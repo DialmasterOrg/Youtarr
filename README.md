@@ -5,7 +5,7 @@
 YoutubePlexArr is a Dockerized application that offers a user-friendly way to automatically download videos from YouTube channels that you've handpicked, and integrates them seamlessly into your Plex Media Server. 
 Note that this is in no way endorsed by, or associated with Youtube itself.
 
-## NOTE: WORK IN PROGRESS (AS OF MAY 14th THIS IS A WORK IN PROGRESS!!)
+## NOTE: WORK IN PROGRESS (AS OF MAY 14th 2023 THIS IS A WORK IN PROGRESS!!)
 
 This code is not yet complete, this Readme will be updated when it is complete.
 
