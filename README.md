@@ -10,6 +10,19 @@ In the era of digital media, ensuring safe and appropriate content for your chil
 
 The application operates by running a scheduled task that automatically downloads new videos, along with their thumbnails and metadata, from a list of YouTube channels that you specify. These videos are then automatically added to your Plex server.
 
+## Requirements
+
+To use YoutubePlexArr, you need to have the following software installed on your system:
+
+1. **Docker:** YoutubePlexarr uses Docker to create an isolated environment where it can run without interfering with your system or requiring you to install a bunch of software. You can download Docker from the official website.
+
+2. **Python:** Python is used in some of the setup scripts to handle the parsing and writing of the JSON configuration file. Most systems come pre-installed with Python, but if you don't have it, you can download it from the official website.
+
+3. **Bash Shell:** Bash is a Unix shell and command language. The setup and start scripts are written in bash. For Windows users, you can use Git Bash, which is included when you install Git for Windows.
+
+4. **npm (Node Package Manager):** npm is a package manager for the JavaScript programming language. It is used to install the dependencies that YoutubePlexarr needs to run in development mode. If you have Node.js installed on your machine, npm is typically installed with it. If not, you can download Node.js (which includes npm) from the official website.
+
+Please ensure that you have these installed and available in your system's PATH before you proceed with the installation of YoutubePlexarr.
 
 ## Key Features
 * **Parental Control**: Vet the channels and control the quality and appropriateness of the content available to your children.
