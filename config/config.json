@@ -1,0 +1,6 @@
+{
+    "channelAutoDownload": false,
+    "channelDownloadFrequency": "* * * * *",
+    "plexApiKey": "",
+    "plexApiSecret": ""
+}

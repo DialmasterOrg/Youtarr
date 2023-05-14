@@ -1,0 +1,23 @@
+{
+  "name": "youtubeplexarr",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "start:dev": "nodemon server/server.js",
+    "client": "cd client && npm start",
+    "dev": "concurrently --kill-others \"npm run start:dev\" \"npm run client\""
+  },
+  "devDependencies": {
+    "concurrently": "^6.5.1",
+    "nodemon": "^2.0.15"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "node-cron": "^3.0.2"
+  }
+}
