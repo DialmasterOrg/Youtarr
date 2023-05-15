@@ -6,54 +6,41 @@ interface PlexAuthProps {
 }
 
 const PlexAuth: React.FC<PlexAuthProps> = ({ clientId }) => {
-  const [authStatus, setAuthStatus] = useState('');
+  const [token, setToken] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-// TODO: Note, that the code below DOES NOT WORK
-// I should use the documentation at https://forums.plex.tv/t/authenticating-with-plex/609370
-
-  const handleAuth = async () => {
-    console.log('Clicky!!!');
+  const handleAuthClick = async () => {
     try {
-      // Open a new window for the Plex login page
-      const authWindow = window.open(
-        `https://app.plex.tv/auth#?clientID=${clientId}&context[device][product]=YouTubePlexArr`,
-        '_blank',
-        "width=600,height=600"
-      );
+      // Request the server to generate a PIN and get the auth URL
+      const res = await fetch('/plex/auth-url');
+      const { authUrl, pinId } = await res.json();
 
-      // Poll the Plex API until we get a token
+      // Open the Plex auth page
+      const authWindow = window.open(authUrl, '_blank');
+      if (authWindow) {
+        authWindow.focus();
+      }
+
+      // Poll the server every 5 seconds to check if the PIN is claimed
       const intervalId = setInterval(async () => {
-        try {
-            // If the pop-up window has been closed, stop checking
-            if (!authWindow || authWindow.closed) {
-              clearInterval(intervalId);
-            }
-            // If the pop-up window's URL includes the Plex token, extract it
-            else if (authWindow.location.href.includes("code=")) {
-              const url = new URL(authWindow.location.href);
-              const token = url.searchParams.get("code");
-              alert(`Authenticated successfully. Plex token: ${token}`);
-              authWindow.close();
-              clearInterval(intervalId);
-            }
-          } catch (error) {
-            console.error(error);
-          }
-
-      }, 1000);
-    } catch (error) {
-        if (error instanceof Error) {
-            setAuthStatus(`Authentication failed: ${error.message}`);
-        } else {
-            setAuthStatus(`Authentication failed: ${String(error)}`);
-        }    
+        const res = await fetch(`/plex/check-pin/${pinId}`);
+        const { authToken } = await res.json();
+        if (authToken) {
+          clearInterval(intervalId);
+          setToken(authToken);
+          authWindow?.close();
+        }
+      }, 5000);
+    } catch (error: any) {
+      setError(`Error: ${error.message}`);
     }
   };
 
   return (
     <div>
-      <Button onClick={handleAuth}>Auth to Plex</Button>
-      {authStatus && <p>{authStatus}</p>}
+      <Button variant="contained" onClick={handleAuthClick}>Get New Plex API KEY</Button>
+      {token && <p>Authenticated successfully</p>}
+      {error && <p>{error}</p>}
     </div>
   );
 };

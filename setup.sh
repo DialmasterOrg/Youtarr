@@ -18,3 +18,13 @@ if [ -d "$dir_path" ]; then
 else
   echo "Directory does not exist. Please enter a valid directory path."
 fi
+
+# Install dependencies in root directory
+echo "Installing root directory dependencies..."
+npm i
+
+# Install dependencies in client directory
+echo "Installing client directory dependencies..."
+cd client
+npm i
+cd ..
