@@ -17,7 +17,7 @@ The application operates by running a scheduled task that automatically download
 
 ## Requirements
 
-** This is designed to be run from the same computer that is running your Plex server as it needs direct access to write video files to the directory that you use for your Plex Youtube library **
+**This is designed to be run from the same computer that is running your Plex server as it needs direct access to write video files to the directory that you use for your Plex Youtube library**
 
 To use YoutubePlexArr, you need to have the following software installed on your system:
 
