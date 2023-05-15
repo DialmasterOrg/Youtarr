@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Check if config.json exists, if not, copy from config.example.json
+if [ ! -f "./config/config.json" ]; then
+  echo "config.json not found. Creating from config.example.json..."
+  cp "./config/config.example.json" "./config/config.json"
+fi
+
 # Prompt the user to enter a directory path
 echo "Please enter a directory path:"
 read dir_path
@@ -7,7 +13,7 @@ read dir_path
 # Check if the directory exists
 if [ -d "$dir_path" ]; then
   echo "Directory exists. Saving to config file..."
-  echo "selected_directory=$dir_path" > config/yt_dir.conf
+  python -c "import json; config = json.load(open('./config/config.json')); config['youtubeOutputDirectory'] = '$dir_path'; json.dump(config, open('./config/config.json', 'w'), indent=4)"
   echo "Directory path saved to config file."
 else
   echo "Directory does not exist. Please enter a valid directory path."

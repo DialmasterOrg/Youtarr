@@ -4,6 +4,9 @@
   "private": true,
   "proxy": "http://localhost:3011",
   "dependencies": {
+    "@emotion/react": "^11.11.0",
+    "@emotion/styled": "^11.11.0",
+    "@mui/material": "^5.13.0",
     "@types/jest": "^27.5.2",
     "@types/node": "^16.18.30",
     "@types/react": "^18.2.6",

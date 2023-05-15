@@ -1,0 +1,8 @@
+{
+  "channelAutoDownload": false,
+  "channelDownloadFrequency": "* * * * *",
+  "plexApiKey": "",
+  "plexApiSecret": "",
+  "youtubeOutputDirectory": "",
+  "uuid": ""
+}

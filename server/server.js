@@ -1,28 +1,32 @@
 const express = require("express");
 const app = express();
+app.use(express.json());
 const path = require("path");
 const fs = require("fs");
 const { exec } = require("child_process");
 const cron = require('node-cron');
+const { v4: uuidv4 } = require('uuid');
+
+// Load the config file
+let config = JSON.parse(fs.readFileSync(path.join(__dirname, '../config/config.json')));
+
+// Check if a UUID exists in the config
+if (!config.uuid) {
+  // Generate a new UUID
+  config.uuid = uuidv4();
+
+  // Save the new UUID to the config file
+  fs.writeFileSync(path.join(__dirname, '../config/config.json'), JSON.stringify(config, null, 2));
+}
 
 let directoryPath;
 if (process.env.IN_DOCKER_CONTAINER) {
   directoryPath = "/usr/src/app/data";
 } else {
-  const configFile = fs.readFileSync(
-    path.join(__dirname, "../config/yt_dir.conf"),
-    "utf8"
-  );
-  // Extract the selected_directory value
-  const selectedDirectoryMatch = configFile.match(/selected_directory=(.+)/);
-  if (selectedDirectoryMatch) {
-    directoryPath = selectedDirectoryMatch[1];
-  }
+  directoryPath = config.youtubeOutputDirectory;
 }
 
-// Load the config file
-let config = JSON.parse(fs.readFileSync(path.join(__dirname, '../config/config.json')));
-
+console.log(`Selected directory: ${directoryPath}`);
 
 // Schedule the initial task
 let task = cron.schedule(config.channelDownloadFrequency, () => {
@@ -45,8 +49,22 @@ fs.watch(path.join(__dirname, '../config/config.json'), (event, filename) => {
   }
 });
 
+app.get("/getconfig", (req, res) => {
+  // Just send the current config object as a JSON response.
+  res.json(config);
+});
 
-console.log(`Selected directory: ${directoryPath}`);
+app.post("/updateconfig", (req, res) => {
+  console.log('Updating config');
+  // Update the config object with the new data
+  config = req.body;
+
+  // Write the new config data to the file
+  fs.writeFileSync(path.join(__dirname, '../config/config.json'), JSON.stringify(config, null, 2));
+
+  // Send a response to indicate success
+  res.json({ status: 'success' });
+});
 
 // Serve static files from the React app
 app.use(express.static(path.join(__dirname, "build")));

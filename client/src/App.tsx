@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './App.css';
+import { Container, Typography } from '@mui/material';
+import Configuration from './components/Configuration';
 
 interface ApiResponse {
   message: string;
@@ -25,12 +27,19 @@ function App() {
 
 
   return (
-    <div className="App">
-      <p>YoutubePlexArr Youtube Video Downloader</p>
+    <Container>
+      <Typography variant="h2" align="center" gutterBottom>
+        YouTubePlexArr
+      </Typography>
+      <Typography variant="h5" align="center" gutterBottom>
+        Youtube Video Downloader for Plex
+      </Typography>
+      <Configuration />
       <header className="App-header">
-        <p>Node BE test data: {data && <p>{data.message}</p>}</p>
+        <div>Node BE test data: {data && <p>{data.message}</p>}</div>
       </header>
-    </div>
+
+    </Container>
   );
 }
 
