@@ -3,6 +3,9 @@ const configModule = require('./configModule');
 const plexModule = require('./plexModule');
 const { exec } = require("child_process");
 const jobModule = require('./jobModule');
+const fs = require('fs');
+const path = require('path');
+
 
 class DownloadModule {
   constructor() {
@@ -32,6 +35,11 @@ class DownloadModule {
       }
     }
 
+    const initialCount = fs.readFileSync(path.join(__dirname, '../../config', 'complete.list'), 'utf-8')
+    .split('\n')
+    .filter(line => line.trim() !== '')
+    .length;
+
     console.log('Adding job to jobs list for Channel Downloads');
     let jobId = jobModule.addJob({
       jobType: 'Channel Downloads',
@@ -51,22 +59,28 @@ class DownloadModule {
       console.log('Running exec to download channels');
       exec(command, { timeout: 1000000 }, (error, stdout, stderr) => {
         clearTimeout(timer);
+        const finalCount = fs.readFileSync(path.join(__dirname, '../../config', 'complete.list'), 'utf-8')
+        .split('\n')
+        .filter(line => line.trim() !== '')
+        .length;
+         // Calculate the number of videos downloaded
+        const videoCount = finalCount - initialCount;
 
         console.log('Channel downloads complete (with or without errors) for Job ID: ' + jobId);
         if (error) {
           jobModule.updateJob(jobId, {
             status: 'Error',
-            output: error.message
+            output: `${videoCount} videos downloaded. Error: ${error.message}`
           });
         } else if (stderr) {
           jobModule.updateJob(jobId, {
             status: 'Complete with Warnings',
-            output: stderr
+            output: `${videoCount} videos downloaded.`
           });
         } else {
           jobModule.updateJob(jobId, {
             status: 'Complete',
-            output: stdout
+            output: `${videoCount} videos downloaded.`
           });
         }
         plexModule.refreshLibrary();
@@ -94,9 +108,14 @@ class DownloadModule {
 
     const command = `${baseCommand} ${urlsString}`;
 
+    const initialCount = fs.readFileSync(path.join(__dirname, '../../config', 'complete.list'), 'utf-8')
+    .split('\n')
+    .filter(line => line.trim() !== '')
+    .length;
+
     let jobId = jobModule.addJob({
       jobType: 'Manually Added Urls',
-      status: 'In progress',
+      status: 'In Progress',
       output: '',
       urls: urls,
     });
@@ -104,20 +123,27 @@ class DownloadModule {
 
     exec(command, { timeout: 1000000 }, (error, stdout, stderr) => {
       console.log('Specific downloads complete (with or without errors) for Job ID: ' + jobId);
+      const finalCount = fs.readFileSync(path.join(__dirname, '../../config', 'complete.list'), 'utf-8')
+      .split('\n')
+      .filter(line => line.trim() !== '')
+      .length;
+       // Calculate the number of videos downloaded
+      const videoCount = finalCount - initialCount;
+
       if (error) {
         jobModule.updateJob(jobId, {
           status: 'Error',
-          output: error.message
+          output: `${videoCount} videos downloaded. Error: ${error.message}`
         });
       } else if (stderr) {
         jobModule.updateJob(jobId, {
           status: 'Complete with Warnings',
-          output: stderr
+          output: `${videoCount} videos downloaded.`
         });
       } else {
         jobModule.updateJob(jobId, {
           status: 'Complete',
-          output: stdout
+          output: `${videoCount} videos downloaded.`
         });
       }
       plexModule.refreshLibrary();
