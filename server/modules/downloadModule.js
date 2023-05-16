@@ -65,7 +65,7 @@ class DownloadModule {
       console.log("This is a 'next job', flipping from Pending to In Progress");
       jobModule.updateJob(jobData.id, {
         status: 'In Progress',
-        timeStarted: Date.now(),
+        timeInitiated: Date.now(),
       });
       jobId = jobData.id;
     }
@@ -177,7 +177,7 @@ class DownloadModule {
       jobId = reqOrJobData.id; // Retrieve jobId from the jobData
       jobModule.updateJob(jobId, {
         status: 'In Progress',
-        timeStarted: Date.now(),
+        timeInitiated: Date.now(),
       });
     }
 

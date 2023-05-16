@@ -10,7 +10,7 @@ interface Job {
   jobType: string;
   status: string;
   output: string;
-  timeStarted: number;
+  timeCreated: number;
   timeInitiated: number;
 }
 
@@ -117,7 +117,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
                 <TableHead>
                   <TableRow>
                     <TableCell style={{ fontWeight: 'bold'}}>Job Type</TableCell>
-                    <TableCell style={{ fontWeight: 'bold'}}>Initiated</TableCell>
+                    <TableCell style={{ fontWeight: 'bold'}}>Created</TableCell>
                     <TableCell style={{ fontWeight: 'bold'}}>Status</TableCell>
                     <TableCell style={{ fontWeight: 'bold'}}>Running Time</TableCell>
                     <TableCell style={{ fontWeight: 'bold'}}>Output</TableCell>
@@ -139,19 +139,19 @@ function DownloadManager({ token }: DownloadManagerProps) {
                     } else if (job.status !== 'In Progress') {
                       durationString = 'Completed';
                     } else {
-                      const jobStartTime = new Date(job.timeStarted).getTime(); // Convert to milliseconds
+                      const jobStartTime = new Date(job.timeInitiated).getTime(); // Convert to milliseconds
                       const duration = new Date(currentTime.getTime() - jobStartTime); // Subtract in milliseconds                    const hh = String(duration.getUTCHours()).padStart(2, '0');
                       const mm = String(duration.getUTCMinutes()).padStart(2, '0');
                       const ss = String(duration.getUTCSeconds()).padStart(2, '0');
                       durationString = `${mm}m${ss}s`;
                     }
-                    let timeInitiated = new Date(job.timeInitiated);
-                    let month = String(timeInitiated.getMonth() + 1).padStart(2, '0'); // Add 1 to month and pad with 0s
-                    let day = String(timeInitiated.getDate()).padStart(2, '0'); // Pad with 0s
+                    let timeCreated = new Date(job.timeCreated);
+                    let month = String(timeCreated.getMonth() + 1).padStart(2, '0'); // Add 1 to month and pad with 0s
+                    let day = String(timeCreated.getDate()).padStart(2, '0'); // Pad with 0s
 
-                    let minutes = String(timeInitiated.getMinutes()).padStart(2, '0'); // Pad with 0s
+                    let minutes = String(timeCreated.getMinutes()).padStart(2, '0'); // Pad with 0s
                     // Convert 24-hour format to 12-hour format
-                    let hours = timeInitiated.getHours();
+                    let hours = timeCreated.getHours();
                     let period = hours >= 12 ? 'PM' : 'AM';
 
                     // Adjust hours
@@ -159,12 +159,12 @@ function DownloadManager({ token }: DownloadManagerProps) {
                     hours = hours ? hours : 12; // the hour '0' should be '12'
 
                     // Combine into a formatted string
-                    let formattedTimeInitiated = `${month}-${day} ${hours}:${minutes} ${period}`;
+                    let formattedTimeCreated = `${month}-${day} ${hours}:${minutes} ${period}`;
 
                     return (
                       <TableRow key={index}>
                         <TableCell>{job.jobType}</TableCell>
-                        <TableCell>{formattedTimeInitiated}</TableCell>
+                        <TableCell>{formattedTimeCreated}</TableCell>
                         <TableCell>{job.status}</TableCell>
                         <TableCell>{durationString}</TableCell>
                         <TableCell>{job.output}</TableCell>

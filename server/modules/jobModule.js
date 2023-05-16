@@ -16,7 +16,7 @@ class JobModule {
 
     // Delete jobs older than the cutoff
     for (let jobId in this.jobs) {
-      if (this.jobs[jobId].timeStarted < cutoff) {
+      if (this.jobs[jobId].timeCreated < cutoff) {
         delete this.jobs[jobId];
       }
     }
@@ -24,10 +24,10 @@ class JobModule {
     // Convert jobs into an array
     const jobsArray = Object.values(this.jobs);
 
-    // Sort jobs by timeStarted in descending order
-    jobsArray.sort((a, b) => b.timeStarted - a.timeStarted);
+    // Sort jobs by timeCreated in descending order
+    jobsArray.sort((a, b) => b.timeCreated - a.timeCreated);
 
-    // Return the last 20 jobs (we may want to adjust this later)
+    // Return the last 20 jobs (we may want to adjust this)
     return jobsArray.slice(0, 10);
   }
 
@@ -38,7 +38,7 @@ class JobModule {
   addJob(job) {
     const jobId = uuidv4(); // Generate a new UUID
     job.timeInitiated = Date.now();
-    job.timeStarted = Date.now();
+    job.timeCreated = Date.now();
     console.log('Adding job: ' + JSON.stringify(job));
     console.log('Job ID: ' + jobId);
     this.jobs[jobId] = job;
