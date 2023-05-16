@@ -37,6 +37,8 @@ class ConfigModule extends EventEmitter {
   updateConfig(newConfig) {
     this.config = newConfig;
     this.saveConfig();
+    // Emit a change event
+    this.emit('change');
   }
 
   saveConfig() {

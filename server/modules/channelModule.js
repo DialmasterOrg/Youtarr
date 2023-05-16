@@ -1,4 +1,5 @@
 const configModule = require('./configModule');
+const downloadModule = require('./downloadModule');
 const cron = require('node-cron');
 const fs = require("fs");
 const path = require("path");
@@ -7,16 +8,20 @@ class ChannelModule {
   constructor() {
     this.channelAutoDownload = this.channelAutoDownload.bind(this);
     this.scheduleTask();
+    this.subscribe();
   }
 
   channelAutoDownload() {
     console.log('The current time is ' + new Date());
     console.log('Running new Channel Downloads at interval: ' + configModule.getConfig().channelDownloadFrequency);
+    downloadModule.doChannelDownloads();
   }
 
   scheduleTask() {
+    console.log('Scheduling task to run at: ' + configModule.getConfig().channelDownloadFrequency);
     // Stop the old task if exists
     if (this.task) {
+      console.log('Stopping old task');
       this.task.stop();
     }
 

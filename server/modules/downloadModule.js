@@ -2,8 +2,7 @@
 const configModule = require('./configModule');
 const plexModule = require('./plexModule');
 const { exec } = require("child_process");
-const { v4: uuidv4 } = require('uuid');
-
+const jobModule = require('./jobModule');
 
 class DownloadModule {
   constructor() {
@@ -15,42 +14,76 @@ class DownloadModule {
     this.config = newConfig; // Update the configuration
   }
 
-  doChannelDownloads(jobs, req) {
+  doChannelDownloads() {
     console.log('Triggering channel downloads');
-    console.log(req.body);
     const youtubeOutputDirectory = configModule.directoryPath;
     const baseCommand = `yt-dlp --ffmpeg-location /usr/bin/ffmpeg -f mp4 --write-thumbnail -a ./config/channels.list --playlist-end 3 --convert-thumbnails jpg --download-archive ./config/complete.list --ignore-errors --embed-metadata -o "${youtubeOutputDirectory}/%(uploader)s/%(uploader)s - %(title)s - %(id)s/%(uploader)s - %(title)s  [%(id)s].%(ext)s" -o "thumbnail:${youtubeOutputDirectory}/%(uploader)s/%(uploader)s - %(title)s - %(id)s/poster" -o "pl_thumbnail:"`;
 
     const command = `${baseCommand}`;
 
-    const jobId = uuidv4(); // Generate a new UUID
+    console.log('Running command: ' + command);
 
-    jobs[jobId] = {
-      status: 'Channel Downloads In Progress',
-      output: '',
-      timeStarted: Date.now(),
-     }; // Initialize the job
-
-
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        jobs[jobId].status = 'Error';
-        jobs[jobId].output = error.message;
+    // Check if there's a job of type "Channel Downloads" and status "In Progress"
+    const jobs = jobModule.getAllJobs();
+    for (let id in jobs) {
+      if (jobs[id].jobType === 'Channel Downloads' && jobs[id].status === 'In Progress') {
+        console.log('Channel download is already in progress. Please wait for it to finish before starting a new one.');
         return;
       }
-      if (stderr) {
-        jobs[jobId].output = stderr;
-      }
-      jobs[jobId].status = 'Complete';
-      jobs[jobId].output = stdout;
-      plexModule.refreshLibrary();
+    }
+
+    console.log('Adding job to jobs list for Channel Downloads');
+    let jobId = jobModule.addJob({
+      jobType: 'Channel Downloads',
+      status: 'In Progress',
+      output: '',
+    });
+
+    console.log('Job ID: ' + jobId);
+
+    // Wrap the exec command in a Promise to handle timeout
+    new Promise((resolve, reject) => {
+      console.log('Setting timeout for ending job');
+      const timer = setTimeout(() => {
+        reject(new Error('Job time exceeded timeout'));
+      }, 1000000); // Set your desired timeout
+
+      console.log('Running exec to download channels');
+      exec(command, { timeout: 1000000 }, (error, stdout, stderr) => {
+        clearTimeout(timer);
+
+        console.log('Channel downloads complete (with or without errors) for Job ID: ' + jobId);
+        if (error) {
+          jobModule.updateJob(jobId, {
+            status: 'Error',
+            output: error.message
+          });
+        } else if (stderr) {
+          jobModule.updateJob(jobId, {
+            status: 'Complete with Warnings',
+            output: stderr
+          });
+        } else {
+          jobModule.updateJob(jobId, {
+            status: 'Complete',
+            output: stdout
+          });
+        }
+        plexModule.refreshLibrary();
+        resolve();
+      });
+    }).catch(error => {
+      console.log(error.message);
+      jobModule.updateJob(jobId, {
+        status: 'Killed',
+        output: 'Job time exceeded timeout'
+      });
     });
 
     return jobId;
-
   }
 
-  doSpecificDownloads(jobs, req) {
+  doSpecificDownloads(req) {
     console.log('Triggering specific downloads');
     console.log(req.body);
     const { urls } = req.body; // URLs from the request body
@@ -61,27 +94,32 @@ class DownloadModule {
 
     const command = `${baseCommand} ${urlsString}`;
 
-    const jobId = uuidv4(); // Generate a new UUID
-
-    jobs[jobId] = {
-      status: 'Specific Downloads In progress',
+    let jobId = jobModule.addJob({
+      jobType: 'Manually Added Urls',
+      status: 'In progress',
       output: '',
       urls: urls,
-      timeStarted: Date.now(),
-     }; // Initialize the job
+    });
 
 
-    exec(command, (error, stdout, stderr) => {
+    exec(command, { timeout: 1000000 }, (error, stdout, stderr) => {
+      console.log('Specific downloads complete (with or without errors) for Job ID: ' + jobId);
       if (error) {
-        jobs[jobId].status = 'Error';
-        jobs[jobId].output = error.message;
-        return;
+        jobModule.updateJob(jobId, {
+          status: 'Error',
+          output: error.message
+        });
+      } else if (stderr) {
+        jobModule.updateJob(jobId, {
+          status: 'Complete with Warnings',
+          output: stderr
+        });
+      } else {
+        jobModule.updateJob(jobId, {
+          status: 'Complete',
+          output: stdout
+        });
       }
-      if (stderr) {
-        jobs[jobId].output = stderr;
-      }
-      jobs[jobId].status = 'Complete';
-      jobs[jobId].output = stdout;
       plexModule.refreshLibrary();
     });
 

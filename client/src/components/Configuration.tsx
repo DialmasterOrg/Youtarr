@@ -1,5 +1,6 @@
 import React, { useState, ChangeEvent, useEffect } from 'react';
 import { FormControl, InputLabel, Select, MenuItem, Button, Card, CardContent, Checkbox, FormControlLabel, TextField, Grid, Typography, Tooltip } from '@mui/material';
+import PlexLibrarySelector from './PlexLibrarySelector';
 
 interface ConfigurationProps {
   token: string | null;
@@ -15,6 +16,7 @@ function Configuration({ token }: ConfigurationProps) {
     plexIP: '',
     uuid: '',
   });
+  const [openPlexLibrarySelector, setOpenPlexLibrarySelector] = useState(false);
 
   useEffect(() => {
     fetch('/getconfig', {
@@ -31,6 +33,22 @@ function Configuration({ token }: ConfigurationProps) {
       .then(data => setConfig(data))
       .catch(error => console.error(error));
   }, [token]);
+
+  const openLibrarySelector = () => {
+    setOpenPlexLibrarySelector(true);
+  };
+
+  const closeLibrarySelector = () => {
+    setOpenPlexLibrarySelector(false);
+  };
+
+  const setLibraryId = (id: string) => {
+    setConfig({
+      ...config,
+      plexYoutubeLibraryId: id,
+    });
+    closeLibrarySelector();
+  };
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     setConfig({
@@ -135,12 +153,24 @@ function Configuration({ token }: ConfigurationProps) {
                 value={config.plexYoutubeLibraryId}
                 onChange={handleInputChange}
                 InputProps={{
-                  readOnly: true
+                  readOnly: true,
+                  onClick: openLibrarySelector
                 }}
                 name="plexYoutubeLibraryId"
                 fullWidth
               />
-            </Tooltip>
+              </Tooltip>
+              <PlexLibrarySelector
+                open={openPlexLibrarySelector}
+                handleClose={closeLibrarySelector}
+                setLibraryId={setLibraryId}
+                token={token}
+              />
+          </Grid>
+          <Grid item xs={2}>
+            <Button variant="contained" color="primary" onClick={openLibrarySelector}>
+                Select Plex Library
+            </Button>
           </Grid>
           <Grid item xs={12}>
             <Tooltip placement="top-start" title="The directory path to your Plex Youtube library. If you update this you must restart your docker container.">

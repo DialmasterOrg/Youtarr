@@ -6,12 +6,9 @@ const configModule = require('./modules/configModule');
 const channelModule = require('./modules/channelModule');
 const plexModule = require('./modules/plexModule');
 const downloadModule = require('./modules/downloadModule');
-
+const jobModule = require('./modules/jobModule');
 
 channelModule.subscribe();
-
-let jobs = {};
-
 
 console.log(`Youtube downloads directory from config: ${configModule.directoryPath}`);
 
@@ -32,6 +29,18 @@ function verifyToken(req, res, next) {
   // If the token is valid, proceed to the next middleware function or the route handler
   next();
 }
+
+/**** ONLY ROUTES BELOW THIS LINE *********/
+
+app.get('/getplexlibraries', verifyToken, async (req, res) => {
+  try {
+    const libraries = await plexModule.getLibraries();
+    res.json(libraries);
+  } catch (error) {
+    console.log('Error: ' + error.message);
+    res.status(500).json({ error: 'Failed to get libraries from Plex' });
+  }
+});
 
 app.get("/getconfig", verifyToken, (req, res) => {
   // Just send the current config object as a JSON response.
@@ -64,7 +73,7 @@ app.get("/refreshlibrary", verifyToken, (req, res) => {
 
 app.get('/jobstatus/:jobId', verifyToken, (req, res) => {
   const jobId = req.params.jobId;
-  const job = jobs[jobId];
+  const job = jobModule.getJob(jobId);
 
   if (!job) {
     res.status(404).json({ error: 'Job not found' });
@@ -74,27 +83,20 @@ app.get('/jobstatus/:jobId', verifyToken, (req, res) => {
 });
 
 app.get('/runningjobs', verifyToken, (req, res) => {
- // Ensure jobs is an object
- jobs = jobs || {};
-
- // Convert jobs into an array
- const jobsArray = Object.values(jobs);
-
- // Get all the jobs that are running, where the status is not 'Error' or 'Complete'
- const runningJobs = jobsArray.filter(job => job.status !== 'Error' && job.status !== 'Complete');
-
- res.json(runningJobs);
+  const runningJobs = jobModule.getRunningJobs();
+  res.json(runningJobs);
 });
+
 
 // Takes a list of specific youtube urls and downloads them
 app.post('/triggerspecificdownloads', verifyToken, (req, res) => {
-  let jobId = downloadModule.doSpecificDownloads(jobs, req);
+  let jobId = downloadModule.doSpecificDownloads(req);
   res.json({ status: 'success', jobId: jobId });
 });
 
 // Manually trigger the channel downloads
 app.post('/triggerchanneldownloads', verifyToken, (req, res) => {
-  let jobId = downloadModule.doChannelDownloads(jobs, req);
+  let jobId = downloadModule.doChannelDownloads();
   res.json({ status: 'success', jobId: jobId });
 });
 
