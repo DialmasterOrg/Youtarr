@@ -5,7 +5,7 @@
 YoutubePlexArr is a Dockerized application that offers a user-friendly way to automatically download videos from YouTube channels that you've handpicked, and integrates them seamlessly into your Plex Media Server.
 Note that this is in no way endorsed by, or associated with Youtube itself.
 
-## NOTE: WORK IN PROGRESS (AS OF MAY 14th 2023 THIS IS A WORK IN PROGRESS!!)
+## NOTE: WORK IN PROGRESS (AS OF MAY 16th 2023 THIS IS A WORK IN PROGRESS!!)
 
 This code is not yet complete, this Readme will be updated when it is complete.
 
@@ -44,11 +44,16 @@ YoutubePlexArr is completely Dockerized, which means it's straightforward to get
 While YoutubePlexArr provides a means to curate and download YouTube content, it's crucial to respect copyright laws and YouTube's Terms of Service. Always ensure you're in compliance with these guidelines when using the application.
 ## Usage
 
-Before running this in either dev or production mode, first run ```./setup.sh```. This will let you select the root directory where Youtube videos that are downloaded will be placed.
+**Before running this in either dev or production mode**, first run ```./setup.sh```. This will let you select the root directory where Youtube videos that are downloaded will be placed.
 
 ### To run locally on the host with hot reload (for development)
 Run ```npm run dev```. The frontend UI will be exposed at localhost:3000
 
-### To run in production mode in a Docker container (for end users)
+### To run in production mode in a Docker container (for most users)
+
+## NOTES: 
+**This has been tested in git bash on Windows with Docker Desktop. This is designed to be run from the same system as your Plex server.**
+**When running in production mode with the above config, your Plex Server IP Address should be set to host.docker.internal**
+
 
 1. Run ```./build.sh``` then run ```start.sh```. The frontend UI will be exposed at localhost:3087
