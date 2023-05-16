@@ -51,7 +51,7 @@ Run ```npm run dev```. The frontend UI will be exposed at localhost:3000
 
 ### To run in production mode in a Docker container (for most users)
 
-## NOTES: 
+#### NOTES: 
 **This has been tested in git bash on Windows with Docker Desktop. This is designed to be run from the same system as your Plex server.**
 **When running in production mode with the above config, your Plex Server IP Address should be set to host.docker.internal**
 
