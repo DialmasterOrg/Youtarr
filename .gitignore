@@ -5,6 +5,8 @@ node_modules
 /.pnp
 .pnp.js
 config/config.json
+config/channels.list
+config/complete.list
 
 # testing
 /coverage

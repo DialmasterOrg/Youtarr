@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { Button } from '@mui/material';
 
 interface PlexAuthProps {
-    clientId: string;
+    setToken: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
-const PlexAuth: React.FC<PlexAuthProps> = ({ clientId }) => {
-  const [token, setToken] = useState<string | null>(null);
+const PlexAuth: React.FC<PlexAuthProps> = ({ setToken }) => {
+  //const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleAuthClick = async () => {
@@ -28,7 +28,9 @@ const PlexAuth: React.FC<PlexAuthProps> = ({ clientId }) => {
         if (authToken) {
           clearInterval(intervalId);
           setToken(authToken);
+          localStorage.setItem('plexAuthToken', authToken);
           authWindow?.close();
+          window.location.href = '/configuration';
         }
       }, 5000);
     } catch (error: any) {
@@ -38,8 +40,7 @@ const PlexAuth: React.FC<PlexAuthProps> = ({ clientId }) => {
 
   return (
     <div>
-      <Button variant="contained" onClick={handleAuthClick}>Get New Plex API KEY</Button>
-      {token && <p>Authenticated successfully</p>}
+      <Button variant="contained" onClick={handleAuthClick}>Login Via Plex</Button>
       {error && <p>{error}</p>}
     </div>
   );

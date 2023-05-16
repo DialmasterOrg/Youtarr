@@ -1,8 +1,11 @@
 import React, { useState, ChangeEvent, useEffect } from 'react';
-import { Button, Card, CardContent, Checkbox, FormControlLabel, TextField, Grid, Typography, Tooltip } from '@mui/material';
-import PlexAuth from './PLexAuth';
+import { FormControl, InputLabel, Select, MenuItem, Button, Card, CardContent, Checkbox, FormControlLabel, TextField, Grid, Typography, Tooltip } from '@mui/material';
 
-function Configuration() {
+interface ConfigurationProps {
+  token: string | null;
+}
+
+function Configuration({ token }: ConfigurationProps) {
   const [config, setConfig] = useState({
     channelAutoDownload: false,
     channelDownloadFrequency: '',
@@ -14,10 +17,20 @@ function Configuration() {
   });
 
   useEffect(() => {
-    fetch('/getconfig')
-      .then(response => response.json())
-      .then(data => setConfig(data));
-  }, []);
+    fetch('/getconfig', {
+      headers: {
+        'x-access-token': token || ''
+      }
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(response.statusText);
+        }
+        return response.json();
+      })
+      .then(data => setConfig(data))
+      .catch(error => console.error(error));
+  }, [token]);
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     setConfig({
@@ -38,10 +51,30 @@ function Configuration() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-access-token': token || ''
       },
       body: JSON.stringify(config),
     });
   };
+
+  const frequencyMapping: { [key: string]: string } = {
+    'Every 5 minutes': '*/5 * * * *',
+    'Every 15 minutes': '*/15 * * * *',
+    'Every 30 minutes': '*/30 * * * *',
+    'Hourly': '0 * * * *',
+    'Every 4 hours': '0 */4 * * *',
+    'Every 12 hours': '0 */12 * * *',
+    'Daily': '0 0 * * *',
+    'Weekly': '0 0 * * 0'
+  };
+
+  const handleSelectChange = (event: ChangeEvent<{ value: unknown }>, name: string) => {
+    setConfig({
+      ...config,
+      [name]: frequencyMapping[event.target.value as string],
+    });
+  };
+
 
   return (
     <Card>
@@ -64,14 +97,23 @@ function Configuration() {
             />
           </Grid>
           <Grid item xs={12}>
-            <Tooltip placement="top-start" title="How often to run automatic channel downloads. This uses crontab syntax">
-              <TextField
-                label="Download Frequency"
-                value={config.channelDownloadFrequency}
-                onChange={handleInputChange}
-                name="channelDownloadFrequency"
-                fullWidth
-              />
+            <Tooltip placement="top-start" title="How often to run automatic channel downloads.">
+              <FormControl fullWidth>
+                <InputLabel id="download-frequency-label">Download Frequency</InputLabel>
+                <Select
+                  labelId="download-frequency-label"
+                  label="Download Frequency"
+                  value={Object.keys(frequencyMapping).find(key => frequencyMapping[key] === config.channelDownloadFrequency) || ''}
+                  onChange={(event: any) => handleSelectChange(event, 'channelDownloadFrequency')}
+                  name="channelDownloadFrequency"
+                >
+                  {Object.keys(frequencyMapping).map((frequency, index) => (
+                    <MenuItem key={index} value={frequency}>
+                      {frequency}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Tooltip>
           </Grid>
           <Grid item xs={12}>
@@ -86,23 +128,6 @@ function Configuration() {
             </Tooltip>
           </Grid>
 
-          <Grid item xs={4}>
-            <Tooltip placement="top-start" title="Click GET NEW PLEX API KEY to auth to Plex">
-              <TextField
-                label="Plex API Key"
-                value={config.plexApiKey}
-                onChange={handleInputChange}
-                InputProps={{
-                  readOnly: true
-                }}
-                name="plexApiKey"
-                fullWidth
-              />
-            </Tooltip>
-          </Grid>
-          <Grid item container xs={3} alignItems="center" justifyItems="center">
-            <PlexAuth clientId={config.uuid} />
-          </Grid>
           <Grid item xs={2}>
             <Tooltip placement="top-start" title="The ID number of your Plex Youtube library">
               <TextField
