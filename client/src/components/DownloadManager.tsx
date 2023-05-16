@@ -11,6 +11,7 @@ interface Job {
   status: string;
   output: string;
   timeStarted: number;
+  timeInitiated: number;
 }
 
 function DownloadManager({ token }: DownloadManagerProps) {
@@ -77,17 +78,17 @@ function DownloadManager({ token }: DownloadManagerProps) {
   return (
     <Grid container spacing={3}>
       <Grid item xs={12} md={12}>
-        <Card>
+        <Card elevation={10}>
           <CardHeader title="Video Channel Downloads" />
           <CardContent>
             <Button variant="contained" onClick={handleTriggerChannelDownloads}>
-              Manually trigger download of new channel videos
+              Manually trigger download from watched channels
             </Button>
           </CardContent>
         </Card>
       </Grid>
       <Grid item xs={12} md={12}>
-        <Card>
+        <Card elevation={10}>
           <CardHeader title="Download Specific Videos" />
           <CardContent>
             <Typography variant="body1">
@@ -108,7 +109,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
         </Card>
       </Grid>
       <Grid item xs={12} md={12}>
-        <Card>
+        <Card elevation={10}>
           <CardHeader title="Recent Downloads" />
           <CardContent>
             <TableContainer>
@@ -116,6 +117,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
                 <TableHead>
                   <TableRow>
                     <TableCell style={{ fontWeight: 'bold'}}>Job Type</TableCell>
+                    <TableCell style={{ fontWeight: 'bold'}}>Initiated</TableCell>
                     <TableCell style={{ fontWeight: 'bold'}}>Status</TableCell>
                     <TableCell style={{ fontWeight: 'bold'}}>Running Time</TableCell>
                     <TableCell style={{ fontWeight: 'bold'}}>Output</TableCell>
@@ -124,23 +126,45 @@ function DownloadManager({ token }: DownloadManagerProps) {
                 { jobs.length === 0 &&
                   <TableBody>
                     <TableRow>
-                      <TableCell colSpan={4}>No jobs currently running</TableCell>
+                      <TableCell colSpan={5}>No jobs currently running</TableCell>
                     </TableRow>
                   </TableBody>
                 }
                 <TableBody>
                   {jobs.map((job, index) => {
-                    const jobStartTime = new Date(job.timeStarted).getTime(); // Convert to milliseconds
-                    const duration = new Date(currentTime.getTime() - jobStartTime); // Subtract in milliseconds                    const hh = String(duration.getUTCHours()).padStart(2, '0');
-                    const mm = String(duration.getUTCMinutes()).padStart(2, '0');
-                    const ss = String(duration.getUTCSeconds()).padStart(2, '0');
-                    let durationString = `${mm}:${ss}`;
-                    if (job.status !== 'In Progress') {
+                    let durationString = '';
+                    if (job.status === 'Pending') {
+                      durationString = 'Pending';
+                      console.log('Setting status to Pending');
+                    } else if (job.status !== 'In Progress') {
                       durationString = 'Completed';
+                    } else {
+                      const jobStartTime = new Date(job.timeStarted).getTime(); // Convert to milliseconds
+                      const duration = new Date(currentTime.getTime() - jobStartTime); // Subtract in milliseconds                    const hh = String(duration.getUTCHours()).padStart(2, '0');
+                      const mm = String(duration.getUTCMinutes()).padStart(2, '0');
+                      const ss = String(duration.getUTCSeconds()).padStart(2, '0');
+                      durationString = `${mm}m${ss}s`;
                     }
+                    let timeInitiated = new Date(job.timeInitiated);
+                    let month = String(timeInitiated.getMonth() + 1).padStart(2, '0'); // Add 1 to month and pad with 0s
+                    let day = String(timeInitiated.getDate()).padStart(2, '0'); // Pad with 0s
+
+                    let minutes = String(timeInitiated.getMinutes()).padStart(2, '0'); // Pad with 0s
+                    // Convert 24-hour format to 12-hour format
+                    let hours = timeInitiated.getHours();
+                    let period = hours >= 12 ? 'PM' : 'AM';
+
+                    // Adjust hours
+                    hours = hours % 12;
+                    hours = hours ? hours : 12; // the hour '0' should be '12'
+
+                    // Combine into a formatted string
+                    let formattedTimeInitiated = `${month}-${day} ${hours}:${minutes} ${period}`;
+
                     return (
                       <TableRow key={index}>
                         <TableCell>{job.jobType}</TableCell>
+                        <TableCell>{formattedTimeInitiated}</TableCell>
                         <TableCell>{job.status}</TableCell>
                         <TableCell>{durationString}</TableCell>
                         <TableCell>{job.output}</TableCell>

@@ -38,7 +38,7 @@ function App() {
             variant="permanent"
             open
             style={{ width: drawerWidth }}
-            PaperProps={{ style: { width: drawerWidth } }}
+            PaperProps={{ style: { width: drawerWidth, backgroundColor: '#CCC' } }}
           >
             <List>
               <ListItem button component={Link} to="/configuration">

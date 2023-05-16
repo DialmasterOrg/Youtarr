@@ -10,9 +10,9 @@ class JobModule {
   }
 
   getRunningJobs() {
-    // Remove jobs older than 12 hours
+    // Remove jobs older than 24 hours
     const now = Date.now();
-    const cutoff = now - 12 * 60 * 60 * 1000;
+    const cutoff = now - 24 * 60 * 60 * 1000;
 
     // Delete jobs older than the cutoff
     for (let jobId in this.jobs) {
@@ -27,8 +27,8 @@ class JobModule {
     // Sort jobs by timeStarted in descending order
     jobsArray.sort((a, b) => b.timeStarted - a.timeStarted);
 
-    // Return the last 5 jobs
-    return jobsArray.slice(0, 5);
+    // Return the last 20 jobs (we may want to adjust this later)
+    return jobsArray.slice(0, 10);
   }
 
   getAllJobs() {
@@ -37,6 +37,7 @@ class JobModule {
 
   addJob(job) {
     const jobId = uuidv4(); // Generate a new UUID
+    job.timeInitiated = Date.now();
     job.timeStarted = Date.now();
     console.log('Adding job: ' + JSON.stringify(job));
     console.log('Job ID: ' + jobId);

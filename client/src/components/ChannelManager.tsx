@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Grid, Button, Card, CardHeader, ListItem, ListItemSecondaryAction, IconButton, TextField, List, ListItemText } from '@mui/material';
+import { Tooltip, Grid, Button, Card, CardHeader, ListItem, ListItemSecondaryAction, IconButton, TextField, List, ListItemText } from '@mui/material';
 import Delete from '@mui/icons-material/Delete';
 import axios from 'axios';
 
@@ -64,7 +64,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
   return (
     <Grid container spacing={2} style={{ marginBottom: '55px' }}>
       <Grid item xs={12}>
-        <Card>
+        <Card elevation={10}>
           <CardHeader title="Youtube Channels" />
           <List>
             {channels.map((channel, index) => (
@@ -87,19 +87,28 @@ function ChannelManager({ token }: ChannelManagerProps) {
         </Card>
       </Grid>
       <Grid item xs={12}>
-        <TextField
-          label="New Channel"
-          value={newChannel}
-          onChange={(e) => setNewChannel(e.target.value)}
-          fullWidth
-        />
+      <Card elevation={3}>
+        <Tooltip placement="top" title="Enter a new channel URL to track here, eg: https://www.youtube.com/@PrestonReacts/videos">
+          <TextField
+            label="New Channel"
+            value={newChannel}
+            onChange={(e) => setNewChannel(e.target.value)}
+            fullWidth
+          />
+        </Tooltip>
+        </Card>
       </Grid>
       <Grid item xs={6}>
-        <Button variant="contained" onClick={handleAdd} fullWidth>Add Channel</Button>
+        <Tooltip placement="top" title="Add a new channel to the list above">
+          <Button variant="contained" onClick={handleAdd} fullWidth>Add Channel</Button>
+        </Tooltip>
       </Grid>
       <Grid item xs={6}>
-        <Button variant="contained" onClick={handleSave} fullWidth>Save Channel Changes</Button>
+        <Tooltip placement="top" title="Save your changes and make them active">
+          <Button variant="contained" onClick={handleSave} fullWidth>Save Channel Changes</Button>
+        </Tooltip>
       </Grid>
+
     </Grid>
 );
 }

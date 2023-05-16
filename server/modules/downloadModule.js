@@ -17,8 +17,59 @@ class DownloadModule {
     this.config = newConfig; // Update the configuration
   }
 
-  doChannelDownloads() {
-    console.log('Triggering channel downloads');
+  startNextJob() {
+    console.log("Looking for next job to start");
+    const jobs = jobModule.getAllJobs();
+    for (let id in jobs) {
+      if (jobs[id].status === 'Pending') {
+        if (jobs[id].jobType === 'Channel Downloads') {
+          jobs[id].id = id;
+          this.doChannelDownloads(jobs[id], true);
+        } else if (jobs[id].jobType === 'Manually Added Urls') {
+          jobs[id].id = id;
+          this.doSpecificDownloads(jobs[id], true);
+        }
+        break;
+      }
+    }
+  }
+
+  doChannelDownloads(jobData = {}, isNextJob = false) {
+    console.log('Running channel downloads');
+    let jobId;
+    if (!isNextJob) {
+      console.log("This is NOT a 'next job', it's a primary trigger");
+      // Check if there's a job with status "In Progress"
+      const jobs = jobModule.getAllJobs();
+      console.log('Existing jobs: ' + JSON.stringify(jobs));
+      for (let id in jobs) {
+        if (jobs[id].status === 'In Progress') {
+          console.log('A job is already in progress. Adding this Channel Downloads job to the queue.');
+          jobModule.addJob({
+            jobType: 'Channel Downloads',
+            status: 'Pending',
+            output: '',
+          });
+          return;
+        }
+      }
+
+      console.log('Adding job to jobs list as In Progress for Channel Downloads');
+      jobId = jobModule.addJob({
+        jobType: 'Channel Downloads',
+        status: 'In Progress',
+        output: '',
+      });
+
+    } else {
+      console.log("This is a 'next job', flipping from Pending to In Progress");
+      jobModule.updateJob(jobData.id, {
+        status: 'In Progress',
+        timeStarted: Date.now(),
+      });
+      jobId = jobData.id;
+    }
+
     const youtubeOutputDirectory = configModule.directoryPath;
     const baseCommand = `yt-dlp --ffmpeg-location /usr/bin/ffmpeg -f mp4 --write-thumbnail -a ./config/channels.list --playlist-end 3 --convert-thumbnails jpg --download-archive ./config/complete.list --ignore-errors --embed-metadata -o "${youtubeOutputDirectory}/%(uploader)s/%(uploader)s - %(title)s - %(id)s/%(uploader)s - %(title)s  [%(id)s].%(ext)s" -o "thumbnail:${youtubeOutputDirectory}/%(uploader)s/%(uploader)s - %(title)s - %(id)s/poster" -o "pl_thumbnail:"`;
 
@@ -26,26 +77,10 @@ class DownloadModule {
 
     console.log('Running command: ' + command);
 
-    // Check if there's a job of type "Channel Downloads" and status "In Progress"
-    const jobs = jobModule.getAllJobs();
-    for (let id in jobs) {
-      if (jobs[id].jobType === 'Channel Downloads' && jobs[id].status === 'In Progress') {
-        console.log('Channel download is already in progress. Please wait for it to finish before starting a new one.');
-        return;
-      }
-    }
-
     const initialCount = fs.readFileSync(path.join(__dirname, '../../config', 'complete.list'), 'utf-8')
     .split('\n')
     .filter(line => line.trim() !== '')
     .length;
-
-    console.log('Adding job to jobs list for Channel Downloads');
-    let jobId = jobModule.addJob({
-      jobType: 'Channel Downloads',
-      status: 'In Progress',
-      output: '',
-    });
 
     console.log('Job ID: ' + jobId);
 
@@ -84,6 +119,8 @@ class DownloadModule {
           });
         }
         plexModule.refreshLibrary();
+        // When the job is complete, start the next job in the queue
+        this.startNextJob();
         resolve();
       });
     }).catch(error => {
@@ -97,10 +134,53 @@ class DownloadModule {
     return jobId;
   }
 
-  doSpecificDownloads(req) {
-    console.log('Triggering specific downloads');
-    console.log(req.body);
-    const { urls } = req.body; // URLs from the request body
+  doSpecificDownloads(reqOrJobData, isNextJob = false) {
+    let urls;
+    let jobId;
+    console.log("Running manually added url downloads");
+
+    if (reqOrJobData.body) { // this is a req object
+      urls = reqOrJobData.body.urls;
+
+      // Check if there's a job with status "In Progress"
+      const jobs = jobModule.getAllJobs();
+      let inProgressJobExists = false;
+      for (let id in jobs) {
+        if (jobs[id].status === 'In Progress') {
+          inProgressJobExists = true;
+          break;
+        }
+      }
+
+      if (inProgressJobExists && !isNextJob) {
+        console.log('A job is already in progress. Adding this Manually Added Downloads job to the queue.');
+        jobId = jobModule.addJob({
+          jobType: 'Manually Added Urls',
+          status: 'Pending',
+          output: '',
+          data: reqOrJobData.body, // Save the request body to the job
+        });
+        return jobId;
+      } else {
+        console.log('Adding job to jobs list as In Progress for Manually Added Urls');
+        jobId = jobModule.addJob({
+          jobType: 'Manually Added Urls',
+          status: 'In Progress',
+          output: '',
+          data: reqOrJobData.body,
+        });
+      }
+
+    } else { // this is jobData
+      console.log('Flipping from Pending to In Progress for Manually Added Urls');
+      urls = reqOrJobData.data.urls; // Retrieve URLs from the jobData
+      jobId = reqOrJobData.id; // Retrieve jobId from the jobData
+      jobModule.updateJob(jobId, {
+        status: 'In Progress',
+        timeStarted: Date.now(),
+      });
+    }
+
     const youtubeOutputDirectory = configModule.directoryPath;
     const baseCommand = `yt-dlp --ffmpeg-location /usr/bin/ffmpeg -f mp4 --write-thumbnail --convert-thumbnails jpg --download-archive ./config/complete.list --ignore-errors --embed-metadata -o "${youtubeOutputDirectory}/%(uploader)s/%(uploader)s - %(title)s - %(id)s/%(uploader)s - %(title)s  [%(id)s].%(ext)s" -o "thumbnail:${youtubeOutputDirectory}/%(uploader)s/%(uploader)s - %(title)s - %(id)s/poster" -o "pl_thumbnail:"`;
 
@@ -112,14 +192,6 @@ class DownloadModule {
     .split('\n')
     .filter(line => line.trim() !== '')
     .length;
-
-    let jobId = jobModule.addJob({
-      jobType: 'Manually Added Urls',
-      status: 'In Progress',
-      output: '',
-      urls: urls,
-    });
-
 
     exec(command, { timeout: 1000000 }, (error, stdout, stderr) => {
       console.log('Specific downloads complete (with or without errors) for Job ID: ' + jobId);
@@ -147,6 +219,7 @@ class DownloadModule {
         });
       }
       plexModule.refreshLibrary();
+      this.startNextJob();
     });
 
     return jobId;

@@ -95,7 +95,7 @@ function Configuration({ token }: ConfigurationProps) {
 
 
   return (
-    <Card>
+    <Card elevation={10}>
       <CardContent>
         <Typography variant="h5" component="h2" gutterBottom>
           Configuration
