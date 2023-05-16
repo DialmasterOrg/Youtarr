@@ -69,8 +69,8 @@ function ChannelManager({ token }: ChannelManagerProps) {
           <List>
             {channels.map((channel, index) => (
               <ListItem key={index} style={unsavedChannels.includes(channel) ? { backgroundColor: 'lightyellow' } : {}}>
-                <Grid container alignItems="center" spacing={1}>
-                  <Grid item xs={9}>
+                <Grid container alignItems="center" spacing={1} >
+                  <Grid item xs={9} md={9} lg={9}>
                     <ListItemText primary={channel} />
                   </Grid>
                   <Grid item xs={3}>

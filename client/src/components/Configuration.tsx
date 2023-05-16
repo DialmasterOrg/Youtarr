@@ -135,7 +135,7 @@ function Configuration({ token }: ConfigurationProps) {
             </Tooltip>
           </Grid>
           <Grid item xs={12}>
-            <Tooltip placement="top-start" title="The IP address of your Plex server, or localhost if you're on the same machine.">
+            <Tooltip placement="top-start" title="The IP address of your Plex server. 'localhost' if you're on the same machine. 'host.docker.internal' for production Docker on the same machine.">
             <TextField
               label="Plex Server IP Address"
               value={config.plexIP}

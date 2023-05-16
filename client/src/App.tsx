@@ -1,7 +1,7 @@
 import './App.css';
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
-import { AppBar, Toolbar, Box, Container, Typography, Drawer, List, ListItem, ListItemText } from '@mui/material';
+import { Grid, AppBar, Toolbar, Box, Container, Typography, Drawer, List, ListItem, ListItemText } from '@mui/material';
 import Configuration from './components/Configuration';
 import ChannelManager from './components/ChannelManager';
 import DownloadManager from './components/DownloadManager';
@@ -9,6 +9,7 @@ import Login from './components/Login';
 
 function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('plexAuthToken'));
+  const drawerWidth = 240; // specify your drawer width
 
   useEffect(() => {
     const storedToken = localStorage.getItem('plexAuthToken');
@@ -31,41 +32,49 @@ function App() {
           </div>
         </Toolbar>
       </AppBar>
-      <Drawer
-        variant="permanent"
-        open
-      >
-        <List>
-          <ListItem button component={Link} to="/configuration">
-            <ListItemText primary="Configuration" />
-          </ListItem>
-          <ListItem button component={Link} to="/channels">
-            <ListItemText primary="Channels" />
-          </ListItem>
-          <ListItem button component={Link} to="/downloads">
-            <ListItemText primary="Manage Downloads" />
-          </ListItem>
-          { !token && <ListItem button component={Link} to="/login">
-            <ListItemText primary="Login" />
-          </ListItem>}
+      <Grid container>
+        <Grid item xs={12} sm={3} md={1} style={{ maxWidth: drawerWidth }}>
+          <Drawer
+            variant="permanent"
+            open
+            style={{ width: drawerWidth }}
+            PaperProps={{ style: { width: drawerWidth } }}
+          >
+            <List>
+              <ListItem button component={Link} to="/configuration">
+                <ListItemText primary="Configuration" />
+              </ListItem>
+              <ListItem button component={Link} to="/channels">
+                <ListItemText primary="Channels" />
+              </ListItem>
+              <ListItem button component={Link} to="/downloads">
+                <ListItemText primary="Manage Downloads" />
+              </ListItem>
+              { !token && <ListItem button component={Link} to="/login">
+                <ListItemText primary="Login" />
+              </ListItem>}
 
-        </List>
-      </Drawer>
-      <Container style={{ paddingTop: '50px' }}>
-        <Routes>
-          <Route path="/login" element={<Login setToken={setToken} />} />
-          {token ? (
-            <>
-              <Route path="/configuration" element={<Configuration token={token} />} />
-              <Route path="/channels" element={<ChannelManager token={token} />} />
-              <Route path="/downloads" element={<DownloadManager token={token} />} />
-              <Route path="/*" element={<Navigate to="/configuration" />} />
-            </>
-          ) : (
-            <Route path="/*" element={<Navigate to="/login" />} />
-          )}
-        </Routes>
-      </Container>
+            </List>
+          </Drawer>
+        </Grid>
+        <Grid item xs={12} sm={9} md={11} style={{ paddingLeft: drawerWidth }}>
+          <Container style={{ paddingTop: '50px' }}>
+            <Routes>
+              <Route path="/login" element={<Login setToken={setToken} />} />
+              {token ? (
+                <>
+                  <Route path="/configuration" element={<Configuration token={token} />} />
+                  <Route path="/channels" element={<ChannelManager token={token} />} />
+                  <Route path="/downloads" element={<DownloadManager token={token} />} />
+                  <Route path="/*" element={<Navigate to="/configuration" />} />
+                </>
+              ) : (
+                <Route path="/*" element={<Navigate to="/login" />} />
+              )}
+            </Routes>
+          </Container>
+        </Grid>
+      </Grid>
     </Router>
   );
 }
