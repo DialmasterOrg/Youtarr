@@ -25,7 +25,7 @@ class JobModule {
 
   saveJobs() {
     // Write jobs to file.
-    const fileContent = JSON.stringify(this.jobs);
+    const fileContent = JSON.stringify(this.jobs, null, 2);
     fs.writeFileSync(this.jobsFilePath, fileContent);
   }
 
@@ -34,9 +34,9 @@ class JobModule {
   }
 
   getRunningJobs() {
-    // Remove jobs older than 24 hours
+    // Remove jobs older than 1 week
     const now = Date.now();
-    const cutoff = now - 24 * 60 * 60 * 1000;
+    const cutoff = now - 7 * 24 * 60 * 60 * 1000;
 
     // Delete jobs older than the cutoff
     for (let jobId in this.jobs) {

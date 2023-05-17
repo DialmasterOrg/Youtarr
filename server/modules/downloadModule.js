@@ -79,10 +79,13 @@ class DownloadModule {
 
     console.log('Running command: ' + command);
 
-    const initialCount = fs.readFileSync(path.join(__dirname, '../../config', 'complete.list'), 'utf-8')
+    // Read the complete.list before the command execution
+    const initialLines = fs.readFileSync(path.join(__dirname, '../../config', 'complete.list'), 'utf-8')
     .split('\n')
-    .filter(line => line.trim() !== '')
-    .length;
+    .filter(line => line.trim() !== '');
+
+    const initialCount = initialLines.length;
+
 
     console.log('Job ID: ' + jobId);
 
@@ -96,28 +99,41 @@ class DownloadModule {
       console.log('Running exec to download channels');
       exec(command, { timeout: 1000000 }, (error, stdout, stderr) => {
         clearTimeout(timer);
-        const finalCount = fs.readFileSync(path.join(__dirname, '../../config', 'complete.list'), 'utf-8')
+        // Read the complete.list before the command execution
+        const finalLines = fs.readFileSync(path.join(__dirname, '../../config', 'complete.list'), 'utf-8')
         .split('\n')
-        .filter(line => line.trim() !== '')
-        .length;
+        .filter(line => line.trim() !== '');
+
+
+        const finalCount = finalLines.length;
+
          // Calculate the number of videos downloaded
         const videoCount = finalCount - initialCount;
+        // Get the new video IDs
+        const newVideoIds = finalLines.slice(initialLines.length).map(line => line.split(' ')[1]);
+
+        // Create the URLs
+        const newVideoUrls = newVideoIds.map(id => `https://youtu.be/${id}`);
+
 
         console.log('Channel downloads complete (with or without errors) for Job ID: ' + jobId);
         if (error) {
           jobModule.updateJob(jobId, {
             status: 'Error',
-            output: `${videoCount} videos downloaded. Error: ${error.message}`
+            output: `${videoCount} videos downloaded. Error: ${error.message}`,
+            data: { urls: newVideoUrls }
           });
         } else if (stderr) {
           jobModule.updateJob(jobId, {
             status: 'Complete with Warnings',
-            output: `${videoCount} videos downloaded.`
+            output: `${videoCount} videos downloaded.`,
+            data: { urls: newVideoUrls }
           });
         } else {
           jobModule.updateJob(jobId, {
             status: 'Complete',
-            output: `${videoCount} videos downloaded.`
+            output: `${videoCount} videos downloaded.`,
+            data: { urls: newVideoUrls }
           });
         }
         plexModule.refreshLibrary();
