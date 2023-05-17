@@ -8,6 +8,8 @@ interface ConfigurationProps {
   token: string | null;
 }
 
+// TODO: No need to show the user the Plex Youtube Library ID, we should save the library NAME and the ID to the config and only display the name
+
 function Configuration({ token }: ConfigurationProps) {
   const [config, setConfig] = useState({
     channelAutoDownload: false,
@@ -154,7 +156,7 @@ function Configuration({ token }: ConfigurationProps) {
           </Grid>
 
           <Grid item xs={6} md={3}>
-            <Tooltip placement="top-start" title="The Youtube Library ID for the library you will be downloading videos to.">
+            <Tooltip placement="top-start" title="The Plex Library ID for the library you will be downloading videos to and refreshing in Plex.">
               <TextField
                 label="Plex Youtube Library ID"
                 value={config.plexYoutubeLibraryId}
