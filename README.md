@@ -5,9 +5,7 @@
 YoutubePlexArr is a Dockerized application that offers a user-friendly way to automatically download videos from YouTube channels that you've handpicked, and integrates them seamlessly into your Plex Media Server.
 Note that this is in no way endorsed by, or associated with Youtube or the Plex team.
 
-## NOTE: WORK IN PROGRESS (AS OF MAY 16th 2023 THIS IS A WORK IN PROGRESS!!)
-
-This code is not yet complete, this Readme will be updated when it is complete.
+## NOTE: (AS OF MAY 16th 2023 THIS IS A WORK IN PROGRESS AND IS NOT YET POLISHED FOR END USERS)
 Input is welcome, but I would not advise the average "end user" to attempt to use this yet, unless they are brave.
 
 ## Overview
@@ -45,10 +43,11 @@ YoutubePlexArr is completely Dockerized, which means it's straightforward to get
 While YoutubePlexArr provides a means to curate and download YouTube content, it's crucial to respect copyright laws and YouTube's Terms of Service. Always ensure you're in compliance with these guidelines when using the application.
 ## Usage
 
-**Before running this in either dev or production mode**, first run ```./setup.sh```. This will let you select the root directory where Youtube videos that are downloaded will be placed.
+**Before running this in either dev or production mode**: First run ```./setup.sh```. This will let you select the root directory where Youtube videos that are downloaded will be placed.
 
-### To run locally on the host with hot reload (for development)
+### To run locally on the host with hot reload (for development -- NOT FOR END USERS)
 Run ```npm run dev```. The frontend UI will be exposed at localhost:3000
+This does not yet work with actual downloading as the yt-dlp and ffmpeg dependencies will not be pulled in correctly
 
 ### To run in production mode in a Docker container (for most users)
 
@@ -56,5 +55,10 @@ Run ```npm run dev```. The frontend UI will be exposed at localhost:3000
 **This has been tested in git bash on Windows with Docker Desktop. This is designed to be run from the same system as your Plex server.**
 **When running in production mode with the above config, your Plex Server IP Address should be set to host.docker.internal**
 
+This app uses Plex for auth. To login it will use Plex and then will verify that the Plex server on the local system is accessible to the Plex account you logged in to.
+If not you will be unable to login.
+
 
 1. Run ```./build.sh``` then run ```start.sh```. The frontend UI will be exposed at localhost:3087
+2. Once you are logged in, set your options in the Configuration screen. You will want to select the Plex library that videos are supposed to be downloaded to, as well as the directory where they will be downloaded.
+   Each video will be placed in a directory named for the Youtube channel it came from.
