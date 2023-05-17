@@ -70,13 +70,29 @@ function ChannelManager({ token }: ChannelManagerProps) {
     <Grid container spacing={2} style={{ marginBottom: '55px' }}>
       <Grid item xs={12}>
         <Card elevation={10}>
-          <CardHeader title="Youtube Channels" />
+          <CardHeader title="Youtube Channels" align="center"/>
             <List>
             {channels.map((channel, index) => (
-              <ListItem key={index} style={unsavedChannels.includes(channel) ? { backgroundColor: 'lightyellow' } : {}}>
-                <Grid container direction={isMobile ? "column" : "row"} alignItems="center" spacing={1} >
-                  <Grid item xs={12} sm={9}>
-                    <ListItemText primary={channel} style={{ fontSize: isMobile ? '0.8rem' : '1rem' }} />
+              <ListItem
+              key={index}
+              style={unsavedChannels.includes(channel) ?
+                { backgroundColor: 'lightyellow' } :
+                { backgroundColor: index % 2 === 0 ? 'white' : '#DDE' }}
+                >
+                <Grid container direction={isMobile ? "row" : "row"} alignItems="center" spacing={1} >
+                  <Grid item xs={11} sm={11}>
+                  <ListItemText
+                    primary={
+                      <div style={{
+                        fontSize: isMobile ? '0.8rem' : '1rem',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {channel}
+                      </div>
+                    }
+                  />
                   </Grid>
                   <Grid item xs={12} sm={3}>
                     <ListItemSecondaryAction>

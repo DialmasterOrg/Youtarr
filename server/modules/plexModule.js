@@ -20,6 +20,10 @@ class PlexModule {
       const libraries = response.data.MediaContainer.Directory.map((directory) => ({
         id: directory.key,
         title: directory.title,
+        locations: directory.Location.map(location => ({ // map the Location array
+          id: location.id,
+          path: location.path,
+        })),
       }));
 
       return libraries;

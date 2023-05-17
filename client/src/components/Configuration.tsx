@@ -46,10 +46,11 @@ function Configuration({ token }: ConfigurationProps) {
     setOpenPlexLibrarySelector(false);
   };
 
-  const setLibraryId = (id: string) => {
+  const setLibraryId = (id: string, directory: string) => {
     setConfig({
       ...config,
       plexYoutubeLibraryId: id,
+      youtubeOutputDirectory: directory
     });
     closeLibrarySelector();
   };
@@ -153,7 +154,7 @@ function Configuration({ token }: ConfigurationProps) {
           </Grid>
 
           <Grid item xs={6} md={3}>
-            <Tooltip placement="top-start" title="The ID number of your Plex Youtube library">
+            <Tooltip placement="top-start" title="The Youtube Library ID for the library you will be downloading videos to.">
               <TextField
                 label="Plex Youtube Library ID"
                 value={config.plexYoutubeLibraryId}
@@ -180,7 +181,7 @@ function Configuration({ token }: ConfigurationProps) {
             </Button>
           </Grid>
           <Grid item xs={12}>
-            <Tooltip placement="top-start" title="The directory path to your Plex Youtube library. If you update this you must restart your docker container.">
+            <Tooltip placement="top-start" title="The directory path to your Plex Youtube library. If you update this you must restart your docker container. Manually update this field at your own risk!">
               <TextField
                 label="Youtube Output Directory"
                 value={config.youtubeOutputDirectory}
@@ -193,7 +194,7 @@ function Configuration({ token }: ConfigurationProps) {
           </Grid>
           <Grid item xs={12}>
             <Button variant="contained" color="primary" onClick={saveConfig} style={{ fontSize: isMobile ? '0.8rem' : '1rem' }}>
-              Save Configuration
+              Save Configuration Changes
             </Button>
           </Grid>
         </Grid>

@@ -1,7 +1,7 @@
 {
   "channelAutoDownload": false,
-  "channelDownloadFrequency": "* * * * *",
-  "plexIP": "",
+  "channelDownloadFrequency": "0 * * * *",
+  "plexIP": "host.docker.internal",
   "plexApiKey": "",
   "plexYoutubeLibraryId": "",
   "youtubeOutputDirectory": "",

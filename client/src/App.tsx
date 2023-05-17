@@ -30,29 +30,36 @@ function App() {
   return (
     <Router>
       <AppBar position="static" style={{ backgroundColor: '#DDD', width: '100%', margin: 0, padding: 0 }}>
-        <Toolbar style={{ paddingBottom: '15px' }}>
-          {isMobile &&
+          <Toolbar style={{ paddingBottom: '15px' }}>
             <IconButton
               color="inherit"
               aria-label="open drawer"
               edge="start"
               onClick={handleDrawerToggle}
-              sx={{ mr: 2 }}
+              sx={{ mr: 2, visibility: isMobile ? 'visible' : 'hidden' }}
             >
               <MenuIcon />
             </IconButton>
-          }
-          <div style={{ color: '#000', flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <Typography variant={isMobile ? "h5" : "h3"} align="center">
-              YouTubePlexArr
-            </Typography>
-            <Typography style={{ fontSize: isMobile ? '1.0rem' : '1.3rem' }} align="center">
-              Youtube Video Downloader for Plex
-            </Typography>
-          </div>
-        </Toolbar>
-      </AppBar>
-      <Grid container>
+            <div style={{ color: '#000', flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <Typography variant={isMobile ? "h5" : "h3"} align="center">
+                YouTubePlexArr
+              </Typography>
+              <Typography style={{ fontSize: isMobile ? '1.0rem' : '1.3rem' }} align="center">
+                Youtube Video Downloader for Plex
+              </Typography>
+            </div>
+            {/* This is the matching invisible IconButton */}
+            <IconButton
+              color="inherit"
+              aria-label="menu space"
+              edge="start"
+              sx={{ mr: 2, visibility: 'hidden' }}
+            >
+              <MenuIcon />
+            </IconButton>
+          </Toolbar>
+        </AppBar>
+        <Grid container>
         <Grid item xs={12} sm={3} md={1} style={{ maxWidth: drawerWidth }}>
         <Drawer
           variant={isMobile ? 'temporary' : 'permanent'}

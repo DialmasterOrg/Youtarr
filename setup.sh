@@ -7,7 +7,7 @@ if [ ! -f "./config/config.json" ]; then
 fi
 
 # Prompt the user to enter a directory path
-echo "Please enter a directory path:"
+echo "Please enter the directory path to store the videos (you can change this later):"
 read dir_path
 
 # Check if the directory exists

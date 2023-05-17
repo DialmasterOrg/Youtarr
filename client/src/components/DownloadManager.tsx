@@ -79,20 +79,20 @@ function DownloadManager({ token }: DownloadManagerProps) {
     <Grid container spacing={3}>
       <Grid item xs={12} md={12}>
         <Card elevation={10}>
-          <CardHeader title="Video Channel Downloads" />
+          <CardHeader title="Video Channel Downloads" align="center" />
           <CardContent>
             <Button variant="contained" onClick={handleTriggerChannelDownloads}>
-              Manually trigger download from watched channels
+              Immediately start download from all channels
             </Button>
           </CardContent>
         </Card>
       </Grid>
       <Grid item xs={12} md={12}>
         <Card elevation={10}>
-          <CardHeader title="Download Specific Videos" />
+          <CardHeader title="Download Specific Videos" align="center" />
           <CardContent>
             <Typography variant="body1">
-              Enter YouTube video URLs, one per line, or separated by spaces.:
+              Enter YouTube video URLs, one per line, or separated by spaces:
             </Typography>
             <TextField style={{ marginBottom: '15px'}}
               multiline
@@ -108,9 +108,9 @@ function DownloadManager({ token }: DownloadManagerProps) {
           </CardContent>
         </Card>
       </Grid>
-      <Grid item xs={12} md={12}>
+      <Grid item xs={12} md={12} paddingBottom={'50px'}>
         <Card elevation={10}>
-          <CardHeader title="Recent Downloads" />
+          <CardHeader title="Recent Downloads" align="center" />
           <CardContent>
             <TableContainer>
               <Table>
@@ -119,7 +119,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
                     <TableCell style={{ fontWeight: 'bold'}}>Job Type</TableCell>
                     <TableCell style={{ fontWeight: 'bold'}}>Created</TableCell>
                     <TableCell style={{ fontWeight: 'bold'}}>Status</TableCell>
-                    <TableCell style={{ fontWeight: 'bold'}}>Running Time</TableCell>
+                    <TableCell style={{ fontWeight: 'bold'}}>Duration</TableCell>
                     <TableCell style={{ fontWeight: 'bold'}}>Output</TableCell>
                   </TableRow>
                 </TableHead>
@@ -137,7 +137,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
                       durationString = 'Pending';
                       console.log('Setting status to Pending');
                     } else if (job.status !== 'In Progress') {
-                      durationString = 'Completed';
+                      durationString = 'Complete';
                     } else {
                       const jobStartTime = new Date(job.timeInitiated).getTime(); // Convert to milliseconds
                       const duration = new Date(currentTime.getTime() - jobStartTime); // Subtract in milliseconds                    const hh = String(duration.getUTCHours()).padStart(2, '0');
