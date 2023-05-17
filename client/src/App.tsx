@@ -1,7 +1,7 @@
 import './App.css';
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
-import { ListItemIcon, Grid, AppBar, Toolbar, Box, Container, Typography, Drawer, List, ListItem, ListItemText, IconButton, useTheme, useMediaQuery } from '@mui/material';
+import { Grid, AppBar, Toolbar, Container, Typography, Drawer, List, ListItem, ListItemText, IconButton, useTheme, useMediaQuery } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import MenuIcon from '@mui/icons-material/Menu';
 import Configuration from './components/Configuration';
@@ -42,7 +42,7 @@ function App() {
             </IconButton>
             <div style={{ color: '#000', flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <Typography variant={isMobile ? "h5" : "h3"} align="center">
-                YouTubePlexArr
+                Youtarr
               </Typography>
               <Typography style={{ fontSize: isMobile ? '1.0rem' : '1.3rem' }} align="center">
                 Youtube Video Downloader for Plex

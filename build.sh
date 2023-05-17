@@ -1,15 +1,21 @@
 #!/bin/bash
 
-#Install dependencies for the base
-npm install
+# Check if --install-deps was passed as an argument
+if [ "$1" = "--install-deps" ]
+then
+  # Install dependencies for the base
+  npm install
 
+  # Install dependencies and build the client
+  cd client
+  npm install
+  cd ..
+fi
 
-# Install dependencies and build the client
+# Always build the client and Docker container
 cd client
-npm install
 npm run build
-
 cd ..
 
 # Build the Docker container
-docker build -t youtubeplexarr .
+docker build -t youtarr .

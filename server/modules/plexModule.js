@@ -39,13 +39,13 @@ class PlexModule {
         { strong: true },
         {
           headers: {
-            'X-Plex-Product': 'YoutubePlexArr',
+            'X-Plex-Product': 'Youtarr',
             'X-Plex-Client-Identifier': configModule.getConfig().uuid,
           }
         }
       );
       const { id, code } = response.data;
-      const authUrl = `https://app.plex.tv/auth#?clientID=${configModule.getConfig().uuid}&code=${code}&context%5Bdevice%5D%5Bproduct%5D=YoutubePlexArr`;
+      const authUrl = `https://app.plex.tv/auth#?clientID=${configModule.getConfig().uuid}&code=${code}&context%5Bdevice%5D%5Bproduct%5D=Youtarr`;
       return { authUrl, pinId: id };
     } catch (error) {
       console.log('PIN ERROR!!' + error.message);

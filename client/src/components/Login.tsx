@@ -1,6 +1,6 @@
 import React from 'react';
 import PlexAuth from './PLexAuth';
-import { Typography, Card, CardContent, CardHeader } from '@mui/material';
+import { Typography, Card, CardContent } from '@mui/material';
 
 interface HomeProps {
   setToken: React.Dispatch<React.SetStateAction<string | null>>;
