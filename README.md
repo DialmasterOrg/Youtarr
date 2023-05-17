@@ -12,7 +12,7 @@ Input is welcome, but I would not advise the average "end user" to attempt to us
 
 In the era of digital media, ensuring safe and appropriate content for your children can be a challenge. Youtube, while being a vast reservoir of educational and entertaining content, also hosts content that might not be suitable for children. To strike a balance, YoutubePlexArr allows you to curate YouTube channels so that you can provide a vetted, customized and safe YouTube experience for your kids.
 
-The application operates by running a scheduled task that automatically downloads new videos, along with their thumbnails and metadata, from a list of YouTube channels that you specify. These videos are then automatically added to your Plex server.
+The application operates by running a scheduled task that automatically downloads new videos, along with their thumbnails and metadata, from a list of YouTube channels that you specify. These videos are then automatically added to your Plex server and a library scan is initiated as soon as downloads are complete.
 
 ## Requirements
 
