@@ -45,8 +45,10 @@ class JobModule {
       }
     }
 
-    // Convert jobs into an array
-    const jobsArray = Object.values(this.jobs);
+    // Convert jobs into an array and add 'id' field
+    let jobsArray = Object.entries(this.jobs).map(([id, job]) => {
+      return { id, ...job };
+    });
 
     // Sort jobs by timeCreated in descending order
     jobsArray.sort((a, b) => b.timeCreated - a.timeCreated);
