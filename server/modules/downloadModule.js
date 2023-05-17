@@ -11,6 +11,8 @@ class DownloadModule {
   constructor() {
     this.config = configModule.getConfig(); // Get the initial configuration
     configModule.on('change', this.handleConfigChange.bind(this)); // Listen for configuration changes
+    // Start processing the next job in the queue, if any, this may happen if the app was shut down
+    this.startNextJob();
   }
 
   handleConfigChange(newConfig) {

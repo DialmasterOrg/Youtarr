@@ -73,7 +73,17 @@ class JobModule {
   }
 
   updateJob(jobId, updatedFields) {
-    //... keep the same up to the loop
+    console.log('Updating job: ' + jobId);
+    console.log('Updated fields: ' + JSON.stringify(updatedFields));
+    const job = this.jobs[jobId];
+    // If the job doesn't exist, do nothing
+    if (!job) {
+      console.log("Job to update did not exist!");
+      return;
+    }
+
+    // For each updated field, update the corresponding field in the job
+
     for (let field in updatedFields) {
       job[field] = updatedFields[field];
     }
