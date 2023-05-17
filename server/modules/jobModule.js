@@ -1,8 +1,32 @@
 const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
+const path = require('path');
 
 class JobModule {
   constructor() {
-    this.jobs = {};
+    this.jobsFilePath = path.join(__dirname, '../../config', 'jobs.json');
+
+    // Load jobs from file, if it exists.
+    if (fs.existsSync(this.jobsFilePath)) {
+      const fileContent = fs.readFileSync(this.jobsFilePath);
+      this.jobs = JSON.parse(fileContent);
+      // Change the status of "In Progress" jobs to "Terminated".
+      for (let jobId in this.jobs) {
+        if (this.jobs[jobId].status === "In Progress") {
+          this.jobs[jobId].status = "Terminated";
+        }
+      }
+
+      this.saveJobs(); // Save jobs after updating their status
+    } else {
+      this.jobs = {};
+    }
+  }
+
+  saveJobs() {
+    // Write jobs to file.
+    const fileContent = JSON.stringify(this.jobs);
+    fs.writeFileSync(this.jobsFilePath, fileContent);
   }
 
   getJob(jobId) {
@@ -42,29 +66,25 @@ class JobModule {
     console.log('Adding job: ' + JSON.stringify(job));
     console.log('Job ID: ' + jobId);
     this.jobs[jobId] = job;
+
+    this.saveJobs(); // Save jobs after adding new one
+
     return jobId;
   }
 
   updateJob(jobId, updatedFields) {
-
-    console.log('Updating job: ' + jobId);
-    console.log('Updated fields: ' + JSON.stringify(updatedFields));
-    const job = this.jobs[jobId];
-
-    // If the job doesn't exist, do nothing
-    if (!job) {
-      console.log("Job to update did not exist!");
-      return;
-    }
-
-    // For each updated field, update the corresponding field in the job
+    //... keep the same up to the loop
     for (let field in updatedFields) {
       job[field] = updatedFields[field];
     }
+
+    this.saveJobs(); // Save jobs after updating
   }
 
   deleteJob(jobId) {
     delete this.jobs[jobId];
+
+    this.saveJobs(); // Save jobs after deleting
   }
 }
 

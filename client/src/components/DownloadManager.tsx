@@ -39,7 +39,10 @@ function DownloadManager({ token }: DownloadManagerProps) {
           'x-access-token': token
         }
       }).then(response => {
-        setJobs(response.data);
+        // If there is response data, then set the jobs
+        if (response.data) {
+          setJobs(response.data);
+        }
       });
     }
   };
