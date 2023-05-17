@@ -1,6 +1,8 @@
 import React, { useState, ChangeEvent, useEffect } from 'react';
 import { FormControl, InputLabel, Select, MenuItem, Button, Card, CardContent, Checkbox, FormControlLabel, TextField, Grid, Typography, Tooltip } from '@mui/material';
 import PlexLibrarySelector from './PlexLibrarySelector';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
 
 interface ConfigurationProps {
   token: string | null;
@@ -17,6 +19,8 @@ function Configuration({ token }: ConfigurationProps) {
     uuid: '',
   });
   const [openPlexLibrarySelector, setOpenPlexLibrarySelector] = useState(false);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   useEffect(() => {
     fetch('/getconfig', {
@@ -97,7 +101,7 @@ function Configuration({ token }: ConfigurationProps) {
   return (
     <Card elevation={10}>
       <CardContent>
-        <Typography variant="h5" component="h2" gutterBottom>
+        <Typography variant={isMobile ? "h6" : "h5"} component="h2" gutterBottom>
           Configuration
         </Typography>
         <Grid container spacing={3}>
@@ -117,16 +121,17 @@ function Configuration({ token }: ConfigurationProps) {
           <Grid item xs={12}>
             <Tooltip placement="top-start" title="How often to run automatic channel downloads.">
               <FormControl fullWidth>
-                <InputLabel id="download-frequency-label">Download Frequency</InputLabel>
+                <InputLabel id="download-frequency-label" style={{ fontSize: isMobile ? '0.8rem' : '1rem' }}>Download Frequency</InputLabel>
                 <Select
                   labelId="download-frequency-label"
                   label="Download Frequency"
                   value={Object.keys(frequencyMapping).find(key => frequencyMapping[key] === config.channelDownloadFrequency) || ''}
                   onChange={(event: any) => handleSelectChange(event, 'channelDownloadFrequency')}
                   name="channelDownloadFrequency"
+                  inputProps={{ style: { fontSize: isMobile ? '0.8rem' : '1rem' } }}
                 >
                   {Object.keys(frequencyMapping).map((frequency, index) => (
-                    <MenuItem key={index} value={frequency}>
+                    <MenuItem key={index} value={frequency} style={{ fontSize: isMobile ? '0.8rem' : '1rem' }}>
                       {frequency}
                     </MenuItem>
                   ))}
@@ -136,17 +141,18 @@ function Configuration({ token }: ConfigurationProps) {
           </Grid>
           <Grid item xs={12}>
             <Tooltip placement="top-start" title="The IP address of your Plex server. 'localhost' if you're on the same machine. 'host.docker.internal' for production Docker on the same machine.">
-            <TextField
-              label="Plex Server IP Address"
-              value={config.plexIP}
-              onChange={handleInputChange}
-              name="plexIP"
-              fullWidth
-            />
+              <TextField
+                label="Plex Server IP Address"
+                value={config.plexIP}
+                onChange={handleInputChange}
+                name="plexIP"
+                fullWidth
+                InputProps={{ style: { fontSize: isMobile ? '0.8rem' : '1rem' } }}
+              />
             </Tooltip>
           </Grid>
 
-          <Grid item xs={2}>
+          <Grid item xs={6} md={3}>
             <Tooltip placement="top-start" title="The ID number of your Plex Youtube library">
               <TextField
                 label="Plex Youtube Library ID"
@@ -154,22 +160,23 @@ function Configuration({ token }: ConfigurationProps) {
                 onChange={handleInputChange}
                 InputProps={{
                   readOnly: true,
-                  onClick: openLibrarySelector
+                  onClick: openLibrarySelector,
+                  style: { fontSize: isMobile ? '0.8rem' : '1rem' }
                 }}
                 name="plexYoutubeLibraryId"
                 fullWidth
               />
-              </Tooltip>
-              <PlexLibrarySelector
-                open={openPlexLibrarySelector}
-                handleClose={closeLibrarySelector}
-                setLibraryId={setLibraryId}
-                token={token}
-              />
+            </Tooltip>
+            <PlexLibrarySelector
+              open={openPlexLibrarySelector}
+              handleClose={closeLibrarySelector}
+              setLibraryId={setLibraryId}
+              token={token}
+            />
           </Grid>
-          <Grid item xs={2}>
-            <Button variant="contained" color="primary" onClick={openLibrarySelector}>
-                Select Plex Library
+          <Grid item xs={6} md={3}>
+            <Button variant="contained" color="primary" onClick={openLibrarySelector} style={{ fontSize: isMobile ? '0.8rem' : '1rem' }}>
+              Select Plex Library
             </Button>
           </Grid>
           <Grid item xs={12}>
@@ -180,11 +187,12 @@ function Configuration({ token }: ConfigurationProps) {
                 onChange={handleInputChange}
                 name="youtubeOutputDirectory"
                 fullWidth
+                InputProps={{ style: { fontSize: isMobile ? '0.8rem' : '1rem' } }}
               />
             </Tooltip>
           </Grid>
           <Grid item xs={12}>
-            <Button variant="contained" color="primary" onClick={saveConfig}>
+            <Button variant="contained" color="primary" onClick={saveConfig} style={{ fontSize: isMobile ? '0.8rem' : '1rem' }}>
               Save Configuration
             </Button>
           </Grid>

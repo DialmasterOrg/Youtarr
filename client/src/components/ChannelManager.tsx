@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Tooltip, Grid, Button, Card, CardHeader, ListItem, ListItemSecondaryAction, IconButton, TextField, List, ListItemText } from '@mui/material';
 import Delete from '@mui/icons-material/Delete';
 import axios from 'axios';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
+
 
 interface ChannelManagerProps {
   token: string | null;
@@ -12,6 +15,8 @@ function ChannelManager({ token }: ChannelManagerProps) {
   const [channels, setChannels] = useState<string[]>([]);
   const [newChannel, setNewChannel] = useState<string>('');
   const [unsavedChannels, setUnsavedChannels] = useState<string[]>([]);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   useEffect(() => {
     // Fetch channels from backend on component mount
@@ -66,16 +71,16 @@ function ChannelManager({ token }: ChannelManagerProps) {
       <Grid item xs={12}>
         <Card elevation={10}>
           <CardHeader title="Youtube Channels" />
-          <List>
+            <List>
             {channels.map((channel, index) => (
               <ListItem key={index} style={unsavedChannels.includes(channel) ? { backgroundColor: 'lightyellow' } : {}}>
-                <Grid container alignItems="center" spacing={1} >
-                  <Grid item xs={9} md={9} lg={9}>
-                    <ListItemText primary={channel} />
+                <Grid container direction={isMobile ? "column" : "row"} alignItems="center" spacing={1} >
+                  <Grid item xs={12} sm={9}>
+                    <ListItemText primary={channel} style={{ fontSize: isMobile ? '0.8rem' : '1rem' }} />
                   </Grid>
-                  <Grid item xs={3}>
+                  <Grid item xs={12} sm={3}>
                     <ListItemSecondaryAction>
-                      <IconButton edge="end" onClick={() => handleDelete(index)}>
+                      <IconButton edge="end" onClick={() => handleDelete(index)} size={isMobile ? "small" : "medium"}>
                         <Delete />
                       </IconButton>
                     </ListItemSecondaryAction>
@@ -94,18 +99,19 @@ function ChannelManager({ token }: ChannelManagerProps) {
             value={newChannel}
             onChange={(e) => setNewChannel(e.target.value)}
             fullWidth
+            InputProps={{ style: { fontSize: isMobile ? '0.8rem' : '1rem' } }}
           />
         </Tooltip>
-        </Card>
+      </Card>
       </Grid>
       <Grid item xs={6}>
         <Tooltip placement="top" title="Add a new channel to the list above">
-          <Button variant="contained" onClick={handleAdd} fullWidth>Add Channel</Button>
+          <Button variant="contained" onClick={handleAdd} fullWidth style={{ fontSize: isMobile ? '0.8rem' : '1rem' }}>Add Channel</Button>
         </Tooltip>
       </Grid>
       <Grid item xs={6}>
         <Tooltip placement="top" title="Save your changes and make them active">
-          <Button variant="contained" onClick={handleSave} fullWidth>Save Channel Changes</Button>
+        <Button variant="contained" onClick={handleSave} fullWidth style={{ fontSize: isMobile ? '0.8rem' : '1rem' }}>Save Changes</Button>
         </Tooltip>
       </Grid>
 
