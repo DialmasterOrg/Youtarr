@@ -26,6 +26,7 @@ class JobModule {
     } else {
       this.jobs = {};
     }
+    this.startNextJob();
   }
 
   getInProgressJobId() {
