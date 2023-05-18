@@ -112,7 +112,7 @@ class JobModule {
     jobsArray.sort((a, b) => b.timeCreated - a.timeCreated);
 
     // Return the last 20 jobs (we may want to adjust this)
-    return jobsArray.slice(0, 10);
+    return jobsArray.slice(0, 20);
   }
 
   getAllJobs() {
