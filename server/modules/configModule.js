@@ -13,8 +13,10 @@ class ConfigModule extends EventEmitter {
     this.directoryPath = '';
     if (process.env.IN_DOCKER_CONTAINER) {
       this.directoryPath = "/usr/src/app/data";
+      this.ffmpegPath = '/usr/bin/ffmpeg';
     } else {
-      this.directoryPath = this.config.youtubeOutputDirectory;
+      this.ffmpegPath = this.config.devffmpegPath;
+      this.directoryPath = this.config.devYoutubeOutputDirectory;
     }
 
 

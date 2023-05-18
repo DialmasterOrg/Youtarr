@@ -9,13 +9,17 @@ config/channels.list
 config/complete.list
 config/jobs.json
 
+# Local dev exclusion
+ffmpeg.exe
+yt-dlp.exe
+
 # testing
 /coverage
 
 # production
 client/build
 client/node_modules
-
+jobs/*
 
 # misc
 .DS_Store

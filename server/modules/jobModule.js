@@ -4,7 +4,12 @@ const path = require('path');
 
 class JobModule {
   constructor() {
-    this.jobsFilePath = path.join(__dirname, '../../config', 'jobs.json');
+    this.jobsDir = path.join(__dirname, '../../jobs');
+    this.jobsFilePath = path.join(__dirname, '../../jobs', 'jobs.json');
+
+    if (!fs.existsSync(this.jobsDir)) {
+      fs.mkdirSync(this.jobsDir, { recursive: true });
+    }
 
     // Load jobs from file, if it exists.
     if (fs.existsSync(this.jobsFilePath)) {
@@ -21,6 +26,44 @@ class JobModule {
     } else {
       this.jobs = {};
     }
+  }
+
+  getInProgressJobId() {
+    for (let id in this.jobs) {
+      if (this.jobs[id].status === "In Progress") {
+        return id;
+      }
+    }
+    return null;
+  }
+
+  addOrUpdateJob(jobData, isNextJob = false) {
+    let jobId;
+    const inProgressJobId = this.getInProgressJobId();
+    if (!isNextJob) {
+      if (inProgressJobId) {
+        // If there is a job in progress, create a new job with status Pending
+        console.log(`A job is already in progress. Adding this ${jobData.jobType} job to the queue.`);
+        jobData.status = "Pending";
+        jobId = this.addJob(jobData);
+      } else {
+        // Otherwise, add a job with status In Progress
+        console.log(`Adding job to jobs list as In Progress for ${jobData.jobType} job.`);
+        jobData.status = "In Progress";
+        jobId = this.addJob(jobData);
+      }
+    } else if (isNextJob && !inProgressJobId) {
+      // If this is a next job and there's no job in progress, update its status to In Progress
+      console.log("This is a 'next job', flipping from Pending to In Progress");
+      this.updateJob(jobData.id, {
+        status: "In Progress",
+        timeInitiated: Date.now(),
+      });
+      jobId = jobData.id;
+    } else {
+      console.log("Cannot start next job as a job is already in progress");
+    }
+    return jobId;
   }
 
   saveJobs() {
@@ -65,6 +108,7 @@ class JobModule {
     const jobId = uuidv4(); // Generate a new UUID
     job.timeInitiated = Date.now();
     job.timeCreated = Date.now();
+    job.id = jobId;
     console.log('Adding job: ' + JSON.stringify(job));
     console.log('Job ID: ' + jobId);
     this.jobs[jobId] = job;

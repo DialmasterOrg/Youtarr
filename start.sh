@@ -16,4 +16,4 @@ if [[ "$OSTYPE" == "msys" ]]; then
 fi
 
 # Start the Docker container with the selected directory mounted
-docker run --name youtarr -d -v $youtubeOutputDirectory:/usr/src/app/data -v /$(pwd)/config:/app/config -p 3087:3011 -e IN_DOCKER_CONTAINER=1 youtarr
+docker run --name youtarr -d -v $youtubeOutputDirectory:/usr/src/app/data -v /$(pwd)/config:/app/config -v /$(pwd)/jobs:/app/jobs -p 3087:3011 -e IN_DOCKER_CONTAINER=1 youtarr
