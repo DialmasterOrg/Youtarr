@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "",
   "main": "server/index.js",
-
   "scripts": {
     "start": "node server/server.js",
     "start:dev": "nodemon server/server.js",
@@ -20,6 +19,7 @@
   "dependencies": {
     "axios": "^1.4.0",
     "express": "^4.18.2",
+    "fs-extra": "^11.1.1",
     "node-cron": "^3.0.2",
     "uuid": "^9.0.0"
   }

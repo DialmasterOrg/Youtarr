@@ -13,13 +13,23 @@ import {
   TableHead,
   TableRow,
   TableCell,
+  Popper,
 } from "@mui/material";
-import { IconButton, Collapse } from "@mui/material";
+import { IconButton } from "@mui/material";
+import InfoIcon from "@mui/icons-material/Info";
 import { ExpandLess, ExpandMore } from "@mui/icons-material";
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
 import axios from "axios";
 
 interface DownloadManagerProps {
   token: string | null;
+}
+
+interface VideoData {
+  youtubeId: string;
+  youTubeChannelName: string;
+  youTubeVideoName: string;
 }
 
 interface Job {
@@ -29,6 +39,9 @@ interface Job {
   timeCreated: number;
   timeInitiated: number;
   id: string;
+  data: {
+    videos: VideoData[];
+  };
 }
 
 function DownloadManager({ token }: DownloadManagerProps) {
@@ -36,6 +49,11 @@ function DownloadManager({ token }: DownloadManagerProps) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [anchorEl, setAnchorEl] = useState<
+    Record<string, null | HTMLButtonElement>
+  >({});
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   useEffect(() => {
     fetchRunningJobs();
@@ -109,7 +127,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
   };
 
   return (
-    <Grid container spacing={3}>
+    <Grid container spacing={2}>
       <Grid item xs={12} md={12}>
         <Card elevation={10}>
           <CardHeader title="Video Channel Downloads" align="center" />
@@ -150,23 +168,20 @@ function DownloadManager({ token }: DownloadManagerProps) {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell style={{ fontWeight: "bold" }}>
+                    <TableCell style={{ fontSize: isMobile ? "small" : "medium", fontWeight: "bold" }}>
                       Job Type
                     </TableCell>
-                    <TableCell style={{ fontWeight: "bold" }}>
+                    <TableCell style={{ fontSize: isMobile ? "small" : "medium", fontWeight: "bold" }}>
                       Created
                     </TableCell>
-                    <TableCell style={{ fontWeight: "bold" }}>Status</TableCell>
-                    <TableCell style={{ fontWeight: "bold" }}>
-                      Duration
-                    </TableCell>
-                    <TableCell style={{ fontWeight: "bold" }}>Output</TableCell>
+                    <TableCell style={{ fontSize: isMobile ? "small" : "medium", fontWeight: "bold" }}>Status</TableCell>
+                    <TableCell style={{ fontSize: isMobile ? "small" : "medium", fontWeight: "bold" }}>Output</TableCell>
                   </TableRow>
                 </TableHead>
                 {jobs.length === 0 && (
                   <TableBody>
                     <TableRow>
-                      <TableCell colSpan={5}>
+                      <TableCell colSpan={4}>
                         No jobs currently running
                       </TableCell>
                     </TableRow>
@@ -176,11 +191,8 @@ function DownloadManager({ token }: DownloadManagerProps) {
                   {jobs.map((job, index) => {
                     const isExpanded = expanded[job.id] || false;
                     let durationString = "";
-                    if (job.status === "Pending") {
-                      durationString = "Pending";
-                      console.log("Setting status to Pending");
-                    } else if (job.status !== "In Progress") {
-                      durationString = "Complete";
+                    if (job.status !== "In Progress") {
+                      durationString = job.status;
                     } else {
                       const jobStartTime = new Date(
                         job.timeInitiated
@@ -222,11 +234,10 @@ function DownloadManager({ token }: DownloadManagerProps) {
 
                     return (
                       <TableRow key={index}>
-                        <TableCell>{job.jobType}</TableCell>
-                        <TableCell>{formattedTimeCreated}</TableCell>
-                        <TableCell>{job.status}</TableCell>
-                        <TableCell>{durationString}</TableCell>
-                        <TableCell>
+                        <TableCell style={{ fontSize: isMobile ? "small" : "medium" }} >{job.jobType}</TableCell>
+                        <TableCell style={{ fontSize: isMobile ? "small" : "medium" }} >{formattedTimeCreated}</TableCell>
+                        <TableCell style={{ fontSize: isMobile ? "small" : "medium" }} >{durationString}</TableCell>
+                        <TableCell style={{ fontSize: isMobile ? "small" : "medium" }} >
                           <div
                             style={{
                               position: "relative",
@@ -241,16 +252,57 @@ function DownloadManager({ token }: DownloadManagerProps) {
                                 {isExpanded ? <ExpandLess /> : <ExpandMore />}
                               </IconButton>
                             )}
+                            {job.data?.videos?.length > 0 && (
+                              <>
+                                <IconButton
+                                  onClick={(
+                                    event: React.MouseEvent<HTMLButtonElement>
+                                  ) => {
+                                    setAnchorEl({
+                                      ...anchorEl,
+                                      [job.id]: anchorEl[job.id]
+                                        ? null
+                                        : event.currentTarget,
+                                    });
+                                  }}
+                                >
+                                  {" "}
+                                  <InfoIcon fontSize="small" />
+                                </IconButton>
+                                <Popper
+                                  open={Boolean(anchorEl[job.id])}
+                                  anchorEl={anchorEl[job.id]}
+                                >
+                                  <div
+                                    style={{
+                                      padding: "10px",
+                                      backgroundColor: "#f5f5f5",
+                                      maxWidth: isMobile ? "85vw" : "300px",
+                                      wordBreak: "break-word",
+                                    }}
+                                  >
+                                    <Typography sx={{ padding: 2 }}>
+                                      {job.data?.videos?.map((video: any) => (
+                                        <p key={video.youtubeId}>
+                                          {video.youTubeChannelName} -{" "}
+                                          {video.youTubeVideoName}
+                                        </p>
+                                      ))}
+                                    </Typography>
+                                  </div>
+                                </Popper>
+                              </>
+                            )}
 
                             {isExpanded ? (
-                              <pre>{job.output}</pre>
+                              <div style={{ maxWidth: isMobile ? "200px" : "100%" }}>{job.output}</div>
                             ) : (
                               <div
                                 style={{
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
                                   whiteSpace: "nowrap",
-                                  width: 200,
+                                  width: isMobile ? "100px" : "200px",
                                 }}
                               >
                                 {job.output}
