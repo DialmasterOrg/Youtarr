@@ -10,41 +10,41 @@ class DownloadModule {
     this.config = configModule.getConfig(); // Get the initial configuration
     configModule.on("change", this.handleConfigChange.bind(this)); // Listen for configuration changes
     // Start processing the next job in the queue, if any, this may happen if the app was shut down
-    this.startNextJob();
+    jobModule.startNextJob();
   }
 
   handleConfigChange(newConfig) {
     this.config = newConfig; // Update the configuration
   }
 
-  startNextJob() {
-    console.log("Looking for next job to start");
-    const jobs = jobModule.getAllJobs();
-    for (let id in jobs) {
-      if (jobs[id].status === "Pending") {
-        if (jobs[id].jobType === "Channel Downloads") {
-          jobs[id].id = id;
-          this.doChannelDownloads(jobs[id], true);
-        } else if (jobs[id].jobType === "Manually Added Urls") {
-          jobs[id].id = id;
-          this.doSpecificDownloads(jobs[id], true);
-        }
-        break;
-      }
-    }
-  }
-
-  doDownload(command, jobId, jobType) {
-    // Read the complete.list before the command execution
-    const initialLines = fs
+  getCountOfDownloadedVideos() {
+    const lines = fs
       .readFileSync(
         path.join(__dirname, "../../config", "complete.list"),
         "utf-8"
       )
       .split("\n")
       .filter((line) => line.trim() !== "");
+    return lines.length;
+  }
 
-    const initialCount = initialLines.length;
+  getNewVideoUrls(initialCount) {
+    const lines = fs
+      .readFileSync(
+        path.join(__dirname, "../../config", "complete.list"),
+        "utf-8"
+      )
+      .split("\n")
+      .filter((line) => line.trim() !== "");
+    const newVideoIds = lines
+      .slice(initialCount)
+      .map((line) => line.split(" ")[1]);
+
+    return newVideoIds.map((id) => `https://youtu.be/${id}`);
+  }
+
+  doDownload(command, jobId, jobType) {
+    const initialCount = this.getCountOfDownloadedVideos();
 
     // Wrap the exec command in a Promise to handle timeout
     new Promise((resolve, reject) => {
@@ -56,26 +56,8 @@ class DownloadModule {
       console.log(`Running exec for ${jobType}`);
       exec(command, { timeout: 1000000 }, (error, stdout, stderr) => {
         clearTimeout(timer);
-        // Read the complete.list before the command execution
-        const finalLines = fs
-          .readFileSync(
-            path.join(__dirname, "../../config", "complete.list"),
-            "utf-8"
-          )
-          .split("\n")
-          .filter((line) => line.trim() !== "");
-
-        const finalCount = finalLines.length;
-
-        // Calculate the number of videos downloaded
-        const videoCount = finalCount - initialCount;
-        // Get the new video IDs
-        const newVideoIds = finalLines
-          .slice(initialLines.length)
-          .map((line) => line.split(" ")[1]);
-
-        // Create the URLs
-        const newVideoUrls = newVideoIds.map((id) => `https://youtu.be/${id}`);
+        const newVideoUrls = this.getNewVideoUrls(initialCount);
+        const videoCount = newVideoUrls.length;
 
         console.log(
           `${jobType} complete (with or without errors) for Job ID: ${jobId}`
@@ -101,7 +83,7 @@ class DownloadModule {
         }
         plexModule.refreshLibrary();
         // When the job is complete, start the next job in the queue
-        this.startNextJob();
+        jobModule.startNextJob();
         resolve();
       });
     }).catch((error) => {
@@ -122,6 +104,7 @@ class DownloadModule {
       status: "",
       output: "",
       id: jobData.id ? jobData.id : "",
+      action: this.doChannelDownloads.bind(this),
     }, isNextJob);
 
 
@@ -149,6 +132,7 @@ class DownloadModule {
       output: "",
       id: jobData.id ? jobData.id : "",
       data: jobData,
+      action: this.doSpecificDownloads.bind(this)
     }, isNextJob);
 
     if (jobModule.getJob(jobId).status === "In Progress") {

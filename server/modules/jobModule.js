@@ -37,6 +37,20 @@ class JobModule {
     return null;
   }
 
+  startNextJob() {
+    console.log("Looking for next job to start");
+    const jobs = this.getAllJobs();
+    for (let id in jobs) {
+      if (jobs[id].status === "Pending") {
+        jobs[id].id = id;
+        if (jobs[id].action) {
+          jobs[id].action(jobs[id], true); // Invoke the function
+        }
+        break;
+      }
+    }
+  }
+
   addOrUpdateJob(jobData, isNextJob = false) {
     let jobId;
     const inProgressJobId = this.getInProgressJobId();
