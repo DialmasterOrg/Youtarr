@@ -18,8 +18,8 @@ import {
 import { IconButton } from "@mui/material";
 import InfoIcon from "@mui/icons-material/Info";
 import { ExpandLess, ExpandMore } from "@mui/icons-material";
-import useMediaQuery from '@mui/material/useMediaQuery';
-import { useTheme } from '@mui/material/styles';
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import axios from "axios";
 
 interface DownloadManagerProps {
@@ -53,7 +53,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
     Record<string, null | HTMLButtonElement>
   >({});
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   useEffect(() => {
     fetchRunningJobs();
@@ -129,27 +129,31 @@ function DownloadManager({ token }: DownloadManagerProps) {
   return (
     <Grid container spacing={2}>
       <Grid item xs={12} md={12}>
-        <Card elevation={10}>
+        <Card elevation={8}>
           <CardHeader title="Channel Downloads" align="center" />
           <CardContent>
             <Typography align="center" variant="body1">
-            <Button variant="contained" onClick={handleTriggerChannelDownloads}>
-              Immediately start download from all channels
-            </Button>
+              <Button
+                variant="contained"
+                onClick={handleTriggerChannelDownloads}
+              >
+                Immediately start download from all channels
+              </Button>
             </Typography>
           </CardContent>
         </Card>
       </Grid>
       <Grid item xs={12} md={12}>
-        <Card elevation={10}>
+        <Card elevation={8}>
           <CardHeader title="Download Specific Videos" align="center" />
           <CardContent>
             <Typography variant="body1">
-              Enter YouTube video URLs, one per line, or separated by spaces. <br />
-              URLs should be in the format: https://www.youtube.com/watch?v=SETDSFhhQWM
+              Enter urls, one per line or space separated
+              <br />
+              Eg: https://www.youtube.com/watch?v=SETDSFhhQWM
             </Typography>
             <TextField
-              style={{ marginBottom: "15px" }}
+              style={{ marginBottom: "16px" }}
               multiline
               rows={8}
               variant="outlined"
@@ -163,22 +167,46 @@ function DownloadManager({ token }: DownloadManagerProps) {
           </CardContent>
         </Card>
       </Grid>
-      <Grid item xs={12} md={12} paddingBottom={"50px"}>
-        <Card elevation={10}>
+      <Grid item xs={12} md={12} paddingBottom={"48px"}>
+        <Card elevation={8}>
           <CardHeader title="Recent Downloads" align="center" />
           <CardContent>
             <TableContainer>
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell style={{ fontSize: isMobile ? "small" : "medium", fontWeight: "bold" }}>
+                    <TableCell
+                      style={{
+                        fontSize: isMobile ? "small" : "medium",
+                        fontWeight: "bold",
+                      }}
+                    >
                       Job Type
                     </TableCell>
-                    <TableCell style={{ fontSize: isMobile ? "small" : "medium", fontWeight: "bold" }}>
+                    <TableCell
+                      style={{
+                        fontSize: isMobile ? "small" : "medium",
+                        fontWeight: "bold",
+                      }}
+                    >
                       Created
                     </TableCell>
-                    <TableCell style={{ fontSize: isMobile ? "small" : "medium", fontWeight: "bold" }}>Status</TableCell>
-                    <TableCell style={{ fontSize: isMobile ? "small" : "medium", fontWeight: "bold" }}>Output</TableCell>
+                    <TableCell
+                      style={{
+                        fontSize: isMobile ? "small" : "medium",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      Status
+                    </TableCell>
+                    <TableCell
+                      style={{
+                        fontSize: isMobile ? "small" : "medium",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      Output
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 {jobs.length === 0 && (
@@ -237,10 +265,24 @@ function DownloadManager({ token }: DownloadManagerProps) {
 
                     return (
                       <TableRow key={index}>
-                        <TableCell style={{ fontSize: isMobile ? "small" : "medium" }} >{job.jobType}</TableCell>
-                        <TableCell style={{ fontSize: isMobile ? "small" : "medium" }} >{formattedTimeCreated}</TableCell>
-                        <TableCell style={{ fontSize: isMobile ? "small" : "medium" }} >{durationString}</TableCell>
-                        <TableCell style={{ fontSize: isMobile ? "small" : "medium" }} >
+                        <TableCell
+                          style={{ fontSize: isMobile ? "small" : "medium" }}
+                        >
+                          {job.jobType}
+                        </TableCell>
+                        <TableCell
+                          style={{ fontSize: isMobile ? "small" : "medium" }}
+                        >
+                          {formattedTimeCreated}
+                        </TableCell>
+                        <TableCell
+                          style={{ fontSize: isMobile ? "small" : "medium" }}
+                        >
+                          {durationString}
+                        </TableCell>
+                        <TableCell
+                          style={{ fontSize: isMobile ? "small" : "medium" }}
+                        >
                           <div
                             style={{
                               position: "relative",
@@ -278,9 +320,9 @@ function DownloadManager({ token }: DownloadManagerProps) {
                                 >
                                   <div
                                     style={{
-                                      padding: "10px",
+                                      padding: "8px",
                                       backgroundColor: "#f5f5f5",
-                                      maxWidth: isMobile ? "85vw" : "300px",
+                                      maxWidth: isMobile ? "85vw" : "320px",
                                       wordBreak: "break-word",
                                     }}
                                   >
@@ -298,7 +340,13 @@ function DownloadManager({ token }: DownloadManagerProps) {
                             )}
 
                             {isExpanded ? (
-                              <div style={{ maxWidth: isMobile ? "200px" : "100%" }}>{job.output}</div>
+                              <div
+                                style={{
+                                  maxWidth: isMobile ? "200px" : "100%",
+                                }}
+                              >
+                                {job.output}
+                              </div>
                             ) : (
                               <div
                                 style={{

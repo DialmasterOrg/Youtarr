@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { Button } from '@mui/material';
+import React, { useState } from "react";
+import { Button } from "@mui/material";
 
 interface PlexAuthProps {
-    setToken: React.Dispatch<React.SetStateAction<string | null>>;
+  setToken: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
 const PlexAuth: React.FC<PlexAuthProps> = ({ setToken }) => {
@@ -12,11 +12,11 @@ const PlexAuth: React.FC<PlexAuthProps> = ({ setToken }) => {
   const handleAuthClick = async () => {
     try {
       // Request the server to generate a PIN and get the auth URL
-      const res = await fetch('/plex/auth-url');
+      const res = await fetch("/plex/auth-url");
       const { authUrl, pinId } = await res.json();
 
       // Open the Plex auth page
-      const authWindow = window.open(authUrl, '_blank');
+      const authWindow = window.open(authUrl, "_blank");
       if (authWindow) {
         authWindow.focus();
       }
@@ -28,9 +28,9 @@ const PlexAuth: React.FC<PlexAuthProps> = ({ setToken }) => {
         if (authToken) {
           clearInterval(intervalId);
           setToken(authToken);
-          localStorage.setItem('plexAuthToken', authToken);
+          localStorage.setItem("plexAuthToken", authToken);
           authWindow?.close();
-          window.location.href = '/configuration';
+          window.location.href = "/configuration";
         }
       }, 5000);
     } catch (error: any) {
@@ -40,7 +40,9 @@ const PlexAuth: React.FC<PlexAuthProps> = ({ setToken }) => {
 
   return (
     <div>
-      <Button variant="contained" onClick={handleAuthClick}>Login Via Plex</Button>
+      <Button variant="contained" onClick={handleAuthClick}>
+        Login Via Plex
+      </Button>
       {error && <p>{error}</p>}
     </div>
   );

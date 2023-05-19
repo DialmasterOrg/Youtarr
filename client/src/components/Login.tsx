@@ -8,7 +8,7 @@ interface HomeProps {
 
 const Login: React.FC<HomeProps> = ({ setToken }) => {
   return (
-    <Card title='Sign in to continue' elevation={10}>
+    <Card title='Sign in to continue' elevation={8}>
       <CardContent>
         <Typography variant="h4" align='center' component="h2" gutterBottom>
           Sign in to continue
