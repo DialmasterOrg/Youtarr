@@ -26,7 +26,11 @@ To use Youtarr, you need to have the following software installed on your system
 
 3. **Bash Shell:** Bash is a Unix shell and command language. The setup and start scripts are written in bash. For Windows users, you can use Git Bash, which is included when you install Git for Windows.
 
-4. **npm (Node Package Manager):** npm is a package manager for the JavaScript programming language. It is used to install the dependencies that Youtarr needs to run in development mode. If you have Node.js installed on your machine, npm is typically installed with it. If not, you can download Node.js (which includes npm) from the official website.
+4. **npm (Node Package Manager):** npm is a package manager for the JavaScript programming language. It is used to install the dependencies that Youtarr needs to run in development mode. If you have Node.js installed on your machine, npm is typically installed with it. If not, you can download Node.js (which includes npm) from the official website
+
+5. **Git**: Git is a free and open source distributed version control system designed to handle everything from small to very large projects with speed and efficiency. Git is needed for version control and is required for Bash Shell as well. You can download Git from the official website.
+
+
 
 Please ensure that you have these installed and available in your system's PATH before you proceed with the installation of Youtarr.
 
