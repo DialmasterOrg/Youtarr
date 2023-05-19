@@ -19,6 +19,9 @@ class ConfigModule extends EventEmitter {
       this.directoryPath = this.config.devYoutubeOutputDirectory;
     }
 
+    if (!this.config.channelFilesToDownload) {
+      this.config.channelFilesToDownload = 3;
+    }
 
     // Check if a UUID exists in the config
     if (!this.config.uuid) {

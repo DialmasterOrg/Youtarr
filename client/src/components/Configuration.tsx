@@ -1,5 +1,5 @@
 import React, { useState, ChangeEvent, useEffect } from 'react';
-import { FormControl, InputLabel, Select, MenuItem, Button, Card, CardContent, Checkbox, FormControlLabel, TextField, Grid, Typography, Tooltip } from '@mui/material';
+import { SelectChangeEvent, FormControl, InputLabel, Select, MenuItem, Button, Card, CardContent, Checkbox, FormControlLabel, TextField, Grid, Typography, Tooltip } from '@mui/material';
 import PlexLibrarySelector from './PlexLibrarySelector';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
@@ -14,6 +14,8 @@ function Configuration({ token }: ConfigurationProps) {
   const [config, setConfig] = useState({
     channelAutoDownload: false,
     channelDownloadFrequency: '',
+    channelFilesToDownload: 3,
+    initialSetup: true,
     plexApiKey: '',
     youtubeOutputDirectory: '',
     plexYoutubeLibraryId: '',
@@ -83,7 +85,6 @@ function Configuration({ token }: ConfigurationProps) {
   };
 
   const frequencyMapping: { [key: string]: string } = {
-    'Every 5 minutes': '*/5 * * * *',
     'Every 15 minutes': '*/15 * * * *',
     'Every 30 minutes': '*/30 * * * *',
     'Hourly': '0 * * * *',
@@ -100,6 +101,14 @@ function Configuration({ token }: ConfigurationProps) {
     });
   };
 
+  const handleSelectNumberChange = (event: SelectChangeEvent<number>) => {
+    const { name = '', value } = event.target;
+    setConfig({
+      ...config,
+      [name]: value,
+    });
+};
+
 
   return (
     <Card elevation={10}>
@@ -109,6 +118,7 @@ function Configuration({ token }: ConfigurationProps) {
         </Typography>
         <Grid container spacing={3}>
           <Grid item xs={12}>
+          <Tooltip placement="top-start" title="Check to enable automatic scheduled downloading of videos from your Channels.">
             <FormControlLabel
               control={
                 <Checkbox
@@ -120,9 +130,11 @@ function Configuration({ token }: ConfigurationProps) {
               }
               label="Enable Automatic Download of Channel Videos"
             />
+          </Tooltip>
           </Grid>
+          {config.channelAutoDownload && (
           <Grid item xs={12}>
-            <Tooltip placement="top-start" title="How often to run automatic channel downloads.">
+            <Tooltip placement="top-start" title="How often to run automatic channel video downloads.">
               <FormControl fullWidth>
                 <InputLabel id="download-frequency-label" style={{ fontSize: isMobile ? '0.8rem' : '1rem' }}>Download Frequency</InputLabel>
                 <Select
@@ -141,9 +153,27 @@ function Configuration({ token }: ConfigurationProps) {
                 </Select>
               </FormControl>
             </Tooltip>
+          </Grid> )}
+          <Grid item xs={12}>
+            <Tooltip placement="top-start" title="How many videos (starting from the most recent) should be downloaded for each channel when channel downloads are initiated.">
+              <FormControl fullWidth>
+                <InputLabel>Channel Files to Download</InputLabel>
+                <Select
+                  label="Channel Files to Download"
+                  value={config.channelFilesToDownload}
+                  onChange={handleSelectNumberChange}
+                  name="channelFilesToDownload"
+                  inputProps={{ style: { fontSize: isMobile ? '0.8rem' : '1rem' } }}
+                >
+                  {[...Array(10)].map((_, i) => (
+                    <MenuItem value={i+1} key={i}>{i+1}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Tooltip>
           </Grid>
           <Grid item xs={12}>
-            <Tooltip placement="top-start" title="The IP address of your Plex server. 'localhost' if you're on the same machine. 'host.docker.internal' for production Docker on the same machine.">
+            <Tooltip placement="top-start" title="The IP address of your Plex server. 'localhost' if you're on the same machine running in dev mode. 'host.docker.internal' for production Docker on the same machine. You can also use your public IP for your Plex server.">
               <TextField
                 label="Plex Server IP Address"
                 value={config.plexIP}

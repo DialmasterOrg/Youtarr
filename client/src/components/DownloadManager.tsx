@@ -130,11 +130,13 @@ function DownloadManager({ token }: DownloadManagerProps) {
     <Grid container spacing={2}>
       <Grid item xs={12} md={12}>
         <Card elevation={10}>
-          <CardHeader title="Video Channel Downloads" align="center" />
+          <CardHeader title="Channel Downloads" align="center" />
           <CardContent>
+            <Typography align="center" variant="body1">
             <Button variant="contained" onClick={handleTriggerChannelDownloads}>
               Immediately start download from all channels
             </Button>
+            </Typography>
           </CardContent>
         </Card>
       </Grid>
@@ -148,7 +150,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
             <TextField
               style={{ marginBottom: "15px" }}
               multiline
-              rows={10}
+              rows={8}
               variant="outlined"
               fullWidth
               value={videoUrls}

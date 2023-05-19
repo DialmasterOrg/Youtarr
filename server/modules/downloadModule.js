@@ -127,7 +127,7 @@ class DownloadModule {
 
     if (jobModule.getJob(jobId).status === "In Progress") {
       const baseCommand = this.getBaseCommand();
-      const command = `${baseCommand} -a ./config/channels.list --playlist-end 3`;
+      const command = `${baseCommand} -a ./config/channels.list --playlist-end ${configModule.config.channelFilesToDownload}`;
       this.doDownload(command, jobId, jobType);
     }
     return jobId;

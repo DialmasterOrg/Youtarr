@@ -1,4 +1,6 @@
 {
+  "initialSetup": true,
+  "channelFilesToDownload": 5,
   "channelAutoDownload": false,
   "channelDownloadFrequency": "0 * * * *",
   "plexIP": "host.docker.internal",
