@@ -7,6 +7,7 @@ Note that this is in no way endorsed by, or associated with Youtube or the Plex 
 
 ## NOTE: (AS OF MAY 18th 2023 THIS IS A WORK IN PROGRESS)
 As-is this application does what I intended it to do for me. I welcome any suggestions or feedback. I will continue to add functionality and polish.
+I am aware the the initial setup/startup, although fairly easy for developers, is not very friendly to the end user and this will be addressed in the future if there turns out to be a demand for it.
 
 ## Overview
 
