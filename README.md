@@ -5,8 +5,8 @@
 Youtarr is a Dockerized application that offers a user-friendly way to automatically download videos from YouTube channels that you've handpicked, and integrates them seamlessly into your Plex Media Server.
 Note that this is in no way endorsed by, or associated with Youtube or the Plex team.
 
-## NOTE: (AS OF MAY 16th 2023 THIS IS A WORK IN PROGRESS AND IS NOT YET POLISHED FOR END USERS)
-Input is welcome, but I would not advise the average "end user" to attempt to use this yet, unless they are brave.
+## NOTE: (AS OF MAY 18th 2023 THIS IS A WORK IN PROGRESS)
+As-is this application does what I intended it to do for me. I welcome any suggestions or feedback. I will continue to add functionality and polish.
 
 ## Overview
 
