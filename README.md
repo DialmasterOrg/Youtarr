@@ -43,11 +43,9 @@ Youtarr is completely Dockerized, which means it's straightforward to get up and
 While Youtarr provides a means to curate and download YouTube content, it's crucial to respect copyright laws and YouTube's Terms of Service. Always ensure you're in compliance with these guidelines when using the application.
 ## Usage
 
-**Before running this in either dev or production mode**: First run ```./setup.sh```. This will let you select the root directory where Youtube videos that are downloaded will be placed.
+**You will first need to clone this repository.**: 
 
-### To run locally on the host with hot reload (for development -- NOT FOR END USERS)
-Run ```npm run dev```. The frontend UI will be exposed at localhost:3000
-This does not yet work with actual downloading as the yt-dlp and ffmpeg dependencies will not be pulled in correctly
+**Before running this in either dev or production mode**: First run ```./setup.sh```. This will let you select the root directory where Youtube videos that are downloaded will be placed.
 
 ### To run in production mode in a Docker container (for most users)
 
@@ -64,3 +62,13 @@ If not you will be unable to login.
 3. Once you set your download directory, you will need to restart the app. From the command line just to ```./stop.sh``` and then ```./start.sh```
 
    Each video will be placed in a directory named for the Youtube channel it came from.
+
+### To run locally on the host with hot reload (for development -- NOT FOR END USERS)
+Download yt-dlp.exe and place it in the root directory of your application.
+Make sure ffmpeg is installed on your system.
+Update your ```config/config.json```. 
+* Your devYoutubeOutputDirectory will need to be pointed to the root directory where you want to download videos.
+* Your devffmpegPath will need to be pointed to whereever you installed ffmpeg.
+
+Run ```npm run dev```. The frontend UI will be exposed at localhost:3000
+
