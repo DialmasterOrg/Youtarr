@@ -1,5 +1,7 @@
 import React, { useState, ChangeEvent, useEffect } from 'react';
-import { SelectChangeEvent, FormControl, InputLabel, Select, MenuItem, Button, Card, CardContent, Checkbox, FormControlLabel, TextField, Grid, Typography, Tooltip } from '@mui/material';
+import { SelectChangeEvent, FormControl, InputLabel, Select, MenuItem,
+  Button, Card, CardContent, Checkbox, FormControlLabel, TextField,
+  Grid, Typography, Tooltip } from '@mui/material';
 import PlexLibrarySelector from './PlexLibrarySelector';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';

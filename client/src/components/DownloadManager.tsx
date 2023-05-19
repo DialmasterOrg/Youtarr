@@ -145,7 +145,8 @@ function DownloadManager({ token }: DownloadManagerProps) {
           <CardHeader title="Download Specific Videos" align="center" />
           <CardContent>
             <Typography variant="body1">
-              Enter YouTube video URLs, one per line, or separated by spaces:
+              Enter YouTube video URLs, one per line, or separated by spaces. <br />
+              URLs should be in the format: https://www.youtube.com/watch?v=SETDSFhhQWM
             </Typography>
             <TextField
               style={{ marginBottom: "15px" }}

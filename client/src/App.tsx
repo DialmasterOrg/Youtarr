@@ -30,7 +30,7 @@ function App() {
   return (
     <Router>
       <AppBar position="static" style={{ backgroundColor: '#DDD', width: '100%', margin: 0, padding: 0 }}>
-          <Toolbar style={{ paddingBottom: '15px' }}>
+          <Toolbar style={{ paddingBottom: '10px' }}>
             <IconButton
               color="inherit"
               aria-label="open drawer"
@@ -38,9 +38,9 @@ function App() {
               onClick={handleDrawerToggle}
               sx={{ mr: 2, visibility: isMobile ? 'visible' : 'hidden' }}
             >
-              <MenuIcon />
+              <MenuIcon fontSize="large" />
             </IconButton>
-            <div style={{ color: '#000', flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ marginTop: '5px', color: '#000', flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <Typography variant={isMobile ? "h5" : "h3"} align="center">
                 Youtarr
               </Typography>
@@ -55,7 +55,7 @@ function App() {
               edge="start"
               sx={{ mr: 2, visibility: 'hidden' }}
             >
-              <MenuIcon />
+              <MenuIcon fontSize="large" />
             </IconButton>
           </Toolbar>
         </AppBar>
@@ -77,7 +77,7 @@ function App() {
               onClick={handleDrawerToggle}
               sx={{ mr: 2, alignSelf: 'flex-end' }}
             >
-              <CloseIcon />
+              <CloseIcon fontSize="large" />
             </IconButton>
           )}
             <List>
