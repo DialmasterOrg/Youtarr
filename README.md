@@ -77,3 +77,6 @@ Update your ```config/config.json```.
 
 Run ```npm run dev```. The frontend UI will be exposed at localhost:3000
 
+![Alt text](/screenshots/youtarr_channels.jpg?raw=true "Channels Screen")
+![Alt text](/screenshots/youtarr_config.jpg?raw=true "Config Screen")
+![Alt text](/screenshots/youtarr_downloads.jpg?raw=true "Downloads Screen")
