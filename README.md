@@ -59,6 +59,8 @@ This app uses Plex for auth. To login it will use Plex and then will verify that
 If not you will be unable to login.
 
 
-1. Run ```./build.sh --install-deps``` then run ```start.sh```. The frontend UI will be exposed at ```localhost:3087```
-2. Once you are logged in, set your options in the Configuration screen. You will want to select the Plex library that videos are supposed to be downloaded to, as well as the directory where they will be downloaded.
+1. Run ```./start.sh```. The frontend UI will be exposed at ```localhost:3087```
+2. Once you are logged in, set your options in the Configuration screen and save them. You will want to select the Plex library that videos are supposed to be downloaded to, as well as the directory where they will be downloaded.
+3. Once you set your download directory, you will need to restart the app. From the command line just to ```./stop.sh``` and then ```./start.sh```
+
    Each video will be placed in a directory named for the Youtube channel it came from.
