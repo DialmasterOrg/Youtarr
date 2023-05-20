@@ -145,6 +145,10 @@ class JobModule {
       } else {
         myEmitter.emit('newData', "Completed: " + updatedFields.data.videos.length + " new videos downloaded.");
       }
+    } else if (updatedFields.output == '0 videos. Error: Command exited with code 1') {
+      myEmitter.emit('newData', "Completed: No new videos downloaded.");
+      updatedFields.status = "Complete";
+      updatedFields.output = '0 videos.';
     }
     const job = this.jobs[jobId];
     // If the job doesn't exist, do nothing
