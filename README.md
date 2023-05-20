@@ -48,7 +48,7 @@ Youtarr is completely Dockerized, which means it's straightforward to get up and
 While Youtarr provides a means to curate and download YouTube content, it's crucial to respect copyright laws and YouTube's Terms of Service. Always ensure you're in compliance with these guidelines when using the application.
 ## Usage
 
-**You will first need to clone this repository.**: 
+**You will first need to clone this repository.**:
 
 **Before running this in either dev or production mode**: First run ```./setup.sh```. This will let you select the root directory where Youtube videos that are downloaded will be placed.
 
@@ -71,11 +71,15 @@ If not you will be unable to login.
 ### To run locally on the host with hot reload (for development -- NOT FOR END USERS)
 Download yt-dlp.exe and place it in the root directory of your application.
 Make sure ffmpeg is installed on your system.
-Update your ```config/config.json```. 
+Update your ```config/config.json```.
 * Your devYoutubeOutputDirectory will need to be pointed to the root directory where you want to download videos.
 * Your devffmpegPath will need to be pointed to whereever you installed ffmpeg.
 
 Run ```npm run dev```. The frontend UI will be exposed at localhost:3000
+
+## Accessing Youtarr from Outside Your Network
+
+If you wish to access Youtarr from outside your network, or from other computers aside from the one you are running it on, you will need to forward ports 3087 and 8099 on your Windows Defender Firewall and on your router.
 
 ## Screenshots (note that the app is mobile responsive as well. Only PC screenshots included)
 
