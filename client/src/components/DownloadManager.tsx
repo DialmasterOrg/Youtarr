@@ -62,7 +62,8 @@ function DownloadManager({ token }: DownloadManagerProps) {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   useEffect(() => {
-    const ws = new WebSocket("ws://localhost:8099");
+    const host = window.location.hostname;
+    const ws = new WebSocket(`ws://${host}:8099`);
 
     ws.onmessage = (message: MessageEvent) => {
       let line = message.data.trim();
