@@ -138,13 +138,13 @@ class JobModule {
   updateJob(jobId, updatedFields) {
     console.log('Updating job: ' + jobId);
     console.log('Updated fields: ' + JSON.stringify(updatedFields));
-    if (updatedFields.status === "Complete") {
+    if (updatedFields.status === "Complete" || updatedFields.status === "Error") {
       if (updatedFields.data.videos.length == 0) {
-
         myEmitter.emit('newData', "Completed: No new videos downloaded.");
       } else {
         myEmitter.emit('newData', "Completed: " + updatedFields.data.videos.length + " new videos downloaded.");
       }
+      updatedFields.status = "Complete";
     } else if (updatedFields.output == '0 videos. Error: Command exited with code 1') {
       myEmitter.emit('newData', "Completed: No new videos downloaded.");
       updatedFields.status = "Complete";

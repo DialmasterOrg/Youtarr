@@ -279,7 +279,7 @@ class DownloadModule {
       `yt-dlp --ffmpeg-location ${configModule.ffmpegPath} -f mp4 --write-thumbnail --convert-thumbnails jpg ` +
       `--download-archive ./config/complete.list --ignore-errors --embed-metadata --write-info-json ` +
       `-o "${configModule.directoryPath}/%(uploader)s/%(uploader)s - %(title)s - %(id)s/%(uploader)s - %(title)s  [%(id)s].%(ext)s" ` +
-      `-o "thumbnail:${configModule.directoryPath}/%(uploader)s/%(uploader)s - %(title)s - %(id)s/poster" -o "pl_thumbnail:" ` +
+      `--ignore-errors --datebefore now -o "thumbnail:${configModule.directoryPath}/%(uploader)s/%(uploader)s - %(title)s - %(id)s/poster" -o "pl_thumbnail:" ` +
       `--exec "node ${path.resolve(__dirname, "./moveInfoJson.js")} {}" `
     );
   }

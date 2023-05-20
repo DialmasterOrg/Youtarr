@@ -22,6 +22,7 @@ import { ExpandLess, ExpandMore } from "@mui/icons-material";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
 import axios from "axios";
+import DownloadProgress from "./DownloadProgress";
 
 interface DownloadManagerProps {
   token: string | null;
@@ -53,76 +54,12 @@ function DownloadManager({ token }: DownloadManagerProps) {
   const [anchorEl, setAnchorEl] = useState<
     Record<string, null | HTMLButtonElement>
   >({});
-  const [socketOutput, setSocketOutput] = useState<string[]>([]);
   const downloadProgressRef = useRef<{ index: number | null; message: string }>(
     { index: null, message: "" }
   );
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-
-  useEffect(() => {
-    const host = window.location.hostname;
-    const ws = new WebSocket(`ws://${host}:8099`);
-
-    ws.onmessage = (message: MessageEvent) => {
-      let line = message.data.trim();
-
-      const parts = line.split(/(\s+)/).filter((x: string) => x.trim() !== "");
-
-      if (
-        (line.startsWith("[download]") && parts[parts.length - 2] === "ETA") ||
-        line.startsWith("[download] 100%")
-      ) {
-        if (downloadProgressRef.current.index !== null) {
-          // We've seen a download progress message before, so let's update that message
-          setSocketOutput((prevOutput) => {
-            const outputLine = line.replace("[download]", "").trim();
-            const newOutput = [...prevOutput];
-            newOutput[downloadProgressRef.current.index as number] = outputLine;
-            return newOutput;
-          });
-        } else {
-          // This is the first download progress message we've seen, so let's add it to the end
-          setSocketOutput((prevOutput) => {
-            const outputLine = line.replace("[download]", "").trim();
-            const newOutput = [...prevOutput, outputLine];
-            downloadProgressRef.current = {
-              index: newOutput.length - 1,
-              message: outputLine,
-            };
-            return newOutput;
-          });
-        }
-      } else {
-        // This is not a download progress message
-        if (line.startsWith("[download]")) {
-          line = line.replace("[download]", "").trim();
-          // Strip everything after [youtube]
-          if (line.includes("[youtube]")) {
-            line = line.substring(0, line.indexOf("[youtube]"));
-          }
-          if (line.startsWith("Destination:")) {
-            // Remove the path, keep only the filename
-            const filename = line.split(/[\\\/]/).pop();
-            line = `Video: ${filename}`;
-          }
-          if (!(line.includes("has already been recorded in the archive") || line.includes("Finished downloading playlist") || line.includes("Downloading playlist"))) {
-            setSocketOutput((prevOutput) => [...prevOutput, line]);
-          }
-        }
-        if (line.startsWith("Completed:")) {
-          setSocketOutput((prevOutput) => [...prevOutput, line]);
-        }
-        // Reset download progress ref
-        downloadProgressRef.current = { index: null, message: "" };
-      }
-    };
-
-    return () => {
-      ws.close();
-    };
-  }, []);
 
   useEffect(() => {
     fetchRunningJobs();
@@ -163,7 +100,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
 
   const handleTriggerChannelDownloads = async () => {
     // Call BE endpoint to trigger channel downloads
-    setSocketOutput((prevOutput) =>[]);
+    //setSocketOutput((prevOutput) =>[]);
     downloadProgressRef.current = { index: null, message: "" };
 
     await fetch("/triggerchanneldownloads", {
@@ -179,7 +116,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
 
   const handleSpecificDownloads = async () => {
     // Call BE endpoint to trigger specific downloads
-    setSocketOutput((prevOutput) =>[]);
+    //setSocketOutput((prevOutput) =>[]);
     downloadProgressRef.current = { index: null, message: "" };
 
     const strippedUrls = videoUrls
@@ -247,35 +184,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
           </CardContent>
         </Card>
       </Grid>
-      <Grid item xs={12} md={12} paddingBottom={"8px"}>
-        <Card elevation={8}>
-          <CardHeader title="Recent Activity" align="center" />
-          <CardContent
-            style={{
-              borderTop: "1px solid lightgrey",
-              width: "100%",
-              height: "125px",
-              overflow: "auto",
-              paddingLeft: "8px",
-            }}
-          >
-            <Typography align="left" variant="body1" fontSize="small" component="div">
-              {socketOutput.slice(-7).map((line, index) => (
-                <div
-                  key={index}
-                  style={{
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {line}
-                </div>
-              ))}
-            </Typography>
-          </CardContent>
-        </Card>
-      </Grid>
+      <DownloadProgress downloadProgressRef={downloadProgressRef} />
       <Grid item xs={12} md={12} paddingBottom={"48px"}>
         <Card elevation={8}>
           <CardHeader
