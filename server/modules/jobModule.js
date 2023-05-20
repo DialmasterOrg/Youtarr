@@ -139,16 +139,14 @@ class JobModule {
     console.log('Updating job: ' + jobId);
     console.log('Updated fields: ' + JSON.stringify(updatedFields));
     if (updatedFields.status === "Complete" || updatedFields.status === "Error") {
-      if (updatedFields.data.videos.length == 0) {
+      let numVideos = updatedFields.data.videos.length;
+      if (numVideos == 0) {
         myEmitter.emit('newData', "Completed: No new videos downloaded.");
       } else {
-        myEmitter.emit('newData', "Completed: " + updatedFields.data.videos.length + " new videos downloaded.");
+        myEmitter.emit('newData', "Completed: " + numVideos + " new videos downloaded.");
       }
+      updatedFields.output = numVideos + " videos.";
       updatedFields.status = "Complete";
-    } else if (updatedFields.output == '0 videos. Error: Command exited with code 1') {
-      myEmitter.emit('newData', "Completed: No new videos downloaded.");
-      updatedFields.status = "Complete";
-      updatedFields.output = '0 videos.';
     }
     const job = this.jobs[jobId];
     // If the job doesn't exist, do nothing
@@ -156,9 +154,6 @@ class JobModule {
       console.log("Job to update did not exist!");
       return;
     }
-
-    // For each updated field, update the corresponding field in the job
-
     for (let field in updatedFields) {
       job[field] = updatedFields[field];
     }

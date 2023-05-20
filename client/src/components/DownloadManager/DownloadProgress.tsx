@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
 import { Grid, Card, CardHeader, CardContent, Typography } from "@mui/material";
-import { useTheme, useMediaQuery } from "@mui/material";
 
 interface DownloadProgressProps {
   downloadProgressRef: React.MutableRefObject<{
@@ -90,7 +89,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
         line.startsWith("[download]") &&
         line.includes("Destination:")
       ) {
-        const filename = line.split(/[\\\/]/).pop();
+        const filename = line.split(/[\\/]/).pop();
         fileDownloadNumber.current += 1;
         line = `Video: ${filename}`;
         addLineToOutput(line);
