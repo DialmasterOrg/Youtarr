@@ -4,6 +4,8 @@ const { exec } = require("child_process");
 const jobModule = require("./jobModule");
 const fs = require("fs");
 const path = require("path");
+const { spawn } = require("child_process"); // import spawn
+const myEmitter = require('./events');
 
 class DownloadModule {
   constructor() {
@@ -43,6 +45,103 @@ class DownloadModule {
 
   doDownload(command, jobId, jobType) {
     const initialCount = this.getCountOfDownloadedVideos();
+    const [cmd, ...args] = command.split(" ");
+
+    new Promise((resolve, reject) => {
+      console.log("Setting timeout for ending job");
+      const timer = setTimeout(() => {
+        reject(new Error("Job time exceeded timeout"));
+      }, 1000000); // Set your desired timeout
+
+      console.log(`Running exec for ${jobType}`);
+      const proc = spawn(command, { timeout: 1000000, shell: true });
+
+      let stdoutData = "";
+      proc.stdout.on('data', (data) => {
+        stdoutData += data.toString();
+        console.log(data.toString()); // log the data in real-time
+
+        let line = data.toString();
+         // broadcast the output to the connected WebSocket clients
+        myEmitter.emit('newData', line);
+
+
+      });
+
+      let stderrData = "";
+      proc.stderr.on("data", (data) => {
+        stderrData += data.toString();
+        console.log(data.toString()); // log the data in real-time
+        // Here you can parse data and update the job as it runs
+      });
+
+      proc.on("exit", (code) => {
+        clearTimeout(timer);
+        const newVideoUrls = this.getNewVideoUrls(initialCount);
+        const videoCount = newVideoUrls.length;
+
+        let videoData = newVideoUrls
+          .map((url) => {
+            let id = url.split("youtu.be/")[1].trim();
+            let dataPath = path.join(
+              __dirname,
+              `../../jobs/info/${id}.info.json`
+            );
+            console.log("Looking for info.json file at", dataPath);
+
+            if (fs.existsSync(dataPath)) {
+              console.log("Found info.json file at", dataPath);
+              let data = JSON.parse(fs.readFileSync(dataPath, "utf-8"));
+              return {
+                youtubeId: data.id,
+                youTubeChannelName: data.uploader,
+                youTubeVideoName: data.title,
+              };
+            } else {
+              console.log("No info.json file at", dataPath);
+            }
+            return null; // If for some reason .info.json file is not found, return null
+          })
+          .filter((data) => data !== null); // Filter out any null values
+
+        console.log(
+          `${jobType} complete (with or without errors) for Job ID: ${jobId}`
+        );
+
+        let status = "";
+        let output = "";
+
+        if (code !== 0) {
+          status = "Error";
+          output = `${videoCount} videos. Error: Command exited with code ${code}`;
+        } else if (stderrData) {
+          status = "Complete with Warnings";
+          output = `${videoCount} videos.`;
+        } else {
+          status = "Complete";
+          output = `${videoCount} videos.`;
+        }
+
+        jobModule.updateJob(jobId, {
+          status: status,
+          output: output,
+          data: { videos: videoData },
+        });
+
+        plexModule.refreshLibrary();
+        jobModule.startNextJob();
+      });
+    }).catch((error) => {
+      console.log(error.message);
+      jobModule.updateJob(jobId, {
+        status: "Killed",
+        output: "Job time exceeded timeout",
+      });
+    });
+  }
+
+  doDownloadOld(command, jobId, jobType) {
+    const initialCount = this.getCountOfDownloadedVideos();
 
     new Promise((resolve, reject) => {
       console.log("Setting timeout for ending job");
@@ -56,31 +155,36 @@ class DownloadModule {
         const newVideoUrls = this.getNewVideoUrls(initialCount);
         const videoCount = newVideoUrls.length;
 
-        let videoData = newVideoUrls.map((url) => {
-          let id = url.split('youtu.be/')[1].trim();
-          let dataPath = path.join(__dirname, `../../jobs/info/${id}.info.json`);
-          console.log('Looking for info.json file at', dataPath);
+        let videoData = newVideoUrls
+          .map((url) => {
+            let id = url.split("youtu.be/")[1].trim();
+            let dataPath = path.join(
+              __dirname,
+              `../../jobs/info/${id}.info.json`
+            );
+            console.log("Looking for info.json file at", dataPath);
 
-          if (fs.existsSync(dataPath)) {
-            console.log('Found info.json file at', dataPath);
-            let data = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
-            return {
-              youtubeId: data.id,
-              youTubeChannelName: data.uploader,
-              youTubeVideoName: data.title,
-            };
-          } else {
-            console.log('No info.json file at', dataPath);
-          }
-          return null;  // If for some reason .info.json file is not found, return null
-        }).filter(data => data !== null);  // Filter out any null values
+            if (fs.existsSync(dataPath)) {
+              console.log("Found info.json file at", dataPath);
+              let data = JSON.parse(fs.readFileSync(dataPath, "utf-8"));
+              return {
+                youtubeId: data.id,
+                youTubeChannelName: data.uploader,
+                youTubeVideoName: data.title,
+              };
+            } else {
+              console.log("No info.json file at", dataPath);
+            }
+            return null; // If for some reason .info.json file is not found, return null
+          })
+          .filter((data) => data !== null); // Filter out any null values
 
         console.log(
           `${jobType} complete (with or without errors) for Job ID: ${jobId}`
         );
 
-        let status = '';
-        let output = '';
+        let status = "";
+        let output = "";
 
         if (error) {
           status = "Error";
@@ -116,14 +220,16 @@ class DownloadModule {
     const jobType = "Channel Downloads";
     console.log(`Running ${jobType}`);
 
-    const jobId = jobModule.addOrUpdateJob({
-      jobType: jobType,
-      status: "",
-      output: "",
-      id: jobData.id ? jobData.id : "",
-      action: this.doChannelDownloads.bind(this),
-    }, isNextJob);
-
+    const jobId = jobModule.addOrUpdateJob(
+      {
+        jobType: jobType,
+        status: "",
+        output: "",
+        id: jobData.id ? jobData.id : "",
+        action: this.doChannelDownloads.bind(this),
+      },
+      isNextJob
+    );
 
     if (jobModule.getJob(jobId).status === "In Progress") {
       const baseCommand = this.getBaseCommand();
@@ -137,17 +243,25 @@ class DownloadModule {
     const jobType = "Manually Added Urls";
     const jobData = reqOrJobData.body ? reqOrJobData.body : reqOrJobData;
 
-    console.log('Running doSpecificDownloads and jobData: ', JSON.stringify(jobData));
+    console.log(
+      "Running doSpecificDownloads and jobData: ",
+      JSON.stringify(jobData)
+    );
 
-    const urls = reqOrJobData.body ? reqOrJobData.body.urls : reqOrJobData.data.urls;
-    const jobId = jobModule.addOrUpdateJob({
-      jobType: jobType,
-      status: "",
-      output: "",
-      id: jobData.id ? jobData.id : "",
-      data: jobData,
-      action: this.doSpecificDownloads.bind(this)
-    }, isNextJob);
+    const urls = reqOrJobData.body
+      ? reqOrJobData.body.urls
+      : reqOrJobData.data.urls;
+    const jobId = jobModule.addOrUpdateJob(
+      {
+        jobType: jobType,
+        status: "",
+        output: "",
+        id: jobData.id ? jobData.id : "",
+        data: jobData,
+        action: this.doSpecificDownloads.bind(this),
+      },
+      isNextJob
+    );
 
     if (jobModule.getJob(jobId).status === "In Progress") {
       const baseCommand = this.getBaseCommand();
@@ -161,11 +275,13 @@ class DownloadModule {
   }
 
   getBaseCommand() {
-    return `yt-dlp --ffmpeg-location ${configModule.ffmpegPath} -f mp4 --write-thumbnail --convert-thumbnails jpg ` +
-    `--download-archive ./config/complete.list --ignore-errors --embed-metadata --write-info-json ` +
-    `-o "${configModule.directoryPath}/%(uploader)s/%(uploader)s - %(title)s - %(id)s/%(uploader)s - %(title)s  [%(id)s].%(ext)s" ` +
-    `-o "thumbnail:${configModule.directoryPath}/%(uploader)s/%(uploader)s - %(title)s - %(id)s/poster" -o "pl_thumbnail:" ` +
-    `--exec "node ${path.resolve(__dirname, './moveInfoJson.js')} {}" `;
+    return (
+      `yt-dlp --ffmpeg-location ${configModule.ffmpegPath} -f mp4 --write-thumbnail --convert-thumbnails jpg ` +
+      `--download-archive ./config/complete.list --ignore-errors --embed-metadata --write-info-json ` +
+      `-o "${configModule.directoryPath}/%(uploader)s/%(uploader)s - %(title)s - %(id)s/%(uploader)s - %(title)s  [%(id)s].%(ext)s" ` +
+      `-o "thumbnail:${configModule.directoryPath}/%(uploader)s/%(uploader)s - %(title)s - %(id)s/poster" -o "pl_thumbnail:" ` +
+      `--exec "node ${path.resolve(__dirname, "./moveInfoJson.js")} {}" `
+    );
   }
 }
 

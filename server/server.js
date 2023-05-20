@@ -7,6 +7,26 @@ const channelModule = require('./modules/channelModule');
 const plexModule = require('./modules/plexModule');
 const downloadModule = require('./modules/downloadModule');
 const jobModule = require('./modules/jobModule');
+const myEmitter = require('./modules/events');
+
+const WebSocket = require('ws');
+const wss = new WebSocket.Server({ port: 8099 }); // specify any port you like
+
+wss.on('connection', ws => {
+  console.log('New client connected');
+  
+  ws.on('close', () => {
+    console.log('Client disconnected');
+  });
+});
+
+myEmitter.on('newData', function(data) {
+  wss.clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(data);
+    }
+  });
+});
 
 channelModule.subscribe();
 
@@ -136,3 +156,4 @@ const port = process.env.PORT || 3011;
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
+

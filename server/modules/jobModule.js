@@ -1,6 +1,8 @@
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
+const myEmitter = require('./events');
+
 
 class JobModule {
   constructor() {
@@ -136,6 +138,14 @@ class JobModule {
   updateJob(jobId, updatedFields) {
     console.log('Updating job: ' + jobId);
     console.log('Updated fields: ' + JSON.stringify(updatedFields));
+    if (updatedFields.status === "Complete") {
+      if (updatedFields.data.videos.length == 0) {
+
+        myEmitter.emit('newData', "Completed: No new videos downloaded.");
+      } else {
+        myEmitter.emit('newData', "Completed: " + updatedFields.data.videos.length + " new videos downloaded.");
+      }
+    }
     const job = this.jobs[jobId];
     // If the job doesn't exist, do nothing
     if (!job) {
