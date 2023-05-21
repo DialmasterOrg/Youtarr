@@ -13,7 +13,13 @@ read dir_path
 # Check if the directory exists
 if [ -d "$dir_path" ]; then
   echo "Directory exists. Saving to config file..."
-  python -c "import json; config = json.load(open('./config/config.json')); config['youtubeOutputDirectory'] = '$dir_path'; json.dump(config, open('./config/config.json', 'w'), indent=4)"
+
+  # Escape the user input to avoid any issues with sed
+  dir_path_escaped=$(printf '%s\n' "$dir_path" | sed 's:[][\/.^$*]:\\&:g')
+
+  # Use sed to replace the value of youtubeOutputDirectory in config.json
+  sed -i "s/\"youtubeOutputDirectory\": \".*\"/\"youtubeOutputDirectory\": \"$dir_path_escaped\"/" ./config/config.json
+
   echo "Directory path saved to config file."
 else
   echo "Directory does not exist. Please enter a valid directory path."
