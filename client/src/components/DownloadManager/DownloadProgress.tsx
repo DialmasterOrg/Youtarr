@@ -6,10 +6,11 @@ interface DownloadProgressProps {
     index: number | null;
     message: string;
   }>;
+  downloadInitiatedRef: React.MutableRefObject<boolean>;
 }
 
 const DownloadProgress: React.FC<DownloadProgressProps> = ({
-  downloadProgressRef,
+  downloadProgressRef, downloadInitiatedRef
 }) => {
   const [socketOutput, setSocketOutput] = useState<string[]>([]);
   const fileDownloadNumber = useRef<number>(0); // [0, 1, 2, 3, 4, 5, 6, 7, 8, 9
@@ -42,7 +43,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
     ws.onmessage = (message: MessageEvent) => {
       let line = message.data.trim();
-
+      console.log(line); // DEBUG
       // Check for and remove duplicate lines within the same message
       const downloadTag = "[download]";
       if (
@@ -89,7 +90,10 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
         line.startsWith("[download]") &&
         line.includes("Destination:")
       ) {
-        const filename = line.split(/[\\/]/).pop();
+        // Remove the path from the filename
+        let filename = line.split(/[\\/]/).pop();
+        // Remove the youtube video id and the extension from the filename (last 18 characters)
+        filename = filename?.substring(0, filename.length - 18);
         fileDownloadNumber.current += 1;
         line = `Video: ${filename}`;
         addLineToOutput(line);
@@ -101,8 +105,15 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
         // Reset download progress ref
         downloadProgressRef.current = { index: null, message: "" };
+        // Capture download start, line contains: "[youtube:tab] Extracting URL:"
+      } else if (line.includes("[youtube:tab] Extracting URL:") && downloadInitiatedRef.current) {
+        addLineToOutput("Download initiated...");
+        downloadInitiatedRef.current = false;
+      } else if (line.includes("[Metadata] Adding metadata to")) {
+        addLineToOutput("Processing file...");
       }
     };
+
     ws.onclose = (event) => {
       setTimeout(() => {
         connectWebSocket(setSocketOutput, downloadProgressRef);

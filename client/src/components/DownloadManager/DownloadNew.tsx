@@ -17,6 +17,7 @@ interface DownloadNewProps {
   setVideoUrls: React.Dispatch<React.SetStateAction<string>>;
   token: string | null;
   fetchRunningJobs: () => void;
+  downloadInitiatedRef: React.MutableRefObject<boolean>;
 }
 
 const DownloadNew: React.FC<DownloadNewProps> = ({
@@ -24,11 +25,13 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
   setVideoUrls,
   token,
   fetchRunningJobs,
+  downloadInitiatedRef,
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   const handleTriggerChannelDownloads = async () => {
+    downloadInitiatedRef.current = true;
     await fetch("/triggerchanneldownloads", {
       method: "POST",
       headers: {
@@ -40,6 +43,7 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
   };
 
   const handleSpecificDownloads = async () => {
+    downloadInitiatedRef.current = true;
     const strippedUrls = videoUrls
       .split(/[\n\s]/) // split on newline or space
       .map((url) =>

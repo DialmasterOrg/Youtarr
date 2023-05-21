@@ -37,6 +37,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
   const [anchorEl, setAnchorEl] = useState<
     Record<string, null | HTMLButtonElement>
   >({});
+  const downloadInitiatedRef = useRef(false);
   const downloadProgressRef = useRef<{ index: number | null; message: string }>(
     { index: null, message: "" }
   );
@@ -87,8 +88,12 @@ function DownloadManager({ token }: DownloadManagerProps) {
         setVideoUrls={setVideoUrls}
         token={token}
         fetchRunningJobs={fetchRunningJobs}
+        downloadInitiatedRef={downloadInitiatedRef}
       />
-      <DownloadProgress downloadProgressRef={downloadProgressRef} />
+      <DownloadProgress
+        downloadProgressRef={downloadProgressRef}
+        downloadInitiatedRef={downloadInitiatedRef}
+        />
       <DownloadHistory
         jobs={jobs}
         expanded={expanded}
