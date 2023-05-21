@@ -190,7 +190,7 @@ class DownloadModule {
           status = "Error";
           output = `${videoCount} videos. Error: ${error.message}`;
         } else if (stderr) {
-          status = "Complete with Warnings";
+          status = "Complete";
           output = `${videoCount} videos.`;
         } else {
           status = "Complete";

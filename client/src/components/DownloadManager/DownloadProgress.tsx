@@ -43,7 +43,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
     ws.onmessage = (message: MessageEvent) => {
       let line = message.data.trim();
-      console.log(line); // DEBUG
+
       // Check for and remove duplicate lines within the same message
       const downloadTag = "[download]";
       if (
