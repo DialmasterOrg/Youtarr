@@ -82,6 +82,3 @@ If you wish to access Youtarr from outside your network, or from other computers
 
 ## Screenshots (note that the app is mobile responsive as well. Only PC screenshots included)
 
-![Alt text](/screenshots/youtarr_channels.jpg?raw=true "Channels Screen")
-![Alt text](/screenshots/youtarr_config.jpg?raw=true "Config Screen")
-![Alt text](/screenshots/youtarr_downloads.jpg?raw=true "Downloads Screen")
