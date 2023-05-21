@@ -79,9 +79,14 @@ function App() {
               alignItems: "center",
             }}
           >
-            <Typography variant={isMobile ? "h5" : "h3"} align="center">
+           {/*} <Typography variant={isMobile ? "h5" : "h3"} align="center">
               Youtarr
-            </Typography>
+          </Typography> */}
+          <img
+              src="/youtarr_text.png"
+              alt="Youtarr"
+              style={{ width: isMobile ? "150px" : "200px" }}
+            />
             <Typography
               style={{ fontSize: isMobile ? "small" : "large" }}
               align="center"
@@ -201,7 +206,7 @@ function App() {
                     path="/downloads"
                     element={<DownloadManager token={token} />}
                   />
-                  <Route path="/*" element={<Navigate to="/configuration" />} />
+                  <Route path="/*" element={<Navigate to="/downloads" />} />
                 </>
               ) : (
                 <Route path="/*" element={<Navigate to="/login" />} />
