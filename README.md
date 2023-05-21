@@ -81,4 +81,7 @@ Run ```npm run dev```. The frontend UI will be exposed at localhost:3000
 If you wish to access Youtarr from outside your network, or from other computers aside from the one you are running it on, you will need to forward ports 3087 and 8099 on your Windows Defender Firewall and on your router.
 
 ## Screenshots (note that the app is mobile responsive as well. Only PC screenshots included)
+![Alt text](/screenshots/youtarr_channels.jpg?raw=true "Channels Screen")
+![Alt text](/screenshots/youtarr_config.jpg?raw=true "Config Screen")
+![Alt text](/screenshots/youtarr_downloads.jpg?raw=true "Downloads Screen")
 
