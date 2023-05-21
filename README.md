@@ -23,13 +23,12 @@ To use Youtarr, you need to have the following software installed on your system
 
 1. **Docker:** Youtarr uses Docker to create an isolated environment where it can run without interfering with your system or requiring you to install a bunch of software. You can download Docker from the official website.
 
-2. **Python:** Python is used in some of the setup scripts to handle the parsing and writing of the JSON configuration file. Most systems come pre-installed with Python, but if you don't have it, you can download it from the official website.
+2. **Bash Shell:** Bash is a Unix shell and command language. The setup and start scripts are written in bash. For Windows users, you can use Git Bash, which is included when you install Git for Windows.
 
-3. **Bash Shell:** Bash is a Unix shell and command language. The setup and start scripts are written in bash. For Windows users, you can use Git Bash, which is included when you install Git for Windows.
+3. **Git**: Git is a free and open source distributed version control system designed to handle everything from small to very large projects with speed and efficiency. Git is needed to checkout/download this repository.
 
 4. **npm (Node Package Manager -- NOT REQUIRED FOR END USERS):** npm is a package manager for the JavaScript programming language. It is used to install the dependencies that Youtarr needs to run in development mode. If you have Node.js installed on your machine, npm is typically installed with it. If not, you can download Node.js (which includes npm) from the official website
 
-5. **Git**: Git is a free and open source distributed version control system designed to handle everything from small to very large projects with speed and efficiency. Git is needed for version control and is required for Bash Shell as well. You can download Git from the official website.
 
 
 
