@@ -5,7 +5,7 @@
 Youtarr is a Dockerized application that offers a user-friendly way to automatically download videos from YouTube channels that you've handpicked, and integrates them seamlessly into your Plex Media Server.
 Note that this is in no way endorsed by, or associated with Youtube or the Plex team.
 
-## NOTE: (AS OF MAY 18th 2023 THIS IS A WORK IN PROGRESS)
+## NOTE: (AS OF MAY 21st 2023 THIS IS STILL A WORK IN PROGRESS)
 As-is this application does what I intended it to do for me. I welcome any suggestions or feedback. I will continue to add functionality and polish.
 I am aware the the initial setup/startup, although fairly easy for developers, is not very friendly to the end user and this will be addressed in the future if there turns out to be a demand for it.
 
@@ -27,7 +27,7 @@ To use Youtarr, you need to have the following software installed on your system
 
 3. **Bash Shell:** Bash is a Unix shell and command language. The setup and start scripts are written in bash. For Windows users, you can use Git Bash, which is included when you install Git for Windows.
 
-4. **npm (Node Package Manager):** npm is a package manager for the JavaScript programming language. It is used to install the dependencies that Youtarr needs to run in development mode. If you have Node.js installed on your machine, npm is typically installed with it. If not, you can download Node.js (which includes npm) from the official website
+4. **npm (Node Package Manager -- NOT REQUIRED FOR END USERS):** npm is a package manager for the JavaScript programming language. It is used to install the dependencies that Youtarr needs to run in development mode. If you have Node.js installed on your machine, npm is typically installed with it. If not, you can download Node.js (which includes npm) from the official website
 
 5. **Git**: Git is a free and open source distributed version control system designed to handle everything from small to very large projects with speed and efficiency. Git is needed for version control and is required for Bash Shell as well. You can download Git from the official website.
 
