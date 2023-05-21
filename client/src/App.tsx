@@ -1,5 +1,6 @@
 import "./App.css";
 import React, { useState, useEffect } from "react";
+import toplogo from './Youtarr_text.png';
 import {
   BrowserRouter as Router,
   Routes,
@@ -79,11 +80,8 @@ function App() {
               alignItems: "center",
             }}
           >
-           {/*} <Typography variant={isMobile ? "h5" : "h3"} align="center">
-              Youtarr
-          </Typography> */}
           <img
-              src="/youtarr_text.png"
+              src={toplogo}
               alt="Youtarr"
               style={{ width: isMobile ? "150px" : "200px" }}
             />
