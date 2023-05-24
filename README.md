@@ -5,15 +5,20 @@
 Youtarr is a Dockerized application that offers a user-friendly way to automatically download videos from YouTube channels that you've handpicked, and integrates them seamlessly into your Plex Media Server.
 Note that this is in no way endorsed by, or associated with Youtube or the Plex team.
 
-## NOTE: (AS OF MAY 21st 2023 THIS IS STILL A WORK IN PROGRESS)
-As-is this application does what I intended it to do for me. I welcome any suggestions or feedback. I will continue to add functionality and polish.
-I am aware the the initial setup/startup, although fairly easy for developers, is not very friendly to the end user and this will be addressed in the future if there turns out to be a demand for it.
-
 ## Overview
 
-In the era of digital media, ensuring safe and appropriate content for your children can be a challenge. Youtube, while being a vast reservoir of educational and entertaining content, also hosts content that might not be suitable for children. To strike a balance, Youtarr allows you to curate YouTube channels so that you can provide a vetted, customized and safe YouTube experience for your kids.
+In the era of digital media, ensuring safe and appropriate content for your children can be a challenge. Youtube, while being a vast reservoir of educational and entertaining content, also hosts content that might not be suitable for children. To strike a balance, Youtarr allows you to curate YouTube channels so that you can provide a vetted, customized and safe YouTube experience for your kids via Plex.
 
 The application operates by running a scheduled task that automatically downloads new videos, along with their thumbnails and metadata, from a list of YouTube channels that you specify. These videos are then automatically added to your Plex server and a library scan is initiated as soon as downloads are complete.
+
+## NOTE: Work in progress.
+In its current state, this application fulfills its intended functions and I anticipate it will prove beneficial for users with similar requirements. However, it's important to note that it remains a work-in-progress and not a completely refined product.
+
+I openly invite any constructive feedback or suggestions for improvement. The journey of its development will continue, with the aim of introducing additional functionalities as the project evolves.
+
+While the initial setup and startup process has been designed with a developer-friendly approach, it may not provide an equally seamless experience for the end user. I acknowledge this limitation and plan to address it in future updates, contingent upon user demand and interest.
+
+Your engagement and feedback play a crucial role in shaping the future of this application. I look forward to continuously improving its functionality, usability, and overall user experience based on your needs and suggestions.
 
 ## Requirements
 
