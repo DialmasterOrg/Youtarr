@@ -34,22 +34,17 @@ To use Youtarr, you need to have the following software installed on your system
 
 4. **npm (Node Package Manager -- NOT REQUIRED FOR END USERS):** npm is a package manager for the JavaScript programming language. It is used to install the dependencies that Youtarr needs to run in development mode. If you have Node.js installed on your machine, npm is typically installed with it. If not, you can download Node.js (which includes npm) from the official website
 
-
-
-
 Please ensure that you have these installed and available in your system's PATH before you proceed with the installation of Youtarr.
 
 ## Key Features
 * **Parental Control**: Vet the channels and control the quality and appropriateness of the content available to your children.
 * **Ad-free Experience**: Running the content through a Plex server eliminates ads and potential exposure to inappropriate comments, enhancing the viewing experience.
 Automated Process: Set it and forget it. Youtarr will automatically update the Plex server with new content from the selected channels.
-* **Easy to Use**: With a simple user interface and Dockerized deployment, setting up and running Youtarr is a breeze, even for non-technical users.
-
-## Dockerized for Ease of Use
-Youtarr is completely Dockerized, which means it's straightforward to get up and running, regardless of your operating system or technical skill level. Docker takes care of all the dependencies and setup, leaving you free to focus on choosing the best YouTube channels for your Plex server.
+* **Easy to Use**: With a simple user interface and Dockerized deployment, setting up and running Youtarr should be straightforward for end-users, and will be improved with feedback. Docker takes care of most dependencies and setup.
 
 ## Disclaimer
 While Youtarr provides a means to curate and download YouTube content, it's crucial to respect copyright laws and YouTube's Terms of Service. Always ensure you're in compliance with these guidelines when using the application.
+
 ## Usage
 
 **You will first need to clone this repository.**:
