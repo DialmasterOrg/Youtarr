@@ -138,7 +138,7 @@ class JobModule {
   updateJob(jobId, updatedFields) {
     console.log('Updating job: ' + jobId);
     console.log('Updated fields: ' + JSON.stringify(updatedFields));
-    if (updatedFields.status === "Complete" || updatedFields.status === "Error") {
+    if (updatedFields.status === "Complete" || updatedFields.status === "Error" || updatedFields.status === "Complete with Warnings") {
       let numVideos = updatedFields.data.videos.length;
       if (numVideos == 0) {
         myEmitter.emit('newData', "Completed: No new videos downloaded.");
@@ -149,7 +149,6 @@ class JobModule {
       updatedFields.status = "Complete";
     }
     const job = this.jobs[jobId];
-    // If the job doesn't exist, do nothing
     if (!job) {
       console.log("Job to update did not exist!");
       return;

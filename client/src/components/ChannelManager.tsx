@@ -11,8 +11,13 @@ import {
   TextField,
   List,
   ListItemText,
+  Dialog,
+  DialogContentText,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
 import Delete from "@mui/icons-material/Delete";
+import AddIcon from "@mui/icons-material/Add";
 import axios from "axios";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
@@ -25,10 +30,18 @@ function ChannelManager({ token }: ChannelManagerProps) {
   const [channels, setChannels] = useState<string[]>([]);
   const [newChannel, setNewChannel] = useState<string>("");
   const [unsavedChannels, setUnsavedChannels] = useState<string[]>([]);
+  const [deletedChannels, setDeletedChannels] = useState<string[]>([]);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [dialogMessage, setDialogMessage] = useState("");
+
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   useEffect(() => {
+    reloadChannels();
+  }, [token]);
+
+  const reloadChannels = () => {
     // Fetch channels from backend on component mount
     if (token) {
       axios
@@ -41,7 +54,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
           setChannels(response.data);
         });
     }
-  }, [token]);
+  };
 
   const handleAdd = () => {
     if (
@@ -50,37 +63,53 @@ function ChannelManager({ token }: ChannelManagerProps) {
     ) {
       setChannels([...channels, newChannel]);
       setUnsavedChannels([...unsavedChannels, newChannel]);
-      setNewChannel("");
     } else {
-      alert("Invalid channel URL");
+      setDialogMessage("Invalid channel URL");
+      setIsDialogOpen(true);
     }
+    setNewChannel("");
   };
 
   const handleDelete = (index: number) => {
-    const newChannels = [...channels];
-    newChannels.splice(index, 1);
-    setChannels(newChannels);
-
-    const newUnsavedChannels = [...unsavedChannels];
-    if (newUnsavedChannels.includes(channels[index])) {
-      newUnsavedChannels.splice(newUnsavedChannels.indexOf(channels[index]), 1);
+    if (unsavedChannels.includes(channels[index])) {
+      setUnsavedChannels(
+        unsavedChannels.filter((channel) => channel !== channels[index])
+      );
+      setChannels(channels.filter((channel) => channel !== channels[index]));
+    } else {
+      setDeletedChannels([...deletedChannels, channels[index]]);
     }
-    setUnsavedChannels(newUnsavedChannels);
+  };
+
+  const handleUndo = () => {
+    setDeletedChannels([]);
+    setUnsavedChannels([]);
+    reloadChannels();
   };
 
   const handleSave = () => {
     if (token) {
+      const channelsToSave = channels.filter(
+        (channel) => !deletedChannels.includes(channel)
+      );
       axios
-        .post("/updatechannels", channels, {
+        .post("/updatechannels", channelsToSave, {
           headers: {
             "x-access-token": token,
           },
         })
         .then((response) => {
+          setDeletedChannels([]);
           setUnsavedChannels([]);
-          alert("Channels updated successfully");
+          setDialogMessage("Channels updated successfully");
+          setIsDialogOpen(true);
+          reloadChannels();
         });
     }
+  };
+
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
   };
 
   return (
@@ -95,7 +124,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
                   key={index}
                   style={
                     unsavedChannels.includes(channel)
-                      ? { backgroundColor: "lightyellow" }
+                      ? { backgroundColor: "#b8ffef" }
                       : { backgroundColor: index % 2 === 0 ? "white" : "#DDE" }
                   }
                 >
@@ -114,32 +143,43 @@ function ChannelManager({ token }: ChannelManagerProps) {
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
+                              fontWeight: unsavedChannels.includes(channel)
+                                ? "bold"
+                                : "normal",
+                              textDecoration: deletedChannels.includes(channel)
+                                ? "line-through"
+                                : "none",
+                              color: deletedChannels.includes(channel)
+                                ? "red"
+                                : "inherit",
                             }}
                           >
                             {channel}
                           </div>
                         }
-                      />
+                      />{" "}
                     </Grid>
-                    <Grid item xs={12} sm={3}>
-                      <ListItemSecondaryAction>
-                        <IconButton
-                          edge="end"
-                          onClick={() => handleDelete(index)}
-                          size={isMobile ? "small" : "medium"}
-                        >
-                          <Delete />
-                        </IconButton>
-                      </ListItemSecondaryAction>
-                    </Grid>
+                    {!deletedChannels.includes(channel) && (
+                      <Grid item xs={12} sm={3}>
+                        <ListItemSecondaryAction>
+                          <IconButton
+                            edge="end"
+                            onClick={() => handleDelete(index)}
+                            size={isMobile ? "small" : "medium"}
+                          >
+                            <Delete />
+                          </IconButton>
+                        </ListItemSecondaryAction>
+                      </Grid>
+                    )}
                   </Grid>
                 </ListItem>
               ))}
             </List>
           </Card>
         </Grid>
-        <Grid item xs={12}>
-          <Card elevation={0} style={{ paddingTop: '8px'}}>
+        <Grid item xs={11}>
+          <Card elevation={0} style={{ paddingTop: "8px" }}>
             <Tooltip
               placement="top"
               title="Enter a new channel URL to track here, eg: https://www.youtube.com/@PrestonReacts/videos"
@@ -148,6 +188,11 @@ function ChannelManager({ token }: ChannelManagerProps) {
                 label="New Channel"
                 value={newChannel}
                 onChange={(e) => setNewChannel(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter") {
+                    handleAdd();
+                  }
+                }}
                 fullWidth
                 InputProps={{
                   style: { fontSize: isMobile ? "small" : "medium" },
@@ -156,15 +201,34 @@ function ChannelManager({ token }: ChannelManagerProps) {
             </Tooltip>
           </Card>
         </Grid>
-        <Grid item xs={6}>
+        <Grid
+          item
+          xs={1}
+          style={{
+            paddingLeft: isMobile ? "8px" : "0px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
           <Tooltip placement="top" title="Add a new channel to the list above">
+            <IconButton onClick={handleAdd} color="primary">
+              <AddIcon fontSize="large" />
+            </IconButton>
+          </Tooltip>
+        </Grid>
+        <Grid item xs={6}>
+          <Tooltip placement="top" title="Revert unsaved changes">
             <Button
               variant="contained"
-              onClick={handleAdd}
+              onClick={handleUndo}
               fullWidth
+              disabled={
+                unsavedChannels.length === 0 && deletedChannels.length === 0
+              }
               style={{ fontSize: isMobile ? "small" : "medium" }}
             >
-              Add Channel
+              Undo
             </Button>
           </Tooltip>
         </Grid>
@@ -175,6 +239,9 @@ function ChannelManager({ token }: ChannelManagerProps) {
           >
             <Button
               variant="contained"
+              disabled={
+                unsavedChannels.length === 0 && deletedChannels.length === 0
+              }
               onClick={handleSave}
               fullWidth
               style={{ fontSize: isMobile ? "small" : "medium" }}
@@ -184,6 +251,25 @@ function ChannelManager({ token }: ChannelManagerProps) {
           </Tooltip>
         </Grid>
       </Grid>
+
+      <Dialog
+        open={isDialogOpen}
+        onClose={handleCloseDialog}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogContent>
+          <DialogContentText id="alert-dialog-description">
+            {dialogMessage}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDialog} color="primary" autoFocus>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
     </Card>
   );
 }
