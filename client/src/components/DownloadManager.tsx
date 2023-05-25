@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Grid } from "@mui/material";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
@@ -45,20 +45,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
-  useEffect(() => {
-    fetchRunningJobs();
-    const intervalId = setInterval(fetchRunningJobs, 5000);
-    return () => clearInterval(intervalId); // clear interval on component unmount
-  }, [token]);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer); // Clean up the interval on unmount
-  }, []);
-
-  const fetchRunningJobs = () => {
+  const fetchRunningJobs = useCallback(() => {
     if (token) {
       axios
         .get("/runningjobs", {
@@ -72,7 +59,21 @@ function DownloadManager({ token }: DownloadManagerProps) {
           }
         });
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    fetchRunningJobs();
+    const intervalId = setInterval(fetchRunningJobs, 5000);
+    return () => clearInterval(intervalId); // clear interval on component unmount
+  }, [fetchRunningJobs]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer); // Clean up the interval on unmount
+  }, []);
+
   // This function toggles the expanded state for a single job.
   const handleExpandCell = (id: string) => {
     setExpanded((prevState) => ({

@@ -12,7 +12,7 @@ class ConfigModule extends EventEmitter {
 
     this.directoryPath = '';
     if (process.env.IN_DOCKER_CONTAINER) {
-      this.directoryPath = "/usr/src/app/data";
+      this.directoryPath = '/usr/src/app/data';
       this.ffmpegPath = '/usr/bin/ffmpeg';
     } else {
       this.ffmpegPath = this.config.devffmpegPath;
@@ -52,7 +52,7 @@ class ConfigModule extends EventEmitter {
 
   watchConfig() {
     // Watch the config file for changes
-    fs.watch(this.configPath, (event, filename) => {
+    fs.watch(this.configPath, (event) => {
       if (event === 'change') {
         // Load the new config file
         this.config = JSON.parse(fs.readFileSync(this.configPath));

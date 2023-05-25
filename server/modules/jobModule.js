@@ -19,8 +19,8 @@ class JobModule {
       this.jobs = JSON.parse(fileContent);
       // Change the status of "In Progress" jobs to "Terminated".
       for (let jobId in this.jobs) {
-        if (this.jobs[jobId].status === "In Progress") {
-          this.jobs[jobId].status = "Terminated";
+        if (this.jobs[jobId].status === 'In Progress') {
+          this.jobs[jobId].status = 'Terminated';
         }
       }
 
@@ -33,7 +33,7 @@ class JobModule {
 
   getInProgressJobId() {
     for (let id in this.jobs) {
-      if (this.jobs[id].status === "In Progress") {
+      if (this.jobs[id].status === 'In Progress') {
         return id;
       }
     }
@@ -41,10 +41,10 @@ class JobModule {
   }
 
   startNextJob() {
-    console.log("Looking for next job to start");
+    console.log('Looking for next job to start');
     const jobs = this.getAllJobs();
     for (let id in jobs) {
-      if (jobs[id].status === "Pending") {
+      if (jobs[id].status === 'Pending') {
         jobs[id].id = id;
         if (jobs[id].action) {
           jobs[id].action(jobs[id], true); // Invoke the function
@@ -61,24 +61,24 @@ class JobModule {
       if (inProgressJobId) {
         // If there is a job in progress, create a new job with status Pending
         console.log(`A job is already in progress. Adding this ${jobData.jobType} job to the queue.`);
-        jobData.status = "Pending";
+        jobData.status = 'Pending';
         jobId = this.addJob(jobData);
       } else {
         // Otherwise, add a job with status In Progress
         console.log(`Adding job to jobs list as In Progress for ${jobData.jobType} job.`);
-        jobData.status = "In Progress";
+        jobData.status = 'In Progress';
         jobId = this.addJob(jobData);
       }
     } else if (isNextJob && !inProgressJobId) {
       // If this is a next job and there's no job in progress, update its status to In Progress
-      console.log("This is a 'next job', flipping from Pending to In Progress");
+      console.log('This is a "next job", flipping from Pending to In Progress');
       this.updateJob(jobData.id, {
-        status: "In Progress",
+        status: 'In Progress',
         timeInitiated: Date.now(),
       });
       jobId = jobData.id;
     } else {
-      console.log("Cannot start next job as a job is already in progress");
+      console.log('Cannot start next job as a job is already in progress');
     }
     return jobId;
   }
@@ -138,19 +138,19 @@ class JobModule {
   updateJob(jobId, updatedFields) {
     console.log('Updating job: ' + jobId);
     console.log('Updated fields: ' + JSON.stringify(updatedFields));
-    if (updatedFields.status === "Complete" || updatedFields.status === "Error" || updatedFields.status === "Complete with Warnings") {
+    if (updatedFields.status === 'Complete' || updatedFields.status === 'Error' || updatedFields.status === 'Complete with Warnings') {
       let numVideos = updatedFields.data.videos.length;
       if (numVideos == 0) {
-        myEmitter.emit('newData', "Completed: No new videos downloaded.");
+        myEmitter.emit('newData', 'Completed: No new videos downloaded.');
       } else {
-        myEmitter.emit('newData', "Completed: " + numVideos + " new videos downloaded.");
+        myEmitter.emit('newData', 'Completed: ' + numVideos + ' new videos downloaded.');
       }
-      updatedFields.output = numVideos + " videos.";
-      updatedFields.status = "Complete";
+      updatedFields.output = numVideos + ' videos.';
+      updatedFields.status = 'Complete';
     }
     const job = this.jobs[jobId];
     if (!job) {
-      console.log("Job to update did not exist!");
+      console.log('Job to update did not exist!');
       return;
     }
     for (let field in updatedFields) {

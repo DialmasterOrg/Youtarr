@@ -53,7 +53,7 @@ function PlexLibrarySelector({
     })
       .then((response) => response.json())
       .then((data) => setLibraries(data));
-  }, [open]);
+  }, [open, token]);
 
   const handleLibraryChange = (event: SelectChangeEvent<string>) => {
     const libraryId = event.target.value as string;

@@ -1,8 +1,8 @@
 const configModule = require('./configModule');
 const downloadModule = require('./downloadModule');
 const cron = require('node-cron');
-const fs = require("fs");
-const path = require("path");
+const fs = require('fs');
+const path = require('path');
 
 class ChannelModule {
   constructor() {
@@ -28,9 +28,9 @@ class ChannelModule {
     // Schedule the new task if enabled
     if (configModule.getConfig().channelAutoDownload) {
       this.task = cron.schedule(configModule.getConfig().channelDownloadFrequency, this.channelAutoDownload);
-      console.log("Auto-downloads enabled, task scheduled!");
+      console.log('Auto-downloads enabled, task scheduled!');
     } else {
-      console.log("Auto-downloads disabled");
+      console.log('Auto-downloads disabled');
     }
   }
 
