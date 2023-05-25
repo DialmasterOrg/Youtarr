@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Grid, Card, CardHeader, CardContent, Typography } from "@mui/material";
 
 interface DownloadProgressProps {
@@ -16,7 +16,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
   const fileDownloadNumber = useRef<number>(0); // [0, 1, 2, 3, 4, 5, 6, 7, 8, 9
   const prevFileDownloadNumber = useRef<number>(-1); // [0, 1, 2, 3, 4, 5, 6, 7, 8, 9
 
-  const connectWebSocket = (
+  const connectWebSocket = useCallback((
     setSocketOutput: React.Dispatch<React.SetStateAction<string[]>>,
     downloadProgressRef: React.MutableRefObject<{
       index: number | null;
@@ -125,7 +125,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     };
 
     return ws;
-  };
+  }, [downloadInitiatedRef]);
 
   useEffect(() => {
     const ws = connectWebSocket(setSocketOutput, downloadProgressRef);
@@ -133,7 +133,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     return () => {
       ws.close();
     };
-  }, []);
+  }, [connectWebSocket, downloadProgressRef]);
 
   return (
     <Grid item xs={12} md={12} paddingBottom={"8px"}>

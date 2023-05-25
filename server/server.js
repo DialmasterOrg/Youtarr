@@ -1,7 +1,7 @@
-const express = require("express");
+const express = require('express');
 const app = express();
 app.use(express.json());
-const path = require("path");
+const path = require('path');
 const configModule = require('./modules/configModule');
 const channelModule = require('./modules/channelModule');
 const plexModule = require('./modules/plexModule');
@@ -14,7 +14,7 @@ const wss = new WebSocket.Server({ port: 8099 }); // specify any port you like
 
 wss.on('connection', ws => {
   console.log('New client connected');
-  
+
   ws.on('close', () => {
     console.log('Client disconnected');
   });
@@ -62,12 +62,12 @@ app.get('/getplexlibraries', verifyToken, async (req, res) => {
   }
 });
 
-app.get("/getconfig", verifyToken, (req, res) => {
+app.get('/getconfig', verifyToken, (req, res) => {
   // Just send the current config object as a JSON response.
   res.json(configModule.getConfig());
 });
 
-app.post("/updateconfig", verifyToken, (req, res) => {
+app.post('/updateconfig', verifyToken, (req, res) => {
   console.log('Updating config');
   // Update the config object with the new data
   configModule.updateConfig(req.body);
@@ -75,21 +75,21 @@ app.post("/updateconfig", verifyToken, (req, res) => {
   res.json({ status: 'success' });
 });
 
-app.get("/getchannels", verifyToken, (req, res) => {
+app.get('/getchannels', verifyToken, (req, res) => {
   const channels = channelModule.readChannels();
   res.json(channels);
 });
 
-app.post("/updatechannels", verifyToken, (req, res) => {
+app.post('/updatechannels', verifyToken, (req, res) => {
   const channels = req.body;
   channelModule.writeChannels(channels);
   res.json({ status: 'success' });
 });
 
 // Not sure if this is needed, but lets expose it for now for testing
-app.get("/refreshlibrary", verifyToken, (req, res) => {
+app.get('/refreshlibrary', verifyToken, () => {
   plexModule.refreshLibrary();
-})
+});
 
 app.get('/jobstatus/:jobId', verifyToken, (req, res) => {
   const jobId = req.params.jobId;
@@ -142,18 +142,17 @@ app.get('/plex/check-pin/:pinId', async (req, res) => {
 
 
 // Serve static files from the React app
-app.use(express.static(path.join(__dirname, "build")));
+app.use(express.static(path.join(__dirname, 'build')));
 
 // Serve any static files built by React
-app.use(express.static(path.join(__dirname, "../client/build")));
+app.use(express.static(path.join(__dirname, '../client/build')));
 
 // Handle any requests that don't match the ones above
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "../client/build/index.html"));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/build/index.html'));
 });
 
 const port = process.env.PORT || 3011;
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
-

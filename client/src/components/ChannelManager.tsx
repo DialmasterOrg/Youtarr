@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Tooltip,
   Grid,
@@ -37,11 +37,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
-  useEffect(() => {
-    reloadChannels();
-  }, [token]);
-
-  const reloadChannels = () => {
+  const reloadChannels = useCallback(() => {
     // Fetch channels from backend on component mount
     if (token) {
       axios
@@ -54,7 +50,11 @@ function ChannelManager({ token }: ChannelManagerProps) {
           setChannels(response.data);
         });
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    reloadChannels();
+  }, [token, reloadChannels]);
 
   const handleAdd = () => {
     if (
