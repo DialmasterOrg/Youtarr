@@ -14,6 +14,9 @@ import {
   Grid,
   Typography,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogActions,
 } from "@mui/material";
 import PlexLibrarySelector from "./PlexLibrarySelector";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -38,6 +41,7 @@ function Configuration({ token }: ConfigurationProps) {
     uuid: "",
   });
   const [openPlexLibrarySelector, setOpenPlexLibrarySelector] = useState(false);
+  const [openConfirmDialog, setOpenConfirmDialog] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
@@ -97,6 +101,15 @@ function Configuration({ token }: ConfigurationProps) {
       },
       body: JSON.stringify(config),
     });
+  };
+
+  const handleOpenConfirmDialog = () => {
+    setOpenConfirmDialog(true);
+  };
+
+  const handleConfirmSave = () => {
+    setOpenConfirmDialog(false);
+    saveConfig();
   };
 
   const frequencyMapping: { [key: string]: string } = {
@@ -301,13 +314,27 @@ function Configuration({ token }: ConfigurationProps) {
             <Button
               variant="contained"
               color="primary"
-              onClick={saveConfig}
+              onClick={handleOpenConfirmDialog}
               style={{ fontSize: isMobile ? "small" : "medium" }}
             >
               Save Configuration Changes
             </Button>
           </Grid>
         </Grid>
+        <Dialog
+          open={openConfirmDialog}
+          onClose={() => setOpenConfirmDialog(false)}
+        >
+          <DialogTitle>Are you sure you want to save these changes?</DialogTitle>
+          <DialogActions>
+            <Button onClick={() => setOpenConfirmDialog(false)} color="primary">
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmSave} color="primary" autoFocus>
+              Save
+            </Button>
+          </DialogActions>
+        </Dialog>
       </CardContent>
     </Card>
   );
