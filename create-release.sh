@@ -21,6 +21,11 @@ jq -n --arg version $new_version 'input | .version=$version' package.json > "tmp
 git add package.json
 git commit -m "Bump version to $new_version"
 
+# Always build the client and Docker container
+cd client
+npm run build
+cd ..
+
 # Build the Docker image with the new version tag
 docker build -t dialmaster/youtarr:$new_version .
 
