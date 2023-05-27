@@ -18,4 +18,4 @@ fi
 docker pull dialmaster/youtarr
 
 # Start the Docker container with the selected directory mounted
-docker run --name youtarr -d -v $youtubeOutputDirectory:/usr/src/app/data -v /$(pwd)/config:/app/config -v /$(pwd)/jobs:/app/jobs -p 3087:3011 -p 8099:8099 -e IN_DOCKER_CONTAINER=1 dialmaster/youtarr:1.2.0
+docker run --name youtarr -d -v $youtubeOutputDirectory:/usr/src/app/data -v /$(pwd)/config:/app/config -v /$(pwd)/jobs:/app/jobs -p 3087:3011 -p 8099:8099 -e IN_DOCKER_CONTAINER=1 dialmaster/youtarr
