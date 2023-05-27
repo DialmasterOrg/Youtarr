@@ -29,6 +29,7 @@ cd ..
 
 # Commit the changes
 git add package.json
+git add client/package.json
 git commit -m "Bump version to $new_version"
 
 
