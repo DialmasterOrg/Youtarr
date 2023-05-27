@@ -2,7 +2,7 @@
 # This can only be used by the package maintainer
 
 # Check for required tools
-for tool in jq git docker npm; do
+for tool in git docker npm; do
   if ! which $tool &> /dev/null; then
     echo "$tool is not available, but is required to run this script. Please install $tool."
     exit 1
@@ -22,17 +22,15 @@ echo "Current version is: $current_version"
 # Ask for the new version number
 read -p "Enter the new version number: " new_version
 
-# Update the version in package.json
-jq -n --arg version $new_version 'input | .version=$version' package.json > "tmp.json" && mv "tmp.json" package.json
+npm version $new_version --no-git-tag-version
+cd client
+npm version $new_version --no-git-tag-version
+cd ..
 
 # Commit the changes
 git add package.json
 git commit -m "Bump version to $new_version"
 
-# Always build the client and Docker container
-cd client
-npm run build
-cd ..
 
 # Build the Docker image with the new version tag
 docker build -t dialmaster/youtarr:$new_version .
