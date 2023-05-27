@@ -1,4 +1,5 @@
 import "./App.css";
+import packageJson from '../package.json';
 import React, { useState, useEffect } from "react";
 import toplogo from './Youtarr_text.png';
 import {
@@ -37,6 +38,7 @@ function App() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const drawerWidth = isMobile ? "50%" : 240; // specify your drawer width
+  const { version } = packageJson;
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -92,6 +94,12 @@ function App() {
               Youtube Video Downloader for Plex
             </Typography>
           </div>
+          <Typography
+            fontSize='small'
+            color={'textSecondary'}
+            style={{ position: 'absolute', top: 5, right: 10 }}>
+            v{version}
+          </Typography>
           {/* This is the matching invisible IconButton */}
           <IconButton
             color="inherit"
