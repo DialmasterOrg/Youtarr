@@ -1,3 +1,4 @@
+import React, { useRef } from "react";
 import {
   Grid,
   Card,
@@ -56,6 +57,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
   setAnchorEl,
   isMobile,
 }) => {
+  const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   return (
     <Grid item xs={12} md={12} paddingBottom={"48px"}>
       <Card elevation={8}>
@@ -190,6 +192,9 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                           {job.data?.videos?.length > 0 && (
                             <>
                               <IconButton
+                                ref={(ref) =>
+                                  (buttonRefs.current[job.id] = ref)
+                                }
                                 onClick={(
                                   event: React.MouseEvent<HTMLButtonElement>
                                 ) => {
@@ -209,9 +214,18 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                 anchorEl={anchorEl[job.id]}
                               >
                                 <ClickAwayListener
-                                  onClickAway={() =>
-                                    setAnchorEl({ ...anchorEl, [job.id]: null })
-                                  }
+                                  onClickAway={(event) => {
+                                    const isIconButton = buttonRefs.current[
+                                      job.id
+                                    ]?.contains(event.target as Node);
+
+                                    if (!isIconButton) {
+                                      setAnchorEl({
+                                        ...anchorEl,
+                                        [job.id]: null,
+                                      });
+                                    }
+                                  }}
                                 >
                                   <div
                                     style={{
