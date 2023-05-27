@@ -1,6 +1,14 @@
 #!/bin/bash
 # This can only be used by the package maintainer
 
+# Check for required tools
+for tool in jq git docker npm; do
+  if ! which $tool &> /dev/null; then
+    echo "$tool is not available, but is required to run this script. Please install $tool."
+    exit 1
+  fi
+done
+
 # Ensure we're on the 'main' branch
 current_branch=$(git symbolic-ref --short HEAD)
 if [ "$current_branch" != "main" ]; then
