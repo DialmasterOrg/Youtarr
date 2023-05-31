@@ -36,9 +36,11 @@ os=$(detect_os)
 if [[ "$os" == "linux" ]]; then
     # If the host is Linux, set plexIP to the Docker host IP
     plex_ip="172.17.0.1"  # Adjust this value according to your Docker network setup
+    echo "Linux detected as host OS, setting Plex IP for Docker to $plex_ip"
 else
     # If the host is not Linux, use host.docker.internal
     plex_ip="host.docker.internal"
+    echo "Linux not detected as host OS, setting Plex IP to $plex_ip"
 fi
 
 # Escape the plex_ip value to avoid any issues with sed
@@ -46,6 +48,9 @@ plex_ip_escaped=$(printf '%s\n' "$plex_ip" | sed 's:[][\/.^$*]:\\&:g')
 
 # Use sed to replace the value of plexIP in config.json
 sed -i "s/\"plexIP\": \".*\"/\"plexIP\": \"$plex_ip_escaped\"/" ./config/config.json
+
+
+read -p "Would you like to (re)set your Youtube video file output directory? (Y/N) " confirm && [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]] || exit 1
 
 
 # Prompt the user to enter a directory path
