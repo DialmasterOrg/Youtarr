@@ -6,6 +6,48 @@ if [ ! -f "./config/config.json" ]; then
   cp "./config/config.example.json" "./config/config.json"
 fi
 
+touch "./config/complete.list"
+
+function detect_os() {
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        # Linux
+        echo "linux"
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        # MacOS
+        echo "mac"
+    elif [[ "$OSTYPE" == "cygwin" ]]; then
+        # POSIX compatibility layer and Linux environment emulation for Windows
+        echo "windows"
+    elif [[ "$OSTYPE" == "msys" ]]; then
+        # Lightweight shell and GNU utilities compiled for Windows (part of MinGW)
+        echo "windows"
+    elif [[ "$OSTYPE" == "win32" ]]; then
+        # I'm not sure this can happen.
+        echo "windows"
+    else
+        # Unknown.
+        echo "unknown"
+    fi
+}
+
+# Detect the host operating system
+os=$(detect_os)
+
+if [[ "$os" == "linux" ]]; then
+    # If the host is Linux, set plexIP to the Docker host IP
+    plex_ip="172.17.0.1"  # Adjust this value according to your Docker network setup
+else
+    # If the host is not Linux, use host.docker.internal
+    plex_ip="host.docker.internal"
+fi
+
+# Escape the plex_ip value to avoid any issues with sed
+plex_ip_escaped=$(printf '%s\n' "$plex_ip" | sed 's:[][\/.^$*]:\\&:g')
+
+# Use sed to replace the value of plexIP in config.json
+sed -i "s/\"plexIP\": \".*\"/\"plexIP\": \"$plex_ip_escaped\"/" ./config/config.json
+
+
 # Prompt the user to enter a directory path
 echo "Please enter the directory path to store the videos (you can change this later):"
 read dir_path
