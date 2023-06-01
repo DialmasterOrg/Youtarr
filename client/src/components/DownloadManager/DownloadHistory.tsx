@@ -10,7 +10,7 @@ import {
   TableHead,
   TableRow,
   TableCell,
-  Popper,
+  Popover,
   Typography,
   IconButton,
   ClickAwayListener,
@@ -209,7 +209,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                 {" "}
                                 <InfoIcon fontSize="small" />
                               </IconButton>
-                              <Popper
+                              <Popover
                                 open={Boolean(anchorEl[job.id])}
                                 anchorEl={anchorEl[job.id]}
                               >
@@ -245,7 +245,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                     </Typography>
                                   </div>
                                 </ClickAwayListener>
-                              </Popper>{" "}
+                              </Popover>{" "}
                             </>
                           )}
 
