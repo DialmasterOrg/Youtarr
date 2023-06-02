@@ -211,11 +211,11 @@ class DownloadModule {
     });
   }
 
-  doChannelDownloads(jobData = {}, isNextJob = false) {
+  async doChannelDownloads(jobData = {}, isNextJob = false) {
     const jobType = 'Channel Downloads';
     console.log(`Running ${jobType}`);
 
-    const jobId = jobModule.addOrUpdateJob(
+    const jobId = await jobModule.addOrUpdateJob(
       {
         jobType: jobType,
         status: '',
@@ -231,10 +231,9 @@ class DownloadModule {
       const command = `${baseCommand} -a ./config/channels.list --playlist-end ${configModule.config.channelFilesToDownload}`;
       this.doDownload(command, jobId, jobType);
     }
-    return jobId;
   }
 
-  doSpecificDownloads(reqOrJobData, isNextJob = false) {
+  async doSpecificDownloads(reqOrJobData, isNextJob = false) {
     const jobType = 'Manually Added Urls';
     const jobData = reqOrJobData.body ? reqOrJobData.body : reqOrJobData;
 
@@ -246,7 +245,7 @@ class DownloadModule {
     const urls = reqOrJobData.body
       ? reqOrJobData.body.urls
       : reqOrJobData.data.urls;
-    const jobId = jobModule.addOrUpdateJob(
+    const jobId = await jobModule.addOrUpdateJob(
       {
         jobType: jobType,
         status: '',
@@ -266,16 +265,23 @@ class DownloadModule {
       const command = `${baseCommand} ${urlsString}`;
       this.doDownload(command, jobId, jobType);
     }
-    return jobId;
   }
 
   getBaseCommand() {
     return (
-      'yt-dlp --ffmpeg-location ' + configModule.ffmpegPath + ' -f mp4 --write-thumbnail --convert-thumbnails jpg ' +
+      'yt-dlp --ffmpeg-location ' +
+      configModule.ffmpegPath +
+      ' -f mp4 --write-thumbnail --convert-thumbnails jpg ' +
       '--download-archive ./config/complete.list --ignore-errors --embed-metadata --write-info-json ' +
-      '-o "' + configModule.directoryPath + '/%(uploader)s/%(uploader)s - %(title)s - %(id)s/%(uploader)s - %(title)s  [%(id)s].%(ext)s" ' +
-      '--ignore-errors --datebefore now -o "thumbnail:' + configModule.directoryPath + '/%(uploader)s/%(uploader)s - %(title)s - %(id)s/poster" -o "pl_thumbnail:" ' +
-      '--exec "node ' + path.resolve(__dirname, './moveInfoJson.js') + ' {}" '
+      '-o "' +
+      configModule.directoryPath +
+      '/%(uploader)s/%(uploader)s - %(title)s - %(id)s/%(uploader)s - %(title)s  [%(id)s].%(ext)s" ' +
+      '--ignore-errors --datebefore now -o "thumbnail:' +
+      configModule.directoryPath +
+      '/%(uploader)s/%(uploader)s - %(title)s - %(id)s/poster" -o "pl_thumbnail:" ' +
+      '--exec "node ' +
+      path.resolve(__dirname, './moveInfoJson.js') +
+      ' {}" '
     );
   }
 }

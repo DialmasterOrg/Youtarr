@@ -4,11 +4,11 @@
 node_modules
 /.pnp
 .pnp.js
-config/config.json
 config/channels.list
 config/complete.list
 config/jobs.json
-config/myconfig.json
+config/config.json
+database
 
 # Local dev exclusion
 ffmpeg.exe
