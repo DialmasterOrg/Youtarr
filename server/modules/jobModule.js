@@ -25,8 +25,11 @@ class JobModule {
         // Save the jobs.json file to jobs.json.old just in case we need it later
         fs.renameSync(this.jobsFilePath, this.jobsFilePathOld);
 
-        this.terminateInProgressJobs();
-        this.saveJobsAndStartNext();
+        // Reload from the DB
+        this.loadJobsFromDB().then(() => {
+          this.terminateInProgressJobs();
+          this.saveJobsAndStartNext();
+        });
       });
     } else {
       // If there is no jobs.json file, load the jobs from the DB
