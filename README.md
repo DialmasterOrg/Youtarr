@@ -70,26 +70,15 @@ If not you will be unable to login.
 
    Each video will be placed in a directory named for the Youtube channel it came from.
 
-### To run locally on the host with hot reload (for development -- NOT FOR END USERS)
-
-Download yt-dlp.exe and place it in the root directory of your application.
-Make sure ffmpeg is installed on your system.
-Update your `config/config.json`.
-
-- Your devYoutubeOutputDirectory will need to be pointed to the root directory where you want to download videos.
-- Your devffmpegPath will need to be pointed to whereever you installed ffmpeg.
-
-Run `npm run dev`. The frontend UI will be exposed at localhost:3000
-
 ## Accessing Youtarr from Outside Your Network
 
 If you wish to access Youtarr from outside your network, or from other computers aside from the one you are running it on, you will need to forward ports 3087 (for the main application webpage) and 8099 (in order to get realtime notifications of download progress) on your local computer firewall (Eg: Windows Defender Firewall) and on your router.
 
 ## Screenshots
 
-![Alt text](/screenshots/youtarr_channels.jpg?raw=true "Channels Screen")
-![Alt text](/screenshots/youtarr_config.jpg?raw=true "Config Screen")
-![Alt text](/screenshots/youtarr_downloads.jpg?raw=true "Downloads Screen")
-![Alt text](/screenshots/youtarr_channels_mb.jpg?raw=true "Channels Screen")
-![Alt text](/screenshots/youtarr_config_mb.jpg?raw=true "Config Screen")
-![Alt text](/screenshots/youtarr_downloads_mb.jpg?raw=true "Downloads Screen")
+![Alt text](/screenshots/youtarr_channels.jpg?raw=true 'Channels Screen')
+![Alt text](/screenshots/youtarr_config.jpg?raw=true 'Config Screen')
+![Alt text](/screenshots/youtarr_downloads.jpg?raw=true 'Downloads Screen')
+![Alt text](/screenshots/youtarr_channels_mb.jpg?raw=true 'Channels Screen')
+![Alt text](/screenshots/youtarr_config_mb.jpg?raw=true 'Config Screen')
+![Alt text](/screenshots/youtarr_downloads_mb.jpg?raw=true 'Downloads Screen')
