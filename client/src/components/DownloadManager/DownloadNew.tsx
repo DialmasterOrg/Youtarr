@@ -32,13 +32,18 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
 
   const handleTriggerChannelDownloads = async () => {
     downloadInitiatedRef.current = true;
-    await fetch("/triggerchanneldownloads", {
+    const result = await fetch("/triggerchanneldownloads", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-access-token": token || "",
       },
     });
+    // If the result is a 400 then we already have a running Channel Download
+    // job and we should display an alert
+    if (result.status === 400) {
+      alert("Channel Download already running");
+    }
     setTimeout(fetchRunningJobs, 1000);
   };
 

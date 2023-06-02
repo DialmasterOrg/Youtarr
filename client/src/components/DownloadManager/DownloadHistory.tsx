@@ -182,7 +182,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                             alignItems: "center",
                           }}
                         >
-                          {job.output.length > 50 && (
+                          {job.output && job.output.length > 50 && (
                             <IconButton
                               onClick={() => handleExpandCell(job.id)}
                             >

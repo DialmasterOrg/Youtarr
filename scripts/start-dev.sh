@@ -15,7 +15,5 @@ if [[ "$OSTYPE" == "msys" ]]; then
   youtubeOutputDirectory="/$youtubeOutputDirectory"
 fi
 
-docker pull dialmaster/youtarr
-
 # Start the Docker container with the selected directory mounted
-docker run --name youtarr -d -v $youtubeOutputDirectory:/usr/src/app/data -v /$(pwd)/config:/app/config -v /$(pwd)/jobs:/app/jobs -v /$(pwd)/migrations:/app/migrations -v /$(pwd)/database:/var/lib/mysql -p 3087:3011 -p 8099:8099 -p 3321:3306 -e IN_DOCKER_CONTAINER=1 youtarr
+docker run --name youtarr-dev -d -v $youtubeOutputDirectory:/usr/src/app/data -v /$(pwd)/config:/app/config -v /$(pwd)/jobs:/app/jobs -v /$(pwd)/migrations:/app/migrations -v /$(pwd)/database:/var/lib/mysql -p 3087:3011 -p 8099:8099 -p 3321:3321 -e IN_DOCKER_CONTAINER=1 youtarr-dev
