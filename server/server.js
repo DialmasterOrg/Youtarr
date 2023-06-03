@@ -5,6 +5,7 @@ const path = require('path');
 const WebSocket = require('ws');
 const wss = new WebSocket.Server({ port: 8099 }); // specify any port you like
 const db = require('./db');
+const https = require('https');
 
 const initialize = async () => {
   try {
@@ -60,6 +61,39 @@ const initialize = async () => {
     }
 
     /**** ONLY ROUTES BELOW THIS LINE *********/
+
+    app.get('/getCurrentReleaseVersion', async (req, res) => {
+      try {
+        https
+          .get(
+            'https://registry.hub.docker.com/v2/repositories/dialmaster/youtarr/tags',
+            (resp) => {
+              let data = '';
+
+              resp.on('data', (chunk) => {
+                data += chunk;
+              });
+
+              resp.on('end', () => {
+                const dockerData = JSON.parse(data);
+                const latestVersion = dockerData.results.filter(
+                  (tag) => tag.name !== 'latest'
+                )[0].name; // Filter out 'latest' tag and get the first non-'latest' tag
+                res.json({ version: latestVersion });
+              });
+            }
+          )
+          .on('error', (err) => {
+            console.log('Error: ' + err.message);
+            res.status(500).json({ error: err.message });
+          });
+      } catch (error) {
+        console.log('Error: ' + error.message);
+        res
+          .status(500)
+          .json({ error: 'Failed to fetch version from Docker Hub' });
+      }
+    });
 
     app.get('/getplexlibraries', verifyToken, async (req, res) => {
       try {
