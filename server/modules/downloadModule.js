@@ -1,6 +1,5 @@
 const configModule = require('./configModule');
 const plexModule = require('./plexModule');
-const { exec } = require('child_process');
 const jobModule = require('./jobModule');
 const fs = require('fs');
 const path = require('path');
@@ -125,82 +124,6 @@ class DownloadModule {
 
         plexModule.refreshLibrary();
         jobModule.startNextJob();
-      });
-    }).catch((error) => {
-      console.log(error.message);
-      jobModule.updateJob(jobId, {
-        status: 'Killed',
-        output: 'Job time exceeded timeout',
-      });
-    });
-  }
-
-  doDownloadOld(command, jobId, jobType) {
-    const initialCount = this.getCountOfDownloadedVideos();
-
-    new Promise((resolve, reject) => {
-      console.log('Setting timeout for ending job');
-      const timer = setTimeout(() => {
-        reject(new Error('Job time exceeded timeout'));
-      }, 1000000); // Set your desired timeout
-
-      console.log(`Running exec for ${jobType}`);
-      exec(command, { timeout: 1000000 }, (error, stdout, stderr) => {
-        clearTimeout(timer);
-        const newVideoUrls = this.getNewVideoUrls(initialCount);
-        const videoCount = newVideoUrls.length;
-
-        let videoData = newVideoUrls
-          .map((url) => {
-            let id = url.split('youtu.be/')[1].trim();
-            let dataPath = path.join(
-              __dirname,
-              `../../jobs/info/${id}.info.json`
-            );
-            console.log('Looking for info.json file at', dataPath);
-
-            if (fs.existsSync(dataPath)) {
-              console.log('Found info.json file at', dataPath);
-              let data = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
-              return {
-                youtubeId: data.id,
-                youTubeChannelName: data.uploader,
-                youTubeVideoName: data.title,
-              };
-            } else {
-              console.log('No info.json file at', dataPath);
-            }
-            return null; // If for some reason .info.json file is not found, return null
-          })
-          .filter((data) => data !== null); // Filter out any null values
-
-        console.log(
-          `${jobType} complete (with or without errors) for Job ID: ${jobId}`
-        );
-
-        let status = '';
-        let output = '';
-
-        if (error) {
-          status = 'Error';
-          output = `${videoCount} videos. Error: ${error.message}`;
-        } else if (stderr) {
-          status = 'Complete';
-          output = `${videoCount} videos.`;
-        } else {
-          status = 'Complete';
-          output = `${videoCount} videos.`;
-        }
-
-        jobModule.updateJob(jobId, {
-          status: status,
-          output: output,
-          data: { videos: videoData },
-        });
-
-        plexModule.refreshLibrary();
-        jobModule.startNextJob();
-        resolve();
       });
     }).catch((error) => {
       console.log(error.message);
