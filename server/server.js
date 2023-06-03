@@ -85,8 +85,9 @@ const initialize = async () => {
     });
 
     app.get('/getchannels', verifyToken, (req, res) => {
-      const channels = channelModule.readChannels();
-      res.json(channels);
+      channelModule.readChannels().then((channels) => {
+        res.json(channels);
+      });
     });
 
     app.post('/updatechannels', verifyToken, (req, res) => {
