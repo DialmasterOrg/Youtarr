@@ -32,6 +32,9 @@ git add package.json
 git add client/package.json
 git commit -m "Bump version to $new_version"
 
+cd client
+npm run build
+cd ..
 
 # Build the Docker image with the new version tag
 docker build -t dialmaster/youtarr:$new_version .
