@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Grid,
   Card,
@@ -14,6 +14,10 @@ import {
   Typography,
   IconButton,
   ClickAwayListener,
+  Checkbox,
+  Toolbar,
+  FormControlLabel,
+  Box,
 } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
 
@@ -56,6 +60,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
   setAnchorEl,
   isMobile,
 }) => {
+  const [hideNoVideoJobs, setHideNoVideoJobs] = useState(false); // New state here
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   return (
     <Grid item xs={12} md={12} paddingBottom={'48px'}>
@@ -66,6 +71,22 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
           style={{ marginBottom: '-16px' }}
         />
         <CardContent>
+          <Toolbar>
+            <Box display='flex' justifyContent='center' width='100%'>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={hideNoVideoJobs}
+                    onChange={(event) =>
+                      setHideNoVideoJobs(event.target.checked)
+                    }
+                    inputProps={{ 'aria-label': 'Hide jobs with no videos' }}
+                  />
+                }
+                label='Hide jobs with no videos'
+              />
+            </Box>
+          </Toolbar>
           <TableContainer>
             <Table>
               <TableHead>
@@ -112,174 +133,181 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                 </TableBody>
               )}
               <TableBody>
-                {jobs.map((job, index) => {
-                  const isExpanded = expanded[job.id] || false;
-                  let durationString = '';
-                  if (job.status !== 'In Progress') {
-                    durationString = job.status;
-                  } else {
-                    const jobStartTime = new Date(job.timeInitiated).getTime(); // Convert to milliseconds
-                    const duration = new Date(
-                      currentTime.getTime() - jobStartTime
-                    ); // Subtract in milliseconds                    const hh = String(duration.getUTCHours()).padStart(2, '0');
-                    const mm = String(duration.getUTCMinutes()).padStart(
+                {jobs
+                  .filter(
+                    (job) =>
+                      !(hideNoVideoJobs && job.data?.videos?.length === 0)
+                  )
+                  .map((job, index) => {
+                    const isExpanded = expanded[job.id] || false;
+                    let durationString = '';
+                    if (job.status !== 'In Progress') {
+                      durationString = job.status;
+                    } else {
+                      const jobStartTime = new Date(
+                        job.timeInitiated
+                      ).getTime(); // Convert to milliseconds
+                      const duration = new Date(
+                        currentTime.getTime() - jobStartTime
+                      ); // Subtract in milliseconds                    const hh = String(duration.getUTCHours()).padStart(2, '0');
+                      const mm = String(duration.getUTCMinutes()).padStart(
+                        2,
+                        '0'
+                      );
+                      const ss = String(duration.getUTCSeconds()).padStart(
+                        2,
+                        '0'
+                      );
+                      durationString = `${mm}m${ss}s`;
+                    }
+                    let timeCreated = new Date(job.timeCreated);
+                    let month = String(timeCreated.getMonth() + 1).padStart(
                       2,
                       '0'
-                    );
-                    const ss = String(duration.getUTCSeconds()).padStart(
+                    ); // Add 1 to month and pad with 0s
+                    let day = String(timeCreated.getDate()).padStart(2, '0'); // Pad with 0s
+
+                    let minutes = String(timeCreated.getMinutes()).padStart(
                       2,
                       '0'
-                    );
-                    durationString = `${mm}m${ss}s`;
-                  }
-                  let timeCreated = new Date(job.timeCreated);
-                  let month = String(timeCreated.getMonth() + 1).padStart(
-                    2,
-                    '0'
-                  ); // Add 1 to month and pad with 0s
-                  let day = String(timeCreated.getDate()).padStart(2, '0'); // Pad with 0s
+                    ); // Pad with 0s
+                    // Convert 24-hour format to 12-hour format
+                    let hours = timeCreated.getHours();
+                    let period = hours >= 12 ? 'PM' : 'AM';
+                    let videosText = job.data?.videos
+                      ? job.data.videos.length > 0
+                        ? `${job.data.videos.length}`
+                        : 'None'
+                      : 'None';
 
-                  let minutes = String(timeCreated.getMinutes()).padStart(
-                    2,
-                    '0'
-                  ); // Pad with 0s
-                  // Convert 24-hour format to 12-hour format
-                  let hours = timeCreated.getHours();
-                  let period = hours >= 12 ? 'PM' : 'AM';
-                  let videosText = job.data?.videos
-                    ? job.data.videos.length > 0
-                      ? `${job.data.videos.length}`
-                      : 'None'
-                    : 'None';
+                    if (job.status === 'In Progress') {
+                      videosText = '---';
+                    }
+                    let formattedJobType = '';
+                    if (job.jobType === 'Channel Downloads') {
+                      formattedJobType = 'Channel';
+                    } else if (job.jobType === 'Manually Added Urls') {
+                      formattedJobType = 'Manual Videos';
+                    }
 
-                  if (job.status === 'In Progress') {
-                    videosText = '---';
-                  }
-                  let formattedJobType = '';
-                  if (job.jobType === 'Channel Downloads') {
-                    formattedJobType = 'Channel';
-                  } else if (job.jobType === 'Manually Added Urls') {
-                    formattedJobType = 'Manual Videos';
-                  }
+                    // Adjust hours
+                    hours = hours % 12;
+                    hours = hours ? hours : 12; // the hour '0' should be '12'
 
-                  // Adjust hours
-                  hours = hours % 12;
-                  hours = hours ? hours : 12; // the hour '0' should be '12'
+                    // Combine into a formatted string
+                    let formattedTimeCreated = `${month}-${day} ${hours}:${minutes} ${period}`;
 
-                  // Combine into a formatted string
-                  let formattedTimeCreated = `${month}-${day} ${hours}:${minutes} ${period}`;
-
-                  return (
-                    <TableRow key={index}>
-                      <TableCell
-                        style={{ fontSize: isMobile ? 'small' : 'medium' }}
-                      >
-                        {formattedJobType}
-                      </TableCell>
-                      <TableCell
-                        style={{ fontSize: isMobile ? 'small' : 'medium' }}
-                      >
-                        {formattedTimeCreated}
-                      </TableCell>
-                      <TableCell
-                        style={{ fontSize: isMobile ? 'small' : 'medium' }}
-                      >
-                        {durationString}
-                      </TableCell>
-                      <TableCell
-                        style={{ fontSize: isMobile ? 'small' : 'medium' }}
-                      >
-                        <div
-                          style={{
-                            position: 'relative',
-                            display: 'flex',
-                            alignItems: 'center',
-                          }}
+                    return (
+                      <TableRow key={index}>
+                        <TableCell
+                          style={{ fontSize: isMobile ? 'small' : 'medium' }}
                         >
-                          {job.data?.videos?.length > 0 && (
-                            <>
-                              <IconButton
-                                ref={(ref) =>
-                                  (buttonRefs.current[job.id] = ref)
-                                }
-                                onClick={(
-                                  event: React.MouseEvent<HTMLButtonElement>
-                                ) => {
-                                  setAnchorEl({
-                                    ...anchorEl,
-                                    [job.id]: anchorEl[job.id]
-                                      ? null
-                                      : event.currentTarget,
-                                  });
-                                }}
-                              >
-                                {' '}
-                                <InfoIcon fontSize='small' />
-                              </IconButton>
-                              <Popover
-                                open={Boolean(anchorEl[job.id])}
-                                anchorEl={anchorEl[job.id]}
-                              >
-                                <ClickAwayListener
-                                  onClickAway={(event) => {
-                                    const isIconButton = buttonRefs.current[
-                                      job.id
-                                    ]?.contains(event.target as Node);
-
-                                    if (!isIconButton) {
-                                      setAnchorEl({
-                                        ...anchorEl,
-                                        [job.id]: null,
-                                      });
-                                    }
+                          {formattedJobType}
+                        </TableCell>
+                        <TableCell
+                          style={{ fontSize: isMobile ? 'small' : 'medium' }}
+                        >
+                          {formattedTimeCreated}
+                        </TableCell>
+                        <TableCell
+                          style={{ fontSize: isMobile ? 'small' : 'medium' }}
+                        >
+                          {durationString}
+                        </TableCell>
+                        <TableCell
+                          style={{ fontSize: isMobile ? 'small' : 'medium' }}
+                        >
+                          <div
+                            style={{
+                              position: 'relative',
+                              display: 'flex',
+                              alignItems: 'center',
+                            }}
+                          >
+                            {job.data?.videos?.length > 0 && (
+                              <>
+                                <IconButton
+                                  ref={(ref) =>
+                                    (buttonRefs.current[job.id] = ref)
+                                  }
+                                  onClick={(
+                                    event: React.MouseEvent<HTMLButtonElement>
+                                  ) => {
+                                    setAnchorEl({
+                                      ...anchorEl,
+                                      [job.id]: anchorEl[job.id]
+                                        ? null
+                                        : event.currentTarget,
+                                    });
                                   }}
                                 >
-                                  <div
-                                    style={{
-                                      padding: '8px',
-                                      backgroundColor: '#f5f5f5',
-                                      maxWidth: isMobile ? '85vw' : '320px',
-                                      wordBreak: 'break-word',
+                                  {' '}
+                                  <InfoIcon fontSize='small' />
+                                </IconButton>
+                                <Popover
+                                  open={Boolean(anchorEl[job.id])}
+                                  anchorEl={anchorEl[job.id]}
+                                >
+                                  <ClickAwayListener
+                                    onClickAway={(event) => {
+                                      const isIconButton = buttonRefs.current[
+                                        job.id
+                                      ]?.contains(event.target as Node);
+
+                                      if (!isIconButton) {
+                                        setAnchorEl({
+                                          ...anchorEl,
+                                          [job.id]: null,
+                                        });
+                                      }
                                     }}
                                   >
-                                    <Typography sx={{ padding: 2 }}>
-                                      {job.data?.videos?.map((video: any) => (
-                                        <p key={video.youtubeId}>
-                                          {video.youTubeChannelName} -{' '}
-                                          {video.youTubeVideoName}
-                                        </p>
-                                      ))}
-                                    </Typography>
-                                  </div>
-                                </ClickAwayListener>
-                              </Popover>{' '}
-                            </>
-                          )}
+                                    <div
+                                      style={{
+                                        padding: '8px',
+                                        backgroundColor: '#f5f5f5',
+                                        maxWidth: isMobile ? '85vw' : '320px',
+                                        wordBreak: 'break-word',
+                                      }}
+                                    >
+                                      <Typography sx={{ padding: 2 }}>
+                                        {job.data?.videos?.map((video: any) => (
+                                          <p key={video.youtubeId}>
+                                            {video.youTubeChannelName} -{' '}
+                                            {video.youTubeVideoName}
+                                          </p>
+                                        ))}
+                                      </Typography>
+                                    </div>
+                                  </ClickAwayListener>
+                                </Popover>{' '}
+                              </>
+                            )}
 
-                          {isExpanded ? (
-                            <div
-                              style={{
-                                maxWidth: isMobile ? '125px' : '100%',
-                              }}
-                            >
-                              {videosText}
-                            </div>
-                          ) : (
-                            <div
-                              style={{
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {videosText}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                            {isExpanded ? (
+                              <div
+                                style={{
+                                  maxWidth: isMobile ? '125px' : '100%',
+                                }}
+                              >
+                                {videosText}
+                              </div>
+                            ) : (
+                              <div
+                                style={{
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {videosText}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
               </TableBody>
             </Table>
           </TableContainer>
