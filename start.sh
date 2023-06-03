@@ -1,5 +1,7 @@
 #!/bin/bash
 
+git pull
+
 # Read the selected directory from the config file
 # Read the selected directory from the config file
 youtubeOutputDirectory=$(python -c "import json; print(json.load(open('config/config.json'))['youtubeOutputDirectory'])")
