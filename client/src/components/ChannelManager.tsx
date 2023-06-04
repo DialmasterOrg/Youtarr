@@ -154,8 +154,16 @@ function ChannelManager({ token }: ChannelManagerProps) {
                         <img
                           src={`/images/channelthumb-${channel.channel_id}.jpg`}
                           alt={`${channel.uploader} thumbnail`}
-                          style={{ height: '50px', marginRight: '10px' }}
-                        />
+                          style={{
+                            height: '50px',
+                            width: '50px',
+                            marginRight: '10px',
+                          }}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display =
+                              'none';
+                          }}
+                        />{' '}
                         <ListItemText
                           primary={
                             <div
