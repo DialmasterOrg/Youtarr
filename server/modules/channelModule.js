@@ -68,12 +68,34 @@ class ChannelModule {
     // Open a writable stream
     const writeStream = fs.createWriteStream(outputFilePath);
 
-    // Run yt-dlp command and write the output to a file
+    // Run yt-dlp command and write the output to a file for json
     const ytDlp = spawn('yt-dlp', [
       '--skip-download',
       '--dump-single-json',
       '--playlist-end',
       '1',
+      '--playlist-items',
+      '0',
+      channelUrl,
+    ]);
+
+    const imagePath = path.resolve(
+      __dirname,
+      '../images/channelthumb-%(uploader_id)s.jpg'
+    );
+
+    // Doesn't matter when this finishes...
+    spawn('yt-dlp', [
+      '--skip-download',
+      '--write-thumbnail',
+      '--playlist-end',
+      '1',
+      '--playlist-items',
+      '0',
+      '--convert-thumbnails',
+      'jpg',
+      '-o',
+      `${imagePath}`,
       channelUrl,
     ]);
 
@@ -175,6 +197,7 @@ class ChannelModule {
         return {
           url: channel,
           uploader: foundChannel ? foundChannel.uploader : '',
+          channel_id: foundChannel ? foundChannel.channel_id : '',
         };
       });
     });

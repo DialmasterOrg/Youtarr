@@ -62,6 +62,12 @@ const initialize = async () => {
 
     /**** ONLY ROUTES BELOW THIS LINE *********/
 
+    // Serve image files
+    app.use('/images', express.static(path.join(__dirname, 'images')));
+
+    // Serve any static files built by React
+    app.use(express.static(path.join(__dirname, '../client/build')));
+
     app.get('/getCurrentReleaseVersion', async (req, res) => {
       try {
         https
@@ -194,12 +200,6 @@ const initialize = async () => {
         res.status(500).json({ error: error.message });
       }
     });
-
-    // Serve static files from the React app
-    app.use(express.static(path.join(__dirname, 'build')));
-
-    // Serve any static files built by React
-    app.use(express.static(path.join(__dirname, '../client/build')));
 
     // Handle any requests that don't match the ones above
     app.get('*', (req, res) => {

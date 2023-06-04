@@ -13,13 +13,15 @@ if (fs.existsSync(jsonPath)) {
     ? matches[matches.length - 1].replace(/[[\]]/g, '')
     : 'default'; // take the last match and remove brackets or use 'default'
   const directoryPath = path.resolve(__dirname, '../../jobs/info');
+  const newImagePath = path.resolve(__dirname, '../images');
+
   fs.ensureDirSync(directoryPath); // ensures that the directory exists, if it doesn't it will create it
   const newJsonPath = path.join(directoryPath, `${id}.info.json`); // define the new path
   fs.moveSync(jsonPath, newJsonPath, { overwrite: true }); // move the file
 
   if (fs.existsSync(imagePath)) {
     // check if image thumbnail exists
-    const newImagePath = path.join(directoryPath, `${id}.jpg`); // define the new path for image thumbnail
-    fs.copySync(imagePath, newImagePath, { overwrite: true }); // copy the image thumbnail
+    const newImageFullPath = path.join(newImagePath, `videothumb-${id}.jpg`); // define the new path for image thumbnail
+    fs.copySync(imagePath, newImageFullPath, { overwrite: true }); // copy the image thumbnail
   }
 }
