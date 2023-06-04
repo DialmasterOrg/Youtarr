@@ -155,8 +155,8 @@ function ChannelManager({ token }: ChannelManagerProps) {
                           src={`/images/channelthumb-${channel.channel_id}.jpg`}
                           alt={`${channel.uploader} thumbnail`}
                           style={{
-                            height: '50px',
-                            width: '50px',
+                            height: isMobile ? '50px' : '75px',
+                            width: isMobile ? '50px' : '75px',
                             marginRight: '10px',
                           }}
                           onError={(e) => {
