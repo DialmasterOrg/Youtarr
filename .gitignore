@@ -9,6 +9,7 @@ config/complete.list
 config/jobs.json
 config/config.json
 database
+server/images
 
 # Local dev exclusion
 ffmpeg.exe

@@ -29,6 +29,7 @@ interface ChannelManagerProps {
 interface Channel {
   url: string;
   uploader: string;
+  channel_id?: string;
 }
 
 function ChannelManager({ token }: ChannelManagerProps) {
@@ -149,31 +150,48 @@ function ChannelManager({ token }: ChannelManagerProps) {
                     spacing={0}
                   >
                     <Grid item xs={11} sm={11}>
-                      <ListItemText
-                        primary={
-                          <div
-                            style={{
-                              fontSize: isMobile ? 'small' : 'medium',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              fontWeight: unsavedChannels.includes(channel.url)
-                                ? 'bold'
-                                : 'normal',
-                              textDecoration: deletedChannels.includes(
-                                channel.url
-                              )
-                                ? 'line-through'
-                                : 'none',
-                              color: deletedChannels.includes(channel.url)
-                                ? 'red'
-                                : 'inherit',
-                            }}
-                          >
-                            {channel.uploader || channel.url}
-                          </div>
-                        }
-                      />{' '}
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <img
+                          src={`/images/channelthumb-${channel.channel_id}.jpg`}
+                          alt={`${channel.uploader} thumbnail`}
+                          style={{
+                            height: isMobile ? '50px' : '75px',
+                            width: isMobile ? '50px' : '75px',
+                            marginRight: '10px',
+                          }}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display =
+                              'none';
+                          }}
+                        />{' '}
+                        <ListItemText
+                          primary={
+                            <div
+                              style={{
+                                fontSize: isMobile ? 'small' : 'medium',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                fontWeight: unsavedChannels.includes(
+                                  channel.url
+                                )
+                                  ? 'bold'
+                                  : 'normal',
+                                textDecoration: deletedChannels.includes(
+                                  channel.url
+                                )
+                                  ? 'line-through'
+                                  : 'none',
+                                color: deletedChannels.includes(channel.url)
+                                  ? 'red'
+                                  : 'inherit',
+                              }}
+                            >
+                              {channel.uploader || channel.url}
+                            </div>
+                          }
+                        />
+                      </div>{' '}
                     </Grid>
                     {!deletedChannels.includes(channel.url) && (
                       <Grid item xs={12} sm={3}>
