@@ -81,7 +81,7 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
         socket.close();
       }
     };
-  }, []);
+  }, [connect, socket, subscriptions]);
 
   return (
     <WebSocketContext.Provider value={{ socket, subscribe, unsubscribe }}>

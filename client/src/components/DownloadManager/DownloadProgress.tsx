@@ -113,7 +113,8 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
         downloadProgressRef.current = { index: null, message: '' };
         // Capture download start, line contains: "[youtube:tab] Extracting URL:"
       } else if (
-        line.includes('[youtube] Extracting URL:') &&
+        (line.includes('[youtube] Extracting URL:') ||
+          line.includes('[youtube:tab] Extracting URL:')) &&
         downloadInitiatedRef.current
       ) {
         addLineToOutput('Download initiated...');
