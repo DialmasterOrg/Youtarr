@@ -2,8 +2,6 @@ const express = require('express');
 const app = express();
 app.use(express.json());
 const path = require('path');
-const WebSocket = require('ws');
-const wss = new WebSocket.Server({ port: 8099 }); // specify any port you like
 const db = require('./db');
 const https = require('https');
 
@@ -17,23 +15,6 @@ const initialize = async () => {
     const plexModule = require('./modules/plexModule');
     const downloadModule = require('./modules/downloadModule');
     const jobModule = require('./modules/jobModule');
-    const myEmitter = require('./modules/events');
-
-    wss.on('connection', (ws) => {
-      console.log('New client connected');
-
-      ws.on('close', () => {
-        console.log('Client disconnected');
-      });
-    });
-
-    myEmitter.on('newData', function (data) {
-      wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(data);
-        }
-      });
-    });
 
     channelModule.subscribe();
 
@@ -134,6 +115,18 @@ const initialize = async () => {
       const channels = req.body;
       channelModule.writeChannels(channels);
       res.json({ status: 'success' });
+    });
+
+    app.post('/addchannelinfo', verifyToken, async (req, res) => {
+      const url = req.body.url;
+      if (url) {
+        console.log(`Adding channel info for ${url}`);
+        let channelInfo = await channelModule.getChannelInfo(url, false);
+        channelInfo.channel_id = channelInfo.id;
+        res.json({ status: 'success', channelInfo: channelInfo });
+      } else {
+        res.status(400).send('URL is missing in the request');
+      }
     });
 
     // Not sure if this is needed, but lets expose it for now for testing

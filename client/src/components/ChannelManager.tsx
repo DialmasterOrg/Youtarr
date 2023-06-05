@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useContext, useState, useEffect, useCallback } from 'react';
 import {
   Tooltip,
   Grid,
@@ -21,6 +21,7 @@ import AddIcon from '@mui/icons-material/Add';
 import axios from 'axios';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
+import WebSocketContext, { Message } from '../contexts/WebSocketContext';
 
 interface ChannelManagerProps {
   token: string | null;
@@ -42,12 +43,15 @@ function ChannelManager({ token }: ChannelManagerProps) {
   const [deletedChannels, setDeletedChannels] = useState<string[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [dialogMessage, setDialogMessage] = useState('');
+  const websocketContext = useContext(WebSocketContext);
+  if (!websocketContext) {
+    throw new Error('WebSocketContext not found');
+  }
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const reloadChannels = useCallback(() => {
-    // Fetch channels from backend on component mount
     if (token) {
       axios
         .get('/getchannels', {
@@ -61,22 +65,77 @@ function ChannelManager({ token }: ChannelManagerProps) {
     }
   }, [token]);
 
+  const handleMessage = useCallback(
+    (payload: any) => {
+      reloadChannels();
+    },
+    [reloadChannels]
+  );
+
+  const messageFilter = useCallback((message: Message) => {
+    return (
+      message.destination === 'broadcast' &&
+      message.source === 'channel' &&
+      message.type === 'channelsUpdated'
+    );
+  }, []);
+
   useEffect(() => {
+    websocketContext.subscribe(messageFilter, handleMessage);
     reloadChannels();
+    return () => {
+      websocketContext.unsubscribe(handleMessage);
+    };
   }, [token, reloadChannels]);
 
   const handleAdd = () => {
+    if (channels.some((channel) => channel.url === newChannel.url)) {
+      setDialogMessage('Channel already exists');
+      setIsDialogOpen(true);
+
+      setNewChannel({ url: '', uploader: '', channel_id: '' });
+      return;
+    }
     if (
       newChannel.url.startsWith('https://www.youtube.com') &&
       newChannel.url.endsWith('/videos')
     ) {
       setChannels([...channels, newChannel]);
+      if (token) {
+        axios
+          .post(
+            '/addchannelinfo',
+            { url: newChannel.url }, // Pass URL in request body
+            {
+              headers: {
+                'x-access-token': token,
+              },
+            }
+          )
+          .then((response) => {
+            if (response.data.status === 'success') {
+              // Delete the last channel in the list, which is the new channel
+              // with no channel info
+              setChannels((prevChannels) => prevChannels.slice(0, -1));
+
+              // Now re-add it with info
+              setChannels((prevChannels) => [
+                ...prevChannels,
+                response.data.channelInfo,
+              ]);
+            } else {
+              console.error('Failed to add channel info');
+            }
+          });
+      }
+
       setUnsavedChannels([...unsavedChannels, newChannel.url]);
     } else {
       setDialogMessage('Invalid channel URL');
       setIsDialogOpen(true);
     }
-    setNewChannel({ url: '', uploader: '' });
+
+    setNewChannel({ url: '', uploader: '', channel_id: '' });
   };
 
   const handleDelete = (index: number) => {
@@ -118,7 +177,6 @@ function ChannelManager({ token }: ChannelManagerProps) {
           setDialogMessage('Channels updated successfully');
           setIsDialogOpen(true);
           reloadChannels();
-          setTimeout(reloadChannels, 5000);
         });
     }
   };
@@ -162,6 +220,9 @@ function ChannelManager({ token }: ChannelManagerProps) {
                           onError={(e) => {
                             (e.target as HTMLImageElement).style.display =
                               'none';
+                          }}
+                          onLoad={(e) => {
+                            (e.target as HTMLImageElement).style.display = '';
                           }}
                         />{' '}
                         <ListItemText

@@ -4,7 +4,7 @@ const jobModule = require('./jobModule');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process'); // import spawn
-const myEmitter = require('./events');
+const MessageEmitter = require('./messageEmitter.js'); // import the helper function
 
 class DownloadModule {
   constructor() {
@@ -58,8 +58,13 @@ class DownloadModule {
         console.log(data.toString()); // log the data in real-time
 
         let line = data.toString();
-        // broadcast the output to the connected WebSocket clients
-        myEmitter.emit('newData', line);
+        MessageEmitter.emitMessage(
+          'broadcast',
+          null,
+          'download',
+          'downloadProgress',
+          { text: line }
+        );
       });
 
       let stderrData = '';

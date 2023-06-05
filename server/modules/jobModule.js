@@ -1,10 +1,10 @@
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
-const myEmitter = require('./events');
 const Job = require('../models/job');
 const Video = require('../models/video');
 const JobVideo = require('../models/jobvideo');
+const MessageEmitter = require('./messageEmitter.js'); // import the helper function
 
 class JobModule {
   constructor() {
@@ -281,11 +281,20 @@ class JobModule {
     ) {
       let numVideos = updatedFields.data.videos.length;
       if (numVideos == 0) {
-        myEmitter.emit('newData', 'Completed: No new videos downloaded.');
+        MessageEmitter.emitMessage(
+          'broadcast',
+          null,
+          'download',
+          'downloadProgress',
+          { text: 'Completed: No new videos downloaded.' }
+        );
       } else {
-        myEmitter.emit(
-          'newData',
-          'Completed: ' + numVideos + ' new videos downloaded.'
+        MessageEmitter.emitMessage(
+          'broadcast',
+          null,
+          'download',
+          'downloadProgress',
+          { text: 'Completed: ' + numVideos + ' new videos downloaded.' }
         );
       }
       updatedFields.output = numVideos + ' videos.';
