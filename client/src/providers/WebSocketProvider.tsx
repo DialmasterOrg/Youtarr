@@ -28,7 +28,8 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
   }, []);
 
   const connect = useCallback(() => {
-    const ws = new WebSocket('ws://localhost:8099');
+    const host = window.location.hostname;
+    const ws = new WebSocket(`ws://${host}:8099`);
 
     ws.onopen = () => {
       console.log('Connected to socket');
@@ -75,11 +76,12 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     }
 
     return () => {
+      console.log('WebSocketProvider unmounting...');
       if (socket) {
         socket.close();
       }
     };
-  }, [connect, socket, subscriptions]);
+  }, []);
 
   return (
     <WebSocketContext.Provider value={{ socket, subscribe, unsubscribe }}>
