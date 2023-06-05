@@ -1,11 +1,18 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Grid } from "@mui/material";
-import useMediaQuery from "@mui/material/useMediaQuery";
-import { useTheme } from "@mui/material/styles";
-import axios from "axios";
-import DownloadProgress from "./DownloadManager/DownloadProgress";
-import DownloadHistory from "./DownloadManager/DownloadHistory";
-import DownloadNew from "./DownloadManager/DownloadNew";
+import React, {
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+} from 'react';
+import { Grid } from '@mui/material';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
+import axios from 'axios';
+import DownloadProgress from './DownloadManager/DownloadProgress';
+import DownloadHistory from './DownloadManager/DownloadHistory';
+import DownloadNew from './DownloadManager/DownloadNew';
+import WebSocketContext from '../contexts/WebSocketContext';
 
 interface DownloadManagerProps {
   token: string | null;
@@ -30,7 +37,7 @@ interface Job {
 }
 
 function DownloadManager({ token }: DownloadManagerProps) {
-  const [videoUrls, setVideoUrls] = useState("");
+  const [videoUrls, setVideoUrls] = useState('');
   const [jobs, setJobs] = useState<Job[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -39,18 +46,33 @@ function DownloadManager({ token }: DownloadManagerProps) {
   >({});
   const downloadInitiatedRef = useRef(false);
   const downloadProgressRef = useRef<{ index: number | null; message: string }>(
-    { index: null, message: "" }
+    { index: null, message: '' }
   );
+  const wsContext = useContext(WebSocketContext);
+  if (!wsContext) {
+    throw new Error('WebSocketContext not found');
+  }
 
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  const { subscribe, unsubscribe } = wsContext;
+
+  const filter = useCallback((message: any) => {
+    // DEBUG
+    //console.log('Filtering message: ', message);
+    return (
+      message.destination === 'broadcast' && message.type === 'downloadComplete'
+    );
+  }, []);
 
   const fetchRunningJobs = useCallback(() => {
+    console.log('fetchRunningJobs!!');
     if (token) {
       axios
-        .get("/runningjobs", {
+        .get('/runningjobs', {
           headers: {
-            "x-access-token": token,
+            'x-access-token': token,
           },
         })
         .then((response) => {
@@ -61,11 +83,21 @@ function DownloadManager({ token }: DownloadManagerProps) {
     }
   }, [token]);
 
+  const processMessagesCallback = useCallback(
+    (payload: any) => {
+      fetchRunningJobs();
+    },
+    [fetchRunningJobs]
+  );
+
   useEffect(() => {
+    console.log('useEffect for subscribe/unsubscribe');
     fetchRunningJobs();
-    const intervalId = setInterval(fetchRunningJobs, 5000);
-    return () => clearInterval(intervalId); // clear interval on component unmount
-  }, [fetchRunningJobs]);
+    subscribe(filter, processMessagesCallback);
+    return () => {
+      unsubscribe(processMessagesCallback);
+    };
+  }, [subscribe, unsubscribe, filter, processMessagesCallback]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -94,7 +126,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
       <DownloadProgress
         downloadProgressRef={downloadProgressRef}
         downloadInitiatedRef={downloadInitiatedRef}
-        />
+      />
       <DownloadHistory
         jobs={jobs}
         expanded={expanded}

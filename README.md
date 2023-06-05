@@ -72,7 +72,7 @@ If not you will be unable to login.
 
 ## Accessing Youtarr from Outside Your Network
 
-If you wish to access Youtarr from outside your network, or from other computers aside from the one you are running it on, you will need to forward ports 3087 (for the main application webpage) and 8099 (in order to get realtime notifications of download progress) on your local computer firewall (Eg: Windows Defender Firewall) and on your router.
+If you wish to access Youtarr from outside your network, or from other computers aside from the one you are running it on, you will need to forward port 3087 on your local computer firewall (Eg: Windows Defender Firewall) and on your router.
 
 ## Screenshots
 

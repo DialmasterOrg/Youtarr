@@ -1,5 +1,12 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
-import { Grid, Card, CardHeader, CardContent, Typography } from "@mui/material";
+import React, {
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+} from 'react';
+import { Grid, Card, CardHeader, CardContent, Typography } from '@mui/material';
+import WebSocketContext from '../../contexts/WebSocketContext';
 
 interface DownloadProgressProps {
   downloadProgressRef: React.MutableRefObject<{
@@ -10,42 +17,42 @@ interface DownloadProgressProps {
 }
 
 const DownloadProgress: React.FC<DownloadProgressProps> = ({
-  downloadProgressRef, downloadInitiatedRef
+  downloadProgressRef,
+  downloadInitiatedRef,
 }) => {
   const [socketOutput, setSocketOutput] = useState<string[]>([]);
   const fileDownloadNumber = useRef<number>(0); // [0, 1, 2, 3, 4, 5, 6, 7, 8, 9
   const prevFileDownloadNumber = useRef<number>(-1); // [0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+  const wsContext = useContext(WebSocketContext);
+  if (!wsContext) {
+    throw new Error('WebSocketContext not found');
+  }
+  const { subscribe, unsubscribe } = wsContext;
 
-  const connectWebSocket = useCallback((
-    setSocketOutput: React.Dispatch<React.SetStateAction<string[]>>,
-    downloadProgressRef: React.MutableRefObject<{
-      index: number | null;
-      message: string;
-    }>
-  ) => {
-    const host = window.location.hostname;
-    const ws = new WebSocket(`ws://${host}:8099`);
+  const filter = useCallback((message: any) => {
+    // DEBUG
+    //console.log('Filtering message: ', message);
+    return (
+      message.destination === 'broadcast' && message.type === 'downloadProgress'
+    );
+  }, []);
 
-    ws.onopen = () => {
-      console.log("WebSocket connection opened");
-    };
+  const addLineToOutput = useCallback((line: string) => {
+    setSocketOutput((prevOutput) => {
+      if (prevOutput[prevOutput.length - 1] !== line) {
+        return [...prevOutput, line];
+      }
+      // If it's a duplicate line, just return the current output
+      return prevOutput;
+    });
+  }, []);
 
-    // Function to add a line to the output, if it's not a duplicate of the last line
-    function addLineToOutput(line: string) {
-      setSocketOutput((prevOutput) => {
-        if (prevOutput[prevOutput.length - 1] !== line) {
-          return [...prevOutput, line];
-        }
-        // If it's a duplicate line, just return the current output
-        return prevOutput;
-      });
-    }
-
-    ws.onmessage = (message: MessageEvent) => {
-      let line = message.data.trim();
+  const processMessagesCallback = useCallback(
+    (payload: any) => {
+      let line = payload.text.trim();
 
       // Check for and remove duplicate lines within the same message
-      const downloadTag = "[download]";
+      const downloadTag = '[download]';
       if (
         line.includes(downloadTag) &&
         line.indexOf(downloadTag) !== line.lastIndexOf(downloadTag)
@@ -54,15 +61,15 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
         line = line.substring(0, downloadTagIndex);
       }
 
-      const parts = line.split(/(\s+)/).filter((x: string) => x.trim() !== "");
+      const parts = line.split(/(\s+)/).filter((x: string) => x.trim() !== '');
 
       if (
-        line.startsWith("[download]") &&
-        (parts[parts.length - 2] === "ETA" ||
-          line.includes("ETA Unknown") ||
-          line.startsWith("[download] 100%"))
+        line.startsWith('[download]') &&
+        (parts[parts.length - 2] === 'ETA' ||
+          line.includes('ETA Unknown') ||
+          line.startsWith('[download] 100%'))
       ) {
-        const outputLine = line.replace("[download]", "").trim();
+        const outputLine = line.replace('[download]', '').trim();
 
         if (
           downloadProgressRef.current.index === null &&
@@ -87,8 +94,8 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
         downloadProgressRef.current.message = outputLine;
       } else if (
-        line.startsWith("[download]") &&
-        line.includes("Destination:")
+        line.startsWith('[download]') &&
+        line.includes('Destination:')
       ) {
         // Remove the path from the filename
         let filename = line.split(/[\\/]/).pop();
@@ -100,68 +107,60 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
         // Reset the index in the ref, to indicate the start of a new download
         downloadProgressRef.current.index = null;
-      } else if (line.startsWith("Completed:")) {
+      } else if (line.startsWith('Completed:')) {
         addLineToOutput(line);
 
         // Reset download progress ref
-        downloadProgressRef.current = { index: null, message: "" };
+        downloadProgressRef.current = { index: null, message: '' };
         // Capture download start, line contains: "[youtube:tab] Extracting URL:"
-      } else if (line.includes("[youtube:tab] Extracting URL:") && downloadInitiatedRef.current) {
-        addLineToOutput("Download initiated...");
+      } else if (
+        (line.includes('[youtube] Extracting URL:') ||
+          line.includes('[youtube:tab] Extracting URL:')) &&
+        downloadInitiatedRef.current
+      ) {
+        addLineToOutput('Download initiated...');
         downloadInitiatedRef.current = false;
-      } else if (line.includes("[Metadata] Adding metadata to")) {
-        addLineToOutput("Processing file...");
+      } else if (line.includes('[Metadata] Adding metadata to')) {
+        addLineToOutput('Processing file...');
       }
-    };
-
-    ws.onclose = (event) => {
-      setTimeout(() => {
-        connectWebSocket(setSocketOutput, downloadProgressRef);
-      }, 1000);
-    };
-
-    ws.onerror = (error) => {
-      ws.close();
-    };
-
-    return ws;
-  }, [downloadInitiatedRef]);
+    },
+    [addLineToOutput]
+  );
 
   useEffect(() => {
-    const ws = connectWebSocket(setSocketOutput, downloadProgressRef);
-
+    subscribe(filter, processMessagesCallback);
     return () => {
-      ws.close();
+      unsubscribe(processMessagesCallback);
     };
-  }, [connectWebSocket, downloadProgressRef]);
+  }, [subscribe, unsubscribe, filter, processMessagesCallback]);
 
   return (
-    <Grid item xs={12} md={12} paddingBottom={"8px"}>
+    <Grid item xs={12} md={12} paddingBottom={'8px'}>
       <Card elevation={8}>
-        <CardHeader title="Recent Activity" align="center" />
+        <CardHeader title='Recent Activity' align='center' />
         <CardContent
           style={{
-            borderTop: "1px solid lightgrey",
-            width: "100%",
-            height: "140px",
-            overflow: "auto",
-            paddingLeft: "8px",
-            paddingTop: "8px",
+            borderTop: '1px solid lightgrey',
+            width: '100%',
+            height: '140px',
+            overflow: 'auto',
+            paddingLeft: '8px',
+            paddingTop: '8px',
           }}
         >
           <Typography
-            align="left"
-            variant="body1"
-            fontSize="small"
-            component="div"
+            align='left'
+            variant='body1'
+            fontSize='small'
+            component='div'
           >
             {socketOutput.slice(-8).map((line, index) => (
               <div
                 key={index}
                 style={{
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
                 }}
               >
                 {line}

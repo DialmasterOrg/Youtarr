@@ -5,6 +5,7 @@ const fs = require('fs');
 const fsPromises = fs.promises;
 const path = require('path');
 const Channel = require('../models/channel');
+const MessageEmitter = require('./messageEmitter.js'); // import the helper function
 
 const { v4: uuidv4 } = require('uuid');
 const { spawn } = require('child_process');
@@ -43,7 +44,7 @@ class ChannelModule {
     downloadModule.doChannelDownloads();
   }
 
-  async getChannelInfo(channelUrl) {
+  async getChannelInfo(channelUrl, emitMessage = true) {
     // Check if there is already an entry in the database for this channel url
     // Using teh Channel Sequelize model, if so we don't need to fetch the data using yt-dlp
     const foundChannel = await Channel.findOne({
@@ -52,6 +53,15 @@ class ChannelModule {
 
     // If the channel exists in the database, then return it
     if (foundChannel) {
+      if (emitMessage) {
+        MessageEmitter.emitMessage(
+          'broadcast',
+          null,
+          'channel',
+          'channelsUpdated',
+          { text: 'Channel Updated' }
+        );
+      }
       return {
         id: foundChannel.channel_id,
         uploader: foundChannel.uploader,
@@ -85,7 +95,7 @@ class ChannelModule {
     );
 
     // Doesn't matter when this finishes...
-    spawn('yt-dlp', [
+    const ytDlpGetThumb = spawn('yt-dlp', [
       '--skip-download',
       '--write-thumbnail',
       '--playlist-end',
@@ -108,6 +118,23 @@ class ChannelModule {
       ytDlp.on('error', reject);
     });
 
+    // Handle ytDlpGetThumb exit
+    await new Promise((resolve, reject) => {
+      ytDlpGetThumb.on('exit', resolve);
+      ytDlpGetThumb.on('error', reject);
+    });
+
+    // When all channel data is fetched, emit a message
+    if (emitMessage) {
+      console.log('Channel data fetched -- emitting message!');
+      MessageEmitter.emitMessage(
+        'broadcast',
+        null,
+        'channel',
+        'channelsUpdated',
+        { text: 'Channel Updated' }
+      );
+    }
     // Read the file content
     const fileContent = await fsPromises.readFile(outputFilePath, 'utf8');
 
@@ -213,10 +240,9 @@ class ChannelModule {
         data
       );
 
-      // Call getChannelInfo for each channel and print results
+      // For each channel, get the channel info and write it to the database
       for (let channel of channels) {
-        const info = await this.getChannelInfo(channel);
-        console.log(info);
+        await this.getChannelInfo(channel);
       }
     } catch (err) {
       console.error(
