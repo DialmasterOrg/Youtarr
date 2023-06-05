@@ -30,7 +30,8 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
   const { subscribe, unsubscribe } = wsContext;
 
   const filter = useCallback((message: any) => {
-    console.log('Filtering message: ', message);
+    // DEBUG
+    //console.log('Filtering message: ', message);
     return (
       message.destination === 'broadcast' && message.type === 'downloadProgress'
     );

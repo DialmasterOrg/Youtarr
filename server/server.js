@@ -4,6 +4,7 @@ app.use(express.json());
 const path = require('path');
 const db = require('./db');
 const https = require('https');
+const http = require('http');
 
 const initialize = async () => {
   try {
@@ -200,7 +201,11 @@ const initialize = async () => {
     });
 
     const port = process.env.PORT || 3011;
-    app.listen(port, () => {
+    const server = http.createServer(app);
+    // pass the server to WebSocket server initialization function to allow it to use the same port
+    require('./modules/webSocketServer.js')(server);
+
+    server.listen(port, () => {
       console.log(`Server listening on port ${port}`);
     });
   } catch (error) {

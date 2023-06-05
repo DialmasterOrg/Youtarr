@@ -297,6 +297,14 @@ class JobModule {
           { text: 'Completed: ' + numVideos + ' new videos downloaded.' }
         );
       }
+      MessageEmitter.emitMessage(
+        'broadcast',
+        null,
+        'download',
+        'downloadComplete',
+        { text: 'Download job completed.' }
+      );
+
       updatedFields.output = numVideos + ' videos.';
       updatedFields.status = 'Complete';
     }

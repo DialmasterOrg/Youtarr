@@ -29,7 +29,9 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
 
   const connect = useCallback(() => {
     const host = window.location.hostname;
-    const ws = new WebSocket(`ws://${host}:8099`);
+    const port =
+      process.env.NODE_ENV === 'development' ? '3011' : window.location.port;
+    const ws = new WebSocket(`ws://${host}:${port}`);
 
     ws.onopen = () => {
       console.log('Connected to socket');
@@ -61,6 +63,7 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
 
   useEffect(() => {
     if (!socket) {
+      console.log('WebSocketProvider connecting...');
       connect();
     } else {
       socket.onmessage = (event) => {

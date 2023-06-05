@@ -1,5 +1,4 @@
 const WebSocket = require('ws');
-const wss = require('./webSocketServer.js');
 
 module.exports = {
   emitMessage: (destination, clientId, source, type, payload) => {
@@ -14,7 +13,7 @@ module.exports = {
       message.clientId = clientId;
     }
 
-    wss.clients.forEach((client) => {
+    global.wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
         if (destination === 'broadcast') {
           client.send(JSON.stringify(message)); // broadcast the message
