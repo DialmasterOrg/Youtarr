@@ -65,16 +65,17 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(12);
-  // calculate total pages
-  const totalPages = Math.ceil(jobs.length / itemsPerPage);
-
-  // get current jobs
-  const indexOfLastJob = currentPage * itemsPerPage;
-  const indexOfFirstJob = indexOfLastJob - itemsPerPage;
   // If hideNoVideoJobs is true, filter out jobs with no videos
   let jobsToDisplay = jobs.filter((job) =>
     hideNoVideoJobs ? job.data.videos.length > 0 : true
   );
+
+  // calculate total pages
+  const totalPages = Math.ceil(jobsToDisplay.length / itemsPerPage);
+
+  // get current jobs
+  const indexOfLastJob = currentPage * itemsPerPage;
+  const indexOfFirstJob = indexOfLastJob - itemsPerPage;
 
   let currentJobs = jobsToDisplay.slice(indexOfFirstJob, indexOfLastJob);
 
