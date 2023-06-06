@@ -18,6 +18,7 @@ import {
   Toolbar,
   FormControlLabel,
   Box,
+  Pagination,
 } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
 
@@ -62,6 +63,25 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
 }) => {
   const [hideNoVideoJobs, setHideNoVideoJobs] = useState(false); // New state here
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(12);
+  // If hideNoVideoJobs is true, filter out jobs with no videos
+  let jobsToDisplay = jobs.filter((job) =>
+    hideNoVideoJobs ? job.data.videos.length > 0 : true
+  );
+
+  // calculate total pages
+  const totalPages = Math.ceil(jobsToDisplay.length / itemsPerPage);
+
+  // get current jobs
+  const indexOfLastJob = currentPage * itemsPerPage;
+  const indexOfFirstJob = indexOfLastJob - itemsPerPage;
+
+  let currentJobs = jobsToDisplay.slice(indexOfFirstJob, indexOfLastJob);
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+  };
   return (
     <Grid item xs={12} md={12} paddingBottom={'48px'}>
       <Card elevation={8}>
@@ -70,8 +90,18 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
           align='center'
           style={{ marginBottom: '-16px' }}
         />
-        <CardContent>
-          <Toolbar>
+        <Grid container spacing={2} justifyContent='center'>
+          <Grid item>
+            <Pagination
+              count={totalPages}
+              page={currentPage}
+              onChange={(event, page) => handlePageChange(page)}
+            />
+          </Grid>
+        </Grid>
+
+        <CardContent style={{ paddingTop: '0px' }}>
+          <Toolbar style={{ minHeight: '42px' }}>
             <Box display='flex' justifyContent='center' width='100%'>
               <FormControlLabel
                 control={
@@ -133,7 +163,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                 </TableBody>
               )}
               <TableBody>
-                {jobs
+                {currentJobs
                   .filter(
                     (job) =>
                       !(hideNoVideoJobs && job.data?.videos?.length === 0)
