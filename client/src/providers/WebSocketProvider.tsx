@@ -31,7 +31,7 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     const host = window.location.hostname;
     const port =
       process.env.NODE_ENV === 'development' ? '3011' : window.location.port;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const ws = new WebSocket(`${protocol}://${host}:${port}`);
 
     ws.onopen = () => {
