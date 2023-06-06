@@ -302,7 +302,7 @@ class JobModule {
         null,
         'download',
         'downloadComplete',
-        { text: 'Download job completed.' }
+        { text: 'Download job completed.', videos: updatedFields.data.videos }
       );
 
       updatedFields.output = numVideos + ' videos.';

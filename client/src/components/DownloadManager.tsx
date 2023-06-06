@@ -67,7 +67,6 @@ function DownloadManager({ token }: DownloadManagerProps) {
   }, []);
 
   const fetchRunningJobs = useCallback(() => {
-    console.log('fetchRunningJobs!!');
     if (token) {
       axios
         .get('/runningjobs', {
