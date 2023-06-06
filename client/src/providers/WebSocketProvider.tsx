@@ -31,7 +31,8 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     const host = window.location.hostname;
     const port =
       process.env.NODE_ENV === 'development' ? '3011' : window.location.port;
-    const ws = new WebSocket(`ws://${host}:${port}`);
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${protocol}://${host}:${port}`);
 
     ws.onopen = () => {
       console.log('Connected to socket');
@@ -61,6 +62,35 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     return delay;
   };
 
+  const showDownloadCompleteNotification = async (payload: any) => {
+    if (!('Notification' in window)) {
+      console.log('This browser does not support desktop notification');
+      return;
+    }
+
+    const options = {
+      body: `Downloads complete: ${payload.videos.length} videos downloaded`,
+      icon: '/favicon.ico',
+    };
+
+    // Function to display notification
+    const displayNotification = () => {
+      new Notification('Youtarr', options);
+    };
+
+    switch (Notification.permission) {
+      case 'granted':
+        displayNotification();
+        break;
+      case 'default':
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          displayNotification();
+        }
+        break;
+    }
+  };
+
   useEffect(() => {
     if (!socket) {
       console.log('WebSocketProvider connecting...');
@@ -68,6 +98,15 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     } else {
       socket.onmessage = (event) => {
         const message = JSON.parse(event.data);
+
+        // If new videos downloaded, trigger a notification to the user
+        if (
+          message.type === 'downloadComplete' &&
+          message.payload.videos.length > 0
+        ) {
+          showDownloadCompleteNotification(message.payload);
+        }
+
         // Uncomment to debug web socket messages...
         //console.log('Received message from socket: ', message);
         subscriptions.forEach((sub) => {
