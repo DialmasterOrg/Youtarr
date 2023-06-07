@@ -67,7 +67,7 @@ function VideosPage({ token }: VideosPageProps) {
   const videosPerPage = isMobile ? 5 : 12;
 
   return (
-    <Card elevation={8}>
+    <Card elevation={8} style={{ marginBottom: '16px' }}>
       <CardContent>
         <Typography
           variant={isMobile ? 'h6' : 'h5'}
