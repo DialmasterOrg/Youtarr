@@ -138,7 +138,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     };
   }, [subscribe, unsubscribe, filter, processMessagesCallback]);
 
-  const linesToDisplay = isMobile ? 4 : 8;
+  const linesToDisplay = isMobile ? -4 : -8;
   return (
     <Grid item xs={12} md={12} paddingBottom={'8px'}>
       <Card elevation={8}>
@@ -159,7 +159,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             fontSize='small'
             component='div'
           >
-            {socketOutput.slice(-1 * linesToDisplay).map((line, index) => (
+            {socketOutput.slice(linesToDisplay).map((line, index) => (
               <div
                 key={index}
                 style={{

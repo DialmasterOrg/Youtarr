@@ -67,7 +67,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
   const [itemsPerPage] = useState(12);
   // If showNoVideoJobs is true, show all jobs, otherwise only show jobs with videos
   let jobsToDisplay = jobs.filter((job) =>
-    !showNoVideoJobs ? job.data.videos && job.data.videos.length > 0 : true
+    !showNoVideoJobs ? job.data?.videos && job.data.videos.length > 0 : true
   );
 
   // calculate total pages
