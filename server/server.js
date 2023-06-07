@@ -16,6 +16,7 @@ const initialize = async () => {
     const plexModule = require('./modules/plexModule');
     const downloadModule = require('./modules/downloadModule');
     const jobModule = require('./modules/jobModule');
+    const videosModule = require('./modules/videosModule');
 
     channelModule.subscribe();
 
@@ -149,6 +150,20 @@ const initialize = async () => {
     app.get('/runningjobs', verifyToken, (req, res) => {
       const runningJobs = jobModule.getRunningJobs();
       res.json(runningJobs);
+    });
+
+    app.get('/getVideos', verifyToken, (req, res) => {
+      console.log('Getting videos');
+
+      //return res.json({ status: 'success' });
+      videosModule
+        .getVideos()
+        .then((videos) => {
+          res.json(videos);
+        })
+        .catch((error) => {
+          res.status(500).json({ error: error.message });
+        });
     });
 
     // Takes a list of specific youtube urls and downloads them

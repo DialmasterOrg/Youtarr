@@ -29,6 +29,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import Configuration from './components/Configuration';
 import ChannelManager from './components/ChannelManager';
 import DownloadManager from './components/DownloadManager';
+import VideosPage from './components/VideosPage';
 import Login from './components/Login';
 
 function App() {
@@ -106,7 +107,7 @@ function App() {
               style={{ fontSize: isMobile ? 'small' : 'large' }}
               align='center'
             >
-              Youtube Video Downloader for Plex
+              Youtube Video Management For Plex
             </Typography>
           </div>
           <Typography
@@ -188,6 +189,17 @@ function App() {
                   primary='Manage Downloads'
                 />
               </ListItem>
+              <ListItem
+                button
+                component={Link}
+                to='/videos'
+                onClick={handleDrawerToggle}
+              >
+                <ListItemText
+                  primaryTypographyProps={{ fontSize: 'large' }}
+                  primary='Videos'
+                />
+              </ListItem>
               {!token && (
                 <ListItem
                   button
@@ -228,6 +240,11 @@ function App() {
                     path='/downloads'
                     element={<DownloadManager token={token} />}
                   />
+                  <Route
+                    path='/videos'
+                    element={<VideosPage token={token} />}
+                  />
+
                   <Route path='/*' element={<Navigate to='/downloads' />} />
                 </>
               ) : (
