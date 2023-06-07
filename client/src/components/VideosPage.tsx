@@ -81,7 +81,7 @@ function VideosPage({ token }: VideosPageProps) {
           container
           spacing={2}
           justifyContent='center'
-          style={{ marginTop: '8px' }}
+          style={{ marginTop: '8px', marginBottom: '8px' }}
         >
           <Pagination
             count={Math.ceil(videos.length / videosPerPage)}
