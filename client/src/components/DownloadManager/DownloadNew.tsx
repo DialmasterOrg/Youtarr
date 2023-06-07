@@ -76,19 +76,15 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
           style={{ marginBottom: '-16px' }}
         />
         <CardContent>
-          <Typography variant='body1'>
-            Enter urls, one per line or space separated
-            <br />
-            Eg: https://www.youtube.com/watch?v=SETDSFhhQWM
-          </Typography>
           <TextField
             style={{ marginBottom: '16px' }}
             multiline
-            rows={4}
+            rows={isMobile ? 3 : 4}
             variant='outlined'
             fullWidth
             value={videoUrls}
             onChange={(e) => setVideoUrls(e.target.value)}
+            placeholder='Enter specific Youtube video links here'
           />
           <Typography align='center' variant='body1' component='div'>
             <Box

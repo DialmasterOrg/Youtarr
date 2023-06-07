@@ -7,6 +7,8 @@ import React, {
 } from 'react';
 import { Grid, Card, CardHeader, CardContent, Typography } from '@mui/material';
 import WebSocketContext from '../../contexts/WebSocketContext';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
 
 interface DownloadProgressProps {
   downloadProgressRef: React.MutableRefObject<{
@@ -23,6 +25,8 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
   const [socketOutput, setSocketOutput] = useState<string[]>([]);
   const fileDownloadNumber = useRef<number>(0); // [0, 1, 2, 3, 4, 5, 6, 7, 8, 9
   const prevFileDownloadNumber = useRef<number>(-1); // [0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const wsContext = useContext(WebSocketContext);
   if (!wsContext) {
     throw new Error('WebSocketContext not found');
@@ -134,6 +138,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     };
   }, [subscribe, unsubscribe, filter, processMessagesCallback]);
 
+  const linesToDisplay = isMobile ? 4 : 8;
   return (
     <Grid item xs={12} md={12} paddingBottom={'8px'}>
       <Card elevation={8}>
@@ -142,7 +147,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
           style={{
             borderTop: '1px solid lightgrey',
             width: '100%',
-            height: '140px',
+            height: isMobile ? '70px' : '140px',
             overflow: 'auto',
             paddingLeft: '8px',
             paddingTop: '8px',
@@ -154,7 +159,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             fontSize='small'
             component='div'
           >
-            {socketOutput.slice(-8).map((line, index) => (
+            {socketOutput.slice(-1 * linesToDisplay).map((line, index) => (
               <div
                 key={index}
                 style={{
