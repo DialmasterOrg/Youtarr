@@ -37,4 +37,5 @@ const initializeDatabase = async () => {
 module.exports = {
   initializeDatabase,
   sequelize,
+  Sequelize,
 };
