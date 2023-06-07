@@ -28,6 +28,9 @@ interface Video {
   youTubeChannelName: string;
   youTubeVideoName: string;
   timeCreated: string;
+  originalDate: string;
+  duration: number;
+  description: string;
 }
 
 function VideosPage({ token }: VideosPageProps) {
@@ -64,7 +67,21 @@ function VideosPage({ token }: VideosPageProps) {
     setPage(value);
   };
 
-  const videosPerPage = isMobile ? 5 : 12;
+  const videosPerPage = isMobile ? 6 : 12;
+
+  const formatDuration = (duration: number) => {
+    const minutes = Math.floor(duration / 60);
+    const seconds = duration % 60;
+
+    return `${minutes}m${seconds.toString().padStart(2, '0')}s`;
+  };
+
+  const formatDatePosted = (datePosted: string) => {
+    const year = datePosted.slice(0, 4);
+    const month = datePosted.slice(4, 6);
+    const day = datePosted.slice(6, 8);
+    return `${month}/${day}/${year}`;
+  };
 
   return (
     <Card elevation={8} style={{ marginBottom: '16px' }}>
@@ -104,7 +121,7 @@ function VideosPage({ token }: VideosPageProps) {
                     Channel
                   </TableCell>
                   <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
-                    Video Title
+                    Video Information
                   </TableCell>
                   <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
                     Added
@@ -165,7 +182,16 @@ function VideosPage({ token }: VideosPageProps) {
                           >
                             {video.youTubeChannelName}
                           </Typography>
+                          {video.duration && (
+                            <Typography
+                              variant='caption'
+                              color='text.secondary'
+                            >
+                              {formatDuration(video.duration)}
+                            </Typography>
+                          )}
                           <Typography variant='caption' color='text.secondary'>
+                            Added:
                             {new Date(video.timeCreated).toLocaleDateString() +
                               ' ' +
                               new Date(video.timeCreated).toLocaleTimeString(
@@ -211,7 +237,17 @@ function VideosPage({ token }: VideosPageProps) {
                           {video.youTubeChannelName}
                         </TableCell>
                         <TableCell style={{ fontSize: 'medium' }}>
-                          {video.youTubeVideoName}
+                          <Typography variant='subtitle1'>
+                            {video.youTubeVideoName}
+                          </Typography>
+                          {video.duration && (
+                            <Typography
+                              variant='caption'
+                              color='text.secondary'
+                            >
+                              Duration: {formatDuration(video.duration)}
+                            </Typography>
+                          )}
                         </TableCell>
                         <TableCell>
                           {new Date(video.timeCreated).toLocaleDateString() +

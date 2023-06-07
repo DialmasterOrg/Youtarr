@@ -23,6 +23,18 @@ Video.init(
       type: DataTypes.STRING,
       allowNull: false,
     },
+    duration: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    originalDate: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    description: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
   },
   {
     sequelize,

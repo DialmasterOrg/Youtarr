@@ -13,6 +13,9 @@ class VideosModule {
           Videos.youtubeId,
           Videos.youTubeChannelName,
           Videos.youTubeVideoName,
+          Videos.duration,
+          Videos.originalDate,
+          Videos.description,
           Jobs.timeCreated
         FROM
           Videos

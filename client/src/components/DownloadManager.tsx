@@ -22,6 +22,7 @@ interface VideoData {
   youtubeId: string;
   youTubeChannelName: string;
   youTubeVideoName: string;
+  duration: number;
 }
 
 interface Job {

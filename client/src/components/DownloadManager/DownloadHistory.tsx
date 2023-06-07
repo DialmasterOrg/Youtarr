@@ -26,6 +26,7 @@ interface VideoData {
   youtubeId: string;
   youTubeChannelName: string;
   youTubeVideoName: string;
+  duration: number;
 }
 
 interface Job {
@@ -78,6 +79,12 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
   // get current jobs
   const indexOfLastJob = currentPage * itemsPerPage;
   const indexOfFirstJob = indexOfLastJob - itemsPerPage;
+
+  const formatDuration = (duration: number) => {
+    const minutes = Math.floor(duration / 60);
+    const seconds = duration % 60;
+    return `${minutes}m${seconds.toString().padStart(2, '0')}s`;
+  };
 
   let currentJobs = jobsToDisplay.slice(indexOfFirstJob, indexOfLastJob);
 
@@ -301,6 +308,15 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                         <p key={video.youtubeId}>
                                           {video.youTubeChannelName} -{' '}
                                           {video.youTubeVideoName}
+                                          {video.duration && (
+                                            <Typography
+                                              variant='caption'
+                                              color='text.secondary'
+                                            >
+                                              {' '}
+                                              ({formatDuration(video.duration)})
+                                            </Typography>
+                                          )}
                                         </p>
                                       ))}
                                     </Typography>
