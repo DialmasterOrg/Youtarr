@@ -249,8 +249,8 @@ class JobModule {
     // Sort jobs by timeCreated in descending order
     jobsArray.sort((a, b) => b.timeCreated - a.timeCreated);
 
-    // Return the last 120 jobs (we may want to adjust this)
-    return jobsArray.slice(0, 120);
+    // Return the last 240 jobs (we may want to adjust this)
+    return jobsArray.slice(0, 240);
   }
 
   getAllJobs() {

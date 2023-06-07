@@ -70,6 +70,8 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
     !showNoVideoJobs ? job.data?.videos && job.data.videos.length > 0 : true
   );
 
+  console.log();
+
   // calculate total pages
   const totalPages = Math.ceil(jobsToDisplay.length / itemsPerPage);
 
@@ -107,9 +109,10 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                 control={
                   <Checkbox
                     checked={showNoVideoJobs}
-                    onChange={(event) =>
-                      setShowNoVideoJobs(event.target.checked)
-                    }
+                    onChange={(event) => {
+                      setShowNoVideoJobs(event.target.checked);
+                      setCurrentPage(1); // Reset the page number to 1
+                    }}
                     inputProps={{ 'aria-label': 'Show jobs with no videos' }}
                   />
                 }
