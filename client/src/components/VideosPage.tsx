@@ -64,7 +64,7 @@ function VideosPage({ token }: VideosPageProps) {
     setPage(value);
   };
 
-  const videosPerPage = isMobile ? 5 : 15;
+  const videosPerPage = isMobile ? 5 : 12;
 
   return (
     <Card elevation={8}>
@@ -97,10 +97,18 @@ function VideosPage({ token }: VideosPageProps) {
             ) : (
               <TableHead>
                 <TableRow>
-                  <TableCell>Thumbnail</TableCell>
-                  <TableCell>Channel Name</TableCell>
-                  <TableCell>Video Title</TableCell>
-                  <TableCell>Added</TableCell>
+                  <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
+                    Thumbnail
+                  </TableCell>
+                  <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
+                    Channel
+                  </TableCell>
+                  <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
+                    Video Title
+                  </TableCell>
+                  <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
+                    Added
+                  </TableCell>
                 </TableRow>
               </TableHead>
             )}
@@ -158,7 +166,15 @@ function VideosPage({ token }: VideosPageProps) {
                             {video.youTubeChannelName}
                           </Typography>
                           <Typography variant='caption' color='text.secondary'>
-                            {new Date(video.timeCreated).toLocaleString()}
+                            {new Date(video.timeCreated).toLocaleDateString() +
+                              ' ' +
+                              new Date(video.timeCreated).toLocaleTimeString(
+                                [],
+                                {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                }
+                              )}
                           </Typography>
                         </Box>
                       </TableCell>
@@ -166,8 +182,8 @@ function VideosPage({ token }: VideosPageProps) {
                       <>
                         <TableCell>
                           <Box
-                            width={160}
-                            height={90}
+                            width={256}
+                            height={144}
                             border={1}
                             borderColor='grey.500'
                             display='flex'
@@ -176,14 +192,14 @@ function VideosPage({ token }: VideosPageProps) {
                           >
                             {imageErrors[video.youtubeId] ? (
                               <Typography variant='caption'>
-                                No video
+                                No thumbnail
                               </Typography>
                             ) : (
                               <img
                                 src={`/images/videothumb-${video.youtubeId}.jpg`}
                                 alt='thumbnail'
-                                width='160'
-                                height='90'
+                                width='256'
+                                height='144'
                                 onError={() =>
                                   handleImageError(video.youtubeId)
                                 }
@@ -191,10 +207,19 @@ function VideosPage({ token }: VideosPageProps) {
                             )}
                           </Box>
                         </TableCell>
-                        <TableCell>{video.youTubeChannelName}</TableCell>
-                        <TableCell>{video.youTubeVideoName}</TableCell>
+                        <TableCell style={{ fontSize: 'medium' }}>
+                          {video.youTubeChannelName}
+                        </TableCell>
+                        <TableCell style={{ fontSize: 'medium' }}>
+                          {video.youTubeVideoName}
+                        </TableCell>
                         <TableCell>
-                          {new Date(video.timeCreated).toLocaleString()}
+                          {new Date(video.timeCreated).toLocaleDateString() +
+                            ' ' +
+                            new Date(video.timeCreated).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
                         </TableCell>
                       </>
                     )}
