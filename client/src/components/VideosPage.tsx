@@ -93,11 +93,7 @@ function VideosPage({ token }: VideosPageProps) {
         <TableContainer component={Paper}>
           <Table>
             {isMobile ? (
-              <TableHead>
-                <TableRow>
-                  <TableCell></TableCell>
-                </TableRow>
-              </TableHead>
+              <></>
             ) : (
               <TableHead>
                 <TableRow>

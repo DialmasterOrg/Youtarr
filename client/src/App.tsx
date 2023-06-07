@@ -107,7 +107,7 @@ function App() {
               style={{ fontSize: isMobile ? 'small' : 'large' }}
               align='center'
             >
-              Automated Youtube Video Management For Plex
+              Youtube Video Management For Plex
             </Typography>
           </div>
           <Typography
