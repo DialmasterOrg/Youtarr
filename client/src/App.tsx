@@ -140,6 +140,7 @@ function App() {
                 width: drawerWidth,
                 backgroundColor: '#CCC',
                 maxWidth: '50vw',
+                marginTop: isMobile ? '0' : '110px',
               },
             }}
             ModalProps={{ keepMounted: true }} // Better open performance on mobile.
@@ -219,11 +220,16 @@ function App() {
         <Grid
           item
           xs={12}
-          sm={9}
-          md={11}
-          style={{ paddingLeft: isMobile ? '0' : drawerWidth }}
+          style={{
+            marginLeft: isMobile ? '0' : drawerWidth,
+          }}
         >
-          <Container style={{ paddingTop: '32px' }}>
+          <Container
+            style={{
+              paddingTop: '32px',
+              width: '100%',
+            }}
+          >
             <Routes>
               <Route path='/login' element={<Login setToken={setToken} />} />
               {token ? (
