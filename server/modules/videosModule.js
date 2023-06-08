@@ -16,6 +16,7 @@ class VideosModule {
           Videos.duration,
           Videos.originalDate,
           Videos.description,
+          Videos.channel_id,
           Jobs.timeCreated
         FROM
           Videos

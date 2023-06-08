@@ -21,25 +21,8 @@ import {
   Pagination,
 } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
-
-interface VideoData {
-  youtubeId: string;
-  youTubeChannelName: string;
-  youTubeVideoName: string;
-  duration: number;
-}
-
-interface Job {
-  jobType: string;
-  status: string;
-  output: string;
-  timeCreated: number;
-  timeInitiated: number;
-  id: string;
-  data: {
-    videos: VideoData[];
-  };
-}
+import { formatDuration } from '../../utils';
+import { Job } from '../../types/Job';
 
 interface DownloadHistoryProps {
   jobs: Job[];
@@ -71,20 +54,12 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
     !showNoVideoJobs ? job.data?.videos && job.data.videos.length > 0 : true
   );
 
-  console.log();
-
   // calculate total pages
   const totalPages = Math.ceil(jobsToDisplay.length / itemsPerPage);
 
   // get current jobs
   const indexOfLastJob = currentPage * itemsPerPage;
   const indexOfFirstJob = indexOfLastJob - itemsPerPage;
-
-  const formatDuration = (duration: number) => {
-    const minutes = Math.floor(duration / 60);
-    const seconds = duration % 60;
-    return `${minutes}m${seconds.toString().padStart(2, '0')}s`;
-  };
 
   let currentJobs = jobsToDisplay.slice(indexOfFirstJob, indexOfLastJob);
 

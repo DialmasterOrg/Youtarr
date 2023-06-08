@@ -22,15 +22,10 @@ import axios from 'axios';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import WebSocketContext, { Message } from '../contexts/WebSocketContext';
+import { Channel } from '../types/Channel';
 
 interface ChannelManagerProps {
   token: string | null;
-}
-
-interface Channel {
-  url: string;
-  uploader: string;
-  channel_id?: string;
 }
 
 function ChannelManager({ token }: ChannelManagerProps) {

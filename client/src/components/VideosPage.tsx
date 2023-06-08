@@ -17,26 +17,17 @@ import {
 import Pagination from '@mui/material/Pagination';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
+import { formatDuration } from '../utils';
+import { VideoData } from '../types/VideoData';
 
 interface VideosPageProps {
   token: string | null;
 }
 
-interface Video {
-  id: number;
-  youtubeId: string;
-  youTubeChannelName: string;
-  youTubeVideoName: string;
-  timeCreated: string;
-  originalDate: string;
-  duration: number;
-  description: string;
-}
-
 function VideosPage({ token }: VideosPageProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const [videos, setVideos] = useState<Video[]>([]);
+  const [videos, setVideos] = useState<VideoData[]>([]);
   const [page, setPage] = useState(1);
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>(
     {}
@@ -68,20 +59,6 @@ function VideosPage({ token }: VideosPageProps) {
   };
 
   const videosPerPage = isMobile ? 6 : 12;
-
-  const formatDuration = (duration: number) => {
-    const minutes = Math.floor(duration / 60);
-    const seconds = duration % 60;
-
-    return `${minutes}m${seconds.toString().padStart(2, '0')}s`;
-  };
-
-  const formatDatePosted = (datePosted: string) => {
-    const year = datePosted.slice(0, 4);
-    const month = datePosted.slice(4, 6);
-    const day = datePosted.slice(6, 8);
-    return `${month}/${day}/${year}`;
-  };
 
   return (
     <Card elevation={8} style={{ marginBottom: '16px' }}>

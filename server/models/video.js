@@ -35,6 +35,10 @@ Video.init(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    channel_id: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
   },
   {
     sequelize,

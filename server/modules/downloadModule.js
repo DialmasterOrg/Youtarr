@@ -98,6 +98,7 @@ class DownloadModule {
                 duration: data.duration,
                 description: data.description,
                 originalDate: data.upload_date,
+                channel_id: data.channel_id,
               };
             } else {
               console.log('No info.json file at', dataPath);
