@@ -141,10 +141,6 @@ class ChannelModule {
     // Parse the returned JSON
     const jsonOutput = JSON.parse(fileContent);
 
-    // Resize the channel thumbnail
-    const ffmpegLoc = path.dirname(configModule.ffmpegPath);
-    const ffmpegPath = path.join(ffmpegLoc, 'ffmpeg.exe');
-
     const realImagePath = path.resolve(
       __dirname,
       `../images/channelthumb-${jsonOutput.id}.jpg`
@@ -153,7 +149,7 @@ class ChannelModule {
     // Resize the image using ffmpeg
     try {
       execSync(
-        `${ffmpegPath} -y -i ${realImagePath} -vf "scale=iw*0.4:ih*0.4" ${realImagePath}`,
+        `${configModule.ffmpegPath} -y -i ${realImagePath} -vf "scale=iw*0.4:ih*0.4" ${realImagePath}`,
         { stdio: 'inherit' }
       );
       console.log('Image resized successfully');

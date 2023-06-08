@@ -26,13 +26,10 @@ if (fs.existsSync(jsonPath)) {
     const newImageFullPath = path.join(newImagePath, `videothumb-${id}.jpg`); // define the new path for image thumbnail
     fs.copySync(imagePath, newImageFullPath, { overwrite: true }); // copy the image thumbnail
 
-    const ffmpegLoc = path.dirname(configModule.ffmpegPath);
-    const ffmpegPath = path.join(ffmpegLoc, 'ffmpeg.exe');
-
     // Resize the image using ffmpeg
     try {
       execSync(
-        `${ffmpegPath} -y -i ${newImageFullPath} -vf "scale=iw*0.5:ih*0.5" ${newImageFullPath}`,
+        `${configModule.ffmpegPath} -y -i ${newImageFullPath} -vf "scale=iw*0.5:ih*0.5" ${newImageFullPath}`,
         { stdio: 'inherit' }
       );
       console.log('Image resized successfully');
