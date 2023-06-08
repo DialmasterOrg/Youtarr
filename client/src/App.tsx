@@ -66,7 +66,7 @@ function App() {
   return (
     <Router>
       <AppBar
-        position='static'
+        position={isMobile ? 'static' : 'fixed'}
         style={{
           backgroundColor: '#DDD',
           width: '100%',
@@ -74,7 +74,11 @@ function App() {
           padding: 0,
         }}
       >
-        <Toolbar style={{ paddingBottom: '8px' }}>
+        <Toolbar
+          style={{
+            paddingBottom: '8px',
+          }}
+        >
           <IconButton
             color='inherit'
             aria-label='open drawer'
@@ -129,7 +133,13 @@ function App() {
         </Toolbar>
       </AppBar>
       <Grid container>
-        <Grid item xs={12} sm={3} md={1} style={{ maxWidth: drawerWidth }}>
+        <Grid
+          item
+          xs={12}
+          sm={3}
+          md={1}
+          style={{ maxWidth: drawerWidth, paddingTop: isMobile ? 0 : '112px' }}
+        >
           <Drawer
             variant={isMobile ? 'temporary' : 'permanent'}
             open={isMobile ? mobileOpen : true}
