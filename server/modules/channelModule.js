@@ -145,13 +145,19 @@ class ChannelModule {
       __dirname,
       `../images/channelthumb-${jsonOutput.id}.jpg`
     );
+    const smallImagePath = path.resolve(
+      __dirname,
+      `../images/channelthumb-${jsonOutput.id}-small.jpg`
+    );
 
     // Resize the image using ffmpeg
     try {
       execSync(
-        `${configModule.ffmpegPath} -y -i ${realImagePath} -vf "scale=iw*0.4:ih*0.4" ${realImagePath}`,
+        `${configModule.ffmpegPath} -y -i ${realImagePath} -vf "scale=iw*0.4:ih*0.4" ${smallImagePath}`,
         { stdio: 'inherit' }
       );
+      // Delete the original image (realImagePath) and move the small image to the original image path
+      await fsPromises.rename(smallImagePath, realImagePath);
       console.log('Image resized successfully');
     } catch (err) {
       console.log(`Error resizing image: ${err}`);
