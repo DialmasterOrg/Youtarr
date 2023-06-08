@@ -1,5 +1,7 @@
 const fs = require('fs-extra');
 const path = require('path');
+const { execSync } = require('child_process');
+const configModule = require('./configModule');
 
 const videoPath = process.argv[2]; // get the video file path
 const jsonPath = videoPath.replace(/\.mp4$/, '.info.json'); // replace .mp4 with .info.json
@@ -22,6 +24,24 @@ if (fs.existsSync(jsonPath)) {
   if (fs.existsSync(imagePath)) {
     // check if image thumbnail exists
     const newImageFullPath = path.join(newImagePath, `videothumb-${id}.jpg`); // define the new path for image thumbnail
+    const newImageFullPathSmall = path.join(
+      newImagePath,
+      `videothumb-${id}-small.jpg`
+    ); // define the new path for image thumbnail
     fs.copySync(imagePath, newImageFullPath, { overwrite: true }); // copy the image thumbnail
+
+    // Resize the image using ffmpeg
+    try {
+      execSync(
+        `${configModule.ffmpegPath} -y -i ${newImageFullPath} -vf "scale=iw*0.5:ih*0.5" ${newImageFullPathSmall}`,
+        { stdio: 'inherit' }
+      );
+      fs.rename(newImageFullPathSmall, newImageFullPath);
+      console.log('Image resized successfully');
+    } catch (err) {
+      console.log(`Error resizing image: ${err}`);
+    }
   }
 }
+
+configModule.stopWatchingConfig();

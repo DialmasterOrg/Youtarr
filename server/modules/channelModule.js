@@ -8,7 +8,7 @@ const Channel = require('../models/channel');
 const MessageEmitter = require('./messageEmitter.js'); // import the helper function
 
 const { v4: uuidv4 } = require('uuid');
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 
 class ChannelModule {
   constructor() {
@@ -140,6 +140,28 @@ class ChannelModule {
 
     // Parse the returned JSON
     const jsonOutput = JSON.parse(fileContent);
+
+    const realImagePath = path.resolve(
+      __dirname,
+      `../images/channelthumb-${jsonOutput.id}.jpg`
+    );
+    const smallImagePath = path.resolve(
+      __dirname,
+      `../images/channelthumb-${jsonOutput.id}-small.jpg`
+    );
+
+    // Resize the image using ffmpeg
+    try {
+      execSync(
+        `${configModule.ffmpegPath} -y -i ${realImagePath} -vf "scale=iw*0.4:ih*0.4" ${smallImagePath}`,
+        { stdio: 'inherit' }
+      );
+      // Delete the original image (realImagePath) and move the small image to the original image path
+      await fsPromises.rename(smallImagePath, realImagePath);
+      console.log('Image resized successfully');
+    } catch (err) {
+      console.log(`Error resizing image: ${err}`);
+    }
 
     // Delete the file after parsing it
     await fsPromises.unlink(outputFilePath);
