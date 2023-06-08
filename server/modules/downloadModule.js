@@ -212,7 +212,7 @@ class DownloadModule {
       configModule.directoryPath +
       '/%(uploader)s/%(uploader)s - %(title)s - %(id)s/poster" -o "pl_thumbnail:" ' +
       '--exec "node ' +
-      path.resolve(__dirname, './moveInfoJson.js') +
+      path.resolve(__dirname, './videoDownloadPostProcessFiles.js') +
       ' {}" '
     );
   }

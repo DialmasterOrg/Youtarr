@@ -9,6 +9,7 @@ class ConfigModule extends EventEmitter {
     this.configPath = path.join(__dirname, '../../config/config.json');
     this.config = JSON.parse(fs.readFileSync(this.configPath));
     this.task = null;
+    this.configWatcher = null;
 
     this.directoryPath = '';
     if (process.env.IN_DOCKER_CONTAINER) {
@@ -52,7 +53,7 @@ class ConfigModule extends EventEmitter {
 
   watchConfig() {
     // Watch the config file for changes
-    fs.watch(this.configPath, (event) => {
+    this.configWatcher = fs.watch(this.configPath, (event) => {
       if (event === 'change') {
         // Load the new config file
         this.config = JSON.parse(fs.readFileSync(this.configPath));
@@ -61,6 +62,12 @@ class ConfigModule extends EventEmitter {
         this.emit('change');
       }
     });
+  }
+
+  stopWatchingConfig() {
+    if (this.configWatcher) {
+      this.configWatcher.close();
+    }
   }
 
   onConfigChange(callback) {
