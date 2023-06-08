@@ -17,23 +17,17 @@ import {
 import Pagination from '@mui/material/Pagination';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
+import { formatDuration } from '../utils';
+import { VideoData } from '../types/VideoData';
 
 interface VideosPageProps {
   token: string | null;
 }
 
-interface Video {
-  id: number;
-  youtubeId: string;
-  youTubeChannelName: string;
-  youTubeVideoName: string;
-  timeCreated: string;
-}
-
 function VideosPage({ token }: VideosPageProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const [videos, setVideos] = useState<Video[]>([]);
+  const [videos, setVideos] = useState<VideoData[]>([]);
   const [page, setPage] = useState(1);
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>(
     {}
@@ -64,7 +58,7 @@ function VideosPage({ token }: VideosPageProps) {
     setPage(value);
   };
 
-  const videosPerPage = isMobile ? 5 : 12;
+  const videosPerPage = isMobile ? 6 : 12;
 
   return (
     <Card elevation={8} style={{ marginBottom: '16px' }}>
@@ -104,7 +98,7 @@ function VideosPage({ token }: VideosPageProps) {
                     Channel
                   </TableCell>
                   <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
-                    Video Title
+                    Video Information
                   </TableCell>
                   <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
                     Added
@@ -165,7 +159,16 @@ function VideosPage({ token }: VideosPageProps) {
                           >
                             {video.youTubeChannelName}
                           </Typography>
+                          {video.duration && (
+                            <Typography
+                              variant='caption'
+                              color='text.secondary'
+                            >
+                              {formatDuration(video.duration)}
+                            </Typography>
+                          )}
                           <Typography variant='caption' color='text.secondary'>
+                            Added:
                             {new Date(video.timeCreated).toLocaleDateString() +
                               ' ' +
                               new Date(video.timeCreated).toLocaleTimeString(
@@ -211,7 +214,17 @@ function VideosPage({ token }: VideosPageProps) {
                           {video.youTubeChannelName}
                         </TableCell>
                         <TableCell style={{ fontSize: 'medium' }}>
-                          {video.youTubeVideoName}
+                          <Typography variant='subtitle1'>
+                            {video.youTubeVideoName}
+                          </Typography>
+                          {video.duration && (
+                            <Typography
+                              variant='caption'
+                              color='text.secondary'
+                            >
+                              Duration: {formatDuration(video.duration)}
+                            </Typography>
+                          )}
                         </TableCell>
                         <TableCell>
                           {new Date(video.timeCreated).toLocaleDateString() +

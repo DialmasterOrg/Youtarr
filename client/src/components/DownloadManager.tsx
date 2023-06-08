@@ -13,27 +13,10 @@ import DownloadProgress from './DownloadManager/DownloadProgress';
 import DownloadHistory from './DownloadManager/DownloadHistory';
 import DownloadNew from './DownloadManager/DownloadNew';
 import WebSocketContext from '../contexts/WebSocketContext';
+import { Job } from '../types/Job';
 
 interface DownloadManagerProps {
   token: string | null;
-}
-
-interface VideoData {
-  youtubeId: string;
-  youTubeChannelName: string;
-  youTubeVideoName: string;
-}
-
-interface Job {
-  jobType: string;
-  status: string;
-  output: string;
-  timeCreated: number;
-  timeInitiated: number;
-  id: string;
-  data: {
-    videos: VideoData[];
-  };
 }
 
 function DownloadManager({ token }: DownloadManagerProps) {
@@ -59,8 +42,6 @@ function DownloadManager({ token }: DownloadManagerProps) {
   const { subscribe, unsubscribe } = wsContext;
 
   const filter = useCallback((message: any) => {
-    // DEBUG
-    //console.log('Filtering message: ', message);
     return (
       message.destination === 'broadcast' && message.type === 'downloadComplete'
     );
