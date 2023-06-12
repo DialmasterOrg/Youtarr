@@ -5,7 +5,7 @@ const fs = require('fs');
 const fsPromises = fs.promises;
 const path = require('path');
 const Channel = require('../models/channel');
-const Video = require('../models/video');
+//const Video = require('../models/video');
 const MessageEmitter = require('./messageEmitter.js'); // import the helper function
 const { google } = require('googleapis');
 const { parse } = require('iso8601-duration');
@@ -301,7 +301,7 @@ class ChannelModule {
       auth: configModule.getConfig().youtubeApiKey,
     });
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       youtube.search.list(
         {
           part: 'snippet',
@@ -311,12 +311,12 @@ class ChannelModule {
           type: 'video, creatorContentType',
         },
         async (err, res) => {
+          let videos = [];
           if (err) {
-            console.log('The API returned an error: ' + err);
-            reject(err);
+            console.log('The API returned an errors: ' + err);
+          } else {
+            videos = res.data.items;
           }
-
-          const videos = res.data.items;
 
           // Get the video IDs
           const videoIds = videos.map((video) => video.id.videoId).join(',');
@@ -328,12 +328,12 @@ class ChannelModule {
               id: videoIds,
             },
             async (err, res) => {
+              let videoDetails = [];
               if (err) {
-                console.log('The API returned an error: ' + err);
-                reject(err);
+                console.log('The API returned an errors: ' + err);
+              } else {
+                videoDetails = res.data.items;
               }
-
-              const videoDetails = res.data.items;
 
               const videoPromises = videoDetails.map((videoDetail) => {
                 const snippet = videos.find(
@@ -348,11 +348,45 @@ class ChannelModule {
                   duration.minutes * 60 +
                   duration.hours * 3600;
 
+                // Attempt to filter out "shorts" videos
                 if (totalDurationSeconds < 70) {
                   return null;
                 }
 
-                return Video.findOne({
+                // Check if the videoDetail.id is already in ../../config/complete.list
+                /* The format of that file is:
+                youtube PKRImlmh3Ko
+                youtube r5Rg-b7rZ0I
+                etc...
+                */
+                const completePath = path.join(
+                  __dirname,
+                  '../../config/complete.list'
+                );
+                const completeList = fs.readFileSync(completePath, 'utf-8');
+                const completeListArray = completeList
+                  .split('\n')
+                  .filter((line) => line.trim() !== '');
+                let foundVideo = false;
+                console.log(
+                  'Looking for video id: ' +
+                    videoDetail.id +
+                    ' in complete.list'
+                );
+                if (completeListArray.includes(`youtube ${videoDetail.id}`)) {
+                  foundVideo = true;
+                }
+                return {
+                  title: snippet.title,
+                  id: videoDetail.id,
+                  publishedAt: snippet.publishedAt,
+                  thumbnail: snippet.thumbnails.medium.url,
+                  duration: totalDurationSeconds, // Add the duration field
+                  added: foundVideo,
+                };
+
+                // I was checking the DB, but this is less accurate since not all old videos are in there
+                /*return Video.findOne({
                   where: { youtubeId: videoDetail.id },
                 }).then((foundVideo) => {
                   return {
@@ -363,7 +397,7 @@ class ChannelModule {
                     duration: totalDurationSeconds, // Add the duration field
                     added: !!foundVideo, // added will be true if foundVideo is not null
                   };
-                });
+                }); */
               });
 
               try {
@@ -373,7 +407,9 @@ class ChannelModule {
                 resolve(videosOutput);
               } catch (error) {
                 console.error('Error processing videos: ', error);
-                reject(error);
+                // In case of error, resolve with an empty array
+                resolve([]);
+                //reject(error);
               }
             }
           );

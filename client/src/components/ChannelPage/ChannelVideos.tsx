@@ -32,6 +32,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [page, setPage] = useState(1);
   const [videos, setVideos] = useState<ChannelVideo[]>([]);
+  const [videoFailed, setVideoFailed] = useState<Boolean>(false);
   const [checkedBoxes, setCheckedBoxes] = useState<string[]>([]); // new state variable
   const { channel_id } = useParams();
 
@@ -88,7 +89,8 @@ function ChannelVideos({ token }: ChannelVideosProps) {
         return response.json();
       })
       .then((data) => {
-        setVideos(data);
+        setVideos(data.videos);
+        setVideoFailed(data.videoFail);
       })
       .catch((error) => console.error(error));
   }, [token]);
@@ -174,10 +176,17 @@ function ChannelVideos({ token }: ChannelVideosProps) {
               )}
             </TableHead>
             <TableBody>
-              {videos.length === 0 && (
+              {videos.length === 0 && !videoFailed && (
                 <TableRow>
                   <TableCell colSpan={5} align='center'>
                     Loading...
+                  </TableCell>
+                </TableRow>
+              )}
+              {videoFailed && (
+                <TableRow>
+                  <TableCell colSpan={5} align='center'>
+                    Youtube Data Request Failed
                   </TableCell>
                 </TableRow>
               )}

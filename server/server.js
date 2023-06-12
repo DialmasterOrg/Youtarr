@@ -146,7 +146,11 @@ const initialize = async () => {
       console.log('Getting channel videos');
       const channelId = req.params.channelId;
       const channelVideos = await channelModule.getChannelVideos(channelId);
-      res.status(200).json(channelVideos);
+      const responseData = {
+        videos: channelVideos,
+        videoFail: channelVideos.length === 0,
+      };
+      res.status(200).json(responseData);
     });
 
     app.get('/jobstatus/:jobId', verifyToken, (req, res) => {
