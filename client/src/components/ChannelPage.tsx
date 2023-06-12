@@ -45,7 +45,11 @@ function ChannelPage({ token }: ChannelPageProps) {
 
   return (
     <>
-      <Grid container justifyContent='center' style={{ marginBottom: '8px' }}>
+      <Grid
+        container
+        justifyContent='center'
+        style={{ marginBottom: '16px', marginTop: '-8px' }}
+      >
         <Button onClick={() => navigate(-1)}>
           <KeyboardDoubleArrowLeft />
           Back To Channels Page
@@ -59,6 +63,7 @@ function ChannelPage({ token }: ChannelPageProps) {
                 src={channel ? `/images/channelthumb-${channel_id}.jpg` : ''}
                 alt='Channel thumbnail'
                 width='100%'
+                style={{ border: '1px solid black' }}
               />
             </Grid>
             <Grid item xs={12} sm={8}>

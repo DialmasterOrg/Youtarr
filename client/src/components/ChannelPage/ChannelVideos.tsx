@@ -111,18 +111,20 @@ function ChannelVideos({ token }: ChannelVideosProps) {
   return (
     <Card elevation={8} style={{ marginBottom: '16px' }}>
       <CardHeader title='Videos' align='center' />
-      <Grid
-        container
-        spacing={2}
-        justifyContent='center'
-        style={{ marginTop: '8px', marginBottom: '8px' }}
-      >
-        <Pagination
-          count={Math.ceil(videos.length / videosPerPage)}
-          page={page}
-          onChange={handlePageChange}
-        />
-      </Grid>
+      {!videoFailed && (
+        <Grid
+          container
+          spacing={2}
+          justifyContent='center'
+          style={{ marginTop: '8px', marginBottom: '8px' }}
+        >
+          <Pagination
+            count={Math.ceil(videos.length / videosPerPage)}
+            page={page}
+            onChange={handlePageChange}
+          />
+        </Grid>
+      )}
       <Grid container justifyContent='center'>
         <Button
           onClick={downloadChecked}
@@ -148,7 +150,13 @@ function ChannelVideos({ token }: ChannelVideosProps) {
             <TableHead>
               {isMobile ? (
                 <TableRow>
-                  <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
+                  <TableCell
+                    style={{
+                      fontWeight: 'bold',
+                      fontSize: 'medium',
+                      minWidth: '200px',
+                    }}
+                  >
                     Video
                   </TableCell>
                   <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
