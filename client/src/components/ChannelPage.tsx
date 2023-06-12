@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Card, CardContent, Grid, Typography } from '@mui/material';
+import { Card, CardContent, Grid, Typography, Button } from '@mui/material';
 import Pagination from '@mui/material/Pagination';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { Channel } from '../types/Channel';
 import ChannelVideos from './ChannelPage/ChannelVideos';
+import KeyboardDoubleArrowLeft from '@mui/icons-material/KeyboardDoubleArrowLeft';
+import { useNavigate } from 'react-router-dom';
 
 interface ChannelPageProps {
   token: string | null;
@@ -16,6 +18,7 @@ function ChannelPage({ token }: ChannelPageProps) {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [channel, setChannel] = useState<Channel | null>(null);
   const { channel_id } = useParams();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetch(`/getChannelInfo/${channel_id}`, {
@@ -42,17 +45,23 @@ function ChannelPage({ token }: ChannelPageProps) {
 
   return (
     <>
+      <Grid container justifyContent='center' style={{ marginBottom: '8px' }}>
+        <Button onClick={() => navigate(-1)}>
+          <KeyboardDoubleArrowLeft />
+          Back To Channels Page
+        </Button>
+      </Grid>
       <Card elevation={8} style={{ marginBottom: '16px' }}>
         <CardContent>
           <Grid container spacing={3} justifyContent='center'>
-            <Grid item xs={4}>
+            <Grid item xs={12} sm={4}>
               <img
                 src={channel ? `/images/channelthumb-${channel_id}.jpg` : ''}
                 alt='Channel thumbnail'
                 width='100%'
               />
             </Grid>
-            <Grid item xs={8}>
+            <Grid item xs={12} sm={8}>
               <Typography
                 variant={isMobile ? 'h6' : 'h4'}
                 component='h2'

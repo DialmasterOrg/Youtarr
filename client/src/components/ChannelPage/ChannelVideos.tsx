@@ -13,13 +13,16 @@ import {
   Paper,
   Checkbox,
   CardHeader,
+  Button,
 } from '@mui/material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+
 import Pagination from '@mui/material/Pagination';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
-
+import { useNavigate } from 'react-router-dom';
 interface ChannelVideosProps {
   token: string | null;
 }
@@ -29,11 +32,41 @@ function ChannelVideos({ token }: ChannelVideosProps) {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [page, setPage] = useState(1);
   const [videos, setVideos] = useState<ChannelVideo[]>([]);
+  const [checkedBoxes, setCheckedBoxes] = useState<string[]>([]); // new state variable
   const { channel_id } = useParams();
+
+  const navigate = useNavigate();
 
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>(
     {}
   );
+  const handleCheckChange = (videoId: string, isChecked: boolean) => {
+    setCheckedBoxes((prevState) => {
+      if (isChecked) {
+        return [...prevState, videoId];
+      } else {
+        return prevState.filter((id) => id !== videoId);
+      }
+    });
+  };
+
+  const downloadChecked = async () => {
+    // Start downloading the checked videos
+    await fetch('/triggerspecificdownloads', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-access-token': token || '',
+      },
+      body: JSON.stringify({ urls: checkedBoxes }),
+    });
+    // Navigate to the Manage Downloads page
+    navigate('/downloads');
+  };
+
+  const resetChecked = () => {
+    setCheckedBoxes([]);
+  };
 
   function decodeHtml(html: string) {
     const txt = document.createElement('textarea');
@@ -88,28 +121,57 @@ function ChannelVideos({ token }: ChannelVideosProps) {
           onChange={handlePageChange}
         />
       </Grid>
-
+      <Grid container justifyContent='center'>
+        <Button
+          onClick={downloadChecked}
+          variant='contained'
+          disabled={checkedBoxes.length === 0}
+          style={{ marginTop: '8px', marginLeft: '8px', marginRight: '8px' }}
+        >
+          Download New Videos{' '}
+          {checkedBoxes.length ? `(${checkedBoxes.length})` : ''}
+        </Button>
+        <Button
+          variant='contained'
+          disabled={checkedBoxes.length === 0}
+          onClick={resetChecked}
+          style={{ marginTop: '8px', marginLeft: '8px', marginRight: '8px' }}
+        >
+          Undo
+        </Button>
+      </Grid>
       <CardContent>
         <TableContainer component={Paper}>
           <Table>
             <TableHead>
-              <TableRow>
-                <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
-                  Thumbnail
-                </TableCell>
-                <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
-                  Title
-                </TableCell>
-                <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
-                  Date Published
-                </TableCell>
-                <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
-                  Duration
-                </TableCell>
-                <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
-                  Added?
-                </TableCell>
-              </TableRow>
+              {isMobile ? (
+                <TableRow>
+                  <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
+                    Video
+                  </TableCell>
+                  <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
+                    Added?
+                  </TableCell>
+                </TableRow>
+              ) : (
+                <TableRow>
+                  <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
+                    Thumbnail
+                  </TableCell>
+                  <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
+                    Title
+                  </TableCell>
+                  <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
+                    Date Published
+                  </TableCell>
+                  <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
+                    Duration
+                  </TableCell>
+                  <TableCell style={{ fontWeight: 'bold', fontSize: 'medium' }}>
+                    Added?
+                  </TableCell>
+                </TableRow>
+              )}
             </TableHead>
             <TableBody>
               {videos.length === 0 && (
@@ -121,26 +183,72 @@ function ChannelVideos({ token }: ChannelVideosProps) {
               )}
               {videos
                 .slice((page - 1) * videosPerPage, page * videosPerPage)
-                .map((video) => (
-                  <TableRow key={video.id}>
-                    <TableCell>
-                      <img
-                        style={{ maxWidth: '140px' }}
-                        src={video.thumbnail}
-                        onError={() => handleImageError(video.id)}
-                        alt={`Thumbnail for video ${video.title}`}
-                      />
-                    </TableCell>
-                    <TableCell>{decodeHtml(video.title)}</TableCell>
-                    <TableCell>
-                      {new Date(video.publishedAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>{formatDuration(video.duration)}</TableCell>
-                    <TableCell>
-                      <Checkbox checked={video.added} />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                .map((video) =>
+                  isMobile ? (
+                    <TableRow key={video.id}>
+                      <TableCell>
+                        <img
+                          style={{ maxWidth: '200px' }}
+                          src={video.thumbnail}
+                          onError={() => handleImageError(video.id)}
+                          alt={`Thumbnail for video ${video.title}`}
+                        />
+                        <div>{decodeHtml(video.title)}</div>
+                        {formatDuration(video.duration)}
+                        <div>
+                          {new Date(video.publishedAt).toLocaleDateString()}
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        {video.added ? (
+                          <CheckCircleIcon
+                            color='success'
+                            style={{ marginLeft: '8px' }}
+                          />
+                        ) : (
+                          <Checkbox
+                            checked={checkedBoxes.includes(video.id)}
+                            onChange={(e) =>
+                              handleCheckChange(video.id, e.target.checked)
+                            }
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    <TableRow key={video.id}>
+                      <TableCell>
+                        <img
+                          style={{ maxWidth: '200px' }}
+                          src={video.thumbnail}
+                          onError={() => handleImageError(video.id)}
+                          alt={`Thumbnail for video ${video.title}`}
+                        />
+                      </TableCell>
+                      <TableCell>{decodeHtml(video.title)}</TableCell>
+                      <TableCell>
+                        {new Date(video.publishedAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>{formatDuration(video.duration)}</TableCell>
+                      <TableCell>
+                        {video.added ? (
+                          <CheckCircleIcon
+                            color='success'
+                            style={{ marginLeft: '8px' }}
+                          />
+                        ) : (
+                          <Checkbox
+                            checked={checkedBoxes.includes(video.id)}
+                            onChange={(e) =>
+                              handleCheckChange(video.id, e.target.checked)
+                            }
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                )}{' '}
             </TableBody>
           </Table>
         </TableContainer>
