@@ -13,6 +13,10 @@ interface ChannelPageProps {
   token: string | null;
 }
 
+//TODO: Before this FEAT #39 is complete:
+// * Update the config page so you can edit your Youtube API Key -- add an info icon there as well
+// * Update the README
+// * If you do not have a youtube API key set, just don't show the ChannelVideos section at all
 function ChannelPage({ token }: ChannelPageProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));

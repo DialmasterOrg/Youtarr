@@ -8,7 +8,7 @@
 
 export interface ChannelVideo {
   title: string;
-  id: string;
+  youtube_id: string;
   publishedAt: string;
   thumbnail: string;
   added: boolean;

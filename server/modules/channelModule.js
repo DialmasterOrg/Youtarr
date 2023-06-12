@@ -5,6 +5,7 @@ const fs = require('fs');
 const fsPromises = fs.promises;
 const path = require('path');
 const Channel = require('../models/channel');
+const ChannelVideo = require('../models/channelvideo');
 //const Video = require('../models/video');
 const MessageEmitter = require('./messageEmitter.js'); // import the helper function
 const { google } = require('googleapis');
@@ -294,14 +295,9 @@ class ChannelModule {
     configModule.onConfigChange(this.scheduleTask.bind(this));
   }
 
-  async getChannelVideos(channelId) {
-    const youtube = google.youtube({
-      version: 'v3',
-      //TODO: Move this to a config file!!!
-      auth: configModule.getConfig().youtubeApiKey,
-    });
-
-    return new Promise((resolve) => {
+  // Fetch YouTube video data using Google APIs
+  async fetchYoutubeVideos(youtube, channelId) {
+    return new Promise((resolve, reject) => {
       youtube.search.list(
         {
           part: 'snippet',
@@ -310,112 +306,127 @@ class ChannelModule {
           order: 'date',
           type: 'video, creatorContentType',
         },
-        async (err, res) => {
-          let videos = [];
+        (err, res) => {
           if (err) {
-            console.log('The API returned an errors: ' + err);
+            console.error('The API returned an errors: ' + err);
+            reject(err);
           } else {
-            videos = res.data.items;
+            resolve(res.data.items);
           }
-
-          // Get the video IDs
-          const videoIds = videos.map((video) => video.id.videoId).join(',');
-
-          // Get details of each video
-          youtube.videos.list(
-            {
-              part: 'contentDetails',
-              id: videoIds,
-            },
-            async (err, res) => {
-              let videoDetails = [];
-              if (err) {
-                console.log('The API returned an errors: ' + err);
-              } else {
-                videoDetails = res.data.items;
-              }
-
-              const videoPromises = videoDetails.map((videoDetail) => {
-                const snippet = videos.find(
-                  (v) => v.id.videoId === videoDetail.id
-                ).snippet;
-
-                // Parse the ISO 8601 duration into an object
-                const duration = parse(videoDetail.contentDetails.duration);
-
-                const totalDurationSeconds =
-                  duration.seconds +
-                  duration.minutes * 60 +
-                  duration.hours * 3600;
-
-                // Attempt to filter out "shorts" videos
-                if (totalDurationSeconds < 70) {
-                  return null;
-                }
-
-                // Check if the videoDetail.id is already in ../../config/complete.list
-                /* The format of that file is:
-                youtube PKRImlmh3Ko
-                youtube r5Rg-b7rZ0I
-                etc...
-                */
-                const completePath = path.join(
-                  __dirname,
-                  '../../config/complete.list'
-                );
-                const completeList = fs.readFileSync(completePath, 'utf-8');
-                const completeListArray = completeList
-                  .split('\n')
-                  .filter((line) => line.trim() !== '');
-                let foundVideo = false;
-                console.log(
-                  'Looking for video id: ' +
-                    videoDetail.id +
-                    ' in complete.list'
-                );
-                if (completeListArray.includes(`youtube ${videoDetail.id}`)) {
-                  foundVideo = true;
-                }
-                return {
-                  title: snippet.title,
-                  id: videoDetail.id,
-                  publishedAt: snippet.publishedAt,
-                  thumbnail: snippet.thumbnails.medium.url,
-                  duration: totalDurationSeconds, // Add the duration field
-                  added: foundVideo,
-                };
-
-                // I was checking the DB, but this is less accurate since not all old videos are in there
-                /*return Video.findOne({
-                  where: { youtubeId: videoDetail.id },
-                }).then((foundVideo) => {
-                  return {
-                    title: snippet.title,
-                    id: videoDetail.id,
-                    publishedAt: snippet.publishedAt,
-                    thumbnail: snippet.thumbnails.medium.url,
-                    duration: totalDurationSeconds, // Add the duration field
-                    added: !!foundVideo, // added will be true if foundVideo is not null
-                  };
-                }); */
-              });
-
-              try {
-                let videosOutput = await Promise.all(videoPromises);
-                // Filter out null values (these are the videos that were ignored because they're too short)
-                videosOutput = videosOutput.filter((video) => video !== null);
-                resolve(videosOutput);
-              } catch (error) {
-                console.error('Error processing videos: ', error);
-                // In case of error, resolve with an empty array
-                resolve([]);
-                //reject(error);
-              }
-            }
-          );
         }
       );
     });
+  }
+
+  // Fetch video details
+  async fetchVideoDetails(youtube, videoIds) {
+    return new Promise((resolve, reject) => {
+      youtube.videos.list(
+        {
+          part: 'contentDetails',
+          id: videoIds,
+        },
+        (err, res) => {
+          if (err) {
+            console.error('The API returned an errors: ' + err);
+            reject(err);
+          } else {
+            resolve(res.data.items);
+          }
+        }
+      );
+    });
+  }
+
+  // Insert videos into DB
+  async insertVideosIntoDb(videos, channelId) {
+    for (const video of videos) {
+      await ChannelVideo.findOrCreate({
+        where: { youtube_id: video.youtube_id, channel_id: channelId },
+        defaults: video,
+      });
+    }
+  }
+
+  // Fetch videos for this channel from the DB,
+  // also add whether they have already been downloaded
+  async fetchNewestVideosFromDb(channelId) {
+    const videos = await ChannelVideo.findAll({
+      where: {
+        channel_id: channelId,
+      },
+      order: [['publishedAt', 'DESC']],
+      limit: 50,
+    });
+
+    const completePath = path.join(__dirname, '../../config/complete.list');
+    const completeList = fs.readFileSync(completePath, 'utf-8');
+    const completeListArray = completeList
+      .split(/\r?\n/) // split on \n and \r\n
+      .filter((line) => line.trim() !== '');
+
+    return videos.map((video) => {
+      const plainVideoObject = video.toJSON();
+      console.log(
+        `Looking for video in complete list: youtube ${plainVideoObject.youtube_id}`
+      );
+      plainVideoObject.added = completeListArray.includes(
+        `youtube ${plainVideoObject.youtube_id}`
+      );
+      return plainVideoObject;
+    });
+  }
+
+  async getChannelVideos(channelId) {
+    const youtube = google.youtube({
+      version: 'v3',
+      auth: configModule.getConfig().youtubeApiKey,
+    });
+
+    try {
+      const videos = await this.fetchYoutubeVideos(youtube, channelId);
+      const videoIds = videos.map((video) => video.id.videoId).join(',');
+
+      const videoDetails = await this.fetchVideoDetails(youtube, videoIds);
+
+      const videoPromises = videoDetails.map((videoDetail) => {
+        const snippet = videos.find(
+          (v) => v.id.videoId === videoDetail.id
+        ).snippet;
+
+        // Parse the ISO 8601 duration into an object
+        const duration = parse(videoDetail.contentDetails.duration);
+
+        const totalDurationSeconds =
+          duration.seconds + duration.minutes * 60 + duration.hours * 3600;
+
+        // Attempt to filter out "shorts" videos
+        if (totalDurationSeconds < 70) {
+          return null;
+        }
+
+        return {
+          title: snippet.title,
+          youtube_id: videoDetail.id,
+          publishedAt: snippet.publishedAt,
+          thumbnail: snippet.thumbnails.medium.url,
+          duration: totalDurationSeconds, // Add the duration field
+        };
+      });
+      let videosOutput = await Promise.all(videoPromises);
+      videosOutput = videosOutput.filter((video) => video !== null);
+      console.log('Found ' + videosOutput.length + ' videos');
+      if (videosOutput.length > 0) {
+        await this.insertVideosIntoDb(videosOutput, channelId);
+      }
+      const newestVideos = await this.fetchNewestVideosFromDb(channelId);
+
+      return newestVideos;
+    } catch (error) {
+      // In case of error, return whatever the DB has
+      const newestVideos = await this.fetchNewestVideosFromDb(channelId);
+      return newestVideos;
+    }
   }
 }
 

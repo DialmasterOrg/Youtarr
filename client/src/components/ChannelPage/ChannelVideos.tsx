@@ -14,6 +14,9 @@ import {
   Checkbox,
   CardHeader,
   Button,
+  Toolbar,
+  Box,
+  FormControlLabel,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
@@ -34,6 +37,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
   const [videos, setVideos] = useState<ChannelVideo[]>([]);
   const [videoFailed, setVideoFailed] = useState<Boolean>(false);
   const [checkedBoxes, setCheckedBoxes] = useState<string[]>([]); // new state variable
+  const [hideDownloaded, setHideDownloaded] = useState(false);
   const { channel_id } = useParams();
 
   const navigate = useNavigate();
@@ -107,23 +111,45 @@ function ChannelVideos({ token }: ChannelVideosProps) {
   };
 
   const videosPerPage = isMobile ? 8 : 16;
+  let videosToDisplay = videos.filter((video) =>
+    hideDownloaded ? !video.added : true
+  );
 
   return (
     <Card elevation={8} style={{ marginBottom: '16px' }}>
       <CardHeader title='Videos' align='center' />
       {!videoFailed && (
-        <Grid
-          container
-          spacing={2}
-          justifyContent='center'
-          style={{ marginTop: '8px', marginBottom: '8px' }}
-        >
-          <Pagination
-            count={Math.ceil(videos.length / videosPerPage)}
-            page={page}
-            onChange={handlePageChange}
-          />
-        </Grid>
+        <>
+          <Grid
+            container
+            spacing={2}
+            justifyContent='center'
+            style={{ marginTop: '8px', marginBottom: '8px' }}
+          >
+            <Pagination
+              count={Math.ceil(videosToDisplay.length / videosPerPage)}
+              page={page}
+              onChange={handlePageChange}
+            />
+          </Grid>
+          <Toolbar style={{ minHeight: '42px' }}>
+            <Box display='flex' justifyContent='center' width='100%'>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={hideDownloaded}
+                    onChange={(event) => {
+                      setHideDownloaded(event.target.checked);
+                      setPage(1); // Reset the page number to 1
+                    }}
+                    inputProps={{ 'aria-label': 'Show jobs with no videos' }}
+                  />
+                }
+                label='Hide Downloaded Videos'
+              />
+            </Box>
+          </Toolbar>
+        </>
       )}
       <Grid container justifyContent='center'>
         <Button
@@ -198,16 +224,16 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                   </TableCell>
                 </TableRow>
               )}
-              {videos
+              {videosToDisplay
                 .slice((page - 1) * videosPerPage, page * videosPerPage)
                 .map((video) =>
                   isMobile ? (
-                    <TableRow key={video.id}>
+                    <TableRow key={video.youtube_id}>
                       <TableCell>
                         <img
                           style={{ maxWidth: '200px' }}
                           src={video.thumbnail}
-                          onError={() => handleImageError(video.id)}
+                          onError={() => handleImageError(video.youtube_id)}
                           alt={`Thumbnail for video ${video.title}`}
                         />
                         <div>{decodeHtml(video.title)}</div>
@@ -225,21 +251,24 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                           />
                         ) : (
                           <Checkbox
-                            checked={checkedBoxes.includes(video.id)}
+                            checked={checkedBoxes.includes(video.youtube_id)}
                             onChange={(e) =>
-                              handleCheckChange(video.id, e.target.checked)
+                              handleCheckChange(
+                                video.youtube_id,
+                                e.target.checked
+                              )
                             }
                           />
                         )}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    <TableRow key={video.id}>
+                    <TableRow key={video.youtube_id}>
                       <TableCell>
                         <img
                           style={{ maxWidth: '200px' }}
                           src={video.thumbnail}
-                          onError={() => handleImageError(video.id)}
+                          onError={() => handleImageError(video.youtube_id)}
                           alt={`Thumbnail for video ${video.title}`}
                         />
                       </TableCell>
@@ -256,9 +285,12 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                           />
                         ) : (
                           <Checkbox
-                            checked={checkedBoxes.includes(video.id)}
+                            checked={checkedBoxes.includes(video.youtube_id)}
                             onChange={(e) =>
-                              handleCheckChange(video.id, e.target.checked)
+                              handleCheckChange(
+                                video.youtube_id,
+                                e.target.checked
+                              )
                             }
                           />
                         )}
