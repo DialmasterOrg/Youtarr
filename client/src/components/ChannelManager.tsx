@@ -23,6 +23,7 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import WebSocketContext, { Message } from '../contexts/WebSocketContext';
 import { Channel } from '../types/Channel';
+import { useNavigate } from 'react-router-dom';
 
 interface ChannelManagerProps {
   token: string | null;
@@ -39,6 +40,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [dialogMessage, setDialogMessage] = useState('');
   const websocketContext = useContext(WebSocketContext);
+  const navigate = useNavigate();
   if (!websocketContext) {
     throw new Error('WebSocketContext not found');
   }
@@ -202,7 +204,13 @@ function ChannelManager({ token }: ChannelManagerProps) {
                     alignItems='center'
                     spacing={0}
                   >
-                    <Grid item xs={11} sm={11}>
+                    <Grid
+                      item
+                      xs={11}
+                      sm={11}
+                      onClick={() => navigate(`/channel/${channel.channel_id}`)}
+                      style={{ cursor: 'pointer' }}
+                    >
                       <div style={{ display: 'flex', alignItems: 'center' }}>
                         <img
                           src={`/images/channelthumb-${channel.channel_id}.jpg`}
@@ -249,6 +257,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
                         />
                       </div>{' '}
                     </Grid>
+
                     {!deletedChannels.includes(channel.url) && (
                       <Grid item xs={12} sm={3}>
                         <ListItemSecondaryAction>

@@ -136,6 +136,19 @@ const initialize = async () => {
       plexModule.refreshLibrary();
     });
 
+    app.get('/getchannelinfo/:channelId', verifyToken, async (req, res) => {
+      const channelId = req.params.channelId;
+      const channelInfo = await channelModule.getChannelInfo(channelId, true);
+      res.json(channelInfo);
+    });
+
+    app.get('/getchannelvideos/:channelId', verifyToken, async (req, res) => {
+      console.log('Getting channel videos');
+      const channelId = req.params.channelId;
+      const channelVideos = await channelModule.getChannelVideos(channelId);
+      res.status(200).json(channelVideos);
+    });
+
     app.get('/jobstatus/:jobId', verifyToken, (req, res) => {
       const jobId = req.params.jobId;
       const job = jobModule.getJob(jobId);

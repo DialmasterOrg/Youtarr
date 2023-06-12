@@ -5,7 +5,10 @@ const fs = require('fs');
 const fsPromises = fs.promises;
 const path = require('path');
 const Channel = require('../models/channel');
+const Video = require('../models/video');
 const MessageEmitter = require('./messageEmitter.js'); // import the helper function
+const { google } = require('googleapis');
+const { parse } = require('iso8601-duration');
 
 const { v4: uuidv4 } = require('uuid');
 const { spawn, execSync } = require('child_process');
@@ -44,12 +47,25 @@ class ChannelModule {
     downloadModule.doChannelDownloads();
   }
 
-  async getChannelInfo(channelUrl, emitMessage = true) {
-    // Check if there is already an entry in the database for this channel url
-    // Using teh Channel Sequelize model, if so we don't need to fetch the data using yt-dlp
-    const foundChannel = await Channel.findOne({
-      where: { url: channelUrl },
-    });
+  async getChannelInfo(channelUrlOrId, emitMessage = true) {
+    // Check if there is already an entry in the database for this channel
+
+    // If channelUrlOrId starts with 'http', then it is a url, otherwise it is a channel id
+    // Set the variables channelUrl and channelId accordingly
+    let channelUrl = '';
+    let channelId = '';
+    let foundChannel = null;
+    if (channelUrlOrId.startsWith('http')) {
+      channelUrl = channelUrlOrId;
+      foundChannel = await Channel.findOne({
+        where: { url: channelUrl },
+      });
+    } else {
+      channelId = channelUrlOrId;
+      foundChannel = await Channel.findOne({
+        where: { channel_id: channelId },
+      });
+    }
 
     // If the channel exists in the database, then return it
     if (foundChannel) {
@@ -276,6 +292,94 @@ class ChannelModule {
 
   subscribe() {
     configModule.onConfigChange(this.scheduleTask.bind(this));
+  }
+
+  async getChannelVideos(channelId) {
+    const youtube = google.youtube({
+      version: 'v3',
+      //TODO: Move this to a config file!!!
+      auth: configModule.getConfig().youtubeApiKey,
+    });
+
+    return new Promise((resolve, reject) => {
+      youtube.search.list(
+        {
+          part: 'snippet',
+          channelId: channelId,
+          maxResults: 50,
+          order: 'date',
+          type: 'video, creatorContentType',
+        },
+        async (err, res) => {
+          if (err) {
+            console.log('The API returned an error: ' + err);
+            reject(err);
+          }
+
+          const videos = res.data.items;
+
+          // Get the video IDs
+          const videoIds = videos.map((video) => video.id.videoId).join(',');
+
+          // Get details of each video
+          youtube.videos.list(
+            {
+              part: 'contentDetails',
+              id: videoIds,
+            },
+            async (err, res) => {
+              if (err) {
+                console.log('The API returned an error: ' + err);
+                reject(err);
+              }
+
+              const videoDetails = res.data.items;
+
+              const videoPromises = videoDetails.map((videoDetail) => {
+                const snippet = videos.find(
+                  (v) => v.id.videoId === videoDetail.id
+                ).snippet;
+
+                // Parse the ISO 8601 duration into an object
+                const duration = parse(videoDetail.contentDetails.duration);
+
+                const totalDurationSeconds =
+                  duration.seconds +
+                  duration.minutes * 60 +
+                  duration.hours * 3600;
+
+                if (totalDurationSeconds < 70) {
+                  return null;
+                }
+
+                return Video.findOne({
+                  where: { youtubeId: videoDetail.id },
+                }).then((foundVideo) => {
+                  return {
+                    title: snippet.title,
+                    id: videoDetail.id,
+                    publishedAt: snippet.publishedAt,
+                    thumbnail: snippet.thumbnails.medium.url,
+                    duration: totalDurationSeconds, // Add the duration field
+                    added: !!foundVideo, // added will be true if foundVideo is not null
+                  };
+                });
+              });
+
+              try {
+                let videosOutput = await Promise.all(videoPromises);
+                // Filter out null values (these are the videos that were ignored because they're too short)
+                videosOutput = videosOutput.filter((video) => video !== null);
+                resolve(videosOutput);
+              } catch (error) {
+                console.error('Error processing videos: ', error);
+                reject(error);
+              }
+            }
+          );
+        }
+      );
+    });
   }
 }
 
