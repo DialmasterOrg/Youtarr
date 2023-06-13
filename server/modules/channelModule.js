@@ -379,44 +379,64 @@ class ChannelModule {
       auth: configModule.getConfig().youtubeApiKey,
     });
 
+    // Get channel from DB
+    const channel = await Channel.findOne({
+      where: { channel_id: channelId },
+    });
+
     try {
-      const videos = await this.fetchYoutubeVideos(youtube, channelId);
+      // Fetch videos from YouTube API if last fetched more than 6 hours ago
+      if (
+        channel &&
+        new Date() - new Date(channel.lastFetched) > 6 * 60 * 60 * 1000
+      ) {
+        console.log('Fetching videos from YouTube API');
+        const videos = await this.fetchYoutubeVideos(youtube, channelId);
 
-      const videoIds = videos
-        .map((video) => video.snippet.resourceId.videoId)
-        .join(',');
+        const videoIds = videos
+          .map((video) => video.snippet.resourceId.videoId)
+          .join(',');
 
-      const videoDetails = await this.fetchVideoDetails(youtube, videoIds);
+        const videoDetails = await this.fetchVideoDetails(youtube, videoIds);
 
-      const videoPromises = videoDetails.map((videoDetail) => {
-        const snippet = videos.find(
-          (v) => v.snippet.resourceId.videoId === videoDetail.id
-        ).snippet;
+        const videoPromises = videoDetails.map((videoDetail) => {
+          const snippet = videos.find(
+            (v) => v.snippet.resourceId.videoId === videoDetail.id
+          ).snippet;
 
-        // Parse the ISO 8601 duration into an object
-        const duration = parse(videoDetail.contentDetails.duration);
+          // Parse the ISO 8601 duration into an object
+          const duration = parse(videoDetail.contentDetails.duration);
 
-        const totalDurationSeconds =
-          duration.seconds + duration.minutes * 60 + duration.hours * 3600;
+          const totalDurationSeconds =
+            duration.seconds + duration.minutes * 60 + duration.hours * 3600;
 
-        // Attempt to filter out "shorts" videos
-        if (totalDurationSeconds < 70) {
-          return null;
+          // Attempt to filter out "shorts" videos
+          if (totalDurationSeconds < 70) {
+            return null;
+          }
+
+          return {
+            title: snippet.title,
+            youtube_id: videoDetail.id,
+            publishedAt: snippet.publishedAt,
+            thumbnail: snippet.thumbnails.medium.url,
+            duration: totalDurationSeconds, // Add the duration field
+          };
+        });
+        let videosOutput = await Promise.all(videoPromises);
+
+        // Update channel lastFetched
+        const channel = await Channel.findOne({
+          where: { channel_id: channelId },
+        });
+        channel.lastFetched = new Date();
+        await channel.save();
+
+        videosOutput = videosOutput.filter((video) => video !== null);
+        console.log('Found ' + videosOutput.length + ' videos');
+        if (videosOutput.length > 0) {
+          await this.insertVideosIntoDb(videosOutput, channelId);
         }
-
-        return {
-          title: snippet.title,
-          youtube_id: videoDetail.id,
-          publishedAt: snippet.publishedAt,
-          thumbnail: snippet.thumbnails.medium.url,
-          duration: totalDurationSeconds, // Add the duration field
-        };
-      });
-      let videosOutput = await Promise.all(videoPromises);
-      videosOutput = videosOutput.filter((video) => video !== null);
-      console.log('Found ' + videosOutput.length + ' videos');
-      if (videosOutput.length > 0) {
-        await this.insertVideosIntoDb(videosOutput, channelId);
       }
       const newestVideos = await this.fetchNewestVideosFromDb(channelId);
 

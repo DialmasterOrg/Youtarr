@@ -31,6 +31,10 @@ Channel.init(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    lastFetched: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   },
   {
     sequelize,
