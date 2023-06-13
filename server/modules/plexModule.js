@@ -7,12 +7,16 @@ class PlexModule {
   refreshLibrary() {
     console.log('Refreshing library in Plex');
     // Example GET http://[plexIP]:32400/library/sections/[plexYoutubeLibraryId]/refresh?X-Plex-Token=[plexApiKey]
-    const response = axios.get(
-      `http://${configModule.getConfig().plexIP}:32400/library/sections/${
-        configModule.getConfig().plexYoutubeLibraryId
-      }/refresh?X-Plex-Token=${configModule.getConfig().plexApiKey}`
-    );
-    console.log(response);
+    try {
+      const response = axios.get(
+        `http://${configModule.getConfig().plexIP}:32400/library/sections/${
+          configModule.getConfig().plexYoutubeLibraryId
+        }/refresh?X-Plex-Token=${configModule.getConfig().plexApiKey}`
+      );
+      console.log(response);
+    } catch (error) {
+      console.log('Error refreshing library in Plex: ' + error.message);
+    }
   }
 
   async getLibraries() {

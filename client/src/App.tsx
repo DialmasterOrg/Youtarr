@@ -31,6 +31,7 @@ import ChannelManager from './components/ChannelManager';
 import DownloadManager from './components/DownloadManager';
 import VideosPage from './components/VideosPage';
 import Login from './components/Login';
+import ChannelPage from './components/ChannelPage';
 
 function App() {
   const [token, setToken] = useState<string | null>(
@@ -186,7 +187,7 @@ function App() {
               >
                 <ListItemText
                   primaryTypographyProps={{ fontSize: 'large' }}
-                  primary='Channels'
+                  primary='Your Channels'
                 />
               </ListItem>
               <ListItem
@@ -208,7 +209,7 @@ function App() {
               >
                 <ListItemText
                   primaryTypographyProps={{ fontSize: 'large' }}
-                  primary='Videos'
+                  primary='Downloaded Videos'
                 />
               </ListItem>
               {!token && (
@@ -260,7 +261,10 @@ function App() {
                     path='/videos'
                     element={<VideosPage token={token} />}
                   />
-
+                  <Route
+                    path='/channel/:channel_id'
+                    element={<ChannelPage token={token} />}
+                  />
                   <Route path='/*' element={<Navigate to='/downloads' />} />
                 </>
               ) : (

@@ -23,6 +23,7 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import WebSocketContext, { Message } from '../contexts/WebSocketContext';
 import { Channel } from '../types/Channel';
+import { useNavigate } from 'react-router-dom';
 
 interface ChannelManagerProps {
   token: string | null;
@@ -39,6 +40,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [dialogMessage, setDialogMessage] = useState('');
   const websocketContext = useContext(WebSocketContext);
+  const navigate = useNavigate();
   if (!websocketContext) {
     throw new Error('WebSocketContext not found');
   }
@@ -126,7 +128,9 @@ function ChannelManager({ token }: ChannelManagerProps) {
 
       setUnsavedChannels([...unsavedChannels, newChannel.url]);
     } else {
-      setDialogMessage('Invalid channel URL');
+      setDialogMessage(
+        'Invalid channel URL. Please use the following format: https://www.youtube.com/@DanTDM/videos'
+      );
       setIsDialogOpen(true);
     }
 
@@ -185,7 +189,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
       <Grid container spacing={2} style={{ marginBottom: '8px' }}>
         <Grid item xs={12}>
           <Card elevation={2}>
-            <CardHeader title='Youtube Channels' align='center' />
+            <CardHeader title='Your Channels' align='center' />
             <List style={{ border: '1px solid #DDE' }}>
               {channels.map((channel, index) => (
                 <ListItem
@@ -202,7 +206,13 @@ function ChannelManager({ token }: ChannelManagerProps) {
                     alignItems='center'
                     spacing={0}
                   >
-                    <Grid item xs={11} sm={11}>
+                    <Grid
+                      item
+                      xs={11}
+                      sm={11}
+                      onClick={() => navigate(`/channel/${channel.channel_id}`)}
+                      style={{ cursor: 'pointer' }}
+                    >
                       <div style={{ display: 'flex', alignItems: 'center' }}>
                         <img
                           src={`/images/channelthumb-${channel.channel_id}.jpg`}
@@ -249,6 +259,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
                         />
                       </div>{' '}
                     </Grid>
+
                     {!deletedChannels.includes(channel.url) && (
                       <Grid item xs={12} sm={3}>
                         <ListItemSecondaryAction>
@@ -275,7 +286,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
               title='Enter a new channel URL to track here, eg: https://www.youtube.com/@PrestonReacts/videos'
             >
               <TextField
-                label='New Channel'
+                label='Add a new channel'
                 value={newChannel.url}
                 onChange={(e) =>
                   setNewChannel({ url: e.target.value, uploader: '' })
@@ -351,7 +362,10 @@ function ChannelManager({ token }: ChannelManagerProps) {
         aria-describedby='alert-dialog-description'
       >
         <DialogContent>
-          <DialogContentText id='alert-dialog-description'>
+          <DialogContentText
+            id='alert-dialog-description'
+            style={{ fontSize: isMobile ? '14px' : '18px' }}
+          >
             {dialogMessage}
           </DialogContentText>
         </DialogContent>

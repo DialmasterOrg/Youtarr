@@ -192,7 +192,15 @@ class DownloadModule {
     if (jobModule.getJob(jobId).status === 'In Progress') {
       const baseCommand = this.getBaseCommand();
 
-      const urlsString = urls.join(' '); // Join all URLs into a single space-separated string
+      const modifiedUrls = urls.map((url) => {
+        if (url.startsWith('-')) {
+          return '-- ' + url;
+        } else {
+          return url;
+        }
+      });
+
+      const urlsString = modifiedUrls.join(' '); // Join all URLs into a single space-separated string
 
       const command = `${baseCommand} ${urlsString}`;
       this.doDownload(command, jobId, jobType);

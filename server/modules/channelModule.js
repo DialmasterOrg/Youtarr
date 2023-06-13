@@ -5,7 +5,11 @@ const fs = require('fs');
 const fsPromises = fs.promises;
 const path = require('path');
 const Channel = require('../models/channel');
+const ChannelVideo = require('../models/channelvideo');
+//const Video = require('../models/video');
 const MessageEmitter = require('./messageEmitter.js'); // import the helper function
+const { google } = require('googleapis');
+const { parse } = require('iso8601-duration');
 
 const { v4: uuidv4 } = require('uuid');
 const { spawn, execSync } = require('child_process');
@@ -44,12 +48,25 @@ class ChannelModule {
     downloadModule.doChannelDownloads();
   }
 
-  async getChannelInfo(channelUrl, emitMessage = true) {
-    // Check if there is already an entry in the database for this channel url
-    // Using teh Channel Sequelize model, if so we don't need to fetch the data using yt-dlp
-    const foundChannel = await Channel.findOne({
-      where: { url: channelUrl },
-    });
+  async getChannelInfo(channelUrlOrId, emitMessage = true) {
+    // Check if there is already an entry in the database for this channel
+
+    // If channelUrlOrId starts with 'http', then it is a url, otherwise it is a channel id
+    // Set the variables channelUrl and channelId accordingly
+    let channelUrl = '';
+    let channelId = '';
+    let foundChannel = null;
+    if (channelUrlOrId.startsWith('http')) {
+      channelUrl = channelUrlOrId;
+      foundChannel = await Channel.findOne({
+        where: { url: channelUrl },
+      });
+    } else {
+      channelId = channelUrlOrId;
+      foundChannel = await Channel.findOne({
+        where: { channel_id: channelId },
+      });
+    }
 
     // If the channel exists in the database, then return it
     if (foundChannel) {
@@ -276,6 +293,139 @@ class ChannelModule {
 
   subscribe() {
     configModule.onConfigChange(this.scheduleTask.bind(this));
+  }
+
+  async fetchYoutubeVideos(youtube, channelId) {
+    return new Promise((resolve, reject) => {
+      const uploadsPlaylistId = `UU${channelId.slice(2)}`; // Extract uploads playlist ID
+
+      youtube.playlistItems.list(
+        {
+          part: 'snippet',
+          playlistId: uploadsPlaylistId,
+          maxResults: 50,
+        },
+        (err, res) => {
+          if (err) {
+            console.error('The API returned an error: ' + err);
+            reject(err);
+          } else {
+            resolve(res.data.items);
+          }
+        }
+      );
+    });
+  }
+
+  // Fetch video details
+  async fetchVideoDetails(youtube, videoIds) {
+    return new Promise((resolve, reject) => {
+      youtube.videos.list(
+        {
+          part: 'contentDetails',
+          id: videoIds,
+        },
+        (err, res) => {
+          if (err) {
+            console.error('The API returned an errors: ' + err);
+            reject(err);
+          } else {
+            resolve(res.data.items);
+          }
+        }
+      );
+    });
+  }
+
+  // Insert videos into DB
+  async insertVideosIntoDb(videos, channelId) {
+    for (const video of videos) {
+      await ChannelVideo.findOrCreate({
+        where: { youtube_id: video.youtube_id, channel_id: channelId },
+        defaults: video,
+      });
+    }
+  }
+
+  // Fetch videos for this channel from the DB,
+  // also add whether they have already been downloaded
+  async fetchNewestVideosFromDb(channelId) {
+    const videos = await ChannelVideo.findAll({
+      where: {
+        channel_id: channelId,
+      },
+      order: [['publishedAt', 'DESC']],
+      limit: 50,
+    });
+
+    const completePath = path.join(__dirname, '../../config/complete.list');
+    const completeList = fs.readFileSync(completePath, 'utf-8');
+    const completeListArray = completeList
+      .split(/\r?\n/) // split on \n and \r\n
+      .filter((line) => line.trim() !== '');
+
+    return videos.map((video) => {
+      const plainVideoObject = video.toJSON();
+      plainVideoObject.added = completeListArray.includes(
+        `youtube ${plainVideoObject.youtube_id}`
+      );
+      return plainVideoObject;
+    });
+  }
+
+  async getChannelVideos(channelId) {
+    const youtube = google.youtube({
+      version: 'v3',
+      auth: configModule.getConfig().youtubeApiKey,
+    });
+
+    try {
+      const videos = await this.fetchYoutubeVideos(youtube, channelId);
+
+      const videoIds = videos
+        .map((video) => video.snippet.resourceId.videoId)
+        .join(',');
+
+      const videoDetails = await this.fetchVideoDetails(youtube, videoIds);
+
+      const videoPromises = videoDetails.map((videoDetail) => {
+        const snippet = videos.find(
+          (v) => v.snippet.resourceId.videoId === videoDetail.id
+        ).snippet;
+
+        // Parse the ISO 8601 duration into an object
+        const duration = parse(videoDetail.contentDetails.duration);
+
+        const totalDurationSeconds =
+          duration.seconds + duration.minutes * 60 + duration.hours * 3600;
+
+        // Attempt to filter out "shorts" videos
+        if (totalDurationSeconds < 70) {
+          return null;
+        }
+
+        return {
+          title: snippet.title,
+          youtube_id: videoDetail.id,
+          publishedAt: snippet.publishedAt,
+          thumbnail: snippet.thumbnails.medium.url,
+          duration: totalDurationSeconds, // Add the duration field
+        };
+      });
+      let videosOutput = await Promise.all(videoPromises);
+      videosOutput = videosOutput.filter((video) => video !== null);
+      console.log('Found ' + videosOutput.length + ' videos');
+      if (videosOutput.length > 0) {
+        await this.insertVideosIntoDb(videosOutput, channelId);
+      }
+      const newestVideos = await this.fetchNewestVideosFromDb(channelId);
+
+      return newestVideos;
+    } catch (error) {
+      // In case of error, return whatever the DB has
+      const newestVideos = await this.fetchNewestVideosFromDb(channelId);
+      return newestVideos;
+    }
   }
 }
 

@@ -36,6 +36,8 @@
     "axios": "^1.4.0",
     "express": "^4.18.2",
     "fs-extra": "^11.1.1",
+    "googleapis": "^118.0.0",
+    "iso8601-duration": "^2.1.1",
     "mysql2": "^3.3.3",
     "node-cron": "^3.0.2",
     "sequelize": "^6.31.1",
