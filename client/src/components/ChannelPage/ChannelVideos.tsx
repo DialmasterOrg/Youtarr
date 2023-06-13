@@ -96,7 +96,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
         setVideoFailed(data.videoFail);
       })
       .catch((error) => console.error(error));
-  }, [token]);
+  }, [token, channel_id]);
 
   const handlePageChange = (
     event: React.ChangeEvent<unknown>,
@@ -257,11 +257,11 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                             src={video.thumbnail}
                             alt={`Thumbnail for video ${video.title}`}
                           />
-                          <div>{decodeHtml(video.title)}</div>
+                          <span>{decodeHtml(video.title)}</span>
                           {formatDuration(video.duration)}
-                          <div>
+                          <span>
                             {new Date(video.publishedAt).toLocaleDateString()}
-                          </div>
+                          </span>
                         </TableCell>
 
                         <TableCell>
@@ -317,7 +317,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                         </TableCell>
                       </TableRow>
                     )
-                  )}{' '}
+                  )}
               </TableBody>
             </Table>
           </TableContainer>

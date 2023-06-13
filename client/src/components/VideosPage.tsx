@@ -13,8 +13,15 @@ import {
   TableRow,
   Paper,
   Box,
+  IconButton,
+  MenuItem,
+  Menu,
+  Button,
 } from '@mui/material';
 import Pagination from '@mui/material/Pagination';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import CheckIcon from '@mui/icons-material/Check';
+import ListItemIcon from '@mui/material/ListItemIcon';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { formatDuration } from '../utils';
@@ -30,6 +37,8 @@ function VideosPage({ token }: VideosPageProps) {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [videos, setVideos] = useState<VideoData[]>([]);
   const [page, setPage] = useState(1);
+  const [filter, setFilter] = useState('');
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>(
     {}
   );
@@ -59,9 +68,29 @@ function VideosPage({ token }: VideosPageProps) {
     setPage(value);
   };
 
+  const handleFilterClick = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuItemClick = (
+    event: React.MouseEvent<HTMLElement>,
+    value: string
+  ) => {
+    setFilter(value);
+    setAnchorEl(null);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
+  const filteredVideos = videos.filter((video) =>
+    video.youTubeChannelName.includes(filter)
+  );
+
   const handlers = useSwipeable({
     onSwipedLeft: () => {
-      if (page < Math.ceil(videos.length / videosPerPage)) {
+      if (page < Math.ceil(filteredVideos.length / videosPerPage)) {
         setPage(page + 1);
       }
     },
@@ -73,7 +102,42 @@ function VideosPage({ token }: VideosPageProps) {
     trackMouse: true,
   });
 
+  const uniqueChannels = [
+    ...new Set(videos.map((video) => video.youTubeChannelName)),
+  ];
+
   const videosPerPage = isMobile ? 6 : 12;
+
+  const filterMenu = (
+    <Menu
+      anchorEl={anchorEl}
+      keepMounted
+      open={Boolean(anchorEl)}
+      onClose={handleClose}
+    >
+      <MenuItem onClick={(event) => handleMenuItemClick(event, '')} key='All'>
+        All
+        {filter === '' && (
+          <ListItemIcon>
+            <CheckIcon />
+          </ListItemIcon>
+        )}
+      </MenuItem>
+      {uniqueChannels.map((channel) => (
+        <MenuItem
+          onClick={(event) => handleMenuItemClick(event, channel)}
+          key={channel}
+        >
+          {channel}
+          {filter === channel && (
+            <ListItemIcon>
+              <CheckIcon />
+            </ListItemIcon>
+          )}
+        </MenuItem>
+      ))}
+    </Menu>
+  );
 
   return (
     <Card elevation={8} style={{ marginBottom: '16px' }}>
@@ -86,6 +150,19 @@ function VideosPage({ token }: VideosPageProps) {
         >
           Downloaded Videos
         </Typography>
+        {isMobile && (
+          <Box display='flex' justifyContent='center' mb={2}>
+            <Button
+              variant='outlined'
+              startIcon={<FilterListIcon />}
+              onClick={handleFilterClick}
+            >
+              Filter by Channel
+            </Button>
+            {filterMenu}
+          </Box>
+        )}
+
         <Grid
           container
           spacing={2}
@@ -93,7 +170,7 @@ function VideosPage({ token }: VideosPageProps) {
           style={{ marginTop: '8px', marginBottom: '8px' }}
         >
           <Pagination
-            count={Math.ceil(videos.length / videosPerPage)}
+            count={Math.ceil(filteredVideos.length / videosPerPage)}
             page={page}
             onChange={handlePageChange}
           />
@@ -116,6 +193,10 @@ function VideosPage({ token }: VideosPageProps) {
                       style={{ fontWeight: 'bold', fontSize: 'medium' }}
                     >
                       Channel
+                      <IconButton onClick={handleFilterClick}>
+                        <FilterListIcon />
+                      </IconButton>
+                      {filterMenu}
                     </TableCell>
                     <TableCell
                       style={{ fontWeight: 'bold', fontSize: 'medium' }}
@@ -131,7 +212,7 @@ function VideosPage({ token }: VideosPageProps) {
                 </TableHead>
               )}
               <TableBody>
-                {videos
+                {filteredVideos
                   .slice((page - 1) * videosPerPage, page * videosPerPage)
                   .map((video) => (
                     <TableRow key={video.id}>
@@ -270,7 +351,7 @@ function VideosPage({ token }: VideosPageProps) {
                       )}
                     </TableRow>
                   ))}
-              </TableBody>{' '}
+              </TableBody>
             </Table>
           </div>
         </TableContainer>
