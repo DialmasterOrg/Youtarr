@@ -128,7 +128,9 @@ function ChannelManager({ token }: ChannelManagerProps) {
 
       setUnsavedChannels([...unsavedChannels, newChannel.url]);
     } else {
-      setDialogMessage('Invalid channel URL');
+      setDialogMessage(
+        'Invalid channel URL. Please use the following format: https://www.youtube.com/@DanTDM/videos'
+      );
       setIsDialogOpen(true);
     }
 
@@ -187,7 +189,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
       <Grid container spacing={2} style={{ marginBottom: '8px' }}>
         <Grid item xs={12}>
           <Card elevation={2}>
-            <CardHeader title='Youtube Channels' align='center' />
+            <CardHeader title='Your Channels' align='center' />
             <List style={{ border: '1px solid #DDE' }}>
               {channels.map((channel, index) => (
                 <ListItem
@@ -284,7 +286,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
               title='Enter a new channel URL to track here, eg: https://www.youtube.com/@PrestonReacts/videos'
             >
               <TextField
-                label='New Channel'
+                label='Add a new channel'
                 value={newChannel.url}
                 onChange={(e) =>
                   setNewChannel({ url: e.target.value, uploader: '' })
@@ -360,7 +362,10 @@ function ChannelManager({ token }: ChannelManagerProps) {
         aria-describedby='alert-dialog-description'
       >
         <DialogContent>
-          <DialogContentText id='alert-dialog-description'>
+          <DialogContentText
+            id='alert-dialog-description'
+            style={{ fontSize: isMobile ? '14px' : '18px' }}
+          >
             {dialogMessage}
           </DialogContentText>
         </DialogContent>

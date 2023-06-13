@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent, Grid, Typography, Button } from '@mui/material';
-import Pagination from '@mui/material/Pagination';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { Channel } from '../types/Channel';
@@ -13,9 +12,6 @@ interface ChannelPageProps {
   token: string | null;
 }
 
-//TODO: Before this FEAT #39 is complete:
-// * Update the config page so you can edit your Youtube API Key -- add an info icon there as well
-// * Update the README
 // * If you do not have a youtube API key set, just don't show the ChannelVideos section at all
 function ChannelPage({ token }: ChannelPageProps) {
   const theme = useTheme();

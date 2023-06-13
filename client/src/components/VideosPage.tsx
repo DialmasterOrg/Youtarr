@@ -84,7 +84,7 @@ function VideosPage({ token }: VideosPageProps) {
           gutterBottom
           align='center'
         >
-          Videos
+          Downloaded Videos
         </Typography>
         <Grid
           container

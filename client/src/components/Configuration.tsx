@@ -37,6 +37,7 @@ function Configuration({ token }: ConfigurationProps) {
     plexYoutubeLibraryId: '',
     plexIP: '',
     uuid: '',
+    youtubeApiKey: '',
   });
   const [openPlexLibrarySelector, setOpenPlexLibrarySelector] = useState(false);
   const [openConfirmDialog, setOpenConfirmDialog] = useState(false);
@@ -308,6 +309,24 @@ function Configuration({ token }: ConfigurationProps) {
               />
             </Tooltip>
           </Grid>
+          <Grid item xs={12}>
+            <Tooltip
+              placement='top-start'
+              title='Your YouTube API Key. You can get one here: https://console.developers.google.com/apis/credentials. This is not required for the app to work, but it will allow you to browse channel videos and download them from the app.'
+            >
+              <TextField
+                label='Youtube API Key'
+                value={config.youtubeApiKey}
+                onChange={handleInputChange}
+                name='youtubeApiKey'
+                fullWidth
+                InputProps={{
+                  style: { fontSize: isMobile ? 'small' : 'medium' },
+                }}
+              />
+            </Tooltip>
+          </Grid>
+
           <Grid item xs={12}>
             <Button
               variant='contained'

@@ -44,9 +44,6 @@ function ChannelVideos({ token }: ChannelVideosProps) {
 
   const navigate = useNavigate();
 
-  const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>(
-    {}
-  );
   const handleCheckChange = (videoId: string, isChecked: boolean) => {
     setCheckedBoxes((prevState) => {
       if (isChecked) {
@@ -101,10 +98,6 @@ function ChannelVideos({ token }: ChannelVideosProps) {
       .catch((error) => console.error(error));
   }, [token]);
 
-  const handleImageError = (youtubeId: string) => {
-    setImageErrors((prevState) => ({ ...prevState, [youtubeId]: true }));
-  };
-
   const handlePageChange = (
     event: React.ChangeEvent<unknown>,
     value: number
@@ -133,7 +126,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
 
   return (
     <Card elevation={8} style={{ marginBottom: '16px' }}>
-      <CardHeader title='Videos' align='center' />
+      <CardHeader title='Recent Channel Videos' align='center' />
       <div {...handlers}>
         {!videoFailed && (
           <>
@@ -262,7 +255,6 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                           <img
                             style={{ maxWidth: '200px' }}
                             src={video.thumbnail}
-                            onError={() => handleImageError(video.youtube_id)}
                             alt={`Thumbnail for video ${video.title}`}
                           />
                           <div>{decodeHtml(video.title)}</div>
@@ -297,7 +289,6 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                           <img
                             style={{ maxWidth: '200px' }}
                             src={video.thumbnail}
-                            onError={() => handleImageError(video.youtube_id)}
                             alt={`Thumbnail for video ${video.title}`}
                           />
                         </TableCell>

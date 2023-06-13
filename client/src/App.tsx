@@ -187,7 +187,7 @@ function App() {
               >
                 <ListItemText
                   primaryTypographyProps={{ fontSize: 'large' }}
-                  primary='Channels'
+                  primary='Your Channels'
                 />
               </ListItem>
               <ListItem
@@ -209,7 +209,7 @@ function App() {
               >
                 <ListItemText
                   primaryTypographyProps={{ fontSize: 'large' }}
-                  primary='Videos'
+                  primary='Downloaded Videos'
                 />
               </ListItem>
               {!token && (
