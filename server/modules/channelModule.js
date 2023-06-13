@@ -295,20 +295,19 @@ class ChannelModule {
     configModule.onConfigChange(this.scheduleTask.bind(this));
   }
 
-  // Fetch YouTube video data using Google APIs
   async fetchYoutubeVideos(youtube, channelId) {
     return new Promise((resolve, reject) => {
-      youtube.search.list(
+      const uploadsPlaylistId = `UU${channelId.slice(2)}`; // Extract uploads playlist ID
+
+      youtube.playlistItems.list(
         {
           part: 'snippet',
-          channelId: channelId,
+          playlistId: uploadsPlaylistId,
           maxResults: 50,
-          order: 'date',
-          type: 'video, creatorContentType',
         },
         (err, res) => {
           if (err) {
-            console.error('The API returned an errors: ' + err);
+            console.error('The API returned an error: ' + err);
             reject(err);
           } else {
             resolve(res.data.items);
@@ -367,9 +366,6 @@ class ChannelModule {
 
     return videos.map((video) => {
       const plainVideoObject = video.toJSON();
-      console.log(
-        `Looking for video in complete list: youtube ${plainVideoObject.youtube_id}`
-      );
       plainVideoObject.added = completeListArray.includes(
         `youtube ${plainVideoObject.youtube_id}`
       );
@@ -385,13 +381,16 @@ class ChannelModule {
 
     try {
       const videos = await this.fetchYoutubeVideos(youtube, channelId);
-      const videoIds = videos.map((video) => video.id.videoId).join(',');
+
+      const videoIds = videos
+        .map((video) => video.snippet.resourceId.videoId)
+        .join(',');
 
       const videoDetails = await this.fetchVideoDetails(youtube, videoIds);
 
       const videoPromises = videoDetails.map((videoDetail) => {
         const snippet = videos.find(
-          (v) => v.id.videoId === videoDetail.id
+          (v) => v.snippet.resourceId.videoId === videoDetail.id
         ).snippet;
 
         // Parse the ISO 8601 duration into an object
