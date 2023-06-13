@@ -67,6 +67,7 @@ If not you will be unable to login.
 1. Run `./start.sh`. The frontend UI will be exposed at `localhost:3087`
 2. Once you are logged in, set your options in the Configuration screen and save them. You will want to select the Plex library that videos are supposed to be downloaded to, as well as the directory where they will be downloaded.
 3. If you want to be able to browse videos from your subscribed channels from within the app, and initiate downloads of new videos that way, you will need to enter a Youtube API Key in your Configuration page as well.
+   You can get an API key at https://console.developers.google.com/apis/credentials This is not required to run the app.
 4. Once you set your download directory, you will need to restart the app. From the command line just to `./stop.sh` and then `./start.sh`
 
    Each video will be placed in a directory named for the Youtube channel it came from.
@@ -85,3 +86,4 @@ If you wish to access Youtarr from outside your network, or from other computers
 ![Alt text](/screenshots/youtarr_config_mb.jpg?raw=true 'Config Screen Mobile')
 ![Alt text](/screenshots/youtarr_downloads_mb.jpg?raw=true 'Downloads Screen Mobile')
 ![Alt text](/screenshots/youtarr_videos_mb.jpg?raw=true 'Videos Screen Mobile')
+![Alt text](/screenshots/youtarr_channel_view_pc.jpg?raw=true 'Individual Channel Screen')
