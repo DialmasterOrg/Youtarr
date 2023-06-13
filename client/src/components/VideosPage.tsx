@@ -238,9 +238,24 @@ function VideosPage({ token }: VideosPageProps) {
                               position='relative'
                             >
                               {imageErrors[video.youtubeId] ? (
-                                <Typography variant='caption'>
-                                  No video
-                                </Typography>
+                                <Box
+                                  style={{
+                                    position: 'absolute',
+                                    top: '50%',
+                                    left: '50%',
+                                    transform: 'translate(-50%, -50%)',
+                                    textAlign: 'center',
+                                    width: '100%',
+                                    height: '100%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}
+                                >
+                                  <Typography variant='caption'>
+                                    No thumbnail available
+                                  </Typography>
+                                </Box>
                               ) : (
                                 <img
                                   src={`/images/videothumb-${video.youtubeId}.jpg`}
