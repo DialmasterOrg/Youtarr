@@ -103,7 +103,11 @@ function VideosPage({ token }: VideosPageProps) {
   });
 
   const uniqueChannels = [
-    ...new Set(videos.map((video) => video.youTubeChannelName)),
+    ...new Set(
+      videos
+        .map((video) => video.youTubeChannelName)
+        .sort((a, b) => a.localeCompare(b))
+    ),
   ];
 
   const videosPerPage = isMobile ? 6 : 12;
