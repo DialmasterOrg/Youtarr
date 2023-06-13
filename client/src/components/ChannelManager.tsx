@@ -322,17 +322,19 @@ function ChannelManager({ token }: ChannelManagerProps) {
         </Grid>
         <Grid item xs={6}>
           <Tooltip placement='top' title='Revert unsaved changes'>
-            <Button
-              variant='contained'
-              onClick={handleUndo}
-              fullWidth
-              disabled={
-                unsavedChannels.length === 0 && deletedChannels.length === 0
-              }
-              style={{ fontSize: isMobile ? 'small' : 'medium' }}
-            >
-              Undo
-            </Button>
+            <span>
+              <Button
+                variant='contained'
+                onClick={handleUndo}
+                fullWidth
+                disabled={
+                  unsavedChannels.length === 0 && deletedChannels.length === 0
+                }
+                style={{ fontSize: isMobile ? 'small' : 'medium' }}
+              >
+                Undo
+              </Button>
+            </span>
           </Tooltip>
         </Grid>
         <Grid item xs={6}>
@@ -340,17 +342,19 @@ function ChannelManager({ token }: ChannelManagerProps) {
             placement='top'
             title='Save your changes and make them active'
           >
-            <Button
-              variant='contained'
-              disabled={
-                unsavedChannels.length === 0 && deletedChannels.length === 0
-              }
-              onClick={handleSave}
-              fullWidth
-              style={{ fontSize: isMobile ? 'small' : 'medium' }}
-            >
-              Save Changes
-            </Button>
+            <span>
+              <Button
+                variant='contained'
+                disabled={
+                  unsavedChannels.length === 0 && deletedChannels.length === 0
+                }
+                onClick={handleSave}
+                fullWidth
+                style={{ fontSize: isMobile ? 'small' : 'medium' }}
+              >
+                Save Changes
+              </Button>
+            </span>
           </Tooltip>
         </Grid>
       </Grid>

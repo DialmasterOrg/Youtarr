@@ -34,7 +34,7 @@ function ChannelPage({ token }: ChannelPageProps) {
       })
       .then((data) => setChannel(data))
       .catch((error) => console.error(error));
-  }, [token]);
+  }, [token, channel_id]);
 
   function textToHTML(text: string) {
     return text
@@ -77,7 +77,7 @@ function ChannelPage({ token }: ChannelPageProps) {
               </Typography>
               <Typography variant='body1' gutterBottom align='center'>
                 {channel ? (
-                  <div
+                  <span
                     dangerouslySetInnerHTML={{
                       __html: textToHTML(channel.description || ''),
                     }}
