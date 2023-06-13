@@ -257,8 +257,11 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                             src={video.thumbnail}
                             alt={`Thumbnail for video ${video.title}`}
                           />
-                          <span>{decodeHtml(video.title)}</span>
-                          {formatDuration(video.duration)}
+                          <span style={{ fontWeight: 'bold' }}>
+                            {decodeHtml(video.title)}
+                          </span>{' '}
+                          <span>({formatDuration(video.duration)})</span>
+                          <br />
                           <span>
                             {new Date(video.publishedAt).toLocaleDateString()}
                           </span>
