@@ -24,7 +24,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
-import { formatDuration } from '../utils';
+import { formatDuration, formatYTDate } from '../utils';
 import { VideoData } from '../types/VideoData';
 import { useSwipeable } from 'react-swipeable';
 
@@ -210,6 +210,12 @@ function VideosPage({ token }: VideosPageProps) {
                     <TableCell
                       style={{ fontWeight: 'bold', fontSize: 'medium' }}
                     >
+                      Published
+                    </TableCell>
+
+                    <TableCell
+                      style={{ fontWeight: 'bold', fontSize: 'medium' }}
+                    >
                       Added
                     </TableCell>
                   </TableRow>
@@ -274,8 +280,17 @@ function VideosPage({ token }: VideosPageProps) {
                                 />
                               )}
                             </Box>
-                            <Typography variant='subtitle1'>
+                            <Typography variant='subtitle1' textAlign='center'>
                               {video.youTubeVideoName}
+                              {video.duration && (
+                                <Typography
+                                  variant='caption'
+                                  color='text.secondary'
+                                >
+                                  {' '}
+                                  ({formatDuration(video.duration)})
+                                </Typography>
+                              )}
                             </Typography>
                             <Typography
                               variant='subtitle2'
@@ -283,14 +298,7 @@ function VideosPage({ token }: VideosPageProps) {
                             >
                               {video.youTubeChannelName}
                             </Typography>
-                            {video.duration && (
-                              <Typography
-                                variant='caption'
-                                color='text.secondary'
-                              >
-                                {formatDuration(video.duration)}
-                              </Typography>
-                            )}
+
                             <Typography
                               variant='caption'
                               color='text.secondary'
@@ -307,6 +315,13 @@ function VideosPage({ token }: VideosPageProps) {
                                     minute: '2-digit',
                                   }
                                 )}
+                            </Typography>
+                            <Typography
+                              variant='caption'
+                              color='text.secondary'
+                            >
+                              Published:
+                              {formatYTDate(video.originalDate)}
                             </Typography>
                           </Box>
                         </TableCell>
@@ -356,15 +371,19 @@ function VideosPage({ token }: VideosPageProps) {
                             )}
                           </TableCell>
                           <TableCell>
-                            {new Date(video.timeCreated).toLocaleDateString() +
-                              ' ' +
-                              new Date(video.timeCreated).toLocaleTimeString(
-                                [],
-                                {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                }
-                              )}
+                            {formatYTDate(video.originalDate)}
+                          </TableCell>
+
+                          <TableCell>
+                            {new Date(video.timeCreated).toLocaleDateString()}
+                            <br />
+                            {new Date(video.timeCreated).toLocaleTimeString(
+                              [],
+                              {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              }
+                            )}
                           </TableCell>
                         </>
                       )}
