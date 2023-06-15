@@ -11,7 +11,7 @@ export interface VideoData {
   youTubeChannelName: string;
   youTubeVideoName: string;
   timeCreated: string;
-  originalDate: string;
-  duration: number;
-  description: string;
+  originalDate: string | null;
+  duration: number | null;
+  description: string | null;
 }

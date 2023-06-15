@@ -40,7 +40,6 @@ function VideosPage({ token }: VideosPageProps) {
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>(
     {}
   );
-  // Add new state variables for tracking sort order and column
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [orderBy, setOrderBy] = useState<'published' | 'added'>('added');
 
@@ -89,11 +88,12 @@ function VideosPage({ token }: VideosPageProps) {
     video.youTubeChannelName.includes(filter)
   );
 
-  // Add a sort function
   const sortedVideos = React.useMemo(() => {
     const compare = (a: VideoData, b: VideoData) => {
       if (orderBy === 'published') {
-        return a.originalDate > b.originalDate ? 1 : -1;
+        const dateA = a.originalDate || new Date(0); // default to Jan 1, 1970
+        const dateB = b.originalDate || new Date(0); // default to Jan 1, 1970
+        return dateA > dateB ? 1 : -1;
       }
       return a.timeCreated > b.timeCreated ? 1 : -1;
     };
