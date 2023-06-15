@@ -185,7 +185,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
   };
 
   return (
-    <Card elevation={8} style={{ padding: '8px' }}>
+    <Card elevation={8} style={{ padding: '8px', marginBottom: '16px' }}>
       <Grid container spacing={2} style={{ marginBottom: '8px' }}>
         <Grid item xs={12}>
           <Card elevation={2}>
