@@ -77,6 +77,7 @@ function VideosPage({ token }: VideosPageProps) {
     value: string
   ) => {
     setFilter(value);
+    setPage(1);
     setAnchorEl(null);
   };
 
