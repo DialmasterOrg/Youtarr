@@ -57,6 +57,16 @@ function ChannelManager({ token }: ChannelManagerProps) {
           },
         })
         .then((response) => {
+          // Sort the channels by uploader
+          response.data.sort((a: Channel, b: Channel) => {
+            if (a.uploader < b.uploader) {
+              return -1;
+            }
+            if (a.uploader > b.uploader) {
+              return 1;
+            }
+            return 0;
+          });
           setChannels(response.data);
         });
     }
