@@ -11,6 +11,7 @@ class JobModule {
     this.jobsDir = path.join(__dirname, '../../jobs');
     this.jobsFilePath = path.join(__dirname, '../../jobs', 'jobs.json');
     this.jobsFilePathOld = path.join(this.jobsDir, 'jobs.json.old');
+    this.isSaving = false; // Locking mechanism to prevent multiple saves at the same time
 
     if (!fs.existsSync(this.jobsDir)) {
       fs.mkdirSync(this.jobsDir, { recursive: true });
@@ -181,6 +182,12 @@ class JobModule {
   }
 
   async saveJobs() {
+    if (this.isSaving) {
+      // If a save operation is already in progress, skip this one
+      console.log('Save operation already in progress, skipping...');
+      return;
+    }
+    this.isSaving = true; // Set the locking variable
     for (let jobId in this.jobs) {
       let jobDataOriginal = this.jobs[jobId];
       const jobData = { ...jobDataOriginal };
@@ -224,6 +231,7 @@ class JobModule {
         console.error('Error saving job: ' + error.message);
       }
     }
+    this.isSaving = false; // Reset the locking variable when done
   }
 
   getJob(jobId) {

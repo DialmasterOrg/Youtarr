@@ -57,6 +57,16 @@ function ChannelManager({ token }: ChannelManagerProps) {
           },
         })
         .then((response) => {
+          // Sort the channels by uploader
+          response.data.sort((a: Channel, b: Channel) => {
+            if (a.uploader < b.uploader) {
+              return -1;
+            }
+            if (a.uploader > b.uploader) {
+              return 1;
+            }
+            return 0;
+          });
           setChannels(response.data);
         });
     }
@@ -185,7 +195,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
   };
 
   return (
-    <Card elevation={8} style={{ padding: '8px' }}>
+    <Card elevation={8} style={{ padding: '8px', marginBottom: '16px' }}>
       <Grid container spacing={2} style={{ marginBottom: '8px' }}>
         <Grid item xs={12}>
           <Card elevation={2}>

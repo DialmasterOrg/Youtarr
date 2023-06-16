@@ -17,6 +17,7 @@ import {
   Toolbar,
   Box,
   FormControlLabel,
+  Typography,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
@@ -216,17 +217,12 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                     <TableCell
                       style={{ fontWeight: 'bold', fontSize: 'medium' }}
                     >
-                      Date Published
+                      Published
                     </TableCell>
                     <TableCell
                       style={{ fontWeight: 'bold', fontSize: 'medium' }}
                     >
-                      Duration
-                    </TableCell>
-                    <TableCell
-                      style={{ fontWeight: 'bold', fontSize: 'medium' }}
-                    >
-                      Added?
+                      Downloaded?
                     </TableCell>
                   </TableRow>
                 )}
@@ -257,11 +253,15 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                             src={video.thumbnail}
                             alt={`Thumbnail for video ${video.title}`}
                           />
-                          <span style={{ fontWeight: 'bold' }}>
+                          <Typography variant='subtitle1'>
                             {decodeHtml(video.title)}
-                          </span>{' '}
-                          <span>({formatDuration(video.duration)})</span>
-                          <br />
+                            <Typography
+                              variant='caption'
+                              color='text.secondary'
+                            >
+                              ({formatDuration(video.duration)})
+                            </Typography>
+                          </Typography>
                           <span>
                             {new Date(video.publishedAt).toLocaleDateString()}
                           </span>
@@ -295,11 +295,17 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                             alt={`Thumbnail for video ${video.title}`}
                           />
                         </TableCell>
-                        <TableCell>{decodeHtml(video.title)}</TableCell>
+                        <TableCell>
+                          <Typography variant='subtitle1'>
+                            {decodeHtml(video.title)}{' '}
+                          </Typography>
+                          <Typography variant='caption' color='text.secondary'>
+                            ({formatDuration(video.duration)})
+                          </Typography>
+                        </TableCell>
                         <TableCell>
                           {new Date(video.publishedAt).toLocaleDateString()}
                         </TableCell>
-                        <TableCell>{formatDuration(video.duration)}</TableCell>
                         <TableCell>
                           {video.added ? (
                             <CheckCircleIcon

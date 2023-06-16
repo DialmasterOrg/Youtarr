@@ -14,19 +14,17 @@ import {
   Paper,
   Box,
   IconButton,
-  MenuItem,
-  Menu,
   Button,
+  TableSortLabel,
 } from '@mui/material';
 import Pagination from '@mui/material/Pagination';
 import FilterListIcon from '@mui/icons-material/FilterList';
-import CheckIcon from '@mui/icons-material/Check';
-import ListItemIcon from '@mui/material/ListItemIcon';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
-import { formatDuration } from '../utils';
+import { formatDuration, formatYTDate } from '../utils';
 import { VideoData } from '../types/VideoData';
 import { useSwipeable } from 'react-swipeable';
+import FilterMenu from './VideosPage/FilterMenu';
 
 interface VideosPageProps {
   token: string | null;
@@ -42,6 +40,8 @@ function VideosPage({ token }: VideosPageProps) {
   const [imageErrors, setImageErrors] = useState<{ [key: string]: boolean }>(
     {}
   );
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [orderBy, setOrderBy] = useState<'published' | 'added'>('added');
 
   const handleImageError = (youtubeId: string) => {
     setImageErrors((prevState) => ({ ...prevState, [youtubeId]: true }));
@@ -77,6 +77,7 @@ function VideosPage({ token }: VideosPageProps) {
     value: string
   ) => {
     setFilter(value);
+    setPage(1);
     setAnchorEl(null);
   };
 
@@ -87,6 +88,20 @@ function VideosPage({ token }: VideosPageProps) {
   const filteredVideos = videos.filter((video) =>
     video.youTubeChannelName.includes(filter)
   );
+
+  const sortedVideos = React.useMemo(() => {
+    const compare = (a: VideoData, b: VideoData) => {
+      if (orderBy === 'published') {
+        const dateA = a.originalDate || new Date(0); // default to Jan 1, 1970
+        const dateB = b.originalDate || new Date(0); // default to Jan 1, 1970
+        return dateA > dateB ? 1 : -1;
+      }
+      return a.timeCreated > b.timeCreated ? 1 : -1;
+    };
+
+    const sortedVideos = [...filteredVideos].sort(compare);
+    return sortOrder === 'asc' ? sortedVideos : sortedVideos.reverse();
+  }, [filteredVideos, sortOrder, orderBy]);
 
   const handlers = useSwipeable({
     onSwipedLeft: () => {
@@ -112,37 +127,6 @@ function VideosPage({ token }: VideosPageProps) {
 
   const videosPerPage = isMobile ? 6 : 12;
 
-  const filterMenu = (
-    <Menu
-      anchorEl={anchorEl}
-      keepMounted
-      open={Boolean(anchorEl)}
-      onClose={handleClose}
-    >
-      <MenuItem onClick={(event) => handleMenuItemClick(event, '')} key='All'>
-        All
-        {filter === '' && (
-          <ListItemIcon>
-            <CheckIcon />
-          </ListItemIcon>
-        )}
-      </MenuItem>
-      {uniqueChannels.map((channel) => (
-        <MenuItem
-          onClick={(event) => handleMenuItemClick(event, channel)}
-          key={channel}
-        >
-          {channel}
-          {filter === channel && (
-            <ListItemIcon>
-              <CheckIcon />
-            </ListItemIcon>
-          )}
-        </MenuItem>
-      ))}
-    </Menu>
-  );
-
   return (
     <Card elevation={8} style={{ marginBottom: '16px' }}>
       <CardContent>
@@ -163,7 +147,13 @@ function VideosPage({ token }: VideosPageProps) {
             >
               Filter by Channel
             </Button>
-            {filterMenu}
+            <FilterMenu
+              anchorEl={anchorEl}
+              handleClose={handleClose}
+              handleMenuItemClick={handleMenuItemClick}
+              filter={filter}
+              uniqueChannels={uniqueChannels}
+            />
           </Box>
         )}
 
@@ -200,7 +190,13 @@ function VideosPage({ token }: VideosPageProps) {
                       <IconButton onClick={handleFilterClick}>
                         <FilterListIcon />
                       </IconButton>
-                      {filterMenu}
+                      <FilterMenu
+                        anchorEl={anchorEl}
+                        handleClose={handleClose}
+                        handleMenuItemClick={handleMenuItemClick}
+                        filter={filter}
+                        uniqueChannels={uniqueChannels}
+                      />
                     </TableCell>
                     <TableCell
                       style={{ fontWeight: 'bold', fontSize: 'medium' }}
@@ -209,14 +205,46 @@ function VideosPage({ token }: VideosPageProps) {
                     </TableCell>
                     <TableCell
                       style={{ fontWeight: 'bold', fontSize: 'medium' }}
+                      sortDirection={
+                        orderBy === 'published' ? sortOrder : false
+                      }
                     >
-                      Added
+                      <TableSortLabel
+                        active={orderBy === 'published'}
+                        direction={orderBy === 'published' ? sortOrder : 'asc'}
+                        onClick={() => {
+                          const isAsc =
+                            orderBy === 'published' && sortOrder === 'asc';
+                          setSortOrder(isAsc ? 'desc' : 'asc');
+                          setOrderBy('published');
+                        }}
+                      >
+                        Published
+                      </TableSortLabel>
+                    </TableCell>
+
+                    <TableCell
+                      style={{ fontWeight: 'bold', fontSize: 'medium' }}
+                      sortDirection={orderBy === 'added' ? sortOrder : false}
+                    >
+                      <TableSortLabel
+                        active={orderBy === 'added'}
+                        direction={orderBy === 'added' ? sortOrder : 'asc'}
+                        onClick={() => {
+                          const isAsc =
+                            orderBy === 'added' && sortOrder === 'asc';
+                          setSortOrder(isAsc ? 'desc' : 'asc');
+                          setOrderBy('added');
+                        }}
+                      >
+                        Added
+                      </TableSortLabel>
                     </TableCell>
                   </TableRow>
                 </TableHead>
               )}
               <TableBody>
-                {filteredVideos
+                {sortedVideos
                   .slice((page - 1) * videosPerPage, page * videosPerPage)
                   .map((video) => (
                     <TableRow key={video.id}>
@@ -274,8 +302,17 @@ function VideosPage({ token }: VideosPageProps) {
                                 />
                               )}
                             </Box>
-                            <Typography variant='subtitle1'>
+                            <Typography variant='subtitle1' textAlign='center'>
                               {video.youTubeVideoName}
+                              {video.duration && (
+                                <Typography
+                                  variant='caption'
+                                  color='text.secondary'
+                                >
+                                  {' '}
+                                  ({formatDuration(video.duration)})
+                                </Typography>
+                              )}
                             </Typography>
                             <Typography
                               variant='subtitle2'
@@ -283,14 +320,7 @@ function VideosPage({ token }: VideosPageProps) {
                             >
                               {video.youTubeChannelName}
                             </Typography>
-                            {video.duration && (
-                              <Typography
-                                variant='caption'
-                                color='text.secondary'
-                              >
-                                {formatDuration(video.duration)}
-                              </Typography>
-                            )}
+
                             <Typography
                               variant='caption'
                               color='text.secondary'
@@ -307,6 +337,13 @@ function VideosPage({ token }: VideosPageProps) {
                                     minute: '2-digit',
                                   }
                                 )}
+                            </Typography>
+                            <Typography
+                              variant='caption'
+                              color='text.secondary'
+                            >
+                              Published:
+                              {formatYTDate(video.originalDate)}
                             </Typography>
                           </Box>
                         </TableCell>
@@ -356,15 +393,19 @@ function VideosPage({ token }: VideosPageProps) {
                             )}
                           </TableCell>
                           <TableCell>
-                            {new Date(video.timeCreated).toLocaleDateString() +
-                              ' ' +
-                              new Date(video.timeCreated).toLocaleTimeString(
-                                [],
-                                {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                }
-                              )}
+                            {formatYTDate(video.originalDate)}
+                          </TableCell>
+
+                          <TableCell>
+                            {new Date(video.timeCreated).toLocaleDateString()}
+                            <br />
+                            {new Date(video.timeCreated).toLocaleTimeString(
+                              [],
+                              {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              }
+                            )}
                           </TableCell>
                         </>
                       )}
