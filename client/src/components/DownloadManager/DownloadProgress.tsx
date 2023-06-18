@@ -41,10 +41,29 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     );
   }, []);
 
-  const addLineToOutput = useCallback((line: string) => {
+  const getTimeStampString = (dateTimeStamp: string) => {
+    const date = new Date(parseInt(dateTimeStamp));
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const timeString = `${hours < 10 ? '0' + hours : hours}:${
+      minutes < 10 ? '0' + minutes : minutes} -`;
+    return timeString;
+  };
+
+
+  const addLineToOutput = useCallback((line: string, dateTimeStamp: string) => {
+    console.log('addLineToOutput: ', dateTimeStamp, line);
+    let timeString = getTimeStampString(dateTimeStamp);
     setSocketOutput((prevOutput) => {
-      if (prevOutput[prevOutput.length - 1] !== line) {
-        return [...prevOutput, line];
+      // Compare prevOutput[prevOutput.length - 1] to line, but ignore the first 7 characters
+      // of line, which is the dateTimeStamp
+      if (
+        prevOutput.length === 0 ||  // If prevOutput is empty, add the line
+        prevOutput[prevOutput.length - 1].substring(7) !== line.substring(7)) {
+
+      //if (prevOutput[prevOutput.length - 1] !== line) {
+        let newLine = `${timeString} ${line}`;
+        return [...prevOutput, newLine];
       }
       // If it's a duplicate line, just return the current output
       return prevOutput;
@@ -73,7 +92,8 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
           line.includes('ETA Unknown') ||
           line.startsWith('[download] 100%'))
       ) {
-        const outputLine = line.replace('[download]', '').trim();
+        let timeString = getTimeStampString(payload.dateTimeStamp);
+        const outputLine = timeString + ' ' + line.replace('[download]', '').trim();
 
         if (
           downloadProgressRef.current.index === null &&
@@ -107,12 +127,12 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
         filename = filename?.substring(0, filename.length - 18);
         fileDownloadNumber.current += 1;
         line = `Video: ${filename}`;
-        addLineToOutput(line);
+        addLineToOutput(line, payload.dateTimeStamp);
 
         // Reset the index in the ref, to indicate the start of a new download
         downloadProgressRef.current.index = null;
       } else if (line.startsWith('Completed:')) {
-        addLineToOutput(line);
+        addLineToOutput(line, payload.dateTimeStamp);
 
         // Reset download progress ref
         downloadProgressRef.current = { index: null, message: '' };
@@ -122,10 +142,10 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
           line.includes('[youtube:tab] Extracting URL:')) &&
         downloadInitiatedRef.current
       ) {
-        addLineToOutput('Download initiated...');
+        addLineToOutput('Download initiated...', payload.dateTimeStamp);
         downloadInitiatedRef.current = false;
       } else if (line.includes('[Metadata] Adding metadata to')) {
-        addLineToOutput('Processing file...');
+        addLineToOutput('Processing file...', payload.dateTimeStamp);
       }
     },
     [addLineToOutput]
