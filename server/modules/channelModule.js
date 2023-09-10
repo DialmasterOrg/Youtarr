@@ -108,7 +108,7 @@ class ChannelModule {
 
     const imagePath = path.resolve(
       __dirname,
-      '../images/channelthumb-%(uploader_id)s.jpg'
+      '../images/channelthumb-%(channel_id)s.jpg'
     );
 
     // Doesn't matter when this finishes...
