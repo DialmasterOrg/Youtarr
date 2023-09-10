@@ -18,4 +18,4 @@ npm run build
 cd ..
 
 # Build the Docker container
-docker build -t youtarr-dev .
+docker build --no-cache -t youtarr-dev .
