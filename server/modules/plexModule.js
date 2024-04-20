@@ -116,7 +116,7 @@ class PlexModule {
         );
 
         if (authToken !== currentPlexApiKey) {
-          return { authToken: null };
+          return { authToken: 'invalid' };
         }
         return { authToken };
       } catch (error) {
