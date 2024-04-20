@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Button } from "@mui/material";
+import { clear } from "console";
 
 interface PlexAuthProps {
   setToken: React.Dispatch<React.SetStateAction<string | null>>;
@@ -22,18 +23,24 @@ const PlexAuth: React.FC<PlexAuthProps> = ({ setToken }) => {
       }
 
       let attempts = 0;
-      const maxAttempts = 5;
+      const maxAttempts = 15;
 
       // Poll the server every 5 seconds to check if the PIN is claimed
       const intervalId = setInterval(async () => {
         const res = await fetch(`/plex/check-pin/${pinId}`);
         const { authToken } = await res.json();
         if (authToken) {
-          clearInterval(intervalId);
-          setToken(authToken);
-          localStorage.setItem("plexAuthToken", authToken);
-          authWindow?.close();
-          window.location.href = "/configuration";
+          if (authToken === "invalid") {
+            clearInterval(intervalId);
+            setError("Invalid Plex Account. You must use the Plex account associated to this Youtarr server.");
+            authWindow?.close();
+          } else {
+            clearInterval(intervalId);
+            setToken(authToken);
+            localStorage.setItem("plexAuthToken", authToken);
+            authWindow?.close();
+            window.location.href = "/configuration";
+          }
         } else {
           attempts++;
           if (attempts >= maxAttempts) {
