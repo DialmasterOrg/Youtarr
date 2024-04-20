@@ -94,7 +94,6 @@ class PlexModule {
 
         currentConfig.plexApiKey = authToken;
 
-        configModule.updateConfig(currentConfig);
         return { authToken };
       } catch (error) {
         // If the request fails, the authToken is not valid for your server
