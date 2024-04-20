@@ -21,6 +21,9 @@ const PlexAuth: React.FC<PlexAuthProps> = ({ setToken }) => {
         authWindow.focus();
       }
 
+      let attempts = 0;
+      const maxAttempts = 5;
+
       // Poll the server every 5 seconds to check if the PIN is claimed
       const intervalId = setInterval(async () => {
         const res = await fetch(`/plex/check-pin/${pinId}`);
@@ -31,6 +34,13 @@ const PlexAuth: React.FC<PlexAuthProps> = ({ setToken }) => {
           localStorage.setItem("plexAuthToken", authToken);
           authWindow?.close();
           window.location.href = "/configuration";
+        } else {
+          attempts++;
+          if (attempts >= maxAttempts) {
+            clearInterval(intervalId);
+            setError("Failed to authenticate with Plex. Please try again.");
+            authWindow?.close();
+          }
         }
       }, 5000);
     } catch (error: any) {

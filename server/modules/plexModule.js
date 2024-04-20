@@ -71,13 +71,38 @@ class PlexModule {
     }
   }
 
+  /**
+   *
+   * Check the PIN against the Plex server
+   * IF there is no token in your config, then SET it (for first time setup)
+   * Otherwise, validate the token against your config
+   *
+   * @returns
+   */
   async checkPin(pinId) {
-    const response = await axios.get(`https://plex.tv/api/v2/pins/${pinId}`, {
-      headers: {
-        'X-Plex-Client-Identifier': configModule.getConfig().uuid,
-      },
-    });
-    const { authToken } = response.data;
+    console.log('Checking pin: ' + pinId);
+    let authToken = '';
+    try {
+      const response = await axios.get(`https://plex.tv/api/v2/pins/${pinId}`, {
+        headers: {
+          'X-Plex-Client-Identifier': configModule.getConfig().uuid,
+        },
+      });
+      authToken = response.data.authToken;
+    } catch (error) {
+      console.log('PIN ERROR!!' + error.message);
+      console.log(error.response.data);
+    }
+
+    const currentPlexApiKey = configModule.getConfig().plexApiKey;
+    // If there is not currently a token in the config, SET it
+    if (!currentPlexApiKey || currentPlexApiKey == '') {
+      let currentConfig = configModule.getConfig();
+      currentConfig.plexApiKey = authToken;
+      configModule.updateConfig(currentConfig);
+      return { authToken };
+    }
+
     if (authToken) {
       // Verify authToken against your Plex server
       try {
@@ -89,12 +114,18 @@ class PlexModule {
             },
           }
         );
+
+        if (authToken !== currentPlexApiKey) {
+          return { authToken: null };
+        }
         return { authToken };
       } catch (error) {
+        console.log('Invalid authToken for this server: ' + error.message);
         // If the request fails, the authToken is not valid for your server
         throw new Error('Invalid authToken for this server');
       }
     } else {
+      console.log('No authToken for this server: ' + authToken);
       return { authToken: null };
     }
   }

@@ -131,6 +131,10 @@ const initialize = async () => {
       }
     });
 
+    app.get('/validateToken', verifyToken, (req, res) => {
+      res.json({ valid: true });
+    });
+
     // Not sure if this is needed, but lets expose it for now for testing
     app.get('/refreshlibrary', verifyToken, () => {
       plexModule.refreshLibrary();

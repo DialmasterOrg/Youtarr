@@ -50,9 +50,27 @@ function App() {
 
   useEffect(() => {
     const storedToken = localStorage.getItem('plexAuthToken');
+
     if (storedToken) {
-      setToken(storedToken);
-    }
+      fetch('/validateToken', {
+        headers: {
+          'x-access-token': storedToken,
+        },
+      })
+        .then((response) => {
+          if (response.ok) {
+            setToken(storedToken);
+          } else {
+            localStorage.removeItem('plexAuthToken');
+            setToken(null);
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem('plexAuthToken');
+          setToken(null);
+        });
+      }
+
     // Fetch the current release version from the server
     axios
       .get('/getCurrentReleaseVersion')
