@@ -89,11 +89,6 @@ class PlexModule {
             },
           }
         );
-        // If the request is successful, the authToken is valid for your server
-        let currentConfig = configModule.getConfig();
-
-        currentConfig.plexApiKey = authToken;
-
         return { authToken };
       } catch (error) {
         // If the request fails, the authToken is not valid for your server
