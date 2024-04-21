@@ -77,6 +77,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
     return () => {
       unsubscribe(processMessagesCallback);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subscribe, unsubscribe, filter, processMessagesCallback]);
 
   useEffect(() => {

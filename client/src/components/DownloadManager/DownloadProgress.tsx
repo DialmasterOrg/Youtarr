@@ -148,6 +148,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
         addLineToOutput('Processing file...', payload.dateTimeStamp);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [addLineToOutput]
   );
 

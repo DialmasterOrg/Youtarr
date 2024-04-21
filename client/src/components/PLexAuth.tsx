@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { Button } from "@mui/material";
-import { clear } from "console";
 
 interface PlexAuthProps {
   setToken: React.Dispatch<React.SetStateAction<string | null>>;
