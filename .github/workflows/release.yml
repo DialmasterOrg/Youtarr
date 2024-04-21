@@ -16,8 +16,8 @@ jobs:
 
       - name: Configure Git user
         run: |
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
+          git config --global user.email "dial.chris+youtarr_service@gmail.com"
+          git config --global user.name "Youtarr Service Account[bot]"
 
       - name: Bump version and push tag
         id: tag_version
