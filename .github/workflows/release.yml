@@ -1,4 +1,4 @@
-name: Create Release
+name: Create Release V2
 
 on:
   workflow_dispatch:
