@@ -13,6 +13,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          token: ${{ secrets.ACTION_RUNNER_TOKEN }}
 
       - name: Configure Git user
         run: |
