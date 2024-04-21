@@ -43,6 +43,8 @@ jobs:
 
       - name: Update version in package.json
         run: |
+          git config --global user.email "dial.chris+youtarr_service@gmail.com"
+          git config --global user.name "Youtarr Service Account[bot]"
           npm version ${{ steps.tag_version.outputs.new_tag }} --no-git-tag-version
           cd client
           npm version ${{ steps.tag_version.outputs.new_tag }} --no-git-tag-version
