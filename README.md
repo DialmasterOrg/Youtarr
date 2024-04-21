@@ -76,6 +76,16 @@ If not you will be unable to login.
 
 If you wish to access Youtarr from outside your network, or from other computers aside from the one you are running it on, you will need to forward port 3087 on your local computer firewall (Eg: Windows Defender Firewall) and on your router.
 
+## Commit Messages and Versioning
+
+This project uses anothrNick/github-tag-action for automatic versioning based on commit messages. The version number is automatically incremented according to the commit message prefix.
+
+To ensure proper versioning, please follow these guidelines when writing commit messages:
+
+- For a patch version bump (e.g., v1.0.0 → v1.0.1), use the prefix fix: or docs: in your commit message.
+- For a minor version bump (e.g., v1.0.0 → v1.1.0), use the prefix feat: in your commit message.
+- For a major version bump (e.g., v1.0.0 → v2.0.0), include BREAKING CHANGE: in the commit message footer.
+
 ## Screenshots
 
 ![Alt text](/screenshots/youtarr_channels.jpg?raw=true 'Channels Screen')
