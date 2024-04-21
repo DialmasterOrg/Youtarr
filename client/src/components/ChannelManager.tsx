@@ -93,6 +93,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
     return () => {
       websocketContext.unsubscribe(handleMessage);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, reloadChannels]);
 
   const handleAdd = () => {
