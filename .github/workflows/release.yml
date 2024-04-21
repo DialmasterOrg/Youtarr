@@ -1,0 +1,59 @@
+name: Create Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Bump version and push tag
+        id: tag_version
+        uses: anothrNick/github-tag-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BUMP: patch
+          WITH_V: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Update version in package.json
+        run: |
+          npm version ${{ steps.tag_version.outputs.new_tag }} --no-git-tag-version
+          cd client
+          npm version ${{ steps.tag_version.outputs.new_tag }} --no-git-tag-version
+          cd ..
+          git add package.json client/package.json
+          git commit -m "Bump version to ${{ steps.tag_version.outputs.new_tag }}"
+          git push
+
+      - name: Build and push Docker images
+        run: |
+          cd client
+          npm run build
+          cd ..
+
+          docker build -t ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.tag_version.outputs.new_tag }} .
+          docker push ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.tag_version.outputs.new_tag }}
+
+          docker tag ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.tag_version.outputs.new_tag }} ${{ vars.DOCKERHUB_USERNAME }}/youtarr:latest
+          docker push ${{ vars.DOCKERHUB_USERNAME }}/youtarr:latest
