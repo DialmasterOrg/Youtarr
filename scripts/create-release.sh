@@ -1,6 +1,11 @@
 #!/bin/bash
 # This can only be used by the package maintainer
 
+echo "Please merge to main and then use the github action to create a release"
+echo "The code below is deprecated but retained for reference."
+exit 0
+
+
 # Check for required tools
 for tool in git docker npm; do
   if ! which $tool &> /dev/null; then
