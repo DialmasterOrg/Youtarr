@@ -33,6 +33,15 @@ jobs:
         with:
           node-version: '16'
 
+      - name: Install server dependencies
+        run: npm ci
+
+      - name: Install client dependencies
+        run: |
+          cd client
+          npm ci
+          cd ..
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
 
