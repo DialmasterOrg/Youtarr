@@ -62,6 +62,9 @@ While Youtarr provides a means to curate and download YouTube content, it's cruc
 **When running in production mode with the above config, your Plex Server IP Address should be set to host.docker.internal**
 
 This app uses Plex for auth. To login it will use Plex and then will verify that the Plex server on the local system is accessible to the Plex account you logged in to.
+
+**You must login to Youtarr using the same Plex account that you use to administer the Plex server you want to use Youtarr with!**
+
 If not you will be unable to login.
 
 1. Run `./start.sh`. The frontend UI will be exposed at `localhost:3087`
@@ -71,6 +74,16 @@ If not you will be unable to login.
 4. Once you set your download directory, you will need to restart the app. From the command line just to `./stop.sh` and then `./start.sh`
 
    Each video will be placed in a directory named for the Youtube channel it came from.
+
+## Login Troubleshooting
+
+**If you find that you are unable to login to Youtarr and get an error message that says**: "_Invalid Plex Account. You must use the Plex account associated to this Youtarr server._"
+
+You may have a Plex token that is incorrectly associated to Youtarr. You can fix this by "resetting" the token that Youtarr stores by:
+
+1. Shut Youtarr down or stop the docker container.
+2. Edit config/config.json, edit the line that says plexApiKey by removing the stored key. After you are done the line should look like: `"plexApiKey": "",`
+3. Restart Youtarr and reload it in your browser.
 
 ## Accessing Youtarr from Outside Your Network
 
