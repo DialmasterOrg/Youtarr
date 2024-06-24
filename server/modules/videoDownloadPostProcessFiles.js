@@ -4,7 +4,15 @@ const { execSync } = require('child_process');
 const configModule = require('./configModule');
 
 const videoPath = process.argv[2]; // get the video file path
-const jsonPath = videoPath.replace(/\.mp4$/, '.info.json'); // replace .mp4 with .info.json
+const parsedPath = path.parse(videoPath);
+// Note that the mp4 video itself contains embedded metadata for Plex
+// We only need the .info.json for Youtarr to use
+const jsonPath = path.format({
+  dir: parsedPath.dir,
+  name: parsedPath.name,
+  ext: '.info.json'
+});
+
 const videoDirectory = path.dirname(videoPath);
 const imagePath = path.join(videoDirectory, 'poster.jpg'); // assume the image thumbnail is named 'poster.jpg'
 
@@ -19,6 +27,7 @@ if (fs.existsSync(jsonPath)) {
 
   fs.ensureDirSync(directoryPath); // ensures that the directory exists, if it doesn't it will create it
   const newJsonPath = path.join(directoryPath, `${id}.info.json`); // define the new path
+
   fs.moveSync(jsonPath, newJsonPath, { overwrite: true }); // move the file
 
   if (fs.existsSync(imagePath)) {

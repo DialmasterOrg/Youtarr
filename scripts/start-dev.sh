@@ -4,7 +4,9 @@
 # Read the selected directory from the config file
 youtubeOutputDirectory=$(python -c "import json; print(json.load(open('config/config.json'))['youtubeOutputDirectory'])")
 
-docker rm -f youtarr
+# Do not display errors from the following command
+# If the container does not exist, it will return an error, but it is not a problem
+docker rm -f youtarr 2> /dev/null
 
 # Convert the windows path to Unix path and remove trailing whitespaces
 ## ONLY NEEDED IF RUNNING IN GIT BASH!!!

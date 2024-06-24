@@ -88,9 +88,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
       if (
         line.startsWith('[download]') &&
-        (parts[parts.length - 2] === 'ETA' ||
-          line.includes('ETA Unknown') ||
-          line.startsWith('[download] 100%'))
+        (line.includes('% of') || line.includes('ETA Unknown') || line.startsWith('[download] 100%') || line.includes('has already been recorded in the archive'))
       ) {
         let timeString = getTimeStampString(payload.dateTimeStamp);
         const outputLine = timeString + ' ' + line.replace('[download]', '').trim();
@@ -145,7 +143,11 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
         addLineToOutput('Download initiated...', payload.dateTimeStamp);
         downloadInitiatedRef.current = false;
       } else if (line.includes('[Metadata] Adding metadata to')) {
-        addLineToOutput('Processing file...', payload.dateTimeStamp);
+        addLineToOutput('Processing file [adding metadata]...', payload.dateTimeStamp);
+      } else if (line.includes('[Merger] Merging formats')) {
+        addLineToOutput('Processing file [merging formats]...', payload.dateTimeStamp);
+      } else if (line.includes('has already been recorded in the archive')) {
+        addLineToOutput('File already downloaded.', payload.dateTimeStamp);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
