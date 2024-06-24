@@ -84,8 +84,6 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
         line = line.substring(0, downloadTagIndex);
       }
 
-      const parts = line.split(/(\s+)/).filter((x: string) => x.trim() !== '');
-
       if (
         line.startsWith('[download]') &&
         (line.includes('% of') || line.includes('ETA Unknown') || line.startsWith('[download] 100%') || line.includes('has already been recorded in the archive'))
