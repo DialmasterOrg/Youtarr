@@ -12,6 +12,7 @@ class JobModule {
     this.jobsFilePath = path.join(__dirname, '../../jobs', 'jobs.json');
     this.jobsFilePathOld = path.join(this.jobsDir, 'jobs.json.old');
     this.isSaving = false; // Locking mechanism to prevent multiple saves at the same time
+    this.jobs = {}; // Initialize this.jobs as an empty object
 
     if (!fs.existsSync(this.jobsDir)) {
       fs.mkdirSync(this.jobsDir, { recursive: true });
@@ -239,6 +240,12 @@ class JobModule {
   }
 
   getRunningJobs() {
+    // If this.jobs is undefined or null, return an empty array
+    if (!this.jobs) {
+      console.log('No jobs found. Returning empty array.');
+      return [];
+    }
+
     const now = Date.now();
     const cutoff = now - 14 * 24 * 60 * 60 * 1000; // 14 days ago
 
