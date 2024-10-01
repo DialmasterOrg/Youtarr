@@ -99,6 +99,7 @@ class ChannelModule {
     const ytDlp = spawn('yt-dlp', [
       '--skip-download',
       '--dump-single-json',
+      '-4',
       '--playlist-end',
       '1',
       '--playlist-items',

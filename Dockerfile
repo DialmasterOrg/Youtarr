@@ -4,7 +4,7 @@ ENV PATH="/usr/local/bin:/usr/local:$PATH"
 WORKDIR /app
 COPY package*.json ./
 
-# ---- Dependencies woot ----
+# ---- Dependencies ----
 FROM base AS dependencies
 RUN npm install
 RUN apt-get update && apt-get install -y ffmpeg

@@ -211,7 +211,7 @@ class DownloadModule {
   // We write the info.json file to the same directory because Youtarr parses those for video information display
   getBaseCommand() {
     return (
-      'yt-dlp --ffmpeg-location ' +
+      'yt-dlp -4 --ffmpeg-location ' +
       configModule.ffmpegPath +
       ' -f "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --write-thumbnail --convert-thumbnails jpg ' +
       '--download-archive ./config/complete.list --ignore-errors --embed-metadata --write-info-json ' +
