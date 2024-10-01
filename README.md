@@ -48,16 +48,16 @@ Please ensure that you have these installed and available in your system's PATH 
 
 While Youtarr provides a means to curate and download YouTube content, it's crucial to respect copyright laws and YouTube's Terms of Service. Always ensure you're in compliance with these guidelines when using the application.
 
+## Plex Library Setup
+**Special thanks to @DeanAtEC for helping me to identify this**
+
+In order for Plex to properly pull in the poster images and metadata for the youtube videos, the Library setup to store the youtube videos should be setup as "Other Videos" and the Agent should be configured as "Personal Media"
+
 ## Usage
 
 **You will first need to clone this repository.**:
 
 **Before running this in either dev or production mode**: First run `./setup.sh`. This will let you select the root directory where Youtube videos that are downloaded will be placed.
-
-## Plex Library Setup
-**Special thanks to @DeanAtEC for helping me to identify this**
-
-In order for Plex to properly pull in the poster images and metadata for the youtube videos, the Library setup to store the youtube videos should be setup as "Other Videos" and the Agent should be configured as "Personal Media"
 
 ### To run in production mode in a Docker container (for most users)
 
