@@ -8,9 +8,10 @@ COPY package*.json ./
 FROM base AS dependencies
 RUN npm install
 RUN apt-get update && apt-get install -y ffmpeg
-RUN apt-get install -y python3-pip
-RUN pip3 install --user pip
-RUN pip3 install yt-dlp
+
+# Download the latest yt-dlp release directly from GitHub
+RUN wget https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -O /usr/local/bin/yt-dlp && \
+    chmod +x /usr/local/bin/yt-dlp
 
 # Install MariaDB
 RUN apt-get install -y mariadb-server
