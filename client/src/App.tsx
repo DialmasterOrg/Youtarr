@@ -43,6 +43,7 @@ function App() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const drawerWidth = isMobile ? '50%' : 240; // specify your drawer width
   const { version } = packageJson;
+  const clientVersion = `v${version}`; // Create a version with 'v' prefix for comparison
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -138,7 +139,7 @@ function App() {
             color={'textSecondary'}
             style={{ position: 'absolute', top: 5, right: 10 }}
           >
-            v{version}
+            {clientVersion}
           </Typography>
           {/* This is the matching invisible IconButton */}
           <IconButton
@@ -302,7 +303,7 @@ function App() {
         }}
       >
         <Typography variant='subtitle1' color='textSecondary'>
-          {serverVersion && serverVersion !== version && (
+          {serverVersion && serverVersion !== clientVersion && (
             <Typography color='error'>
               New version ({serverVersion}) available! Please restart the app to
               update.
