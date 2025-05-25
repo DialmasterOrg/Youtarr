@@ -1,6 +1,6 @@
 {
   "name": "youtarr",
-  "version": "1.17.20",
+  "version": "1.17.21",
   "description": "",
   "main": "server/index.js",
   "scripts": {
