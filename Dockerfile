@@ -1,5 +1,5 @@
 # ---- Base Node ----
-FROM node:20 AS base
+FROM node:14 AS base
 ENV PATH="/usr/local/bin:/usr/local:$PATH"
 WORKDIR /app
 COPY package*.json ./
