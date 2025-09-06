@@ -131,7 +131,9 @@ class DownloadModule {
           data: { videos: videoData },
         });
 
-        plexModule.refreshLibrary();
+        plexModule.refreshLibrary().catch(err => {
+          console.log('Failed to refresh Plex library:', err.message);
+        });
         jobModule.startNextJob();
       });
     }).catch((error) => {
