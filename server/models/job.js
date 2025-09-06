@@ -36,7 +36,7 @@ Job.init(
   {
     sequelize,
     modelName: 'Job',
-    tableName: 'jobs',
+    tableName: 'Jobs',
     timestamps: false,
   }
 );

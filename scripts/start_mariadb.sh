@@ -1,25 +1,45 @@
 #!/bin/bash
 
+# Set MariaDB paths
+MARIADB_BASE="/opt/mariadb"
+MARIADB_DATADIR="/var/lib/mysql"
+MARIADB_SOCKET="/run/mysqld/mysqld.sock"
+MARIADB_PORT="3321"
+
+# Ensure directories exist with correct permissions
+mkdir -p /run/mysqld
+chown -R mysql:mysql /run/mysqld /var/lib/mysql
+
 # Check if the data directory has been initialized
-if [ ! -d "/var/lib/mysql/mysql" ]; then
-    # Initialize MariaDB data directory
-    mysql_install_db --user=mysql --ldata=/var/lib/mysql
+if [ ! -d "${MARIADB_DATADIR}/mysql" ]; then
+    echo "Initializing MariaDB data directory..."
+    # Initialize MariaDB data directory using the binary
+    "${MARIADB_BASE}/scripts/mysql_install_db" \
+        --user=mysql \
+        --basedir="${MARIADB_BASE}" \
+        --datadir="${MARIADB_DATADIR}" \
+        --auth-root-authentication-method=normal
 
-    # Start MariaDB
-    mysqld_safe --nowatch --datadir=/var/lib/mysql &
+    # Start MariaDB using the binary
+    "${MARIADB_BASE}/bin/mysqld" \
+        --basedir="${MARIADB_BASE}" \
+        --datadir="${MARIADB_DATADIR}" \
+        --plugin-dir="${MARIADB_BASE}/lib/plugin" \
+        --socket="${MARIADB_SOCKET}" \
+        --port=${MARIADB_PORT} \
+        --bind-address=0.0.0.0 \
+        --skip-name-resolve \
+        --user=mysql &
 
-    # Wait a bit for MariaDB to start
-    echo "Waiting for DB..."
-    #sleep 10
     # Wait for MariaDB to start
-    echo "Waiting for DB..."
-    until mysqladmin ping >/dev/null 2>&1; do
+    echo "Waiting for DB to start..."
+    until "${MARIADB_BASE}/bin/mysqladmin" --socket="${MARIADB_SOCKET}" ping >/dev/null 2>&1; do
       echo -n "."; sleep 1
     done
-
+    echo " DB started!"
 
     # Run the SQL commands to set up the database and user.
-    mysql -uroot <<-EOSQL
+    "${MARIADB_BASE}/bin/mysql" --socket="${MARIADB_SOCKET}" -uroot <<-EOSQL
         SET @@SESSION.SQL_LOG_BIN=0;
         UPDATE mysql.user SET Password=PASSWORD('123qweasd') WHERE User='root';
         CREATE DATABASE IF NOT EXISTS youtarr;
@@ -27,15 +47,23 @@ if [ ! -d "/var/lib/mysql/mysql" ]; then
         FLUSH PRIVILEGES;
 EOSQL
 else
-    # Start MariaDB
-    mysqld_safe --nowatch --datadir=/var/lib/mysql &
+    echo "Using existing MariaDB data directory..."
+    # Start MariaDB using the binary
+    "${MARIADB_BASE}/bin/mysqld" \
+        --basedir="${MARIADB_BASE}" \
+        --datadir="${MARIADB_DATADIR}" \
+        --plugin-dir="${MARIADB_BASE}/lib/plugin" \
+        --socket="${MARIADB_SOCKET}" \
+        --port=${MARIADB_PORT} \
+        --bind-address=0.0.0.0 \
+        --skip-name-resolve \
+        --user=mysql &
 
-    # Wait a bit for MariaDB to start
-    echo "Waiting for DB..."
     # Wait for MariaDB to start
-    echo "Waiting for DB..."
-    until mysqladmin ping >/dev/null 2>&1; do
+    echo "Waiting for DB to start..."
+    until "${MARIADB_BASE}/bin/mysqladmin" --socket="${MARIADB_SOCKET}" ping >/dev/null 2>&1; do
       echo -n "."; sleep 1
     done
+    echo " DB started!"
 
 fi

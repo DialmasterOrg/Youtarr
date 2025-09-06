@@ -4,18 +4,24 @@ const configModule = require('./configModule');
 class PlexModule {
   constructor() {}
 
-  refreshLibrary() {
+  async refreshLibrary() {
     console.log('Refreshing library in Plex');
     // Example GET http://[plexIP]:32400/library/sections/[plexYoutubeLibraryId]/refresh?X-Plex-Token=[plexApiKey]
     try {
-      const response = axios.get(
+      const response = await axios.get(
         `http://${configModule.getConfig().plexIP}:32400/library/sections/${
           configModule.getConfig().plexYoutubeLibraryId
         }/refresh?X-Plex-Token=${configModule.getConfig().plexApiKey}`
       );
-      console.log(response);
+      console.log('Plex library refresh initiated successfully');
+      return response;
     } catch (error) {
       console.log('Error refreshing library in Plex: ' + error.message);
+      if (error.code === 'ECONNREFUSED') {
+        console.log('Could not connect to Plex server - continuing without refresh');
+      }
+      // Return null or empty response to indicate failure, but don't throw
+      return null;
     }
   }
 
@@ -44,7 +50,11 @@ class PlexModule {
       return libraries;
     } catch (error) {
       console.log('Error getting libraries from Plex: ' + error.message);
-      throw error;
+      if (error.code === 'ECONNREFUSED') {
+        console.log('Could not connect to Plex server - returning empty library list');
+      }
+      // Return empty array instead of throwing to prevent frontend crashes
+      return [];
     }
   }
 

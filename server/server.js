@@ -87,10 +87,12 @@ const initialize = async () => {
     app.get('/getplexlibraries', verifyToken, async (req, res) => {
       try {
         const libraries = await plexModule.getLibraries();
-        res.json(libraries);
+        // Always return an array, even if empty
+        res.json(libraries || []);
       } catch (error) {
         console.log('Error: ' + error.message);
-        res.status(500).json({ error: 'Failed to get libraries from Plex' });
+        // Return empty array instead of error to prevent frontend issues
+        res.json([]);
       }
     });
 
@@ -136,8 +138,14 @@ const initialize = async () => {
     });
 
     // Not sure if this is needed, but lets expose it for now for testing
-    app.get('/refreshlibrary', verifyToken, () => {
-      plexModule.refreshLibrary();
+    app.get('/refreshlibrary', verifyToken, async (req, res) => {
+      try {
+        await plexModule.refreshLibrary();
+        res.json({ success: true, message: 'Library refresh initiated' });
+      } catch (error) {
+        console.log('Failed to refresh Plex library:', error.message);
+        res.status(500).json({ success: false, message: 'Failed to refresh library' });
+      }
     });
 
     app.get('/getchannelinfo/:channelId', verifyToken, async (req, res) => {

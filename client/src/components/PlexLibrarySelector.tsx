@@ -42,17 +42,42 @@ function PlexLibrarySelector({
   const [locations, setLocations] = useState<{ id: string; path: string }[]>(
     []
   );
+  const [plexError, setPlexError] = useState<boolean>(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   useEffect(() => {
+    if (!open) return;
+
+    setPlexError(false);
     fetch(`/getplexlibraries`, {
       headers: {
         "x-access-token": token || "",
       },
     })
-      .then((response) => response.json())
-      .then((data) => setLibraries(data));
+      .then((response) => {
+        if (!response.ok) {
+          console.error("Failed to fetch Plex libraries");
+          setLibraries([]);
+          setPlexError(true);
+          return [];
+        }
+        return response.json();
+      })
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setLibraries(data);
+          setPlexError(false);
+        } else {
+          setLibraries([]);
+          setPlexError(true);
+        }
+      })
+      .catch((error) => {
+        console.error("Error fetching Plex libraries:", error);
+        setLibraries([]);
+        setPlexError(true);
+      });
   }, [open, token]);
 
   const handleLibraryChange = (event: SelectChangeEvent<string>) => {
@@ -111,50 +136,74 @@ function PlexLibrarySelector({
             <CloseIcon />
           </IconButton>
           <h2>Select a Plex Library</h2>
-          <InputLabel id="select-plex-library">
-            Select a Plex Library
-          </InputLabel>
-          <Select
-            fullWidth
-            value={selectedLibrary}
-            onChange={handleLibraryChange}
-            label="Select a Plex Library"
-            labelId="select-plex-library"
-          >
-            {libraries.map((library) => (
-              <MenuItem value={library.id} key={library.id}>
-                {library.title}
-              </MenuItem>
-            ))}
-          </Select>
-          <InputLabel id="select-plex-path">Select a Path</InputLabel>
-          <Select
-            fullWidth
-            value={selectedPath}
-            onChange={handlePathChange}
-            label="Select a Path"
-            labelId="select-plex-path"
-          >
-            {locations.length === 0 ? (
-              <MenuItem value="">No library selected</MenuItem>
-            ) : (
-              locations.map((location) => (
-                <MenuItem value={location.path} key={location.id}>
-                  {location.path}
-                </MenuItem>
-              ))
-            )}
-          </Select>
-          <Box style={{ marginTop: "16px" }}>
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={handleSaveSelection}
-              disabled={selectedLibrary === "" || selectedPath === ""}
-            >
-              Save Selection
-            </Button>
-          </Box>
+          {plexError ? (
+            <Box sx={{ color: 'error.main', mb: 2 }}>
+              <p>Unable to connect to Plex server. Please check:</p>
+              <ul style={{ fontSize: 'small' }}>
+                <li>Plex server is running</li>
+                <li>Plex IP address is correct in configuration</li>
+                <li>Plex API key is valid</li>
+              </ul>
+              <p>Note: Without connecting to Plex, downloading videos will still work, but you will not be able to refresh the library in Plex.</p>
+            </Box>
+          ) : (
+            <>
+              <InputLabel id="select-plex-library">
+                Select a Plex Library
+              </InputLabel>
+              <Select
+                fullWidth
+                value={selectedLibrary}
+                onChange={handleLibraryChange}
+                label="Select a Plex Library"
+                labelId="select-plex-library"
+              >
+                {libraries.length === 0 ? (
+                  <MenuItem value="" disabled>
+                    No libraries available
+                  </MenuItem>
+                ) : (
+                  libraries.map((library) => (
+                    <MenuItem value={library.id} key={library.id}>
+                      {library.title}
+                    </MenuItem>
+                  ))
+                )}
+              </Select>
+            </>
+          )}
+          {!plexError && (
+            <>
+              <InputLabel id="select-plex-path">Select a Path</InputLabel>
+              <Select
+                fullWidth
+                value={selectedPath}
+                onChange={handlePathChange}
+                label="Select a Path"
+                labelId="select-plex-path"
+              >
+                {locations.length === 0 ? (
+                  <MenuItem value="">No library selected</MenuItem>
+                ) : (
+                  locations.map((location) => (
+                    <MenuItem value={location.path} key={location.id}>
+                      {location.path}
+                    </MenuItem>
+                  ))
+                )}
+              </Select>
+              <Box style={{ marginTop: "16px" }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleSaveSelection}
+                  disabled={selectedLibrary === "" || selectedPath === ""}
+                >
+                  Save Selection
+                </Button>
+              </Box>
+            </>
+          )}
         </Card>
       </Box>
     </Modal>
