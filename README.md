@@ -27,7 +27,7 @@ Your engagement and feedback play a crucial role in shaping the future of this a
 
 To use Youtarr, you need to have the following software installed on your system:
 
-1. **Docker:** Youtarr uses Docker to create an isolated environment where it can run without interfering with your system or requiring you to install a bunch of software. You can download Docker from the official website.
+1. **Docker & Docker Compose:** Youtarr uses Docker Compose to run the application and database in separate containers. Docker Compose is included with Docker Desktop. You can download Docker from the official website.
 
 2. **Bash Shell:** Bash is a Unix shell and command language. The setup and start scripts are written in bash. For Windows users, you can use Git Bash, which is included when you install Git for Windows.
 
@@ -59,12 +59,14 @@ In order for Plex to properly pull in the poster images and metadata for the you
 
 **Before running this in either dev or production mode**: First run `./setup.sh`. This will let you select the root directory where Youtube videos that are downloaded will be placed.
 
-### To run in production mode in a Docker container (for most users)
+### To run in production mode with Docker Compose (for most users)
 
 #### NOTES:
 
 **This has been tested in git bash on Windows with Docker Desktop. This is designed to be run from the same system as your Plex server.**
 **When running in production mode with the above config, your Plex Server IP Address should be set to host.docker.internal**
+
+**NEW: Youtarr now uses Docker Compose with separate containers for the application and database. This reduces the image size by ~60% and follows Docker best practices.**
 
 This app uses Plex for auth. To login it will use Plex and then will verify that the Plex server on the local system is accessible to the Plex account you logged in to.
 
@@ -72,13 +74,24 @@ This app uses Plex for auth. To login it will use Plex and then will verify that
 
 If not you will be unable to login.
 
-1. Run `./start.sh`. The frontend UI will be exposed at `localhost:3087`
+1. Run `./start.sh`. This will start both the Youtarr application and MariaDB database containers. The frontend UI will be exposed at `localhost:3087`
 2. Once you are logged in, set your options in the Configuration screen and save them. You will want to select the Plex library that videos are supposed to be downloaded to, as well as the directory where they will be downloaded.
 3. If you want to be able to browse videos from your subscribed channels from within the app, and initiate downloads of new videos that way, you will need to enter a Youtube API Key in your Configuration page as well.
    You can get an API key at https://console.developers.google.com/apis/credentials This is not required to run the app.
-4. Once you set your download directory, you will need to restart the app. From the command line just to `./stop.sh` and then `./start.sh`
+4. Once you set your download directory, you will need to restart the app. From the command line just run `./stop.sh` and then `./start.sh`
+5. To view logs: The start/stop scripts will automatically detect whether you have `docker compose` (v2) or `docker-compose` (v1) installed and use the appropriate command. You can check logs with `docker compose logs -f` or `docker-compose logs -f`
 
    Each video will be placed in a directory named for the Youtube channel it came from.
+
+### Upgrading from Previous Versions
+
+If you're upgrading from an older version:
+
+1. Pull the latest code: `git pull`
+2. Stop the current setup: `./stop.sh` (this automatically handles both old single-container and new compose setups)
+3. Start with the new setup: `./start.sh`
+
+Your existing database in the `./database` directory will be automatically preserved and used.
 
 ## Login Troubleshooting
 

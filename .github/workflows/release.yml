@@ -31,10 +31,10 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: '20'
 
       - name: Install server dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Install client dependencies
         run: |
@@ -69,8 +69,12 @@ jobs:
           npm run build
           cd ..
 
+          # Build the optimized application image (without MariaDB)
           docker build -t ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.tag_version.outputs.new_tag }} .
           docker push ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.tag_version.outputs.new_tag }}
 
           docker tag ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.tag_version.outputs.new_tag }} ${{ vars.DOCKERHUB_USERNAME }}/youtarr:latest
           docker push ${{ vars.DOCKERHUB_USERNAME }}/youtarr:latest
+          
+          # Also push the MariaDB image tag for consistency (users will use official mariadb:10.3)
+          echo "Note: Users should use the official mariadb:10.3 image for the database container"

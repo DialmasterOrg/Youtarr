@@ -1,11 +1,16 @@
 const { Sequelize } = require('sequelize');
 
-const sequelize = new Sequelize('youtarr', 'root', '123qweasd', {
-  host: 'localhost',
-  dialect: 'mysql',
-  port: 3321,
-  logging: false,
-});
+const sequelize = new Sequelize(
+  process.env.DB_NAME || 'youtarr',
+  process.env.DB_USER || 'root',
+  process.env.DB_PASSWORD || '123qweasd',
+  {
+    host: process.env.DB_HOST || 'localhost',
+    dialect: 'mysql',
+    port: process.env.DB_PORT || 3321,
+    logging: false,
+  }
+);
 
 const initializeDatabase = async () => {
   try {

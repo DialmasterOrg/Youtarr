@@ -24,7 +24,11 @@ cd ..
 # Build the Docker container -- do we need --no-cache?
 if [ "$1" = "--no-cache" ]
 then
-  docker build --no-cache -t youtarr-dev .
+  docker build --no-cache -t youtarr-dev:latest .
 else
-  docker build -t youtarr-dev .
+  docker build -t youtarr-dev:latest .
 fi
+
+echo ""
+echo "Development image built successfully!"
+echo "To start the development environment, run: ./scripts/start-dev.sh"

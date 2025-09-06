@@ -39,10 +39,11 @@ if (fs.existsSync(jsonPath)) {
     ); // define the new path for image thumbnail
     fs.copySync(imagePath, newImageFullPath, { overwrite: true }); // copy the image thumbnail
 
-    // Resize the image using ffmpeg
+    // Resize the image using ffmpeg with proper settings to avoid deprecated format warnings
+    // Using -loglevel error to suppress the deprecated pixel format warnings but still show actual errors
     try {
       execSync(
-        `${configModule.ffmpegPath} -y -i ${newImageFullPath} -vf "scale=iw*0.5:ih*0.5" ${newImageFullPathSmall}`,
+        `${configModule.ffmpegPath} -loglevel error -y -i "${newImageFullPath}" -vf "scale=iw*0.5:ih*0.5" -q:v 2 "${newImageFullPathSmall}"`,
         { stdio: 'inherit' }
       );
       fs.rename(newImageFullPathSmall, newImageFullPath);
