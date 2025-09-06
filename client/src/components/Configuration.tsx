@@ -17,6 +17,7 @@ import {
   Dialog,
   DialogTitle,
   DialogActions,
+  Alert,
 } from '@mui/material';
 import PlexLibrarySelector from './PlexLibrarySelector';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -41,6 +42,7 @@ function Configuration({ token }: ConfigurationProps) {
   });
   const [openPlexLibrarySelector, setOpenPlexLibrarySelector] = useState(false);
   const [openConfirmDialog, setOpenConfirmDialog] = useState(false);
+  const [plexConnected, setPlexConnected] = useState<boolean | null>(null);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -58,6 +60,22 @@ function Configuration({ token }: ConfigurationProps) {
       })
       .then((data) => setConfig(data))
       .catch((error) => console.error(error));
+      
+    // Check Plex connectivity
+    fetch('/getplexlibraries', {
+      headers: {
+        'x-access-token': token || '',
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        // If we get an array (even empty), Plex is connected
+        setPlexConnected(Array.isArray(data) && data.length > 0);
+      })
+      .catch((error) => {
+        console.error('Error checking Plex connection:', error);
+        setPlexConnected(false);
+      });
   }, [token]);
 
   const openLibrarySelector = () => {
@@ -239,6 +257,19 @@ function Configuration({ token }: ConfigurationProps) {
               </FormControl>
             </Tooltip>
           </Grid>
+          {plexConnected === false && (
+            <Grid item xs={12}>
+              <Alert severity="warning">
+                Unable to connect to Plex server. Please check that:
+                <ul style={{ marginTop: '8px', marginBottom: '0' }}>
+                  <li>Plex server is running</li>
+                  <li>Plex IP address below is correct</li>
+                  <li>Plex API key is valid (if configured)</li>
+                </ul>
+                Note: Video downloads will still work, but library refresh in Plex will not be available.
+              </Alert>
+            </Grid>
+          )}
           <Grid item xs={12}>
             <Tooltip
               placement='top-start'
