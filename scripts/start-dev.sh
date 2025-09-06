@@ -1,12 +1,24 @@
 #!/bin/bash
 
-# Read the selected directory from the config file
+# Function to check if docker compose (v2) or docker-compose (v1) is available
+get_compose_command() {
+    if docker compose version &>/dev/null; then
+        echo "docker compose"
+    elif docker-compose version &>/dev/null; then
+        echo "docker-compose"
+    else
+        echo "Error: Neither 'docker compose' nor 'docker-compose' command found." >&2
+        echo "Please install Docker Compose." >&2
+        exit 1
+    fi
+}
+
+# Get the appropriate compose command
+COMPOSE_CMD=$(get_compose_command)
+echo "Using compose command: $COMPOSE_CMD"
+
 # Read the selected directory from the config file
 youtubeOutputDirectory=$(python -c "import json; print(json.load(open('config/config.json'))['youtubeOutputDirectory'])")
-
-# Do not display errors from the following command
-# If the container does not exist, it will return an error, but it is not a problem
-docker rm -f youtarr 2> /dev/null
 
 # Convert the windows path to Unix path and remove trailing whitespaces
 ## ONLY NEEDED IF RUNNING IN GIT BASH!!!
@@ -17,5 +29,19 @@ if [[ "$OSTYPE" == "msys" ]]; then
   youtubeOutputDirectory="/$youtubeOutputDirectory"
 fi
 
-# Start the Docker container with the selected directory mounted
-docker run --name youtarr-dev -d -v $youtubeOutputDirectory:/usr/src/app/data -v /$(pwd)/config:/app/config -v /$(pwd)/server/images:/app/server/images -v /$(pwd)/jobs:/app/jobs -v /$(pwd)/migrations:/app/migrations -v /$(pwd)/database:/var/lib/mysql -p 3087:3011 -p 3321:3321 -e IN_DOCKER_CONTAINER=1 youtarr-dev
+# Export the YouTube output directory for docker-compose
+export YOUTUBE_OUTPUT_DIR="$youtubeOutputDirectory"
+
+# Stop and remove existing containers (if any)
+echo "Stopping existing containers..."
+$COMPOSE_CMD -f docker-compose.dev.yml down
+
+# Start the containers using docker-compose for development
+echo "Starting Youtarr development environment..."
+$COMPOSE_CMD -f docker-compose.dev.yml up -d
+
+# Show the status
+echo ""
+echo "Youtarr development environment is starting up..."
+echo "You can check the logs with: $COMPOSE_CMD -f docker-compose.dev.yml logs -f"
+echo "To stop the development environment, run: $COMPOSE_CMD -f docker-compose.dev.yml down"

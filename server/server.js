@@ -45,6 +45,11 @@ const initialize = async () => {
 
     /**** ONLY ROUTES BELOW THIS LINE *********/
 
+    // Health check endpoint
+    app.get('/health', (req, res) => {
+      res.status(200).json({ status: 'healthy' });
+    });
+
     // Serve image files
     app.use('/images', express.static(path.join(__dirname, 'images')));
 
