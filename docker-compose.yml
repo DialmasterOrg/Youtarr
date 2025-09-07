@@ -9,12 +9,16 @@ services:
       MYSQL_ROOT_PASSWORD: 123qweasd
       MYSQL_DATABASE: youtarr
       MYSQL_TCP_PORT: 3321
+      # Set utf8mb4 as default for new installations
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
     ports:
       - "3321:3321"
     volumes:
       - ./database:/var/lib/mysql
       - ./migrations:/docker-entrypoint-initdb.d
-    command: --port=3321
+      - ./config/mariadb.cnf:/etc/mysql/conf.d/charset.cnf:ro
+    command: --port=3321 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-P", "3321", "-p123qweasd"]
       interval: 10s

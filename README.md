@@ -142,6 +142,22 @@ This is a known issue with Docker Desktop on Windows where mount points can beco
 
 **Note:** This is a Docker Desktop on Windows issue, not specific to Youtarr. If this problem persists, consider running Docker natively in WSL2 without Docker Desktop for more stability.
 
+
+## UTF-8 Character Support
+
+Youtarr now supports full UTF-8 characters including emojis in channel names and video titles. 
+
+### For New Installations
+New installations automatically use `utf8mb4` encoding and will handle all Unicode characters correctly.
+
+### For Existing Installations
+If you encounter errors like `Incorrect string value: '\\xF0\\x9F\\xA7\\xA1'`, your database needs to be upgraded to support 4-byte UTF-8 characters.
+
+**Check your current setup:**
+```bash
+./scripts/check-database-charset.sh
+```
+
 ## Accessing Youtarr from Outside Your Network
 
 If you wish to access Youtarr from outside your network, or from other computers aside from the one you are running it on, you will need to forward port 3087 on your local computer firewall (Eg: Windows Defender Firewall) and on your router.
