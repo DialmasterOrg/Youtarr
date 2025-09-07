@@ -103,6 +103,45 @@ You may have a Plex token that is incorrectly associated to Youtarr. You can fix
 2. Edit config/config.json, edit the line that says plexApiKey by removing the stored key. After you are done the line should look like: `"plexApiKey": "",`
 3. Restart Youtarr and reload it in your browser.
 
+## Docker Desktop Mount Path Troubleshooting (Windows)
+
+**If you encounter this error when starting Youtarr**: `Error response from daemon: error while creating mount source path '/run/desktop/mnt/host/...': mkdir /run/desktop/mnt/host/...: file exists`
+
+This is a known issue with Docker Desktop on Windows where mount points can become corrupted or orphaned. This typically happens when Docker Desktop doesn't shut down cleanly.
+
+### Why it happens:
+- Docker Desktop's WSL2 integration sometimes fails to properly clean up mount points
+- The mount path becomes "stuck" and Docker cannot recreate it on restart
+- More common with large directories or after Windows updates
+
+### How to fix it:
+
+1. **First attempt - Restart Docker Desktop:**
+   ```bash
+   ./stop.sh
+   ```
+   Then quit Docker Desktop completely from the system tray, restart it, and run:
+   ```bash
+   ./start.sh
+   ```
+
+2. **If that doesn't work - Reset WSL2 mounts:**
+   - Open PowerShell as Administrator
+   - Run: `wsl --shutdown`
+   - Restart Docker Desktop
+   - Run `./start.sh` again
+
+3. **Last resort - Full system restart:**
+   - If Docker Desktop hangs when trying to restart, you may need to restart your entire machine
+   - This will clear all stale mount points
+
+### Prevention tips:
+- Always use `./stop.sh` before shutting down Docker Desktop
+- Consider disabling Windows Fast Startup (Control Panel → Power Options → Choose what the power button does → Uncheck "Turn on fast startup")
+- Allow Docker Desktop to fully start before running `./start.sh`
+
+**Note:** This is a Docker Desktop on Windows issue, not specific to Youtarr. If this problem persists, consider running Docker natively in WSL2 without Docker Desktop for more stability.
+
 ## Accessing Youtarr from Outside Your Network
 
 If you wish to access Youtarr from outside your network, or from other computers aside from the one you are running it on, you will need to forward port 3087 on your local computer firewall (Eg: Windows Defender Firewall) and on your router.
