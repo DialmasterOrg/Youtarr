@@ -32,6 +32,7 @@ function Configuration({ token }: ConfigurationProps) {
     channelAutoDownload: false,
     channelDownloadFrequency: '',
     channelFilesToDownload: 3,
+    preferredResolution: '1080',
     initialSetup: true,
     plexApiKey: '',
     youtubeOutputDirectory: '',
@@ -253,6 +254,43 @@ function Configuration({ token }: ConfigurationProps) {
                       {i + 1}
                     </MenuItem>
                   ))}
+                </Select>
+              </FormControl>
+            </Tooltip>
+          </Grid>
+          <Grid item xs={12}>
+            <Tooltip
+              placement='top-start'
+              title='The resolution we will try to download from YouTube. Note that this is not guaranteed as YouTube may not have your preferred resolution available.'
+            >
+              <FormControl fullWidth>
+                <InputLabel>Preferred download resolution</InputLabel>
+                <Select
+                  label='Preferred download resolution'
+                  value={config.preferredResolution}
+                  onChange={(event: SelectChangeEvent<string>) => {
+                    setConfig({
+                      ...config,
+                      preferredResolution: event.target.value,
+                    });
+                  }}
+                  name='preferredResolution'
+                  inputProps={{
+                    style: { fontSize: isMobile ? 'small' : 'medium' },
+                  }}
+                >
+                  <MenuItem value='2160' style={{ fontSize: isMobile ? 'small' : 'medium' }}>
+                    4k
+                  </MenuItem>
+                  <MenuItem value='1080' style={{ fontSize: isMobile ? 'small' : 'medium' }}>
+                    1080p
+                  </MenuItem>
+                  <MenuItem value='720' style={{ fontSize: isMobile ? 'small' : 'medium' }}>
+                    720p
+                  </MenuItem>
+                  <MenuItem value='480' style={{ fontSize: isMobile ? 'small' : 'medium' }}>
+                    480p
+                  </MenuItem>
                 </Select>
               </FormControl>
             </Tooltip>
