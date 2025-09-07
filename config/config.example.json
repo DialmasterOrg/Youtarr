@@ -3,6 +3,7 @@
   "channelFilesToDownload": 5,
   "channelAutoDownload": false,
   "channelDownloadFrequency": "0 * * * *",
+  "preferredResolution": "1080",
   "plexIP": "host.docker.internal",
   "plexApiKey": "",
   "plexYoutubeLibraryId": "",
