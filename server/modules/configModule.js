@@ -24,6 +24,10 @@ class ConfigModule extends EventEmitter {
       this.config.channelFilesToDownload = 3;
     }
 
+    if (!this.config.preferredResolution) {
+      this.config.preferredResolution = '1080';
+    }
+
     // Check if a UUID exists in the config
     if (!this.config.uuid) {
       // Generate a new UUID
