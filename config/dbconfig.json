@@ -5,7 +5,16 @@
     "database": "youtarr",
     "host": "127.0.0.1",
     "dialect": "mysql",
-    "port": 3321
+    "port": 3321,
+    "dialectOptions": {
+      "charset": "utf8mb4",
+      "supportBigNumbers": true,
+      "bigNumberStrings": true
+    },
+    "define": {
+      "charset": "utf8mb4",
+      "collate": "utf8mb4_unicode_ci"
+    }
   },
   "test": {
     "username": "root",
@@ -13,7 +22,16 @@
     "database": "youtarr",
     "host": "127.0.0.1",
     "dialect": "mysql",
-    "port": 3321
+    "port": 3321,
+    "dialectOptions": {
+      "charset": "utf8mb4",
+      "supportBigNumbers": true,
+      "bigNumberStrings": true
+    },
+    "define": {
+      "charset": "utf8mb4",
+      "collate": "utf8mb4_unicode_ci"
+    }
   },
   "production": {
     "username": "root",
@@ -21,6 +39,15 @@
     "database": "youtarr",
     "host": "127.0.0.1",
     "dialect": "mysql",
-    "port": 3321
+    "port": 3321,
+    "dialectOptions": {
+      "charset": "utf8mb4",
+      "supportBigNumbers": true,
+      "bigNumberStrings": true
+    },
+    "define": {
+      "charset": "utf8mb4",
+      "collate": "utf8mb4_unicode_ci"
+    }
   }
 }
