@@ -6,7 +6,6 @@ init-connect = 'SET NAMES utf8mb4'
 
 # Enable full Unicode support
 innodb_large_prefix = 1
-innodb_file_format = barracuda
 innodb_file_per_table = 1
 
 [mysql]

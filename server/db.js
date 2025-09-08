@@ -12,7 +12,6 @@ const sequelize = new Sequelize(
     // Ensure utf8mb4 for new connections
     dialectOptions: {
       charset: 'utf8mb4',
-      collate: 'utf8mb4_unicode_ci',
       // Additional connection options for better utf8mb4 support
       supportBigNumbers: true,
       bigNumberStrings: true
@@ -23,7 +22,6 @@ const sequelize = new Sequelize(
       // Ensure all new tables use utf8mb4 by default
       dialectOptions: {
         charset: 'utf8mb4',
-        collate: 'utf8mb4_unicode_ci'
       }
     }
   }
