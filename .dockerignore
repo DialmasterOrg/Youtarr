@@ -1,0 +1,4 @@
+# Ignore database files
+database/
+database/*
+

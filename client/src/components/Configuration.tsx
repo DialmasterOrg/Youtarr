@@ -94,13 +94,30 @@ function Configuration({ token }: ConfigurationProps) {
       .catch((error) => console.error(error));
   }, [token]);
 
+  const checkPlexConnection = React.useCallback(() => {
+    if (config.plexIP) {
+      fetch('/getplexlibraries', {
+        headers: {
+          'x-access-token': token || '',
+        },
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          setPlexConnectionStatus(Array.isArray(data) && data.length > 0 ? 'connected' : 'not_connected');
+        })
+        .catch(() => {
+          setPlexConnectionStatus('not_connected');
+        });
+    }
+  }, [config.plexIP, token]);
+
   // On first load after config arrives, check Plex connection if values exist
   useEffect(() => {
     if (!didInitialPlexCheck && config.plexIP && config.plexApiKey) {
       checkPlexConnection();
       setDidInitialPlexCheck(true);
     }
-  }, [didInitialPlexCheck, config.plexIP, config.plexApiKey]);
+  }, [didInitialPlexCheck, config.plexIP, config.plexApiKey, checkPlexConnection]);
 
   const testPlexConnection = async () => {
     if (!config.plexIP || !config.plexApiKey) {
@@ -262,23 +279,6 @@ function Configuration({ token }: ConfigurationProps) {
         message: 'Failed to save configuration',
         severity: 'error'
       });
-    }
-  };
-
-  const checkPlexConnection = () => {
-    if (config.plexIP) {
-      fetch('/getplexlibraries', {
-        headers: {
-          'x-access-token': token || '',
-        },
-      })
-        .then((response) => response.json())
-        .then((data) => {
-          setPlexConnectionStatus(Array.isArray(data) && data.length > 0 ? 'connected' : 'not_connected');
-        })
-        .catch(() => {
-          setPlexConnectionStatus('not_connected');
-        });
     }
   };
 
