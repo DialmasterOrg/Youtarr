@@ -26,13 +26,19 @@ class PlexModule {
   }
 
   async getLibraries() {
+    const config = configModule.getConfig();
+    return this.getLibrariesWithParams(config.plexIP, config.plexApiKey);
+  }
+
+  async getLibrariesWithParams(plexIP, plexApiKey) {
     try {
+      if (!plexIP || !plexApiKey) {
+        console.log('Missing Plex IP or API key');
+        return [];
+      }
+
       const response = await axios.get(
-        `http://${
-          configModule.getConfig().plexIP
-        }:32400/library/sections?X-Plex-Token=${
-          configModule.getConfig().plexApiKey
-        }`
+        `http://${plexIP}:32400/library/sections?X-Plex-Token=${plexApiKey}`
       );
 
       const libraries = response.data.MediaContainer.Directory.map(
