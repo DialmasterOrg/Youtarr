@@ -23,6 +23,7 @@ import {
   IconButton,
   Tooltip,
   Snackbar,
+  Skeleton,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import InfoIcon from '@mui/icons-material/Info';
@@ -325,11 +326,40 @@ function ChannelVideos({ token }: ChannelVideosProps) {
               </TableHead>
               <TableBody>
                 {videos.length === 0 && !videoFailed && (
-                  <TableRow>
-                    <TableCell colSpan={5} align='center'>
-                      Loading...
-                    </TableCell>
-                  </TableRow>
+                  <>
+                    {[...Array(videosPerPage)].map((_, index) => (
+                      <TableRow key={`skeleton-${index}`}>
+                        {isMobile ? (
+                          <>
+                            <TableCell>
+                              <Skeleton variant="rectangular" width={200} height={112} sx={{ mb: 1 }} />
+                              <Skeleton variant="text" width="90%" />
+                              <Skeleton variant="text" width="40%" />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton variant="circular" width={24} height={24} />
+                            </TableCell>
+                          </>
+                        ) : (
+                          <>
+                            <TableCell>
+                              <Skeleton variant="rectangular" width={200} height={112} />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton variant="text" width="100%" />
+                              <Skeleton variant="text" width="30%" />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton variant="text" width={100} />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton variant="circular" width={24} height={24} />
+                            </TableCell>
+                          </>
+                        )}
+                      </TableRow>
+                    ))}
+                  </>
                 )}
                 {videosToDisplay
                   .slice((page - 1) * videosPerPage, page * videosPerPage)

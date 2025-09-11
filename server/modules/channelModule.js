@@ -302,16 +302,16 @@ class ChannelModule {
     for (const video of videos) {
       // Find existing video or create new one
       const [videoRecord, created] = await ChannelVideo.findOrCreate({
-        where: { 
-          youtube_id: video.youtube_id, 
-          channel_id: channelId 
+        where: {
+          youtube_id: video.youtube_id,
+          channel_id: channelId
         },
         defaults: {
           ...video,
           channel_id: channelId,
         },
       });
-      
+
       // If video already existed, update it with latest metadata
       if (!created) {
         await videoRecord.update({
@@ -410,18 +410,18 @@ class ChannelModule {
 
           // Parse the published date from various possible fields
           let publishedAt = null;
-          
+
           // First try timestamp (from approximate_date extractor arg)
           if (entry.timestamp) {
             publishedAt = new Date(entry.timestamp * 1000).toISOString();
-          } 
+          }
           // Fallback to upload_date if timestamp not available
           else if (entry.upload_date) {
             const year = entry.upload_date.substring(0, 4);
             const month = entry.upload_date.substring(4, 6);
             const day = entry.upload_date.substring(6, 8);
             publishedAt = new Date(`${year}-${month}-${day}`).toISOString();
-          } 
+          }
           // If no date info available, use 90 days ago as fallback
           else {
             const ninetyDaysAgo = new Date();
@@ -489,10 +489,10 @@ class ChannelModule {
       let newestVideos = await this.fetchNewestVideosFromDb(channelId);
 
       // Check if we need to fetch new data
-      // Fetch if: no lastFetched, more than 6 hours old, OR if we have no videos in DB
+      // Fetch if: no lastFetched, more than 1 hour old, OR if we have no videos in DB
       const needsRefresh = channel &&
         (!channel.lastFetched ||
-         new Date() - new Date(channel.lastFetched) > 6 * 60 * 60 * 1000 ||
+         new Date() - new Date(channel.lastFetched) > 1 * 60 * 60 * 1000 ||
          newestVideos.length === 0);
 
       if (needsRefresh) {
