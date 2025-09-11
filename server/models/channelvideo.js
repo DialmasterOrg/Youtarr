@@ -35,6 +35,11 @@ ChannelVideo.init(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    availability: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     sequelize,
