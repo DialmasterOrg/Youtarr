@@ -350,10 +350,11 @@ class ChannelModule {
     const writeStream = fs.createWriteStream(outputFilePath);
 
     // Use yt-dlp to get channel videos metadata without downloading
-    // Using --flat-playlist for speed, but with additional extractors for thumbnails
+    // Using --flat-playlist for speed, but with approximate_date to get timestamps
     const ytDlp = spawn('yt-dlp', [
       '--flat-playlist',
       '--dump-single-json',
+      '--extractor-args', 'youtubetab:approximate_date',  // Get approximate timestamps for videos
       '--playlist-end', '50', // Get latest 50 videos
       '-4',
       channel.url,
@@ -387,13 +388,25 @@ class ChannelModule {
             continue;
           }
 
-          // Convert upload_date from YYYYMMDD to ISO date
+          // Parse the published date from various possible fields
           let publishedAt = null;
-          if (entry.upload_date) {
+          
+          // First try timestamp (from approximate_date extractor arg)
+          if (entry.timestamp) {
+            publishedAt = new Date(entry.timestamp * 1000).toISOString();
+          } 
+          // Fallback to upload_date if timestamp not available
+          else if (entry.upload_date) {
             const year = entry.upload_date.substring(0, 4);
             const month = entry.upload_date.substring(4, 6);
             const day = entry.upload_date.substring(6, 8);
             publishedAt = new Date(`${year}-${month}-${day}`).toISOString();
+          } 
+          // If no date info available, use 90 days ago as fallback
+          else {
+            const ninetyDaysAgo = new Date();
+            ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+            publishedAt = ninetyDaysAgo.toISOString();
           }
 
           // Get thumbnail - with flat-playlist, we need to construct the URL
@@ -414,7 +427,7 @@ class ChannelModule {
           videos.push({
             title: entry.title || 'Untitled',
             youtube_id: entry.id,
-            publishedAt: publishedAt || new Date().toISOString(),
+            publishedAt: publishedAt,  // Always has a value now (either real date or 90 days ago)
             thumbnail: thumbnail,
             duration: entry.duration || 0,
           });
