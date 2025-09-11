@@ -15,10 +15,31 @@ get_compose_command() {
 
 # Get the appropriate compose command
 COMPOSE_CMD=$(get_compose_command)
-echo "Using compose command: $COMPOSE_CMD"
+
+# Check if config file exists
+if [ ! -f "config/config.json" ]; then
+  echo ""
+  echo "==============================================="
+  echo "ERROR: Configuration file not found!"
+  echo "==============================================="
+  echo "Please run ./setup.sh first to configure Youtarr."
+  echo "==============================================="
+  exit 1
+fi
 
 # Read the selected directory from the config file
-youtubeOutputDirectory=$(python -c "import json; print(json.load(open('config/config.json'))['youtubeOutputDirectory'])")
+youtubeOutputDirectory=$(python -c "import json; print(json.load(open('config/config.json'))['youtubeOutputDirectory'])" 2>/dev/null)
+
+# Check if the directory was successfully read and is not empty
+if [ -z "$youtubeOutputDirectory" ] || [ "$youtubeOutputDirectory" == "" ] || [ "$youtubeOutputDirectory" == "null" ]; then
+  echo ""
+  echo "==============================================="
+  echo "ERROR: YouTube output directory not configured!"
+  echo "==============================================="
+  echo "Please run ./setup.sh to configure the download directory."
+  echo "==============================================="
+  exit 1
+fi
 
 # Convert the windows path to Unix path and remove trailing whitespaces
 ## ONLY NEEDED IF RUNNING IN GIT BASH!!!
@@ -28,6 +49,43 @@ if [[ "$OSTYPE" == "msys" ]]; then
   # Just prepend with an a extra / to make it work
   youtubeOutputDirectory="/$youtubeOutputDirectory"
 fi
+
+# Validate that the directory exists and is readable
+# Note: We check the original path for Unix/Mac, and handle Windows path separately
+if [[ "$OSTYPE" == "msys" ]]; then
+  # For Windows/Git Bash, check without the extra slash
+  CHECK_DIR="${youtubeOutputDirectory:1}"
+else
+  CHECK_DIR="$youtubeOutputDirectory"
+fi
+
+if [ ! -d "$CHECK_DIR" ]; then
+  echo ""
+  echo "==============================================="
+  echo "ERROR: YouTube output directory does not exist!"
+  echo "==============================================="
+  echo "Directory: $CHECK_DIR"
+  echo ""
+  echo "Please ensure the directory exists or run ./setup.sh"
+  echo "to configure a different directory."
+  echo "==============================================="
+  exit 1
+fi
+
+if [ ! -r "$CHECK_DIR" ]; then
+  echo ""
+  echo "==============================================="
+  echo "ERROR: YouTube output directory is not readable!"
+  echo "==============================================="
+  echo "Directory: $CHECK_DIR"
+  echo ""
+  echo "Please check directory permissions or run ./setup.sh"
+  echo "to configure a different directory."
+  echo "==============================================="
+  exit 1
+fi
+
+echo "YouTube output directory verified: $CHECK_DIR"
 
 # Export the YouTube output directory for docker-compose
 export YOUTUBE_OUTPUT_DIR="$youtubeOutputDirectory"

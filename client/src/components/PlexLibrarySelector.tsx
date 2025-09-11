@@ -9,6 +9,8 @@ import {
   Card,
   Box,
   IconButton,
+  Alert,
+  Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -97,7 +99,9 @@ function PlexLibrarySelector({
   };
 
   const handleSaveSelection = () => {
-    setLibraryId(selectedLibrary, formatPath(selectedPath));
+    // If no path selected, pass empty string to keep existing directory
+    const pathToSet = selectedPath ? formatPath(selectedPath) : '';
+    setLibraryId(selectedLibrary, pathToSet);
   };
 
   function formatPath(path: string): string {
@@ -174,30 +178,40 @@ function PlexLibrarySelector({
           )}
           {!plexError && (
             <>
-              <InputLabel id="select-plex-path">Select a Path</InputLabel>
-              <Select
-                fullWidth
-                value={selectedPath}
-                onChange={handlePathChange}
-                label="Select a Path"
-                labelId="select-plex-path"
-              >
-                {locations.length === 0 ? (
-                  <MenuItem value="">No library selected</MenuItem>
-                ) : (
-                  locations.map((location) => (
+              <Box sx={{ mt: 3, mb: 2 }}>
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    <strong>Optional:</strong> Select a path below to automatically update your YouTube output directory.
+                    If you don't select a path, your current output directory will remain unchanged.
+                  </Typography>
+                </Alert>
+                <InputLabel id="select-plex-path">
+                  Select a Path
+                </InputLabel>
+                <Select
+                  fullWidth
+                  value={selectedPath}
+                  onChange={handlePathChange}
+                  label="Select a Path"
+                  labelId="select-plex-path"
+                  displayEmpty
+                >
+                  <MenuItem value="">
+                    <em>Keep current YouTube output directory</em>
+                  </MenuItem>
+                  {locations.map((location) => (
                     <MenuItem value={location.path} key={location.id}>
                       {location.path}
                     </MenuItem>
-                  ))
-                )}
-              </Select>
+                  ))}
+                </Select>
+              </Box>
               <Box style={{ marginTop: "16px" }}>
                 <Button
                   variant="contained"
                   color="primary"
                   onClick={handleSaveSelection}
-                  disabled={selectedLibrary === "" || selectedPath === ""}
+                  disabled={selectedLibrary === ""}
                 >
                   Save Selection
                 </Button>

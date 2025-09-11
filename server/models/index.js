@@ -3,6 +3,7 @@ const Job = require('./job');
 const JobVideo = require('./jobvideo');
 const Video = require('./video');
 const Channel = require('./channel');
+const Session = require('./session');
 
 Job.hasMany(JobVideo, { foreignKey: 'job_id', as: 'jobVideos' });
 
@@ -16,4 +17,5 @@ module.exports = {
   JobVideo,
   Video,
   Channel,
+  Session,
 };

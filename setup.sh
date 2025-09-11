@@ -1,9 +1,13 @@
 #!/bin/bash
 
+# Flag to track if this is initial setup
+INITIAL_SETUP=false
+
 # Check if config.json exists, if not, copy from config.example.json
 if [ ! -f "./config/config.json" ]; then
   echo "config.json not found. Creating from config.example.json..."
   cp "./config/config.example.json" "./config/config.json"
+  INITIAL_SETUP=true
 fi
 
 touch "./config/complete.list"
@@ -49,25 +53,81 @@ plex_ip_escaped=$(printf '%s\n' "$plex_ip" | sed 's:[][\/.^$*]:\\&:g')
 # Use sed to replace the value of plexIP in config.json
 sed -i "s/\"plexIP\": \".*\"/\"plexIP\": \"$plex_ip_escaped\"/" ./config/config.json
 
+# Check if youtubeOutputDirectory is already set in config
+CURRENT_DIR=$(grep '"youtubeOutputDirectory"' ./config/config.json | sed 's/.*"youtubeOutputDirectory": "\(.*\)".*/\1/')
 
-read -p "Would you like to (re)set your Youtube video file output directory? (Y/N) " confirm && [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]] || exit 1
+# Trim whitespace from CURRENT_DIR
+CURRENT_DIR=$(echo "$CURRENT_DIR" | xargs)
 
+# Determine if we need to set the directory
+SHOULD_SET_DIR=false
 
-# Prompt the user to enter a directory path
-echo "Please enter the directory path to store the videos (you can change this later):"
-read dir_path
-
-# Check if the directory exists
-if [ -d "$dir_path" ]; then
-  echo "Directory exists. Saving to config file..."
-
-  # Escape the user input to avoid any issues with sed
-  dir_path_escaped=$(printf '%s\n' "$dir_path" | sed 's:[][\/.^$*]:\\&:g')
-
-  # Use sed to replace the value of youtubeOutputDirectory in config.json
-  sed -i "s/\"youtubeOutputDirectory\": \".*\"/\"youtubeOutputDirectory\": \"$dir_path_escaped\"/" ./config/config.json
-
-  echo "Directory path saved to config file."
+if [ -z "$CURRENT_DIR" ] || [ "$CURRENT_DIR" == "" ] || [ "$CURRENT_DIR" == "null" ]; then
+  # Directory not set - this is required
+  echo ""
+  echo "==============================================="
+  echo "YouTube video output directory must be configured."
+  echo "==============================================="
+  SHOULD_SET_DIR=true
 else
-  echo "Directory does not exist. Please enter a valid directory path."
+  # Directory already set - ask if they want to change it
+  echo ""
+  echo "==============================================="
+  echo "Current YouTube video output directory:"
+  echo "  $CURRENT_DIR"
+  echo "==============================================="
+  read -p "Would you like to change your YouTube video output directory? (Y/N) " confirm
+  if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
+    SHOULD_SET_DIR=true
+  fi
+fi
+
+if [ "$SHOULD_SET_DIR" = true ]; then
+  # Loop until a valid directory is provided
+  while true; do
+    echo "Please enter the directory path to store your downloaded YouTube videos (eg, "/mnt/c/Youtube_videos/"):"
+    echo "If you plan to link this to Plex, you should use the same directory that you will be using for the Plex library."
+    read dir_path
+
+    # Check if the directory exists
+    if [ -d "$dir_path" ]; then
+      echo "Directory verified: $dir_path"
+      echo "Saving to config file..."
+
+      # Escape the user input to avoid any issues with sed
+      dir_path_escaped=$(printf '%s\n' "$dir_path" | sed 's:[][\/.^$*]:\\&:g')
+
+      # Use sed to replace the value of youtubeOutputDirectory in config.json
+      sed -i "s/\"youtubeOutputDirectory\": \".*\"/\"youtubeOutputDirectory\": \"$dir_path_escaped\"/" ./config/config.json
+
+      echo ""
+      echo "==============================================="
+      echo "Configuration saved successfully!"
+      echo "==============================================="
+      if [ "$INITIAL_SETUP" = true ]; then
+        echo "Initial configuration complete!"
+        echo "Configuration file written."
+        echo ""
+        echo "Next steps:"
+        echo "1. Start the server: ./start.sh"
+        echo "2. Access Youtarr at: http://localhost:3087"
+        echo "3. Complete initial setup (create admin account)"
+        echo ""
+        echo "Note: Initial admin setup MUST be done from localhost"
+      else
+        echo "Configuration updated."
+        echo "Remember to restart Youtarr for changes to take effect."
+      fi
+      echo "==============================================="
+      break
+    else
+      echo ""
+      echo "Error: Directory '$dir_path' does not exist."
+      echo "Please enter a valid directory path, or press Ctrl+C to exit."
+      echo ""
+    fi
+  done
+else
+  echo "Keeping existing directory configuration."
+  echo "Setup complete."
 fi
