@@ -114,9 +114,14 @@ function ChannelVideos({ token }: ChannelVideosProps) {
   };
 
   const videosPerPage = isMobile ? 8 : 16;
-  let videosToDisplay = videos.filter((video) =>
-    hideDownloaded ? !video.added : true
-  );
+  let videosToDisplay = videos.filter((video) => {
+    // Filter out shorts (videos 70 seconds or less)
+    if (video.duration <= 70) {
+      return false;
+    }
+    // Filter out downloaded videos if hideDownloaded is enabled
+    return hideDownloaded ? !video.added : true;
+  });
 
   const handlers = useSwipeable({
     onSwipedLeft: () => {
