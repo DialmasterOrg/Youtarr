@@ -15,9 +15,13 @@ import {
   DialogContentText,
   DialogContent,
   DialogActions,
+  Box,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import Delete from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import InfoIcon from '@mui/icons-material/Info';
 import axios from 'axios';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
@@ -39,6 +43,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
   const [deletedChannels, setDeletedChannels] = useState<string[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [dialogMessage, setDialogMessage] = useState('');
+  const [mobileTooltip, setMobileTooltip] = useState<string | null>(null);
   const websocketContext = useContext(WebSocketContext);
   const navigate = useNavigate();
   if (!websocketContext) {
@@ -96,55 +101,118 @@ function ChannelManager({ token }: ChannelManagerProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, reloadChannels]);
 
-  const handleAdd = () => {
-    if (channels.some((channel) => channel.url === newChannel.url)) {
-      setDialogMessage('Channel already exists');
-      setIsDialogOpen(true);
+  // Normalize YouTube channel URL to standard format
+  const normalizeChannelUrl = (url: string): string | null => {
+    try {
+      url = url.trim().replace(/\/+$/, '');
 
+      // Check if it's just a channel name (with or without @)
+      // Examples: "@BeastReacts", "BeastReacts", "@MrBeast"
+      if (!url.includes('.') && !url.includes('/')) {
+        // If it doesn't start with @, add it
+        const channelName = url.startsWith('@') ? url : `@${url}`;
+        // Validate it's a reasonable channel name (alphanumeric, underscores, hyphens, dots)
+        if (/^@[\w.-]+$/.test(channelName)) {
+          return `https://www.youtube.com/${channelName}/videos`;
+        }
+        return null;
+      }
+
+      // Support URLs without protocol
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+
+      // Parse the URL
+      const urlObj = new URL(url);
+
+      // Check if it's a YouTube domain (youtube.com, www.youtube.com, m.youtube.com)
+      const hostname = urlObj.hostname.toLowerCase();
+      if (!hostname.endsWith('youtube.com')) {
+        return null;
+      }
+
+      // Extract the pathname
+      const pathname = urlObj.pathname;
+
+      // Check if it's a channel URL with @ handle
+      const channelMatch = pathname.match(/^\/@([^/]+)(\/.*)?$/);
+      if (channelMatch) {
+        const handle = channelMatch[1];
+        // Return normalized URL with /videos suffix
+        return `https://www.youtube.com/@${handle}/videos`;
+      }
+
+      // Also support old-style /c/ or /channel/ URLs
+      const oldStyleMatch = pathname.match(/^\/(c|channel)\/([^/]+)(\/.*)?$/);
+      if (oldStyleMatch) {
+        const channelId = oldStyleMatch[2];
+        return `https://www.youtube.com/${oldStyleMatch[1]}/${channelId}/videos`;
+      }
+
+      return null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const handleAdd = () => {
+    const normalizedUrl = normalizeChannelUrl(newChannel.url);
+
+    if (!normalizedUrl) {
+      setDialogMessage(
+        'Invalid channel URL. Supported formats:\n' +
+        '• @ChannelName or ChannelName\n' +
+        '• youtube.com/@ChannelName\n' +
+        '• https://www.youtube.com/@ChannelName\n' +
+        '• m.youtube.com/@ChannelName'
+      );
+      setIsDialogOpen(true);
       setNewChannel({ url: '', uploader: '', channel_id: '' });
       return;
     }
-    if (
-      newChannel.url.startsWith('https://www.youtube.com') &&
-      newChannel.url.endsWith('/videos')
-    ) {
-      setChannels([...channels, newChannel]);
-      if (token) {
-        axios
-          .post(
-            '/addchannelinfo',
-            { url: newChannel.url }, // Pass URL in request body
-            {
-              headers: {
-                'x-access-token': token,
-              },
-            }
-          )
-          .then((response) => {
-            if (response.data.status === 'success') {
-              // Delete the last channel in the list, which is the new channel
-              // with no channel info
-              setChannels((prevChannels) => prevChannels.slice(0, -1));
 
-              // Now re-add it with info
-              setChannels((prevChannels) => [
-                ...prevChannels,
-                response.data.channelInfo,
-              ]);
-            } else {
-              console.error('Failed to add channel info');
-            }
-          });
-      }
-
-      setUnsavedChannels([...unsavedChannels, newChannel.url]);
-    } else {
-      setDialogMessage(
-        'Invalid channel URL. Please use the following format: https://www.youtube.com/@DanTDM/videos'
-      );
+    // Check if channel already exists using normalized URL
+    if (channels.some((channel) => channel.url === normalizedUrl)) {
+      setDialogMessage('Channel already exists');
       setIsDialogOpen(true);
+      setNewChannel({ url: '', uploader: '', channel_id: '' });
+      return;
     }
 
+    // Use normalized URL for the new channel
+    const channelToAdd = { ...newChannel, url: normalizedUrl };
+    setChannels([...channels, channelToAdd]);
+
+    if (token) {
+      axios
+        .post(
+          '/addchannelinfo',
+          { url: normalizedUrl }, // Pass normalized URL in request body
+          {
+            headers: {
+              'x-access-token': token,
+            },
+          }
+        )
+        .then((response) => {
+          if (response.data.status === 'success') {
+            // Delete the last channel in the list, which is the new channel
+            // with no channel info
+            setChannels((prevChannels) => prevChannels.slice(0, -1));
+
+            // Now re-add it with info
+            setChannels((prevChannels) => [
+              ...prevChannels,
+              response.data.channelInfo,
+            ]);
+          } else {
+            console.error('Failed to add channel info');
+          }
+        });
+    }
+
+    setUnsavedChannels([...unsavedChannels, normalizedUrl]);
     setNewChannel({ url: '', uploader: '', channel_id: '' });
   };
 
@@ -193,6 +261,36 @@ function ChannelManager({ token }: ChannelManagerProps) {
 
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
+  };
+
+  const getInfoIcon = (tooltipText: string) => {
+    const handleClick = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (isMobile) {
+        setMobileTooltip(mobileTooltip === tooltipText ? null : tooltipText);
+      }
+    };
+
+    if (isMobile) {
+      return (
+        <IconButton
+          size="small"
+          sx={{ ml: 0.5, p: 0.5 }}
+          onClick={handleClick}
+        >
+          <InfoIcon fontSize="small" />
+        </IconButton>
+      );
+    }
+
+    return (
+      <Tooltip title={tooltipText} arrow placement="top">
+        <IconButton size="small" sx={{ ml: 0.5, p: 0.5 }}>
+          <InfoIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+    );
   };
 
   return (
@@ -292,10 +390,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
         </Grid>
         <Grid item xs={11}>
           <Card elevation={0} style={{ paddingTop: '8px' }}>
-            <Tooltip
-              placement='top'
-              title='Enter a new channel URL to track here, eg: https://www.youtube.com/@PrestonReacts/videos'
-            >
+            <Box sx={{ display: 'flex', alignItems: 'flex-end' }}>
               <TextField
                 label='Add a new channel'
                 value={newChannel.url}
@@ -311,8 +406,10 @@ function ChannelManager({ token }: ChannelManagerProps) {
                 InputProps={{
                   style: { fontSize: isMobile ? 'small' : 'medium' },
                 }}
+                helperText="e.g., @MrBeast or youtube.com/@MrBeast"
               />
-            </Tooltip>
+              {getInfoIcon('Enter a YouTube channel. Supported formats: @ChannelName, ChannelName, youtube.com/@ChannelName, full URLs, or with /videos suffix')}
+            </Box>
           </Card>
         </Grid>
         <Grid
@@ -390,6 +487,21 @@ function ChannelManager({ token }: ChannelManagerProps) {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={Boolean(mobileTooltip)}
+        autoHideDuration={8000}
+        onClose={() => setMobileTooltip(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setMobileTooltip(null)}
+          severity="info"
+          icon={<InfoIcon />}
+        >
+          {mobileTooltip}
+        </Alert>
+      </Snackbar>
     </Card>
   );
 }
