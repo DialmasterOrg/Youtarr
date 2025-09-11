@@ -33,7 +33,7 @@ const initializeDatabase = async () => {
     console.log('Connection has been established successfully.');
 
     // Ensure connection uses utf8mb4
-    await sequelize.query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+    await sequelize.query('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci');
 
     // Run migrations
     const Umzug = require('umzug');
@@ -51,6 +51,14 @@ const initializeDatabase = async () => {
     });
 
     await migrator.up();
+    
+    // Load models after migrations
+    const models = require('./models');
+    
+    // Attach models to db object for easy access
+    Object.keys(models).forEach(modelName => {
+      module.exports[modelName] = models[modelName];
+    });
   } catch (error) {
     console.error('Unable to initialize the database:', error);
     throw error;

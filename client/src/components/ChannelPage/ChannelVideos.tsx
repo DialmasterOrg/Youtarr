@@ -18,6 +18,8 @@ import {
   Box,
   FormControlLabel,
   Typography,
+  Alert,
+  Chip,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
@@ -39,6 +41,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
   const [page, setPage] = useState(1);
   const [videos, setVideos] = useState<ChannelVideo[]>([]);
   const [videoFailed, setVideoFailed] = useState<Boolean>(false);
+  const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const [checkedBoxes, setCheckedBoxes] = useState<string[]>([]); // new state variable
   const [hideDownloaded, setHideDownloaded] = useState(false);
   const { channel_id } = useParams();
@@ -93,8 +96,12 @@ function ChannelVideos({ token }: ChannelVideosProps) {
         return response.json();
       })
       .then((data) => {
-        setVideos(data.videos);
-        setVideoFailed(data.videoFail);
+        // Handle both old and new response formats
+        if (data.videos !== undefined) {
+          setVideos(data.videos || []);
+        }
+        setVideoFailed(data.videoFail || false);
+        setLastFetched(data.lastFetched ? new Date(data.lastFetched) : null);
       })
       .catch((error) => console.error(error));
   }, [token, channel_id]);
@@ -125,11 +132,60 @@ function ChannelVideos({ token }: ChannelVideosProps) {
     trackMouse: true,
   });
 
+  // Calculate data freshness
+  const getDataFreshnessInfo = () => {
+    if (!lastFetched) return null;
+    
+    const hoursAgo = Math.floor((Date.now() - lastFetched.getTime()) / (1000 * 60 * 60));
+    let color: 'success' | 'warning' | 'error' = 'success';
+    let text = '';
+    
+    if (hoursAgo < 1) {
+      text = 'Updated just now';
+    } else if (hoursAgo < 6) {
+      text = `Updated ${hoursAgo} hour${hoursAgo > 1 ? 's' : ''} ago`;
+      color = 'success';
+    } else if (hoursAgo < 24) {
+      text = `Updated ${hoursAgo} hours ago`;
+      color = 'warning';
+    } else {
+      const daysAgo = Math.floor(hoursAgo / 24);
+      text = `Updated ${daysAgo} day${daysAgo > 1 ? 's' : ''} ago`;
+      color = 'error';
+    }
+    
+    return { text, color };
+  };
+
+  const freshnessInfo = getDataFreshnessInfo();
+
   return (
     <Card elevation={8} style={{ marginBottom: '16px' }}>
-      <CardHeader title='Recent Channel Videos' align='center' />
+      <CardHeader 
+        title='Recent Channel Videos' 
+        align='center'
+        action={
+          freshnessInfo && videos.length > 0 && (
+            <Chip 
+              label={freshnessInfo.text}
+              color={freshnessInfo.color}
+              size="small"
+              style={{ marginRight: '8px' }}
+            />
+          )
+        }
+      />
       <div {...handlers}>
-        {!videoFailed && (
+        {/* Show error message if video fetch failed */}
+        {videoFailed && videos.length === 0 && (
+          <Box p={3}>
+            <Alert severity="error">
+              Failed to fetch channel videos. Please try again later.
+            </Alert>
+          </Box>
+        )}
+        
+        {!videoFailed && videos.length > 0 && (
           <>
             <Grid
               container
@@ -232,13 +288,6 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                   <TableRow>
                     <TableCell colSpan={5} align='center'>
                       Loading...
-                    </TableCell>
-                  </TableRow>
-                )}
-                {videoFailed && (
-                  <TableRow>
-                    <TableCell colSpan={5} align='center'>
-                      Youtube Data Request Failed
                     </TableCell>
                   </TableRow>
                 )}

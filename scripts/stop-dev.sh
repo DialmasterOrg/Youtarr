@@ -15,7 +15,6 @@ get_compose_command() {
 
 # Get the appropriate compose command
 COMPOSE_CMD=$(get_compose_command)
-echo "Using compose command: $COMPOSE_CMD"
 
 # Set a dummy value for YOUTUBE_OUTPUT_DIR since it's not needed for stopping
 export YOUTUBE_OUTPUT_DIR="/tmp"

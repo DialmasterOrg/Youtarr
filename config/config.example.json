@@ -11,7 +11,5 @@
   "uuid": "",
   "//comment": "Replace the two directory paths below with YOUR paths to run this on Windows and have it work",
   "devYoutubeOutputDirectory": "Q:\\\\Youtube_test",
-  "devffmpegPath": "C:\\\\ffmpeg-6.0\\\\bin\\\\ffmpeg.exe",
-  "//youtubeApiKey_comment": "You can get a Youtube API key here: https://console.developers.google.com/apis/credentials",
-  "youtubeApiKey": ""
+  "devffmpegPath": "C:\\\\ffmpeg-6.0\\\\bin\\\\ffmpeg.exe"
 }

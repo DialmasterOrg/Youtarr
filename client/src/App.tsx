@@ -31,14 +31,18 @@ import ChannelManager from './components/ChannelManager';
 import DownloadManager from './components/DownloadManager';
 import VideosPage from './components/VideosPage';
 import Login from './components/Login';
+import LocalLogin from './components/LocalLogin';
+import InitialSetup from './components/InitialSetup';
 import ChannelPage from './components/ChannelPage';
 
 function App() {
   const [token, setToken] = useState<string | null>(
-    localStorage.getItem('plexAuthToken')
+    localStorage.getItem('authToken') || localStorage.getItem('plexAuthToken')
   );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [serverVersion, setServerVersion] = useState('');
+  const [requiresSetup, setRequiresSetup] = useState<boolean | null>(null);
+  const [checkingSetup, setCheckingSetup] = useState(true);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const drawerWidth = isMobile ? '50%' : 240; // specify your drawer width
@@ -50,27 +54,54 @@ function App() {
   };
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('plexAuthToken');
+    // First check if setup is required
+    fetch('/setup/status')
+      .then(response => response.json())
+      .then(data => {
+        setRequiresSetup(data.requiresSetup);
+        setCheckingSetup(false);
+        
+        // Only check auth token if setup is not required
+        if (!data.requiresSetup) {
+          // Try new auth token first, then fall back to plex token for migration
+          const authToken = localStorage.getItem('authToken');
+          const plexToken = localStorage.getItem('plexAuthToken');
+          const storedToken = authToken || plexToken;
 
-    if (storedToken) {
-      fetch('/validateToken', {
-        headers: {
-          'x-access-token': storedToken,
-        },
-      })
-        .then((response) => {
-          if (response.ok) {
-            setToken(storedToken);
-          } else {
-            localStorage.removeItem('plexAuthToken');
-            setToken(null);
+          if (storedToken) {
+            // Use the new auth/validate endpoint
+            fetch('/auth/validate', {
+              headers: {
+                'x-access-token': storedToken,
+              },
+            })
+              .then((response) => {
+                if (response.ok) {
+                  // If we used the old plexAuthToken, migrate to new authToken
+                  if (!authToken && plexToken) {
+                    localStorage.setItem('authToken', plexToken);
+                    localStorage.removeItem('plexAuthToken');
+                  }
+                  setToken(storedToken);
+                } else {
+                  localStorage.removeItem('authToken');
+                  localStorage.removeItem('plexAuthToken');
+                  setToken(null);
+                }
+              })
+              .catch(() => {
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('plexAuthToken');
+                setToken(null);
+              });
           }
-        })
-        .catch(() => {
-          localStorage.removeItem('plexAuthToken');
-          setToken(null);
-        });
-      }
+        }
+      })
+      .catch(err => {
+        console.error('Setup status check failed:', err);
+        setCheckingSetup(false);
+        setRequiresSetup(false); // Assume setup not required if check fails
+      });
 
     // Fetch the current release version from the server
     axios
@@ -131,7 +162,7 @@ function App() {
               style={{ fontSize: isMobile ? 'small' : 'large' }}
               align='center'
             >
-              Youtube Video Management For Plex
+              YouTube Video Manager
             </Typography>
           </div>
           <Typography
@@ -244,6 +275,22 @@ function App() {
                   />
                 </ListItem>
               )}
+              {token && (
+                <ListItem
+                  button
+                  onClick={() => {
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('plexAuthToken');
+                    setToken(null);
+                    handleDrawerToggle();
+                  }}
+                >
+                  <ListItemText
+                    primaryTypographyProps={{ fontSize: 'large' }}
+                    primary='Logout'
+                  />
+                </ListItem>
+              )}
             </List>
           </Drawer>
         </Grid>
@@ -260,36 +307,47 @@ function App() {
               width: '100%',
             }}
           >
-            <Routes>
-              <Route path='/login' element={<Login setToken={setToken} />} />
-              {token ? (
-                <>
-                  <Route
-                    path='/configuration'
-                    element={<Configuration token={token} />}
-                  />
-                  <Route
-                    path='/channels'
-                    element={<ChannelManager token={token} />}
-                  />
-                  <Route
-                    path='/downloads'
-                    element={<DownloadManager token={token} />}
-                  />
-                  <Route
-                    path='/videos'
-                    element={<VideosPage token={token} />}
-                  />
-                  <Route
-                    path='/channel/:channel_id'
-                    element={<ChannelPage token={token} />}
-                  />
-                  <Route path='/*' element={<Navigate to='/downloads' />} />
-                </>
-              ) : (
-                <Route path='/*' element={<Navigate to='/login' />} />
-              )}
-            </Routes>
+            {checkingSetup ? (
+              <div>Loading...</div>
+            ) : (
+              <Routes>
+                <Route path='/setup' element={<InitialSetup onSetupComplete={(newToken) => {
+                  setToken(newToken);
+                  setRequiresSetup(false);
+                  window.location.href = '/configuration';
+                }} />} />
+                <Route path='/login' element={<LocalLogin setToken={setToken} />} />
+                <Route path='/plex-login' element={<Login setToken={setToken} />} />
+                {token ? (
+                  <>
+                    <Route
+                      path='/configuration'
+                      element={<Configuration token={token} />}
+                    />
+                    <Route
+                      path='/channels'
+                      element={<ChannelManager token={token} />}
+                    />
+                    <Route
+                      path='/downloads'
+                      element={<DownloadManager token={token} />}
+                    />
+                    <Route
+                      path='/videos'
+                      element={<VideosPage token={token} />}
+                    />
+                    <Route
+                      path='/channel/:channel_id'
+                      element={<ChannelPage token={token} />}
+                    />
+                    <Route path='/*' element={<Navigate to='/downloads' />} />
+                  </>
+                ) : (
+                  // If setup is required, redirect to setup, otherwise to login
+                  <Route path='/*' element={<Navigate to={requiresSetup ? '/setup' : '/login'} />} />
+                )}
+              </Routes>
+            )}
           </Container>
         </Grid>
       </Grid>

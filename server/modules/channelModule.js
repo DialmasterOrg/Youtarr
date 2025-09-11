@@ -8,8 +8,7 @@ const Channel = require('../models/channel');
 const ChannelVideo = require('../models/channelvideo');
 //const Video = require('../models/video');
 const MessageEmitter = require('./messageEmitter.js'); // import the helper function
-const { google } = require('googleapis');
-const { parse } = require('iso8601-duration');
+// YouTube API removed - using yt-dlp for all video fetching
 
 const { v4: uuidv4 } = require('uuid');
 const { spawn, execSync } = require('child_process');
@@ -296,47 +295,7 @@ class ChannelModule {
     configModule.onConfigChange(this.scheduleTask.bind(this));
   }
 
-  async fetchYoutubeVideos(youtube, channelId) {
-    return new Promise((resolve, reject) => {
-      const uploadsPlaylistId = `UU${channelId.slice(2)}`; // Extract uploads playlist ID
-
-      youtube.playlistItems.list(
-        {
-          part: 'snippet',
-          playlistId: uploadsPlaylistId,
-          maxResults: 50,
-        },
-        (err, res) => {
-          if (err) {
-            console.error('The API returned an error: ' + err);
-            reject(err);
-          } else {
-            resolve(res.data.items);
-          }
-        }
-      );
-    });
-  }
-
-  // Fetch video details
-  async fetchVideoDetails(youtube, videoIds) {
-    return new Promise((resolve, reject) => {
-      youtube.videos.list(
-        {
-          part: 'contentDetails',
-          id: videoIds,
-        },
-        (err, res) => {
-          if (err) {
-            console.error('The API returned an errors: ' + err);
-            reject(err);
-          } else {
-            resolve(res.data.items);
-          }
-        }
-      );
-    });
-  }
+  // YouTube API methods removed - using yt-dlp instead
 
   // Insert videos into DB
   async insertVideosIntoDb(videos, channelId) {
@@ -374,78 +333,189 @@ class ChannelModule {
     });
   }
 
-  async getChannelVideos(channelId) {
-    const youtube = google.youtube({
-      version: 'v3',
-      auth: configModule.getConfig().youtubeApiKey,
+  // Fetch channel videos using yt-dlp (no API key required)
+  async fetchChannelVideosViaYtDlp(channelId) {
+    console.log('Fetching videos via yt-dlp for channel:', channelId);
+
+    // Get channel URL from database
+    const channel = await Channel.findOne({
+      where: { channel_id: channelId },
     });
 
+    if (!channel || !channel.url) {
+      throw new Error('Channel not found in database');
+    }
+
+    const outputFilePath = path.join(__dirname, `channel-videos-${uuidv4()}.json`);
+    const writeStream = fs.createWriteStream(outputFilePath);
+
+    // Use yt-dlp to get channel videos metadata without downloading
+    // Using --flat-playlist for speed, but with additional extractors for thumbnails
+    const ytDlp = spawn('yt-dlp', [
+      '--flat-playlist',
+      '--dump-single-json',
+      '--playlist-end', '50', // Get latest 50 videos
+      '-4',
+      channel.url,
+    ]);
+
+    ytDlp.stdout.pipe(writeStream);
+
+    // Handle ytDlp exit
+    await new Promise((resolve, reject) => {
+      ytDlp.on('exit', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`yt-dlp exited with code ${code}`));
+        }
+      });
+      ytDlp.on('error', reject);
+    });
+
+    try {
+      // Read and parse the JSON output
+      const fileContent = await fsPromises.readFile(outputFilePath, 'utf8');
+      const jsonOutput = JSON.parse(fileContent);
+
+      // Process entries from the playlist
+      const videos = [];
+      if (jsonOutput.entries && Array.isArray(jsonOutput.entries)) {
+        for (const entry of jsonOutput.entries) {
+          // Skip shorts (videos under 70 seconds)
+          if (entry.duration && entry.duration < 70) {
+            continue;
+          }
+
+          // Convert upload_date from YYYYMMDD to ISO date
+          let publishedAt = null;
+          if (entry.upload_date) {
+            const year = entry.upload_date.substring(0, 4);
+            const month = entry.upload_date.substring(4, 6);
+            const day = entry.upload_date.substring(6, 8);
+            publishedAt = new Date(`${year}-${month}-${day}`).toISOString();
+          }
+
+          // Get thumbnail - with flat-playlist, we need to construct the URL
+          let thumbnail = '';
+          if (entry.thumbnail) {
+            // If yt-dlp provides a thumbnail URL, use it
+            thumbnail = entry.thumbnail;
+          } else if (entry.thumbnails && Array.isArray(entry.thumbnails) && entry.thumbnails.length > 0) {
+            // If we have thumbnails array, pick the best one
+            const mediumThumb = entry.thumbnails.find(t => t.id === 'medium' || t.id === '3');
+            thumbnail = mediumThumb ? mediumThumb.url : entry.thumbnails[entry.thumbnails.length - 1].url;
+          } else if (entry.id) {
+            // Fallback: construct YouTube thumbnail URL from video ID
+            // YouTube's thumbnail URL pattern is predictable
+            thumbnail = `https://i.ytimg.com/vi/${entry.id}/mqdefault.jpg`;
+          }
+
+          videos.push({
+            title: entry.title || 'Untitled',
+            youtube_id: entry.id,
+            publishedAt: publishedAt || new Date().toISOString(),
+            thumbnail: thumbnail,
+            duration: entry.duration || 0,
+          });
+        }
+      }
+
+      // Clean up temp file
+      await fsPromises.unlink(outputFilePath);
+
+      return videos;
+    } catch (error) {
+      // Clean up temp file on error
+      try {
+        await fsPromises.unlink(outputFilePath);
+      } catch (unlinkError) {
+        // Ignore unlink errors
+      }
+      throw error;
+    }
+  }
+
+  async getChannelVideos(channelId) {
     // Get channel from DB
     const channel = await Channel.findOne({
       where: { channel_id: channelId },
     });
 
+    let result = {
+      videos: [],
+      videoFail: false,
+      failureReason: null,
+      dataSource: 'cache',
+      lastFetched: channel ? channel.lastFetched : null,
+    };
+
     try {
-      // Fetch videos from YouTube API if last fetched more than 6 hours ago
-      if (
-        channel &&
-        new Date() - new Date(channel.lastFetched) > 6 * 60 * 60 * 1000
-      ) {
-        console.log('Fetching videos from YouTube API');
-        const videos = await this.fetchYoutubeVideos(youtube, channelId);
+      // First, check current state of videos in DB
+      let newestVideos = await this.fetchNewestVideosFromDb(channelId);
 
-        const videoIds = videos
-          .map((video) => video.snippet.resourceId.videoId)
-          .join(',');
+      // Check if we need to fetch new data
+      // Fetch if: no lastFetched, more than 6 hours old, OR if we have no videos in DB
+      const needsRefresh = channel &&
+        (!channel.lastFetched ||
+         new Date() - new Date(channel.lastFetched) > 6 * 60 * 60 * 1000 ||
+         newestVideos.length === 0);
 
-        const videoDetails = await this.fetchVideoDetails(youtube, videoIds);
+      if (needsRefresh) {
+        // Always use yt-dlp for fetching videos
+        console.log('Fetching videos using yt-dlp');
+        await this.fetchAndSaveVideosViaYtDlp(channel, channelId);
+        result.dataSource = 'yt_dlp';
 
-        const videoPromises = videoDetails.map((videoDetail) => {
-          const snippet = videos.find(
-            (v) => v.snippet.resourceId.videoId === videoDetail.id
-          ).snippet;
+        // Re-fetch videos from database after updating
+        newestVideos = await this.fetchNewestVideosFromDb(channelId);
+      }
 
-          // Parse the ISO 8601 duration into an object
-          const duration = parse(videoDetail.contentDetails.duration);
+      // Use the videos we have (either from cache or freshly fetched)
+      result.videos = newestVideos;
+      result.lastFetched = channel ? channel.lastFetched : null;
 
-          const totalDurationSeconds =
-            duration.seconds + duration.minutes * 60 + duration.hours * 3600;
+      // Only show failure if we have no videos at all
+      if (newestVideos.length === 0) {
+        result.videoFail = true;
+        result.failureReason = 'fetch_error';
+      }
 
-          // Attempt to filter out "shorts" videos
-          if (totalDurationSeconds < 70) {
-            return null;
-          }
+      return result;
+    } catch (error) {
+      console.error('Error fetching channel videos:', error);
 
-          return {
-            title: snippet.title,
-            youtube_id: videoDetail.id,
-            publishedAt: snippet.publishedAt,
-            thumbnail: snippet.thumbnails.medium.url,
-            duration: totalDurationSeconds, // Add the duration field
-          };
-        });
-        let videosOutput = await Promise.all(videoPromises);
+      // Try to return cached data
+      const cachedVideos = await this.fetchNewestVideosFromDb(channelId);
 
-        // Update channel lastFetched
-        const channel = await Channel.findOne({
-          where: { channel_id: channelId },
-        });
+      result.videos = cachedVideos;
+      result.videoFail = cachedVideos.length === 0;
+      result.failureReason = cachedVideos.length === 0 ? 'fetch_error' : null;
+      result.dataSource = 'cache';
+      result.lastFetched = channel ? channel.lastFetched : null;
+
+      return result;
+    }
+  }
+
+  // Helper method to fetch and save videos using yt-dlp
+  async fetchAndSaveVideosViaYtDlp(channel, channelId) {
+    try {
+      const videos = await this.fetchChannelVideosViaYtDlp(channelId);
+
+      console.log('Found ' + videos.length + ' videos via yt-dlp');
+      if (videos.length > 0) {
+        await this.insertVideosIntoDb(videos, channelId);
+      }
+
+      // Update channel lastFetched
+      if (channel) {
         channel.lastFetched = new Date();
         await channel.save();
-
-        videosOutput = videosOutput.filter((video) => video !== null);
-        console.log('Found ' + videosOutput.length + ' videos');
-        if (videosOutput.length > 0) {
-          await this.insertVideosIntoDb(videosOutput, channelId);
-        }
       }
-      const newestVideos = await this.fetchNewestVideosFromDb(channelId);
-
-      return newestVideos;
-    } catch (error) {
-      // In case of error, return whatever the DB has
-      const newestVideos = await this.fetchNewestVideosFromDb(channelId);
-      return newestVideos;
+    } catch (ytdlpError) {
+      console.error('yt-dlp error:', ytdlpError);
+      throw ytdlpError;
     }
   }
 }
