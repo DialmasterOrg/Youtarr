@@ -388,6 +388,11 @@ class ChannelModule {
             continue;
           }
 
+          // Skip members-only videos
+          if (entry.availability === 'subscriber_only') {
+            continue;
+          }
+
           // Parse the published date from various possible fields
           let publishedAt = null;
           
