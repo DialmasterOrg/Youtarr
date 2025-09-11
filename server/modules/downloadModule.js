@@ -218,7 +218,7 @@ class DownloadModule {
       configModule.ffmpegPath +
       ` -f "bestvideo[height<=${resolution}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --write-thumbnail --convert-thumbnails jpg ` +
       '--download-archive ./config/complete.list --ignore-errors --embed-metadata --write-info-json ' +
-      '--match-filter "duration>70" ' +  // Filter out shorts (videos under 70 seconds)
+      '--match-filter "duration>70 & availability!=subscriber_only" ' +  // Filter out shorts and members-only videos
       '-o "' +
       configModule.directoryPath +
       '/%(uploader)s/%(uploader)s - %(title)s - %(id)s/%(uploader)s - %(title)s  [%(id)s].%(ext)s" ' +
