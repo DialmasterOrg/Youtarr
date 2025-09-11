@@ -37,7 +37,7 @@ import ChannelPage from './components/ChannelPage';
 
 function App() {
   const [token, setToken] = useState<string | null>(
-    localStorage.getItem('authToken') || localStorage.getItem('plexAuthToken')
+    localStorage.getItem('authToken') // Only use the new authToken, no fallback to plexAuthToken
   );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [serverVersion, setServerVersion] = useState('');
@@ -54,6 +54,11 @@ function App() {
   };
 
   useEffect(() => {
+    // IMMEDIATELY clear any old plexAuthToken that might exist from previous auth method
+    if (localStorage.getItem('plexAuthToken')) {
+      localStorage.removeItem('plexAuthToken');
+    }
+
     // First check if setup is required
     fetch('/setup/status')
       .then(response => response.json())
@@ -73,11 +78,6 @@ function App() {
         if (!data.requiresSetup) {
           // Only use the new authToken - no fallback to plexAuthToken
           const authToken = localStorage.getItem('authToken');
-          
-          // Clear any old plexAuthToken that might exist
-          if (localStorage.getItem('plexAuthToken')) {
-            localStorage.removeItem('plexAuthToken');
-          }
 
           if (authToken) {
             // Use the new auth/validate endpoint
