@@ -123,6 +123,8 @@ if ! grep -q "passwordHash" config/config.json 2>/dev/null; then
   echo ""
   echo "Your Plex integration (if configured) will continue to work"
   echo "for library refreshes."
+  echo ""
+  echo "All your existing channels, videos and configuration will be retained."
   echo "================================================================"
 fi
 
