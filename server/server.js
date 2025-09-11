@@ -61,24 +61,34 @@ const initialize = async () => {
     const verifyToken = async function(req, res, next) {
       const config = configModule.getConfig();
 
-      // Allow setup endpoints if auth not configured
-      if (!config.passwordHash && req.path.startsWith('/setup')) {
-        const clientIP = req.ip || req.connection.remoteAddress;
-        const isLocalhost = isLocalhostIP(clientIP);
+      // If no password hash exists, authentication is not configured
+      // Only allow setup endpoints in this state
+      if (!config.passwordHash) {
+        if (req.path.startsWith('/setup')) {
+          const clientIP = req.ip || req.connection.remoteAddress;
+          const isLocalhost = isLocalhostIP(clientIP);
 
-        if (!isLocalhost) {
-          return res.status(403).json({
-            error: 'Initial setup can only be performed from localhost',
-            instruction: 'Please access from http://localhost:3087'
+          if (!isLocalhost) {
+            return res.status(403).json({
+              error: 'Initial setup can only be performed from localhost',
+              instruction: 'Please access from http://localhost:3087'
+            });
+          }
+          return next();
+        } else {
+          // Reject ALL other endpoints if auth not configured
+          return res.status(503).json({ 
+            error: 'Authentication not configured',
+            requiresSetup: true,
+            message: 'Please complete initial setup first'
           });
         }
-        return next();
       }
 
       // Check for token in headers
       const token = req.headers['x-access-token'];
 
-      if (!token || !config.passwordHash) {
+      if (!token) {
         return res.status(403).json({ error: 'No token provided' });
       }
 
@@ -625,8 +635,19 @@ const initialize = async () => {
       });
     });
 
-    // Plex AUTH routes (the only unprotected routes)
+    // Plex AUTH routes - require local auth to be configured first
     app.get('/plex/auth-url', async (req, res) => {
+      const config = configModule.getConfig();
+      
+      // If auth not configured, reject
+      if (!config.passwordHash) {
+        return res.status(503).json({ 
+          error: 'Authentication not configured',
+          requiresSetup: true,
+          message: 'Please complete initial setup first'
+        });
+      }
+      
       try {
         const result = await plexModule.getAuthUrl();
         res.json(result);
@@ -636,6 +657,17 @@ const initialize = async () => {
       }
     });
     app.get('/plex/check-pin/:pinId', async (req, res) => {
+      const config = configModule.getConfig();
+      
+      // If auth not configured, reject
+      if (!config.passwordHash) {
+        return res.status(503).json({ 
+          error: 'Authentication not configured',
+          requiresSetup: true,
+          message: 'Please complete initial setup first'
+        });
+      }
+      
       try {
         const { pinId } = req.params;
         const result = await plexModule.checkPin(pinId);
