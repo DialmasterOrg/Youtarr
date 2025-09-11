@@ -13,4 +13,5 @@ export interface ChannelVideo {
   thumbnail: string;
   added: boolean;
   duration: number;
+  availability?: string | null;
 }

@@ -297,13 +297,31 @@ class ChannelModule {
 
   // YouTube API methods removed - using yt-dlp instead
 
-  // Insert videos into DB
+  // Insert or update videos in DB
   async insertVideosIntoDb(videos, channelId) {
     for (const video of videos) {
-      await ChannelVideo.findOrCreate({
-        where: { youtube_id: video.youtube_id, channel_id: channelId },
-        defaults: video,
+      // Find existing video or create new one
+      const [videoRecord, created] = await ChannelVideo.findOrCreate({
+        where: { 
+          youtube_id: video.youtube_id, 
+          channel_id: channelId 
+        },
+        defaults: {
+          ...video,
+          channel_id: channelId,
+        },
       });
+      
+      // If video already existed, update it with latest metadata
+      if (!created) {
+        await videoRecord.update({
+          title: video.title,
+          thumbnail: video.thumbnail,
+          duration: video.duration,
+          publishedAt: video.publishedAt,
+          availability: video.availability || null,
+        });
+      }
     }
   }
 
@@ -388,10 +406,7 @@ class ChannelModule {
             continue;
           }
 
-          // Skip members-only videos
-          if (entry.availability === 'subscriber_only') {
-            continue;
-          }
+          // Store availability for all videos including subscriber_only
 
           // Parse the published date from various possible fields
           let publishedAt = null;
@@ -435,6 +450,7 @@ class ChannelModule {
             publishedAt: publishedAt,  // Always has a value now (either real date or 90 days ago)
             thumbnail: thumbnail,
             duration: entry.duration || 0,
+            availability: entry.availability || null,
           });
         }
       }

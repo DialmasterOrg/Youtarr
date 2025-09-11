@@ -20,8 +20,12 @@ import {
   Typography,
   Alert,
   Chip,
+  IconButton,
+  Tooltip,
+  Snackbar,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import InfoIcon from '@mui/icons-material/Info';
 
 import Pagination from '@mui/material/Pagination';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -44,6 +48,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const [checkedBoxes, setCheckedBoxes] = useState<string[]>([]); // new state variable
   const [hideDownloaded, setHideDownloaded] = useState(false);
+  const [mobileTooltip, setMobileTooltip] = useState<string | null>(null);
   const { channel_id } = useParams();
 
   const navigate = useNavigate();
@@ -122,6 +127,36 @@ function ChannelVideos({ token }: ChannelVideosProps) {
     // Filter out downloaded videos if hideDownloaded is enabled
     return hideDownloaded ? !video.added : true;
   });
+
+  const getInfoIcon = (tooltipText: string) => {
+    const handleClick = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (isMobile) {
+        setMobileTooltip(mobileTooltip === tooltipText ? null : tooltipText);
+      }
+    };
+
+    if (isMobile) {
+      return (
+        <IconButton
+          size="small"
+          sx={{ ml: 0.5, p: 0.5 }}
+          onClick={handleClick}
+        >
+          <InfoIcon fontSize="small" />
+        </IconButton>
+      );
+    }
+
+    return (
+      <Tooltip title={tooltipText} arrow placement="top">
+        <IconButton size="small" sx={{ ml: 0.5, p: 0.5 }}>
+          <InfoIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+    );
+  };
 
   const handlers = useSwipeable({
     onSwipedLeft: () => {
@@ -298,9 +333,14 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                 )}
                 {videosToDisplay
                   .slice((page - 1) * videosPerPage, page * videosPerPage)
-                  .map((video) =>
+                  .map((video) => {
+                    const isMembersOnly = video.availability === 'subscriber_only';
+                    return (
                     isMobile ? (
-                      <TableRow key={video.youtube_id}>
+                      <TableRow 
+                        key={video.youtube_id}
+                        sx={{ opacity: isMembersOnly ? 0.6 : 1 }}
+                      >
                         <TableCell>
                           <img
                             style={{ maxWidth: '200px' }}
@@ -327,6 +367,13 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                               color='success'
                               style={{ marginLeft: '8px' }}
                             />
+                          ) : isMembersOnly ? (
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <Typography variant="body2" color="text.secondary">
+                                Members Only
+                              </Typography>
+                              {getInfoIcon('Unable to download Members Only/Subscribers Only videos')}
+                            </Box>
                           ) : (
                             <Checkbox
                               checked={checkedBoxes.includes(video.youtube_id)}
@@ -341,7 +388,10 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      <TableRow key={video.youtube_id}>
+                      <TableRow 
+                        key={video.youtube_id}
+                        sx={{ opacity: isMembersOnly ? 0.6 : 1 }}
+                      >
                         <TableCell>
                           <img
                             style={{ maxWidth: '200px' }}
@@ -366,6 +416,13 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                               color='success'
                               style={{ marginLeft: '8px' }}
                             />
+                          ) : isMembersOnly ? (
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <Typography variant="body2" color="text.secondary">
+                                Members Only
+                              </Typography>
+                              {getInfoIcon('Unable to download Members Only/Subscribers Only videos')}
+                            </Box>
                           ) : (
                             <Checkbox
                               checked={checkedBoxes.includes(video.youtube_id)}
@@ -380,12 +437,27 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                         </TableCell>
                       </TableRow>
                     )
-                  )}
+                  );})}
               </TableBody>
             </Table>
           </TableContainer>
         </CardContent>
       </div>
+
+      <Snackbar
+        open={mobileTooltip !== null}
+        autoHideDuration={8000}
+        onClose={() => setMobileTooltip(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setMobileTooltip(null)}
+          severity="info"
+          icon={<InfoIcon />}
+        >
+          {mobileTooltip}
+        </Alert>
+      </Snackbar>
     </Card>
   );
 }
