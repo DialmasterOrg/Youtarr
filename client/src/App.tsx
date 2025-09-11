@@ -61,37 +61,41 @@ function App() {
         setRequiresSetup(data.requiresSetup);
         setCheckingSetup(false);
         
+        // If setup is required, clear ALL existing tokens to force fresh authentication
+        if (data.requiresSetup) {
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('plexAuthToken');
+          setToken(null);
+          return; // Don't proceed with token validation
+        }
+        
         // Only check auth token if setup is not required
         if (!data.requiresSetup) {
-          // Try new auth token first, then fall back to plex token for migration
+          // Only use the new authToken - no fallback to plexAuthToken
           const authToken = localStorage.getItem('authToken');
-          const plexToken = localStorage.getItem('plexAuthToken');
-          const storedToken = authToken || plexToken;
+          
+          // Clear any old plexAuthToken that might exist
+          if (localStorage.getItem('plexAuthToken')) {
+            localStorage.removeItem('plexAuthToken');
+          }
 
-          if (storedToken) {
+          if (authToken) {
             // Use the new auth/validate endpoint
             fetch('/auth/validate', {
               headers: {
-                'x-access-token': storedToken,
+                'x-access-token': authToken,
               },
             })
               .then((response) => {
                 if (response.ok) {
-                  // If we used the old plexAuthToken, migrate to new authToken
-                  if (!authToken && plexToken) {
-                    localStorage.setItem('authToken', plexToken);
-                    localStorage.removeItem('plexAuthToken');
-                  }
-                  setToken(storedToken);
+                  setToken(authToken);
                 } else {
                   localStorage.removeItem('authToken');
-                  localStorage.removeItem('plexAuthToken');
                   setToken(null);
                 }
               })
               .catch(() => {
                 localStorage.removeItem('authToken');
-                localStorage.removeItem('plexAuthToken');
                 setToken(null);
               });
           }
