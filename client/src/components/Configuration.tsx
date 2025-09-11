@@ -797,8 +797,10 @@ function Configuration({ token }: ConfigurationProps) {
           color={hasUnsavedChanges ? 'warning' : 'primary'}
           onClick={config.initialSetup ? handleOpenConfirmDialog : saveConfig}
           size="large"
-          fullWidth
           sx={{
+            width: { xs: '100%', sm: '500px' },
+            mx: 'auto',
+            display: 'block',
             animation: hasUnsavedChanges ? 'pulse 1.5s infinite' : 'none',
             '@keyframes pulse': {
               '0%': {

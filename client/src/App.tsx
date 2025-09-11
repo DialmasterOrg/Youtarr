@@ -30,7 +30,6 @@ import Configuration from './components/Configuration';
 import ChannelManager from './components/ChannelManager';
 import DownloadManager from './components/DownloadManager';
 import VideosPage from './components/VideosPage';
-import Login from './components/Login';
 import LocalLogin from './components/LocalLogin';
 import InitialSetup from './components/InitialSetup';
 import ChannelPage from './components/ChannelPage';
@@ -104,7 +103,9 @@ function App() {
       .catch(err => {
         console.error('Setup status check failed:', err);
         setCheckingSetup(false);
-        setRequiresSetup(false); // Assume setup not required if check fails
+        // Default to true (require setup) when we can't reach the server
+        // This is safer than assuming setup is complete
+        setRequiresSetup(true);
       });
 
     // Fetch the current release version from the server
@@ -321,7 +322,6 @@ function App() {
                   window.location.href = '/configuration';
                 }} />} />
                 <Route path='/login' element={<LocalLogin setToken={setToken} />} />
-                <Route path='/plex-login' element={<Login setToken={setToken} />} />
                 {token ? (
                   <>
                     <Route
