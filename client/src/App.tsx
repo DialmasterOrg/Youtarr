@@ -33,6 +33,7 @@ import VideosPage from './components/VideosPage';
 import LocalLogin from './components/LocalLogin';
 import InitialSetup from './components/InitialSetup';
 import ChannelPage from './components/ChannelPage';
+import StorageStatus from './components/StorageStatus';
 
 function App() {
   const [token, setToken] = useState<string | null>(
@@ -148,6 +149,7 @@ function App() {
           >
             <MenuIcon fontSize='large' />
           </IconButton>
+          <StorageStatus token={token} />
           <div
             style={{
               marginTop: '8px',
