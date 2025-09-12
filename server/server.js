@@ -357,6 +357,20 @@ const initialize = async () => {
         });
     });
 
+    app.get('/storage-status', verifyToken, async (req, res) => {
+      try {
+        const status = await configModule.getStorageStatus();
+        if (status) {
+          res.json(status);
+        } else {
+          res.status(500).json({ error: 'Could not retrieve storage status' });
+        }
+      } catch (error) {
+        console.error('Error in /storage-status endpoint:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
     // Takes a list of specific youtube urls and downloads them
     app.post('/triggerspecificdownloads', verifyToken, (req, res) => {
       downloadModule.doSpecificDownloads(req);
