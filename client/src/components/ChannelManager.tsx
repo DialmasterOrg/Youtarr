@@ -62,8 +62,8 @@ function ChannelManager({ token }: ChannelManagerProps) {
           },
         })
         .then((response) => {
-          // Sort the channels by uploader
-          response.data.sort((a: Channel, b: Channel) => {
+          // Sort the channels by uploader without mutating the original array
+          const sorted = [...response.data].sort((a: Channel, b: Channel) => {
             if (a.uploader < b.uploader) {
               return -1;
             }
@@ -72,7 +72,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
             }
             return 0;
           });
-          setChannels(response.data);
+          setChannels(sorted);
         });
     }
   }, [token]);
@@ -278,6 +278,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
           size="small"
           sx={{ ml: 0.5, p: 0.5 }}
           onClick={handleClick}
+          data-testid="info-button"
         >
           <InfoIcon fontSize="small" />
         </IconButton>
@@ -286,7 +287,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
 
     return (
       <Tooltip title={tooltipText} arrow placement="top">
-        <IconButton size="small" sx={{ ml: 0.5, p: 0.5 }}>
+        <IconButton size="small" sx={{ ml: 0.5, p: 0.5 }} data-testid="info-button">
           <InfoIcon fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -308,6 +309,13 @@ function ChannelManager({ token }: ChannelManagerProps) {
                       ? { backgroundColor: '#b8ffef' }
                       : { backgroundColor: index % 2 === 0 ? 'white' : '#DDE' }
                   }
+                  data-state={
+                    unsavedChannels.includes(channel.url)
+                      ? 'new'
+                      : deletedChannels.includes(channel.url)
+                      ? 'deleted'
+                      : undefined
+                  }
                 >
                   <Grid
                     container
@@ -321,7 +329,8 @@ function ChannelManager({ token }: ChannelManagerProps) {
                       sm={11}
                       onClick={() => navigate(`/channel/${channel.channel_id}`)}
                       style={{ cursor: 'pointer' }}
-                    >
+                      data-testid={`channel-click-area-${channel.channel_id}`}
+                      >
                       <div style={{ display: 'flex', alignItems: 'center' }}>
                         <img
                           src={`/images/channelthumb-${channel.channel_id}.jpg`}
@@ -331,6 +340,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
                             width: isMobile ? '50px' : '75px',
                             marginRight: '10px',
                           }}
+                          data-size={isMobile ? 'small' : 'large'}
                           onError={(e) => {
                             (e.target as HTMLImageElement).style.display =
                               'none';
@@ -376,6 +386,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
                             edge='end'
                             onClick={() => handleDelete(index)}
                             size={isMobile ? 'small' : 'medium'}
+                            data-testid='delete-channel-button'
                           >
                             <Delete />
                           </IconButton>
@@ -423,7 +434,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
           }}
         >
           <Tooltip placement='top' title='Add a new channel to the list above'>
-            <IconButton onClick={handleAdd} color='primary'>
+            <IconButton onClick={handleAdd} color='primary' data-testid='add-channel-button'>
               <AddIcon fontSize='large' />
             </IconButton>
           </Tooltip>
@@ -439,6 +450,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
                   unsavedChannels.length === 0 && deletedChannels.length === 0
                 }
                 style={{ fontSize: isMobile ? 'small' : 'medium' }}
+                data-size={isMobile ? 'small' : 'medium'}
               >
                 Undo
               </Button>
@@ -459,6 +471,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
                 onClick={handleSave}
                 fullWidth
                 style={{ fontSize: isMobile ? 'small' : 'medium' }}
+                data-size={isMobile ? 'small' : 'medium'}
               >
                 Save Changes
               </Button>
