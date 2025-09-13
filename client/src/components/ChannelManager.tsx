@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect, useCallback } from 'react';
+import React, { useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   Tooltip,
   Grid,
@@ -35,6 +35,7 @@ interface ChannelManagerProps {
 
 function ChannelManager({ token }: ChannelManagerProps) {
   const [channels, setChannels] = useState<Channel[]>([]);
+  const listContainerRef = useRef<HTMLDivElement>(null);
   const [newChannel, setNewChannel] = useState<Channel>({
     url: '',
     uploader: '',
@@ -44,6 +45,9 @@ function ChannelManager({ token }: ChannelManagerProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [dialogMessage, setDialogMessage] = useState('');
   const [mobileTooltip, setMobileTooltip] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  // Store a stable identifier (URL) for pending deletion
+  const [channelToDelete, setChannelToDelete] = useState<string | null>(null);
   const websocketContext = useContext(WebSocketContext);
   const navigate = useNavigate();
   if (!websocketContext) {
@@ -214,9 +218,31 @@ function ChannelManager({ token }: ChannelManagerProps) {
 
     setUnsavedChannels([...unsavedChannels, normalizedUrl]);
     setNewChannel({ url: '', uploader: '', channel_id: '' });
+
+    // Auto-scroll to bottom to show the newly added channel
+    setTimeout(() => {
+      if (listContainerRef.current) {
+        listContainerRef.current.scrollTop = listContainerRef.current.scrollHeight;
+      }
+    }, 100);
   };
 
-  const handleDelete = (index: number) => {
+  const handleDeleteClick = (index: number) => {
+    setChannelToDelete(channels[index].url);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (channelToDelete === null) return;
+
+    const index = channels.findIndex((c) => c.url === channelToDelete);
+    if (index === -1) {
+      // Channel no longer exists; just close the dialog
+      setDeleteConfirmOpen(false);
+      setChannelToDelete(null);
+      return;
+    }
+
     if (unsavedChannels.includes(channels[index].url)) {
       setUnsavedChannels(
         unsavedChannels.filter(
@@ -229,6 +255,14 @@ function ChannelManager({ token }: ChannelManagerProps) {
     } else {
       setDeletedChannels([...deletedChannels, channels[index].url]);
     }
+    
+    setDeleteConfirmOpen(false);
+    setChannelToDelete(null);
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirmOpen(false);
+    setChannelToDelete(null);
   };
 
   const handleUndo = () => {
@@ -295,15 +329,34 @@ function ChannelManager({ token }: ChannelManagerProps) {
   };
 
   return (
-    <Card elevation={8} style={{ padding: '8px', marginBottom: '16px' }}>
-      <Grid container spacing={2} style={{ marginBottom: '8px' }}>
-        <Grid item xs={12}>
-          <Card elevation={2}>
-            <CardHeader title='Your Channels' align='center' />
-            <List style={{ border: '1px solid #DDE' }}>
+    <Card elevation={8} style={{
+      padding: '8px',
+      marginBottom: '16px',
+      height: 'calc(100vh - 175px)',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      <Box sx={{
+        flex: 1,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        mb: 2
+      }}>
+        <Card elevation={2} sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <CardHeader title='Your Channels' align='center' />
+            <Box
+              ref={listContainerRef}
+              sx={{
+                flex: 1,
+                overflow: 'auto',
+                border: '1px solid #DDE',
+                borderTop: 'none'
+              }}>
+              <List>
               {channels.map((channel, index) => (
                 <ListItem
-                  key={index}
+                  key={channel.channel_id || channel.url}
                   style={
                     unsavedChannels.includes(channel.url)
                       ? { backgroundColor: '#b8ffef' }
@@ -384,7 +437,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
                         <ListItemSecondaryAction>
                           <IconButton
                             edge='end'
-                            onClick={() => handleDelete(index)}
+                            onClick={() => handleDeleteClick(index)}
                             size={isMobile ? 'small' : 'medium'}
                             data-testid='delete-channel-button'
                           >
@@ -396,11 +449,17 @@ function ChannelManager({ token }: ChannelManagerProps) {
                   </Grid>
                 </ListItem>
               ))}
-            </List>
-          </Card>
-        </Grid>
-        <Grid item xs={11}>
-          <Card elevation={0} style={{ paddingTop: '8px' }}>
+              </List>
+            </Box>
+        </Card>
+      </Box>
+      <Box sx={{
+        borderTop: '2px solid #e0e0e0',
+        pt: 2,
+        backgroundColor: 'background.paper'
+      }}>
+        <Grid container spacing={2}>
+          <Grid item xs={11}>
             <Box sx={{ display: 'flex', alignItems: 'flex-end' }}>
               <TextField
                 label='Add a new channel'
@@ -421,8 +480,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
               />
               {getInfoIcon('Enter a YouTube channel. Supported formats: @ChannelName, ChannelName, youtube.com/@ChannelName, full URLs, or with /videos suffix')}
             </Box>
-          </Card>
-        </Grid>
+          </Grid>
         <Grid
           item
           xs={1}
@@ -439,8 +497,8 @@ function ChannelManager({ token }: ChannelManagerProps) {
             </IconButton>
           </Tooltip>
         </Grid>
-        <Grid item xs={6}>
-          <Tooltip placement='top' title='Revert unsaved changes'>
+          <Grid item xs={6}>
+            <Tooltip placement='top' title='Revert unsaved changes'>
             <span>
               <Button
                 variant='contained'
@@ -456,12 +514,12 @@ function ChannelManager({ token }: ChannelManagerProps) {
               </Button>
             </span>
           </Tooltip>
-        </Grid>
-        <Grid item xs={6}>
-          <Tooltip
-            placement='top'
-            title='Save your changes and make them active'
-          >
+          </Grid>
+          <Grid item xs={6}>
+            <Tooltip
+              placement='top'
+              title='Save your changes and make them active'
+            >
             <span>
               <Button
                 variant='contained'
@@ -477,8 +535,9 @@ function ChannelManager({ token }: ChannelManagerProps) {
               </Button>
             </span>
           </Tooltip>
+          </Grid>
         </Grid>
-      </Grid>
+      </Box>
 
       <Dialog
         open={isDialogOpen}
@@ -497,6 +556,30 @@ function ChannelManager({ token }: ChannelManagerProps) {
         <DialogActions>
           <Button onClick={handleCloseDialog} color='primary' autoFocus>
             Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={handleDeleteCancel}
+        aria-labelledby='delete-confirm-dialog-title'
+        aria-describedby='delete-confirm-dialog-description'
+      >
+        <DialogContent>
+          <DialogContentText
+            id='delete-confirm-dialog-description'
+            style={{ fontSize: isMobile ? '14px' : '16px' }}
+          >
+            Removing this channel will stop automatic downloads but won't delete existing videos or download history.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDeleteCancel} color='primary'>
+            Cancel
+          </Button>
+          <Button onClick={handleDeleteConfirm} color='primary' autoFocus>
+            OK
           </Button>
         </DialogActions>
       </Dialog>
