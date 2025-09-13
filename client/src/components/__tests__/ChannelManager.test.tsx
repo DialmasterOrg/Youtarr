@@ -257,6 +257,11 @@ describe('ChannelManager Component', () => {
       const techItem = listItems.find((li) => within(li).queryByText('Tech Channel')) as HTMLElement;
       const delBtn = within(techItem).getByTestId('delete-channel-button');
       await user.click(delBtn);
+      
+      // Confirm deletion in the dialog
+      await screen.findByText(/Removing this channel will stop automatic downloads/);
+      await user.click(screen.getByRole('button', { name: /^OK$/i }));
+      
       expect(techItem).toHaveAttribute('data-state', 'deleted');
     });
 
@@ -270,9 +275,33 @@ describe('ChannelManager Component', () => {
       const initialCount = initialDeleteButtons.length;
       
       await user.click(initialDeleteButtons[0]);
+      
+      // Confirm deletion in the dialog
+      await screen.findByText(/Removing this channel will stop automatic downloads/);
+      await user.click(screen.getByRole('button', { name: /^OK$/i }));
 
       const remainingDeleteButtons = screen.getAllByTestId('delete-channel-button');
       expect(remainingDeleteButtons.length).toBe(initialCount - 1);
+    });
+
+    test('cancels deletion when Cancel is clicked', async () => {
+      const user = userEvent.setup();
+      mockGetChannelsOnce(mockChannels);
+      renderChannelManager();
+      await screen.findByText('Tech Channel');
+      const listItems = screen.getAllByRole('listitem');
+      const techItem = listItems.find((li) => within(li).queryByText('Tech Channel')) as HTMLElement;
+      const delBtn = within(techItem).getByTestId('delete-channel-button');
+      await user.click(delBtn);
+      
+      // Cancel deletion in the dialog
+      await screen.findByText(/Removing this channel will stop automatic downloads/);
+      await user.click(screen.getByRole('button', { name: /Cancel/i }));
+      
+      // Channel should not be marked as deleted
+      expect(techItem).not.toHaveAttribute('data-state', 'deleted');
+      // Delete button should still be present
+      expect(within(techItem).getByTestId('delete-channel-button')).toBeInTheDocument();
     });
 
     test('immediately removes unsaved channels on delete', async () => {
@@ -283,6 +312,11 @@ describe('ChannelManager Component', () => {
       await addChannel(user, '@NewChannel');
       const deleteButtons = screen.getAllByTestId('delete-channel-button');
       await user.click(deleteButtons[0]);
+      
+      // Confirm deletion in the dialog
+      await screen.findByText(/Removing this channel will stop automatic downloads/);
+      await user.click(screen.getByRole('button', { name: /^OK$/i }));
+      
       expect(screen.queryByText('New Channel')).not.toBeInTheDocument();
     });
   });
@@ -299,6 +333,14 @@ describe('ChannelManager Component', () => {
       const techItem = listItems.find((li) => within(li).queryByText('Tech Channel')) as HTMLElement;
       const delBtn = within(techItem).getByTestId('delete-channel-button');
       await user.click(delBtn);
+      
+      // Confirm deletion in the dialog
+      await screen.findByText(/Removing this channel will stop automatic downloads/);
+      await user.click(screen.getByRole('button', { name: /^OK$/i }));
+      
+      // Wait for dialog to close
+      await waitFor(() => expect(screen.queryByText(/Removing this channel will stop automatic downloads/)).not.toBeInTheDocument());
+      
       await user.click(screen.getByRole('button', { name: /save changes/i }));
       await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledWith(
         '/updatechannels',
@@ -321,6 +363,14 @@ describe('ChannelManager Component', () => {
       await screen.findByText('Tech Channel');
       const deleteButtons = screen.getAllByTestId('delete-channel-button');
       await user.click(deleteButtons[0]);
+      
+      // Confirm deletion in the dialog
+      await screen.findByText(/Removing this channel will stop automatic downloads/);
+      await user.click(screen.getByRole('button', { name: /^OK$/i }));
+      
+      // Wait for dialog to close
+      await waitFor(() => expect(screen.queryByText(/Removing this channel will stop automatic downloads/)).not.toBeInTheDocument());
+      
       await user.click(screen.getByRole('button', { name: /undo/i }));
       await waitFor(() => expect(mockedAxios.get).toHaveBeenCalledTimes(2));
     });
@@ -339,6 +389,14 @@ describe('ChannelManager Component', () => {
       await screen.findByText('Tech Channel');
       const deleteButtons = screen.getAllByTestId('delete-channel-button');
       await user.click(deleteButtons[0]);
+      
+      // Confirm deletion in the dialog
+      await screen.findByText(/Removing this channel will stop automatic downloads/);
+      await user.click(screen.getByRole('button', { name: /^OK$/i }));
+      
+      // Wait for dialog to close
+      await waitFor(() => expect(screen.queryByText(/Removing this channel will stop automatic downloads/)).not.toBeInTheDocument());
+      
       expect(screen.getByRole('button', { name: /save changes/i })).toBeEnabled();
     });
 
@@ -356,6 +414,14 @@ describe('ChannelManager Component', () => {
       await screen.findByText('Tech Channel');
       const deleteButtons = screen.getAllByTestId('delete-channel-button');
       await user.click(deleteButtons[0]);
+      
+      // Confirm deletion in the dialog
+      await screen.findByText(/Removing this channel will stop automatic downloads/);
+      await user.click(screen.getByRole('button', { name: /^OK$/i }));
+      
+      // Wait for dialog to close
+      await waitFor(() => expect(screen.queryByText(/Removing this channel will stop automatic downloads/)).not.toBeInTheDocument());
+      
       expect(screen.getByRole('button', { name: /undo/i })).toBeEnabled();
     });
   });
