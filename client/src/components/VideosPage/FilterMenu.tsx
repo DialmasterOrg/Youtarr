@@ -26,7 +26,11 @@ const FilterMenu: React.FC<FilterMenuProps> = ({
     open={Boolean(anchorEl)}
     onClose={handleClose}
   >
-    <MenuItem onClick={(event) => handleMenuItemClick(event, '')} key='All'>
+    <MenuItem
+      onClick={(event) => handleMenuItemClick(event, '')}
+      key='All'
+      data-testid="filter-menu-all"
+    >
       All
       {filter === '' && (
         <ListItemIcon>
@@ -38,6 +42,7 @@ const FilterMenu: React.FC<FilterMenuProps> = ({
       <MenuItem
         onClick={(event) => handleMenuItemClick(event, channel)}
         key={channel}
+        data-testid={`filter-menu-${channel}`}
       >
         {channel}
         {filter === channel && (
