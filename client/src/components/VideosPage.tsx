@@ -16,6 +16,7 @@ import {
   IconButton,
   Button,
   TableSortLabel,
+  Alert,
 } from '@mui/material';
 import Pagination from '@mui/material/Pagination';
 import FilterListIcon from '@mui/icons-material/FilterList';
@@ -42,6 +43,7 @@ function VideosPage({ token }: VideosPageProps) {
   );
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [orderBy, setOrderBy] = useState<'published' | 'added'>('added');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const handleImageError = (youtubeId: string) => {
     setImageErrors((prevState) => ({ ...prevState, [youtubeId]: true }));
@@ -49,6 +51,7 @@ function VideosPage({ token }: VideosPageProps) {
 
   useEffect(() => {
     if (token) {
+      setLoadError(null);
       axios
         .get('/getVideos', {
           headers: {
@@ -57,6 +60,10 @@ function VideosPage({ token }: VideosPageProps) {
         })
         .then((response) => {
           setVideos(response.data);
+        })
+        .catch((error) => {
+          console.error('Failed to fetch videos:', error);
+          setLoadError('Failed to load videos. Please try refreshing the page. If this error persists, the Youtarr backend may be down.');
         });
     }
   }, [token]);
@@ -138,6 +145,13 @@ function VideosPage({ token }: VideosPageProps) {
         >
           Downloaded Videos
         </Typography>
+
+        {loadError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {loadError}
+          </Alert>
+        )}
+
         {isMobile && (
           <Box display='flex' justifyContent='center' mb={2}>
             <Button

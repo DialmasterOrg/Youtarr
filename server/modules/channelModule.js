@@ -6,9 +6,7 @@ const fsPromises = fs.promises;
 const path = require('path');
 const Channel = require('../models/channel');
 const ChannelVideo = require('../models/channelvideo');
-//const Video = require('../models/video');
-const MessageEmitter = require('./messageEmitter.js'); // import the helper function
-// YouTube API removed - using yt-dlp for all video fetching
+const MessageEmitter = require('./messageEmitter.js');
 
 const { v4: uuidv4 } = require('uuid');
 const { spawn, execSync } = require('child_process');
@@ -21,23 +19,218 @@ class ChannelModule {
     this.populateMissingChannelInfo();
   }
 
+
+  /**
+   * Execute yt-dlp command with promise-based handling
+   * @param {Array} args - Arguments for yt-dlp command
+   * @param {string|null} outputFile - Optional output file path
+   * @returns {Promise<string>} - Output content if outputFile provided
+   */
+  async executeYtDlpCommand(args, outputFile = null) {
+    const ytDlp = spawn('yt-dlp', args);
+
+    if (outputFile) {
+      const writeStream = fs.createWriteStream(outputFile);
+      ytDlp.stdout.pipe(writeStream);
+    }
+
+    await new Promise((resolve, reject) => {
+      ytDlp.on('exit', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`yt-dlp exited with code ${code}`));
+        }
+      });
+      ytDlp.on('error', reject);
+    });
+
+    if (outputFile) {
+      const content = await fsPromises.readFile(outputFile, 'utf8');
+      await fsPromises.unlink(outputFile);
+      return content;
+    }
+  }
+
+  /**
+   * Execute file operation with temporary file handling
+   * @param {string} prefix - Prefix for temp file name
+   * @param {Function} callback - Async callback that receives the temp file path
+   * @returns {Promise<any>} - Result from callback
+   */
+  async withTempFile(prefix, callback) {
+    const tempFilePath = path.join(__dirname, `${prefix}-${uuidv4()}.json`);
+    try {
+      const result = await callback(tempFilePath);
+      try {
+        await fsPromises.unlink(tempFilePath);
+      } catch (err) {
+        // Ignore cleanup errors
+      }
+      return result;
+    } catch (error) {
+      try {
+        await fsPromises.unlink(tempFilePath);
+      } catch (err) {
+        // Ignore cleanup errors
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Find channel by URL or ID
+   * @param {string} channelUrlOrId - Channel URL or ID
+   * @returns {Promise<Object>} - Channel object with url and id
+   */
+  async findChannelByUrlOrId(channelUrlOrId) {
+    let channelUrl = '';
+    let channelId = '';
+    let foundChannel = null;
+
+    if (channelUrlOrId.startsWith('http')) {
+      channelUrl = channelUrlOrId;
+      foundChannel = await Channel.findOne({
+        where: { url: channelUrl },
+      });
+      if (foundChannel && foundChannel.channel_id) {
+        channelId = foundChannel.channel_id;
+        channelUrl = this.resolveChannelUrlFromId(channelId);
+      }
+    } else {
+      channelId = channelUrlOrId;
+      foundChannel = await Channel.findOne({
+        where: { channel_id: channelId },
+      });
+      channelUrl = this.resolveChannelUrlFromId(channelId);
+    }
+
+    return { foundChannel, channelUrl, channelId };
+  }
+
+  /**
+   * Build a canonical YouTube channel URL from a channel-like ID.
+   * Handles uploads playlist IDs (UU...) by converting to UC...
+   * @param {string} channelId
+   * @returns {string}
+   */
+  resolveChannelUrlFromId(channelId) {
+    if (!channelId) return '';
+    const normalizedId = channelId.startsWith('UU')
+      ? `UC${channelId.substring(2)}`
+      : channelId;
+    return `https://www.youtube.com/channel/${normalizedId}`;
+  }
+
+  /**
+   * Map channel database record to response format
+   * @param {Object} channel - Channel database record
+   * @returns {Object} - Formatted channel response
+   */
+  mapChannelToResponse(channel) {
+    return {
+      id: channel.channel_id,
+      uploader: channel.uploader,
+      uploader_id: channel.uploader_id || channel.channel_id,
+      title: channel.title,
+      description: channel.description,
+      url: channel.url,
+    };
+  }
+
+  /**
+   * Insert or update channel in database
+   * @param {Object} channelData - Channel data to save
+   * @returns {Promise<Object>} - Saved channel record
+   */
+  async upsertChannel(channelData) {
+    const [channel, created] = await Channel.findOrCreate({
+      where: { url: channelData.url },
+      defaults: {
+        channel_id: channelData.id,
+        title: channelData.title,
+        description: channelData.description,
+        uploader: channelData.uploader,
+        url: channelData.url,
+      },
+    });
+
+    if (!created) {
+      await channel.update({
+        channel_id: channelData.id,
+        title: channelData.title,
+        description: channelData.description,
+        uploader: channelData.uploader,
+        url: channelData.url,
+      });
+    }
+
+    return channel;
+  }
+
+  /**
+   * Read complete list file
+   * @returns {Array<string>} - Array of completed video IDs
+   */
+  readCompleteList() {
+    const completePath = path.join(__dirname, '../../config/complete.list');
+    const completeList = fs.readFileSync(completePath, 'utf-8');
+    return completeList
+      .split(/\r?\n/)
+      .filter((line) => line.trim() !== '');
+  }
+
+  /**
+   * Resize channel thumbnail image
+   * @param {string} channelId - Channel ID
+   * @returns {Promise<void>}
+   */
+  async resizeChannelThumbnail(channelId) {
+    const realImagePath = path.resolve(
+      __dirname,
+      `../images/channelthumb-${channelId}.jpg`
+    );
+    const smallImagePath = path.resolve(
+      __dirname,
+      `../images/channelthumb-${channelId}-small.jpg`
+    );
+
+    try {
+      execSync(
+        `${configModule.ffmpegPath} -y -i ${realImagePath} -vf "scale=iw*0.4:ih*0.4" ${smallImagePath}`,
+        { stdio: 'inherit' }
+      );
+      await fsPromises.rename(smallImagePath, realImagePath);
+      console.log('Image resized successfully');
+    } catch (err) {
+      console.log(`Error resizing image: ${err}`);
+    }
+  }
+
+  /**
+   * Populate missing channel information for all enabled channels.
+   * Fetches metadata from YouTube for channels that don't have complete data.
+   * @returns {Promise<void>}
+   */
   async populateMissingChannelInfo() {
-    // Read channels from channels.list
     const channelPromises = await this.readChannels();
 
-    // For each channel, check if it has an entry in the database
     for (let channelObj of channelPromises) {
       const foundChannel = await Channel.findOne({
         where: { url: channelObj.url },
       });
 
-      // If the channel does not exist in the database or if the uploader is missing, fetch its data
       if (!foundChannel || !foundChannel.uploader) {
         await this.getChannelInfo(channelObj.url);
       }
     }
   }
 
+  /**
+   * Trigger automatic channel video downloads.
+   * Called by cron scheduler based on configured frequency.
+   * @returns {void}
+   */
   channelAutoDownload() {
     console.log('The current time is ' + new Date());
     console.log(
@@ -47,72 +240,40 @@ class ChannelModule {
     downloadModule.doChannelDownloads();
   }
 
-  async getChannelInfo(channelUrlOrId, emitMessage = true) {
-    // Check if there is already an entry in the database for this channel
+  /**
+   * Fetch channel metadata from YouTube
+   * @param {string} channelUrl - Channel URL
+   * @returns {Promise<Object>} - Channel metadata
+   */
+  async fetchChannelMetadata(channelUrl) {
+    return await this.withTempFile('channel', async (outputFilePath) => {
+      const content = await this.executeYtDlpCommand([
+        '--skip-download',
+        '--dump-single-json',
+        '-4',
+        '--playlist-end',
+        '1',
+        '--playlist-items',
+        '0',
+        channelUrl,
+      ], outputFilePath);
 
-    // If channelUrlOrId starts with 'http', then it is a url, otherwise it is a channel id
-    // Set the variables channelUrl and channelId accordingly
-    let channelUrl = '';
-    let channelId = '';
-    let foundChannel = null;
-    if (channelUrlOrId.startsWith('http')) {
-      channelUrl = channelUrlOrId;
-      foundChannel = await Channel.findOne({
-        where: { url: channelUrl },
-      });
-    } else {
-      channelId = channelUrlOrId;
-      foundChannel = await Channel.findOne({
-        where: { channel_id: channelId },
-      });
-    }
+      return JSON.parse(content);
+    });
+  }
 
-    // If the channel exists in the database, then return it
-    if (foundChannel) {
-      if (emitMessage) {
-        MessageEmitter.emitMessage(
-          'broadcast',
-          null,
-          'channel',
-          'channelsUpdated',
-          { text: 'Channel Updated' }
-        );
-      }
-      return {
-        id: foundChannel.channel_id,
-        uploader: foundChannel.uploader,
-        uploader_id: foundChannel.uploader_id,
-        title: foundChannel.title,
-        description: foundChannel.description,
-        url: foundChannel.url,
-      };
-    }
-
-    // Otherwise we need to get the data for it...
-    const outputFilePath = path.join(__dirname, `channel-${uuidv4()}.json`); // Define the output file path
-
-    // Open a writable stream
-    const writeStream = fs.createWriteStream(outputFilePath);
-
-    // Run yt-dlp command and write the output to a file for json
-    const ytDlp = spawn('yt-dlp', [
-      '--skip-download',
-      '--dump-single-json',
-      '-4',
-      '--playlist-end',
-      '1',
-      '--playlist-items',
-      '0',
-      channelUrl,
-    ]);
-
+  /**
+   * Download channel thumbnail
+   * @param {string} channelUrl - Channel URL
+   * @returns {Promise<void>}
+   */
+  async downloadChannelThumbnail(channelUrl) {
     const imagePath = path.resolve(
       __dirname,
       '../images/channelthumb-%(channel_id)s.jpg'
     );
 
-    // Doesn't matter when this finishes...
-    const ytDlpGetThumb = spawn('yt-dlp', [
+    await this.executeYtDlpCommand([
       '--skip-download',
       '--write-thumbnail',
       '--playlist-end',
@@ -125,23 +286,56 @@ class ChannelModule {
       `${imagePath}`,
       channelUrl,
     ]);
+  }
 
-    // Pipe the stdout to the writeStream
-    ytDlp.stdout.pipe(writeStream);
+  /**
+   * Process channel thumbnail (download and resize)
+   * @param {string} channelUrl - Channel URL
+   * @param {string} channelId - Channel ID
+   * @returns {Promise<void>}
+   */
+  async processChannelThumbnail(channelUrl, channelId) {
+    await this.downloadChannelThumbnail(channelUrl);
+    await this.resizeChannelThumbnail(channelId);
+  }
 
-    // Handle ytDlp exit
-    await new Promise((resolve, reject) => {
-      ytDlp.on('exit', resolve);
-      ytDlp.on('error', reject);
-    });
+  /**
+   * Get channel information from database or fetch from YouTube.
+   * First checks database, then fetches from YouTube if not found.
+   * Also handles channel thumbnail download and processing.
+   * @param {string} channelUrlOrId - YouTube channel URL or channel ID
+   * @param {boolean} emitMessage - Whether to emit WebSocket update message
+   * @returns {Promise<Object>} - Channel information object
+   */
+  async getChannelInfo(channelUrlOrId, emitMessage = true) {
+    const { foundChannel, channelUrl } = await this.findChannelByUrlOrId(channelUrlOrId);
 
-    // Handle ytDlpGetThumb exit
-    await new Promise((resolve, reject) => {
-      ytDlpGetThumb.on('exit', resolve);
-      ytDlpGetThumb.on('error', reject);
-    });
+    if (foundChannel) {
+      if (emitMessage) {
+        MessageEmitter.emitMessage(
+          'broadcast',
+          null,
+          'channel',
+          'channelsUpdated',
+          { text: 'Channel Updated' }
+        );
+      }
+      return this.mapChannelToResponse(foundChannel);
+    }
 
-    // When all channel data is fetched, emit a message
+    const channelData = await this.fetchChannelMetadata(channelUrl);
+
+    await Promise.all([
+      this.upsertChannel({
+        id: channelData.id,
+        title: channelData.title,
+        description: channelData.description,
+        uploader: channelData.uploader,
+        url: channelUrl,
+      }),
+      this.processChannelThumbnail(channelUrl, channelData.id)
+    ]);
+
     if (emitMessage) {
       console.log('Channel data fetched -- emitting message!');
       MessageEmitter.emitMessage(
@@ -152,85 +346,32 @@ class ChannelModule {
         { text: 'Channel Updated' }
       );
     }
-    // Read the file content
-    const fileContent = await fsPromises.readFile(outputFilePath, 'utf8');
 
-    // Parse the returned JSON
-    const jsonOutput = JSON.parse(fileContent);
-
-    const realImagePath = path.resolve(
-      __dirname,
-      `../images/channelthumb-${jsonOutput.id}.jpg`
-    );
-    const smallImagePath = path.resolve(
-      __dirname,
-      `../images/channelthumb-${jsonOutput.id}-small.jpg`
-    );
-
-    // Resize the image using ffmpeg
-    try {
-      execSync(
-        `${configModule.ffmpegPath} -y -i ${realImagePath} -vf "scale=iw*0.4:ih*0.4" ${smallImagePath}`,
-        { stdio: 'inherit' }
-      );
-      // Delete the original image (realImagePath) and move the small image to the original image path
-      await fsPromises.rename(smallImagePath, realImagePath);
-      console.log('Image resized successfully');
-    } catch (err) {
-      console.log(`Error resizing image: ${err}`);
-    }
-
-    // Delete the file after parsing it
-    await fsPromises.unlink(outputFilePath);
-
-    // Check to see if there is already an entry in the database for this channel url
-    // Using the Channel Sequelize model. If so, then update it, otherwise create a new entry
-    // The Channel model is defined in server\models\channel.js and does not include timestamps
-    const [channel, created] = await Channel.findOrCreate({
-      where: { url: channelUrl },
-      defaults: {
-        channel_id: jsonOutput.id,
-        title: jsonOutput.title,
-        description: jsonOutput.description,
-        uploader: jsonOutput.uploader,
-        url: channelUrl,
-      },
-    });
-
-    // If the channel already exists, then update it
-    if (!created) {
-      await channel.update({
-        channel_id: jsonOutput.id,
-        title: jsonOutput.title,
-        description: jsonOutput.description,
-        uploader: jsonOutput.uploader,
-        url: channelUrl,
-      });
-    }
-
-    // Return only the relevant properties
     return {
-      id: jsonOutput.id,
-      uploader: jsonOutput.uploader,
-      uploader_id: jsonOutput.uploader_id,
-      title: jsonOutput.title,
-      description: jsonOutput.description,
+      id: channelData.id,
+      uploader: channelData.uploader,
+      uploader_id: channelData.uploader_id,
+      title: channelData.title,
+      description: channelData.description,
       url: channelUrl,
     };
   }
 
+  /**
+   * Schedule or reschedule the automatic download task.
+   * Manages cron job based on configuration settings.
+   * @returns {void}
+   */
   scheduleTask() {
     console.log(
       'Scheduling task to run at: ' +
         configModule.getConfig().channelDownloadFrequency
     );
-    // Stop the old task if exists
     if (this.task) {
       console.log('Stopping old task');
       this.task.stop();
     }
 
-    // Schedule the new task if enabled
     if (configModule.getConfig().channelAutoDownload) {
       this.task = cron.schedule(
         configModule.getConfig().channelDownloadFrequency,
@@ -242,65 +383,107 @@ class ChannelModule {
     }
   }
 
-  readChannels() {
-    let channels = [];
+  /**
+   * Read all enabled channels from the database.
+   * @returns {Promise<Array>} - Array of channel objects with url, uploader, and channel_id
+   */
+  async readChannels() {
     try {
-      const data = fs.readFileSync(
-        path.join(__dirname, '../../config/channels.list'),
-        'utf-8'
-      );
-      channels = data.split('\n').filter((line) => line.trim() !== ''); // filter out any empty lines
-    } catch (err) {
-      console.error('Error reading channels.list:', err);
-    }
-    // Foreach channel, get the channel uploader and return an array of objects with the channel url and uploader
-    // Use the Channel Sequelize model to get the channel info from the database
-    // The Channel model is defined in server\models\channel.js and does not include timestamps
-    const channelPromises = channels.map((channel) => {
-      return Channel.findOne({
-        where: { url: channel },
-      }).then((foundChannel) => {
-        return {
-          url: channel,
-          uploader: foundChannel ? foundChannel.uploader : '',
-          channel_id: foundChannel ? foundChannel.channel_id : '',
-        };
+      const channels = await Channel.findAll({
+        where: { enabled: true },
       });
-    });
 
-    return Promise.all(channelPromises);
+      return channels.map((channel) => ({
+        url: channel.url,
+        uploader: channel.uploader || '',
+        channel_id: channel.channel_id || '',
+      }));
+    } catch (err) {
+      console.error('Error reading channels from database:', err);
+      return [];
+    }
   }
 
-  async writeChannels(channels) {
+  /**
+   * Update the list of enabled channels in the database.
+   * Enables new channels, disables removed ones, and fetches metadata for new additions.
+   * @param {Array<string>} channelUrls - Array of channel URLs to enable
+   * @returns {Promise<void>}
+   */
+  async writeChannels(channelUrls) {
     try {
-      const data = channels.join('\n');
-      fs.writeFileSync(
-        path.join(__dirname, '../../config/channels.list'),
-        data
+      const desiredUrls = Array.from(
+        new Set((channelUrls || []).map((u) => (u || '').trim()).filter(Boolean))
       );
 
-      // For each channel, get the channel info and write it to the database
-      for (let channel of channels) {
-        await this.getChannelInfo(channel);
+      const existing = await Channel.findAll({ attributes: ['url', 'enabled'] });
+      const existingMap = new Map(existing.map((c) => [c.url, c.enabled]));
+
+      const toEnable = desiredUrls.filter((url) => existingMap.get(url) !== true);
+
+      const desiredSet = new Set(desiredUrls);
+      const toDisable = existing
+        .filter((c) => c.enabled === true && !desiredSet.has(c.url))
+        .map((c) => c.url);
+
+      for (const url of toEnable) {
+        await this.getChannelInfo(url);
+        await Channel.update({ enabled: true }, { where: { url } });
+      }
+
+      if (toDisable.length > 0) {
+        await Channel.update({ enabled: false }, { where: { url: toDisable } });
       }
     } catch (err) {
-      console.error(
-        'Error writing to channels.list or fetching channel info:',
-        err
-      );
+      console.error('Error updating channels in database:', err);
     }
   }
 
+  /**
+   * Subscribe to configuration changes.
+   * Reschedules tasks when configuration is updated.
+   * @returns {void}
+   */
   subscribe() {
     configModule.onConfigChange(this.scheduleTask.bind(this));
   }
 
-  // YouTube API methods removed - using yt-dlp instead
+  /**
+   * Generate a temporary file with enabled channel URLs for yt-dlp
+   * @returns {Promise<string>} - Path to the temporary file
+   */
+  async generateChannelsFile() {
+    const tempFilePath = path.join(__dirname, `channels-temp-${uuidv4()}.txt`);
+    try {
+      const channels = await Channel.findAll({
+        where: { enabled: true },
+        attributes: ['url']
+      });
 
-  // Insert or update videos in DB
+      const urls = channels.map(c => c.url).join('\n');
+      await fsPromises.writeFile(tempFilePath, urls);
+
+      return tempFilePath;
+    } catch (err) {
+      console.error('Error generating channels file:', err);
+      try {
+        await fsPromises.unlink(tempFilePath);
+      } catch (unlinkErr) {
+        // Ignore cleanup errors
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Insert or update videos in the database.
+   * Creates new records or updates existing ones with latest metadata.
+   * @param {Array<Object>} videos - Array of video objects to save
+   * @param {string} channelId - Channel ID these videos belong to
+   * @returns {Promise<void>}
+   */
   async insertVideosIntoDb(videos, channelId) {
     for (const video of videos) {
-      // Find existing video or create new one
       const [videoRecord, created] = await ChannelVideo.findOrCreate({
         where: {
           youtube_id: video.youtube_id,
@@ -312,7 +495,6 @@ class ChannelModule {
         },
       });
 
-      // If video already existed, update it with latest metadata
       if (!created) {
         await videoRecord.update({
           title: video.title,
@@ -325,8 +507,29 @@ class ChannelModule {
     }
   }
 
-  // Fetch videos for this channel from the DB,
-  // also add whether they have already been downloaded
+  /**
+   * Enrich videos with download status
+   * @param {Array} videos - Array of video objects
+   * @returns {Array} - Videos with 'added' property
+   */
+  enrichVideosWithDownloadStatus(videos) {
+    const completeListArray = this.readCompleteList();
+
+    return videos.map((video) => {
+      const plainVideoObject = video.toJSON ? video.toJSON() : video;
+      plainVideoObject.added = completeListArray.includes(
+        `youtube ${plainVideoObject.youtube_id}`
+      );
+      return plainVideoObject;
+    });
+  }
+
+  /**
+   * Fetch the newest videos for a channel from the database.
+   * Returns up to 50 most recent videos with download status.
+   * @param {string} channelId - Channel ID to fetch videos for
+   * @returns {Promise<Array>} - Array of video objects with download status
+   */
   async fetchNewestVideosFromDb(channelId) {
     const videos = await ChannelVideo.findAll({
       where: {
@@ -336,26 +539,78 @@ class ChannelModule {
       limit: 50,
     });
 
-    const completePath = path.join(__dirname, '../../config/complete.list');
-    const completeList = fs.readFileSync(completePath, 'utf-8');
-    const completeListArray = completeList
-      .split(/\r?\n/) // split on \n and \r\n
-      .filter((line) => line.trim() !== '');
-
-    return videos.map((video) => {
-      const plainVideoObject = video.toJSON();
-      plainVideoObject.added = completeListArray.includes(
-        `youtube ${plainVideoObject.youtube_id}`
-      );
-      return plainVideoObject;
-    });
+    return this.enrichVideosWithDownloadStatus(videos);
   }
 
-  // Fetch channel videos using yt-dlp (no API key required)
+  /**
+   * Extract published date from yt-dlp entry
+   * @param {Object} entry - Video entry from yt-dlp
+   * @returns {string} - ISO date string
+   */
+  extractPublishedDate(entry) {
+    if (entry.timestamp) {
+      return new Date(entry.timestamp * 1000).toISOString();
+    }
+    if (entry.upload_date) {
+      const year = entry.upload_date.substring(0, 4);
+      const month = entry.upload_date.substring(4, 6);
+      const day = entry.upload_date.substring(6, 8);
+      return new Date(`${year}-${month}-${day}`).toISOString();
+    }
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    return ninetyDaysAgo.toISOString();
+  }
+
+  /**
+   * Extract thumbnail URL from yt-dlp entry
+   * @param {Object} entry - Video entry from yt-dlp
+   * @returns {string} - Thumbnail URL
+   */
+  extractThumbnailUrl(entry) {
+    if (entry.thumbnail) {
+      return entry.thumbnail;
+    }
+    if (entry.thumbnails && Array.isArray(entry.thumbnails) && entry.thumbnails.length > 0) {
+      const mediumThumb = entry.thumbnails.find(t => t.id === 'medium' || t.id === '3');
+      return mediumThumb ? mediumThumb.url : entry.thumbnails[entry.thumbnails.length - 1].url;
+    }
+    if (entry.id) {
+      return `https://i.ytimg.com/vi/${entry.id}/mqdefault.jpg`;
+    }
+    return '';
+  }
+
+  /**
+   * Parse video metadata from yt-dlp entry
+   * @param {Object} entry - Video entry from yt-dlp
+   * @returns {Object|null} - Parsed video object or null if should skip
+   */
+  parseVideoMetadata(entry) {
+    if (entry.duration && entry.duration < 70) {
+      return null;
+    }
+
+    return {
+      title: entry.title || 'Untitled',
+      youtube_id: entry.id,
+      publishedAt: this.extractPublishedDate(entry),
+      thumbnail: this.extractThumbnailUrl(entry),
+      duration: entry.duration || 0,
+      availability: entry.availability || null,
+    };
+  }
+
+  /**
+   * Fetch channel videos using yt-dlp.
+   * Retrieves metadata for the latest 50 videos from YouTube.
+   * @param {string} channelId - Channel ID to fetch videos for
+   * @returns {Promise<Array>} - Array of parsed video metadata objects
+   * @throws {Error} - If channel not found in database
+   */
   async fetchChannelVideosViaYtDlp(channelId) {
     console.log('Fetching videos via yt-dlp for channel:', channelId);
 
-    // Get channel URL from database
     const channel = await Channel.findOne({
       where: { channel_id: channelId },
     });
@@ -364,175 +619,105 @@ class ChannelModule {
       throw new Error('Channel not found in database');
     }
 
-    const outputFilePath = path.join(__dirname, `channel-videos-${uuidv4()}.json`);
-    const writeStream = fs.createWriteStream(outputFilePath);
+    return await this.withTempFile('channel-videos', async (outputFilePath) => {
+      const content = await this.executeYtDlpCommand([
+        '--flat-playlist',
+        '--dump-single-json',
+        '--extractor-args', 'youtubetab:approximate_date',  // Get approximate timestamps for videos
+        '--playlist-end', '50', // Get latest 50 videos
+        '-4',
+        channel.url,
+      ], outputFilePath);
 
-    // Use yt-dlp to get channel videos metadata without downloading
-    // Using --flat-playlist for speed, but with approximate_date to get timestamps
-    const ytDlp = spawn('yt-dlp', [
-      '--flat-playlist',
-      '--dump-single-json',
-      '--extractor-args', 'youtubetab:approximate_date',  // Get approximate timestamps for videos
-      '--playlist-end', '50', // Get latest 50 videos
-      '-4',
-      channel.url,
-    ]);
-
-    ytDlp.stdout.pipe(writeStream);
-
-    // Handle ytDlp exit
-    await new Promise((resolve, reject) => {
-      ytDlp.on('exit', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`yt-dlp exited with code ${code}`));
-        }
-      });
-      ytDlp.on('error', reject);
-    });
-
-    try {
-      // Read and parse the JSON output
-      const fileContent = await fsPromises.readFile(outputFilePath, 'utf8');
-      const jsonOutput = JSON.parse(fileContent);
-
-      // Process entries from the playlist
+      const jsonOutput = JSON.parse(content);
       const videos = [];
+
       if (jsonOutput.entries && Array.isArray(jsonOutput.entries)) {
         for (const entry of jsonOutput.entries) {
-          // Skip shorts (videos under 70 seconds)
-          if (entry.duration && entry.duration < 70) {
-            continue;
+          const videoMetadata = this.parseVideoMetadata(entry);
+          if (videoMetadata) {
+            videos.push(videoMetadata);
           }
-
-          // Store availability for all videos including subscriber_only
-
-          // Parse the published date from various possible fields
-          let publishedAt = null;
-
-          // First try timestamp (from approximate_date extractor arg)
-          if (entry.timestamp) {
-            publishedAt = new Date(entry.timestamp * 1000).toISOString();
-          }
-          // Fallback to upload_date if timestamp not available
-          else if (entry.upload_date) {
-            const year = entry.upload_date.substring(0, 4);
-            const month = entry.upload_date.substring(4, 6);
-            const day = entry.upload_date.substring(6, 8);
-            publishedAt = new Date(`${year}-${month}-${day}`).toISOString();
-          }
-          // If no date info available, use 90 days ago as fallback
-          else {
-            const ninetyDaysAgo = new Date();
-            ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-            publishedAt = ninetyDaysAgo.toISOString();
-          }
-
-          // Get thumbnail - with flat-playlist, we need to construct the URL
-          let thumbnail = '';
-          if (entry.thumbnail) {
-            // If yt-dlp provides a thumbnail URL, use it
-            thumbnail = entry.thumbnail;
-          } else if (entry.thumbnails && Array.isArray(entry.thumbnails) && entry.thumbnails.length > 0) {
-            // If we have thumbnails array, pick the best one
-            const mediumThumb = entry.thumbnails.find(t => t.id === 'medium' || t.id === '3');
-            thumbnail = mediumThumb ? mediumThumb.url : entry.thumbnails[entry.thumbnails.length - 1].url;
-          } else if (entry.id) {
-            // Fallback: construct YouTube thumbnail URL from video ID
-            // YouTube's thumbnail URL pattern is predictable
-            thumbnail = `https://i.ytimg.com/vi/${entry.id}/mqdefault.jpg`;
-          }
-
-          videos.push({
-            title: entry.title || 'Untitled',
-            youtube_id: entry.id,
-            publishedAt: publishedAt,  // Always has a value now (either real date or 90 days ago)
-            thumbnail: thumbnail,
-            duration: entry.duration || 0,
-            availability: entry.availability || null,
-          });
         }
       }
 
-      // Clean up temp file
-      await fsPromises.unlink(outputFilePath);
-
       return videos;
-    } catch (error) {
-      // Clean up temp file on error
-      try {
-        await fsPromises.unlink(outputFilePath);
-      } catch (unlinkError) {
-        // Ignore unlink errors
-      }
-      throw error;
-    }
+    });
   }
 
+  /**
+   * Check if channel videos need refreshing
+   * @param {Object} channel - Channel database record
+   * @param {number} videoCount - Current video count
+   * @returns {boolean} - True if refresh needed
+   */
+  shouldRefreshChannelVideos(channel, videoCount) {
+    if (!channel) return false;
+
+    return !channel.lastFetched ||
+           new Date() - new Date(channel.lastFetched) > 1 * 60 * 60 * 1000 ||
+           videoCount === 0;
+  }
+
+  /**
+   * Build channel videos response object
+   * @param {Array} videos - Array of videos
+   * @param {Object} channel - Channel database record
+   * @param {string} dataSource - Data source ('cache' or 'yt_dlp')
+   * @returns {Object} - Formatted response
+   */
+  buildChannelVideosResponse(videos, channel, dataSource = 'cache') {
+    return {
+      videos: videos,
+      videoFail: videos.length === 0,
+      failureReason: videos.length === 0 ? 'fetch_error' : null,
+      dataSource: dataSource,
+      lastFetched: channel ? channel.lastFetched : null,
+    };
+  }
+
+  /**
+   * Get channel videos with smart caching.
+   * Returns cached data if fresh, otherwise fetches new data from YouTube.
+   * Falls back to cached data on errors.
+   * @param {string} channelId - Channel ID to get videos for
+   * @returns {Promise<Object>} - Response object with videos and metadata
+   */
   async getChannelVideos(channelId) {
-    // Get channel from DB
     const channel = await Channel.findOne({
       where: { channel_id: channelId },
     });
 
-    let result = {
-      videos: [],
-      videoFail: false,
-      failureReason: null,
-      dataSource: 'cache',
-      lastFetched: channel ? channel.lastFetched : null,
-    };
-
     try {
-      // First, check current state of videos in DB
       let newestVideos = await this.fetchNewestVideosFromDb(channelId);
 
-      // Check if we need to fetch new data
-      // Fetch if: no lastFetched, more than 1 hour old, OR if we have no videos in DB
-      const needsRefresh = channel &&
-        (!channel.lastFetched ||
-         new Date() - new Date(channel.lastFetched) > 1 * 60 * 60 * 1000 ||
-         newestVideos.length === 0);
-
-      if (needsRefresh) {
-        // Always use yt-dlp for fetching videos
+      if (this.shouldRefreshChannelVideos(channel, newestVideos.length)) {
         console.log('Fetching videos using yt-dlp');
         await this.fetchAndSaveVideosViaYtDlp(channel, channelId);
-        result.dataSource = 'yt_dlp';
 
-        // Re-fetch videos from database after updating
         newestVideos = await this.fetchNewestVideosFromDb(channelId);
+
+        return this.buildChannelVideosResponse(newestVideos, channel, 'yt_dlp');
       }
 
-      // Use the videos we have (either from cache or freshly fetched)
-      result.videos = newestVideos;
-      result.lastFetched = channel ? channel.lastFetched : null;
+      return this.buildChannelVideosResponse(newestVideos, channel, 'cache');
 
-      // Only show failure if we have no videos at all
-      if (newestVideos.length === 0) {
-        result.videoFail = true;
-        result.failureReason = 'fetch_error';
-      }
-
-      return result;
     } catch (error) {
       console.error('Error fetching channel videos:', error);
 
-      // Try to return cached data
       const cachedVideos = await this.fetchNewestVideosFromDb(channelId);
-
-      result.videos = cachedVideos;
-      result.videoFail = cachedVideos.length === 0;
-      result.failureReason = cachedVideos.length === 0 ? 'fetch_error' : null;
-      result.dataSource = 'cache';
-      result.lastFetched = channel ? channel.lastFetched : null;
-
-      return result;
+      return this.buildChannelVideosResponse(cachedVideos, channel, 'cache');
     }
   }
 
-  // Helper method to fetch and save videos using yt-dlp
+  /**
+   * Fetch videos from YouTube and save to database.
+   * Updates channel's lastFetched timestamp on success.
+   * @param {Object} channel - Channel database record
+   * @param {string} channelId - Channel ID
+   * @returns {Promise<void>}
+   * @throws {Error} - Re-throws yt-dlp errors
+   */
   async fetchAndSaveVideosViaYtDlp(channel, channelId) {
     try {
       const videos = await this.fetchChannelVideosViaYtDlp(channelId);
@@ -542,7 +727,6 @@ class ChannelModule {
         await this.insertVideosIntoDb(videos, channelId);
       }
 
-      // Update channel lastFetched
       if (channel) {
         channel.lastFetched = new Date();
         await channel.save();

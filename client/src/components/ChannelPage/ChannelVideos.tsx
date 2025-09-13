@@ -176,11 +176,11 @@ function ChannelVideos({ token }: ChannelVideosProps) {
   // Calculate data freshness
   const getDataFreshnessInfo = () => {
     if (!lastFetched) return null;
-    
+
     const hoursAgo = Math.floor((Date.now() - lastFetched.getTime()) / (1000 * 60 * 60));
     let color: 'success' | 'warning' | 'error' = 'success';
     let text = '';
-    
+
     if (hoursAgo < 1) {
       text = 'Updated just now';
     } else if (hoursAgo < 6) {
@@ -194,7 +194,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
       text = `Updated ${daysAgo} day${daysAgo > 1 ? 's' : ''} ago`;
       color = 'error';
     }
-    
+
     return { text, color };
   };
 
@@ -202,12 +202,12 @@ function ChannelVideos({ token }: ChannelVideosProps) {
 
   return (
     <Card elevation={8} style={{ marginBottom: '16px' }}>
-      <CardHeader 
-        title='Recent Channel Videos' 
+      <CardHeader
+        title='Recent Channel Videos'
         align='center'
         action={
           freshnessInfo && videos.length > 0 && (
-            <Chip 
+            <Chip
               label={freshnessInfo.text}
               color={freshnessInfo.color}
               size="small"
@@ -225,7 +225,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
             </Alert>
           </Box>
         )}
-        
+
         {!videoFailed && videos.length > 0 && (
           <>
             <Grid
@@ -266,7 +266,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
             disabled={checkedBoxes.length === 0}
             style={{ marginTop: '8px', marginLeft: '8px', marginRight: '8px' }}
           >
-            Download New Videos{' '}
+            Download Selected{' '}
             {checkedBoxes.length ? `(${checkedBoxes.length})` : ''}
           </Button>
           <Button
@@ -367,7 +367,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                     const isMembersOnly = video.availability === 'subscriber_only';
                     return (
                     isMobile ? (
-                      <TableRow 
+                      <TableRow
                         key={video.youtube_id}
                         sx={{ opacity: isMembersOnly ? 0.6 : 1 }}
                       >
@@ -418,7 +418,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      <TableRow 
+                      <TableRow
                         key={video.youtube_id}
                         sx={{ opacity: isMembersOnly ? 0.6 : 1 }}
                       >

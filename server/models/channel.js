@@ -35,6 +35,11 @@ Channel.init(
       type: DataTypes.DATE,
       allowNull: true,
     },
+    enabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
   },
   {
     sequelize,

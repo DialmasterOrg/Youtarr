@@ -131,6 +131,19 @@ class DownloadModule {
           data: { videos: videoData },
         });
 
+        // Clean up temporary channels file if it exists
+        if (this.tempChannelsFile) {
+          const fs = require('fs').promises;
+          fs.unlink(this.tempChannelsFile)
+            .then(() => {
+              console.log('Cleaned up temporary channels file');
+              this.tempChannelsFile = null;
+            })
+            .catch((err) => {
+              console.log('Failed to clean up temp channels file:', err.message);
+            });
+        }
+
         plexModule.refreshLibrary().catch(err => {
           console.log('Failed to refresh Plex library:', err.message);
         });
@@ -138,6 +151,17 @@ class DownloadModule {
       });
     }).catch((error) => {
       console.log(error.message);
+      
+      // Clean up temporary channels file on error
+      if (this.tempChannelsFile) {
+        const fs = require('fs').promises;
+        fs.unlink(this.tempChannelsFile)
+          .catch((err) => {
+            console.log('Failed to clean up temp channels file:', err.message);
+          });
+        this.tempChannelsFile = null;
+      }
+      
       jobModule.updateJob(jobId, {
         status: 'Killed',
         output: 'Job time exceeded timeout',
@@ -161,9 +185,35 @@ class DownloadModule {
     );
 
     if (jobModule.getJob(jobId).status === 'In Progress') {
-      const baseCommand = this.getBaseCommand();
-      const command = `${baseCommand} -a ./config/channels.list --playlist-end ${configModule.config.channelFilesToDownload}`;
-      this.doDownload(command, jobId, jobType);
+      let tempChannelsFile = null;
+      try {
+        // Generate temporary channels file from database
+        const channelModule = require('./channelModule');
+        tempChannelsFile = await channelModule.generateChannelsFile();
+        
+        const baseCommand = this.getBaseCommand();
+        const command = `${baseCommand} -a ${tempChannelsFile} --playlist-end ${configModule.config.channelFilesToDownload}`;
+        
+        // Store temp file path for cleanup later
+        this.tempChannelsFile = tempChannelsFile;
+        
+        this.doDownload(command, jobId, jobType);
+      } catch (err) {
+        console.error('Error in doChannelDownloads:', err);
+        if (tempChannelsFile) {
+          // Clean up temp file on error
+          const fs = require('fs').promises;
+          try {
+            await fs.unlink(tempChannelsFile);
+          } catch (unlinkErr) {
+            // Ignore cleanup errors
+          }
+        }
+        await jobModule.updateJob(jobId, {
+          status: 'Failed',
+          output: `Error: ${err.message}`,
+        });
+      }
     }
   }
 
