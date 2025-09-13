@@ -144,19 +144,41 @@ class ChannelModule {
    * @returns {Promise<Object>} - Saved channel record
    */
   async upsertChannel(channelData) {
-    const [channel, created] = await Channel.findOrCreate({
-      where: { url: channelData.url },
-      defaults: {
-        channel_id: channelData.id,
+    // First, try to find by channel_id (preferred)
+    let channel = await Channel.findOne({
+      where: { channel_id: channelData.id }
+    });
+
+    if (!channel) {
+      // Fallback: try to find by URL (for legacy data without channel_id)
+      channel = await Channel.findOne({
+        where: { url: channelData.url }
+      });
+
+      if (channel) {
+        // Found by URL - update with channel_id and other fields
+        // This backfills legacy data with the channel_id
+        await channel.update({
+          channel_id: channelData.id,
+          title: channelData.title,
+          description: channelData.description,
+          uploader: channelData.uploader,
+          url: channelData.url,
+        });
+      }
+    } else {
+      // Found by channel_id - just update metadata
+      await channel.update({
         title: channelData.title,
         description: channelData.description,
         uploader: channelData.uploader,
         url: channelData.url,
-      },
-    });
+      });
+    }
 
-    if (!created) {
-      await channel.update({
+    // Only create if not found by either method
+    if (!channel) {
+      channel = await Channel.create({
         channel_id: channelData.id,
         title: channelData.title,
         description: channelData.description,

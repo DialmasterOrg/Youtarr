@@ -257,7 +257,9 @@ describe('ChannelModule', () => {
     describe('upsertChannel', () => {
       test('should create new channel if not exists', async () => {
         const mockChannel = { ...mockChannelData };
-        Channel.findOrCreate.mockResolvedValue([mockChannel, true]);
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by channel_id
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by URL
+        Channel.create.mockResolvedValue(mockChannel);
 
         const channelData = {
           id: 'UC123',
@@ -269,25 +271,28 @@ describe('ChannelModule', () => {
 
         const result = await ChannelModule.upsertChannel(channelData);
 
-        expect(Channel.findOrCreate).toHaveBeenCalledWith({
-          where: { url: channelData.url },
-          defaults: {
-            channel_id: channelData.id,
-            title: channelData.title,
-            description: channelData.description,
-            uploader: channelData.uploader,
-            url: channelData.url
-          }
+        expect(Channel.findOne).toHaveBeenNthCalledWith(1, {
+          where: { channel_id: channelData.id }
+        });
+        expect(Channel.findOne).toHaveBeenNthCalledWith(2, {
+          where: { url: channelData.url }
+        });
+        expect(Channel.create).toHaveBeenCalledWith({
+          channel_id: channelData.id,
+          title: channelData.title,
+          description: channelData.description,
+          uploader: channelData.uploader,
+          url: channelData.url
         });
         expect(result).toBe(mockChannel);
       });
 
-      test('should update existing channel', async () => {
+      test('should update existing channel found by channel_id', async () => {
         const mockChannel = {
           ...mockChannelData,
           update: jest.fn()
         };
-        Channel.findOrCreate.mockResolvedValue([mockChannel, false]);
+        Channel.findOne.mockResolvedValueOnce(mockChannel); // Found by channel_id
 
         const channelData = {
           id: 'UC123',
@@ -299,6 +304,41 @@ describe('ChannelModule', () => {
 
         await ChannelModule.upsertChannel(channelData);
 
+        expect(Channel.findOne).toHaveBeenCalledWith({
+          where: { channel_id: channelData.id }
+        });
+        expect(mockChannel.update).toHaveBeenCalledWith({
+          title: channelData.title,
+          description: channelData.description,
+          uploader: channelData.uploader,
+          url: channelData.url
+        });
+      });
+
+      test('should update existing channel found by URL and backfill channel_id', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          update: jest.fn()
+        };
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by channel_id
+        Channel.findOne.mockResolvedValueOnce(mockChannel); // Found by URL
+
+        const channelData = {
+          id: 'UC123',
+          title: 'Updated Channel',
+          description: 'Updated Description',
+          uploader: 'Updated Uploader',
+          url: 'https://youtube.com/@test'
+        };
+
+        await ChannelModule.upsertChannel(channelData);
+
+        expect(Channel.findOne).toHaveBeenNthCalledWith(1, {
+          where: { channel_id: channelData.id }
+        });
+        expect(Channel.findOne).toHaveBeenNthCalledWith(2, {
+          where: { url: channelData.url }
+        });
         expect(mockChannel.update).toHaveBeenCalledWith({
           channel_id: channelData.id,
           title: channelData.title,
