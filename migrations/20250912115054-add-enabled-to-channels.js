@@ -13,19 +13,35 @@ module.exports = {
       defaultValue: false,
     });
 
+    // DB-side cleanup: strip carriage returns from stored URLs and trim
+    // This fixes issues found during testing where stored URLs had CR characters.
+    await queryInterface.sequelize.query(
+      `UPDATE channels SET url = TRIM(REPLACE(url, CHAR(13), ''))`
+    );
+
+    // Normalize a URL line from channels.list for safe comparison
+    const normalizeUrl = (val) =>
+      (val || '')
+        .replace(/^\uFEFF/, '') // drop BOM if present at file start
+        .replace(/[\r\n\t]/g, '') // remove CR/LF/TAB from lines
+        .trim();
+
     // Read channels.list file if it exists
     const channelsListPath = path.join(__dirname, '../config/channels.list');
     if (fs.existsSync(channelsListPath)) {
       try {
         const data = fs.readFileSync(channelsListPath, 'utf-8');
-        const channelUrls = data.split('\n').filter((line) => line.trim() !== '');
+        const channelUrls = data
+          .split(/\r?\n/)
+          .map((line) => normalizeUrl(line))
+          .filter((line) => line !== '');
 
         // Update enabled status for channels in the list
         for (const url of channelUrls) {
           await queryInterface.sequelize.query(
             'UPDATE channels SET enabled = true WHERE url = :url',
             {
-              replacements: { url: url.trim() },
+              replacements: { url },
               type: Sequelize.QueryTypes.UPDATE
             }
           );
