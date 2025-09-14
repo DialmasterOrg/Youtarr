@@ -65,7 +65,7 @@ function App() {
       .then(data => {
         setRequiresSetup(data.requiresSetup);
         setCheckingSetup(false);
-        
+
         // If setup is required, clear ALL existing tokens to force fresh authentication
         if (data.requiresSetup) {
           localStorage.removeItem('authToken');
@@ -73,7 +73,7 @@ function App() {
           setToken(null);
           return; // Don't proceed with token validation
         }
-        
+
         // Only check auth token if setup is not required
         if (!data.requiresSetup) {
           // Only use the new authToken - no fallback to plexAuthToken
@@ -163,7 +163,10 @@ function App() {
             <img
               src={toplogo}
               alt='Youtarr'
-              style={{ width: isMobile ? '150px' : '200px' }}
+              style={{
+                width: isMobile ? '150px' : '200px',
+                height: isMobile ? '36px' : 'auto'
+              }}
             />
             <Typography
               style={{ fontSize: isMobile ? 'small' : 'large' }}
