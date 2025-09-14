@@ -11,13 +11,13 @@ Youtarr uses Docker Compose with two containers:
 ### Application Container (youtarr)
 - **Image**: `dialmaster/youtarr:latest`
 - **Exposed Ports**:
-  - 3087 → 3011 (Web interface)
-  - 3088 → 3012 (WebSocket)
+  - 3087 → 3011 (Web interface + WebSocket)
 - **Volumes**:
+  - `${YOUTUBE_OUTPUT_DIR}:/usr/src/app/data` - Videos directory
+  - `./server/images:/app/server/images` - Thumbnails/cache
   - `./config:/app/config` - Configuration files
-  - `./database:/app/database` - SQLite fallback
-  - `./logs:/app/logs` - Application logs
-  - YouTube output directory (configured during setup)
+  - `./jobs:/app/jobs` - Job state and artifacts
+  - `./migrations:/app/migrations` - DB migrations
 
 ### Database Container (youtarr-db)
 - **Image**: `mariadb:10.3`
@@ -81,7 +81,7 @@ docker exec -it youtarr bash
 docker exec -it youtarr-db bash
 
 # Direct database access
-docker exec -it youtarr-db mysql -u root -pyoutarr123 youtarr
+docker exec -it youtarr-db mysql -u root -p123qweasd youtarr
 ```
 
 ## Environment Variables
@@ -92,9 +92,9 @@ Set in docker-compose.yml:
 environment:
   - IN_DOCKER_CONTAINER=1
   - DB_HOST=youtarr-db
-  - DB_PORT=3306
+  - DB_PORT=3321
   - DB_USER=root
-  - DB_PASSWORD=youtarr123
+  - DB_PASSWORD=123qweasd
   - DB_NAME=youtarr
   - YOUTUBE_OUTPUT_DIR=${YOUTUBE_OUTPUT_DIR}
 ```
@@ -105,19 +105,19 @@ environment:
 
 - **Database**: Docker volume `youtarr_db_data`
 - **Config**: `./config` directory
-- **Logs**: `./logs` directory
 - **Videos**: User-specified directory (set via setup.sh)
+- **Images/Jobs**: `./server/images` and `./jobs` directories
 
 ### Backup and Restore
 
 **Backup database**:
 ```bash
-docker exec youtarr-db mysqldump -u root -pyoutarr123 youtarr > backup.sql
+docker exec youtarr-db mysqldump -u root -p123qweasd youtarr > backup.sql
 ```
 
 **Restore database**:
 ```bash
-docker exec -i youtarr-db mysql -u root -pyoutarr123 youtarr < backup.sql
+docker exec -i youtarr-db mysql -u root -p123qweasd youtarr < backup.sql
 ```
 
 **Backup all data**:
@@ -126,7 +126,7 @@ docker exec -i youtarr-db mysql -u root -pyoutarr123 youtarr < backup.sql
 ./stop.sh
 
 # Create backup
-tar -czf youtarr-backup.tar.gz config/ database/ logs/
+tar -czf youtarr-backup.tar.gz config/ database/ jobs/ server/images/
 
 # Include database volume
 docker run --rm -v youtarr_db_data:/data -v $(pwd):/backup alpine tar -czf /backup/db-backup.tar.gz -C /data .
@@ -256,7 +256,7 @@ docker-compose version
 
 ### Database Password
 
-Default password is `youtarr123`. To change:
+Default password is `123qweasd`. To change:
 
 1. Update in docker-compose.yml:
    ```yaml

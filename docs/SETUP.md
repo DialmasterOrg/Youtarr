@@ -100,6 +100,8 @@ For Youtarr to work correctly with Plex:
    - Organize them by channel name
    - Add them to your Plex library
 
+Note on removal: Removing a channel in the UI disables future downloads for that channel but does not delete existing videos or download history.
+
 ## Network Access
 
 To access Youtarr from other devices on your network:

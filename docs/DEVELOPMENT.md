@@ -4,7 +4,7 @@
 
 For development, you'll need:
 
-1. **Node.js** (v14 or higher) and npm
+1. **Node.js** (v18 or higher) and npm
 2. **Docker** and Docker Compose (for database)
 3. **Git** for version control
 4. A code editor (VS Code recommended)
@@ -73,7 +73,7 @@ Create a `.env` file in the root directory:
 DB_HOST=localhost
 DB_PORT=3321
 DB_USER=root
-DB_PASSWORD=youtarr123
+DB_PASSWORD=123qweasd
 DB_NAME=youtarr
 NODE_ENV=development
 ```
@@ -90,7 +90,7 @@ npm run dev
 This starts:
 - Backend on http://localhost:3011 (with nodemon)
 - Frontend on http://localhost:3000 (with webpack dev server)
-- WebSocket server on port 3012
+- WebSocket served on the same HTTP server/port (3011)
 
 ### Option 2: Separate Frontend/Backend
 
@@ -181,10 +181,17 @@ npm test -- --watchAll=false  # Run once
 
 ### Backend Tests
 
-Currently, no backend test suite is configured. Consider adding:
-- Unit tests with Jest
-- Integration tests for API endpoints
-- Database migration tests
+Backend tests use Jest at the repo root:
+```bash
+# Run all tests (backend + frontend)
+npm test
+
+# Backend only
+npm run test:backend
+
+# Coverage (backend + frontend)
+npm run test:coverage
+```
 
 ## Database Development
 
@@ -218,28 +225,24 @@ Key tables:
 
 ```bash
 # Development database
-mysql -h localhost -P 3321 -u root -pyoutarr123 youtarr
+mysql -h localhost -P 3321 -u root -p123qweasd youtarr
 
 # Docker database
-docker exec -it youtarr-db mysql -u root -pyoutarr123 youtarr
+docker exec -it youtarr-db mysql -u root -p123qweasd youtarr
 ```
 
 ## API Development
 
 ### API Endpoints
 
-Main endpoints (all require authentication except setup):
+Key endpoints (all require authentication except setup):
 
-- `POST /setup/create-admin` - Initial admin setup
-- `POST /auth/login` - User login
-- `GET /auth/logout` - User logout
-- `GET /api/config` - Get configuration
-- `POST /api/config` - Update configuration
-- `GET /api/channels` - List channels
-- `POST /api/channels` - Add channel
-- `DELETE /api/channels/:id` - Remove channel
-- `GET /api/videos` - List videos
-- `GET /api/jobs` - List download jobs
+- Setup: `GET /setup/status`, `POST /setup/create-auth`
+- Auth: `POST /auth/login`, `POST /auth/logout`, `GET /auth/sessions`, `DELETE /auth/sessions/:id`, `POST /auth/change-password`, `GET /auth/validate`
+- Config: `GET /getconfig`, `POST /updateconfig`, `GET /storage-status`, `GET /getCurrentReleaseVersion`
+- Channels: `GET /getchannels`, `POST /updatechannels`, `POST /addchannelinfo`, `GET /getchannelinfo/:channelId`, `GET /getchannelvideos/:channelId`
+- Downloads/Jobs: `POST /triggerspecificdownloads`, `POST /triggerchanneldownloads`, `GET /jobstatus/:jobId`, `GET /runningjobs`, `GET /getVideos`
+- Plex: `GET /getplexlibraries`, `GET /plex/auth-url`, `GET /plex/check-pin/:pinId`
 
 ### Authentication
 
@@ -252,10 +255,10 @@ headers: {
 
 ### WebSocket Events
 
-WebSocket server on port 3012 emits:
-- `jobUpdate` - Download progress
-- `channelRefresh` - Channel update status
-- `downloadComplete` - Video download finished
+WebSocket shares the HTTP port (3011) and emits broadcast messages including:
+- `downloadProgress` - Download progress updates
+- `downloadComplete` - Video download finished (with list)
+- `channelsUpdated` - Channel list or metadata changed
 
 ## Frontend Development
 
@@ -422,7 +425,7 @@ taskkill /PID <PID> /F  # Windows
 
 3. Test connection:
    ```bash
-   mysql -h localhost -P 3321 -u root -pyoutarr123
+   mysql -h localhost -P 3321 -u root -p123qweasd
    ```
 
 ### Module Not Found Errors

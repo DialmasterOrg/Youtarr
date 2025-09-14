@@ -11,7 +11,7 @@ The application operates by running a scheduled task that automatically download
 ## 🎯 Key Features
 
 - **📺 Automated Downloads**: Schedule automatic downloads from your subscribed YouTube channels
-- **🎬 Plex Integration**: If you link the PLex, videos are automatically added to your Plex library with metadata
+- **🎬 Plex Integration**: If you link Plex, videos are automatically added to your Plex library with metadata
 - **👨‍👩‍👧‍👦 Family-Friendly**: Create a safe, curated YouTube experience without ads or comments
 - **🔐 Secure Access**: Local authentication system with admin controls
 - **📱 Responsive UI**: Works on desktop and mobile devices
@@ -23,7 +23,7 @@ The application operates by running a scheduled task that automatically download
 - Docker & Docker Compose
 - Git
 - Bash shell (Git Bash for Windows)
-- Plex Media Server (on the same machine)
+- Plex Media Server (optional; only needed for library refresh in Plex)
 
 ### Installation
 
