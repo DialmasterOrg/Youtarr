@@ -745,11 +745,11 @@ class ChannelModule {
 
     // Determine how many videos to fetch based on recency
     // If we have recent data (within 3 days), fetch fewer videos for faster response
-    let videoCount = 50; // Default for initial fetch or stale data
+    let videoCount = 50; // Default/max for initial fetch or stale data
     if (mostRecentVideoDate) {
       const daysSinceLastVideo = Math.floor((Date.now() - new Date(mostRecentVideoDate).getTime()) / (1000 * 60 * 60 * 24));
-      if (daysSinceLastVideo <= 3) {
-        videoCount = 20; // Fetch fewer videos for active channels with recent data
+      if (daysSinceLastVideo <= 5) {
+        videoCount = daysSinceLastVideo * 10;
       }
     }
 

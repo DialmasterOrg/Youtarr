@@ -17,15 +17,15 @@ class VideosModule {
           Videos.originalDate,
           Videos.description,
           Videos.channel_id,
-          Jobs.timeCreated
+          COALESCE(Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) AS timeCreated
         FROM
           Videos
-        INNER JOIN
+        LEFT JOIN
           JobVideos ON Videos.id = JobVideos.video_id
-        INNER JOIN
+        LEFT JOIN
           Jobs ON Jobs.id = JobVideos.job_id
         ORDER BY
-          Jobs.timeCreated DESC
+          COALESCE(Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) DESC
         LIMIT 150
       `,
         {
