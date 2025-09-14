@@ -17,29 +17,13 @@ class DownloadModule {
   }
 
   getCountOfDownloadedVideos() {
-    const lines = fs
-      .readFileSync(
-        path.join(__dirname, '../../config', 'complete.list'),
-        'utf-8'
-      )
-      .split('\n')
-      .filter((line) => line.trim() !== '');
-    return lines.length;
+    const archive = require('./archiveModule');
+    return archive.readCompleteListLines().length;
   }
 
   getNewVideoUrls(initialCount) {
-    const lines = fs
-      .readFileSync(
-        path.join(__dirname, '../../config', 'complete.list'),
-        'utf-8'
-      )
-      .split('\n')
-      .filter((line) => line.trim() !== '');
-    const newVideoIds = lines
-      .slice(initialCount)
-      .map((line) => line.split(' ')[1]);
-
-    return newVideoIds.map((id) => `https://youtu.be/${id}`);
+    const archive = require('./archiveModule');
+    return archive.getNewVideoUrlsSince(initialCount);
   }
 
   doDownload(command, jobId, jobType) {
@@ -151,7 +135,7 @@ class DownloadModule {
       });
     }).catch((error) => {
       console.log(error.message);
-      
+
       // Clean up temporary channels file on error
       if (this.tempChannelsFile) {
         const fs = require('fs').promises;
@@ -161,7 +145,7 @@ class DownloadModule {
           });
         this.tempChannelsFile = null;
       }
-      
+
       jobModule.updateJob(jobId, {
         status: 'Killed',
         output: 'Job time exceeded timeout',
@@ -190,13 +174,13 @@ class DownloadModule {
         // Generate temporary channels file from database
         const channelModule = require('./channelModule');
         tempChannelsFile = await channelModule.generateChannelsFile();
-        
+
         const baseCommand = this.getBaseCommand();
         const command = `${baseCommand} -a ${tempChannelsFile} --playlist-end ${configModule.config.channelFilesToDownload}`;
-        
+
         // Store temp file path for cleanup later
         this.tempChannelsFile = tempChannelsFile;
-        
+
         this.doDownload(command, jobId, jobType);
       } catch (err) {
         console.error('Error in doChannelDownloads:', err);
@@ -268,6 +252,7 @@ class DownloadModule {
       configModule.ffmpegPath +
       ` -f "bestvideo[height<=${resolution}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --write-thumbnail --convert-thumbnails jpg ` +
       '--download-archive ./config/complete.list --ignore-errors --embed-metadata --write-info-json ' +
+      '--extractor-args "youtubetab:tab=videos;sort=dd" ' +
       '--match-filter "duration>70 & availability!=subscriber_only" ' +  // Filter out shorts and members-only videos
       '-o "' +
       configModule.directoryPath +

@@ -229,28 +229,6 @@ describe('ChannelModule', () => {
       });
     });
 
-    describe('readCompleteList', () => {
-      test('should read and parse complete.list file', () => {
-        const mockCompleteList = 'youtube video1\nyoutube video2\n\nyoutube video3';
-        fs.readFileSync.mockReturnValue(mockCompleteList);
-
-        const result = ChannelModule.readCompleteList();
-
-        expect(fs.readFileSync).toHaveBeenCalledWith(
-          expect.stringContaining('complete.list'),
-          'utf-8'
-        );
-        expect(result).toEqual(['youtube video1', 'youtube video2', 'youtube video3']);
-      });
-
-      test('should handle empty complete.list', () => {
-        fs.readFileSync.mockReturnValue('');
-
-        const result = ChannelModule.readCompleteList();
-
-        expect(result).toEqual([]);
-      });
-    });
   });
 
   describe('Database Operations', () => {

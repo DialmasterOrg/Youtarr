@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
+const fsPromises = fs.promises;
 const path = require('path');
 const Job = require('../models/job');
 const Video = require('../models/video');
@@ -295,13 +296,18 @@ class JobModule {
   async backfillFromCompleteList() {
     try {
       const archivePath = path.join(__dirname, '../../config', 'complete.list');
-      if (!fs.existsSync(archivePath)) {
-        console.log('No complete.list found for backfill. Skipping.');
-        return;
+      let archiveContent;
+      try {
+        archiveContent = await fsPromises.readFile(archivePath, 'utf-8');
+      } catch (e) {
+        if (e && e.code === 'ENOENT') {
+          console.log('No complete.list found for backfill. Skipping.');
+          return;
+        }
+        throw e;
       }
 
-      const lines = fs
-        .readFileSync(archivePath, 'utf-8')
+      const lines = archiveContent
         .split(/\r?\n/)
         .map((l) => l.trim())
         .filter(Boolean);
@@ -320,28 +326,46 @@ class JobModule {
       const existingChannelVideos = await ChannelVideo.findAll({ attributes: ['youtube_id'] });
       const existingChannelVideoIdSet = new Set(existingChannelVideos.map(cv => cv.youtube_id));
 
-      for (const id of ids) {
-        const infoPath = path.join(__dirname, `../../jobs/info/${id}.info.json`);
-
-        // Determine whether we need to backfill Videos and/or channelvideos for this id
+      // Build candidate list first (IDs needing backfill in either table),
+      // starting from newest entries at the end of complete.list
+      const candidates = [];
+      for (let i = ids.length - 1; i >= 0; i--) {
+        const id = ids[i];
         const needsVideo = !existingVideoIdSet.has(id);
         const needsChannelVideo = !existingChannelVideoIdSet.has(id);
-
-        if (!needsVideo && !needsChannelVideo) {
-          continue; // Already present in DB; skip to avoid stale overwrites
+        if (needsVideo || needsChannelVideo) {
+          candidates.push({ id, needsVideo, needsChannelVideo });
         }
+      }
 
-        if (!fs.existsSync(infoPath)) {
-          // Record ids missing info.json only if we needed to backfill and cannot
-          missingInfoIds.push(id);
-          continue; // Skip if no info.json present
-        }
+      // Cap per run to 300 items
+      const maxPerRun = 300;
+      const capped = candidates.slice(0, maxPerRun);
+
+      let processed = 0;
+      for (const { id, needsVideo, needsChannelVideo } of capped) {
+        const infoPath = path.join(__dirname, `../../jobs/info/${id}.info.json`);
 
         let info;
         try {
-          info = JSON.parse(fs.readFileSync(infoPath, 'utf-8'));
+          const content = await fsPromises.readFile(infoPath, 'utf-8');
+          info = JSON.parse(content);
         } catch (e) {
+          if (e && e.code === 'ENOENT') {
+            // Record ids missing info.json only if we needed to backfill and cannot
+            missingInfoIds.push(id);
+            // Yield occasionally even on misses to keep loop responsive
+            processed++;
+            if (processed % 20 === 0) {
+              await new Promise((resolve) => setImmediate(resolve));
+            }
+            continue;
+          }
           console.error('Failed parsing info.json for', id, e.message);
+          processed++;
+          if (processed % 20 === 0) {
+            await new Promise((resolve) => setImmediate(resolve));
+          }
           continue;
         }
 
@@ -375,6 +399,12 @@ class JobModule {
         } catch (cvErr) {
           console.error('Error upserting channelvideos for', id, cvErr.message);
         }
+
+        // Yield to event loop every 20 items to keep server responsive
+        processed++;
+        if (processed % 20 === 0) {
+          await new Promise((resolve) => setImmediate(resolve));
+        }
       }
 
       console.log(
@@ -391,15 +421,15 @@ class JobModule {
     }
   }
 
-  // Schedule daily backfill at midnight
+  // Schedule daily backfill at 2:20am local time
   scheduleDailyBackfill() {
     try {
-      cron.schedule('0 0 * * *', () => {
+      cron.schedule('20 2 * * *', () => {
         this.backfillFromCompleteList().catch((err) => {
           console.error('Scheduled backfill failed:', err.message);
         });
       });
-      console.log('Scheduled daily backfill from complete.list');
+      console.log('Scheduled daily backfill from complete.list at 2:20am');
     } catch (err) {
       console.error('Failed to schedule daily backfill:', err.message);
     }

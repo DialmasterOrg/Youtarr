@@ -1,5 +1,6 @@
 const configModule = require('./configModule');
 const downloadModule = require('./downloadModule');
+const archiveModule = require('./archiveModule');
 const cron = require('node-cron');
 const fs = require('fs');
 const fsPromises = fs.promises;
@@ -125,6 +126,22 @@ class ChannelModule {
   }
 
   /**
+   * Build the uploads playlist URL from a channel-like ID.
+   * Converts UC... to UU... when needed.
+   * @param {string} channelId
+   * @returns {string}
+   */
+  resolveUploadsPlaylistUrlFromChannelId(channelId) {
+    if (!channelId) return '';
+    const uploadsId = channelId.startsWith('UC')
+      ? `UU${channelId.substring(2)}`
+      : (channelId.startsWith('UU') ? channelId : '');
+    return uploadsId
+      ? `https://www.youtube.com/playlist?list=${uploadsId}`
+      : '';
+  }
+
+  /**
    * Map channel database record to response format
    * @param {Object} channel - Channel database record
    * @returns {Object} - Formatted channel response
@@ -190,18 +207,6 @@ class ChannelModule {
     }
 
     return channel;
-  }
-
-  /**
-   * Read complete list file
-   * @returns {Array<string>} - Array of completed video IDs
-   */
-  readCompleteList() {
-    const completePath = path.join(__dirname, '../../config/complete.list');
-    const completeList = fs.readFileSync(completePath, 'utf-8');
-    return completeList
-      .split(/\r?\n/)
-      .filter((line) => line.trim() !== '');
   }
 
   /**
@@ -529,10 +534,12 @@ class ChannelModule {
         attributes: ['channel_id', 'url']
       });
 
-      // Use canonical URLs when channel_id exists, fall back to stored url otherwise
+      // Use canonical channel URLs with the explicit Videos tab when channel_id exists,
+      // so the auto-download list aligns with the ChannelVideos tab (newest-first Videos only).
       const urls = channels.map(c => {
         if (c.channel_id) {
-          return this.resolveChannelUrlFromId(c.channel_id);
+          const canonical = this.resolveChannelUrlFromId(c.channel_id);
+          return `${canonical}/videos`;
         }
         return c.url;
       }).join('\n');
@@ -589,7 +596,7 @@ class ChannelModule {
    * @returns {Array} - Videos with 'added' property
    */
   enrichVideosWithDownloadStatus(videos) {
-    const completeListArray = this.readCompleteList();
+    const completeListArray = archiveModule.readCompleteListLines();
 
     return videos.map((video) => {
       const plainVideoObject = video.toJSON ? video.toJSON() : video;
