@@ -229,28 +229,6 @@ describe('ChannelModule', () => {
       });
     });
 
-    describe('readCompleteList', () => {
-      test('should read and parse complete.list file', () => {
-        const mockCompleteList = 'youtube video1\nyoutube video2\n\nyoutube video3';
-        fs.readFileSync.mockReturnValue(mockCompleteList);
-
-        const result = ChannelModule.readCompleteList();
-
-        expect(fs.readFileSync).toHaveBeenCalledWith(
-          expect.stringContaining('complete.list'),
-          'utf-8'
-        );
-        expect(result).toEqual(['youtube video1', 'youtube video2', 'youtube video3']);
-      });
-
-      test('should handle empty complete.list', () => {
-        fs.readFileSync.mockReturnValue('');
-
-        const result = ChannelModule.readCompleteList();
-
-        expect(result).toEqual([]);
-      });
-    });
   });
 
   describe('Database Operations', () => {
@@ -559,18 +537,6 @@ describe('ChannelModule', () => {
         });
       });
 
-      test('should skip shorts (videos under 70 seconds)', () => {
-        const entry = {
-          id: 'short123',
-          title: 'Short Video',
-          duration: 60
-        };
-
-        const result = ChannelModule.parseVideoMetadata(entry);
-
-        expect(result).toBeNull();
-      });
-
       test('should handle missing fields with defaults', () => {
         const entry = {
           id: 'video123'
@@ -644,7 +610,7 @@ describe('ChannelModule', () => {
             enabled: true
           }
         ];
-        
+
         Channel.findAll = jest.fn().mockResolvedValue(mockChannels);
 
         const result = await ChannelModule.readChannels();
@@ -652,7 +618,7 @@ describe('ChannelModule', () => {
         expect(Channel.findAll).toHaveBeenCalledWith({
           where: { enabled: true }
         });
-        
+
         expect(result).toEqual([
           {
             url: 'https://youtube.com/@channel1',
@@ -731,29 +697,29 @@ describe('ChannelModule', () => {
           { url: 'https://youtube.com/@channel1' },
           { url: 'https://youtube.com/@channel2' }
         ];
-        
+
         Channel.findAll = jest.fn().mockResolvedValue(mockChannels);
         fsPromises.writeFile.mockResolvedValue();
-        
+
         const tempPath = await ChannelModule.generateChannelsFile();
-        
+
         expect(Channel.findAll).toHaveBeenCalledWith({
           where: { enabled: true },
-          attributes: ['url']
+          attributes: ['channel_id', 'url']
         });
-        
+
         expect(fsPromises.writeFile).toHaveBeenCalledWith(
           expect.stringContaining('channels-temp-'),
           'https://youtube.com/@channel1\nhttps://youtube.com/@channel2'
         );
-        
+
         expect(tempPath).toContain('channels-temp-');
       });
-      
+
       test('should handle error and cleanup temp file', async () => {
         Channel.findAll = jest.fn().mockRejectedValue(new Error('DB Error'));
         fsPromises.unlink.mockResolvedValue();
-        
+
         await expect(ChannelModule.generateChannelsFile()).rejects.toThrow('DB Error');
       });
     });

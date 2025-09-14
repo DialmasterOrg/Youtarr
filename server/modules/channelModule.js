@@ -1,5 +1,6 @@
 const configModule = require('./configModule');
 const downloadModule = require('./downloadModule');
+const archiveModule = require('./archiveModule');
 const cron = require('node-cron');
 const fs = require('fs');
 const fsPromises = fs.promises;
@@ -7,6 +8,7 @@ const path = require('path');
 const Channel = require('../models/channel');
 const ChannelVideo = require('../models/channelvideo');
 const MessageEmitter = require('./messageEmitter.js');
+const { Op } = require('sequelize');
 
 const { v4: uuidv4 } = require('uuid');
 const { spawn, execSync } = require('child_process');
@@ -17,6 +19,7 @@ class ChannelModule {
     this.scheduleTask();
     this.subscribe();
     this.populateMissingChannelInfo();
+    this.normalizeChannelUrls();
   }
 
 
@@ -191,18 +194,6 @@ class ChannelModule {
   }
 
   /**
-   * Read complete list file
-   * @returns {Array<string>} - Array of completed video IDs
-   */
-  readCompleteList() {
-    const completePath = path.join(__dirname, '../../config/complete.list');
-    const completeList = fs.readFileSync(completePath, 'utf-8');
-    return completeList
-      .split(/\r?\n/)
-      .filter((line) => line.trim() !== '');
-  }
-
-  /**
    * Resize channel thumbnail image
    * @param {string} channelId - Channel ID
    * @returns {Promise<void>}
@@ -245,6 +236,47 @@ class ChannelModule {
       if (!foundChannel || !foundChannel.uploader) {
         await this.getChannelInfo(channelObj.url);
       }
+    }
+  }
+
+  /**
+   * Normalize channel URLs at startup.
+   * This is a lightweight check that only logs potential issues.
+   * The actual URL updates happen lazily when channels are accessed.
+   * @returns {Promise<void>}
+   */
+  async normalizeChannelUrls() {
+    try {
+      console.log('Checking for channels with potentially stale handle URLs...');
+
+      // Find all enabled channels with channel_id and handle URLs
+      const channels = await Channel.findAll({
+        where: {
+          enabled: true,
+          channel_id: { [Op.ne]: null }
+        },
+        attributes: ['id', 'channel_id', 'url', 'title', 'lastFetched']
+      });
+
+      let handleUrlCount = 0;
+      for (const channel of channels) {
+        // Check if URL looks like a handle URL
+        if (channel.url && channel.url.includes('@')) {
+          handleUrlCount++;
+          const daysSinceUpdate = channel.lastFetched
+            ? Math.floor((Date.now() - new Date(channel.lastFetched).getTime()) / (1000 * 60 * 60 * 24))
+            : 'never';
+          console.log(`Channel "${channel.title}" uses handle URL: ${channel.url} (last updated: ${daysSinceUpdate === 'never' ? 'never' : `${daysSinceUpdate} days ago`})`);
+        }
+      }
+
+      if (handleUrlCount > 0) {
+        console.log(`Found ${handleUrlCount} channel(s) with handle URLs. These will be updated automatically when accessed.`);
+      } else {
+        console.log('No channels with handle URLs found.');
+      }
+    } catch (error) {
+      console.error('Error during channel URL check:', error);
     }
   }
 
@@ -347,13 +379,17 @@ class ChannelModule {
 
     const channelData = await this.fetchChannelMetadata(channelUrl);
 
+    // Extract the actual current handle URL from the response
+    const actualChannelUrl = channelData.channel_url || channelData.url || channelUrl;
+    console.log(`Storing handle URL for channel ${channelData.id}: ${actualChannelUrl}`);
+
     await Promise.all([
       this.upsertChannel({
         id: channelData.id,
         title: channelData.title,
         description: channelData.description,
         uploader: channelData.uploader,
-        url: channelUrl,
+        url: actualChannelUrl,  // Store the actual handle URL for display
       }),
       this.processChannelThumbnail(channelUrl, channelData.id)
     ]);
@@ -479,10 +515,19 @@ class ChannelModule {
     try {
       const channels = await Channel.findAll({
         where: { enabled: true },
-        attributes: ['url']
+        attributes: ['channel_id', 'url']
       });
 
-      const urls = channels.map(c => c.url).join('\n');
+      // Use canonical channel URLs with the explicit Videos tab when channel_id exists,
+      // so the auto-download list aligns with the ChannelVideos tab (newest-first Videos only).
+      const urls = channels.map(c => {
+        if (c.channel_id) {
+          const canonical = this.resolveChannelUrlFromId(c.channel_id);
+          return `${canonical}/videos`;
+        }
+        return c.url;
+      }).join('\n');
+
       await fsPromises.writeFile(tempFilePath, urls);
 
       return tempFilePath;
@@ -535,7 +580,7 @@ class ChannelModule {
    * @returns {Array} - Videos with 'added' property
    */
   enrichVideosWithDownloadStatus(videos) {
-    const completeListArray = this.readCompleteList();
+    const completeListArray = archiveModule.readCompleteListLines();
 
     return videos.map((video) => {
       const plainVideoObject = video.toJSON ? video.toJSON() : video;
@@ -606,13 +651,9 @@ class ChannelModule {
   /**
    * Parse video metadata from yt-dlp entry
    * @param {Object} entry - Video entry from yt-dlp
-   * @returns {Object|null} - Parsed video object or null if should skip
+   * @returns {Object} - Parsed video object
    */
   parseVideoMetadata(entry) {
-    if (entry.duration && entry.duration < 70) {
-      return null;
-    }
-
     return {
       title: entry.title || 'Untitled',
       youtube_id: entry.id,
@@ -624,46 +665,109 @@ class ChannelModule {
   }
 
   /**
+   * Extract video entries from yt-dlp JSON response.
+   * Handles both flat (direct video entries) and nested (playlists within playlist) structures.
+   * @param {Object} jsonOutput - Parsed JSON from yt-dlp
+   * @returns {Array} - Array of parsed video metadata objects
+   */
+  extractVideosFromYtDlpResponse(jsonOutput) {
+    const videos = [];
+
+    if (!jsonOutput.entries || !Array.isArray(jsonOutput.entries)) {
+      console.log('No entries found in yt-dlp JSON response');
+      return videos;
+    }
+
+    const entries = jsonOutput.entries;
+
+    // Prefer nested playlist selection using stable, non-localized URL slugs
+    const playlists = entries.filter(e => e && e._type === 'playlist');
+    if (playlists.length > 0) {
+      // Find the Videos tab by webpage_url ending with /videos (or with query params)
+      const videosPlaylist = playlists.find(p => {
+        const url = typeof p.webpage_url === 'string' ? p.webpage_url : '';
+        return url.endsWith('/videos') || url.includes('/videos?');
+      });
+
+      if (videosPlaylist && Array.isArray(videosPlaylist.entries)) {
+        for (const entry of videosPlaylist.entries) {
+          videos.push(this.parseVideoMetadata(entry));
+        }
+        return videos;
+      }
+
+      // Do not fallback to other playlists (e.g., Shorts/Live) if Videos tab isn't present
+      return videos; // empty
+    }
+
+    // Flat structure fallback: entries are videos directly
+    // Include typical watch URLs and exclude shorts URLs when possible
+    // NOTE: This fallback should never be hit now that we are using canonical urls.. but just in case
+    const flatVideoEntries = entries.filter(e => e && e._type !== 'playlist');
+    if (flatVideoEntries.length > 0) {
+      for (const entry of flatVideoEntries) {
+        const url = String(entry && entry.url ? entry.url : '');
+        if (url.includes('/shorts/')) continue;
+        // If URL is missing, still include as a best-effort fallback
+        videos.push(this.parseVideoMetadata(entry));
+      }
+    }
+
+    return videos;
+  }
+
+  /**
    * Fetch channel videos using yt-dlp.
-   * Retrieves metadata for the latest 50 videos from YouTube.
+   * Retrieves metadata for recent videos from YouTube.
+   * Uses canonical channel URL for stability when handles change.
    * @param {string} channelId - Channel ID to fetch videos for
-   * @returns {Promise<Array>} - Array of parsed video metadata objects
+   * @param {Date|null} mostRecentVideoDate - Date of the most recent video we have
+   * @returns {Promise<Object>} - Object with videos array and current channel URL
    * @throws {Error} - If channel not found in database
    */
-  async fetchChannelVideosViaYtDlp(channelId) {
-    console.log('Fetching videos via yt-dlp for channel:', channelId);
-
+  async fetchChannelVideosViaYtDlp(channelId, mostRecentVideoDate = null) {
     const channel = await Channel.findOne({
       where: { channel_id: channelId },
     });
 
-    if (!channel || !channel.url) {
+    if (!channel) {
       throw new Error('Channel not found in database');
     }
+
+    // Determine how many videos to fetch based on recency
+    // If we have recent data (within 3 days), fetch fewer videos for faster response
+    let videoCount = 50; // Default/max for initial fetch or stale data
+    if (mostRecentVideoDate) {
+      const daysSinceLastVideo = Math.floor((Date.now() - new Date(mostRecentVideoDate).getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSinceLastVideo <= 5) {
+        // If we fetched videos today, then fetch last 5 videos, else fetch 10 videos per day
+        videoCount = Math.max(5, daysSinceLastVideo * 10);
+      }
+    }
+
+    // Always use canonical URL based on channel ID for yt-dlp
+    // This ensures stability even when channel handles change
+    const canonicalUrl = this.resolveChannelUrlFromId(channelId);
 
     return await this.withTempFile('channel-videos', async (outputFilePath) => {
       const content = await this.executeYtDlpCommand([
         '--flat-playlist',
         '--dump-single-json',
         '--extractor-args', 'youtubetab:approximate_date',  // Get approximate timestamps for videos
-        '--playlist-end', '50', // Get latest 50 videos
+        '--playlist-end', String(videoCount), // Fetch dynamic number of videos
         '-4',
-        channel.url,
+        canonicalUrl,
       ], outputFilePath);
 
       const jsonOutput = JSON.parse(content);
-      const videos = [];
 
-      if (jsonOutput.entries && Array.isArray(jsonOutput.entries)) {
-        for (const entry of jsonOutput.entries) {
-          const videoMetadata = this.parseVideoMetadata(entry);
-          if (videoMetadata) {
-            videos.push(videoMetadata);
-          }
-        }
-      }
+      // Extract videos using helper method that handles nested structures
+      const videos = this.extractVideosFromYtDlpResponse(jsonOutput);
 
-      return videos;
+      // Extract the current channel URL (with handle) from the response
+      const currentChannelUrl = jsonOutput.uploader_url || jsonOutput.channel_url || jsonOutput.url;
+
+      return { videos, currentChannelUrl };
     });
   }
 
@@ -714,19 +818,17 @@ class ChannelModule {
       let newestVideos = await this.fetchNewestVideosFromDb(channelId);
 
       if (this.shouldRefreshChannelVideos(channel, newestVideos.length)) {
-        console.log('Fetching videos using yt-dlp');
-        await this.fetchAndSaveVideosViaYtDlp(channel, channelId);
-
+        // Get the most recent video date to optimize fetch count
+        const mostRecentVideoDate = newestVideos.length > 0 ? newestVideos[0].publishedAt : null;
+        await this.fetchAndSaveVideosViaYtDlp(channel, channelId, mostRecentVideoDate);
         newestVideos = await this.fetchNewestVideosFromDb(channelId);
-
         return this.buildChannelVideosResponse(newestVideos, channel, 'yt_dlp');
       }
 
       return this.buildChannelVideosResponse(newestVideos, channel, 'cache');
 
     } catch (error) {
-      console.error('Error fetching channel videos:', error);
-
+      console.error('Error fetching channel videos:', error.message);
       const cachedVideos = await this.fetchNewestVideosFromDb(channelId);
       return this.buildChannelVideosResponse(cachedVideos, channel, 'cache');
     }
@@ -735,26 +837,34 @@ class ChannelModule {
   /**
    * Fetch videos from YouTube and save to database.
    * Updates channel's lastFetched timestamp on success.
+   * Also updates the channel URL if it has changed (e.g., handle renamed).
    * @param {Object} channel - Channel database record
    * @param {string} channelId - Channel ID
+   * @param {Date|null} mostRecentVideoDate - Date of the most recent video we have
    * @returns {Promise<void>}
    * @throws {Error} - Re-throws yt-dlp errors
    */
-  async fetchAndSaveVideosViaYtDlp(channel, channelId) {
+  async fetchAndSaveVideosViaYtDlp(channel, channelId, mostRecentVideoDate = null) {
     try {
-      const videos = await this.fetchChannelVideosViaYtDlp(channelId);
+      const result = await this.fetchChannelVideosViaYtDlp(channelId, mostRecentVideoDate);
+      const { videos, currentChannelUrl } = result;
 
-      console.log('Found ' + videos.length + ' videos via yt-dlp');
       if (videos.length > 0) {
         await this.insertVideosIntoDb(videos, channelId);
       }
 
       if (channel) {
+        // Update URL if it has changed (e.g., handle renamed)
+        if (currentChannelUrl && currentChannelUrl !== channel.url) {
+          console.log(`Channel URL updated for ${channel.title}: ${currentChannelUrl}`);
+          channel.url = currentChannelUrl;
+        }
+
         channel.lastFetched = new Date();
         await channel.save();
       }
     } catch (ytdlpError) {
-      console.error('yt-dlp error:', ytdlpError);
+      console.error('Error fetching channel videos:', ytdlpError.message);
       throw ytdlpError;
     }
   }

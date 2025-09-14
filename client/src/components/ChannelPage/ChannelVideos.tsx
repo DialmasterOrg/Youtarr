@@ -121,10 +121,6 @@ function ChannelVideos({ token }: ChannelVideosProps) {
 
   const videosPerPage = isMobile ? 8 : 16;
   let videosToDisplay = videos.filter((video) => {
-    // Filter out shorts (videos 70 seconds or less)
-    if (video.duration <= 70) {
-      return false;
-    }
     // Filter out downloaded videos if hideDownloaded is enabled
     return hideDownloaded ? !video.added : true;
   });
@@ -327,6 +323,13 @@ function ChannelVideos({ token }: ChannelVideosProps) {
               <TableBody>
                 {videos.length === 0 && !videoFailed && (
                   <>
+                    <TableRow>
+                      <TableCell colSpan={isMobile ? 2 : 4} align="center" sx={{ py: 2 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Refreshing channel videos — please wait
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
                     {[...Array(videosPerPage)].map((_, index) => (
                       <TableRow key={`skeleton-${index}`}>
                         {isMobile ? (
