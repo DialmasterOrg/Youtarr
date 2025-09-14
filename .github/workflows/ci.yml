@@ -3,8 +3,6 @@ name: CI - Lint and Test
 on:
   pull_request:
     branches: [ main ]
-  push:
-    branches: [ main ]
 
 permissions:
   contents: read
@@ -15,35 +13,35 @@ jobs:
   lint:
     name: ESLint Check
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '20.x'
           cache: 'npm'
-      
+
       - name: Install root dependencies
         run: npm ci
-      
+
       - name: Install client dependencies
         run: |
           cd client
           npm ci
-      
+
       - name: Run ESLint on Backend
         id: lint-backend
         run: npx eslint ./server/. --ext .js
         continue-on-error: true
-      
+
       - name: Run ESLint on Frontend
         id: lint-frontend
         run: npx eslint ./client/src/. --ext .ts,.tsx
         continue-on-error: true
-      
+
       - name: Check Linting Results
         if: steps.lint-backend.outcome == 'failure' || steps.lint-frontend.outcome == 'failure'
         run: |
@@ -59,25 +57,25 @@ jobs:
   test-backend:
     name: Backend Tests
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '20.x'
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Run backend tests with coverage
         run: npm run test:backend -- --coverage --coverageReporters=json-summary --coverageReporters=lcov --coverageReporters=text
         env:
           NODE_ENV: test
-      
+
       - name: Upload backend coverage artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -89,30 +87,30 @@ jobs:
   test-frontend:
     name: Frontend Tests
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '20.x'
           cache: 'npm'
-      
+
       - name: Install root dependencies
         run: npm ci
-      
+
       - name: Install client dependencies
         run: |
           cd client
           npm ci
-      
+
       - name: Run frontend tests with coverage
         run: cd client && npm test -- --coverage --coverageReporters=json-summary --coverageReporters=lcov --coverageReporters=text --watchAll=false
         env:
           CI: true
-      
+
       - name: Upload frontend coverage artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -126,25 +124,25 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test-backend, test-frontend]
     if: github.event_name == 'pull_request' && always()
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      
+
       - name: Download backend coverage
         uses: actions/download-artifact@v4
         with:
           name: backend-coverage
           path: backend-coverage
         continue-on-error: true
-      
+
       - name: Download frontend coverage
         uses: actions/download-artifact@v4
         with:
           name: frontend-coverage
           path: frontend-coverage
         continue-on-error: true
-      
+
       - name: Generate Coverage Report Comment
         id: coverage
         uses: actions/github-script@v6
@@ -152,13 +150,13 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            
+
             // Read coverage summaries
             let backendCoverage = { total: { lines: { pct: 0 }, statements: { pct: 0 }, functions: { pct: 0 }, branches: { pct: 0 } } };
             let frontendCoverage = { total: { lines: { pct: 0 }, statements: { pct: 0 }, functions: { pct: 0 }, branches: { pct: 0 } } };
             let backendAvailable = false;
             let frontendAvailable = false;
-            
+
             try {
               const backendSummary = fs.readFileSync('backend-coverage/coverage-summary.json', 'utf8');
               backendCoverage = JSON.parse(backendSummary);
@@ -166,7 +164,7 @@ jobs:
             } catch (e) {
               console.log('Could not read backend coverage:', e);
             }
-            
+
             try {
               const frontendSummary = fs.readFileSync('frontend-coverage/coverage-summary.json', 'utf8');
               frontendCoverage = JSON.parse(frontendSummary);
@@ -174,25 +172,25 @@ jobs:
             } catch (e) {
               console.log('Could not read frontend coverage:', e);
             }
-            
+
             // Format coverage badge color
             function getBadgeColor(percentage) {
               if (percentage >= 80) return '🟢';
               if (percentage >= 60) return '🟡';
               return '🔴';
             }
-            
+
             // Format percentage
             function formatPct(value) {
               return typeof value === 'number' ? value.toFixed(2) : '0.00';
             }
-            
+
             // Create comment body
             const backendTotal = backendCoverage.total || backendCoverage;
             const frontendTotal = frontendCoverage.total || frontendCoverage;
-            
+
             let comment = `## 📊 Test Coverage Report\n\n`;
-            
+
             if (backendAvailable) {
               comment += `### Backend Coverage
             | Type | Coverage | Status |
@@ -201,12 +199,12 @@ jobs:
             | Statements | ${formatPct(backendTotal.statements.pct)}% | ${getBadgeColor(backendTotal.statements.pct)} |
             | Functions | ${formatPct(backendTotal.functions.pct)}% | ${getBadgeColor(backendTotal.functions.pct)} |
             | Branches | ${formatPct(backendTotal.branches.pct)}% | ${getBadgeColor(backendTotal.branches.pct)} |
-            
+
             `;
             } else {
               comment += `### Backend Coverage\n⚠️ Coverage data not available (tests may have failed)\n\n`;
             }
-            
+
             if (frontendAvailable) {
               comment += `### Frontend Coverage
             | Type | Coverage | Status |
@@ -215,26 +213,26 @@ jobs:
             | Statements | ${formatPct(frontendTotal.statements.pct)}% | ${getBadgeColor(frontendTotal.statements.pct)} |
             | Functions | ${formatPct(frontendTotal.functions.pct)}% | ${getBadgeColor(frontendTotal.functions.pct)} |
             | Branches | ${formatPct(frontendTotal.branches.pct)}% | ${getBadgeColor(frontendTotal.branches.pct)} |
-            
+
             `;
             } else {
               comment += `### Frontend Coverage\n⚠️ Coverage data not available (tests may have failed)\n\n`;
             }
-            
+
             comment += `---\n*Coverage report generated for commit ${context.sha.substring(0, 7)}*`;
-            
+
             // Find existing comment
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
-            
-            const botComment = comments.find(comment => 
-              comment.user.type === 'Bot' && 
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
               comment.body.includes('Test Coverage Report')
             );
-            
+
             // Update or create comment
             if (botComment) {
               await github.rest.issues.updateComment({
@@ -266,7 +264,7 @@ jobs:
           echo "Lint: ${{ needs.lint.result }}"
           echo "Backend Tests: ${{ needs.test-backend.result }}"
           echo "Frontend Tests: ${{ needs.test-frontend.result }}"
-          
+
           if [ "${{ needs.lint.result }}" != "success" ] || \
              [ "${{ needs.test-backend.result }}" != "success" ] || \
              [ "${{ needs.test-frontend.result }}" != "success" ]; then
@@ -279,6 +277,6 @@ jobs:
             [ "${{ needs.test-frontend.result }}" != "success" ] && echo "  - Frontend Tests"
             exit 1
           fi
-          
+
           echo ""
           echo "✅ All checks passed successfully!"

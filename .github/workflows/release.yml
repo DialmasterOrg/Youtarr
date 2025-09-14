@@ -62,14 +62,6 @@ jobs:
           npm ci
           cd ..
 
-      - name: Build client (verification)
-        if: ${{ steps.calculate_version.outputs.release_type != 'none' }}
-        run: |
-          cd client
-          npm run build
-          cd ..
-          echo "✅ Client build successful"
-
       - name: Set up QEMU (multi-arch)
         uses: docker/setup-qemu-action@v3
 
@@ -83,6 +75,25 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Update version in package.json files
+        if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
+        run: |
+          npm version ${{ steps.calculate_version.outputs.new_tag }} --no-git-tag-version
+          cd client
+          npm version ${{ steps.calculate_version.outputs.new_tag }} --no-git-tag-version
+          cd ..
+          git add package.json package-lock.json client/package.json client/package-lock.json
+          git commit -m "Bump version to ${{ steps.calculate_version.outputs.new_tag }}"
+          git push
+
+      - name: Build client (verification)
+        if: ${{ steps.calculate_version.outputs.release_type != 'none' }}
+        run: |
+          cd client
+          npm run build
+          cd ..
+          echo "✅ Client build successful"
+
       - name: Build Docker image (verification)
         if: ${{ steps.calculate_version.outputs.release_type != 'none' }}
         uses: docker/build-push-action@v5
@@ -92,17 +103,6 @@ jobs:
           tags: ${{ vars.DOCKERHUB_USERNAME }}/youtarr:test-${{ github.run_id }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Update version in package.json files
-        if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
-        run: |
-          npm version ${{ steps.calculate_version.outputs.new_tag }} --no-git-tag-version
-          cd client
-          npm version ${{ steps.calculate_version.outputs.new_tag }} --no-git-tag-version
-          cd ..
-          git add package.json client/package.json
-          git commit -m "Bump version to ${{ steps.calculate_version.outputs.new_tag }}"
-          git push
 
       - name: Record bump commit SHA
         if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
