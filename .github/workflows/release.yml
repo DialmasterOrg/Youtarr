@@ -2,14 +2,27 @@ name: Create Release V2
 
 on:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (test mode - no tags, no Docker push)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
@@ -20,13 +33,20 @@ jobs:
           git config --global user.email "dial.chris+youtarr_service@gmail.com"
           git config --global user.name "Youtarr Service Account[bot]"
 
-      - name: Bump version and push tag
-        id: tag_version
-        uses: anothrNick/github-tag-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.ACTION_RUNNER_TOKEN }}
-          DEFAULT_BUMP: patch
-          WITH_V: true
+      - name: Calculate next version (dry run)
+        id: calculate_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.ACTION_RUNNER_TOKEN }}
+          tag_prefix: v
+          default_bump: patch
+          release_branches: main
+          dry_run: true  # Always dry run first to get the version
+
+      - name: No changes since last release
+        if: ${{ steps.calculate_version.outputs.release_type == 'none' && !inputs.dry_run }}
+        run: |
+          echo "No conventional commit changes since last tag (${{ steps.calculate_version.outputs.previous_tag }}). Skipping release."
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -42,39 +62,219 @@ jobs:
           npm ci
           cd ..
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v1
-        with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Update version in package.json
-        run: |
-          git config --global user.email "dial.chris+youtarr_service@gmail.com"
-          git config --global user.name "Youtarr Service Account[bot]"
-          npm version ${{ steps.tag_version.outputs.new_tag }} --no-git-tag-version
-          cd client
-          npm version ${{ steps.tag_version.outputs.new_tag }} --no-git-tag-version
-          cd ..
-          git add package.json client/package.json
-          git commit -m "Bump version to ${{ steps.tag_version.outputs.new_tag }}"
-          git push
-
-      - name: Build and push Docker images
+      - name: Build client (verification)
+        if: ${{ steps.calculate_version.outputs.release_type != 'none' }}
         run: |
           cd client
           npm run build
           cd ..
+          echo "✅ Client build successful"
 
-          # Build the optimized application image (without MariaDB)
-          docker build -t ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.tag_version.outputs.new_tag }} .
-          docker push ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.tag_version.outputs.new_tag }}
+      - name: Set up QEMU (multi-arch)
+        uses: docker/setup-qemu-action@v3
 
-          docker tag ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.tag_version.outputs.new_tag }} ${{ vars.DOCKERHUB_USERNAME }}/youtarr:latest
-          docker push ${{ vars.DOCKERHUB_USERNAME }}/youtarr:latest
-          
-          # Also push the MariaDB image tag for consistency (users will use official mariadb:10.3)
-          echo "Note: Users should use the official mariadb:10.3 image for the database container"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build Docker image (verification)
+        if: ${{ steps.calculate_version.outputs.release_type != 'none' }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: ${{ vars.DOCKERHUB_USERNAME }}/youtarr:test-${{ github.run_id }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Update version in package.json files
+        if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
+        run: |
+          npm version ${{ steps.calculate_version.outputs.new_tag }} --no-git-tag-version
+          cd client
+          npm version ${{ steps.calculate_version.outputs.new_tag }} --no-git-tag-version
+          cd ..
+          git add package.json client/package.json
+          git commit -m "Bump version to ${{ steps.calculate_version.outputs.new_tag }}"
+          git push
+
+      - name: Record bump commit SHA
+        if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
+        run: |
+          echo "BUMP_COMMIT=$(git rev-parse HEAD)" >> $GITHUB_ENV
+
+      - name: Create and push tag
+        if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.ACTION_RUNNER_TOKEN }}
+          tag_prefix: v
+          default_bump: patch
+          release_branches: main
+          custom_tag: ${{ steps.calculate_version.outputs.new_tag }}
+          create_release: false
+
+
+      - name: Create GitHub Release
+        if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.calculate_version.outputs.new_tag }}
+          name: Release ${{ steps.calculate_version.outputs.new_tag }}
+          body: |
+            ## What's Changed
+            ${{ steps.calculate_version.outputs.changelog }}
+
+            ## Docker Image
+            ```bash
+            docker pull ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.calculate_version.outputs.new_tag }}
+            ```
+
+            Or use `latest`:
+            ```bash
+            docker pull ${{ vars.DOCKERHUB_USERNAME }}/youtarr:latest
+            ```
+
+            ## Full Changelog
+            **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.calculate_version.outputs.previous_tag }}...${{ steps.calculate_version.outputs.new_tag }}
+          draft: false
+          prerelease: false
+          token: ${{ secrets.ACTION_RUNNER_TOKEN }}
+          allowUpdates: true
+
+      - name: Update CHANGELOG.md
+        if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
+        run: |
+          # Create or update CHANGELOG.md
+          CHANGELOG_ENTRY="## [${{ steps.calculate_version.outputs.new_tag }}](https://github.com/${{ github.repository }}/releases/tag/${{ steps.calculate_version.outputs.new_tag }}) - $(date +%Y-%m-%d)
+
+          ${{ steps.calculate_version.outputs.changelog }}
+
+          "
+
+          if [ -f CHANGELOG.md ]; then
+            # Prepend new entry after the header
+            echo "# Changelog
+
+          $CHANGELOG_ENTRY" > CHANGELOG.tmp
+            tail -n +2 CHANGELOG.md >> CHANGELOG.tmp
+            mv CHANGELOG.tmp CHANGELOG.md
+          else
+            # Create new CHANGELOG
+            echo "# Changelog
+
+          $CHANGELOG_ENTRY" > CHANGELOG.md
+          fi
+
+          # Commit the CHANGELOG update
+          git add CHANGELOG.md
+          git commit -m "docs: update CHANGELOG for ${{ steps.calculate_version.outputs.new_tag }}"
+          git push
+
+      - name: Record CHANGELOG commit SHA
+        if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
+        run: |
+          echo "CHANGELOG_COMMIT=$(git rev-parse HEAD)" >> $GITHUB_ENV
+
+      - name: Build and push Docker images
+        if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.calculate_version.outputs.new_tag }}
+            ${{ vars.DOCKERHUB_USERNAME }}/youtarr:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Revert release commits on failure
+        if: ${{ failure() && !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
+        run: |
+          set -e
+          git config --global user.email "dial.chris+youtarr_service@gmail.com"
+          git config --global user.name "Youtarr Service Account[bot]"
+          git fetch origin main
+          git checkout main
+          git reset --hard origin/main
+          REVERTED=0
+          if [ -n "${CHANGELOG_COMMIT}" ]; then
+            if git merge-base --is-ancestor "${CHANGELOG_COMMIT}" HEAD; then
+              git revert --no-edit "${CHANGELOG_COMMIT}" || true
+              REVERTED=1
+            fi
+          fi
+          if [ -n "${BUMP_COMMIT}" ]; then
+            if git merge-base --is-ancestor "${BUMP_COMMIT}" HEAD; then
+              git revert --no-edit "${BUMP_COMMIT}" || true
+              REVERTED=1
+            fi
+          fi
+          if [ "$REVERTED" = "1" ]; then
+            git push
+          else
+            echo "No release commits to revert"
+          fi
+
+      - name: Cleanup tag and release on failure
+        if: ${{ failure() && !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.ACTION_RUNNER_TOKEN }}
+          script: |
+            const tag = `${{ toJSON(steps.calculate_version.outputs.new_tag) }}`.replace(/^"|"$/g, '');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            if (!tag) {
+              core.info('No tag available from version calculation; skipping cleanup.');
+            } else {
+              core.info(`Cleanup: attempting to delete release and tag for ${tag}`);
+              // Delete release by tag if it exists
+              try {
+                const rel = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+                await github.rest.repos.deleteRelease({ owner, repo, release_id: rel.data.id });
+                core.info(`Deleted release id ${rel.data.id} for tag ${tag}`);
+              } catch (e) {
+                core.info(`No release found for ${tag} or delete failed: ${e.message}`);
+              }
+              // Delete tag ref if it exists
+              try {
+                await github.rest.git.deleteRef({ owner, repo, ref: `tags/${tag}` });
+                core.info(`Deleted ref tags/${tag}`);
+              } catch (e) {
+                core.info(`No tag ref tags/${tag} or delete failed: ${e.message}`);
+              }
+            }
+
+      - name: Display dry run results
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "🔍 DRY RUN RESULTS:"
+          echo "==================="
+          echo "Would have created tag: ${{ steps.calculate_version.outputs.new_tag }}"
+          echo "Previous tag: ${{ steps.calculate_version.outputs.previous_tag }}"
+          echo "Bump type: ${{ steps.calculate_version.outputs.release_type }}"
+          echo ""
+          echo "Would have created GitHub Release: ${{ steps.calculate_version.outputs.new_tag }}"
+          echo ""
+          echo "Release Notes Preview:"
+          echo "----------------------"
+          echo "${{ steps.calculate_version.outputs.changelog }}"
+          echo ""
+          echo "Docker images that would be pushed:"
+          echo "  - ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.calculate_version.outputs.new_tag }}"
+          echo "  - ${{ vars.DOCKERHUB_USERNAME }}/youtarr:latest"
+          echo ""
+          if [ "${{ steps.calculate_version.outputs.release_type }}" = "none" ]; then
+            echo "No changes detected since the last release; no build attempted in dry run."
+          else
+            echo "✅ Build verification steps succeeded (client and Docker)"
+          fi
+          echo "No actual changes were made (dry run mode)"
