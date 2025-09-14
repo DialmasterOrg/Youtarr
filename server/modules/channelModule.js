@@ -126,22 +126,6 @@ class ChannelModule {
   }
 
   /**
-   * Build the uploads playlist URL from a channel-like ID.
-   * Converts UC... to UU... when needed.
-   * @param {string} channelId
-   * @returns {string}
-   */
-  resolveUploadsPlaylistUrlFromChannelId(channelId) {
-    if (!channelId) return '';
-    const uploadsId = channelId.startsWith('UC')
-      ? `UU${channelId.substring(2)}`
-      : (channelId.startsWith('UU') ? channelId : '');
-    return uploadsId
-      ? `https://www.youtube.com/playlist?list=${uploadsId}`
-      : '';
-  }
-
-  /**
    * Map channel database record to response format
    * @param {Object} channel - Channel database record
    * @returns {Object} - Formatted channel response
@@ -756,7 +740,8 @@ class ChannelModule {
     if (mostRecentVideoDate) {
       const daysSinceLastVideo = Math.floor((Date.now() - new Date(mostRecentVideoDate).getTime()) / (1000 * 60 * 60 * 24));
       if (daysSinceLastVideo <= 5) {
-        videoCount = daysSinceLastVideo * 10;
+        // If we fetched videos today, then fetch last 5 videos, else fetch 10 videos per day
+        videoCount = Math.max(5, daysSinceLastVideo * 10);
       }
     }
 
