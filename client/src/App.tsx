@@ -34,6 +34,7 @@ import LocalLogin from './components/LocalLogin';
 import InitialSetup from './components/InitialSetup';
 import ChannelPage from './components/ChannelPage';
 import StorageStatus from './components/StorageStatus';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
   const [token, setToken] = useState<string | null>(
@@ -317,7 +318,10 @@ function App() {
             {checkingSetup ? (
               <div>Loading...</div>
             ) : (
-              <Routes>
+              <ErrorBoundary
+                fallbackMessage="An unexpected error occurred. Please refresh the page to continue."
+              >
+                <Routes>
                 <Route path='/setup' element={<InitialSetup onSetupComplete={(newToken) => {
                   setToken(newToken);
                   setRequiresSetup(false);
@@ -352,7 +356,8 @@ function App() {
                   // If setup is required, redirect to setup, otherwise to login
                   <Route path='/*' element={<Navigate to={requiresSetup ? '/setup' : '/login'} />} />
                 )}
-              </Routes>
+                </Routes>
+              </ErrorBoundary>
             )}
           </Container>
         </Grid>

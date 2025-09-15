@@ -227,6 +227,28 @@ function Configuration({ token }: ConfigurationProps) {
     }
   };
 
+  const handleChannelFilesChange = (event: SelectChangeEvent<number>) => {
+    setConfig({
+      ...config,
+      channelFilesToDownload: event.target.value as number,
+    });
+  };
+
+  // Generate options for channel files dropdown
+  const getChannelFilesOptions = () => {
+    const options = [];
+    // Always include 1-10
+    for (let i = 1; i <= 10; i++) {
+      options.push(i);
+    }
+    // If current value is greater than 10, include it as well
+    if (config.channelFilesToDownload > 10 && !options.includes(config.channelFilesToDownload)) {
+      options.push(config.channelFilesToDownload);
+      options.sort((a, b) => a - b);
+    }
+    return options;
+  };
+
   const handleCheckboxChange = (event: ChangeEvent<HTMLInputElement>) => {
     setConfig({
       ...config,
@@ -512,20 +534,23 @@ function Configuration({ token }: ConfigurationProps) {
             </Grid>
 
             <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                type="number"
-                label={
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    Files to Download per Channel
-                    {getInfoIcon('How many videos (starting from the most recent) should be downloaded for each channel when channel downloads are initiated.')}
-                  </Box>
-                }
-                name="channelFilesToDownload"
-                value={config.channelFilesToDownload}
-                onChange={handleInputChange}
-                inputProps={{ min: 1, max: 50 }}
-              />
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <FormControl fullWidth>
+                  <InputLabel>Files to Download per Channel</InputLabel>
+                  <Select
+                    value={config.channelFilesToDownload}
+                    onChange={handleChannelFilesChange}
+                    label="Files to Download per Channel"
+                  >
+                    {getChannelFilesOptions().map(count => (
+                      <MenuItem key={count} value={count}>
+                        {count} {count === 1 ? 'video' : 'videos'}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                {getInfoIcon('How many videos (starting from the most recent) should be downloaded for each channel when channel downloads are initiated.')}
+              </Box>
             </Grid>
 
             <Grid item xs={12} md={6}>

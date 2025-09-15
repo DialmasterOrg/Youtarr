@@ -26,7 +26,7 @@ class DownloadModule {
     return archive.getNewVideoUrlsSince(initialCount);
   }
 
-  doDownload(command, jobId, jobType) {
+  doDownload(args, jobId, jobType) {
     const initialCount = this.getCountOfDownloadedVideos();
 
     new Promise((resolve, reject) => {
@@ -35,8 +35,9 @@ class DownloadModule {
         reject(new Error('Job time exceeded timeout'));
       }, 1000000); // Set your desired timeout
 
-      console.log(`Running exec for ${jobType}`);
-      const proc = spawn(command, { timeout: 1000000, shell: true });
+      console.log(`Running yt-dlp for ${jobType}`);
+      console.log('Command args:', args);
+      const proc = spawn('yt-dlp', args, { timeout: 1000000, shell: false });
 
       proc.stdout.on('data', (data) => {
         console.log(data.toString()); // log the data in real-time
@@ -163,6 +164,7 @@ class DownloadModule {
         status: '',
         output: '',
         id: jobData.id ? jobData.id : '',
+        data: jobData,
         action: this.doChannelDownloads.bind(this),
       },
       isNextJob
@@ -175,13 +177,19 @@ class DownloadModule {
         const channelModule = require('./channelModule');
         tempChannelsFile = await channelModule.generateChannelsFile();
 
-        const baseCommand = this.getBaseCommand();
-        const command = `${baseCommand} -a ${tempChannelsFile} --playlist-end ${configModule.config.channelFilesToDownload}`;
+        // Use override settings if provided, otherwise use defaults
+        const overrideSettings = jobData.overrideSettings || {};
+        const resolution = overrideSettings.resolution || configModule.config.preferredResolution || '1080';
+        const videoCount = overrideSettings.videoCount || configModule.config.channelFilesToDownload;
+
+        const args = this.getBaseCommandArgs(resolution);
+        args.push('-a', tempChannelsFile);
+        args.push('--playlist-end', String(videoCount));
 
         // Store temp file path for cleanup later
         this.tempChannelsFile = tempChannelsFile;
 
-        this.doDownload(command, jobId, jobType);
+        this.doDownload(args, jobId, jobType);
       } catch (err) {
         console.error('Error in doChannelDownloads:', err);
         if (tempChannelsFile) {
@@ -226,44 +234,72 @@ class DownloadModule {
     );
 
     if (jobModule.getJob(jobId).status === 'In Progress') {
-      const baseCommand = this.getBaseCommand();
+      // Use override settings if provided, otherwise use defaults
+      const overrideSettings = jobData.overrideSettings || {};
+      const resolution = overrideSettings.resolution || configModule.config.preferredResolution || '1080';
 
-      const modifiedUrls = urls.map((url) => {
+      // For manual downloads, we don't apply duration filters but still exclude members-only
+      const args = this.getBaseCommandArgsForManualDownload(resolution);
+
+      // Add URLs to args array
+      urls.forEach((url) => {
         if (url.startsWith('-')) {
-          return '-- ' + url;
+          args.push('--', url);
         } else {
-          return url;
+          args.push(url);
         }
       });
 
-      const urlsString = modifiedUrls.join(' '); // Join all URLs into a single space-separated string
-
-      const command = `${baseCommand} ${urlsString}`;
-      this.doDownload(command, jobId, jobType);
+      this.doDownload(args, jobId, jobType);
     }
   }
 
-  // Download mp4 at the user's preferred resolution because it contains embedded metadata
-  // We write the info.json file to the same directory because Youtarr parses those for video information display
-  getBaseCommand() {
-    const resolution = configModule.config.preferredResolution || '1080';
-    return (
-      'yt-dlp -4 --ffmpeg-location ' +
-      configModule.ffmpegPath +
-      ` -f "bestvideo[height<=${resolution}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --write-thumbnail --convert-thumbnails jpg ` +
-      '--download-archive ./config/complete.list --ignore-errors --embed-metadata --write-info-json ' +
-      '--extractor-args "youtubetab:tab=videos;sort=dd" ' +
-      '--match-filter "duration>70 & availability!=subscriber_only" ' +  // Filter out shorts and members-only videos
-      '-o "' +
-      configModule.directoryPath +
-      '/%(uploader)s/%(uploader)s - %(title)s - %(id)s/%(uploader)s - %(title)s  [%(id)s].%(ext)s" ' +
-      '--ignore-errors --datebefore now -o "thumbnail:' +
-      configModule.directoryPath +
-      '/%(uploader)s/%(uploader)s - %(title)s - %(id)s/poster" -o "pl_thumbnail:" ' +
-      '--exec "node ' +
-      path.resolve(__dirname, './videoDownloadPostProcessFiles.js') +
-      ' {}" '
-    );
+  // Build yt-dlp command args array for channel downloads
+  getBaseCommandArgs(resolution) {
+    const res = resolution || configModule.config.preferredResolution || '1080';
+    const args = [
+      '-4',
+      '--ffmpeg-location', configModule.ffmpegPath,
+      '-f', `bestvideo[height<=${res}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best`,
+      '--write-thumbnail',
+      '--convert-thumbnails', 'jpg',
+      '--download-archive', './config/complete.list',
+      '--ignore-errors',
+      '--embed-metadata',
+      '--write-info-json',
+      '--extractor-args', 'youtubetab:tab=videos;sort=dd',
+      '--match-filter', 'duration>70 & availability!=subscriber_only',
+      '-o', `${configModule.directoryPath}/%(uploader)s/%(uploader)s - %(title)s - %(id)s/%(uploader)s - %(title)s  [%(id)s].%(ext)s`,
+      '--datebefore', 'now',
+      '-o', `thumbnail:${configModule.directoryPath}/%(uploader)s/%(uploader)s - %(title)s - %(id)s/poster`,
+      '-o', 'pl_thumbnail:',
+      '--exec', `node ${path.resolve(__dirname, './videoDownloadPostProcessFiles.js')} {}`
+    ];
+    return args;
+  }
+
+  // Build yt-dlp command args array for manual downloads - no duration filter
+  getBaseCommandArgsForManualDownload(resolution) {
+    const res = resolution || configModule.config.preferredResolution || '1080';
+    const args = [
+      '-4',
+      '--ffmpeg-location', configModule.ffmpegPath,
+      '-f', `bestvideo[height<=${res}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best`,
+      '--write-thumbnail',
+      '--convert-thumbnails', 'jpg',
+      '--download-archive', './config/complete.list',
+      '--ignore-errors',
+      '--embed-metadata',
+      '--write-info-json',
+      '--extractor-args', 'youtubetab:tab=videos;sort=dd',
+      '--match-filter', 'availability!=subscriber_only',
+      '-o', `${configModule.directoryPath}/%(uploader)s/%(uploader)s - %(title)s - %(id)s/%(uploader)s - %(title)s  [%(id)s].%(ext)s`,
+      '--datebefore', 'now',
+      '-o', `thumbnail:${configModule.directoryPath}/%(uploader)s/%(uploader)s - %(title)s - %(id)s/poster`,
+      '-o', 'pl_thumbnail:',
+      '--exec', `node ${path.resolve(__dirname, './videoDownloadPostProcessFiles.js')} {}`
+    ];
+    return args;
   }
 }
 
