@@ -1,21 +1,32 @@
 # Youtarr
 
-Youtarr is a self-hosted application that automatically downloads videos from YouTube channels and integrates them seamlessly with your Plex Media Server, providing a curated, ad-free YouTube experience.
+Youtarr is a self-hosted YouTube downloader that automatically downloads videos from your favorite channels or specific URLs. With optional Plex integration, it can refresh your media library for a seamless, ad-free viewing experience.
 
-## Overview
+## 🤔 Why Youtarr?
 
-In the era of digital media, ensuring safe and appropriate content for your children can be a challenge. Youtube, while being a vast reservoir of educational and entertaining content, also hosts content that might not be suitable for children. To strike a balance, Youtarr allows you to curate YouTube channels so that you can provide a vetted, customized and safe YouTube experience for your kids via Plex.
-
-The application operates by running a scheduled task that automatically downloads new videos, along with their thumbnails and metadata, from a list of YouTube channels that you specify. These videos are then automatically added to your Plex server and a library scan is initiated as soon as downloads are complete.
+- **No Ads or Tracking**: Watch YouTube content without interruptions
+- **Offline Viewing**: Access your videos anytime, even without internet
+- **Archive Content**: Preserve videos before they're deleted or made private
+- **Family-Friendly Option**: Create a curated, safe YouTube experience for kids
+- **Works Standalone**: Full functionality without requiring any media server
+- **Plex-Ready**: Seamlessly integrates with Plex if desired, but never requires it
 
 ## 🎯 Key Features
 
-- **📺 Automated Downloads**: Schedule automatic downloads from your subscribed YouTube channels
-- **🎬 Plex Integration**: If you link Plex, videos are automatically added to your Plex library with metadata
-- **👨‍👩‍👧‍👦 Family-Friendly**: Create a safe, curated YouTube experience without ads or comments
+### Core Features (No Plex Required)
+- **📥 Direct Downloads**: Download any YouTube video by URL (powered by [yt-dlp](https://github.com/yt-dlp/yt-dlp))
+- **📺 Channel Subscriptions**: Subscribe to channels and auto-download new videos
+- **🗂️ Smart Organization**: Videos organized by channel with metadata and thumbnails
+- **⏰ Scheduled Downloads**: Configure automatic downloads on your schedule (cron-based)
+- **📱 Web Interface**: Manage everything through a responsive web UI
+- **🔍 Browse Channels**: View all videos from subscribed channels before downloading
+- **📊 Download History**: Track what you've downloaded with smart duplicate prevention
 - **🔐 Secure Access**: Local authentication system with admin controls
-- **📱 Responsive UI**: Works on desktop and mobile devices
-- **🐳 Docker-Ready**: Easy deployment with Docker Compose
+
+### Optional Plex Integration
+- **🔄 Auto Library Refresh**: Automatically update Plex after downloads
+- **📁 Plex-Ready Format**: Videos organized and named for perfect Plex compatibility
+- **🎬 Metadata Support**: Full descriptions, thumbnails, and video info display in Plex
 
 ## 🚀 Quick Start
 
@@ -23,7 +34,7 @@ The application operates by running a scheduled task that automatically download
 - Docker & Docker Compose
 - Git
 - Bash shell (Git Bash for Windows)
-- Plex Media Server (optional; only needed for library refresh in Plex)
+- Plex Media Server (optional - only if you want automatic library refresh)
 
 ### Installation
 
@@ -47,8 +58,27 @@ The application operates by running a scheduled task that automatically download
    - Navigate to `http://localhost:3087`
    - Create your admin account on first access
    - If you want automatic Plex integration with library refresh, then configure your Plex connection
-     - The app works fine without Plex integration and will still download videos from Youtube automatically and
-       allow you to add and browse Youtube channels
+     - The app works fine without Plex integration and will still download videos from YouTube automatically and
+       allow you to add and browse YouTube channels
+   - If containers don’t start or the app isn’t reachable, see [Troubleshooting](docs/TROUBLESHOOTING.md)
+
+## 📋 Usage Examples
+
+### Download Individual Videos
+1. Navigate to Downloads page
+2. Paste YouTube URLs (one per line)
+3. Click "Download Specific Videos"
+
+### Subscribe to Channels
+1. Go to Channels page
+2. Add channel by URL or @handle (e.g., `@MrBeast` or `https://youtube.com/@MrBeast`)
+3. Choose to download all videos or let automation handle new ones
+
+### Configure Automation
+1. Visit Configuration page
+2. Set download schedule (e.g., every 6 hours)
+3. Choose video resolution and download limits
+4. (Optional) Connect Plex for auto-refresh
 
 ## 📖 Documentation
 
@@ -59,15 +89,26 @@ The application operates by running a scheduled task that automatically download
 
 ## ⚠️ Important Notes
 
-- **Plex Library Type**: Must be configured as "Other Videos" with "Personal Media" agent
-- **Authentication**: Youtarr uses local authentication (admin account)
-- **Plex Integration**: Requires a Plex API key - get it automatically via the Configuration page or [manually](https://www.plexopedia.com/plex-media-server/general/plex-token/)
-- **Network Access**: Run on the same machine as your Plex server for best results with Plex integration
+### For All Users
+- **Storage**: Videos download to the directory you select during setup
+- **Storage Growth**: Downloads can consume significant disk space over time. The UI includes a storage status chip that shows total and free space for your selected directory/drive, making it easy to monitor and adjust limits/schedule as needed.
+- **Format**: Downloads as MP4 with embedded metadata for best compatibility
+- **Filtering**: Automatically skips YouTube Shorts and subscriber-only content
+- **Authentication**: Uses local authentication (create admin account on first access)
+
+### For Plex Users (Optional)
+- **Library Type**: Must be configured as "Other Videos" with "Personal Media" agent
+- **API Key**: Get it automatically via Configuration page or [manually](https://www.plexopedia.com/plex-media-server/general/plex-token/)
+- **Network Access**: Run on same machine as Plex server (the app must be able to write to the Plex library directory)
 - **Docker on Windows**: Use `host.docker.internal` as your Plex server address
 
 ## ⚖️ Legal Disclaimer
 
 Youtarr is not affiliated with YouTube or Plex. Users are responsible for ensuring their use complies with YouTube's Terms of Service and applicable copyright laws. This tool is intended for personal use with content you have the right to download.
+
+## 📝 License
+
+Licensed under the ISC License. See [LICENSE.md](LICENSE.md) for details.
 
 ## Screenshots
 
