@@ -18,6 +18,7 @@ import {
   Box,
   Snackbar,
   Alert,
+  CircularProgress,
 } from '@mui/material';
 import Delete from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -48,6 +49,8 @@ function ChannelManager({ token }: ChannelManagerProps) {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   // Store a stable identifier (URL) for pending deletion
   const [channelToDelete, setChannelToDelete] = useState<string | null>(null);
+  const [isAddingChannel, setIsAddingChannel] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const websocketContext = useContext(WebSocketContext);
   const navigate = useNavigate();
   if (!websocketContext) {
@@ -184,6 +187,9 @@ function ChannelManager({ token }: ChannelManagerProps) {
       return;
     }
 
+    // Set loading state
+    setIsAddingChannel(true);
+
     // Use normalized URL for the new channel
     const channelToAdd = { ...newChannel, url: normalizedUrl };
     setChannels([...channels, channelToAdd]);
@@ -213,6 +219,16 @@ function ChannelManager({ token }: ChannelManagerProps) {
           } else {
             console.error('Failed to add channel info');
           }
+        })
+        .catch((error) => {
+          console.error('Error adding channel:', error);
+          // Remove the temporary channel on error
+          setChannels((prevChannels) => prevChannels.slice(0, -1));
+          setDialogMessage('Failed to add channel. Please try again.');
+          setIsDialogOpen(true);
+        })
+        .finally(() => {
+          setIsAddingChannel(false);
         });
     }
 
@@ -273,6 +289,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
 
   const handleSave = () => {
     if (token) {
+      setIsSaving(true);
       const channelsToSave = channels
         .filter((channel) => !deletedChannels.includes(channel.url))
         .map((channel) => channel.url); // Transform array of Channel objects into array of strings
@@ -289,6 +306,14 @@ function ChannelManager({ token }: ChannelManagerProps) {
           setDialogMessage('Channels updated successfully');
           setIsDialogOpen(true);
           reloadChannels();
+        })
+        .catch((error) => {
+          console.error('Error saving channels:', error);
+          setDialogMessage('Failed to save channels. Please try again.');
+          setIsDialogOpen(true);
+        })
+        .finally(() => {
+          setIsSaving(false);
         });
     }
   };
@@ -440,6 +465,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
                             onClick={() => handleDeleteClick(index)}
                             size={isMobile ? 'small' : 'medium'}
                             data-testid='delete-channel-button'
+                            disabled={isSaving}
                           >
                             <Delete />
                           </IconButton>
@@ -467,8 +493,9 @@ function ChannelManager({ token }: ChannelManagerProps) {
                 onChange={(e) =>
                   setNewChannel({ url: e.target.value, uploader: '' })
                 }
+                disabled={isAddingChannel || isSaving}
                 onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
+                  if (e.key === 'Enter' && !isAddingChannel && !isSaving) {
                     handleAdd();
                   }
                 }}
@@ -491,10 +518,21 @@ function ChannelManager({ token }: ChannelManagerProps) {
             justifyContent: 'center',
           }}
         >
-          <Tooltip placement='top' title='Add a new channel to the list above'>
-            <IconButton onClick={handleAdd} color='primary' data-testid='add-channel-button'>
-              <AddIcon fontSize='large' />
-            </IconButton>
+          <Tooltip placement='top' title={isAddingChannel ? 'Adding channel...' : 'Add a new channel to the list above'}>
+            <span>
+              <IconButton
+                onClick={handleAdd}
+                color='primary'
+                data-testid='add-channel-button'
+                disabled={isAddingChannel || isSaving}
+              >
+                {isAddingChannel ? (
+                  <CircularProgress size={28} />
+                ) : (
+                  <AddIcon fontSize='large' />
+                )}
+              </IconButton>
+            </span>
           </Tooltip>
         </Grid>
           <Grid item xs={6}>
@@ -505,7 +543,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
                 onClick={handleUndo}
                 fullWidth
                 disabled={
-                  unsavedChannels.length === 0 && deletedChannels.length === 0
+                  (unsavedChannels.length === 0 && deletedChannels.length === 0) || isSaving
                 }
                 style={{ fontSize: isMobile ? 'small' : 'medium' }}
                 data-size={isMobile ? 'small' : 'medium'}
@@ -524,14 +562,21 @@ function ChannelManager({ token }: ChannelManagerProps) {
               <Button
                 variant='contained'
                 disabled={
-                  unsavedChannels.length === 0 && deletedChannels.length === 0
+                  (unsavedChannels.length === 0 && deletedChannels.length === 0) || isSaving
                 }
                 onClick={handleSave}
                 fullWidth
                 style={{ fontSize: isMobile ? 'small' : 'medium' }}
                 data-size={isMobile ? 'small' : 'medium'}
               >
-                Save Changes
+                {isSaving ? (
+                  <>
+                    <CircularProgress size={20} color="inherit" sx={{ mr: 1 }} />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
               </Button>
             </span>
           </Tooltip>

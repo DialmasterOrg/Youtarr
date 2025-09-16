@@ -35,8 +35,17 @@ function getNewVideoUrlsSince(initialCount) {
   return newVideoIds.map((id) => `https://youtu.be/${id}`);
 }
 
+async function isVideoInArchive(videoId) {
+  const lines = readCompleteListLines();
+  return lines.some(line => {
+    const parts = line.split(/\s+/).filter(Boolean);
+    return parts.length >= 2 && parts[0] === 'youtube' && parts[1] === videoId;
+  });
+}
+
 module.exports = {
   getArchivePath,
   readCompleteListLines,
   getNewVideoUrlsSince,
+  isVideoInArchive,
 };

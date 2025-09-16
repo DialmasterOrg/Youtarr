@@ -144,9 +144,10 @@ class ChannelModule {
   /**
    * Insert or update channel in database
    * @param {Object} channelData - Channel data to save
+   * @param {boolean} enabled - Whether the channel should be enabled (default: false)
    * @returns {Promise<Object>} - Saved channel record
    */
-  async upsertChannel(channelData) {
+  async upsertChannel(channelData, enabled = false) {
     // First, try to find by channel_id (preferred)
     let channel = await Channel.findOne({
       where: { channel_id: channelData.id }
@@ -167,6 +168,7 @@ class ChannelModule {
           description: channelData.description,
           uploader: channelData.uploader,
           url: channelData.url,
+          enabled: enabled,
         });
       }
     } else {
@@ -176,6 +178,7 @@ class ChannelModule {
         description: channelData.description,
         uploader: channelData.uploader,
         url: channelData.url,
+        enabled: enabled,
       });
     }
 
@@ -187,6 +190,7 @@ class ChannelModule {
         description: channelData.description,
         uploader: channelData.uploader,
         url: channelData.url,
+        enabled: enabled,
       });
     }
 
@@ -359,9 +363,10 @@ class ChannelModule {
    * Also handles channel thumbnail download and processing.
    * @param {string} channelUrlOrId - YouTube channel URL or channel ID
    * @param {boolean} emitMessage - Whether to emit WebSocket update message
+   * @param {boolean} enableChannel - Whether to enable the channel if it's new (default: false)
    * @returns {Promise<Object>} - Channel information object
    */
-  async getChannelInfo(channelUrlOrId, emitMessage = true) {
+  async getChannelInfo(channelUrlOrId, emitMessage = true, enableChannel = false) {
     const { foundChannel, channelUrl } = await this.findChannelByUrlOrId(channelUrlOrId);
 
     if (foundChannel) {
@@ -390,7 +395,7 @@ class ChannelModule {
         description: channelData.description,
         uploader: channelData.uploader,
         url: actualChannelUrl,  // Store the actual handle URL for display
-      }),
+      }, enableChannel),
       this.processChannelThumbnail(channelUrl, channelData.id)
     ]);
 
@@ -474,7 +479,7 @@ class ChannelModule {
         new Set((channelUrls || []).map((u) => (u || '').trim()).filter(Boolean))
       );
 
-      const existing = await Channel.findAll({ attributes: ['url', 'enabled'] });
+      const existing = await Channel.findAll({ attributes: ['url', 'enabled', 'channel_id'] });
       const existingMap = new Map(existing.map((c) => [c.url, c.enabled]));
 
       const toEnable = desiredUrls.filter((url) => existingMap.get(url) !== true);
@@ -485,8 +490,13 @@ class ChannelModule {
         .map((c) => c.url);
 
       for (const url of toEnable) {
-        await this.getChannelInfo(url);
-        await Channel.update({ enabled: true }, { where: { url } });
+        // Pass enableChannel=true when getting channel info for new/disabled channels
+        const channelInfo = await this.getChannelInfo(url, false, true);
+        // Still update in case it already existed but was disabled
+        // Use channel_id to ensure we update the correct channel regardless of URL format
+        if (channelInfo && channelInfo.id) {
+          await Channel.update({ enabled: true }, { where: { channel_id: channelInfo.id } });
+        }
       }
 
       if (toDisable.length > 0) {

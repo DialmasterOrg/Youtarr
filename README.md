@@ -14,7 +14,8 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 ## 🎯 Key Features
 
 ### Core Features (No Plex Required)
-- **📥 Direct Downloads**: Download any YouTube video by URL (powered by [yt-dlp](https://github.com/yt-dlp/yt-dlp))
+- **📥 Smart Downloads**: Pre-validate YouTube URLs with metadata preview before downloading (powered by [yt-dlp](https://github.com/yt-dlp/yt-dlp))
+- **🎯 Custom Quality Settings**: Per-download resolution control with support from 360p to 4K
 - **📺 Channel Subscriptions**: Subscribe to channels and auto-download new videos
 - **🗂️ Smart Organization**: Videos organized by channel with metadata and thumbnails
 - **⏰ Scheduled Downloads**: Configure automatic downloads on your schedule (cron-based)
@@ -66,8 +67,9 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 
 ### Download Individual Videos
 1. Navigate to Downloads page
-2. Paste YouTube URLs (one per line)
-3. Click "Download Specific Videos"
+2. Paste YouTube URLs to validate and preview video metadata
+3. Optionally customize resolution settings for this download
+4. Click "Start Download" to begin
 
 ### Subscribe to Channels
 1. Go to Channels page

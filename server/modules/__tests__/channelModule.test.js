@@ -260,7 +260,8 @@ describe('ChannelModule', () => {
           title: channelData.title,
           description: channelData.description,
           uploader: channelData.uploader,
-          url: channelData.url
+          url: channelData.url,
+          enabled: false
         });
         expect(result).toBe(mockChannel);
       });
@@ -289,7 +290,8 @@ describe('ChannelModule', () => {
           title: channelData.title,
           description: channelData.description,
           uploader: channelData.uploader,
-          url: channelData.url
+          url: channelData.url,
+          enabled: false
         });
       });
 
@@ -322,7 +324,8 @@ describe('ChannelModule', () => {
           title: channelData.title,
           description: channelData.description,
           uploader: channelData.uploader,
-          url: channelData.url
+          url: channelData.url,
+          enabled: false
         });
       });
     });
@@ -655,18 +658,22 @@ describe('ChannelModule', () => {
         ]);
 
         Channel.update = jest.fn().mockResolvedValue([1]);
-        jest.spyOn(ChannelModule, 'getChannelInfo').mockResolvedValue({});
+        jest.spyOn(ChannelModule, 'getChannelInfo').mockResolvedValue({
+          id: 'UC_channel2_id'
+        });
 
         await ChannelModule.writeChannels(channelUrls);
 
         expect(ChannelModule.getChannelInfo).toHaveBeenCalledTimes(1);
         expect(ChannelModule.getChannelInfo).toHaveBeenCalledWith(
-          'https://youtube.com/@channel2'
+          'https://youtube.com/@channel2',
+          false,
+          true
         );
 
         expect(Channel.update).toHaveBeenCalledWith(
           { enabled: true },
-          { where: { url: 'https://youtube.com/@channel2' } }
+          { where: { channel_id: 'UC_channel2_id' } }
         );
 
         expect(Channel.update).toHaveBeenCalledWith(

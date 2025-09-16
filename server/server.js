@@ -77,7 +77,7 @@ const initialize = async () => {
           return next();
         } else {
           // Reject ALL other endpoints if auth not configured
-          return res.status(503).json({ 
+          return res.status(503).json({
             error: 'Authentication not configured',
             requiresSetup: true,
             message: 'Please complete initial setup first'
@@ -271,9 +271,9 @@ const initialize = async () => {
       });
     });
 
-    app.post('/updatechannels', verifyToken, (req, res) => {
+    app.post('/updatechannels', verifyToken, async (req, res) => {
       const channels = req.body;
-      channelModule.writeChannels(channels);
+      await channelModule.writeChannels(channels);
       res.json({ status: 'success' });
     });
 
@@ -371,8 +371,56 @@ const initialize = async () => {
       }
     });
 
+    const videoValidationLimiter = rateLimit({
+      windowMs: 1 * 60 * 1000, // 1 minute
+      max: 30, // 30 requests per minute
+      message: 'Too many validation requests, please try again later',
+      standardHeaders: true,
+      legacyHeaders: false,
+    });
+
+    // Validate YouTube video URL and fetch metadata
+    app.post('/api/checkYoutubeVideoURL', verifyToken, videoValidationLimiter, async (req, res) => {
+      try {
+        const { url } = req.body;
+
+        if (!url) {
+          return res.status(400).json({
+            isValidUrl: false,
+            error: 'URL is required'
+          });
+        }
+
+        const videoValidationModule = require('./modules/videoValidationModule');
+        const validationResult = await videoValidationModule.validateVideo(url);
+
+        res.json(validationResult);
+      } catch (error) {
+        console.error('Error validating video URL:', error);
+        res.status(500).json({
+          isValidUrl: false,
+          error: 'Internal server error'
+        });
+      }
+    });
+
     // Takes a list of specific youtube urls and downloads them
     app.post('/triggerspecificdownloads', verifyToken, (req, res) => {
+      // Validate override settings if provided
+      const { overrideSettings } = req.body;
+      if (overrideSettings) {
+        // Validate resolution
+        if (overrideSettings.resolution) {
+          const validResolutions = ['360', '480', '720', '1080', '1440', '2160'];
+          if (!validResolutions.includes(overrideSettings.resolution)) {
+            return res.status(400).json({
+              error: 'Invalid resolution. Valid values: 360, 480, 720, 1080, 1440, 2160'
+            });
+          }
+        }
+        // Note: video count is not applicable for manual downloads
+      }
+
       downloadModule.doSpecificDownloads(req);
       res.json({ status: 'success' });
     });
@@ -391,7 +439,31 @@ const initialize = async () => {
         res.status(400).json({ error: 'Job Already Running' });
         return;
       }
-      downloadModule.doChannelDownloads();
+
+      // Validate override settings if provided
+      const { overrideSettings } = req.body;
+      if (overrideSettings) {
+        // Validate resolution
+        if (overrideSettings.resolution) {
+          const validResolutions = ['360', '480', '720', '1080', '1440', '2160'];
+          if (!validResolutions.includes(overrideSettings.resolution)) {
+            return res.status(400).json({
+              error: 'Invalid resolution. Valid values: 360, 480, 720, 1080, 1440, 2160'
+            });
+          }
+        }
+        // Validate video count
+        if (overrideSettings.videoCount !== undefined) {
+          const count = parseInt(overrideSettings.videoCount);
+          if (isNaN(count) || count < 1 || count > 50) {
+            return res.status(400).json({
+              error: 'Invalid video count. Must be between 1 and 50'
+            });
+          }
+        }
+      }
+
+      downloadModule.doChannelDownloads(req.body || {});
       res.json({ status: 'success' });
     });
 
@@ -652,16 +724,16 @@ const initialize = async () => {
     // Plex AUTH routes - require local auth to be configured first
     app.get('/plex/auth-url', async (req, res) => {
       const config = configModule.getConfig();
-      
+
       // If auth not configured, reject
       if (!config.passwordHash) {
-        return res.status(503).json({ 
+        return res.status(503).json({
           error: 'Authentication not configured',
           requiresSetup: true,
           message: 'Please complete initial setup first'
         });
       }
-      
+
       try {
         const result = await plexModule.getAuthUrl();
         res.json(result);
@@ -672,16 +744,16 @@ const initialize = async () => {
     });
     app.get('/plex/check-pin/:pinId', async (req, res) => {
       const config = configModule.getConfig();
-      
+
       // If auth not configured, reject
       if (!config.passwordHash) {
-        return res.status(503).json({ 
+        return res.status(503).json({
           error: 'Authentication not configured',
           requiresSetup: true,
           message: 'Please complete initial setup first'
         });
       }
-      
+
       try {
         const { pinId } = req.params;
         const result = await plexModule.checkPin(pinId);

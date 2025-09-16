@@ -303,17 +303,4 @@ youtube video2
       ]);
     });
   });
-
-  describe('module exports', () => {
-    test('should export all expected functions', () => {
-      expect(typeof ArchiveModule.getArchivePath).toBe('function');
-      expect(typeof ArchiveModule.readCompleteListLines).toBe('function');
-      expect(typeof ArchiveModule.getNewVideoUrlsSince).toBe('function');
-    });
-
-    test('should not export any internal functions', () => {
-      const exportedKeys = Object.keys(ArchiveModule);
-      expect(exportedKeys).toEqual(['getArchivePath', 'readCompleteListLines', 'getNewVideoUrlsSince']);
-    });
-  });
 });

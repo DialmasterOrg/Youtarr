@@ -1,16 +1,18 @@
-import React from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   Button,
   Card,
   CardContent,
   CardHeader,
   Grid,
-  TextField,
-  Typography,
   Box,
+  Tabs,
+  Tab,
 } from '@mui/material';
-import useMediaQuery from '@mui/material/useMediaQuery';
-import { useTheme } from '@mui/material/styles';
+import ManualDownload from './ManualDownload/ManualDownload';
+import DownloadSettingsDialog from './ManualDownload/DownloadSettingsDialog';
+import { DownloadSettings } from './ManualDownload/types';
+import ErrorBoundary from '../ErrorBoundary';
 
 interface DownloadNewProps {
   videoUrls: string;
@@ -27,17 +29,32 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
   fetchRunningJobs,
   downloadInitiatedRef,
 }) => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [tabValue, setTabValue] = useState(0);
+  const [defaultResolution, setDefaultResolution] = useState<string>('1080');
+  const [defaultVideoCount, setDefaultVideoCount] = useState<number>(3);
+  const [showChannelSettingsDialog, setShowChannelSettingsDialog] = useState(false);
 
-  const handleTriggerChannelDownloads = async () => {
+  const handleOpenChannelSettings = () => {
+    setShowChannelSettingsDialog(true);
+  };
+
+  const handleTriggerChannelDownloads = async (settings: DownloadSettings | null) => {
+    setShowChannelSettingsDialog(false);
     downloadInitiatedRef.current = true;
+
+    const body: any = {};
+    // Add settings to the request body if provided
+    if (settings) {
+      body.overrideSettings = settings;
+    }
+
     const result = await fetch('/triggerchanneldownloads', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-access-token': token || '',
       },
+      body: JSON.stringify(body),
     });
     // If the result is a 400 then we already have a running Channel Download
     // job and we should display an alert
@@ -47,24 +64,55 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
     setTimeout(fetchRunningJobs, 500);
   };
 
-  const handleSpecificDownloads = async () => {
+  const handleManualDownload = useCallback(async (urls: string[], settings?: DownloadSettings | null) => {
     downloadInitiatedRef.current = true;
-    const strippedUrls = videoUrls
-      .split(/[\n\s]/) // split on newline or space
-      .map((url) =>
-        url.includes('&') ? url.substring(0, url.indexOf('&')) : url
-      ); // remove '&' and everything after it
+    const strippedUrls = urls.map((url) =>
+      url.includes('&') ? url.substring(0, url.indexOf('&')) : url
+    );
+
+    const body: any = { urls: strippedUrls };
+    // Add settings to the request body if provided
+    if (settings) {
+      body.overrideSettings = settings;
+    }
+
     await fetch('/triggerspecificdownloads', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-access-token': token || '',
       },
-      body: JSON.stringify({ urls: strippedUrls }),
+      body: JSON.stringify(body),
     });
-    // Clear the TextField after download is triggered
-    setVideoUrls('');
+
     setTimeout(fetchRunningJobs, 1000);
+  }, [token, fetchRunningJobs, downloadInitiatedRef]);
+
+  // Fetch config to get default resolution
+  useEffect(() => {
+    if (token) {
+      fetch('/getconfig', {
+        headers: {
+          'x-access-token': token,
+        },
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.preferredResolution) {
+            setDefaultResolution(data.preferredResolution);
+          }
+          if (data.channelFilesToDownload) {
+            setDefaultVideoCount(data.channelFilesToDownload);
+          }
+        })
+        .catch((error) => {
+          console.error('Error fetching config:', error);
+        });
+    }
+  }, [token]);
+
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
   };
 
   return (
@@ -76,37 +124,58 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
           style={{ marginBottom: '-16px' }}
         />
         <CardContent>
-          <TextField
-            style={{ marginBottom: '16px' }}
-            multiline
-            rows={isMobile ? 3 : 4}
-            variant='outlined'
-            fullWidth
-            value={videoUrls}
-            onChange={(e) => setVideoUrls(e.target.value)}
-            placeholder='Enter specific Youtube video links here'
-          />
-          <Typography align='center' variant='body1' component='div'>
-            <Box
-              display='flex'
-              flexDirection={isMobile ? 'column' : 'row'}
-              justifyContent='center'
-              alignItems='center'
-              gap={2} // This is to add some space between the buttons
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+            <Tabs value={tabValue} onChange={handleTabChange} centered>
+              <Tab label="Manual Download" />
+              <Tab label="Channel Download" />
+            </Tabs>
+          </Box>
+
+          {tabValue === 0 ? (
+            <ErrorBoundary
+              fallbackMessage="An error occurred in the download manager. Please refresh the page and try again."
+              onReset={() => setTabValue(0)}
             >
-              <Button variant='contained' onClick={handleSpecificDownloads}>
-                Download Specific URLS Above
-              </Button>
-              <Button
-                variant='contained'
-                onClick={handleTriggerChannelDownloads}
+              <ManualDownload
+                onStartDownload={handleManualDownload}
+                token={token}
+                defaultResolution={defaultResolution}
+              />
+            </ErrorBoundary>
+          ) : (
+            <ErrorBoundary
+              fallbackMessage="An error occurred with channel downloads. Please refresh the page and try again."
+              onReset={() => setTabValue(1)}
+            >
+              <Box
+                display='flex'
+                flexDirection='column'
+                justifyContent='center'
+                alignItems='center'
+                gap={2}
+                mt={3}
               >
-                Download new from all channels
-              </Button>
-            </Box>
-          </Typography>
+                <Button
+                  variant='contained'
+                  onClick={handleOpenChannelSettings}
+                  size='large'
+                >
+                  Download new from all channels
+                </Button>
+              </Box>
+            </ErrorBoundary>
+          )}
         </CardContent>
       </Card>
+
+      <DownloadSettingsDialog
+        open={showChannelSettingsDialog}
+        onClose={() => setShowChannelSettingsDialog(false)}
+        onConfirm={handleTriggerChannelDownloads}
+        defaultResolution={defaultResolution}
+        defaultVideoCount={defaultVideoCount}
+        mode="channel"
+      />
     </Grid>
   );
 };
