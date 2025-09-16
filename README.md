@@ -114,12 +114,9 @@ Licensed under the ISC License. See [LICENSE.md](LICENSE.md) for details.
 
 ## Screenshots
 
-![Alt text](/screenshots/youtarr_channels.jpg?raw=true 'Channels Screen')
-![Alt text](/screenshots/youtarr_config.jpg?raw=true 'Config Screen')
-![Alt text](/screenshots/youtarr_downloads.jpg?raw=true 'Downloads Screen')
-![Alt text](/screenshots/youtarr_videos.jpg?raw=true 'Videos Screen')
-![Alt text](/screenshots/youtarr_channels_mb.jpg?raw=true 'Channels Screen Mobile')
-![Alt text](/screenshots/youtarr_config_mb.jpg?raw=true 'Config Screen Mobile')
-![Alt text](/screenshots/youtarr_downloads_mb.jpg?raw=true 'Downloads Screen Mobile')
-![Alt text](/screenshots/youtarr_videos_mb.jpg?raw=true 'Videos Screen Mobile')
-![Alt text](/screenshots/youtarr_channel_view_pc.jpg?raw=true 'Individual Channel Screen')
+<img width="1790" height="1310" alt="image" src="https://github.com/user-attachments/assets/cf2bf79a-43ce-4ba4-9e5e-a635c15e55aa" />
+<img width="1813" height="1312" alt="image" src="https://github.com/user-attachments/assets/d13f8d25-4049-439a-8d8c-7ba8d6bc5073" />
+<img width="1792" height="1694" alt="image" src="https://github.com/user-attachments/assets/d4be4e88-8dc1-49e5-b13e-299ffd14e001" />
+<img width="1787" height="1692" alt="image" src="https://github.com/user-attachments/assets/1551777c-4335-4bc2-84b8-c8176f3eb0e2" />
+
+
