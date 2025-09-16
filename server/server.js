@@ -271,9 +271,9 @@ const initialize = async () => {
       });
     });
 
-    app.post('/updatechannels', verifyToken, (req, res) => {
+    app.post('/updatechannels', verifyToken, async (req, res) => {
       const channels = req.body;
-      channelModule.writeChannels(channels);
+      await channelModule.writeChannels(channels);
       res.json({ status: 'success' });
     });
 
