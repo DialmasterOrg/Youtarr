@@ -97,7 +97,19 @@ environment:
   - DB_PASSWORD=123qweasd
   - DB_NAME=youtarr
   - YOUTUBE_OUTPUT_DIR=${YOUTUBE_OUTPUT_DIR}
+  # Optional: Custom data path (for Elfhosted or similar platforms)
+  # - DATA_PATH=/storage/rclone/storagebox/youtube
 ```
+
+### DATA_PATH Configuration (Advanced)
+
+The `DATA_PATH` environment variable allows customization of the video storage path **inside** the container. This is primarily for platforms like Elfhosted where paths must be consistent across all pods.
+
+- **Default**: `/usr/src/app/data` (standard Docker setup)
+- **Use case**: Platforms that mount storage at a lower level and need consistent paths across services
+- **Example**: `DATA_PATH=/storage/rclone/storagebox/youtube`
+
+**Note**: For standard Docker deployments, you don't need this. Use volume mounts instead (`${YOUTUBE_OUTPUT_DIR}:/usr/src/app/data`).
 
 ## Volume Management
 

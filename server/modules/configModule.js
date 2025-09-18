@@ -13,7 +13,9 @@ class ConfigModule extends EventEmitter {
 
     this.directoryPath = '';
     if (process.env.IN_DOCKER_CONTAINER) {
-      this.directoryPath = '/usr/src/app/data';
+      // Allow custom data path via environment variable (for Elfhosted compatibility)
+      // Falls back to default /usr/src/app/data for backward compatibility
+      this.directoryPath = process.env.DATA_PATH || '/usr/src/app/data';
       this.ffmpegPath = '/usr/bin/ffmpeg';
     } else {
       this.ffmpegPath = this.config.devffmpegPath;
@@ -111,8 +113,8 @@ class ConfigModule extends EventEmitter {
     const execFilePromise = util.promisify(execFile);
     
     try {
-      // Always use the fixed Docker mount path for safety
-      const dataPath = '/usr/src/app/data';
+      // Use configurable data path (falls back to /usr/src/app/data for backward compatibility)
+      const dataPath = process.env.DATA_PATH || '/usr/src/app/data';
       
       // Use execFile with array arguments to prevent shell injection
       // -B 1 forces output in bytes for accurate calculations

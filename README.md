@@ -24,6 +24,7 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 - **🔍 Browse Channels**: View all videos from subscribed channels before downloading
 - **📊 Download History**: Track what you've downloaded with smart duplicate prevention
 - **🔐 Secure Access**: Local authentication system with admin controls
+- **☁️ Platform Flexible**: Configurable storage paths for Kubernetes/Elfhosted deployments
 
 ### Optional Plex Integration
 - **🔄 Auto Library Refresh**: Automatically update Plex after downloads
@@ -111,6 +112,11 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 - **API Key**: Get it automatically via Configuration page or [manually](https://www.plexopedia.com/plex-media-server/general/plex-token/)
 - **Network Access**: Run on same machine as Plex server (the app must be able to write to the Plex library directory)
 - **Docker on Windows**: Use `host.docker.internal` as your Plex server address
+
+### For Platform Deployments (Elfhosted, etc.)
+- **Custom Data Path**: Set `DATA_PATH` environment variable for platforms requiring consistent paths across pods
+- **Example**: `DATA_PATH=/storage/rclone/storagebox/youtube`
+- **Details**: See [Docker Guide](docs/DOCKER.md#data_path-configuration-advanced) for configuration
 
 ## ⚖️ Legal Disclaimer
 
