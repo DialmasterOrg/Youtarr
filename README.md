@@ -17,6 +17,7 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 - **📥 Smart Downloads**: Pre-validate YouTube URLs with metadata preview before downloading (powered by [yt-dlp](https://github.com/yt-dlp/yt-dlp))
 - **🎯 Custom Quality Settings**: Per-download resolution control with support from 360p to 4K
 - **📺 Channel Subscriptions**: Subscribe to channels and auto-download new videos
+- **🚫 SponsorBlock Integration**: Automatically remove or mark sponsored segments, intros, outros, and more using the crowdsourced SponsorBlock database
 - **🗂️ Smart Organization**: Videos organized by channel with metadata and thumbnails
 - **⏰ Scheduled Downloads**: Configure automatic downloads on your schedule (cron-based)
 - **📱 Web Interface**: Manage everything through a responsive web UI
@@ -81,6 +82,13 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 2. Set download schedule (e.g., every 6 hours)
 3. Choose video resolution and download limits
 4. (Optional) Connect Plex for auto-refresh
+
+### Configure SponsorBlock
+1. Go to Configuration page → SponsorBlock Integration section
+2. Enable SponsorBlock to automatically handle sponsored content
+3. Choose action: Remove segments entirely or mark them as chapters
+4. Select which types of segments to handle (sponsors, intros, outros, etc.)
+5. All new downloads will automatically process selected segments
 
 ## 📖 Documentation
 

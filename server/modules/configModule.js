@@ -28,6 +28,33 @@ class ConfigModule extends EventEmitter {
       this.config.preferredResolution = '1080';
     }
 
+    // Initialize Sponsorblock settings if not present
+    if (this.config.sponsorblockEnabled === undefined) {
+      this.config.sponsorblockEnabled = false;
+    }
+
+    if (!this.config.sponsorblockAction) {
+      this.config.sponsorblockAction = 'remove'; // 'remove' or 'mark'
+    }
+
+    if (!this.config.sponsorblockCategories) {
+      this.config.sponsorblockCategories = {
+        sponsor: true,
+        intro: false,
+        outro: false,
+        selfpromo: true,
+        preview: false,
+        filler: false,
+        interaction: false,
+        music_offtopic: false
+      };
+    }
+
+    // sponsorblockApiUrl is optional, defaults to empty string (uses default API)
+    if (this.config.sponsorblockApiUrl === undefined) {
+      this.config.sponsorblockApiUrl = '';
+    }
+
     // Check if a UUID exists in the config
     if (!this.config.uuid) {
       // Generate a new UUID
