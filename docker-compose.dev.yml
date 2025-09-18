@@ -40,6 +40,8 @@ services:
       DB_USER: root
       DB_PASSWORD: 123qweasd
       DB_NAME: youtarr
+      # Optional: Custom data path for platforms like Elfhosted (defaults to /usr/src/app/data)
+      # DATA_PATH: /storage/rclone/storagebox/youtube
     ports:
       - "3087:3011"
     volumes:
