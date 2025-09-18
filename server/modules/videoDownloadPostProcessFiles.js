@@ -17,6 +17,30 @@ const videoDirectory = path.dirname(videoPath);
 const imagePath = path.join(videoDirectory, 'poster.jpg'); // assume the image thumbnail is named 'poster.jpg'
 
 if (fs.existsSync(jsonPath)) {
+  // Read the JSON file to get the upload_date
+  const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+
+  // Parse the upload_date (format: YYYYMMDD) into a Date object
+  let uploadDate = null;
+  if (jsonData.upload_date) {
+    try {
+      const dateStr = jsonData.upload_date.toString();
+      const year = dateStr.substring(0, 4);
+      const month = dateStr.substring(4, 6);
+      const day = dateStr.substring(6, 8);
+      uploadDate = new Date(`${year}-${month}-${day}T00:00:00`);
+
+      // Check if the date is valid
+      if (isNaN(uploadDate.getTime())) {
+        console.log(`Invalid upload_date format: ${jsonData.upload_date}`);
+        uploadDate = null;
+      }
+    } catch (err) {
+      console.log(`Error parsing upload_date: ${err.message}`);
+      uploadDate = null;
+    }
+  }
+
   const filename = path.basename(jsonPath, '.info.json'); // get the filename
   const matches = filename.match(/\[(.*?)\]/g); // Extract all occurrences of video IDs enclosed in brackets
   const id = matches
@@ -50,6 +74,41 @@ if (fs.existsSync(jsonPath)) {
       console.log('Image resized successfully');
     } catch (err) {
       console.log(`Error resizing image: ${err}`);
+    }
+  }
+
+  // Set the file timestamps to match the upload date
+  if (uploadDate) {
+    const timestamp = uploadDate.getTime() / 1000; // Convert to Unix timestamp
+
+    // Set timestamp for the video file
+    if (fs.existsSync(videoPath)) {
+      try {
+        fs.utimesSync(videoPath, uploadDate, uploadDate);
+        console.log(`Set video timestamp to ${uploadDate.toISOString()}`);
+      } catch (err) {
+        console.log(`Error setting video timestamp: ${err.message}`);
+      }
+    }
+
+    // Set timestamp for the thumbnail
+    if (fs.existsSync(imagePath)) {
+      try {
+        fs.utimesSync(imagePath, uploadDate, uploadDate);
+        console.log(`Set thumbnail timestamp to ${uploadDate.toISOString()}`);
+      } catch (err) {
+        console.log(`Error setting thumbnail timestamp: ${err.message}`);
+      }
+    }
+
+    // Set timestamp for the directory
+    if (fs.existsSync(videoDirectory)) {
+      try {
+        fs.utimesSync(videoDirectory, uploadDate, uploadDate);
+        console.log(`Set directory timestamp to ${uploadDate.toISOString()}`);
+      } catch (err) {
+        console.log(`Error setting directory timestamp: ${err.message}`);
+      }
     }
   }
 }
