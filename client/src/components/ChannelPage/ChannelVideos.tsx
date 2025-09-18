@@ -82,6 +82,38 @@ function ChannelVideos({ token }: ChannelVideosProps) {
     setCheckedBoxes([]);
   };
 
+  const selectAllUndownloaded = () => {
+    // Get videos on current page that are not downloaded and not members-only
+    const currentPageVideos = videosToDisplay.slice(
+      (page - 1) * videosPerPage,
+      page * videosPerPage
+    );
+
+    const undownloadedVideos = currentPageVideos.filter(
+      (video) => !video.added && video.availability !== 'subscriber_only'
+    );
+
+    const videoIds = undownloadedVideos.map((video) => video.youtube_id);
+
+    // Add these IDs to checked boxes (avoiding duplicates)
+    setCheckedBoxes((prevState) => {
+      const newIds = videoIds.filter((id) => !prevState.includes(id));
+      return [...prevState, ...newIds];
+    });
+  };
+
+  // Calculate how many videos on current page can be selected
+  const getSelectableCount = () => {
+    const currentPageVideos = videosToDisplay.slice(
+      (page - 1) * videosPerPage,
+      page * videosPerPage
+    );
+
+    return currentPageVideos.filter(
+      (video) => !video.added && video.availability !== 'subscriber_only'
+    ).length;
+  };
+
   function decodeHtml(html: string) {
     const txt = document.createElement('textarea');
     txt.innerHTML = html;
@@ -256,23 +288,48 @@ function ChannelVideos({ token }: ChannelVideosProps) {
           </>
         )}
         <Grid container justifyContent='center'>
-          <Button
-            onClick={downloadChecked}
-            variant='contained'
-            disabled={checkedBoxes.length === 0}
-            style={{ marginTop: '8px', marginLeft: '8px', marginRight: '8px' }}
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
+              gap: 1,
+              px: 2,
+              py: 1,
+              width: isMobile ? '100%' : 'auto',
+            }}
           >
-            Download Selected{' '}
-            {checkedBoxes.length ? `(${checkedBoxes.length})` : ''}
-          </Button>
-          <Button
-            variant='contained'
-            disabled={checkedBoxes.length === 0}
-            onClick={resetChecked}
-            style={{ marginTop: '8px', marginLeft: '8px', marginRight: '8px' }}
-          >
-            Undo
-          </Button>
+            <Button
+              onClick={selectAllUndownloaded}
+              variant='outlined'
+              disabled={getSelectableCount() === 0}
+              sx={{
+                minWidth: isMobile ? '100%' : 'auto',
+              }}
+            >
+              Select All
+            </Button>
+            <Button
+              onClick={downloadChecked}
+              variant='contained'
+              disabled={checkedBoxes.length === 0}
+              sx={{
+                minWidth: isMobile ? '100%' : 'auto',
+              }}
+            >
+              Download Selected{' '}
+              {checkedBoxes.length ? `(${checkedBoxes.length})` : ''}
+            </Button>
+            <Button
+              variant='outlined'
+              disabled={checkedBoxes.length === 0}
+              onClick={resetChecked}
+              sx={{
+                minWidth: isMobile ? '100%' : 'auto',
+              }}
+            >
+              {'Clear Selection'}
+            </Button>
+          </Box>
         </Grid>
         <CardContent>
           <TableContainer component={Paper}>
