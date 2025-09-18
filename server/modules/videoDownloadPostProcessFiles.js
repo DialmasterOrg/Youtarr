@@ -79,8 +79,6 @@ if (fs.existsSync(jsonPath)) {
 
   // Set the file timestamps to match the upload date
   if (uploadDate) {
-    const timestamp = uploadDate.getTime() / 1000; // Convert to Unix timestamp
-
     // Set timestamp for the video file
     if (fs.existsSync(videoPath)) {
       try {
