@@ -51,6 +51,19 @@ function Configuration({ token }: ConfigurationProps) {
     plexYoutubeLibraryId: '',
     plexIP: '',
     uuid: '',
+    sponsorblockEnabled: false,
+    sponsorblockAction: 'remove' as 'remove' | 'mark',
+    sponsorblockCategories: {
+      sponsor: true,
+      intro: false,
+      outro: false,
+      selfpromo: true,
+      preview: false,
+      filler: false,
+      interaction: false,
+      music_offtopic: false,
+    },
+    sponsorblockApiUrl: '',
   });
   const [openPlexLibrarySelector, setOpenPlexLibrarySelector] = useState(false);
   const [openPlexAuthDialog, setOpenPlexAuthDialog] = useState(false);
@@ -412,6 +425,10 @@ function Configuration({ token }: ConfigurationProps) {
       'youtubeOutputDirectory',
       'plexYoutubeLibraryId',
       'plexIP',
+      'sponsorblockEnabled',
+      'sponsorblockAction',
+      'sponsorblockCategories',
+      'sponsorblockApiUrl',
     ];
     const changed = keysToCompare.some((k) => {
       return (config as any)[k] !== (initialConfig as any)[k];
@@ -714,6 +731,126 @@ function Configuration({ token }: ConfigurationProps) {
                 </Typography>
               )}
             </Grid>
+          </Grid>
+        </AccordionDetails>
+      </Accordion>
+
+      <Accordion defaultExpanded={false} sx={{ mb: 2 }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Typography variant="h6" sx={{ flexGrow: 1 }}>
+            Optional: SponsorBlock Integration
+          </Typography>
+          <Chip
+            label={config.sponsorblockEnabled ? "Enabled" : "Disabled"}
+            color={config.sponsorblockEnabled ? "success" : "default"}
+            size="small"
+            sx={{ mr: 1 }}
+          />
+        </AccordionSummary>
+        <AccordionDetails>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <AlertTitle>What is SponsorBlock?</AlertTitle>
+            <Typography variant="body2">
+              SponsorBlock is a crowdsourced database that identifies segments in YouTube videos like sponsors, intros, outros, and self-promotions.
+              When enabled, Youtarr can automatically remove or mark these segments during download.
+            </Typography>
+          </Alert>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    name="sponsorblockEnabled"
+                    checked={config.sponsorblockEnabled}
+                    onChange={(e) => setConfig({ ...config, sponsorblockEnabled: e.target.checked })}
+                  />
+                }
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    Enable SponsorBlock
+                    {getInfoIcon('Automatically handle sponsored segments and other marked content in downloaded videos.')}
+                  </Box>
+                }
+              />
+            </Grid>
+
+            {config.sponsorblockEnabled && (
+              <>
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Action for Segments</InputLabel>
+                    <Select
+                      value={config.sponsorblockAction}
+                      onChange={(e) => setConfig({ ...config, sponsorblockAction: e.target.value as 'remove' | 'mark' })}
+                      label="Action for Segments"
+                    >
+                      <MenuItem value="remove">Remove segments from video</MenuItem>
+                      <MenuItem value="mark">Mark segments as chapters</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                    Remove: Cuts out segments entirely. Mark: Creates chapter markers for easy skipping.
+                  </Typography>
+                </Grid>
+
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="Custom API URL (Optional)"
+                    name="sponsorblockApiUrl"
+                    value={config.sponsorblockApiUrl}
+                    onChange={(e) => setConfig({ ...config, sponsorblockApiUrl: e.target.value })}
+                    placeholder="https://sponsor.ajay.app"
+                    helperText="Leave empty to use the default SponsorBlock API"
+                  />
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Typography variant="subtitle1" gutterBottom sx={{ mt: 1, mb: 1 }}>
+                    Segment Categories to {config.sponsorblockAction === 'remove' ? 'Remove' : 'Mark'}:
+                  </Typography>
+
+                  <Grid container spacing={1}>
+                    {[
+                      { key: 'sponsor', label: 'Sponsor', description: 'Paid promotions, product placements' },
+                      { key: 'intro', label: 'Intro', description: 'Opening sequences, title cards' },
+                      { key: 'outro', label: 'Outro', description: 'End cards, credits' },
+                      { key: 'selfpromo', label: 'Self-Promotion', description: 'Channel merch, Patreon, other videos' },
+                      { key: 'preview', label: 'Preview/Recap', description: '"Coming up" or "Previously on" segments' },
+                      { key: 'filler', label: 'Filler', description: 'Tangential content, dead space' },
+                      { key: 'interaction', label: 'Interaction', description: '"Like and subscribe" reminders' },
+                      { key: 'music_offtopic', label: 'Music Off-Topic', description: 'Non-music content in music videos' },
+                    ].map(({ key, label, description }) => (
+                      <Grid item xs={12} sm={6} key={key}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={config.sponsorblockCategories[key as keyof typeof config.sponsorblockCategories]}
+                              onChange={(e) => setConfig({
+                                ...config,
+                                sponsorblockCategories: {
+                                  ...config.sponsorblockCategories,
+                                  [key]: e.target.checked
+                                }
+                              })}
+                            />
+                          }
+                          label={
+                            <Box>
+                              <Typography variant="body2">{label}</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {description}
+                              </Typography>
+                            </Box>
+                          }
+                        />
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Grid>
+              </>
+            )}
           </Grid>
         </AccordionDetails>
       </Accordion>

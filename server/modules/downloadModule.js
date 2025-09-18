@@ -254,6 +254,35 @@ class DownloadModule {
     }
   }
 
+  // Build Sponsorblock args based on configuration
+  buildSponsorblockArgs(config) {
+    const args = [];
+
+    if (!config.sponsorblockEnabled) return args;
+
+    // Build categories list from enabled categories
+    const enabledCategories = Object.entries(config.sponsorblockCategories || {})
+      .filter(([, enabled]) => enabled)
+      .map(([category]) => category);
+
+    if (enabledCategories.length > 0) {
+      const categoriesStr = enabledCategories.join(',');
+
+      if (config.sponsorblockAction === 'remove') {
+        args.push('--sponsorblock-remove', categoriesStr);
+      } else if (config.sponsorblockAction === 'mark') {
+        args.push('--sponsorblock-mark', categoriesStr);
+      }
+    }
+
+    // Add custom API URL if specified
+    if (config.sponsorblockApiUrl && config.sponsorblockApiUrl.trim()) {
+      args.push('--sponsorblock-api', config.sponsorblockApiUrl.trim());
+    }
+
+    return args;
+  }
+
   // Build yt-dlp command args array for channel downloads
   getBaseCommandArgs(resolution) {
     const res = resolution || configModule.config.preferredResolution || '1080';
@@ -276,6 +305,11 @@ class DownloadModule {
       '-o', 'pl_thumbnail:',
       '--exec', `node ${path.resolve(__dirname, './videoDownloadPostProcessFiles.js')} {}`
     ];
+
+    // Add Sponsorblock args if configured
+    const sponsorblockArgs = this.buildSponsorblockArgs(configModule.config);
+    args.push(...sponsorblockArgs);
+
     return args;
   }
 
@@ -301,6 +335,11 @@ class DownloadModule {
       '-o', 'pl_thumbnail:',
       '--exec', `node ${path.resolve(__dirname, './videoDownloadPostProcessFiles.js')} {}`
     ];
+
+    // Add Sponsorblock args if configured
+    const sponsorblockArgs = this.buildSponsorblockArgs(configModule.config);
+    args.push(...sponsorblockArgs);
+
     return args;
   }
 }
