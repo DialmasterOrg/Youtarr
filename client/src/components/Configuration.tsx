@@ -69,6 +69,11 @@ function Configuration({ token }: ConfigurationProps) {
   const [openPlexAuthDialog, setOpenPlexAuthDialog] = useState(false);
   const [openConfirmDialog, setOpenConfirmDialog] = useState(false);
   const [plexConnectionStatus, setPlexConnectionStatus] = useState<'connected' | 'not_connected' | 'not_tested' | 'testing'>('not_tested');
+  const [isPlatformManaged, setIsPlatformManaged] = useState({
+    youtubeOutputDirectory: false,
+    plexUrl: false,
+    authEnabled: true
+  });
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [initialConfig, setInitialConfig] = useState<typeof config | null>(null);
@@ -100,6 +105,10 @@ function Configuration({ token }: ConfigurationProps) {
         return response.json();
       })
       .then((data) => {
+        if (data.isPlatformManaged) {
+          setIsPlatformManaged(data.isPlatformManaged);
+          delete data.isPlatformManaged;
+        }
         setConfig(data);
         setOriginalYoutubeDirectory(data.youtubeOutputDirectory || '');
         setInitialConfig(data);
@@ -498,16 +507,29 @@ function Configuration({ token }: ConfigurationProps) {
                 label={
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     YouTube Output Directory
-                    {getInfoIcon('The directory path to your Plex Youtube library. If you update this you must restart your docker container. Manually update this field at your own risk!')}
+                    {isPlatformManaged.youtubeOutputDirectory ? (
+                      <Chip
+                        label="Platform Managed"
+                        size="small"
+                        sx={{ ml: 1 }}
+                      />
+                    ) : (
+                      getInfoIcon('The directory path to your Plex Youtube library. If you update this you must restart your docker container. Manually update this field at your own risk!')
+                    )}
                   </Box>
                 }
                 name="youtubeOutputDirectory"
                 value={config.youtubeOutputDirectory}
                 onChange={handleInputChange}
                 required
-                helperText={youtubeDirectoryChanged
-                  ? "⚠️ RESTART REQUIRED after saving - Directory has been changed!"
-                  : "Path where YouTube videos will be saved"}
+                disabled={isPlatformManaged.youtubeOutputDirectory}
+                helperText={
+                  isPlatformManaged.youtubeOutputDirectory
+                    ? "This path is configured by your platform deployment and cannot be changed"
+                    : youtubeDirectoryChanged
+                      ? "⚠️ RESTART REQUIRED after saving - Directory has been changed!"
+                      : "Path where YouTube videos will be saved"
+                }
               />
             </Grid>
 
@@ -656,13 +678,24 @@ function Configuration({ token }: ConfigurationProps) {
                 label={
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     Plex Server IP
-                    {getInfoIcon("The IP address of your Plex server. 'localhost' if you're on the same machine running in dev mode. 'host.docker.internal' for production Docker on the same machine. You can also use your public IP for your Plex server.")}
+                    {isPlatformManaged.plexUrl ? (
+                      <Chip
+                        label="Platform Managed"
+                        size="small"
+                        sx={{ ml: 1 }}
+                      />
+                    ) : (
+                      getInfoIcon("The IP address of your Plex server. 'localhost' if you're on the same machine running in dev mode. 'host.docker.internal' for production Docker on the same machine. You can also use your public IP for your Plex server.")
+                    )}
                   </Box>
                 }
                 name="plexIP"
                 value={config.plexIP}
                 onChange={handleInputChange}
-                helperText="e.g., 192.168.1.100 or host.docker.internal"
+                disabled={isPlatformManaged.plexUrl}
+                helperText={isPlatformManaged.plexUrl
+                  ? "Plex URL is configured by your platform deployment"
+                  : "e.g., 192.168.1.100 or host.docker.internal"}
               />
             </Grid>
 

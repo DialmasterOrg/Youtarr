@@ -8,11 +8,12 @@ const JobVideo = require('../models/jobvideo');
 const ChannelVideo = require('../models/channelvideo');
 const cron = require('node-cron');
 const MessageEmitter = require('./messageEmitter.js'); // import the helper function
+const configModule = require('./configModule');
 
 class JobModule {
   constructor() {
-    this.jobsDir = path.join(__dirname, '../../jobs');
-    this.jobsFilePath = path.join(__dirname, '../../jobs', 'jobs.json');
+    this.jobsDir = configModule.getJobsPath();
+    this.jobsFilePath = path.join(this.jobsDir, 'jobs.json');
     this.jobsFilePathOld = path.join(this.jobsDir, 'jobs.json.old');
     this.isSaving = false; // Locking mechanism to prevent multiple saves at the same time
     this.jobs = {}; // Initialize this.jobs as an empty object

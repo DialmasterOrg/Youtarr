@@ -44,6 +44,7 @@ function App() {
   const [serverVersion, setServerVersion] = useState('');
   const [requiresSetup, setRequiresSetup] = useState<boolean | null>(null);
   const [checkingSetup, setCheckingSetup] = useState(true);
+  const [isPlatformManaged, setIsPlatformManaged] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const drawerWidth = isMobile ? '50%' : 240; // specify your drawer width
@@ -66,7 +67,14 @@ function App() {
       .then(data => {
         setRequiresSetup(data.requiresSetup);
         setCheckingSetup(false);
-        
+
+        if (data.platformManaged) {
+          setIsPlatformManaged(true);
+          setToken('platform-managed-auth');
+          localStorage.setItem('authToken', 'platform-managed-auth');
+          return;
+        }
+
         // If setup is required, clear ALL existing tokens to force fresh authentication
         if (data.requiresSetup) {
           localStorage.removeItem('authToken');
@@ -270,7 +278,7 @@ function App() {
                   primary='Downloaded Videos'
                 />
               </ListItem>
-              {!token && (
+              {!token && !isPlatformManaged && (
                 <ListItem
                   button
                   component={Link}
@@ -283,7 +291,7 @@ function App() {
                   />
                 </ListItem>
               )}
-              {token && (
+              {token && !isPlatformManaged && (
                 <ListItem
                   button
                   onClick={() => {
@@ -296,6 +304,15 @@ function App() {
                   <ListItemText
                     primaryTypographyProps={{ fontSize: 'large' }}
                     primary='Logout'
+                  />
+                </ListItem>
+              )}
+              {isPlatformManaged && (
+                <ListItem>
+                  <ListItemText
+                    primary="Platform Authentication"
+                    secondary="Managed by platform"
+                    secondaryTypographyProps={{ fontSize: 'small' }}
                   />
                 </ListItem>
               )}

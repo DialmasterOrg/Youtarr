@@ -101,15 +101,86 @@ environment:
   # - DATA_PATH=/storage/rclone/storagebox/youtube
 ```
 
-### DATA_PATH Configuration (Advanced)
+### Platform Deployment Configuration
 
-The `DATA_PATH` environment variable allows customization of the video storage path **inside** the container. This is primarily for platforms like Elfhosted where paths must be consistent across all pods.
+Youtarr supports platform-managed deployments (Elfhosted, Kubernetes, etc.) with three special environment variables:
 
-- **Default**: `/usr/src/app/data` (standard Docker setup)
-- **Use case**: Platforms that mount storage at a lower level and need consistent paths across services
-- **Example**: `DATA_PATH=/storage/rclone/storagebox/youtube`
+#### Environment Variables
 
-**Note**: For standard Docker deployments, you don't need this. Use volume mounts instead (`${YOUTUBE_OUTPUT_DIR}:/usr/src/app/data`).
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `DATA_PATH` | Video storage path inside container | `/storage/rclone/storagebox/youtube` |
+| `AUTH_ENABLED` | Set to `false` to bypass internal authentication | `false` |
+| `PLEX_URL` | Pre-configured Plex server URL | `http://plex:32400` |
+
+#### What Happens in Platform Mode
+
+When `DATA_PATH` is set:
+1. **Auto-Configuration**: If no config.json exists, one is created automatically with:
+   - Video output directory set to `DATA_PATH` value
+   - Plex URL set to `PLEX_URL` if provided
+   - Sensible defaults for all other settings
+
+2. **Consolidated Storage**: All persistent data is stored under `/app/config/`:
+   - `/app/config/config.json` - Configuration file
+   - `/app/config/images/` - Channel and video thumbnails
+   - `/app/config/jobs/` - Job state and metadata
+
+3. **Protected Settings**: In the web UI:
+   - YouTube Output Directory field is disabled (shows "Platform Managed")
+   - Plex URL field is disabled if `PLEX_URL` is set
+   - Users can still configure Plex API key and other settings
+
+When `AUTH_ENABLED=false`:
+- No login required - authentication handled by platform (OAuth, Authelia, etc.)
+- Login/logout buttons hidden in UI
+- All API endpoints accessible without token
+
+#### Standard vs Platform Deployments
+
+| Aspect | Standard Docker | Platform Deployment |
+|--------|----------------|---------------------|
+| Config creation | Manual via setup.sh | Auto-created if DATA_PATH set |
+| Video storage | Volume mount to host | Platform-managed path |
+| Authentication | Built-in password | Optional (AUTH_ENABLED) |
+| Storage paths | Separate mounts | Consolidated under /app/config |
+| Plex URL | User configured | Can be pre-configured |
+
+**Note**: Standard Docker users don't need these variables. They're only for platform deployments that can't use traditional Docker volume mounts.
+
+#### Example Kubernetes Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: youtarr
+spec:
+  template:
+    spec:
+      containers:
+      - name: youtarr
+        image: dialmaster/youtarr:latest
+        env:
+        - name: DATA_PATH
+          value: "/storage/youtube"
+        - name: AUTH_ENABLED
+          value: "false"  # Platform handles auth
+        - name: PLEX_URL
+          value: "http://plex-service:32400"
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+        - name: youtube-storage
+          mountPath: /storage/youtube
+      volumes:
+      - name: config
+        persistentVolumeClaim:
+          claimName: youtarr-config
+      - name: youtube-storage
+        persistentVolumeClaim:
+          claimName: youtube-storage
+```
 
 ## Volume Management
 

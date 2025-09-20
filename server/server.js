@@ -59,6 +59,10 @@ const initialize = async () => {
     );
 
     const verifyToken = async function(req, res, next) {
+      if (process.env.AUTH_ENABLED === 'false') {
+        return next();
+      }
+
       const config = configModule.getConfig();
 
       // If no password hash exists, authentication is not configured
@@ -158,8 +162,7 @@ const initialize = async () => {
       res.status(200).json({ status: 'healthy' });
     });
 
-    // Serve image files
-    app.use('/images', express.static(path.join(__dirname, 'images')));
+    app.use('/images', express.static(configModule.getImagePath()));
 
     // Serve any static files built by React
     app.use(express.static(path.join(__dirname, '../client/build')));
@@ -241,6 +244,12 @@ const initialize = async () => {
       // Remove sensitive fields that should never be sent to client
       delete safeConfig.passwordHash;
       delete safeConfig.username;
+
+      safeConfig.isPlatformManaged = {
+        youtubeOutputDirectory: !!process.env.DATA_PATH,
+        plexUrl: !!process.env.PLEX_URL,
+        authEnabled: process.env.AUTH_ENABLED === 'false' ? false : true
+      };
 
       res.json(safeConfig);
     });
@@ -469,6 +478,13 @@ const initialize = async () => {
 
     // Authentication routes (unprotected)
     app.post('/auth/login', loginLimiter, async (req, res) => {
+      if (process.env.AUTH_ENABLED === 'false') {
+        return res.json({
+          token: 'platform-managed-auth',
+          message: 'Authentication is managed by the platform'
+        });
+      }
+
       const { username, password } = req.body;
 
       // Input validation
@@ -611,6 +627,15 @@ const initialize = async () => {
 
     // Setup routes
     app.get('/setup/status', (req, res) => {
+      if (process.env.AUTH_ENABLED === 'false') {
+        return res.json({
+          requiresSetup: false,
+          isLocalhost: true,
+          platformManaged: true,
+          message: 'Authentication is managed by the platform'
+        });
+      }
+
       const config = configModule.getConfig();
       // Try multiple methods to get the client IP
       const clientIP = req.ip ||
