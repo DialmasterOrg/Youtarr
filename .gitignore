@@ -8,6 +8,7 @@ config/channels.list
 config/complete.list
 config/jobs.json
 config/config.json
+config/config.json.*
 database
 server/images
 
@@ -22,6 +23,8 @@ yt-dlp.exe
 client/build
 client/node_modules
 jobs/*
+config/jobs/*
+config/images/*
 
 # misc
 .DS_Store
@@ -33,3 +36,6 @@ jobs/*
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Platform deployment testing
+docker-compose.override.*

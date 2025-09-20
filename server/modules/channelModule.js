@@ -203,13 +203,14 @@ class ChannelModule {
    * @returns {Promise<void>}
    */
   async resizeChannelThumbnail(channelId) {
-    const realImagePath = path.resolve(
-      __dirname,
-      `../images/channelthumb-${channelId}.jpg`
+    const imagePath = configModule.getImagePath();
+    const realImagePath = path.join(
+      imagePath,
+      `channelthumb-${channelId}.jpg`
     );
-    const smallImagePath = path.resolve(
-      __dirname,
-      `../images/channelthumb-${channelId}-small.jpg`
+    const smallImagePath = path.join(
+      imagePath,
+      `channelthumb-${channelId}-small.jpg`
     );
 
     try {
@@ -326,9 +327,10 @@ class ChannelModule {
    * @returns {Promise<void>}
    */
   async downloadChannelThumbnail(channelUrl) {
-    const imagePath = path.resolve(
-      __dirname,
-      '../images/channelthumb-%(channel_id)s.jpg'
+    const imageDir = configModule.getImagePath();
+    const imagePath = path.join(
+      imageDir,
+      'channelthumb-%(channel_id)s.jpg'
     );
 
     await this.executeYtDlpCommand([

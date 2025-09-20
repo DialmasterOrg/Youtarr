@@ -7,7 +7,17 @@ class ConfigModule extends EventEmitter {
   constructor() {
     super();
     this.configPath = path.join(__dirname, '../../config/config.json');
+
+    if (process.env.DATA_PATH && !fs.existsSync(this.configPath)) {
+      console.log('Platform deployment detected (DATA_PATH is set). Auto-creating config.json...');
+      this.createDefaultConfig();
+    }
+
     this.config = JSON.parse(fs.readFileSync(this.configPath));
+
+    if (this.isPlatformDeployment()) {
+      this.ensurePlatformDirectories();
+    }
     this.task = null;
     this.configWatcher = null;
 
@@ -73,6 +83,39 @@ class ConfigModule extends EventEmitter {
     return this.config;
   }
 
+  isPlatformDeployment() {
+    return !!process.env.DATA_PATH;
+  }
+
+  ensurePlatformDirectories() {
+    const imagePath = this.getImagePath();
+    if (!fs.existsSync(imagePath)) {
+      fs.mkdirSync(imagePath, { recursive: true });
+      console.log(`Created platform images directory: ${imagePath}`);
+    }
+
+    // Jobs directory is created by jobModule, but we can ensure parent exists
+    const configDir = path.dirname(this.configPath);
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+      console.log(`Created platform config directory: ${configDir}`);
+    }
+  }
+
+  getImagePath() {
+    if (this.isPlatformDeployment()) {
+      return path.join(__dirname, '../../config/images');
+    }
+    return path.join(__dirname, '../images');
+  }
+
+  getJobsPath() {
+    if (this.isPlatformDeployment()) {
+      return path.join(__dirname, '../../config/jobs');
+    }
+    return path.join(__dirname, '../../jobs');
+  }
+
   updateConfig(newConfig) {
     this.config = newConfig;
     this.saveConfig();
@@ -82,6 +125,58 @@ class ConfigModule extends EventEmitter {
 
   saveConfig() {
     fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2));
+  }
+
+  createDefaultConfig() {
+    // Ensure the config directory exists
+    const configDir = path.dirname(this.configPath);
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+      console.log(`Created config directory: ${configDir}`);
+    }
+
+    // Create default config for platform deployments
+    const defaultConfig = {
+      // Essential settings
+      youtubeOutputDirectory: process.env.DATA_PATH,
+      channelFilesToDownload: 3,
+      preferredResolution: '1080',
+      cronSchedule: '0 */6 * * *', // Every 6 hours
+
+      // Plex settings - use PLEX_URL if provided
+      plexApiKey: '',
+      plexLibrarySection: ''
+    };
+
+    // Add Plex URL if provided by platform
+    if (process.env.PLEX_URL) {
+      defaultConfig.plexUrl = process.env.PLEX_URL;
+    }
+
+    // YouTube API - optional, for browsing channels
+    defaultConfig.youtubeApiKey = '';
+
+    // SponsorBlock settings - disabled by default
+    defaultConfig.sponsorblockEnabled = false;
+    defaultConfig.sponsorblockAction = 'remove';
+    defaultConfig.sponsorblockCategories = {
+      sponsor: true,
+      intro: false,
+      outro: false,
+      selfpromo: true,
+      preview: false,
+      filler: false,
+      interaction: false,
+      music_offtopic: false
+    };
+    defaultConfig.sponsorblockApiUrl = '';
+
+    // Generate UUID for instance identification
+    defaultConfig.uuid = uuidv4();
+
+    // Write the config file
+    fs.writeFileSync(this.configPath, JSON.stringify(defaultConfig, null, 2));
+    console.log(`Auto-created config.json with default settings at: ${this.configPath}`);
   }
 
   watchConfig() {

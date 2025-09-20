@@ -35,7 +35,9 @@ describe('ConfigModule', () => {
       writeFileSync: jest.fn(),
       watch: jest.fn().mockReturnValue({
         close: jest.fn()
-      })
+      }),
+      existsSync: jest.fn().mockReturnValue(true), // Config exists by default
+      mkdirSync: jest.fn()
     }));
 
     // Get the mocked fs for assertions
@@ -339,6 +341,202 @@ describe('ConfigModule', () => {
 
       expect(ConfigModule.config.channelFilesToDownload).toBe(5);
       expect(ConfigModule.config.preferredResolution).toBe('720');
+    });
+  });
+
+  describe('auto-creation for platform deployments', () => {
+    beforeEach(() => {
+      // Reset mocks for auto-creation tests
+      jest.resetModules();
+      jest.clearAllMocks();
+
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'auto-generated-uuid')
+      }));
+    });
+
+    test('should auto-create config when DATA_PATH is set and config does not exist', () => {
+      // Setup: DATA_PATH is set and config doesn't exist
+      process.env.DATA_PATH = '/storage/rclone/storagebox/youtube';
+
+      const mockFs = {
+        existsSync: jest.fn()
+          .mockReturnValueOnce(false) // Config doesn't exist on first check
+          .mockReturnValue(true), // Exists after creation
+        mkdirSync: jest.fn(),
+        writeFileSync: jest.fn(),
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify({
+          youtubeOutputDirectory: '/storage/rclone/storagebox/youtube',
+          channelFilesToDownload: 3,
+          preferredResolution: '1080',
+          uuid: 'auto-generated-uuid'
+        })),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() })
+      };
+
+      jest.doMock('fs', () => mockFs);
+
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      ConfigModule = require('../configModule');
+
+      // Verify auto-creation occurred
+      expect(mockFs.writeFileSync).toHaveBeenCalled();
+      const writtenConfig = JSON.parse(mockFs.writeFileSync.mock.calls[0][1]);
+      expect(writtenConfig.youtubeOutputDirectory).toBe('/storage/rclone/storagebox/youtube');
+      expect(writtenConfig.uuid).toBe('auto-generated-uuid');
+      expect(writtenConfig.cronSchedule).toBe('0 */6 * * *');
+      expect(writtenConfig.plexApiKey).toBe('');
+      expect(consoleSpy).toHaveBeenCalledWith('Platform deployment detected (DATA_PATH is set). Auto-creating config.json...');
+
+      consoleSpy.mockRestore();
+      delete process.env.DATA_PATH;
+    });
+
+    test('should NOT auto-create config when DATA_PATH is set but config exists', () => {
+      // Setup: DATA_PATH is set but config already exists
+      process.env.DATA_PATH = '/storage/rclone/storagebox/youtube';
+
+      const mockFs = {
+        existsSync: jest.fn().mockReturnValue(true), // Config exists
+        mkdirSync: jest.fn(),
+        writeFileSync: jest.fn(),
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(mockConfig)),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() })
+      };
+
+      jest.doMock('fs', () => mockFs);
+
+      ConfigModule = require('../configModule');
+
+      // Verify no auto-creation occurred (writeFileSync only called for UUID, not for config creation)
+      expect(mockFs.mkdirSync).not.toHaveBeenCalled();
+
+      delete process.env.DATA_PATH;
+    });
+
+    test('should NOT auto-create config when DATA_PATH is not set', () => {
+      // Setup: DATA_PATH is not set
+      delete process.env.DATA_PATH;
+
+      const mockFs = {
+        existsSync: jest.fn().mockReturnValue(false), // Config doesn't exist
+        mkdirSync: jest.fn(),
+        writeFileSync: jest.fn(),
+        readFileSync: jest.fn(() => {
+          throw new Error('ENOENT: no such file or directory');
+        }),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() })
+      };
+
+      jest.doMock('fs', () => mockFs);
+
+      // Should throw error when trying to read non-existent config
+      expect(() => {
+        ConfigModule = require('../configModule');
+      }).toThrow('ENOENT');
+
+      // Verify no auto-creation occurred
+      expect(mockFs.mkdirSync).not.toHaveBeenCalled();
+      expect(mockFs.writeFileSync).not.toHaveBeenCalled();
+    });
+
+    test('should create config directory if it does not exist', () => {
+      process.env.DATA_PATH = '/storage/youtube';
+
+      const mockFs = {
+        existsSync: jest.fn()
+          .mockReturnValueOnce(false) // Config doesn't exist
+          .mockReturnValueOnce(false) // Config dir doesn't exist
+          .mockReturnValue(true),
+        mkdirSync: jest.fn(),
+        writeFileSync: jest.fn(),
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify({
+          youtubeOutputDirectory: '/storage/youtube',
+          uuid: 'auto-generated-uuid'
+        })),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() })
+      };
+
+      jest.doMock('fs', () => mockFs);
+
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      ConfigModule = require('../configModule');
+
+      expect(mockFs.mkdirSync).toHaveBeenCalledWith(expect.stringContaining('config'), { recursive: true });
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringMatching(/Created config directory/));
+
+      consoleSpy.mockRestore();
+      delete process.env.DATA_PATH;
+    });
+
+    test('should include PLEX_URL in auto-created config when environment variable is set', () => {
+      process.env.DATA_PATH = '/storage/youtube';
+      process.env.PLEX_URL = 'http://plex:32400';
+
+      const mockFs = {
+        existsSync: jest.fn()
+          .mockReturnValueOnce(false) // Config doesn't exist
+          .mockReturnValue(true),
+        mkdirSync: jest.fn(),
+        writeFileSync: jest.fn(),
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify({
+          youtubeOutputDirectory: '/storage/youtube',
+          plexUrl: 'http://plex:32400',
+          uuid: 'auto-generated-uuid'
+        })),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() })
+      };
+
+      jest.doMock('fs', () => mockFs);
+
+      ConfigModule = require('../configModule');
+
+      const writtenConfig = JSON.parse(mockFs.writeFileSync.mock.calls[0][1]);
+      expect(writtenConfig.plexUrl).toBe('http://plex:32400');
+
+      delete process.env.DATA_PATH;
+      delete process.env.PLEX_URL;
+    });
+  });
+
+  describe('platform deployment detection', () => {
+    test('isPlatformDeployment should return true when DATA_PATH is set', () => {
+      process.env.DATA_PATH = '/storage/youtube';
+      expect(ConfigModule.isPlatformDeployment()).toBe(true);
+      delete process.env.DATA_PATH;
+    });
+
+    test('isPlatformDeployment should return false when DATA_PATH is not set', () => {
+      delete process.env.DATA_PATH;
+      expect(ConfigModule.isPlatformDeployment()).toBe(false);
+    });
+  });
+
+  describe('platform-aware paths', () => {
+    test('getImagePath should return config/images when in platform mode', () => {
+      process.env.DATA_PATH = '/storage/youtube';
+      const imagePath = ConfigModule.getImagePath();
+      expect(imagePath).toContain('config/images');
+      delete process.env.DATA_PATH;
+    });
+
+    test('getImagePath should return server/images when not in platform mode', () => {
+      delete process.env.DATA_PATH;
+      const imagePath = ConfigModule.getImagePath();
+      expect(imagePath).toContain('server/images');
+    });
+
+    test('getJobsPath should return config/jobs when in platform mode', () => {
+      process.env.DATA_PATH = '/storage/youtube';
+      const jobsPath = ConfigModule.getJobsPath();
+      expect(jobsPath).toContain('config/jobs');
+      delete process.env.DATA_PATH;
+    });
+
+    test('getJobsPath should return jobs when not in platform mode', () => {
+      delete process.env.DATA_PATH;
+      const jobsPath = ConfigModule.getJobsPath();
+      expect(jobsPath).toContain('/jobs');
     });
   });
 });

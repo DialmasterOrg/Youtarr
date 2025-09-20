@@ -46,8 +46,8 @@ if (fs.existsSync(jsonPath)) {
   const id = matches
     ? matches[matches.length - 1].replace(/[[\]]/g, '')
     : 'default'; // take the last match and remove brackets or use 'default'
-  const directoryPath = path.resolve(__dirname, '../../jobs/info');
-  const newImagePath = path.resolve(__dirname, '../images');
+  const directoryPath = path.join(configModule.getJobsPath(), 'info');
+  const newImagePath = configModule.getImagePath();
 
   fs.ensureDirSync(directoryPath); // ensures that the directory exists, if it doesn't it will create it
   const newJsonPath = path.join(directoryPath, `${id}.info.json`); // define the new path

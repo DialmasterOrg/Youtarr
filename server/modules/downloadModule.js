@@ -68,8 +68,8 @@ class DownloadModule {
           .map((url) => {
             let id = url.split('youtu.be/')[1].trim();
             let dataPath = path.join(
-              __dirname,
-              `../../jobs/info/${id}.info.json`
+              configModule.getJobsPath(),
+              `info/${id}.info.json`
             );
             console.log('Looking for info.json file at', dataPath);
 
