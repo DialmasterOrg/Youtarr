@@ -250,12 +250,12 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
               borderRadius: 1,
               textAlign: 'center'
             }}>
-              <Typography variant="h6" color="success.contrastText">
+              <Typography variant="body1" color="success.contrastText">
                 ✓ {(() => {
                   const parts = [];
                   parts.push(`${finalSummary.totalDownloaded} new video${finalSummary.totalDownloaded !== 1 ? 's' : ''} downloaded`);
                   if (finalSummary.totalSkipped > 0) {
-                    parts.push(`${finalSummary.totalSkipped} already existed`);
+                    parts.push(`${finalSummary.totalSkipped} already existed or members only`);
                   }
                   if (parts.length === 0) {
                     return 'No new videos to download';

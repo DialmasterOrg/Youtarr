@@ -263,8 +263,6 @@ class DownloadProgressMonitor {
 
     // First detect if the channel name has changed. If so and we are in a channel download, reset the counts.
     // If it's not a channel download, just update the current channel name.
-    // We need to fix this, it should match on a string like: `[download] Downloading playlist: Beast Reacts - Videos`
-    // const metadataMatch = line.match(/\[MetadataParser\] Changed uploader_id to:\s*(.+)/);
     const metadataMatch = line.match(/\[download\] Downloading playlist:\s*(.+?)\s*-\s*Videos/);
     if (metadataMatch) {
       const newChannelName = metadataMatch[1].trim();
@@ -274,6 +272,7 @@ class DownloadProgressMonitor {
         if (this.currentChannelName && this.currentChannelName !== newChannelName) {
           console.log(`Starting new channel: ${newChannelName}, resetting counts`);
           this.videoCount.current = 1;
+          this.videoCount.skippedThisChannel = 0;
           this.currentVideoCompleted = false;
         }
       }
@@ -309,10 +308,10 @@ class DownloadProgressMonitor {
       return true;
     }
 
-    // Check if item was skipped (already in archive)
+    // Check if item was skipped (already in archive or does not pass filter (subscribers only))
     // If so, increment the skipped count for the current channel AND the total skipped count.
-    if (line.includes('has already been recorded in the archive')) {
-      console.log(`Already in archive and currentVideoCompleted is ${this.currentVideoCompleted} and videoCount.current is ${this.videoCount.current}`);
+    if (line.includes('has already been recorded in the archive') || line.includes('does not pass filter')) {
+      console.log(`Already in archive or does not pass filter and currentVideoCompleted is ${this.currentVideoCompleted} and videoCount.current is ${this.videoCount.current}`);
       // Only increment skipped once per video
       if (!this.currentVideoCompleted) {
         this.videoCount.skipped++;
