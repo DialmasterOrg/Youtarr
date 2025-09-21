@@ -27,6 +27,7 @@ const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled 
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
     const pastedText = e.clipboardData.getData('text');
     if (pastedText && (pastedText.includes('youtube.com') || pastedText.includes('youtu.be'))) {
+      e.preventDefault(); // Prevent default paste behavior to avoid duplication
       setInputValue(pastedText);
 
       if (debounceTimerRef.current) {
