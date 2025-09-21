@@ -571,12 +571,6 @@ class DownloadModule {
         const newVideoUrls = this.getNewVideoUrls(initialCount);
         const videoCount = newVideoUrls.length;
 
-        // Debug logging for exit code investigation
-        console.log(`[DEBUG] yt-dlp exit code: ${code}, signal: ${signal}`);
-        console.log(`[DEBUG] Download stats - Completed: ${monitor.videoCount.completed}, Skipped: ${monitor.videoCount.skipped}, Total: ${monitor.videoCount.total}`);
-        console.log(`[DEBUG] New video URLs found: ${videoCount}`);
-        console.log(`[DEBUG] stderr buffer present: ${!!stderrBuffer}`);
-
         let videoData = newVideoUrls
           .map((url) => {
             let id = url.split('youtu.be/')[1].trim();
