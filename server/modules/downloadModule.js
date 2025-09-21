@@ -670,11 +670,17 @@ class DownloadModule {
           });
         }
 
-        // Consider it successful if we have no errors OR if all videos were skipped (nothing to download)
-        const allSkipped = monitor.videoCount.skipped > 0 && monitor.videoCount.completed === 0 && videoCount === 0;
-        const finalState = (code === 0 || allSkipped) ? 'complete' : 'error';
+        // Consider it successful if:
+        // - Exit code is 0 (normal success), OR
+        // - Exit code is 1 with stderr warnings but videos were processed (yt-dlp returns 1 for warnings)
+        // - We found new video files that were downloaded
+        // Only treat as real error if exit code > 1, was killed, or nothing was processed
+        const hasProcessedVideos = (monitor.videoCount.completed > 0 || monitor.videoCount.skipped > 0);
+        const hasDownloadedNewVideos = videoCount > 0;
+        const isWarningOnly = (code === 1 && (hasProcessedVideos || hasDownloadedNewVideos));
+        const finalState = (code === 0 || isWarningOnly) ? 'complete' : 'error';
 
-        console.log(`[DEBUG] Final state determination - code: ${code}, allSkipped: ${allSkipped}, finalState: ${finalState}`);
+        console.log(`[DEBUG] Final state determination - code: ${code}, hasProcessedVideos: ${hasProcessedVideos}, hasDownloadedNewVideos: ${hasDownloadedNewVideos}, isWarningOnly: ${isWarningOnly}, finalState: ${finalState}`);
 
         // Create a more informative final message
         let finalText;
