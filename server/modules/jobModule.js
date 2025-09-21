@@ -495,32 +495,17 @@ class JobModule {
       updatedFields.status === 'Error' ||
       updatedFields.status === 'Complete with Warnings'
     ) {
-      let numVideos = updatedFields.data.videos.length;
-      if (numVideos == 0) {
-        MessageEmitter.emitMessage(
-          'broadcast',
-          null,
-          'download',
-          'downloadProgress',
-          { text: 'Completed: No new videos downloaded.' }
-        );
-      } else {
-        MessageEmitter.emitMessage(
-          'broadcast',
-          null,
-          'download',
-          'downloadProgress',
-          { text: 'Completed: ' + numVideos + ' new videos downloaded.' }
-        );
-      }
+      // downloadModule already sends proper completion messages with finalSummary
+      // Only send the downloadComplete event for backwards compatibility
       MessageEmitter.emitMessage(
         'broadcast',
         null,
         'download',
         'downloadComplete',
-        { text: 'Download job completed.', videos: updatedFields.data.videos }
+        { text: 'Download job completed.', videos: updatedFields.data.videos || [] }
       );
 
+      let numVideos = updatedFields.data?.videos?.length || 0;
       updatedFields.output = numVideos + ' videos.';
       updatedFields.status = 'Complete';
     }

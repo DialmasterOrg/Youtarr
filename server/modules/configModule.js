@@ -67,6 +67,31 @@ class ConfigModule extends EventEmitter {
       this.config.sponsorblockApiUrl = '';
     }
 
+    // Initialize download performance settings if not present
+    if (this.config.downloadSocketTimeoutSeconds === undefined) {
+      this.config.downloadSocketTimeoutSeconds = 30;
+    }
+
+    if (!this.config.downloadThrottledRate) {
+      this.config.downloadThrottledRate = '100K';
+    }
+
+    if (this.config.downloadRetryCount === undefined) {
+      this.config.downloadRetryCount = 2;
+    }
+
+    if (this.config.enableStallDetection === undefined) {
+      this.config.enableStallDetection = true;
+    }
+
+    if (this.config.stallDetectionWindowSeconds === undefined) {
+      this.config.stallDetectionWindowSeconds = 30;
+    }
+
+    if (!this.config.stallDetectionRateThreshold) {
+      this.config.stallDetectionRateThreshold = this.config.downloadThrottledRate || '100K';
+    }
+
     // Check if a UUID exists in the config
     if (!this.config.uuid) {
       // Generate a new UUID
@@ -75,6 +100,9 @@ class ConfigModule extends EventEmitter {
       // Save the new UUID to the config file
       this.saveConfig();
     }
+
+    // Apply migrations after loading and initializing defaults
+    this.config = this.migrateConfig(this.config);
 
     this.watchConfig();
   }
@@ -171,6 +199,14 @@ class ConfigModule extends EventEmitter {
     };
     defaultConfig.sponsorblockApiUrl = '';
 
+    // Download performance settings - defaults for new installs
+    defaultConfig.downloadSocketTimeoutSeconds = 30;
+    defaultConfig.downloadThrottledRate = '100K';
+    defaultConfig.downloadRetryCount = 2;
+    defaultConfig.enableStallDetection = true;
+    defaultConfig.stallDetectionWindowSeconds = 30;
+    defaultConfig.stallDetectionRateThreshold = '100K';
+
     // Generate UUID for instance identification
     defaultConfig.uuid = uuidv4();
 
@@ -200,6 +236,44 @@ class ConfigModule extends EventEmitter {
 
   onConfigChange(callback) {
     this.on('change', callback);
+  }
+
+  migrateConfig(config) {
+    // Migration function to add new fields to existing configs
+    const migrations = {
+      '1.23.0': (cfg) => {
+        const migrated = { ...cfg };
+
+        // Add download performance settings if they don't exist
+        if (migrated.downloadSocketTimeoutSeconds === undefined) {
+          migrated.downloadSocketTimeoutSeconds = 30;
+        }
+        if (!migrated.downloadThrottledRate) {
+          migrated.downloadThrottledRate = '100K';
+        }
+        if (migrated.downloadRetryCount === undefined) {
+          migrated.downloadRetryCount = 2;
+        }
+        if (migrated.enableStallDetection === undefined) {
+          migrated.enableStallDetection = true;
+        }
+        if (migrated.stallDetectionWindowSeconds === undefined) {
+          migrated.stallDetectionWindowSeconds = 30;
+        }
+        if (!migrated.stallDetectionRateThreshold) {
+          migrated.stallDetectionRateThreshold = migrated.downloadThrottledRate || '100K';
+        }
+
+        return migrated;
+      }
+    };
+
+    let migrated = { ...config };
+    Object.values(migrations).forEach(migration => {
+      migrated = migration(migrated);
+    });
+
+    return migrated;
   }
 
   async getStorageStatus() {

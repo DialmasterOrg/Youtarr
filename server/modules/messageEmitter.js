@@ -1,7 +1,7 @@
 const WebSocket = require('ws');
 
-// Create a cache of last download Progress messages sent to broadcast
-let lastDownloadProgressMessages = [];
+// Store only the final state of the last download, not the entire history
+let lastDownloadState = null;
 
 module.exports = {
   emitMessage: (destination, clientId, source, type, payload) => {
@@ -19,9 +19,15 @@ module.exports = {
     }
 
     if (destination === 'broadcast' && type === 'downloadProgress') {
-      lastDownloadProgressMessages.push(message); // Add message to the cache
-      if (lastDownloadProgressMessages.length > 40) { // Keep only last 40 messages
-        lastDownloadProgressMessages.shift();
+      // Only store the final summary or complete/error states, not progress updates
+      if (payload.finalSummary ||
+          (payload.progress && (payload.progress.state === 'complete' || payload.progress.state === 'error'))) {
+        lastDownloadState = message;
+      }
+      // Clear the stored state when a new download starts
+      if (payload.clearPreviousSummary ||
+          (payload.progress && payload.progress.state === 'initiating')) {
+        lastDownloadState = null;
       }
     }
 
@@ -35,5 +41,8 @@ module.exports = {
       }
     });
   },
-  getLastMessages: () => lastDownloadProgressMessages, // Method to retrieve last messages
+  getLastMessages: () => {
+    // Return only the final state if available, not progress history
+    return lastDownloadState ? [lastDownloadState] : [];
+  },
 };
