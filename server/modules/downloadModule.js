@@ -571,6 +571,12 @@ class DownloadModule {
         const newVideoUrls = this.getNewVideoUrls(initialCount);
         const videoCount = newVideoUrls.length;
 
+        // Debug logging for exit code investigation
+        console.log(`[DEBUG] yt-dlp exit code: ${code}, signal: ${signal}`);
+        console.log(`[DEBUG] Download stats - Completed: ${monitor.videoCount.completed}, Skipped: ${monitor.videoCount.skipped}, Total: ${monitor.videoCount.total}`);
+        console.log(`[DEBUG] New video URLs found: ${videoCount}`);
+        console.log(`[DEBUG] stderr buffer present: ${!!stderrBuffer}`);
+
         let videoData = newVideoUrls
           .map((url) => {
             let id = url.split('youtu.be/')[1].trim();
@@ -664,7 +670,11 @@ class DownloadModule {
           });
         }
 
-        const finalState = code === 0 ? 'complete' : 'error';
+        // Consider it successful if we have no errors OR if all videos were skipped (nothing to download)
+        const allSkipped = monitor.videoCount.skipped > 0 && monitor.videoCount.completed === 0 && videoCount === 0;
+        const finalState = (code === 0 || allSkipped) ? 'complete' : 'error';
+
+        console.log(`[DEBUG] Final state determination - code: ${code}, allSkipped: ${allSkipped}, finalState: ${finalState}`);
 
         // Create a more informative final message
         let finalText;
