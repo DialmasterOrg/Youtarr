@@ -72,6 +72,8 @@ function Configuration({ token }: ConfigurationProps) {
     enableStallDetection: true,
     stallDetectionWindowSeconds: 30,
     stallDetectionRateThreshold: '100K',
+    cookiesEnabled: false,
+    customCookiesUploaded: false,
   });
   const [openPlexLibrarySelector, setOpenPlexLibrarySelector] = useState(false);
   const [openPlexAuthDialog, setOpenPlexAuthDialog] = useState(false);
@@ -97,6 +99,12 @@ function Configuration({ token }: ConfigurationProps) {
     severity: 'success' as 'success' | 'error' | 'warning' | 'info'
   });
   const [mobileTooltip, setMobileTooltip] = useState<string | null>(null);
+  const [cookieStatus, setCookieStatus] = useState<{
+    cookiesEnabled: boolean;
+    customCookiesUploaded: boolean;
+    customFileExists: boolean;
+  } | null>(null);
+  const [uploadingCookie, setUploadingCookie] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -148,6 +156,22 @@ function Configuration({ token }: ConfigurationProps) {
       setDidInitialPlexCheck(true);
     }
   }, [didInitialPlexCheck, config.plexIP, config.plexApiKey, checkPlexConnection]);
+
+  // Fetch cookie status
+  useEffect(() => {
+    if (token) {
+      fetch('/api/cookies/status', {
+        headers: {
+          'x-access-token': token,
+        },
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          setCookieStatus(data);
+        })
+        .catch((error) => console.error('Error fetching cookie status:', error));
+    }
+  }, [token]);
 
   const testPlexConnection = async () => {
     if (!config.plexIP || !config.plexApiKey) {
@@ -407,6 +431,90 @@ function Configuration({ token }: ConfigurationProps) {
     saveConfig();
   };
 
+  const handleCookieUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadingCookie(true);
+    const formData = new FormData();
+    formData.append('cookieFile', file);
+
+    try {
+      const response = await fetch('/api/cookies/upload', {
+        method: 'POST',
+        headers: {
+          'x-access-token': token || '',
+        },
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCookieStatus(data.cookieStatus);
+        setConfig(prev => ({
+          ...prev,
+          cookiesEnabled: data.cookieStatus.cookiesEnabled,
+          customCookiesUploaded: data.cookieStatus.customCookiesUploaded,
+        }));
+        setSnackbar({
+          open: true,
+          message: 'Cookie file uploaded successfully',
+          severity: 'success'
+        });
+      } else {
+        const error = await response.json();
+        setSnackbar({
+          open: true,
+          message: error.error || 'Failed to upload cookie file',
+          severity: 'error'
+        });
+      }
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: 'Failed to upload cookie file',
+        severity: 'error'
+      });
+    } finally {
+      setUploadingCookie(false);
+      // Reset the input
+      event.target.value = '';
+    }
+  };
+
+  const handleDeleteCookies = async () => {
+    try {
+      const response = await fetch('/api/cookies', {
+        method: 'DELETE',
+        headers: {
+          'x-access-token': token || '',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCookieStatus(data.cookieStatus);
+        setConfig(prev => ({
+          ...prev,
+          customCookiesUploaded: false,
+        }));
+        setSnackbar({
+          open: true,
+          message: 'Custom cookies deleted',
+          severity: 'success'
+        });
+      } else {
+        throw new Error('Failed to delete cookies');
+      }
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: 'Failed to delete cookies',
+        severity: 'error'
+      });
+    }
+  };
+
   const frequencyMapping: { [key: string]: string } = {
     'Every 15 minutes': '*/15 * * * *',
     'Every 30 minutes': '*/30 * * * *',
@@ -452,6 +560,8 @@ function Configuration({ token }: ConfigurationProps) {
       'enableStallDetection',
       'stallDetectionWindowSeconds',
       'stallDetectionRateThreshold',
+      'cookiesEnabled',
+      'customCookiesUploaded',
     ];
     const changed = keysToCompare.some((k) => {
       return (config as any)[k] !== (initialConfig as any)[k];
@@ -896,6 +1006,119 @@ function Configuration({ token }: ConfigurationProps) {
                     ))}
                   </Grid>
                 </Grid>
+              </>
+            )}
+          </Grid>
+        </AccordionDetails>
+      </Accordion>
+
+      <Accordion defaultExpanded={false} sx={{ mb: 2 }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Typography variant="h6" sx={{ flexGrow: 1 }}>
+            Cookie Configuration
+          </Typography>
+          <Chip
+            label={config.cookiesEnabled ? "Cookies Enabled" : "Cookies Disabled"}
+            color={config.cookiesEnabled ? "success" : "default"}
+            size="small"
+            sx={{ mr: 1 }}
+          />
+        </AccordionSummary>
+        <AccordionDetails>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <AlertTitle>Security Warning</AlertTitle>
+            <Typography variant="body2" paragraph>
+              Cookie files contain authentication information for your Google account.
+              We strongly recommend using a throwaway account instead of your main account.
+            </Typography>
+            <Typography variant="body2">
+              Learn more about cookie security:{' '}
+              <a href="https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies"
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 style={{ color: 'inherit', textDecoration: 'underline' }}>
+                yt-dlp Cookie FAQ
+              </a>
+            </Typography>
+          </Alert>
+
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Typography variant="body2">
+              Cookies help bypass YouTube's bot detection. If you encounter "Sign in to confirm you're not a bot" errors,
+              enabling cookies can resolve the issue.
+            </Typography>
+          </Alert>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={config.cookiesEnabled}
+                    onChange={(e) => setConfig({ ...config, cookiesEnabled: e.target.checked })}
+                  />
+                }
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    Enable Cookies
+                    {getInfoIcon('Use cookies to bypass YouTube bot detection and access age-restricted content.')}
+                  </Box>
+                }
+              />
+            </Grid>
+
+            {config.cookiesEnabled && (
+              <>
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Button
+                        variant="contained"
+                        component="label"
+                        disabled={uploadingCookie}
+                      >
+                        {uploadingCookie ? 'Uploading...' : 'Upload Cookie File'}
+                        <input
+                          type="file"
+                          hidden
+                          accept=".txt,text/plain"
+                          onChange={handleCookieUpload}
+                        />
+                      </Button>
+                      {cookieStatus?.customFileExists && (
+                        <>
+                          <Chip
+                            label="Custom cookies uploaded"
+                            color="success"
+                            size="small"
+                          />
+                          <Button
+                            variant="outlined"
+                            color="error"
+                            size="small"
+                            onClick={handleDeleteCookies}
+                          >
+                            Delete Custom Cookies
+                          </Button>
+                        </>
+                      )}
+                    </Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Upload a Netscape format cookie file exported from your browser.
+                      File must be less than 1MB.
+                    </Typography>
+                  </Box>
+                </Grid>
+
+                {cookieStatus && (
+                  <Grid item xs={12}>
+                    <Typography variant="caption" color="text.secondary">
+                      Status: {cookieStatus.customFileExists ?
+                        'Using custom cookies' :
+                        'No cookie file uploaded'}
+                    </Typography>
+                  </Grid>
+                )}
               </>
             )}
           </Grid>

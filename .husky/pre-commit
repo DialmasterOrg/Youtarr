@@ -1,4 +1,21 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
+echo "🔍 Running linter..."
 npm run lint
+if [ $? -ne 0 ]; then
+  echo "❌ Linting failed. Please fix the errors before committing."
+  exit 1
+fi
+
+echo "🧪 Running tests..."
+cd client && CI=true npm test -- --watchAll=false --passWithNoTests --silent
+TEST_RESULT=$?
+cd ..
+
+if [ $TEST_RESULT -ne 0 ]; then
+  echo "❌ Tests failed. Please fix the failing tests before committing."
+  exit 1
+fi
+
+echo "✅ All checks passed!"

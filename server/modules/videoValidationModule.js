@@ -218,8 +218,17 @@ class VideoValidationModule {
 
       return response;
     } catch (error) {
+      // Check for bot detection error
+      if (error.code === 'COOKIES_REQUIRED' ||
+          error.message.includes('Bot detection encountered')) {
+        return {
+          isValidUrl: false,
+          error: 'Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.',
+          errorCode: 'COOKIES_REQUIRED'
+        };
+      }
       // Check for members-only video error
-      if (error.message.includes('members-only') ||
+      else if (error.message.includes('members-only') ||
           error.message.includes('Join this channel to get access')) {
         // Extract video ID from error message if possible, or use the one we parsed from URL
         const videoIdMatch = error.message.match(/\[youtube\]\s+([a-zA-Z0-9_-]{11}):/);

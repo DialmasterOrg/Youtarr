@@ -13,10 +13,21 @@ class YtDlpRunner {
    * @param {Object} options - Options for execution
    * @param {number} options.timeoutMs - Timeout in milliseconds (default: 10000)
    * @param {string} options.pipeToFile - Optional file path to pipe output to
+   * @param {boolean} options.useCookies - Whether to use cookies if configured (default: true)
    * @returns {Promise<string>} - stdout output or empty string if piped to file
    */
   async run(args, options = {}) {
-    const { timeoutMs = this.defaultTimeout, pipeToFile } = options;
+    const { timeoutMs = this.defaultTimeout, pipeToFile, useCookies = true } = options;
+
+    // Add cookies if configured and requested
+    let finalArgs = [...args];
+    if (useCookies) {
+      const configModule = require('./configModule');
+      const cookiesPath = configModule.getCookiesPath();
+      if (cookiesPath) {
+        finalArgs = ['--cookies', cookiesPath, ...args];
+      }
+    }
 
     return new Promise((resolve, reject) => {
       if (!Array.isArray(args)) {
@@ -24,7 +35,7 @@ class YtDlpRunner {
         return;
       }
 
-      const ytDlpProcess = spawn('yt-dlp', args, {
+      const ytDlpProcess = spawn('yt-dlp', finalArgs, {
         shell: false,
         timeout: timeoutMs
       });
@@ -64,7 +75,13 @@ class YtDlpRunner {
           fileStream.end();
         }
 
-        if (code === 0) {
+        // Check for bot detection
+        if (stderr.includes('Sign in to confirm you\'re not a bot') ||
+            stderr.includes('Sign in to confirm that you\'re not a bot')) {
+          const error = new Error('Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.');
+          error.code = 'COOKIES_REQUIRED';
+          reject(error);
+        } else if (code === 0) {
           resolve(stdout);
         } else if (code === null) {
           reject(new Error(`yt-dlp process timed out after ${timeoutMs}ms`));

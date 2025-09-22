@@ -92,6 +92,15 @@ class ConfigModule extends EventEmitter {
       this.config.stallDetectionRateThreshold = this.config.downloadThrottledRate || '100K';
     }
 
+    // Initialize cookie configuration if not present
+    if (this.config.cookiesEnabled === undefined) {
+      this.config.cookiesEnabled = false;
+    }
+
+    if (this.config.customCookiesUploaded === undefined) {
+      this.config.customCookiesUploaded = false;
+    }
+
     // Check if a UUID exists in the config
     if (!this.config.uuid) {
       // Generate a new UUID
@@ -207,6 +216,10 @@ class ConfigModule extends EventEmitter {
     defaultConfig.stallDetectionWindowSeconds = 30;
     defaultConfig.stallDetectionRateThreshold = '100K';
 
+    // Cookie configuration - disabled by default
+    defaultConfig.cookiesEnabled = false;
+    defaultConfig.customCookiesUploaded = false;
+
     // Generate UUID for instance identification
     defaultConfig.uuid = uuidv4();
 
@@ -265,6 +278,19 @@ class ConfigModule extends EventEmitter {
         }
 
         return migrated;
+      },
+      '1.24.0': (cfg) => {
+        const migrated = { ...cfg };
+
+        // Add cookie configuration if it doesn't exist
+        if (migrated.cookiesEnabled === undefined) {
+          migrated.cookiesEnabled = false;
+        }
+        if (migrated.customCookiesUploaded === undefined) {
+          migrated.customCookiesUploaded = false;
+        }
+
+        return migrated;
       }
     };
 
@@ -274,6 +300,71 @@ class ConfigModule extends EventEmitter {
     });
 
     return migrated;
+  }
+
+  // Cookie helper methods
+  getCookiesPath() {
+    if (!this.config.cookiesEnabled || !this.config.customCookiesUploaded) {
+      return null;
+    }
+
+    const configDir = path.dirname(this.configPath);
+    const cookiePath = path.join(configDir, 'cookies.user.txt');
+
+    // Check if the file exists
+    if (fs.existsSync(cookiePath)) {
+      return cookiePath;
+    }
+
+    // Log warning if cookies are enabled but file is missing
+    console.warn(`Cookie file not found: ${cookiePath}. Falling back to no cookies.`);
+    return null;
+  }
+
+  getCookiesStatus() {
+    const configDir = path.dirname(this.configPath);
+    const customPath = path.join(configDir, 'cookies.user.txt');
+    const customExists = fs.existsSync(customPath);
+
+    return {
+      cookiesEnabled: this.config.cookiesEnabled,
+      customCookiesUploaded: this.config.customCookiesUploaded,
+      customFileExists: customExists
+    };
+  }
+
+  writeCustomCookiesFile(buffer) {
+    const configDir = path.dirname(this.configPath);
+    const customPath = path.join(configDir, 'cookies.user.txt');
+
+    // Write the file
+    fs.writeFileSync(customPath, buffer);
+
+    // Set restrictive permissions (owner read/write only)
+    fs.chmodSync(customPath, 0o600);
+
+    // Update config
+    this.config.customCookiesUploaded = true;
+    this.config.cookiesEnabled = true;
+    this.saveConfig();
+
+    return customPath;
+  }
+
+  deleteCustomCookiesFile() {
+    const configDir = path.dirname(this.configPath);
+    const customPath = path.join(configDir, 'cookies.user.txt');
+
+    if (fs.existsSync(customPath)) {
+      fs.unlinkSync(customPath);
+    }
+
+    // Update config
+    this.config.customCookiesUploaded = false;
+    // Keep cookiesEnabled state unchanged
+    this.saveConfig();
+
+    return true;
   }
 
   async getStorageStatus() {
