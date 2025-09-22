@@ -488,7 +488,7 @@ class DownloadModule {
     // Calculate process timeout based on configuration
     const processTimeoutMs = Math.max(
       config.downloadSocketTimeoutSeconds * 1000 * (config.downloadRetryCount + 1),
-      5 * 60 * 1000
+      20 * 60 * 1000
     );
 
     return new Promise((resolve, reject) => {
