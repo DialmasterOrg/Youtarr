@@ -26,6 +26,76 @@ Youtarr uses Docker Compose with two containers:
   - `youtarr_db_data:/var/lib/mysql` - Database persistence
 - **Character Set**: utf8mb4 (full Unicode support)
 
+## Configuration Setup
+
+### Automatic Config Creation (NEW)
+
+Starting with version 1.23.0, Youtarr now **automatically creates** a `config/config.json` file on first boot if one doesn't exist. This improves the Docker experience for users who manually configure their containers.
+
+#### Two Setup Methods
+
+1. **Using setup.sh + start.sh (Recommended)**
+   - Run `./setup.sh` to configure your YouTube video directory
+   - Script creates `config.json` with your chosen host path
+   - Use `./start.sh` to start containers (reads path from config and sets volume mount)
+   - Use `./stop.sh` to stop containers
+   - **UI Behavior**: YouTube Output Directory field is **editable** - changes require restart via `./start.sh`
+
+2. **Manual Docker Configuration (docker-compose directly)**
+   - Skip setup.sh entirely
+   - Edit `docker-compose.yml` to hardcode your volume mount:
+     ```yaml
+     volumes:
+       - /your/host/path:/usr/src/app/data  # Replace ${YOUTUBE_OUTPUT_DIR} with your path
+     ```
+   - Start containers with `docker compose up -d`
+   - Container auto-creates `config.json` with `/usr/src/app/data` (container's internal path)
+   - **UI Behavior**: YouTube Output Directory field is **read-only** - shows "Docker Volume" chip
+
+#### How Volume Mounts Work
+
+The actual storage location depends on your setup method:
+
+| Setup Method | Volume Mount Source | Config Value | UI Behavior |
+|--------------|-------------------|--------------|-------------|
+| setup.sh + start.sh | `${YOUTUBE_OUTPUT_DIR}` from config.json | Your host path (e.g., `/mnt/videos`) | Editable |
+| Manual docker-compose | Hardcoded in docker-compose.yml | `/usr/src/app/data` (container path) | Read-only |
+
+#### What You'll See in the UI
+
+**If you used setup.sh:**
+- YouTube Output Directory field is editable
+- Shows your actual host path
+- Can be changed (requires restart with `./start.sh`)
+
+**If you manually configured docker-compose.yml:**
+- YouTube Output Directory field shows "Docker Volume" chip
+- Field is disabled (read-only) showing `/usr/src/app/data`
+- Helper text: "This path is configured by your Docker volume mount. To change where videos are saved, update the volume mount in your docker-compose.yml file."
+
+### Setup Script for Network Storage
+
+The `setup.sh` script validates that your chosen directory exists and is accessible. When using network storage:
+
+1. **Mount your network storage BEFORE running setup.sh**
+2. **Enter the full path to the mounted directory** when prompted
+3. **The script will verify the directory exists** and is writable
+
+Examples:
+- Linux with NFS mount: `/mnt/nas/youtube`
+- Windows with mapped drive: `Z:/Youtube_videos`
+- macOS with SMB mount: `/Users/username/nas-youtube`
+- Docker volume mount: `/path/to/mounted/volume`
+
+If you need to change the directory later:
+```bash
+# Re-run setup to change directory
+./setup.sh
+
+# Or manually edit config/config.json
+# Update "youtubeOutputDirectory" value
+```
+
 ## Docker Commands
 
 ### Starting and Stopping
@@ -120,6 +190,7 @@ When `DATA_PATH` is set:
    - Video output directory set to `DATA_PATH` value
    - Plex URL set to `PLEX_URL` if provided
    - Sensible defaults for all other settings
+   - **Note**: This platform behavior is unchanged - DATA_PATH deployments continue to work exactly as before
 
 2. **Consolidated Storage**: All persistent data is stored under `/app/config/`:
    - `/app/config/config.json` - Configuration file
@@ -191,6 +262,115 @@ spec:
 - **Videos**: User-specified directory (set via setup.sh)
 - **Images/Jobs**: `./server/images` and `./jobs` directories
 
+### Network Storage (NAS) Configuration
+
+Youtarr fully supports network-attached storage for your media library. This allows Youtarr and Plex to run on separate machines while sharing the same media storage.
+
+#### Requirements
+- Network share accessible from the Docker host
+- Write permissions for Youtarr
+- Read permissions for Plex (can be on a different machine)
+
+#### Mounting NAS/Network Shares
+
+**Linux Example (NFS)**:
+```bash
+# Create mount point
+sudo mkdir -p /mnt/nas/youtube
+
+# Mount NFS share
+sudo mount -t nfs nas-server:/volume/youtube /mnt/nas/youtube
+
+# Make persistent (add to /etc/fstab)
+nas-server:/volume/youtube /mnt/nas/youtube nfs defaults 0 0
+```
+
+**Linux Example (SMB/CIFS)**:
+```bash
+# Create mount point
+sudo mkdir -p /mnt/nas/youtube
+
+# Mount SMB share (create credentials file for security)
+echo "username=your_username" > ~/.smbcredentials
+echo "password=your_password" >> ~/.smbcredentials
+echo "domain=your_domain" >> ~/.smbcredentials
+chmod 600 ~/.smbcredentials
+
+# Mount
+sudo mount -t cifs //nas-server/youtube /mnt/nas/youtube -o credentials=~/.smbcredentials,uid=1000,gid=1000
+
+# Make persistent (add to /etc/fstab)
+//nas-server/youtube /mnt/nas/youtube cifs credentials=/home/user/.smbcredentials,uid=1000,gid=1000 0 0
+```
+
+**Windows Example (Network Drive)**:
+```bash
+# Map network drive in Windows
+net use Z: \\nas-server\youtube /persistent:yes
+
+# Use the mapped drive path in setup.sh
+# Enter: Z:/Youtube_videos
+```
+
+**macOS Example (SMB)**:
+```bash
+# Mount via Finder or command line
+mkdir ~/nas-youtube
+mount_smbfs //username@nas-server/youtube ~/nas-youtube
+
+# Use the mount path in setup.sh
+# Enter: /Users/username/nas-youtube
+```
+
+#### Docker Compose Configuration
+
+Once your network storage is mounted on the host, configure it in docker-compose.yml:
+
+```yaml
+services:
+  youtarr:
+    volumes:
+      # Local mount path : Container path
+      - /mnt/nas/youtube:/usr/src/app/data
+      # Or for Windows with mapped drive
+      - Z:/Youtube_videos:/usr/src/app/data
+```
+
+#### Troubleshooting NAS Issues
+
+**Permission Denied Errors**:
+- Ensure the Docker user has write permissions to the NAS mount
+- On Linux, check uid/gid in mount options match Docker container user
+- Test write permissions: `touch /mnt/nas/youtube/test.txt`
+
+**Mount Not Accessible in Container**:
+```bash
+# Verify mount is active on host
+mount | grep nas
+
+# Test access from container
+docker exec youtarr ls -la /usr/src/app/data
+
+# Check permissions
+docker exec youtarr touch /usr/src/app/data/test.txt
+```
+
+**Slow Performance**:
+- Check network connectivity between Docker host and NAS
+- Consider mounting with performance options:
+  ```bash
+  # NFS with async writes
+  mount -t nfs -o async,noatime nas-server:/youtube /mnt/nas/youtube
+
+  # SMB with larger buffer
+  mount -t cifs -o cache=loose,rsize=130048,wsize=130048 //nas-server/youtube /mnt/nas/youtube
+  ```
+
+**Plex Can't See Files**:
+- Verify Plex has read access to the same network path
+- Ensure consistent file paths between Youtarr and Plex
+- Check file permissions after download (should be readable by Plex user)
+
 ### Backup and Restore
 
 **Backup database**:
@@ -230,9 +410,26 @@ The application container includes health checks:
 
 ### Plex Server Communication
 
-When running in Docker, use these addresses for Plex:
+#### Same Machine Setup
+When Youtarr and Plex run on the same machine:
 - `host.docker.internal` - Recommended for Docker Desktop
-- Host machine's IP address - For Docker Engine on Linux
+- `172.17.0.1` - Default Docker bridge IP on Linux
+- Host machine's IP address - Works for any setup
+
+#### Separate Machine Setup
+When Youtarr and Plex run on different machines:
+- Use Plex server's IP address or hostname
+- Example: `http://192.168.1.100:32400` or `http://plex-server.local:32400`
+- Ensure network connectivity between machines
+- Both machines must have access to the same media storage location
+
+#### Testing Plex Connection
+```bash
+# From Youtarr container
+docker exec youtarr curl -I http://your-plex-server:32400/web
+
+# Should return HTTP 200 or 301
+```
 
 ## Upgrading
 

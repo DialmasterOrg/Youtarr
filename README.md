@@ -110,7 +110,11 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 ### For Plex Users (Optional)
 - **Library Type**: Must be configured as "Other Videos" with "Personal Media" agent
 - **API Key**: Get it automatically via Configuration page or [manually](https://www.plexopedia.com/plex-media-server/general/plex-token/)
-- **Network Access**: Run on same machine as Plex server (the app must be able to write to the Plex library directory)
+- **Network Access**: Youtarr and Plex can run on the same or separate machines as long as:
+  - Youtarr can write to the media location (local or network storage)
+  - Plex can read from the same media location
+  - Youtarr can reach the Plex API over the network
+- **Network Storage**: Supports NAS, network shares, and mounted volumes
 - **Docker on Windows**: Use `host.docker.internal` as your Plex server address
 
 ### For Platform Deployments (Elfhosted, Kubernetes, etc.)
