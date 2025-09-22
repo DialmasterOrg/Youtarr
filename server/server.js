@@ -338,6 +338,132 @@ const initialize = async () => {
       }
     });
 
+    // Channel Profile Management Endpoints
+    const channelProfileModule = require('./modules/channelProfileModule');
+
+    // Get all profiles for a channel
+    app.get('/api/channels/:id/profiles', verifyToken, async (req, res) => {
+      try {
+        const channelId = parseInt(req.params.id);
+        const profiles = await channelProfileModule.getProfilesForChannel(channelId);
+        res.json(profiles);
+      } catch (error) {
+        console.error('Error fetching channel profiles:', error);
+        res.status(500).json({ error: 'Failed to fetch channel profiles' });
+      }
+    });
+
+    // Create a new profile for a channel
+    app.post('/api/channels/:id/profiles', verifyToken, async (req, res) => {
+      try {
+        const channelId = parseInt(req.params.id);
+        const { filters, ...profileData } = req.body;
+        const profile = await channelProfileModule.createProfile(channelId, profileData, filters);
+        res.json(profile);
+      } catch (error) {
+        console.error('Error creating channel profile:', error);
+        res.status(500).json({ error: 'Failed to create channel profile' });
+      }
+    });
+
+    // Update an existing profile
+    app.put('/api/profiles/:id', verifyToken, async (req, res) => {
+      try {
+        const profileId = parseInt(req.params.id);
+        const { filters, ...profileData } = req.body;
+        const profile = await channelProfileModule.updateProfile(profileId, profileData, filters);
+        res.json(profile);
+      } catch (error) {
+        console.error('Error updating channel profile:', error);
+        res.status(500).json({ error: 'Failed to update channel profile' });
+      }
+    });
+
+    // Delete a profile
+    app.delete('/api/profiles/:id', verifyToken, async (req, res) => {
+      try {
+        const profileId = parseInt(req.params.id);
+        const success = await channelProfileModule.deleteProfile(profileId);
+        if (success) {
+          res.json({ success: true });
+        } else {
+          res.status(404).json({ error: 'Profile not found' });
+        }
+      } catch (error) {
+        console.error('Error deleting channel profile:', error);
+        res.status(500).json({ error: 'Failed to delete channel profile' });
+      }
+    });
+
+    // Test profile filters against existing videos
+    app.post('/api/profiles/:id/test', verifyToken, async (req, res) => {
+      try {
+        const profileId = parseInt(req.params.id);
+        const matches = await channelProfileModule.testProfileFilters(profileId);
+        res.json({ matches, count: matches.length });
+      } catch (error) {
+        console.error('Error testing profile filters:', error);
+        res.status(500).json({ error: 'Failed to test profile filters' });
+      }
+    });
+
+    // Preview naming for matched videos
+    app.get('/api/profiles/:id/preview', verifyToken, async (req, res) => {
+      try {
+        const profileId = parseInt(req.params.id);
+        const matches = await channelProfileModule.testProfileFilters(profileId);
+        const preview = matches.slice(0, 10); // Return first 10 matches as preview
+        res.json({ preview, totalCount: matches.length });
+      } catch (error) {
+        console.error('Error getting naming preview:', error);
+        res.status(500).json({ error: 'Failed to get naming preview' });
+      }
+    });
+
+    // Browse directories for destination path selection
+    app.get('/api/browse-directories', verifyToken, async (req, res) => {
+      const fs = require('fs').promises;
+
+      try {
+        const currentPath = req.query.path || configModule.directoryPath || '/';
+
+        // Security check - ensure we're not going outside allowed directories
+        const resolvedPath = path.resolve(currentPath);
+
+        // Read directory contents
+        const items = await fs.readdir(resolvedPath, { withFileTypes: true });
+
+        // Filter to only directories and add metadata
+        const directories = await Promise.all(
+          items
+            .filter(item => item.isDirectory())
+            .filter(item => !item.name.startsWith('.')) // Hide hidden directories
+            .map(async (item) => ({
+              name: item.name,
+              path: path.join(resolvedPath, item.name),
+              isWritable: true // You could add actual permission check here
+            }))
+        );
+
+        // Sort directories alphabetically
+        directories.sort((a, b) => a.name.localeCompare(b.name));
+
+        // Get parent directory if not at root
+        const parentPath = path.dirname(resolvedPath);
+        const canGoUp = resolvedPath !== parentPath;
+
+        res.json({
+          currentPath: resolvedPath,
+          parentPath: canGoUp ? parentPath : null,
+          directories,
+          defaultPath: configModule.directoryPath
+        });
+      } catch (error) {
+        console.error('Error browsing directories:', error);
+        res.status(500).json({ error: 'Failed to browse directories' });
+      }
+    });
+
     app.get('/runningjobs', verifyToken, (req, res) => {
       const runningJobs = jobModule.getRunningJobs();
       res.json(runningJobs);

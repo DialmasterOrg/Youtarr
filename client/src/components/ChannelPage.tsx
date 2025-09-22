@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Card, CardContent, Grid, Typography, Button } from '@mui/material';
+import { Card, CardContent, Grid, Typography, Button, Tabs, Tab, Box } from '@mui/material';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { Channel } from '../types/Channel';
 import ChannelVideos from './ChannelPage/ChannelVideos';
+import ChannelProfileManager from './ChannelProfiles/ChannelProfileManager';
 import KeyboardDoubleArrowLeft from '@mui/icons-material/KeyboardDoubleArrowLeft';
+import { VideoLibrary, Settings } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
 interface ChannelPageProps {
@@ -17,6 +19,7 @@ function ChannelPage({ token }: ChannelPageProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [channel, setChannel] = useState<Channel | null>(null);
+  const [tabValue, setTabValue] = useState(0);
   const { channel_id } = useParams();
   const navigate = useNavigate();
 
@@ -42,6 +45,10 @@ function ChannelPage({ token }: ChannelPageProps) {
       .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1">$1</a>')
       .replace(/(?:\r\n|\r|\n)/g, '<br />'); // replace newlines with <br />
   }
+
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
 
   return (
     <>
@@ -91,7 +98,30 @@ function ChannelPage({ token }: ChannelPageProps) {
         </CardContent>
       </Card>
 
-      <ChannelVideos token={token} />
+      {/* Tabs for channel content */}
+      <Card elevation={8}>
+        <Tabs value={tabValue} onChange={handleTabChange} variant="fullWidth">
+          <Tab icon={<VideoLibrary />} label="Videos" />
+          <Tab icon={<Settings />} label="Series Configuration" />
+        </Tabs>
+
+        <Box sx={{ p: 2 }}>
+          {tabValue === 0 && (
+            <ChannelVideos token={token} />
+          )}
+          {tabValue === 1 && channel?.db_id && (
+            <ChannelProfileManager
+              channelId={channel.db_id}
+              token={token || ''}
+            />
+          )}
+          {tabValue === 1 && !channel?.db_id && (
+            <Typography color="textSecondary" align="center">
+              Channel information is loading...
+            </Typography>
+          )}
+        </Box>
+      </Card>
     </>
   );
 }

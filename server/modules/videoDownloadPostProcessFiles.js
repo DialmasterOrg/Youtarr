@@ -2,22 +2,31 @@ const fs = require('fs-extra');
 const path = require('path');
 const { execSync } = require('child_process');
 const configModule = require('./configModule');
+const channelProfileModule = require('./channelProfileModule');
+const nfoGeneratorModule = require('./nfoGeneratorModule');
+const { Channel, Video, VideoProfileMapping } = require('../models');
 
-const videoPath = process.argv[2]; // get the video file path
-const parsedPath = path.parse(videoPath);
-// Note that the mp4 video itself contains embedded metadata for Plex
-// We only need the .info.json for Youtarr to use
-const jsonPath = path.format({
-  dir: parsedPath.dir,
-  name: parsedPath.name,
-  ext: '.info.json'
-});
+async function processVideo() {
+  const videoPath = process.argv[2]; // get the video file path
+  const parsedPath = path.parse(videoPath);
 
-const videoDirectory = path.dirname(videoPath);
-const imagePath = path.join(videoDirectory, 'poster.jpg'); // assume the image thumbnail is named 'poster.jpg'
+  // Note that the mp4 video itself contains embedded metadata for Plex
+  // We only need the .info.json for Youtarr to use
+  const jsonPath = path.format({
+    dir: parsedPath.dir,
+    name: parsedPath.name,
+    ext: '.info.json'
+  });
 
-if (fs.existsSync(jsonPath)) {
-  // Read the JSON file to get the upload_date
+  const videoDirectory = path.dirname(videoPath);
+  const imagePath = path.join(videoDirectory, 'poster.jpg'); // assume the image thumbnail is named 'poster.jpg'
+
+  if (!fs.existsSync(jsonPath)) {
+    console.log('No .info.json file found, skipping post-processing');
+    return;
+  }
+
+  // Read the JSON file to get video metadata
   const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
 
   // Parse the upload_date (format: YYYYMMDD) into a Date object
@@ -41,30 +50,269 @@ if (fs.existsSync(jsonPath)) {
     }
   }
 
-  const filename = path.basename(jsonPath, '.info.json'); // get the filename
-  const matches = filename.match(/\[(.*?)\]/g); // Extract all occurrences of video IDs enclosed in brackets
+  // Extract video ID
+  const filename = path.basename(jsonPath, '.info.json');
+  const matches = filename.match(/\[(.*?)\]/g);
   const id = matches
     ? matches[matches.length - 1].replace(/[[\]]/g, '')
-    : 'default'; // take the last match and remove brackets or use 'default'
+    : 'default';
+
+  try {
+    // Check if this channel has series profiles configured
+    const channel = await Channel.findOne({
+      where: { channel_id: jsonData.channel_id }
+    });
+
+    if (channel) {
+      // Check for series profiles
+      const videoData = {
+        title: jsonData.title,
+        duration: jsonData.duration,
+        description: jsonData.description,
+        originalDate: jsonData.upload_date,
+        youtubeId: id,
+        youTubeChannelName: jsonData.uploader,
+        youTubeVideoName: jsonData.title,
+        channel_id: jsonData.channel_id
+      };
+
+      const matchedProfile = await channelProfileModule.evaluateVideoAgainstProfiles(
+        videoData,
+        channel.id
+      );
+
+      if (matchedProfile && matchedProfile.enabled) {
+
+        // Store the original JSON in jobs directory FIRST
+        storeOriginalJson(jsonPath, id);
+
+        // Process with series organization
+        await processWithSeriesProfile(
+          videoPath,
+          imagePath,
+          jsonData,
+          matchedProfile,
+          uploadDate
+        );
+
+        return;
+      }
+    }
+
+    // No profile matched or no profiles configured - use original processing
+    console.log('No series profile matched, using default processing');
+    await originalProcessing(
+      videoPath,
+      imagePath,
+      jsonPath,
+      id,
+      uploadDate
+    );
+
+  } catch (error) {
+    console.error('Error in series profile processing:', error);
+    // Fallback to original processing
+    await originalProcessing(
+      videoPath,
+      imagePath,
+      jsonPath,
+      id,
+      uploadDate
+    );
+  }
+}
+
+async function processWithSeriesProfile(videoPath, imagePath, jsonData, profile, uploadDate) {
+  try {
+    // Get next episode number
+    const episodeNumber = await channelProfileModule.getNextEpisodeNumber(profile.id);
+    const seasonNumber = profile.is_default ? 0 : profile.season_number;
+
+    // Get clean title - remove channel name if present
+    let cleanTitle = channelProfileModule.getCleanTitle(
+      jsonData.title,
+      profile.filters
+    );
+
+    // Remove channel name from title if it appears at the beginning
+    const channelName = jsonData.uploader;
+    if (cleanTitle.toLowerCase().startsWith(channelName.toLowerCase())) {
+      cleanTitle = cleanTitle.substring(channelName.length).replace(/^[-–—:\s]+/, '').trim();
+    }
+
+    // Parse date for template variables
+    let year = '', month = '', day = '';
+    if (jsonData.upload_date) {
+      const dateStr = jsonData.upload_date.toString();
+      year = dateStr.substring(0, 4);
+      month = dateStr.substring(4, 6);
+      day = dateStr.substring(6, 8);
+    }
+
+    // Apply naming template
+    const templateData = {
+      series: profile.series_name || profile.profile_name,
+      season: seasonNumber,
+      episode: episodeNumber,
+      title: jsonData.title,
+      clean_title: cleanTitle,
+      year,
+      month,
+      day,
+      channel: jsonData.uploader,
+      id: jsonData.id
+    };
+
+    const newFilename = channelProfileModule.applyNamingTemplate(
+      profile.naming_template,
+      templateData
+    );
+
+    // Determine destination path
+    // Use the channel folder that already exists from the video download
+    const videoDirectory = path.dirname(videoPath);
+    const channelFolder = path.dirname(videoDirectory); // Go up one level to channel folder
+
+    // If custom destination is set, use that instead
+    const basePath = profile.destination_path || channelFolder;
+
+    // Create season folder inside the channel/base folder
+    const seasonPath = path.join(
+      basePath,
+      `Season ${seasonNumber}`
+    );
+
+    // Ensure directories exist
+    await fs.ensureDir(seasonPath);
+
+    // Build new file paths
+    const videoExt = path.extname(videoPath);
+    const newVideoPath = path.join(seasonPath, `${newFilename}${videoExt}`);
+    const newImagePath = path.join(seasonPath, `${newFilename}.jpg`);
+
+    // Move/rename files
+    console.log(`Moving video to: ${newVideoPath}`);
+    await fs.move(videoPath, newVideoPath, { overwrite: true });
+
+    if (fs.existsSync(imagePath)) {
+      console.log(`Moving thumbnail to: ${newImagePath}`);
+      await fs.move(imagePath, newImagePath, { overwrite: true });
+    }
+
+    // Set file permissions to be readable/writable by owner and group
+    try {
+      fs.chmodSync(newVideoPath, 0o664);  // rw-rw-r--
+      if (fs.existsSync(newImagePath)) {
+        fs.chmodSync(newImagePath, 0o664);
+      }
+      console.log('Set file permissions to 664');
+    } catch (err) {
+      console.log(`Error setting permissions: ${err.message}`);
+    }
+
+    // Set file timestamps
+    if (uploadDate) {
+      try {
+        fs.utimesSync(newVideoPath, uploadDate, uploadDate);
+        if (fs.existsSync(newImagePath)) {
+          fs.utimesSync(newImagePath, uploadDate, uploadDate);
+        }
+        console.log(`Set timestamps to ${uploadDate.toISOString()}`);
+      } catch (err) {
+        console.log(`Error setting timestamps: ${err.message}`);
+      }
+    }
+
+    // Generate NFO files if enabled
+    if (profile.generate_nfo) {
+      console.log('Generating NFO files...');
+      await nfoGeneratorModule.createNFOFiles({
+        videoPath: path.join(seasonPath, newFilename),
+        seriesPath: basePath,  // Use the channel folder for the tvshow.nfo
+        videoData: {
+          title: cleanTitle,
+          youTubeVideoName: jsonData.title,
+          description: jsonData.description,
+          originalDate: jsonData.upload_date,
+          youtubeId: jsonData.id,
+          youTubeChannelName: jsonData.uploader,
+          channel_id: jsonData.channel_id
+        },
+        profileData: profile,
+        season: seasonNumber,
+        episode: episodeNumber
+      });
+    }
+
+    // Clean up empty directories
+    try {
+      const oldDir = path.dirname(videoPath);
+      const files = await fs.readdir(oldDir);
+
+      // Filter out hidden files and system files
+      const realFiles = files.filter(file =>
+        !file.startsWith('.') &&
+        file !== 'Thumbs.db' &&
+        !file.endsWith('.info.json')
+      );
+
+      if (realFiles.length === 0) {
+        // Remove the empty directory
+        await fs.remove(oldDir);
+        console.log(`Removed empty directory: ${oldDir}`);
+      }
+    } catch (err) {
+      // Silent fail - directory might already be removed or inaccessible
+    }
+
+    // Record the mapping in database
+    try {
+      const video = await Video.findOne({
+        where: { youtubeId: jsonData.id }
+      });
+
+      if (video) {
+        await VideoProfileMapping.create({
+          video_id: video.id,
+          profile_id: profile.id,
+          season: seasonNumber,
+          episode: episodeNumber
+        });
+      }
+    } catch (err) {
+      console.log(`Error recording video mapping: ${err.message}`);
+    }
+
+    // Increment episode counter
+    await channelProfileModule.incrementEpisodeCounter(profile.id);
+
+    console.log(`Successfully processed video with series profile: ${profile.profile_name}`);
+
+  } catch (error) {
+    console.error('Error in series processing:', error);
+    throw error;
+  }
+}
+
+async function originalProcessing(videoPath, imagePath, jsonPath, id, uploadDate) {
+  const videoDirectory = path.dirname(videoPath);
   const directoryPath = path.resolve(__dirname, '../../jobs/info');
   const newImagePath = path.resolve(__dirname, '../images');
 
-  fs.ensureDirSync(directoryPath); // ensures that the directory exists, if it doesn't it will create it
-  const newJsonPath = path.join(directoryPath, `${id}.info.json`); // define the new path
+  fs.ensureDirSync(directoryPath);
+  const newJsonPath = path.join(directoryPath, `${id}.info.json`);
 
-  fs.moveSync(jsonPath, newJsonPath, { overwrite: true }); // move the file
+  fs.moveSync(jsonPath, newJsonPath, { overwrite: true });
 
   if (fs.existsSync(imagePath)) {
-    // check if image thumbnail exists
-    const newImageFullPath = path.join(newImagePath, `videothumb-${id}.jpg`); // define the new path for image thumbnail
+    const newImageFullPath = path.join(newImagePath, `videothumb-${id}.jpg`);
     const newImageFullPathSmall = path.join(
       newImagePath,
       `videothumb-${id}-small.jpg`
-    ); // define the new path for image thumbnail
-    fs.copySync(imagePath, newImageFullPath, { overwrite: true }); // copy the image thumbnail
+    );
+    fs.copySync(imagePath, newImageFullPath, { overwrite: true });
 
-    // Resize the image using ffmpeg with proper settings to avoid deprecated format warnings
-    // Using -loglevel error to suppress the deprecated pixel format warnings but still show actual errors
+    // Resize the image using ffmpeg
     try {
       execSync(
         `${configModule.ffmpegPath} -loglevel error -y -i "${newImageFullPath}" -vf "scale=iw*0.5:ih*0.5" -q:v 2 "${newImageFullPathSmall}"`,
@@ -77,9 +325,21 @@ if (fs.existsSync(jsonPath)) {
     }
   }
 
+  // Set file permissions to be readable/writable by owner and group
+  try {
+    if (fs.existsSync(videoPath)) {
+      fs.chmodSync(videoPath, 0o664);  // rw-rw-r--
+    }
+    if (fs.existsSync(imagePath)) {
+      fs.chmodSync(imagePath, 0o664);
+    }
+    console.log('Set file permissions to 664');
+  } catch (err) {
+    console.log(`Error setting permissions: ${err.message}`);
+  }
+
   // Set the file timestamps to match the upload date
   if (uploadDate) {
-    // Set timestamp for the video file
     if (fs.existsSync(videoPath)) {
       try {
         fs.utimesSync(videoPath, uploadDate, uploadDate);
@@ -89,7 +349,6 @@ if (fs.existsSync(jsonPath)) {
       }
     }
 
-    // Set timestamp for the thumbnail
     if (fs.existsSync(imagePath)) {
       try {
         fs.utimesSync(imagePath, uploadDate, uploadDate);
@@ -99,7 +358,6 @@ if (fs.existsSync(jsonPath)) {
       }
     }
 
-    // Set timestamp for the directory
     if (fs.existsSync(videoDirectory)) {
       try {
         fs.utimesSync(videoDirectory, uploadDate, uploadDate);
@@ -111,4 +369,27 @@ if (fs.existsSync(jsonPath)) {
   }
 }
 
-configModule.stopWatchingConfig();
+function storeOriginalJson(jsonPath, id) {
+  try {
+    const directoryPath = path.resolve(__dirname, '../../jobs/info');
+    fs.ensureDirSync(directoryPath);
+    const newJsonPath = path.join(directoryPath, `${id}.info.json`);
+    fs.moveSync(jsonPath, newJsonPath, { overwrite: true });
+    console.log(`Stored original JSON: ${newJsonPath}`);
+  } catch (error) {
+    console.error('Error storing original JSON:', error);
+  }
+}
+
+// Run the async processing
+processVideo()
+  .then(() => {
+    console.log('Post-processing complete');
+    configModule.stopWatchingConfig();
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('Fatal error in post-processing:', error);
+    configModule.stopWatchingConfig();
+    process.exit(1);
+  });

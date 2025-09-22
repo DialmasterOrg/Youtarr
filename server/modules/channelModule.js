@@ -133,6 +133,7 @@ class ChannelModule {
   mapChannelToResponse(channel) {
     return {
       id: channel.channel_id,
+      db_id: channel.id, // Database ID for series profiles
       uploader: channel.uploader,
       uploader_id: channel.uploader_id || channel.channel_id,
       title: channel.title,
