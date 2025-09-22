@@ -12,7 +12,11 @@ import {
   Typography,
   LinearProgress,
   Box,
+  Alert,
+  AlertTitle,
+  Button,
 } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import WebSocketContext from '../../contexts/WebSocketContext';
 
 interface DownloadProgressProps {
@@ -21,6 +25,11 @@ interface DownloadProgressProps {
     message: string;
   }>;
   downloadInitiatedRef: React.MutableRefObject<boolean>;
+}
+
+interface ErrorDetails {
+  message: string;
+  code?: string;
 }
 
 interface ParsedProgress {
@@ -69,6 +78,8 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
   });
   const [finalSummary, setFinalSummary] = useState<FinalSummary | null>(null);
   const [showProgress, setShowProgress] = useState(false);
+  const [errorDetails, setErrorDetails] = useState<ErrorDetails | null>(null);
+  const navigate = useNavigate();
   const wsContext = useContext(WebSocketContext);
   if (!wsContext) {
     throw new Error('WebSocketContext not found');
@@ -155,6 +166,16 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
       // Clear previous summary if explicitly requested
       if (payload.clearPreviousSummary) {
         setFinalSummary(null);
+        setErrorDetails(null);
+      }
+
+      // Check for error messages, especially cookie-related
+      if (payload.error || (payload.text && payload.text.includes('Bot detection encountered'))) {
+        setErrorDetails({
+          message: payload.text || 'Download failed',
+          code: payload.errorCode
+        });
+        setShowProgress(false);
       }
 
       // Handle enhanced structured progress with video counts
@@ -177,9 +198,10 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
         // Clear any previous final summary when new download starts
         if (progress.state === 'initiating' || progress.state === 'downloading_video') {
           setFinalSummary(null);
+          setErrorDetails(null);
         }
 
-        // Handle completion
+        // Handle completion or failure
         if (progress.state === 'complete') {
           // Clear progress after a delay to show final summary
           setTimeout(() => {
@@ -187,6 +209,10 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             setCurrentProgress(null);
             setVideoCount({ current: 0, total: 0, completed: 0, skipped: 0, skippedThisChannel: 0 });
           }, 2000);
+        } else if (progress.state === 'failed' || progress.state === 'error') {
+          // Show error state
+          setShowProgress(false);
+          setCurrentProgress(null);
         }
       }
 
@@ -241,15 +267,43 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
       <Card elevation={8}>
         <CardHeader title='Download Progress' align='center' />
 
+        {/* Show error if available */}
+        {errorDetails && !currentProgress && (
+          <Box sx={{ px: 2, pb: 2 }}>
+            <Alert
+              severity="error"
+              action={
+                errorDetails.code === 'COOKIES_REQUIRED' || errorDetails.message.includes('Bot detection') ? (
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={() => navigate('/configuration')}
+                  >
+                    Go to Settings
+                  </Button>
+                ) : undefined
+              }
+            >
+              <AlertTitle>Download Failed</AlertTitle>
+              <Typography variant="body2">
+                {errorDetails.message}
+              </Typography>
+            </Alert>
+          </Box>
+        )}
+
         {/* Show final summary if available */}
-        {finalSummary && !currentProgress && (
+        {finalSummary && !currentProgress && !errorDetails && (
           <Box sx={{ px: 2, pb: 2 }}>
             <Box sx={{
-              p: 2,
+              p: 1,
               backgroundColor: 'success.light',
               borderRadius: 1,
               textAlign: 'center'
             }}>
+              <Typography variant="h6" color="success.contrastText">
+                Summary of last job
+              </Typography>
               <Typography variant="body1" color="success.contrastText">
                 ✓ {(() => {
                   const parts = [];
@@ -258,7 +312,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                     parts.push(`${finalSummary.totalSkipped} already existed or members only`);
                   }
                   if (parts.length === 0) {
-                    return 'No new videos to download';
+                    return 'No new videos downloaded';
                   }
                   return parts.join(', ');
                 })()}

@@ -27,19 +27,42 @@ class ChannelModule {
    * Execute yt-dlp command with promise-based handling
    * @param {Array} args - Arguments for yt-dlp command
    * @param {string|null} outputFile - Optional output file path
+   * @param {boolean} useCookies - Whether to include cookies if configured
    * @returns {Promise<string>} - Output content if outputFile provided
    */
-  async executeYtDlpCommand(args, outputFile = null) {
-    const ytDlp = spawn('yt-dlp', args);
+  async executeYtDlpCommand(args, outputFile = null, useCookies = true) {
+    // Add cookies if configured and requested
+    const configModule = require('./configModule');
+    let finalArgs = [...args];
+    if (useCookies) {
+      const cookiesPath = configModule.getCookiesPath();
+      if (cookiesPath) {
+        finalArgs = ['--cookies', cookiesPath, ...args];
+      }
+    }
+
+    const ytDlp = spawn('yt-dlp', finalArgs);
 
     if (outputFile) {
       const writeStream = fs.createWriteStream(outputFile);
       ytDlp.stdout.pipe(writeStream);
     }
 
+    // Capture stderr to detect bot challenges
+    let stderrBuffer = '';
+    ytDlp.stderr.on('data', (data) => {
+      stderrBuffer += data.toString();
+    });
+
     await new Promise((resolve, reject) => {
       ytDlp.on('exit', (code) => {
-        if (code === 0) {
+        // Check for bot detection
+        if (stderrBuffer.includes('Sign in to confirm you\'re not a bot') ||
+            stderrBuffer.includes('Sign in to confirm that you\'re not a bot')) {
+          const error = new Error('Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.');
+          error.code = 'COOKIES_REQUIRED';
+          reject(error);
+        } else if (code === 0) {
           resolve();
         } else {
           reject(new Error(`yt-dlp exited with code ${code}`));

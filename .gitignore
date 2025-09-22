@@ -9,6 +9,7 @@ config/complete.list
 config/jobs.json
 config/config.json
 config/config.json.*
+config/cookies.user.txt
 database
 server/images
 

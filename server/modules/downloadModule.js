@@ -561,13 +561,40 @@ class DownloadModule {
       });
 
       let stderrBuffer = '';
+      let botDetected = false;
       proc.stderr.on('data', (data) => {
-        stderrBuffer += data.toString();
-        console.log(data.toString()); // log the data in real-time
+        const dataStr = data.toString();
+        stderrBuffer += dataStr;
+        console.log(dataStr); // log the data in real-time
+
+        // Check for bot detection message (handle different quote types and patterns)
+        if (dataStr.includes('Sign in to confirm') && dataStr.includes('not a bot')) {
+          botDetected = true;
+          MessageEmitter.emitMessage(
+            'broadcast',
+            null,
+            'download',
+            'downloadProgress',
+            {
+              text: 'Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.',
+              progress: monitor.snapshot('bot_detected'),
+              error: true
+            }
+          );
+        }
       });
 
       proc.on('exit', async (code, signal) => {
         clearTimeout(timer);
+
+        // Also check the complete stderr buffer for bot detection
+        if (!botDetected && stderrBuffer &&
+            stderrBuffer.includes('Sign in to confirm') &&
+            stderrBuffer.includes('not a bot')) {
+          botDetected = true;
+          console.log('Bot detection found in stderr buffer');
+        }
+
         const newVideoUrls = this.getNewVideoUrls(initialCount);
         const videoCount = newVideoUrls.length;
 
@@ -623,7 +650,20 @@ class DownloadModule {
         let status = '';
         let output = '';
 
-        if (code !== 0) {
+        // Check for bot detection first
+        if (botDetected) {
+          status = 'Error';
+          output = 'Bot detection encountered. Please set cookies in your Configuration.';
+
+          await jobModule.updateJob(jobId, {
+            status: status,
+            endDate: Date.now(),
+            output: output,
+            data: { videos: videoData || [] },
+            notes: 'YouTube requires authentication. Enable cookies in Configuration to resolve this issue.',
+            error: 'COOKIES_REQUIRED'
+          });
+        } else if (code !== 0) {
           // Cleanup partial files on failure
           await this.cleanupPartialFiles(Array.from(partialDestinations));
 
@@ -672,13 +712,16 @@ class DownloadModule {
         const hasProcessedVideos = (monitor.videoCount.completed > 0 || monitor.videoCount.skipped > 0);
         const hasDownloadedNewVideos = videoCount > 0;
         const isWarningOnly = (code === 1 && (hasProcessedVideos || hasDownloadedNewVideos));
-        const finalState = (code === 0 || isWarningOnly) ? 'complete' : 'error';
+        let finalState = (code === 0 || isWarningOnly) ? 'complete' : 'error';
 
         console.log(`[DEBUG] Final state determination - code: ${code}, hasProcessedVideos: ${hasProcessedVideos}, hasDownloadedNewVideos: ${hasDownloadedNewVideos}, isWarningOnly: ${isWarningOnly}, finalState: ${finalState}`);
 
         // Create a more informative final message
         let finalText;
-        if (finalState === 'complete') {
+        if (botDetected) {
+          finalState = 'failed';
+          finalText = 'Download failed: Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.';
+        } else if (finalState === 'complete') {
           const actualCount = monitor.videoCount.completed || videoCount;
           const skippedCount = monitor.videoCount.skipped || 0;
           if (actualCount > 0 && skippedCount > 0) {
@@ -923,12 +966,25 @@ class DownloadModule {
     return args;
   }
 
+  // Build cookies args for yt-dlp commands
+  buildCookiesArgs() {
+    const cookiesPath = configModule.getCookiesPath();
+    if (cookiesPath) {
+      return ['--cookies', cookiesPath];
+    }
+    return [];
+  }
+
   // Build yt-dlp command args array for channel downloads
   getBaseCommandArgs(resolution) {
     const config = configModule.getConfig();
     const res = resolution || config.preferredResolution || '1080';
     const baseOutputPath = configModule.directoryPath;
+
+    // Add cookies args first if enabled
+    const cookiesArgs = this.buildCookiesArgs();
     const args = [
+      ...cookiesArgs,
       '-4',
       '--ffmpeg-location', configModule.ffmpegPath,
       '--socket-timeout', String(config.downloadSocketTimeoutSeconds || 30),
@@ -971,7 +1027,11 @@ class DownloadModule {
     const config = configModule.getConfig();
     const res = resolution || config.preferredResolution || '1080';
     const baseOutputPath = configModule.directoryPath;
+
+    // Add cookies args first if enabled
+    const cookiesArgs = this.buildCookiesArgs();
     const args = [
+      ...cookiesArgs,
       '-4',
       '--ffmpeg-location', configModule.ffmpegPath,
       '--socket-timeout', String(config.downloadSocketTimeoutSeconds || 30),

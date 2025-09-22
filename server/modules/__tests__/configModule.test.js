@@ -21,34 +21,28 @@ describe('ConfigModule', () => {
   };
 
   beforeEach(() => {
-    // Clear module cache
     jest.resetModules();
 
-    // Reset UUID mock
     jest.doMock('uuid', () => ({
       v4: jest.fn(() => 'test-uuid-1234')
     }));
 
-    // Mock fs module
     jest.doMock('fs', () => ({
       readFileSync: jest.fn().mockReturnValue(JSON.stringify(mockConfig)),
       writeFileSync: jest.fn(),
       watch: jest.fn().mockReturnValue({
         close: jest.fn()
       }),
-      existsSync: jest.fn().mockReturnValue(true), // Config exists by default
+      existsSync: jest.fn().mockReturnValue(true),
       mkdirSync: jest.fn()
     }));
 
-    // Get the mocked fs for assertions
     fs = require('fs');
 
-    // Clear environment
     delete process.env.IN_DOCKER_CONTAINER;
   });
 
   afterEach(() => {
-    // Clean up
     if (ConfigModule && ConfigModule.stopWatchingConfig) {
       ConfigModule.stopWatchingConfig();
     }
@@ -86,7 +80,6 @@ describe('ConfigModule', () => {
 
       expect(uuid.v4).not.toHaveBeenCalled();
       expect(ConfigModule.config.uuid).toBe('existing-uuid');
-      // Should still save for other defaults
       expect(fs.writeFileSync).not.toHaveBeenCalled();
     });
 
@@ -172,10 +165,8 @@ describe('ConfigModule', () => {
       const changeListener = jest.fn();
       ConfigModule.on('change', changeListener);
 
-      // Get the watch callback
       const watchCallback = fs.watch.mock.calls[0][1];
 
-      // Simulate file change
       const updatedConfig = { ...mockConfig, plexApiKey: 'updated-key' };
       fs.readFileSync.mockReturnValue(JSON.stringify(updatedConfig));
 
@@ -199,7 +190,6 @@ describe('ConfigModule', () => {
       const mockWatcher = { close: jest.fn() };
       fs.watch.mockReturnValue(mockWatcher);
 
-      // Re-require to get new watcher
       jest.resetModules();
       jest.doMock('fs', () => ({
         readFileSync: jest.fn().mockReturnValue(JSON.stringify(mockConfig)),
@@ -325,8 +315,8 @@ describe('ConfigModule', () => {
 
       expect(ConfigModule.config.channelFilesToDownload).toBe(3);
       expect(ConfigModule.config.preferredResolution).toBe('1080');
-      expect(ConfigModule.ffmpegPath).toBeUndefined(); // No devffmpegPath in config
-      expect(ConfigModule.directoryPath).toBeUndefined(); // No devYoutubeOutputDirectory
+      expect(ConfigModule.ffmpegPath).toBeUndefined();
+      expect(ConfigModule.directoryPath).toBeUndefined();
     });
 
     test('should handle existing channelFilesToDownload and preferredResolution', () => {
@@ -346,7 +336,6 @@ describe('ConfigModule', () => {
 
   describe('auto-creation for platform deployments', () => {
     beforeEach(() => {
-      // Reset mocks for auto-creation tests
       jest.resetModules();
       jest.clearAllMocks();
 
@@ -356,13 +345,12 @@ describe('ConfigModule', () => {
     });
 
     test('should auto-create config when DATA_PATH is set and config does not exist', () => {
-      // Setup: DATA_PATH is set and config doesn't exist
       process.env.DATA_PATH = '/storage/rclone/storagebox/youtube';
 
       const mockFs = {
         existsSync: jest.fn()
-          .mockReturnValueOnce(false) // Config doesn't exist on first check
-          .mockReturnValue(true), // Exists after creation
+          .mockReturnValueOnce(false)
+          .mockReturnValue(true),
         mkdirSync: jest.fn(),
         writeFileSync: jest.fn(),
         readFileSync: jest.fn().mockReturnValue(JSON.stringify({
@@ -379,7 +367,6 @@ describe('ConfigModule', () => {
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       ConfigModule = require('../configModule');
 
-      // Verify auto-creation occurred
       expect(mockFs.writeFileSync).toHaveBeenCalled();
       const writtenConfig = JSON.parse(mockFs.writeFileSync.mock.calls[0][1]);
       expect(writtenConfig.youtubeOutputDirectory).toBe('/storage/rclone/storagebox/youtube');
@@ -393,11 +380,10 @@ describe('ConfigModule', () => {
     });
 
     test('should NOT auto-create config when DATA_PATH is set but config exists', () => {
-      // Setup: DATA_PATH is set but config already exists
       process.env.DATA_PATH = '/storage/rclone/storagebox/youtube';
 
       const mockFs = {
-        existsSync: jest.fn().mockReturnValue(true), // Config exists
+        existsSync: jest.fn().mockReturnValue(true),
         mkdirSync: jest.fn(),
         writeFileSync: jest.fn(),
         readFileSync: jest.fn().mockReturnValue(JSON.stringify(mockConfig)),
@@ -408,18 +394,16 @@ describe('ConfigModule', () => {
 
       ConfigModule = require('../configModule');
 
-      // Verify no auto-creation occurred (writeFileSync only called for UUID, not for config creation)
       expect(mockFs.mkdirSync).not.toHaveBeenCalled();
 
       delete process.env.DATA_PATH;
     });
 
     test('should NOT auto-create config when DATA_PATH is not set', () => {
-      // Setup: DATA_PATH is not set
       delete process.env.DATA_PATH;
 
       const mockFs = {
-        existsSync: jest.fn().mockReturnValue(false), // Config doesn't exist
+        existsSync: jest.fn().mockReturnValue(false),
         mkdirSync: jest.fn(),
         writeFileSync: jest.fn(),
         readFileSync: jest.fn(() => {
@@ -430,12 +414,10 @@ describe('ConfigModule', () => {
 
       jest.doMock('fs', () => mockFs);
 
-      // Should throw error when trying to read non-existent config
       expect(() => {
         ConfigModule = require('../configModule');
       }).toThrow('ENOENT');
 
-      // Verify no auto-creation occurred
       expect(mockFs.mkdirSync).not.toHaveBeenCalled();
       expect(mockFs.writeFileSync).not.toHaveBeenCalled();
     });
@@ -445,8 +427,8 @@ describe('ConfigModule', () => {
 
       const mockFs = {
         existsSync: jest.fn()
-          .mockReturnValueOnce(false) // Config doesn't exist
-          .mockReturnValueOnce(false) // Config dir doesn't exist
+          .mockReturnValueOnce(false)
+          .mockReturnValueOnce(false)
           .mockReturnValue(true),
         mkdirSync: jest.fn(),
         writeFileSync: jest.fn(),
@@ -475,7 +457,7 @@ describe('ConfigModule', () => {
 
       const mockFs = {
         existsSync: jest.fn()
-          .mockReturnValueOnce(false) // Config doesn't exist
+          .mockReturnValueOnce(false)
           .mockReturnValue(true),
         mkdirSync: jest.fn(),
         writeFileSync: jest.fn(),
@@ -537,6 +519,248 @@ describe('ConfigModule', () => {
       delete process.env.DATA_PATH;
       const jobsPath = ConfigModule.getJobsPath();
       expect(jobsPath).toContain('/jobs');
+    });
+  });
+
+  describe('cookie functionality', () => {
+    beforeEach(() => {
+      jest.resetModules();
+      jest.clearAllMocks();
+
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(mockConfig)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({
+          close: jest.fn()
+        }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn(),
+        chmodSync: jest.fn(),
+        unlinkSync: jest.fn()
+      }));
+
+      fs = require('fs');
+      ConfigModule = require('../configModule');
+    });
+
+    describe('getCookiesPath', () => {
+      test('should return null when cookies are disabled', () => {
+        ConfigModule.config.cookiesEnabled = false;
+        const path = ConfigModule.getCookiesPath();
+        expect(path).toBeNull();
+      });
+
+      test('should return null when custom cookies not uploaded', () => {
+        ConfigModule.config.cookiesEnabled = true;
+        ConfigModule.config.customCookiesUploaded = false;
+        const path = ConfigModule.getCookiesPath();
+        expect(path).toBeNull();
+      });
+
+      test('should return cookie path when enabled and file exists', () => {
+        ConfigModule.config.cookiesEnabled = true;
+        ConfigModule.config.customCookiesUploaded = true;
+        fs.existsSync.mockReturnValue(true);
+
+        const path = ConfigModule.getCookiesPath();
+        expect(path).toContain('cookies.user.txt');
+        expect(fs.existsSync).toHaveBeenCalledWith(expect.stringContaining('cookies.user.txt'));
+      });
+
+      test('should return null and log warning when file is missing', () => {
+        const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+        ConfigModule.config.cookiesEnabled = true;
+        ConfigModule.config.customCookiesUploaded = true;
+        fs.existsSync.mockReturnValue(false);
+
+        const path = ConfigModule.getCookiesPath();
+        expect(path).toBeNull();
+        expect(consoleWarnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Cookie file not found')
+        );
+
+        consoleWarnSpy.mockRestore();
+      });
+    });
+
+    describe('getCookiesStatus', () => {
+      test('should return correct status when cookies disabled', () => {
+        ConfigModule.config.cookiesEnabled = false;
+        ConfigModule.config.customCookiesUploaded = false;
+        fs.existsSync.mockReturnValue(false);
+
+        const status = ConfigModule.getCookiesStatus();
+        expect(status).toEqual({
+          cookiesEnabled: false,
+          customCookiesUploaded: false,
+          customFileExists: false
+        });
+      });
+
+      test('should return correct status when cookies enabled and file exists', () => {
+        ConfigModule.config.cookiesEnabled = true;
+        ConfigModule.config.customCookiesUploaded = true;
+        fs.existsSync.mockReturnValue(true);
+
+        const status = ConfigModule.getCookiesStatus();
+        expect(status).toEqual({
+          cookiesEnabled: true,
+          customCookiesUploaded: true,
+          customFileExists: true
+        });
+      });
+
+      test('should detect missing file even when config says uploaded', () => {
+        ConfigModule.config.cookiesEnabled = true;
+        ConfigModule.config.customCookiesUploaded = true;
+        fs.existsSync.mockReturnValue(false);
+
+        const status = ConfigModule.getCookiesStatus();
+        expect(status).toEqual({
+          cookiesEnabled: true,
+          customCookiesUploaded: true,
+          customFileExists: false
+        });
+      });
+    });
+
+    describe('writeCustomCookiesFile', () => {
+      test('should write file with correct permissions and update config', () => {
+        const testBuffer = Buffer.from('# Netscape HTTP Cookie File\ntest cookie data');
+
+        const filePath = ConfigModule.writeCustomCookiesFile(testBuffer);
+
+        expect(fs.writeFileSync).toHaveBeenCalledWith(
+          expect.stringContaining('cookies.user.txt'),
+          testBuffer
+        );
+
+        expect(fs.chmodSync).toHaveBeenCalledWith(
+          expect.stringContaining('cookies.user.txt'),
+          0o600
+        );
+
+        expect(ConfigModule.config.customCookiesUploaded).toBe(true);
+        expect(ConfigModule.config.cookiesEnabled).toBe(true);
+
+        expect(fs.writeFileSync).toHaveBeenCalledWith(
+          mockConfigPath,
+          expect.stringContaining('"customCookiesUploaded": true')
+        );
+
+        expect(filePath).toContain('cookies.user.txt');
+      });
+
+      test('should overwrite existing file', () => {
+        fs.existsSync.mockReturnValue(true);
+        const testBuffer = Buffer.from('new cookie data');
+
+        ConfigModule.writeCustomCookiesFile(testBuffer);
+
+        expect(fs.writeFileSync).toHaveBeenCalledWith(
+          expect.stringContaining('cookies.user.txt'),
+          testBuffer
+        );
+      });
+    });
+
+    describe('deleteCustomCookiesFile', () => {
+      test('should delete file and update config when file exists', () => {
+        ConfigModule.config.cookiesEnabled = true;
+        ConfigModule.config.customCookiesUploaded = true;
+        fs.existsSync.mockReturnValue(true);
+
+        const result = ConfigModule.deleteCustomCookiesFile();
+
+        expect(fs.unlinkSync).toHaveBeenCalledWith(
+          expect.stringContaining('cookies.user.txt')
+        );
+
+        expect(ConfigModule.config.customCookiesUploaded).toBe(false);
+        expect(ConfigModule.config.cookiesEnabled).toBe(true);
+
+        expect(fs.writeFileSync).toHaveBeenCalledWith(
+          mockConfigPath,
+          expect.stringContaining('"customCookiesUploaded": false')
+        );
+
+        expect(result).toBe(true);
+      });
+
+      test('should handle case when file does not exist', () => {
+        fs.existsSync.mockReturnValue(false);
+
+        const result = ConfigModule.deleteCustomCookiesFile();
+
+        expect(fs.unlinkSync).not.toHaveBeenCalled();
+
+        expect(ConfigModule.config.customCookiesUploaded).toBe(false);
+
+        expect(result).toBe(true);
+      });
+
+      test('should preserve cookiesEnabled state', () => {
+        ConfigModule.config.cookiesEnabled = true;
+        fs.existsSync.mockReturnValue(true);
+
+        ConfigModule.deleteCustomCookiesFile();
+
+        expect(ConfigModule.config.cookiesEnabled).toBe(true);
+        expect(ConfigModule.config.customCookiesUploaded).toBe(false);
+      });
+    });
+
+    describe('cookie configuration defaults', () => {
+      test('should initialize cookie config on first load', () => {
+        const configWithoutCookies = { ...mockConfig };
+        fs.readFileSync.mockReturnValue(JSON.stringify(configWithoutCookies));
+
+        jest.resetModules();
+        jest.doMock('fs', () => ({
+          readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithoutCookies)),
+          writeFileSync: jest.fn(),
+          watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+          existsSync: jest.fn().mockReturnValue(true),
+          mkdirSync: jest.fn()
+        }));
+        jest.doMock('uuid', () => ({
+          v4: jest.fn(() => 'test-uuid-1234')
+        }));
+
+        const FreshConfigModule = require('../configModule');
+
+        expect(FreshConfigModule.config.cookiesEnabled).toBe(false);
+        expect(FreshConfigModule.config.customCookiesUploaded).toBe(false);
+      });
+
+      test('should preserve existing cookie configuration', () => {
+        const configWithCookies = {
+          ...mockConfig,
+          cookiesEnabled: true,
+          customCookiesUploaded: true
+        };
+        fs.readFileSync.mockReturnValue(JSON.stringify(configWithCookies));
+
+        jest.resetModules();
+        jest.doMock('fs', () => ({
+          readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithCookies)),
+          writeFileSync: jest.fn(),
+          watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+          existsSync: jest.fn().mockReturnValue(true)
+        }));
+        jest.doMock('uuid', () => ({
+          v4: jest.fn(() => 'test-uuid-1234')
+        }));
+
+        const FreshConfigModule = require('../configModule');
+
+        expect(FreshConfigModule.config.cookiesEnabled).toBe(true);
+        expect(FreshConfigModule.config.customCookiesUploaded).toBe(true);
+      });
     });
   });
 });
