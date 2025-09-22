@@ -547,7 +547,7 @@ class ChannelModule {
    * @returns {Promise<string>} - Path to the temporary file
    */
   async generateChannelsFile() {
-    const tempFilePath = path.join(__dirname, `channels-temp-${uuidv4()}.txt`);
+    const tempFilePath = path.join(os.tmpdir(), `channels-temp-${uuidv4()}.txt`);
     try {
       const channels = await Channel.findAll({
         where: { enabled: true },
