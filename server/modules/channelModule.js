@@ -5,6 +5,7 @@ const cron = require('node-cron');
 const fs = require('fs');
 const fsPromises = fs.promises;
 const path = require('path');
+const os = require('os');
 const Channel = require('../models/channel');
 const ChannelVideo = require('../models/channelvideo');
 const MessageEmitter = require('./messageEmitter.js');
@@ -85,7 +86,7 @@ class ChannelModule {
    * @returns {Promise<any>} - Result from callback
    */
   async withTempFile(prefix, callback) {
-    const tempFilePath = path.join(__dirname, `${prefix}-${uuidv4()}.json`);
+    const tempFilePath = path.join(os.tmpdir(), `${prefix}-${uuidv4()}.json`);
     try {
       const result = await callback(tempFilePath);
       try {
