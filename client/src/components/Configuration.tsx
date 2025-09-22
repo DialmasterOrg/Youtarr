@@ -84,6 +84,10 @@ function Configuration({ token }: ConfigurationProps) {
     plexUrl: false,
     authEnabled: true
   });
+  const [deploymentEnvironment, setDeploymentEnvironment] = useState({
+    inDocker: false,
+    dockerAutoCreated: false
+  });
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [initialConfig, setInitialConfig] = useState<typeof config | null>(null);
@@ -124,6 +128,10 @@ function Configuration({ token }: ConfigurationProps) {
         if (data.isPlatformManaged) {
           setIsPlatformManaged(data.isPlatformManaged);
           delete data.isPlatformManaged;
+        }
+        if (data.deploymentEnvironment) {
+          setDeploymentEnvironment(data.deploymentEnvironment);
+          delete data.deploymentEnvironment;
         }
         setConfig(data);
         setOriginalYoutubeDirectory(data.youtubeOutputDirectory || '');
@@ -637,6 +645,12 @@ function Configuration({ token }: ConfigurationProps) {
                         size="small"
                         sx={{ ml: 1 }}
                       />
+                    ) : deploymentEnvironment.dockerAutoCreated ? (
+                      <Chip
+                        label="Docker Volume"
+                        size="small"
+                        sx={{ ml: 1 }}
+                      />
                     ) : (
                       getInfoIcon('The directory path to your Plex Youtube library. If you update this you must restart your docker container. Manually update this field at your own risk!')
                     )}
@@ -646,13 +660,15 @@ function Configuration({ token }: ConfigurationProps) {
                 value={config.youtubeOutputDirectory}
                 onChange={handleInputChange}
                 required
-                disabled={isPlatformManaged.youtubeOutputDirectory}
+                disabled={isPlatformManaged.youtubeOutputDirectory || deploymentEnvironment.dockerAutoCreated}
                 helperText={
                   isPlatformManaged.youtubeOutputDirectory
                     ? "This path is configured by your platform deployment and cannot be changed"
-                    : youtubeDirectoryChanged
-                      ? "⚠️ RESTART REQUIRED after saving - Directory has been changed!"
-                      : "Path where YouTube videos will be saved"
+                    : deploymentEnvironment.dockerAutoCreated
+                      ? "This path is configured by your Docker volume mount. To change where videos are saved, update the volume mount in your docker-compose.yml file."
+                      : youtubeDirectoryChanged
+                        ? "⚠️ RESTART REQUIRED after saving - Directory has been changed!"
+                        : "Path where YouTube videos will be saved"
                 }
               />
             </Grid>

@@ -265,6 +265,12 @@ const initialize = async () => {
         authEnabled: process.env.AUTH_ENABLED === 'false' ? false : true
       };
 
+      // Add deployment environment information
+      safeConfig.deploymentEnvironment = {
+        inDocker: !!process.env.IN_DOCKER_CONTAINER,
+        dockerAutoCreated: !!safeConfig.dockerAutoCreated
+      };
+
       res.json(safeConfig);
     });
 

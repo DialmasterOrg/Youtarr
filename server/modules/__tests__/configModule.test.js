@@ -194,7 +194,9 @@ describe('ConfigModule', () => {
       jest.doMock('fs', () => ({
         readFileSync: jest.fn().mockReturnValue(JSON.stringify(mockConfig)),
         writeFileSync: jest.fn(),
-        watch: jest.fn().mockReturnValue(mockWatcher)
+        watch: jest.fn().mockReturnValue(mockWatcher),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
       }));
       jest.doMock('uuid', () => ({
         v4: jest.fn(() => 'test-uuid-1234')
@@ -399,27 +401,122 @@ describe('ConfigModule', () => {
       delete process.env.DATA_PATH;
     });
 
-    test('should NOT auto-create config when DATA_PATH is not set', () => {
+    test('should auto-create config for Docker without DATA_PATH', () => {
       delete process.env.DATA_PATH;
+      process.env.IN_DOCKER_CONTAINER = '1';
+
+      const mockExampleConfig = {
+        channelFilesToDownload: 5,
+        preferredResolution: '1080',
+        '//comment': 'This should be stripped',
+        plexApiKey: '',
+        youtubeOutputDirectory: '/some/path'
+      };
 
       const mockFs = {
-        existsSync: jest.fn().mockReturnValue(false),
+        existsSync: jest.fn()
+          .mockReturnValueOnce(false)  // config.json doesn't exist
+          .mockReturnValue(true),
         mkdirSync: jest.fn(),
         writeFileSync: jest.fn(),
-        readFileSync: jest.fn(() => {
-          throw new Error('ENOENT: no such file or directory');
+        readFileSync: jest.fn((path) => {
+          if (path.includes('config.example.json')) {
+            return JSON.stringify(mockExampleConfig);
+          }
+          // Return the auto-created config
+          return JSON.stringify({
+            channelFilesToDownload: 5,
+            preferredResolution: '1080',
+            plexApiKey: '',
+            youtubeOutputDirectory: '/usr/src/app/data',
+            uuid: 'auto-generated-uuid'
+          });
         }),
         watch: jest.fn().mockReturnValue({ close: jest.fn() })
       };
 
       jest.doMock('fs', () => mockFs);
 
-      expect(() => {
-        ConfigModule = require('../configModule');
-      }).toThrow('ENOENT');
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      ConfigModule = require('../configModule');
 
-      expect(mockFs.mkdirSync).not.toHaveBeenCalled();
+      // Verify the config was written
+      expect(mockFs.writeFileSync).toHaveBeenCalled();
+      const writtenConfig = JSON.parse(mockFs.writeFileSync.mock.calls[0][1]);
+
+      // Should have the container's data path for Docker without DATA_PATH
+      expect(writtenConfig.youtubeOutputDirectory).toBe('/usr/src/app/data');
+      expect(writtenConfig.uuid).toBe('auto-generated-uuid');
+      expect(writtenConfig.dockerAutoCreated).toBe(true);
+
+      // Should not have the comment field
+      expect(writtenConfig['//comment']).toBeUndefined();
+
+      expect(consoleSpy).toHaveBeenCalledWith('Auto-creating config.json (docker default without DATA_PATH)');
+
+      consoleSpy.mockRestore();
+      delete process.env.IN_DOCKER_CONTAINER;
+    });
+
+    test('should use inline defaults when config.example.json is unavailable', () => {
+      delete process.env.DATA_PATH;
+
+      const mockFs = {
+        existsSync: jest.fn()
+          .mockReturnValueOnce(false)  // config.json doesn't exist
+          .mockReturnValue(true),
+        mkdirSync: jest.fn(),
+        writeFileSync: jest.fn(),
+        readFileSync: jest.fn((path) => {
+          if (path.includes('config.example.json')) {
+            throw new Error('File not found');
+          }
+          // Return the auto-created config
+          return JSON.stringify({
+            channelFilesToDownload: 3,
+            preferredResolution: '1080',
+            youtubeOutputDirectory: '/usr/src/app/data',
+            uuid: 'auto-generated-uuid'
+          });
+        }),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() })
+      };
+
+      jest.doMock('fs', () => mockFs);
+
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      ConfigModule = require('../configModule');
+
+      expect(mockFs.writeFileSync).toHaveBeenCalled();
+      const writtenConfig = JSON.parse(mockFs.writeFileSync.mock.calls[0][1]);
+
+      expect(writtenConfig.youtubeOutputDirectory).toBe('/usr/src/app/data');
+      expect(writtenConfig.channelFilesToDownload).toBe(3);
+      expect(writtenConfig.uuid).toBe('auto-generated-uuid');
+      expect(writtenConfig.dockerAutoCreated).toBe(true);
+
+      expect(consoleSpy).toHaveBeenCalledWith('Could not load config.example.json, using inline defaults');
+
+      consoleSpy.mockRestore();
+    });
+
+    test('ensureConfigExists should no-op when file already exists', () => {
+      const configWithUuid = { ...mockConfig, uuid: 'existing-uuid' };
+      const mockFs = {
+        existsSync: jest.fn().mockReturnValue(true),  // config exists
+        mkdirSync: jest.fn(),
+        writeFileSync: jest.fn(),
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithUuid)),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() })
+      };
+
+      jest.doMock('fs', () => mockFs);
+
+      ConfigModule = require('../configModule');
+
+      // writeFileSync should not be called since config exists and has UUID
       expect(mockFs.writeFileSync).not.toHaveBeenCalled();
+      expect(mockFs.mkdirSync).not.toHaveBeenCalled();
     });
 
     test('should create config directory if it does not exist', () => {

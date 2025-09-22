@@ -8,10 +8,8 @@ class ConfigModule extends EventEmitter {
     super();
     this.configPath = path.join(__dirname, '../../config/config.json');
 
-    if (process.env.DATA_PATH && !fs.existsSync(this.configPath)) {
-      console.log('Platform deployment detected (DATA_PATH is set). Auto-creating config.json...');
-      this.createDefaultConfig();
-    }
+    // Ensure config exists before attempting to read it
+    this.ensureConfigExists();
 
     this.config = JSON.parse(fs.readFileSync(this.configPath));
 
@@ -114,6 +112,91 @@ class ConfigModule extends EventEmitter {
     this.config = this.migrateConfig(this.config);
 
     this.watchConfig();
+  }
+
+  ensureConfigExists() {
+    // If config already exists, nothing to do
+    if (fs.existsSync(this.configPath)) {
+      return;
+    }
+
+    // Handle platform deployments with DATA_PATH
+    if (process.env.DATA_PATH) {
+      console.log('Platform deployment detected (DATA_PATH is set). Auto-creating config.json...');
+      this.createDefaultConfig();
+      return;
+    }
+
+    // Handle Docker deployments without DATA_PATH
+    console.log('Auto-creating config.json (docker default without DATA_PATH)');
+
+    // Ensure config directory exists
+    const configDir = path.dirname(this.configPath);
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+
+    let defaultConfig;
+
+    // Try to load from config.example.json first
+    try {
+      const examplePath = path.join(configDir, 'config.example.json');
+      const exampleContent = fs.readFileSync(examplePath, 'utf8');
+      const exampleConfig = JSON.parse(exampleContent);
+
+      // Remove comment-only keys
+      delete exampleConfig['//comment'];
+
+      // Use example as base
+      defaultConfig = exampleConfig;
+    } catch (error) {
+      console.log('Could not load config.example.json, using inline defaults');
+
+      // Fallback to minimal defaults if example file unavailable
+      defaultConfig = {
+        channelFilesToDownload: 3,
+        preferredResolution: '1080',
+        cronSchedule: '0 */6 * * *',
+        plexApiKey: '',
+        plexLibrarySection: '',
+        youtubeApiKey: '',
+        sponsorblockEnabled: false,
+        sponsorblockAction: 'remove',
+        sponsorblockCategories: {
+          sponsor: true,
+          intro: false,
+          outro: false,
+          selfpromo: true,
+          preview: false,
+          filler: false,
+          interaction: false,
+          music_offtopic: false
+        },
+        sponsorblockApiUrl: '',
+        downloadSocketTimeoutSeconds: 30,
+        downloadThrottledRate: '100K',
+        downloadRetryCount: 2,
+        enableStallDetection: true,
+        stallDetectionWindowSeconds: 30,
+        stallDetectionRateThreshold: '100K',
+        cookiesEnabled: false,
+        customCookiesUploaded: false
+      };
+    }
+
+    // Set the container's data path for Docker without DATA_PATH
+    // This path is where the Docker volume is mounted inside the container
+    defaultConfig.youtubeOutputDirectory = '/usr/src/app/data';
+
+    // Mark that this config was auto-created by the container
+    // This helps us know the user didn't use setup.sh
+    defaultConfig.dockerAutoCreated = true;
+
+    // Generate UUID
+    defaultConfig.uuid = uuidv4();
+
+    // Write the config file
+    fs.writeFileSync(this.configPath, JSON.stringify(defaultConfig, null, 2));
   }
 
   getConfig() {
