@@ -137,10 +137,18 @@ Licensed under the ISC License. See [LICENSE.md](LICENSE.md) for details.
 
 ## Screenshots
 
-<img width="1790" height="1310" alt="image" src="https://github.com/user-attachments/assets/cf2bf79a-43ce-4ba4-9e5e-a635c15e55aa" />
-<img width="1789" height="1690" alt="image" src="https://github.com/user-attachments/assets/93c68c0e-be96-434d-bed7-0d3601bf49de" />
-<img width="1813" height="1312" alt="image" src="https://github.com/user-attachments/assets/d13f8d25-4049-439a-8d8c-7ba8d6bc5073" />
-<img width="1792" height="1694" alt="image" src="https://github.com/user-attachments/assets/d4be4e88-8dc1-49e5-b13e-299ffd14e001" />
-<img width="1787" height="1692" alt="image" src="https://github.com/user-attachments/assets/1551777c-4335-4bc2-84b8-c8176f3eb0e2" />
+<img width="1927" height="1488" alt="image" src="https://github.com/user-attachments/assets/9ef03477-a1e2-400f-891b-6e275a58d441" />
+<img width="1908" height="1485" alt="image" src="https://github.com/user-attachments/assets/cac5d4b8-9c65-4782-8bb8-8d5064579937" />
+<img width="1907" height="1487" alt="image" src="https://github.com/user-attachments/assets/3dc7cabc-e725-4e6c-92f0-578e25a0905b" />
+<img width="1901" height="1487" alt="image" src="https://github.com/user-attachments/assets/7d5dbeca-c3dc-4ced-972b-97e16a70dfd4" />
+<img width="1916" height="1482" alt="image" src="https://github.com/user-attachments/assets/18625f29-61de-475d-b509-1654420e7612" />
+<img width="1907" height="1489" alt="image" src="https://github.com/user-attachments/assets/1151811e-0a8a-4960-897b-7b1eb3ab3546" />
+<img width="1905" height="1488" alt="image" src="https://github.com/user-attachments/assets/a9e10530-a966-42fa-b71d-b2d7bbbeadff" />
+
+
+
+
+
+
 
 
