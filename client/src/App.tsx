@@ -441,7 +441,7 @@ function AppContent() {
         }}
       >
         <Typography variant='subtitle1' color='textSecondary'>
-          {serverVersion && serverVersion !== clientVersion && (
+          {serverVersion && serverVersion !== clientVersion && platformName?.toLowerCase() !== 'elfhosted' && (
             <Typography color='error'>
               New version ({serverVersion}) available! Please restart the app to
               update.
