@@ -210,16 +210,16 @@ function ChannelVideos({ token }: ChannelVideosProps) {
     let text = '';
 
     if (hoursAgo < 1) {
-      text = 'Updated just now';
+      text = 'Updated now';
     } else if (hoursAgo < 6) {
-      text = `Updated ${hoursAgo} hour${hoursAgo > 1 ? 's' : ''} ago`;
+      text = `Updated ${hoursAgo}h ago`;
       color = 'success';
     } else if (hoursAgo < 24) {
-      text = `Updated ${hoursAgo} hours ago`;
+      text = `Updated ${hoursAgo}h ago`;
       color = 'warning';
     } else {
       const daysAgo = Math.floor(hoursAgo / 24);
-      text = `Updated ${daysAgo} day${daysAgo > 1 ? 's' : ''} ago`;
+      text = `Updated ${daysAgo}d ago`;
       color = 'error';
     }
 
@@ -231,7 +231,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
   return (
     <Card elevation={8} style={{ marginBottom: '16px' }}>
       <CardHeader
-        title='Recent Channel Videos'
+        title='Channel Videos'
         align='center'
         action={
           freshnessInfo && videos.length > 0 && (
@@ -291,43 +291,54 @@ function ChannelVideos({ token }: ChannelVideosProps) {
           <Box
             sx={{
               display: 'flex',
-              flexDirection: isMobile ? 'column' : 'row',
+              flexDirection: 'column',
               gap: 1,
               px: 2,
               py: 1,
               width: isMobile ? '100%' : 'auto',
+              alignItems: 'center',
             }}
           >
-            <Button
-              onClick={selectAllUndownloaded}
-              variant='outlined'
-              disabled={getSelectableCount() === 0}
+            <Box
               sx={{
-                minWidth: isMobile ? '100%' : 'auto',
+                display: 'flex',
+                flexDirection: 'row',
+                gap: 1,
+                width: '100%',
+                justifyContent: 'center',
               }}
             >
-              Select All
-            </Button>
+              <Button
+                onClick={selectAllUndownloaded}
+                variant='outlined'
+                disabled={getSelectableCount() === 0}
+                sx={{
+                  width: isMobile ? '45%' : '186px',
+                }}
+              >
+                Select All
+              </Button>
+              <Button
+                variant='outlined'
+                disabled={checkedBoxes.length === 0}
+                onClick={resetChecked}
+                sx={{
+                  width: isMobile ? '45%' : '186px',
+                }}
+              >
+                Clear Selection
+              </Button>
+            </Box>
             <Button
               onClick={downloadChecked}
               variant='contained'
               disabled={checkedBoxes.length === 0}
               sx={{
-                minWidth: isMobile ? '100%' : 'auto',
+                width: isMobile ? '91%' : '186px',
               }}
             >
               Download Selected{' '}
               {checkedBoxes.length ? `(${checkedBoxes.length})` : ''}
-            </Button>
-            <Button
-              variant='outlined'
-              disabled={checkedBoxes.length === 0}
-              onClick={resetChecked}
-              sx={{
-                minWidth: isMobile ? '100%' : 'auto',
-              }}
-            >
-              {'Clear Selection'}
             </Button>
           </Box>
         </Grid>

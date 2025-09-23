@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Card, CardContent, Grid, Typography, Button } from '@mui/material';
+import { Card, CardContent, Grid, Typography, Button, Box } from '@mui/material';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { Channel } from '../types/Channel';
@@ -58,34 +58,53 @@ function ChannelPage({ token }: ChannelPageProps) {
       <Card elevation={8} style={{ marginBottom: '16px' }}>
         <CardContent>
           <Grid container spacing={3} justifyContent='center'>
-            <Grid item xs={12} sm={4}>
-              <img
-                src={channel ? `/images/channelthumb-${channel_id}.jpg` : ''}
-                alt='Channel thumbnail'
-                width='100%'
-                style={{ border: '1px solid black' }}
-              />
+            <Grid item xs={12} sm={4}
+              display="flex" alignItems="center"
+              marginLeft={isMobile ? 'auto' : '-32px'}>
+              <Box
+                paddingX={isMobile ? '0px' : 3}
+                maxWidth={isMobile ? '75%' : 'auto'}
+                marginX={isMobile ? 'auto' : 3}>
+                <img
+                  src={channel ? `/images/channelthumb-${channel_id}.jpg` : ''}
+                  alt='Channel thumbnail'
+                  width={isMobile ? '100%' : 'auto'}
+                  height={isMobile ? 'auto' : '285px'}
+                  style={{ border: '1px solid grey' }}
+                />
+              </Box>
             </Grid>
-            <Grid item xs={12} sm={8}>
+            <Grid item xs={12} sm={8} marginTop={isMobile ? '-16px' : '0px'}>
               <Typography
-                variant={isMobile ? 'h6' : 'h4'}
+                variant={isMobile ? 'h5' : 'h4'}
                 component='h2'
                 gutterBottom
                 align='center'
               >
                 {channel ? channel.uploader : 'Loading...'}
               </Typography>
-              <Typography variant='body1' gutterBottom align='center'>
-                {channel ? (
-                  <span
-                    dangerouslySetInnerHTML={{
-                      __html: textToHTML(channel.description || ''),
-                    }}
-                  />
-                ) : (
-                  'Loading...'
-                )}
-              </Typography>
+              <Box
+                sx={{
+                  maxHeight: isMobile ? '96px' : '184px',
+                  minHeight: isMobile ? '16px' : '184px',
+                  overflowY: 'scroll',
+                  border: '1px solid grey',
+                  padding: isMobile ? '12px' : '24px',
+                  borderRadius: '4px'
+                }}
+              >
+                <Typography variant={isMobile ? 'body2' : 'body1'} align='center' color='text.secondary'>
+                  {channel ? (
+                    <span
+                      dangerouslySetInnerHTML={{
+                        __html: textToHTML(channel.description || '** No description available **'),
+                      }}
+                    />
+                  ) : (
+                    'Loading...'
+                  )}
+                </Typography>
+              </Box>
             </Grid>
           </Grid>
         </CardContent>
