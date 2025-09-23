@@ -268,7 +268,8 @@ const initialize = async () => {
       // Add deployment environment information
       safeConfig.deploymentEnvironment = {
         inDocker: !!process.env.IN_DOCKER_CONTAINER,
-        dockerAutoCreated: !!safeConfig.dockerAutoCreated
+        dockerAutoCreated: !!safeConfig.dockerAutoCreated,
+        platform: process.env.PLATFORM || null
       };
 
       res.json(safeConfig);
