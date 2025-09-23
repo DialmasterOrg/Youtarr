@@ -15,7 +15,8 @@ describe('ConfigModule', () => {
     plexApiKey: 'test-plex-key',
     youtubeOutputDirectory: '/test/output',
     plexLibrarySection: 1,
-    cronSchedule: '0 */6 * * *',
+    channelAutoDownload: false,
+    channelDownloadFrequency: '0 */6 * * *',
     devYoutubeOutputDirectory: '/dev/output',
     devffmpegPath: '/usr/local/bin/ffmpeg'
   };
@@ -480,7 +481,8 @@ describe('ConfigModule', () => {
       const writtenConfig = JSON.parse(mockFs.writeFileSync.mock.calls[0][1]);
       expect(writtenConfig.youtubeOutputDirectory).toBe('/storage/rclone/storagebox/youtube');
       expect(writtenConfig.uuid).toBe('auto-generated-uuid');
-      expect(writtenConfig.cronSchedule).toBe('0 */6 * * *');
+      expect(writtenConfig.channelAutoDownload).toBe(false);
+      expect(writtenConfig.channelDownloadFrequency).toBe('0 */6 * * *');
       expect(writtenConfig.plexApiKey).toBe('');
       expect(consoleSpy).toHaveBeenCalledWith('Platform deployment detected (DATA_PATH is set). Auto-creating config.json...');
 

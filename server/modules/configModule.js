@@ -43,6 +43,25 @@ class ConfigModule extends EventEmitter {
       this.config.preferredResolution = '1080';
     }
 
+    // Initialize channel auto-download settings if not present
+    let configModified = false;
+    if (this.config.channelAutoDownload === undefined) {
+      this.config.channelAutoDownload = false;
+      configModified = true;
+    }
+
+    if (!this.config.channelDownloadFrequency) {
+      // Check if cronSchedule exists (backward compatibility for misconfigured files)
+      if (this.config.cronSchedule) {
+        this.config.channelDownloadFrequency = this.config.cronSchedule;
+        delete this.config.cronSchedule; // Remove the incorrect field
+        configModified = true;
+      } else {
+        this.config.channelDownloadFrequency = '0 */6 * * *'; // Default: every 6 hours
+        configModified = true;
+      }
+    }
+
     // Initialize Sponsorblock settings if not present
     if (this.config.sponsorblockEnabled === undefined) {
       this.config.sponsorblockEnabled = false;
@@ -108,8 +127,11 @@ class ConfigModule extends EventEmitter {
     if (!this.config.uuid) {
       // Generate a new UUID
       this.config.uuid = uuidv4();
+      configModified = true;
+    }
 
-      // Save the new UUID to the config file
+    // Save config if any defaults were added
+    if (configModified) {
       this.saveConfig();
     }
 
@@ -161,7 +183,8 @@ class ConfigModule extends EventEmitter {
       defaultConfig = {
         channelFilesToDownload: 3,
         preferredResolution: '1080',
-        cronSchedule: '0 */6 * * *',
+        channelAutoDownload: false,
+        channelDownloadFrequency: '0 */6 * * *',
         plexApiKey: '',
         plexLibrarySection: '',
         youtubeApiKey: '',
@@ -283,7 +306,10 @@ class ConfigModule extends EventEmitter {
       youtubeOutputDirectory: process.env.DATA_PATH,
       channelFilesToDownload: 3,
       preferredResolution: '1080',
-      cronSchedule: '0 */6 * * *', // Every 6 hours
+
+      // Channel auto-download settings
+      channelAutoDownload: false,
+      channelDownloadFrequency: '0 */6 * * *', // Default: every 6 hours
 
       // Plex settings - use PLEX_URL if provided
       plexApiKey: '',
@@ -339,6 +365,14 @@ class ConfigModule extends EventEmitter {
       if (event === 'change') {
         // Load the new config file
         this.config = JSON.parse(fs.readFileSync(this.configPath));
+
+        // Migrate cronSchedule to channelDownloadFrequency if needed
+        if (!this.config.channelDownloadFrequency && this.config.cronSchedule) {
+          this.config.channelDownloadFrequency = this.config.cronSchedule;
+          delete this.config.cronSchedule;
+          // Save the corrected config
+          this.saveConfig();
+        }
 
         // IMPORTANT: If DATA_PATH is set, it ALWAYS overrides config.json
         if (process.env.IN_DOCKER_CONTAINER && process.env.DATA_PATH) {
