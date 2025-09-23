@@ -84,9 +84,13 @@ function Configuration({ token }: ConfigurationProps) {
     plexUrl: false,
     authEnabled: true
   });
-  const [deploymentEnvironment, setDeploymentEnvironment] = useState({
+  const [deploymentEnvironment, setDeploymentEnvironment] = useState<{
+    inDocker: boolean;
+    dockerAutoCreated: boolean;
+    platform?: string | null;
+  }>({
     inDocker: false,
-    dockerAutoCreated: false
+    dockerAutoCreated: false,
   });
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -641,7 +645,7 @@ function Configuration({ token }: ConfigurationProps) {
                     YouTube Output Directory
                     {isPlatformManaged.youtubeOutputDirectory ? (
                       <Chip
-                        label="Platform Managed"
+                        label={deploymentEnvironment.platform?.toLowerCase() === "elfhosted" ? "Managed by Elfhosted" : "Platform Managed"}
                         size="small"
                         sx={{ ml: 1 }}
                       />
@@ -663,7 +667,7 @@ function Configuration({ token }: ConfigurationProps) {
                 disabled={isPlatformManaged.youtubeOutputDirectory || deploymentEnvironment.dockerAutoCreated}
                 helperText={
                   isPlatformManaged.youtubeOutputDirectory
-                    ? "This path is configured by your platform deployment and cannot be changed"
+                    ? "This path is configured by your platform deployment and cannot be changed here"
                     : deploymentEnvironment.dockerAutoCreated
                       ? "This path is configured by your Docker volume mount. To change where videos are saved, update the volume mount in your docker-compose.yml file."
                       : youtubeDirectoryChanged

@@ -9,6 +9,7 @@ import {
   Route,
   Link,
   Navigate,
+  useLocation,
 } from 'react-router-dom';
 import {
   Grid,
@@ -23,9 +24,13 @@ import {
   IconButton,
   useTheme,
   useMediaQuery,
+  Snackbar,
+  Alert,
+  Box,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import MenuIcon from '@mui/icons-material/Menu';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import Configuration from './components/Configuration';
 import ChannelManager from './components/ChannelManager';
 import DownloadManager from './components/DownloadManager';
@@ -36,7 +41,7 @@ import ChannelPage from './components/ChannelPage';
 import StorageStatus from './components/StorageStatus';
 import ErrorBoundary from './components/ErrorBoundary';
 
-function App() {
+function AppContent() {
   const [token, setToken] = useState<string | null>(
     localStorage.getItem('authToken') // Only use the new authToken, no fallback to plexAuthToken
   );
@@ -45,15 +50,53 @@ function App() {
   const [requiresSetup, setRequiresSetup] = useState<boolean | null>(null);
   const [checkingSetup, setCheckingSetup] = useState(true);
   const [isPlatformManaged, setIsPlatformManaged] = useState(false);
+  const [showTmpWarning, setShowTmpWarning] = useState(false);
+  const [shouldShowWarning, setShouldShowWarning] = useState(false);
+  const [platformName, setPlatformName] = useState<string | null>(null);
+  const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const drawerWidth = isMobile ? '50%' : 240; // specify your drawer width
   const { version } = packageJson;
   const clientVersion = `v${version}`; // Create a version with 'v' prefix for comparison
+  const tmpDirectory = '/tmp';
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
+
+  // Check configuration for temp directory warning
+  useEffect(() => {
+    console.log('Useeffect for temp directory warning');
+    if (token && !checkingSetup) {
+      fetch('/getconfig', {
+        headers: {
+          'x-access-token': token,
+        },
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          const dataPath = data.youtubeOutputDirectory;
+          if (dataPath && dataPath.toLowerCase().includes(tmpDirectory.toLowerCase())) {
+            setShouldShowWarning(true);
+            setShowTmpWarning(true);
+          }
+
+          // Check for platform from deployment environment
+          if (data.deploymentEnvironment?.platform) {
+            setPlatformName(data.deploymentEnvironment.platform);
+          }
+        })
+        .catch((error) => console.error('Failed to fetch config for tmp check:', error));
+    }
+  }, [token, checkingSetup]);
+
+  // Reset warning visibility on route change
+  useEffect(() => {
+    if (shouldShowWarning) {
+      setShowTmpWarning(true);
+    }
+  }, [location, shouldShowWarning]);
 
   useEffect(() => {
     // IMMEDIATELY clear any old plexAuthToken that might exist from previous auth method
@@ -82,7 +125,7 @@ function App() {
           setToken(null);
           return; // Don't proceed with token validation
         }
-        
+
         // Only check auth token if setup is not required
         if (!data.requiresSetup) {
           // Only use the new authToken - no fallback to plexAuthToken
@@ -130,7 +173,7 @@ function App() {
   }, []);
 
   return (
-    <Router>
+    <>
       <AppBar
         position={isMobile ? 'static' : 'fixed'}
         style={{
@@ -169,11 +212,20 @@ function App() {
               alignItems: 'center',
             }}
           >
-            <img
-              src={toplogo}
-              alt='Youtarr'
-              style={{ width: isMobile ? '150px' : '200px' }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {platformName?.toLowerCase() === 'elfhosted' && (
+                <img
+                  src="https://store.elfhosted.com/wp-content/uploads/2024/11/logo.svg"
+                  alt="ElfHosted"
+                  style={{ width: isMobile ? '30px' : '40px', height: 'auto' }}
+                />
+              )}
+              <img
+                src={toplogo}
+                alt='Youtarr'
+                style={{ width: isMobile ? '150px' : '200px', height: isMobile ? '44px' : '56px' }}
+              />
+            </div>
             <Typography
               style={{ fontSize: isMobile ? 'small' : 'large' }}
               align='center'
@@ -205,7 +257,7 @@ function App() {
           xs={12}
           sm={3}
           md={1}
-          style={{ maxWidth: drawerWidth, paddingTop: isMobile ? 0 : '112px' }}
+          style={{ maxWidth: drawerWidth, paddingTop: isMobile ? 0 : '100px' }}
         >
           <Drawer
             variant={isMobile ? 'temporary' : 'permanent'}
@@ -217,7 +269,7 @@ function App() {
                 width: drawerWidth,
                 backgroundColor: '#CCC',
                 maxWidth: '50vw',
-                marginTop: isMobile ? '0' : '110px',
+                marginTop: isMobile ? '0' : '100px',
               },
             }}
             ModalProps={{ keepMounted: true }} // Better open performance on mobile.
@@ -311,7 +363,7 @@ function App() {
                 <ListItem>
                   <ListItemText
                     primary="Platform Authentication"
-                    secondary="Managed by platform"
+                    secondary={platformName?.toLowerCase() === "elfhosted" ? "Managed by Elfhosted" : "Managed by platform"}
                     secondaryTypographyProps={{ fontSize: 'small' }}
                   />
                 </ListItem>
@@ -397,6 +449,53 @@ function App() {
           )}
         </Typography>
       </footer>
+
+      {/* Persistent warning for temp directory */}
+      <Snackbar
+        open={showTmpWarning}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        sx={{ mt: 8 }}
+        onClose={() => setShowTmpWarning(false)}
+      >
+        <Alert
+          severity="error"
+          icon={<WarningAmberIcon />}
+          onClose={() => setShowTmpWarning(false)}
+          sx={{
+            maxWidth: '600px',
+            '& .MuiAlert-message': {
+              width: '100%'
+            }
+          }}
+        >
+          <Box>
+            <Typography variant="body2" gutterBottom>
+              <strong>Warning:</strong> Your video directory is mounted to {tmpDirectory}. This means your downloaded videos will not persist between restarts.
+            </Typography>
+            {platformName && platformName.toLowerCase() === 'elfhosted' && (
+              <Typography variant="body2">
+                Please see the{' '}
+                <a
+                  href="https://docs.elfhosted.com/app/youtarr"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: 'inherit', textDecoration: 'underline' }}
+                >
+                  Elfhosted setup guide
+                </a>
+              </Typography>
+            )}
+          </Box>
+        </Alert>
+      </Snackbar>
+    </>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
     </Router>
   );
 }
