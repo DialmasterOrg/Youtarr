@@ -35,6 +35,7 @@ class DownloadProgressMonitor {
     this.isChannelDownload = jobType === 'Channel Downloads';
     this.currentChannelName = '';
     this.currentVideoCompleted = false; // Track if current video is done
+    this.channelNameJustSet = false; // Track when channel name is newly set
   }
 
   normalizeChannelName(name) {
@@ -278,6 +279,8 @@ class DownloadProgressMonitor {
       }
 
       this.currentChannelName = newChannelName;
+      // Force a snapshot update so the channel name is immediately available
+      this.channelNameJustSet = true;
       return true;
     }
 
@@ -305,6 +308,8 @@ class DownloadProgressMonitor {
 
       this.currentChannelName = newChannelName;
       this.videoCount.total = parseInt(playlistInitMatch[2], 10);
+      // Force a snapshot update so the channel name is immediately available
+      this.channelNameJustSet = true;
       return true;
     }
 
@@ -415,8 +420,14 @@ class DownloadProgressMonitor {
     const shouldEmitInitial = !this.lastParsed;
     const stateChanged = !!newState && newState !== this.lastEmittedState;
 
+    // Check if channel name was just set and force an update
+    const channelNameJustSet = this.channelNameJustSet;
+    if (channelNameJustSet) {
+      this.channelNameJustSet = false;
+    }
+
     if (!parsed) {
-      if (shouldEmitInitial || stateChanged || videoInfoChanged) {
+      if (shouldEmitInitial || stateChanged || videoInfoChanged || channelNameJustSet) {
         return this.snapshot(this.currentState, videoInfo || undefined);
       }
       return null;

@@ -291,9 +291,19 @@ function AppContent() {
                 component={Link}
                 to='/configuration'
                 onClick={handleDrawerToggle}
+                sx={{
+                  backgroundColor: location.pathname === '/configuration' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
+                  borderLeft: location.pathname === '/configuration' ? '4px solid #1976d2' : 'none',
+                  '&:hover': {
+                    backgroundColor: location.pathname === '/configuration' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
+                  },
+                }}
               >
                 <ListItemText
-                  primaryTypographyProps={{ fontSize: 'large' }}
+                  primaryTypographyProps={{
+                    fontSize: 'large',
+                    fontWeight: location.pathname === '/configuration' ? 'bold' : 'normal'
+                  }}
                   primary='Configuration'
                 />
               </ListItem>
@@ -302,9 +312,19 @@ function AppContent() {
                 component={Link}
                 to='/channels'
                 onClick={handleDrawerToggle}
+                sx={{
+                  backgroundColor: location.pathname === '/channels' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
+                  borderLeft: location.pathname === '/channels' ? '4px solid #1976d2' : 'none',
+                  '&:hover': {
+                    backgroundColor: location.pathname === '/channels' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
+                  },
+                }}
               >
                 <ListItemText
-                  primaryTypographyProps={{ fontSize: 'large' }}
+                  primaryTypographyProps={{
+                    fontSize: 'large',
+                    fontWeight: location.pathname === '/channels' ? 'bold' : 'normal'
+                  }}
                   primary='Your Channels'
                 />
               </ListItem>
@@ -313,9 +333,19 @@ function AppContent() {
                 component={Link}
                 to='/downloads'
                 onClick={handleDrawerToggle}
+                sx={{
+                  backgroundColor: location.pathname === '/downloads' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
+                  borderLeft: location.pathname === '/downloads' ? '4px solid #1976d2' : 'none',
+                  '&:hover': {
+                    backgroundColor: location.pathname === '/downloads' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
+                  },
+                }}
               >
                 <ListItemText
-                  primaryTypographyProps={{ fontSize: 'large' }}
+                  primaryTypographyProps={{
+                    fontSize: 'large',
+                    fontWeight: location.pathname === '/downloads' ? 'bold' : 'normal'
+                  }}
                   primary='Manage Downloads'
                 />
               </ListItem>
@@ -324,9 +354,19 @@ function AppContent() {
                 component={Link}
                 to='/videos'
                 onClick={handleDrawerToggle}
+                sx={{
+                  backgroundColor: location.pathname === '/videos' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
+                  borderLeft: location.pathname === '/videos' ? '4px solid #1976d2' : 'none',
+                  '&:hover': {
+                    backgroundColor: location.pathname === '/videos' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
+                  },
+                }}
               >
                 <ListItemText
-                  primaryTypographyProps={{ fontSize: 'large' }}
+                  primaryTypographyProps={{
+                    fontSize: 'large',
+                    fontWeight: location.pathname === '/videos' ? 'bold' : 'normal'
+                  }}
                   primary='Downloaded Videos'
                 />
               </ListItem>
@@ -336,9 +376,19 @@ function AppContent() {
                   component={Link}
                   to='/login'
                   onClick={handleDrawerToggle}
+                  sx={{
+                    backgroundColor: location.pathname === '/login' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
+                    borderLeft: location.pathname === '/login' ? '4px solid #1976d2' : 'none',
+                    '&:hover': {
+                      backgroundColor: location.pathname === '/login' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
+                    },
+                  }}
                 >
                   <ListItemText
-                    primaryTypographyProps={{ fontSize: 'large' }}
+                    primaryTypographyProps={{
+                      fontSize: 'large',
+                      fontWeight: location.pathname === '/login' ? 'bold' : 'normal'
+                    }}
                     primary='Login'
                   />
                 </ListItem>

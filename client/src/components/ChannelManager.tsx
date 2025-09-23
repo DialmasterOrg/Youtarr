@@ -271,7 +271,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
     } else {
       setDeletedChannels([...deletedChannels, channels[index].url]);
     }
-    
+
     setDeleteConfirmOpen(false);
     setChannelToDelete(null);
   };
@@ -320,37 +320,6 @@ function ChannelManager({ token }: ChannelManagerProps) {
 
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
-  };
-
-  const getInfoIcon = (tooltipText: string) => {
-    const handleClick = (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (isMobile) {
-        setMobileTooltip(mobileTooltip === tooltipText ? null : tooltipText);
-      }
-    };
-
-    if (isMobile) {
-      return (
-        <IconButton
-          size="small"
-          sx={{ ml: 0.5, p: 0.5 }}
-          onClick={handleClick}
-          data-testid="info-button"
-        >
-          <InfoIcon fontSize="small" />
-        </IconButton>
-      );
-    }
-
-    return (
-      <Tooltip title={tooltipText} arrow placement="top">
-        <IconButton size="small" sx={{ ml: 0.5, p: 0.5 }} data-testid="info-button">
-          <InfoIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-    );
   };
 
   return (
@@ -489,13 +458,14 @@ function ChannelManager({ token }: ChannelManagerProps) {
             <Box sx={{ display: 'flex', alignItems: 'flex-end' }}>
               <TextField
                 label='Add a new channel'
+                padding-right={isMobile ? '8px' : '0px'}
                 value={newChannel.url}
                 onChange={(e) =>
                   setNewChannel({ url: e.target.value, uploader: '' })
                 }
                 disabled={isAddingChannel || isSaving}
                 onKeyPress={(e) => {
-                  if (e.key === 'Enter' && !isAddingChannel && !isSaving) {
+                  if (e.key === 'Enter' && !isAddingChannel && !isSaving && newChannel.url.trim()) {
                     handleAdd();
                   }
                 }}
@@ -505,7 +475,6 @@ function ChannelManager({ token }: ChannelManagerProps) {
                 }}
                 helperText="e.g., @MrBeast or youtube.com/@MrBeast"
               />
-              {getInfoIcon('Enter a YouTube channel. Supported formats: @ChannelName, ChannelName, youtube.com/@ChannelName, full URLs, or with /videos suffix')}
             </Box>
           </Grid>
         <Grid
@@ -516,6 +485,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            height: isMobile ? '70px' : '80px',
           }}
         >
           <Tooltip placement='top' title={isAddingChannel ? 'Adding channel...' : 'Add a new channel to the list above'}>
@@ -524,7 +494,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
                 onClick={handleAdd}
                 color='primary'
                 data-testid='add-channel-button'
-                disabled={isAddingChannel || isSaving}
+                disabled={isAddingChannel || isSaving || !newChannel.url.trim()}
               >
                 {isAddingChannel ? (
                   <CircularProgress size={28} />

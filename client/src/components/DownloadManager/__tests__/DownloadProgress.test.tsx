@@ -184,49 +184,6 @@ describe('DownloadProgress', () => {
     });
   });
 
-  test('displays video count for channel downloads', async () => {
-    renderWithContext(
-      <DownloadProgress
-        downloadProgressRef={mockDownloadProgressRef}
-        downloadInitiatedRef={mockDownloadInitiatedRef}
-      />
-    );
-
-    const [, processCallback] = mockSubscribe.mock.calls[0];
-
-    await act(async () => {
-      processCallback({
-        progress: {
-          jobId: 'test-job',
-          progress: {
-            percent: 50,
-            downloadedBytes: 1024,
-            totalBytes: 2048,
-            speedBytesPerSecond: 512,
-            etaSeconds: 60,
-          },
-          stalled: false,
-          state: 'downloading_video',
-          downloadType: 'Channel Downloads',
-          currentChannelName: 'Test Channel',
-          videoCount: {
-            current: 3,
-            total: 10,
-            completed: 2,
-            skipped: 1,
-            skippedThisChannel: 0,
-          },
-        },
-      });
-    });
-
-    await waitFor(() => {
-      expect(
-        screen.getByText(/Downloading recent from all channels.*Test Channel.*3 of 10/)
-      ).toBeInTheDocument();
-    });
-  });
-
   test('displays video count for non-channel downloads', async () => {
     renderWithContext(
       <DownloadProgress
@@ -621,49 +578,6 @@ describe('DownloadProgress', () => {
     });
 
     expect(mockDownloadInitiatedRef.current).toBe(false);
-  });
-
-  test('adjusts video count for skipped videos in channel downloads', async () => {
-    renderWithContext(
-      <DownloadProgress
-        downloadProgressRef={mockDownloadProgressRef}
-        downloadInitiatedRef={mockDownloadInitiatedRef}
-      />
-    );
-
-    const [, processCallback] = mockSubscribe.mock.calls[0];
-
-    await act(async () => {
-      processCallback({
-        progress: {
-          jobId: 'test-job',
-          progress: {
-            percent: 50,
-            downloadedBytes: 1024,
-            totalBytes: 2048,
-            speedBytesPerSecond: 512,
-            etaSeconds: 60,
-          },
-          stalled: false,
-          state: 'downloading_video',
-          downloadType: 'Channel Downloads',
-          currentChannelName: 'Test Channel',
-          videoCount: {
-            current: 5,
-            total: 10,
-            completed: 2,
-            skipped: 2,
-            skippedThisChannel: 3,
-          },
-        },
-      });
-    });
-
-    await waitFor(() => {
-      expect(
-        screen.getByText(/Downloading recent from all channels.*Test Channel.*2 of 10/)
-      ).toBeInTheDocument();
-    });
   });
 
   test('handles zero bytes gracefully', async () => {

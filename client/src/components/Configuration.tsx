@@ -663,7 +663,6 @@ function Configuration({ token }: ConfigurationProps) {
                 name="youtubeOutputDirectory"
                 value={config.youtubeOutputDirectory}
                 onChange={handleInputChange}
-                required
                 disabled={isPlatformManaged.youtubeOutputDirectory || deploymentEnvironment.dockerAutoCreated}
                 helperText={
                   isPlatformManaged.youtubeOutputDirectory
