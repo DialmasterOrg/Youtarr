@@ -175,7 +175,7 @@ function AppContent() {
   return (
     <>
       <AppBar
-        position={isMobile ? 'static' : 'fixed'}
+        position="fixed"
         style={{
           backgroundColor: '#DDD',
           width: '100%',
@@ -257,7 +257,7 @@ function AppContent() {
           xs={12}
           sm={3}
           md={1}
-          style={{ maxWidth: drawerWidth, paddingTop: isMobile ? 0 : '100px' }}
+          style={{ maxWidth: drawerWidth, paddingTop: isMobile ?'0px' : '100px' }}
         >
           <Drawer
             variant={isMobile ? 'temporary' : 'permanent'}
@@ -380,7 +380,7 @@ function AppContent() {
         >
           <Container
             style={{
-              paddingTop: '32px',
+              paddingTop: isMobile ? '100px' : '32px',
               width: '100%',
             }}
           >
