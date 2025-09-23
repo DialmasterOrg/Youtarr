@@ -102,6 +102,20 @@ describe('ConfigModule', () => {
       delete process.env.DATA_PATH;
     });
 
+    test('DATA_PATH should override youtubeOutputDirectory from config.json', () => {
+      process.env.IN_DOCKER_CONTAINER = '1';
+      process.env.DATA_PATH = '/custom/data/path';
+
+      // Config.json has '/test/output' as youtubeOutputDirectory
+      ConfigModule = require('../configModule');
+
+      // Check that the DATA_PATH overrides the config.json value
+      expect(ConfigModule.config.youtubeOutputDirectory).toBe('/custom/data/path');
+      expect(ConfigModule.directoryPath).toBe('/custom/data/path');
+
+      delete process.env.DATA_PATH;
+    });
+
     test('should use dev paths when not in Docker', () => {
       ConfigModule = require('../configModule');
 
@@ -154,6 +168,64 @@ describe('ConfigModule', () => {
       const parsed = JSON.parse(savedData);
       expect(parsed.testField).toBe('test-value');
     });
+
+    test('saveConfig should not persist DATA_PATH override to config file', () => {
+      process.env.IN_DOCKER_CONTAINER = '1';
+      process.env.DATA_PATH = '/runtime/override/path';
+
+      // Re-require to get fresh instance with DATA_PATH set
+      jest.resetModules();
+      jest.doMock('uuid', () => ({ v4: jest.fn(() => 'test-uuid-1234') }));
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(mockConfig)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      fs = require('fs');
+      ConfigModule = require('../configModule');
+
+      // Verify DATA_PATH override is applied in memory
+      expect(ConfigModule.config.youtubeOutputDirectory).toBe('/runtime/override/path');
+
+      // Save config
+      ConfigModule.saveConfig();
+
+      // Verify the saved config does NOT contain the DATA_PATH override
+      const savedData = fs.writeFileSync.mock.calls[fs.writeFileSync.mock.calls.length - 1][1];
+      const parsed = JSON.parse(savedData);
+      expect(parsed.youtubeOutputDirectory).toBeUndefined();
+
+      delete process.env.DATA_PATH;
+    });
+
+    test('updateConfig with DATA_PATH should maintain override', () => {
+      process.env.IN_DOCKER_CONTAINER = '1';
+      process.env.DATA_PATH = '/platform/data';
+
+      // Re-require to get fresh instance with DATA_PATH set
+      jest.resetModules();
+      jest.doMock('uuid', () => ({ v4: jest.fn(() => 'test-uuid-1234') }));
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(mockConfig)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      fs = require('fs');
+      ConfigModule = require('../configModule');
+
+      // Update config with different youtubeOutputDirectory
+      const newConfig = { ...mockConfig, youtubeOutputDirectory: '/should/be/overridden' };
+      ConfigModule.updateConfig(newConfig);
+
+      // Verify DATA_PATH still overrides after update
+      expect(ConfigModule.config.youtubeOutputDirectory).toBe('/platform/data');
+
+      delete process.env.DATA_PATH;
+    });
   });
 
   describe('file watching', () => {
@@ -174,6 +246,41 @@ describe('ConfigModule', () => {
 
       expect(ConfigModule.config.plexApiKey).toBe('updated-key');
       expect(changeListener).toHaveBeenCalled();
+    });
+
+    test('should maintain DATA_PATH override when config file changes', () => {
+      process.env.IN_DOCKER_CONTAINER = '1';
+      process.env.DATA_PATH = '/platform/override';
+
+      // Re-require to get fresh instance with DATA_PATH set
+      jest.resetModules();
+      jest.doMock('uuid', () => ({ v4: jest.fn(() => 'test-uuid-1234') }));
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(mockConfig)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      fs = require('fs');
+      ConfigModule = require('../configModule');
+
+      const changeListener = jest.fn();
+      ConfigModule.on('change', changeListener);
+
+      const watchCallback = fs.watch.mock.calls[0][1];
+
+      // Simulate config file change with different youtubeOutputDirectory
+      const updatedConfig = { ...mockConfig, youtubeOutputDirectory: '/config/file/path' };
+      fs.readFileSync.mockReturnValue(JSON.stringify(updatedConfig));
+
+      watchCallback('change');
+
+      // Verify DATA_PATH still overrides even after file change
+      expect(ConfigModule.config.youtubeOutputDirectory).toBe('/platform/override');
+      expect(changeListener).toHaveBeenCalled();
+
+      delete process.env.DATA_PATH;
     });
 
     test('should ignore non-change events', () => {
