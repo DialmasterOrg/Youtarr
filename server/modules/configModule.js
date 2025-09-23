@@ -25,6 +25,11 @@ class ConfigModule extends EventEmitter {
       // Falls back to default /usr/src/app/data for backward compatibility
       this.directoryPath = process.env.DATA_PATH || '/usr/src/app/data';
       this.ffmpegPath = '/usr/bin/ffmpeg';
+
+      // IMPORTANT: If DATA_PATH is set, it ALWAYS overrides config.json
+      if (process.env.DATA_PATH) {
+        this.config.youtubeOutputDirectory = process.env.DATA_PATH;
+      }
     } else {
       this.ffmpegPath = this.config.devffmpegPath;
       this.directoryPath = this.config.devYoutubeOutputDirectory;
@@ -238,13 +243,30 @@ class ConfigModule extends EventEmitter {
 
   updateConfig(newConfig) {
     this.config = newConfig;
+
+    // IMPORTANT: If DATA_PATH is set, it ALWAYS overrides config.json
+    if (process.env.IN_DOCKER_CONTAINER && process.env.DATA_PATH) {
+      this.config.youtubeOutputDirectory = process.env.DATA_PATH;
+    }
+
     this.saveConfig();
     // Emit a change event
     this.emit('change');
   }
 
   saveConfig() {
-    fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2));
+    // Create a copy of the config to save
+    const configToSave = { ...this.config };
+
+    // Don't save the DATA_PATH override to the config file
+    // This allows the config.json to maintain its own value
+    // while DATA_PATH always overrides at runtime
+    if (process.env.IN_DOCKER_CONTAINER && process.env.DATA_PATH) {
+      // Remove the runtime override before saving
+      delete configToSave.youtubeOutputDirectory;
+    }
+
+    fs.writeFileSync(this.configPath, JSON.stringify(configToSave, null, 2));
   }
 
   createDefaultConfig() {
@@ -317,6 +339,11 @@ class ConfigModule extends EventEmitter {
       if (event === 'change') {
         // Load the new config file
         this.config = JSON.parse(fs.readFileSync(this.configPath));
+
+        // IMPORTANT: If DATA_PATH is set, it ALWAYS overrides config.json
+        if (process.env.IN_DOCKER_CONTAINER && process.env.DATA_PATH) {
+          this.config.youtubeOutputDirectory = process.env.DATA_PATH;
+        }
 
         // Emit a change event
         this.emit('change');
