@@ -2,6 +2,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const { execSync } = require('child_process');
 const configModule = require('./configModule');
+const nfoGenerator = require('./nfoGenerator');
 
 const videoPath = process.argv[2]; // get the video file path
 const parsedPath = path.parse(videoPath);
@@ -53,6 +54,9 @@ if (fs.existsSync(jsonPath)) {
   const newJsonPath = path.join(directoryPath, `${id}.info.json`); // define the new path
 
   fs.moveSync(jsonPath, newJsonPath, { overwrite: true }); // move the file
+
+  // Generate NFO file for Jellyfin/Kodi/Emby compatibility
+  nfoGenerator.writeVideoNfoFile(videoPath, jsonData);
 
   if (fs.existsSync(imagePath)) {
     // check if image thumbnail exists
