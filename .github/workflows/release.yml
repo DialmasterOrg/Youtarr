@@ -103,8 +103,7 @@ jobs:
           context: .
           push: false
           tags: ${{ vars.DOCKERHUB_USERNAME }}/youtarr:test-${{ github.run_id }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          no-cache: true
 
       - name: Record bump commit SHA
         if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
@@ -194,8 +193,7 @@ jobs:
           tags: |
             ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.calculate_version.outputs.new_tag }}
             ${{ vars.DOCKERHUB_USERNAME }}/youtarr:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          no-cache: true
 
       - name: Revert release commits on failure
         if: ${{ failure() && !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
