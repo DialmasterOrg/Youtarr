@@ -56,6 +56,8 @@ Youtarr generates two types of metadata:
 - The embedded metadata ensures videos display correctly even without NFO support
 - Channel names appear as "Studio" and "Album" for grouping
 - Use Collections to group channels if desired
+- **Local Media Assets**: Ensure "Use local assets" is enabled in your library's Advanced settings to prioritize poster.jpg files
+- **Thumbnail Issues**: If poster.jpg files are occasionally replaced by generated thumbnails, this appears to be a known Plex behavior that occurs inconsistently. Try refreshing metadata for affected items
 
 ## Kodi Configuration
 
