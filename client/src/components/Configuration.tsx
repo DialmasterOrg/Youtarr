@@ -74,6 +74,8 @@ function Configuration({ token }: ConfigurationProps) {
     stallDetectionRateThreshold: '100K',
     cookiesEnabled: false,
     customCookiesUploaded: false,
+    writeChannelPosters: true,
+    writeVideoNfoFiles: true,
   });
   const [openPlexLibrarySelector, setOpenPlexLibrarySelector] = useState(false);
   const [openPlexAuthDialog, setOpenPlexAuthDialog] = useState(false);
@@ -137,9 +139,14 @@ function Configuration({ token }: ConfigurationProps) {
           setDeploymentEnvironment(data.deploymentEnvironment);
           delete data.deploymentEnvironment;
         }
-        setConfig(data);
-        setOriginalYoutubeDirectory(data.youtubeOutputDirectory || '');
-        setInitialConfig(data);
+        const resolvedConfig = {
+          ...data,
+          writeChannelPosters: data.writeChannelPosters ?? true,
+          writeVideoNfoFiles: data.writeVideoNfoFiles ?? true,
+        };
+        setConfig(resolvedConfig);
+        setOriginalYoutubeDirectory(resolvedConfig.youtubeOutputDirectory || '');
+        setInitialConfig(resolvedConfig);
       })
       .catch((error) => console.error(error));
   }, [token]);
@@ -574,6 +581,8 @@ function Configuration({ token }: ConfigurationProps) {
       'stallDetectionRateThreshold',
       'cookiesEnabled',
       'customCookiesUploaded',
+      'writeChannelPosters',
+      'writeVideoNfoFiles',
     ];
     const changed = keysToCompare.some((k) => {
       return (config as any)[k] !== (initialConfig as any)[k];
@@ -1028,13 +1037,86 @@ function Configuration({ token }: ConfigurationProps) {
               </>
             )}
           </Grid>
-        </AccordionDetails>
-      </Accordion>
+      </AccordionDetails>
+    </Accordion>
 
-      <Accordion elevation={8} defaultExpanded={false} sx={{ mb: 2 }}>
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            Cookie Configuration
+    <Accordion elevation={8} defaultExpanded={false} sx={{ mb: 2 }}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+        <Typography variant="h6" sx={{ flexGrow: 1 }}>
+          Optional: Kodi, Emby and Jellyfin compatibility
+        </Typography>
+      </AccordionSummary>
+      <AccordionDetails>
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            Control generation of metadata and artwork files that help Kodi, Emby and Jellyfin index your downloads cleanly.
+          </Typography>
+          <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
+            For best results:
+          </Typography>
+          <Typography variant="body2" component="div">
+            • Add your download library as Content Type: <strong>Movies</strong>
+            <br />
+            • Under Metadata Readers/Savers, select <strong>Nfo</strong> to read the .nfo files
+            <br />
+            • Uncheck all metadata downloaders since we provide metadata via .nfo files
+          </Typography>
+        </Alert>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={6}>
+            <FormControl component="fieldset" variant="standard">
+              <FormControlLabel
+                control={
+                  <Switch
+                    name="writeVideoNfoFiles"
+                    checked={config.writeVideoNfoFiles}
+                    onChange={handleCheckboxChange}
+                  />
+                }
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    Generate video .nfo files
+                    {getInfoIcon('Create .nfo metadata alongside each download so Kodi, Emby and Jellyfin can import videos with full details.')}
+                  </Box>
+                }
+              />
+              <FormHelperText>
+                Recommended when another media server scans your downloads.
+              </FormHelperText>
+            </FormControl>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <FormControl component="fieldset" variant="standard">
+              <FormControlLabel
+                control={
+                  <Switch
+                    name="writeChannelPosters"
+                    checked={config.writeChannelPosters}
+                    onChange={handleCheckboxChange}
+                  />
+                }
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    Copy channel poster.jpg files
+                    {getInfoIcon('Copy channel thumbnails into each channel folder as poster.jpg for media server compatibility.')}
+                  </Box>
+                }
+              />
+              <FormHelperText>
+                Helps Kodi, Emby and Jellyfin display artwork for channel folders.
+              </FormHelperText>
+            </FormControl>
+          </Grid>
+        </Grid>
+      </AccordionDetails>
+    </Accordion>
+
+    <Accordion elevation={8} defaultExpanded={false} sx={{ mb: 2 }}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+        <Typography variant="h6" sx={{ flexGrow: 1 }}>
+          Cookie Configuration
           </Typography>
           <Chip
             label={config.cookiesEnabled ? "Cookies Enabled" : "Cookies Disabled"}

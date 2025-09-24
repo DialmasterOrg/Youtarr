@@ -123,6 +123,16 @@ class ConfigModule extends EventEmitter {
       this.config.customCookiesUploaded = false;
     }
 
+    if (this.config.writeChannelPosters === undefined) {
+      this.config.writeChannelPosters = true;
+      configModified = true;
+    }
+
+    if (this.config.writeVideoNfoFiles === undefined) {
+      this.config.writeVideoNfoFiles = true;
+      configModified = true;
+    }
+
     // Check if a UUID exists in the config
     if (!this.config.uuid) {
       // Generate a new UUID
@@ -208,7 +218,9 @@ class ConfigModule extends EventEmitter {
         stallDetectionWindowSeconds: 30,
         stallDetectionRateThreshold: '100K',
         cookiesEnabled: false,
-        customCookiesUploaded: false
+        customCookiesUploaded: false,
+        writeChannelPosters: true,
+        writeVideoNfoFiles: true
       };
     }
 
@@ -351,6 +363,10 @@ class ConfigModule extends EventEmitter {
     defaultConfig.cookiesEnabled = false;
     defaultConfig.customCookiesUploaded = false;
 
+    // Media server compatibility features enabled by default
+    defaultConfig.writeChannelPosters = true;
+    defaultConfig.writeVideoNfoFiles = true;
+
     // Generate UUID for instance identification
     defaultConfig.uuid = uuidv4();
 
@@ -371,6 +387,15 @@ class ConfigModule extends EventEmitter {
           this.config.channelDownloadFrequency = this.config.cronSchedule;
           delete this.config.cronSchedule;
           // Save the corrected config
+          this.saveConfig();
+        }
+
+        // Apply configuration migrations to ensure new defaults exist
+        const migratedConfig = this.migrateConfig(this.config);
+        const needsMigrationSave = JSON.stringify(migratedConfig) !== JSON.stringify(this.config);
+        this.config = migratedConfig;
+
+        if (needsMigrationSave) {
           this.saveConfig();
         }
 
@@ -432,6 +457,19 @@ class ConfigModule extends EventEmitter {
         }
         if (migrated.customCookiesUploaded === undefined) {
           migrated.customCookiesUploaded = false;
+        }
+
+        return migrated;
+      },
+      '1.25.0': (cfg) => {
+        const migrated = { ...cfg };
+
+        if (migrated.writeChannelPosters === undefined) {
+          migrated.writeChannelPosters = true;
+        }
+
+        if (migrated.writeVideoNfoFiles === undefined) {
+          migrated.writeVideoNfoFiles = true;
         }
 
         return migrated;

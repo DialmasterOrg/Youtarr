@@ -16,8 +16,10 @@
   "stallDetectionRateThreshold": "100K",
   "cookiesEnabled": false,
   "customCookiesUploaded": false,
+  "writeChannelPosters": true,
+  "writeVideoNfoFiles": true,
   "uuid": "",
-  "//comment": "Replace the two directory paths below with YOUR paths to run this on Windows and have it work",
+  "//comment": "DEV ONLY -- These paths are only used for development on Windows",
   "devYoutubeOutputDirectory": "Q:\\\\Youtube_test",
   "devffmpegPath": "C:\\\\ffmpeg-6.0\\\\bin\\\\ffmpeg.exe"
 }

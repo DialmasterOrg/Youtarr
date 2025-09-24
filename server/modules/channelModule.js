@@ -2,7 +2,7 @@ const configModule = require('./configModule');
 const downloadModule = require('./downloadModule');
 const archiveModule = require('./archiveModule');
 const cron = require('node-cron');
-const fs = require('fs');
+const fs = require('fs-extra');
 const fsPromises = fs.promises;
 const path = require('path');
 const os = require('os');
@@ -72,7 +72,25 @@ class ChannelModule {
         } else if (code === 0) {
           resolve();
         } else {
-          reject(new Error(`yt-dlp exited with code ${code}`));
+          // Check for common error patterns in stderr
+          let errorMessage = `yt-dlp exited with code ${code}`;
+          let errorCode = 'YT_DLP_ERROR';
+
+          if (stderrBuffer.includes('Unable to extract') ||
+              stderrBuffer.includes('does not exist') ||
+              stderrBuffer.includes('This channel does not exist') ||
+              stderrBuffer.includes('ERROR: [youtube]')) {
+            errorMessage = 'Channel not found or invalid URL';
+            errorCode = 'CHANNEL_NOT_FOUND';
+          } else if (stderrBuffer.includes('Unable to download webpage')) {
+            errorMessage = 'Network error: Unable to connect to YouTube';
+            errorCode = 'NETWORK_ERROR';
+          }
+
+          const error = new Error(errorMessage);
+          error.code = errorCode;
+          error.stderr = stderrBuffer;
+          reject(error);
         }
       });
       ytDlp.on('error', reject);
@@ -479,7 +497,56 @@ class ChannelModule {
   }
 
   /**
+   * Backfill poster.jpg files for existing channel folders.
+   * Copies channelthumb to each channel's folder as poster.jpg if it doesn't exist.
+   * @param {Array} channels - Array of channel database records
+   * @returns {Promise<void>}
+   */
+  async backfillChannelPosters(channels) {
+    try {
+      const config = configModule.getConfig() || {};
+      const shouldWriteChannelPosters = config.writeChannelPosters !== false;
+
+      if (!shouldWriteChannelPosters) {
+        return;
+      }
+
+      const outputDir = configModule.directoryPath;
+      const imageDir = configModule.getImagePath();
+
+      if (!outputDir || !fs.existsSync(outputDir)) {
+        return;
+      }
+
+      for (const channel of channels) {
+        if (!channel.channel_id || !channel.uploader) continue;
+
+        const channelFolderPath = path.join(outputDir, channel.uploader);
+        const channelPosterPath = path.join(channelFolderPath, 'poster.jpg');
+
+
+        // Check if channel folder exists and poster.jpg doesn't exist
+        if (fs.existsSync(channelFolderPath) && !fs.existsSync(channelPosterPath)) {
+          const channelThumbPath = path.join(imageDir, `channelthumb-${channel.channel_id}.jpg`);
+
+
+          if (fs.existsSync(channelThumbPath)) {
+            try {
+              fs.copySync(channelThumbPath, channelPosterPath);
+            } catch (copyErr) {
+              console.log(`Error backfilling poster for ${channel.uploader}: ${copyErr.message}`);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error during channel poster backfill:', err);
+    }
+  }
+
+  /**
    * Read all enabled channels from the database.
+   * Also backfills poster.jpg files for existing channel folders.
    * @returns {Promise<Array>} - Array of channel objects with url, uploader, and channel_id
    */
   async readChannels() {
@@ -487,6 +554,9 @@ class ChannelModule {
       const channels = await Channel.findAll({
         where: { enabled: true },
       });
+
+      // Backfill poster.jpg for existing channel folders
+      this.backfillChannelPosters(channels);
 
       return channels.map((channel) => ({
         url: channel.url,

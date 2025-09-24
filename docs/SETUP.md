@@ -77,6 +77,22 @@ After logging in, configure Youtarr through the Configuration page:
     - Configure how often Youtarr checks for new and downloads new videos for your channels
     - Default: Every 6 hours
 
+3. **Media Server Compatibility Settings**:
+
+   **NFO File Generation** (enabled by default):
+   - Automatically creates .nfo metadata files alongside each video
+   - Compatible with Kodi, Jellyfin, and Emby
+   - Includes: title, plot, upload date, channel info, genres, tags, runtime
+
+   **Channel Poster Generation** (enabled by default):
+   - Copies channel thumbnails as poster.jpg in each channel folder
+   - Helps media servers display channel artwork
+
+   **Embedded Metadata Enhancement**:
+   - Automatically embeds extended metadata directly into MP4 files
+   - Includes: genre (from categories), studio/network (channel name), keywords (from tags)
+   - Ensures Plex can read metadata even without Local Media Assets configured
+
 ## Plex Library Setup
 
 For Youtarr to work correctly with Plex:
@@ -98,7 +114,8 @@ For Youtarr to work correctly with Plex:
 4. Youtarr will automatically:
    - Download new videos from subscribed channels
    - Organize them by channel name
-   - Add them to your Plex library
+   - Add them to your Plex library (if configured)
+   - Generate metadata files for media server compatibility
 
 Note on removal: Removing a channel in the UI disables future downloads for that channel but does not delete existing videos or download history.
 

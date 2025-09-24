@@ -366,13 +366,48 @@ const initialize = async () => {
 
     app.post('/addchannelinfo', verifyToken, async (req, res) => {
       const url = req.body.url;
-      if (url) {
+      if (!url) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'URL is missing in the request'
+        });
+      }
+
+      try {
         console.log(`Adding channel info for ${url}`);
         let channelInfo = await channelModule.getChannelInfo(url, false);
         channelInfo.channel_id = channelInfo.id;
         res.json({ status: 'success', channelInfo: channelInfo });
-      } else {
-        res.status(400).send('URL is missing in the request');
+      } catch (error) {
+        console.error(`Error getting channel info for ${url}:`, error.message);
+
+        // Handle specific error types
+        if (error.code === 'CHANNEL_NOT_FOUND') {
+          return res.status(404).json({
+            status: 'error',
+            message: 'Channel not found. Please check the URL and try again.',
+            error: error.message
+          });
+        } else if (error.code === 'COOKIES_REQUIRED') {
+          return res.status(403).json({
+            status: 'error',
+            message: error.message,
+            error: error.message
+          });
+        } else if (error.code === 'NETWORK_ERROR') {
+          return res.status(503).json({
+            status: 'error',
+            message: 'Unable to connect to YouTube. Please try again later.',
+            error: error.message
+          });
+        } else {
+          // Generic error response
+          return res.status(500).json({
+            status: 'error',
+            message: 'Failed to get channel information. Please try again.',
+            error: error.message || 'Unknown error'
+          });
+        }
       }
     });
 

@@ -255,6 +255,64 @@ New installations automatically support full UTF-8 (utf8mb4).
 3. Check Windows Defender Firewall settings
 4. Verify router settings if accessing from different subnet
 
+## Metadata Issues
+
+### Metadata Not Showing in Media Server
+
+**Problem**: Videos play but metadata (title, description, etc.) isn't displaying in your media server.
+
+#### Plex
+**Solution**:
+- Ensure "Local Media Assets" is enabled in your library agent settings
+- Place Local Media Assets at the top of the agent priority list
+- Check container logs for "Successfully added additional metadata to video file"
+- Try "Refresh Metadata" on the library or individual items
+- Verify the library type is "Other Videos" with "Personal Media" agent
+
+#### Kodi/Jellyfin/Emby
+**Solution**:
+- Verify .nfo files exist alongside video files (same name, different extension)
+- Ensure library is configured as "Movies" type
+- Enable "Nfo" metadata reader in library settings
+- Disable all online metadata scrapers to avoid conflicts
+- Try a full library rescan
+- Check file permissions - media server must be able to read .nfo files
+
+### Channel Posters Not Displaying
+
+**Problem**: Channel folders don't show artwork/posters.
+
+**Solution**:
+- Verify poster.jpg exists in each channel folder
+- Check that "Copy channel poster.jpg files" is enabled in Configuration
+- Ensure media server has read permissions for image files
+- Some servers cache artwork - try:
+  - Clearing server cache
+  - Restarting the media server
+  - Removing and re-adding the library
+
+### Special Characters in Titles/Metadata
+
+**Problem**: Titles with $, &, or other special characters display incorrectly.
+
+**Solution**:
+- Youtarr properly escapes XML characters in NFO files
+- For Plex: Embedded metadata handles special characters automatically
+- If issues persist:
+  - Check media server logs for XML parsing errors
+  - Verify you're running the latest version of Youtarr
+  - Report specific character issues on GitHub
+
+### NFO Files Not Being Created
+
+**Problem**: Videos download but no .nfo files are generated.
+
+**Solution**:
+- Check that "Generate video .nfo files" is enabled in Configuration
+- Verify post-processing completed (check container logs)
+- Ensure write permissions in video directories
+- Look for errors in logs during post-processing phase
+
 ## Getting Help
 
 If these solutions don't resolve your issue:
