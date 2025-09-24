@@ -1,10 +1,90 @@
 const fs = require('fs-extra');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execSync, spawnSync } = require('child_process');
 const configModule = require('./configModule');
 const channelProfileModule = require('./channelProfileModule');
 const nfoGeneratorModule = require('./nfoGeneratorModule');
+const nfoGenerator = require('./nfoGenerator');
 const { Channel, Video, VideoProfileMapping } = require('../models');
+
+function shouldWriteChannelPosters() {
+  const config = configModule.getConfig() || {};
+  return config.writeChannelPosters !== false;
+}
+
+function shouldWriteVideoNfoFiles() {
+  const config = configModule.getConfig() || {};
+  return config.writeVideoNfoFiles !== false;
+}
+
+// Helper function to download channel thumbnail if needed
+async function downloadChannelThumbnailIfMissing(channelId) {
+  const channelThumbPath = path.join(
+    configModule.getImagePath(),
+    `channelthumb-${channelId}.jpg`
+  );
+
+  if (!fs.existsSync(channelThumbPath)) {
+    try {
+      // Build the channel URL from the channel ID
+      const channelUrl = `https://www.youtube.com/channel/${channelId}`;
+
+      // Build yt-dlp command with cookies if configured
+      let ytdlpCmd = 'yt-dlp';
+      const cookiesPath = configModule.getCookiesPath();
+      if (cookiesPath) {
+        ytdlpCmd += ` --cookies "${cookiesPath}"`;
+      }
+      ytdlpCmd += ` --skip-download --write-thumbnail --playlist-end 1 --playlist-items 0 --convert-thumbnails jpg -o "channelthumb-%(channel_id)s.jpg" "${channelUrl}"`;
+
+      // Download the thumbnail using yt-dlp
+      execSync(ytdlpCmd, {
+        cwd: configModule.getImagePath(),
+        stdio: 'pipe'
+      });
+
+      // Resize the thumbnail to make it smaller
+      if (fs.existsSync(channelThumbPath)) {
+        const tempPath = channelThumbPath + '.temp';
+        execSync(
+          `${configModule.ffmpegPath} -y -i "${channelThumbPath}" -vf "scale=iw*0.4:ih*0.4" "${tempPath}"`,
+          { stdio: 'pipe' }
+        );
+        fs.renameSync(tempPath, channelThumbPath);
+      }
+    } catch (err) {
+      console.log(`Error downloading channel thumbnail: ${err.message}`);
+    }
+  }
+}
+
+// Helper function to copy channel thumb as poster.jpg to channel folder
+async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
+  if (!shouldWriteChannelPosters()) {
+    return;
+  }
+
+  try {
+    const channelPosterPath = path.join(channelFolderPath, 'poster.jpg');
+    // Only copy if poster.jpg doesn't already exist
+    if (!fs.existsSync(channelPosterPath)) {
+      // First ensure we have the channel thumbnail
+      await downloadChannelThumbnailIfMissing(channelId);
+
+      const channelThumbPath = path.join(
+        configModule.getImagePath(),
+        `channelthumb-${channelId}.jpg`
+      );
+
+      if (fs.existsSync(channelThumbPath)) {
+        fs.copySync(channelThumbPath, channelPosterPath);
+        console.log(`Channel poster.jpg created in ${channelFolderPath}`);
+      }
+    }
+  } catch (err) {
+    console.log(`Error copying channel poster: ${err.message}`);
+  }
+}
 
 async function processVideo() {
   const videoPath = process.argv[2]; // get the video file path
@@ -294,15 +374,109 @@ async function processWithSeriesProfile(videoPath, imagePath, jsonData, profile,
   }
 }
 
-async function originalProcessing(videoPath, imagePath, jsonPath, id, uploadDate) {
+async function originalProcessing(videoPath, imagePath, jsonPath, id, uploadDate, jsonData) {
   const videoDirectory = path.dirname(videoPath);
-  const directoryPath = path.resolve(__dirname, '../../jobs/info');
-  const newImagePath = path.resolve(__dirname, '../images');
+  const directoryPath = path.join(configModule.getJobsPath(), 'info');
+  const newImagePath = configModule.getImagePath();
 
   fs.ensureDirSync(directoryPath);
   const newJsonPath = path.join(directoryPath, `${id}.info.json`);
 
   fs.moveSync(jsonPath, newJsonPath, { overwrite: true });
+
+  // Generate NFO file for Jellyfin/Kodi/Emby compatibility if enabled
+  console.log(`Should write video NFO files: ${shouldWriteVideoNfoFiles()}`);
+  if (shouldWriteVideoNfoFiles()) {
+    nfoGenerator.writeVideoNfoFile(videoPath, jsonData);
+  }
+
+  // Add additional metadata to the MP4 file that yt-dlp might have missed
+  // yt-dlp already embeds basic metadata, but we can add more for better Plex compatibility
+  try {
+    const tempPath = videoPath + '.metadata_temp.mp4';
+
+    // Build metadata arguments as an array to avoid shell escaping issues
+    const ffmpegArgs = [
+      '-i', videoPath,
+      '-c', 'copy',
+      '-map_metadata', '0'
+    ];
+
+    // Add genre from categories (yt-dlp doesn't embed this)
+    if (jsonData.categories && jsonData.categories.length > 0) {
+      const genre = jsonData.categories.join(';');
+      ffmpegArgs.push('-metadata', `genre=${genre}`);
+    }
+
+    // Add studio/network (channel name)
+    const channelName = jsonData.uploader || jsonData.channel || '';
+    if (channelName) {
+      ffmpegArgs.push('-metadata', `network=${channelName}`);
+      ffmpegArgs.push('-metadata', `studio=${channelName}`);
+      ffmpegArgs.push('-metadata', `artist=${channelName}`);
+      ffmpegArgs.push('-metadata', `album=${channelName}`); // For collection grouping
+      ffmpegArgs.push('-metadata', `title=${channelName} - ${jsonData.title}`); // Include channel name in title
+    }
+
+    // Add tags as keywords
+    if (jsonData.tags && jsonData.tags.length > 0) {
+      const keywords = jsonData.tags.slice(0, 10).join(';');
+      ffmpegArgs.push('-metadata', `keywords=${keywords}`);
+    }
+
+    // Add media type hint for Plex (9 = Home Video)
+    ffmpegArgs.push('-metadata', 'media_type=9');
+
+    // Output file
+    ffmpegArgs.push('-y', tempPath);
+
+    console.log('Adding additional metadata for Plex...');
+    const result = spawnSync(configModule.ffmpegPath, ffmpegArgs, {
+      stdio: 'pipe',
+      maxBuffer: 10 * 1024 * 1024
+    });
+
+    if (result.error) {
+      throw result.error;
+    }
+
+    if (result.status !== 0) {
+      const stderr = result.stderr ? result.stderr.toString() : 'Unknown error';
+      throw new Error(`ffmpeg exited with status ${result.status}: ${stderr}`);
+    }
+
+    // Replace original with temp file if successful
+    if (fs.existsSync(tempPath)) {
+      const tempStats = fs.statSync(tempPath);
+      const origStats = fs.statSync(videoPath);
+
+      // Basic sanity check
+      if (tempStats.size >= origStats.size * 0.9) {
+        fs.renameSync(tempPath, videoPath);
+        console.log('Successfully added additional metadata to video file');
+      } else {
+        fs.unlinkSync(tempPath);
+        console.log('Skipped metadata update due to file size mismatch');
+      }
+    }
+  } catch (err) {
+    console.log(`Note: Could not add additional metadata: ${err.message}`);
+    // Clean up temp file if exists
+    const tempPath = videoPath + '.metadata_temp.mp4';
+    if (fs.existsSync(tempPath)) {
+      try { fs.unlinkSync(tempPath); } catch (e) {
+        console.log(`Error deleting temp file: ${e.message}`);
+      }
+    }
+  }
+
+  // Channel folder is one level up from videoDirectory
+  const channelFolderPath = path.dirname(videoDirectory);
+
+  // Copy channel thumbnail as poster.jpg to channel folder if needed
+  if (jsonData.channel_id) {
+    await copyChannelPosterIfNeeded(jsonData.channel_id, channelFolderPath);
+  }
 
   if (fs.existsSync(imagePath)) {
     const newImageFullPath = path.join(newImagePath, `videothumb-${id}.jpg`);
@@ -312,7 +486,8 @@ async function originalProcessing(videoPath, imagePath, jsonPath, id, uploadDate
     );
     fs.copySync(imagePath, newImageFullPath, { overwrite: true });
 
-    // Resize the image using ffmpeg
+    // Resize the image using ffmpeg with proper settings to avoid deprecated format warnings
+    // Using -loglevel error to suppress the deprecated pixel format warnings but still show actual errors
     try {
       execSync(
         `${configModule.ffmpegPath} -loglevel error -y -i "${newImageFullPath}" -vf "scale=iw*0.5:ih*0.5" -q:v 2 "${newImageFullPathSmall}"`,
@@ -371,7 +546,7 @@ async function originalProcessing(videoPath, imagePath, jsonPath, id, uploadDate
 
 function storeOriginalJson(jsonPath, id) {
   try {
-    const directoryPath = path.resolve(__dirname, '../../jobs/info');
+    const directoryPath = path.join(configModule.getJobsPath(), 'info');
     fs.ensureDirSync(directoryPath);
     const newJsonPath = path.join(directoryPath, `${id}.info.json`);
     fs.moveSync(jsonPath, newJsonPath, { overwrite: true });
