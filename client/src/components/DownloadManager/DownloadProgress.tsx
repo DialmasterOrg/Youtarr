@@ -415,9 +415,8 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
                     if (isChannelDownload) {
                       const channelName = currentProgress.currentChannelName || 'channels';
-                      // Proper handling for when we are skipping all videos
-                      const currentCount = videoCount.current - videoCount.skippedThisChannel > 0 ? videoCount.current - videoCount.skippedThisChannel : 0;
-                      return `Downloading recent from all channels. Currently "${channelName}": ${currentCount} of ${videoCount.total}`;
+                      // Don't show the count, the user can see the videos downloading in the progress bar.
+                      return `Downloading recent from all channels. Currently "${channelName}"`;
                     } else {
                       return `Videos: ${videoCount.current} of ${videoCount.total}`;
                     }

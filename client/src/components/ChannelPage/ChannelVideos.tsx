@@ -19,7 +19,6 @@ import {
   FormControlLabel,
   Typography,
   Alert,
-  Chip,
   IconButton,
   Tooltip,
   Snackbar,
@@ -46,7 +45,6 @@ function ChannelVideos({ token }: ChannelVideosProps) {
   const [page, setPage] = useState(1);
   const [videos, setVideos] = useState<ChannelVideo[]>([]);
   const [videoFailed, setVideoFailed] = useState<Boolean>(false);
-  const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const [checkedBoxes, setCheckedBoxes] = useState<string[]>([]); // new state variable
   const [hideDownloaded, setHideDownloaded] = useState(false);
   const [mobileTooltip, setMobileTooltip] = useState<string | null>(null);
@@ -139,7 +137,6 @@ function ChannelVideos({ token }: ChannelVideosProps) {
           setVideos(data.videos || []);
         }
         setVideoFailed(data.videoFail || false);
-        setLastFetched(data.lastFetched ? new Date(data.lastFetched) : null);
       })
       .catch((error) => console.error(error));
   }, [token, channel_id]);
@@ -201,48 +198,13 @@ function ChannelVideos({ token }: ChannelVideosProps) {
     trackMouse: true,
   });
 
-  // Calculate data freshness
-  const getDataFreshnessInfo = () => {
-    if (!lastFetched) return null;
-
-    const hoursAgo = Math.floor((Date.now() - lastFetched.getTime()) / (1000 * 60 * 60));
-    let color: 'success' | 'warning' | 'error' = 'success';
-    let text = '';
-
-    if (hoursAgo < 1) {
-      text = 'Updated now';
-    } else if (hoursAgo < 6) {
-      text = `Updated ${hoursAgo}h ago`;
-      color = 'success';
-    } else if (hoursAgo < 24) {
-      text = `Updated ${hoursAgo}h ago`;
-      color = 'warning';
-    } else {
-      const daysAgo = Math.floor(hoursAgo / 24);
-      text = `Updated ${daysAgo}d ago`;
-      color = 'error';
-    }
-
-    return { text, color };
-  };
-
-  const freshnessInfo = getDataFreshnessInfo();
-
   return (
     <Card elevation={8} style={{ marginBottom: '16px' }}>
       <CardHeader
-        title='Channel Videos'
+        title='Recent Channel Videos'
         align='center'
-        action={
-          freshnessInfo && videos.length > 0 && (
-            <Chip
-              label={freshnessInfo.text}
-              color={freshnessInfo.color}
-              size="small"
-              style={{ marginRight: '8px' }}
-            />
-          )
-        }
+        paddingTop={isMobile ? '12px' : '0px'}
+        style={{ position: 'relative' }}
       />
       <div {...handlers}>
         {/* Show error message if video fetch failed */}
@@ -314,6 +276,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                 disabled={getSelectableCount() === 0}
                 sx={{
                   width: isMobile ? '45%' : '186px',
+                  fontSize: isMobile ? '12px' : '14px',
                 }}
               >
                 Select All
@@ -324,6 +287,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                 onClick={resetChecked}
                 sx={{
                   width: isMobile ? '45%' : '186px',
+                  fontSize: isMobile ? '12px' : '14px',
                 }}
               >
                 Clear Selection
@@ -334,7 +298,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
               variant='contained'
               disabled={checkedBoxes.length === 0}
               sx={{
-                width: isMobile ? '91%' : '186px',
+                width: isMobile ? '91%' : '380px',
               }}
             >
               Download Selected{' '}

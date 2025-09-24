@@ -627,7 +627,7 @@ function Configuration({ token }: ConfigurationProps) {
 
   return (
     <>
-      <Card sx={{ mb: 2 }}>
+      <Card elevation={8} sx={{ mb: 2 }}>
         <CardContent>
           <Typography variant="h5" component="h2" gutterBottom>
             Core Settings
@@ -663,7 +663,6 @@ function Configuration({ token }: ConfigurationProps) {
                 name="youtubeOutputDirectory"
                 value={config.youtubeOutputDirectory}
                 onChange={handleInputChange}
-                required
                 disabled={isPlatformManaged.youtubeOutputDirectory || deploymentEnvironment.dockerAutoCreated}
                 helperText={
                   isPlatformManaged.youtubeOutputDirectory
@@ -762,7 +761,7 @@ function Configuration({ token }: ConfigurationProps) {
         </CardContent>
       </Card>
 
-      <Accordion defaultExpanded={false} sx={{ mb: 2 }}>
+      <Accordion elevation={8} defaultExpanded={false} sx={{ mb: 2 }}>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             Optional: Plex Media Server Integration
@@ -912,7 +911,7 @@ function Configuration({ token }: ConfigurationProps) {
         </AccordionDetails>
       </Accordion>
 
-      <Accordion defaultExpanded={false} sx={{ mb: 2 }}>
+      <Accordion elevation={8} defaultExpanded={false} sx={{ mb: 2 }}>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             Optional: SponsorBlock Integration
@@ -1032,7 +1031,7 @@ function Configuration({ token }: ConfigurationProps) {
         </AccordionDetails>
       </Accordion>
 
-      <Accordion defaultExpanded={false} sx={{ mb: 2 }}>
+      <Accordion elevation={8} defaultExpanded={false} sx={{ mb: 2 }}>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             Cookie Configuration
@@ -1145,7 +1144,7 @@ function Configuration({ token }: ConfigurationProps) {
         </AccordionDetails>
       </Accordion>
 
-      <Accordion defaultExpanded={false} sx={{ mb: 2 }}>
+      <Accordion elevation={8} defaultExpanded={false} sx={{ mb: 2 }}>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             Download Performance Settings
@@ -1284,7 +1283,7 @@ function Configuration({ token }: ConfigurationProps) {
         </AccordionDetails>
       </Accordion>
 
-      <Card sx={{ mb: 2 }}>
+      <Card elevation={8} sx={{ mb: 2 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>
             Account & Security
