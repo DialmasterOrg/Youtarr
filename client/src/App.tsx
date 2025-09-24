@@ -21,6 +21,7 @@ import {
   List,
   ListItem,
   ListItemText,
+  ListItemIcon,
   IconButton,
   useTheme,
   useMediaQuery,
@@ -31,6 +32,13 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import MenuIcon from '@mui/icons-material/Menu';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import SettingsIcon from '@mui/icons-material/Settings';
+import SubscriptionsIcon from '@mui/icons-material/Subscriptions';
+import DownloadIcon from '@mui/icons-material/Download';
+import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
+import LoginIcon from '@mui/icons-material/Login';
+import LogoutIcon from '@mui/icons-material/Logout';
+import ShieldIcon from '@mui/icons-material/Shield';
 import Configuration from './components/Configuration';
 import ChannelManager from './components/ChannelManager';
 import DownloadManager from './components/DownloadManager';
@@ -297,11 +305,15 @@ function AppContent() {
                   '&:hover': {
                     backgroundColor: location.pathname === '/configuration' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
                   },
+                  paddingX: isMobile ? '8px' : '16px'
                 }}
               >
+                <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
+                  <SettingsIcon sx={{ color: location.pathname === '/configuration' ? '#1976d2' : 'inherit' }} />
+                </ListItemIcon>
                 <ListItemText
                   primaryTypographyProps={{
-                    fontSize: 'large',
+                    fontSize: isMobile ? 'small' : 'medium',
                     fontWeight: location.pathname === '/configuration' ? 'bold' : 'normal'
                   }}
                   primary='Configuration'
@@ -318,11 +330,15 @@ function AppContent() {
                   '&:hover': {
                     backgroundColor: location.pathname === '/channels' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
                   },
+                  paddingX: isMobile ? '8px' : '16px'
                 }}
               >
+                <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
+                  <SubscriptionsIcon sx={{ color: location.pathname === '/channels' ? '#1976d2' : 'inherit' }} />
+                </ListItemIcon>
                 <ListItemText
                   primaryTypographyProps={{
-                    fontSize: 'large',
+                    fontSize: isMobile ? 'small' : 'medium',
                     fontWeight: location.pathname === '/channels' ? 'bold' : 'normal'
                   }}
                   primary='Your Channels'
@@ -339,11 +355,15 @@ function AppContent() {
                   '&:hover': {
                     backgroundColor: location.pathname === '/downloads' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
                   },
+                  paddingX: isMobile ? '8px' : '16px'
                 }}
               >
+                <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
+                  <DownloadIcon sx={{ color: location.pathname === '/downloads' ? '#1976d2' : 'inherit' }} />
+                </ListItemIcon>
                 <ListItemText
                   primaryTypographyProps={{
-                    fontSize: 'large',
+                    fontSize: isMobile ? 'small' : 'medium',
                     fontWeight: location.pathname === '/downloads' ? 'bold' : 'normal'
                   }}
                   primary='Manage Downloads'
@@ -360,11 +380,15 @@ function AppContent() {
                   '&:hover': {
                     backgroundColor: location.pathname === '/videos' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
                   },
+                  paddingX: isMobile ? '8px' : '16px'
                 }}
               >
+                <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
+                  <VideoLibraryIcon sx={{ color: location.pathname === '/videos' ? '#1976d2' : 'inherit' }} />
+                </ListItemIcon>
                 <ListItemText
                   primaryTypographyProps={{
-                    fontSize: 'large',
+                    fontSize: isMobile ? 'small' : 'medium',
                     fontWeight: location.pathname === '/videos' ? 'bold' : 'normal'
                   }}
                   primary='Downloaded Videos'
@@ -382,11 +406,15 @@ function AppContent() {
                     '&:hover': {
                       backgroundColor: location.pathname === '/login' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
                     },
+                    paddingX: isMobile ? '8px' : '16px'
                   }}
                 >
+                  <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
+                    <LoginIcon sx={{ color: location.pathname === '/login' ? '#1976d2' : 'inherit' }} />
+                  </ListItemIcon>
                   <ListItemText
                     primaryTypographyProps={{
-                      fontSize: 'large',
+                      fontSize: isMobile ? 'small' : 'medium',
                       fontWeight: location.pathname === '/login' ? 'bold' : 'normal'
                     }}
                     primary='Login'
@@ -402,19 +430,29 @@ function AppContent() {
                     setToken(null);
                     handleDrawerToggle();
                   }}
+                  sx={{
+                    paddingX: isMobile ? '8px' : '16px'
+                  }}
                 >
+                  <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
+                    <LogoutIcon />
+                  </ListItemIcon>
                   <ListItemText
-                    primaryTypographyProps={{ fontSize: 'large' }}
+                    primaryTypographyProps={{ fontSize: isMobile ? 'small' : 'medium' }}
                     primary='Logout'
                   />
                 </ListItem>
               )}
               {isPlatformManaged && (
-                <ListItem>
+                <ListItem sx={{ paddingX: isMobile ? '8px' : '16px' }}>
+                  <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
+                    <ShieldIcon sx={{ color: '#4caf50' }} />
+                  </ListItemIcon>
                   <ListItemText
                     primary="Platform Authentication"
+                    primaryTypographyProps={{ fontSize: isMobile ? 'small' : 'medium' }}
                     secondary={platformName?.toLowerCase() === "elfhosted" ? "Managed by Elfhosted" : "Managed by platform"}
-                    secondaryTypographyProps={{ fontSize: 'small' }}
+                    secondaryTypographyProps={{ fontSize: 'x-small' }}
                   />
                 </ListItem>
               )}
