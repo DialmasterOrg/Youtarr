@@ -14,6 +14,12 @@ const { Op } = require('sequelize');
 const { v4: uuidv4 } = require('uuid');
 const { spawn, execSync } = require('child_process');
 
+const TAB_TYPES = {
+  VIDEOS: 'videos',
+  SHORTS: 'shorts',
+  LIVE: 'streams',
+};
+
 class ChannelModule {
   constructor() {
     this.channelAutoDownload = this.channelAutoDownload.bind(this);
@@ -702,7 +708,6 @@ class ChannelModule {
 
   /**
    * Extract video entries from yt-dlp JSON response.
-   * Handles both flat (direct video entries) and nested (playlists within playlist) structures.
    * @param {Object} jsonOutput - Parsed JSON from yt-dlp
    * @returns {Array} - Array of parsed video metadata objects
    */
@@ -716,52 +721,34 @@ class ChannelModule {
 
     const entries = jsonOutput.entries;
 
-    // Prefer nested playlist selection using stable, non-localized URL slugs
-    const playlists = entries.filter(e => e && e._type === 'playlist');
-    if (playlists.length > 0) {
-      // Find the Videos tab by webpage_url ending with /videos (or with query params)
-      const videosPlaylist = playlists.find(p => {
-        const url = typeof p.webpage_url === 'string' ? p.webpage_url : '';
-        return url.endsWith('/videos') || url.includes('/videos?');
-      });
+    // Since we're fetching directly from a specific tab, we should get video entries directly
+    for (const entry of entries) {
+      if (!entry) continue;
 
-      if (videosPlaylist && Array.isArray(videosPlaylist.entries)) {
-        for (const entry of videosPlaylist.entries) {
-          videos.push(this.parseVideoMetadata(entry));
-        }
-        return videos;
+      // Skip playlist entries (shouldn't happen when fetching specific tabs)
+      if (entry._type === 'playlist') {
+        console.log('Unexpected playlist entry found when fetching /videos tab');
+        continue;
       }
 
-      // Do not fallback to other playlists (e.g., Shorts/Live) if Videos tab isn't present
-      return videos; // empty
-    }
-
-    // Flat structure fallback: entries are videos directly
-    // Include typical watch URLs and exclude shorts URLs when possible
-    // NOTE: This fallback should never be hit now that we are using canonical urls.. but just in case
-    const flatVideoEntries = entries.filter(e => e && e._type !== 'playlist');
-    if (flatVideoEntries.length > 0) {
-      for (const entry of flatVideoEntries) {
-        const url = String(entry && entry.url ? entry.url : '');
-        if (url.includes('/shorts/')) continue;
-        // If URL is missing, still include as a best-effort fallback
-        videos.push(this.parseVideoMetadata(entry));
-      }
+      // Parse and add the video metadata
+      videos.push(this.parseVideoMetadata(entry));
     }
 
     return videos;
   }
 
   /**
-   * Fetch channel videos using yt-dlp.
+   * Fetch channel videos from specific tab using yt-dlp.
    * Retrieves metadata for recent videos from YouTube.
    * Uses canonical channel URL for stability when handles change.
    * @param {string} channelId - Channel ID to fetch videos for
    * @param {Date|null} mostRecentVideoDate - Date of the most recent video we have
+   * @param {string} tabType - Type of tab to fetch videos from
    * @returns {Promise<Object>} - Object with videos array and current channel URL
    * @throws {Error} - If channel not found in database
    */
-  async fetchChannelVideosViaYtDlp(channelId, mostRecentVideoDate = null) {
+  async fetchChannelVideosViaYtDlp(channelId, mostRecentVideoDate = null, tabType) {
     const channel = await Channel.findOne({
       where: { channel_id: channelId },
     });
@@ -783,7 +770,7 @@ class ChannelModule {
 
     // Always use canonical URL based on channel ID for yt-dlp
     // This ensures stability even when channel handles change
-    const canonicalUrl = this.resolveChannelUrlFromId(channelId);
+    const canonicalUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
 
     return await this.withTempFile('channel-videos', async (outputFilePath) => {
       const content = await this.executeYtDlpCommand([
@@ -856,7 +843,8 @@ class ChannelModule {
       if (this.shouldRefreshChannelVideos(channel, newestVideos.length)) {
         // Get the most recent video date to optimize fetch count
         const mostRecentVideoDate = newestVideos.length > 0 ? newestVideos[0].publishedAt : null;
-        await this.fetchAndSaveVideosViaYtDlp(channel, channelId, mostRecentVideoDate);
+        // Hardcoded for videos tab only right now. We will add support for shorts and live streams later.
+        await this.fetchAndSaveVideosViaYtDlp(channel, channelId, TAB_TYPES.VIDEOS, mostRecentVideoDate);
         newestVideos = await this.fetchNewestVideosFromDb(channelId);
         return this.buildChannelVideosResponse(newestVideos, channel, 'yt_dlp');
       }
@@ -876,13 +864,14 @@ class ChannelModule {
    * Also updates the channel URL if it has changed (e.g., handle renamed).
    * @param {Object} channel - Channel database record
    * @param {string} channelId - Channel ID
+   * @param {string} tabType - Type of tab to fetch videos from
    * @param {Date|null} mostRecentVideoDate - Date of the most recent video we have
    * @returns {Promise<void>}
    * @throws {Error} - Re-throws yt-dlp errors
    */
-  async fetchAndSaveVideosViaYtDlp(channel, channelId, mostRecentVideoDate = null) {
+  async fetchAndSaveVideosViaYtDlp(channel, channelId, tabType, mostRecentVideoDate = null) {
     try {
-      const result = await this.fetchChannelVideosViaYtDlp(channelId, mostRecentVideoDate);
+      const result = await this.fetchChannelVideosViaYtDlp(channelId, mostRecentVideoDate, tabType);
       const { videos, currentChannelUrl } = result;
 
       if (videos.length > 0) {
