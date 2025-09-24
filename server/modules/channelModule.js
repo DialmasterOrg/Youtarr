@@ -72,7 +72,25 @@ class ChannelModule {
         } else if (code === 0) {
           resolve();
         } else {
-          reject(new Error(`yt-dlp exited with code ${code}`));
+          // Check for common error patterns in stderr
+          let errorMessage = `yt-dlp exited with code ${code}`;
+          let errorCode = 'YT_DLP_ERROR';
+
+          if (stderrBuffer.includes('Unable to extract') ||
+              stderrBuffer.includes('does not exist') ||
+              stderrBuffer.includes('This channel does not exist') ||
+              stderrBuffer.includes('ERROR: [youtube]')) {
+            errorMessage = 'Channel not found or invalid URL';
+            errorCode = 'CHANNEL_NOT_FOUND';
+          } else if (stderrBuffer.includes('Unable to download webpage')) {
+            errorMessage = 'Network error: Unable to connect to YouTube';
+            errorCode = 'NETWORK_ERROR';
+          }
+
+          const error = new Error(errorMessage);
+          error.code = errorCode;
+          error.stderr = stderrBuffer;
+          reject(error);
         }
       });
       ytDlp.on('error', reject);

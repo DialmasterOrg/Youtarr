@@ -224,7 +224,21 @@ function ChannelManager({ token }: ChannelManagerProps) {
           console.error('Error adding channel:', error);
           // Remove the temporary channel on error
           setChannels((prevChannels) => prevChannels.slice(0, -1));
-          setDialogMessage('Failed to add channel. Please try again.');
+
+          // Extract error message from response
+          let errorMessage = 'Failed to add channel. Please try again.';
+          if (error.response?.status === 503) {
+            // yt-dlp returns a 503 when the channel is not found
+            errorMessage = 'Channel not found. Please check the URL or channel name and try again.';
+          } else if (error.response?.data?.message) {
+            errorMessage = error.response.data.message;
+          } else if (error.response?.status === 404) {
+            errorMessage = 'Channel not found. Please check the URL and try again.';
+          } else if (error.response?.status === 403) {
+            errorMessage = 'Authentication issue. Please check your cookies configuration.';
+          }
+
+          setDialogMessage(errorMessage);
           setIsDialogOpen(true);
         })
         .finally(() => {
