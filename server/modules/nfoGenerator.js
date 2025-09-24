@@ -70,6 +70,7 @@ class NfoGenerator {
    * @returns {boolean} True if successful, false otherwise
    */
   writeVideoNfoFile(videoPath, jsonData) {
+    console.log(`Writing NFO file for video ${videoPath}`);
     try {
       // Generate NFO path (same as video but with .nfo extension)
       const parsedPath = path.parse(videoPath);

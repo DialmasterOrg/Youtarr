@@ -19,6 +19,8 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 - **📺 Channel Subscriptions**: Subscribe to channels and auto-download new videos
 - **🚫 SponsorBlock Integration**: Automatically remove or mark sponsored segments, intros, outros, and more using the crowdsourced SponsorBlock database
 - **🗂️ Smart Organization**: Videos organized by channel with metadata and thumbnails
+- **📝 Multi-Server Support**: Compatible with Plex, Kodi, Jellyfin, and Emby through NFO metadata files and embedded MP4 metadata
+- **🖼️ Channel Artwork**: Automatic channel poster generation for media server folder displays
 - **⏰ Scheduled Downloads**: Configure automatic downloads on your schedule (cron-based)
 - **📱 Web Interface**: Manage everything through a responsive web UI
 - **🔍 Browse Channels**: View all videos from subscribed channels before downloading
@@ -29,7 +31,13 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 ### Optional Plex Integration
 - **🔄 Auto Library Refresh**: Automatically update Plex after downloads
 - **📁 Plex-Ready Format**: Videos organized and named for perfect Plex compatibility
-- **🎬 Metadata Support**: Full descriptions, thumbnails, and video info display in Plex
+- **🎬 Enhanced Metadata**: Embedded metadata including title, genre, studio, and keywords for rich Plex display
+
+### Kodi, Jellyfin, and Emby Support
+- **📄 NFO Files**: Automatically generates .nfo metadata files for each video
+- **🎨 Channel Posters**: Creates poster.jpg files in channel folders for visual browsing
+- **🏷️ Rich Metadata**: Includes title, plot, upload date, channel info, genres, tags, and runtime
+- **🔧 Easy Setup**: Add as "Movies" library with NFO metadata reader enabled
 
 ## 🚀 Quick Start
 
@@ -94,6 +102,7 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 ## 📖 Documentation
 
 - **[Setup Guide](docs/SETUP.md)** - Detailed installation and configuration instructions
+- **[Media Server Guide](docs/MEDIA_SERVERS.md)** - Configuration for Plex, Kodi, Jellyfin, and Emby
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Solutions to common issues
 - **[Docker Guide](docs/DOCKER.md)** - Docker configuration and management
 - **[Development](docs/DEVELOPMENT.md)** - Contributing and development setup
@@ -103,7 +112,7 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 ### For All Users
 - **Storage**: Videos download to the directory you select during setup
 - **Storage Growth**: Downloads can consume significant disk space over time. The UI includes a storage status chip that shows total and free space for your selected directory/drive, making it easy to monitor and adjust limits/schedule as needed.
-- **Format**: Downloads as MP4 with embedded metadata for best compatibility
+- **Format**: Downloads as MP4 with comprehensive embedded metadata (title, genre, studio, keywords) and NFO files for maximum media server compatibility
 - **Filtering**: Automatically skips YouTube Shorts and subscriber-only content
 - **Authentication**: Uses local authentication (create admin account on first access)
 

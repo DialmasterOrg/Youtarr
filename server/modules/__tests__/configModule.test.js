@@ -81,7 +81,9 @@ describe('ConfigModule', () => {
 
       expect(uuid.v4).not.toHaveBeenCalled();
       expect(ConfigModule.config.uuid).toBe('existing-uuid');
-      expect(fs.writeFileSync).not.toHaveBeenCalled();
+      // Config may be written if migrations add new fields
+      expect(ConfigModule.config.writeChannelPosters).toBe(true);
+      expect(ConfigModule.config.writeVideoNfoFiles).toBe(true);
     });
 
     test('should use Docker paths when IN_DOCKER_CONTAINER is set', () => {
@@ -623,9 +625,11 @@ describe('ConfigModule', () => {
 
       ConfigModule = require('../configModule');
 
-      // writeFileSync should not be called since config exists and has UUID
-      expect(mockFs.writeFileSync).not.toHaveBeenCalled();
+      // mkdirSync should not be called since directory exists
       expect(mockFs.mkdirSync).not.toHaveBeenCalled();
+      // writeFileSync may be called if migrations add new fields
+      expect(ConfigModule.config.writeChannelPosters).toBe(true);
+      expect(ConfigModule.config.writeVideoNfoFiles).toBe(true);
     });
 
     test('should create config directory if it does not exist', () => {
