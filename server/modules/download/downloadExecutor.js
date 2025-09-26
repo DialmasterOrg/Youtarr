@@ -82,6 +82,29 @@ class DownloadExecutor {
       const proc = spawn('yt-dlp', args);
 
       const partialDestinations = new Set();
+      let httpForbiddenDetected = false;
+      let cookiesSuggestionEmitted = false;
+
+      const emitCookiesSuggestionMessage = () => {
+        if (cookiesSuggestionEmitted) {
+          return;
+        }
+        cookiesSuggestionEmitted = true;
+        const message = 'Download failed: YouTube returned HTTP 403 (Forbidden). Please set cookies in your Configuration or try different cookies to resolve this issue.';
+        monitor.hasError = true;
+        MessageEmitter.emitMessage(
+          'broadcast',
+          null,
+          'download',
+          'downloadProgress',
+          {
+            text: message,
+            progress: monitor.snapshot('failed'),
+            error: true,
+            errorCode: 'COOKIES_RECOMMENDED'
+          }
+        );
+      };
 
       // Emit initial state so the UI reflects the job start immediately
       MessageEmitter.emitMessage(
@@ -136,6 +159,12 @@ class DownloadExecutor {
                 progress: structuredProgress || monitor.lastParsed || null,
               }
             );
+
+            const lowerLine = line.toLowerCase();
+            if (!httpForbiddenDetected && (lowerLine.includes('http error 403') || lowerLine.includes('403: forbidden'))) {
+              httpForbiddenDetected = true;
+              emitCookiesSuggestionMessage();
+            }
           });
       });
 
@@ -145,6 +174,12 @@ class DownloadExecutor {
         const dataStr = data.toString();
         stderrBuffer += dataStr;
         console.log(dataStr); // log the data in real-time
+
+        const lowerData = dataStr.toLowerCase();
+        if (!httpForbiddenDetected && (lowerData.includes('http error 403') || lowerData.includes('403: forbidden'))) {
+          httpForbiddenDetected = true;
+          emitCookiesSuggestionMessage();
+        }
 
         // Check for bot detection message (handle different quote types and patterns)
         if (dataStr.includes('Sign in to confirm') && dataStr.includes('not a bot')) {
@@ -174,6 +209,15 @@ class DownloadExecutor {
           console.log('Bot detection found in stderr buffer');
         }
 
+        if (!httpForbiddenDetected && stderrBuffer) {
+          const lowerStderr = stderrBuffer.toLowerCase();
+          if (lowerStderr.includes('http error 403') || lowerStderr.includes('403: forbidden')) {
+            httpForbiddenDetected = true;
+            console.log('HTTP 403 detected in stderr buffer');
+            emitCookiesSuggestionMessage();
+          }
+        }
+
         const newVideoUrls = this.getNewVideoUrls(initialCount);
         const videoCount = newVideoUrls.length;
 
@@ -185,6 +229,7 @@ class DownloadExecutor {
 
         let status = '';
         let output = '';
+        let jobErrorCode;
 
         // Check for bot detection first
         if (botDetected) {
@@ -199,6 +244,22 @@ class DownloadExecutor {
             notes: 'YouTube requires authentication. Enable cookies in Configuration to resolve this issue.',
             error: 'COOKIES_REQUIRED'
           });
+          jobErrorCode = 'COOKIES_REQUIRED';
+        } else if (httpForbiddenDetected) {
+          await this.cleanupPartialFiles(Array.from(partialDestinations));
+
+          status = 'Error';
+          output = `${videoCount} videos. Error: YouTube returned HTTP 403 (Forbidden)`;
+
+          await jobModule.updateJob(jobId, {
+            status: status,
+            endDate: Date.now(),
+            output: output,
+            data: { videos: videoData || [] },
+            notes: 'YouTube denied access (HTTP 403). Configure cookies in Settings to resolve this issue.',
+            error: 'COOKIES_RECOMMENDED'
+          });
+          jobErrorCode = 'COOKIES_RECOMMENDED';
         } else if (code !== 0) {
           // Cleanup partial files on failure
           await this.cleanupPartialFiles(Array.from(partialDestinations));
@@ -222,7 +283,7 @@ class DownloadExecutor {
             data: { videos: videoData || [] },
             notes: notes,
           });
-        } else if (stderrBuffer) {
+        } else if (stderrBuffer && !monitor.hasError) {
           status = 'Complete with Warnings';
           output = `${videoCount} videos.`;
           jobModule.updateJob(jobId, {
@@ -247,16 +308,25 @@ class DownloadExecutor {
         // Only treat as real error if exit code > 1, was killed, or nothing was processed
         const hasProcessedVideos = (monitor.videoCount.completed > 0 || monitor.videoCount.skipped > 0);
         const hasDownloadedNewVideos = videoCount > 0;
-        const isWarningOnly = (code === 1 && (hasProcessedVideos || hasDownloadedNewVideos));
+        const isWarningOnly = (code === 1 && !monitor.hasError && (hasProcessedVideos || hasDownloadedNewVideos));
         let finalState = (code === 0 || isWarningOnly) ? 'complete' : 'error';
 
-        console.log(`[DEBUG] Final state determination - code: ${code}, hasProcessedVideos: ${hasProcessedVideos}, hasDownloadedNewVideos: ${hasDownloadedNewVideos}, isWarningOnly: ${isWarningOnly}, finalState: ${finalState}`);
+        console.log(`[DEBUG] Final state determination - code: ${code}, hasProcessedVideos: ${hasProcessedVideos}, hasDownloadedNewVideos: ${hasDownloadedNewVideos}, isWarningOnly: ${isWarningOnly}, hasError: ${monitor.hasError}, finalState: ${finalState}`);
 
         // Create a more informative final message
         let finalText;
+        let finalErrorCode = jobErrorCode;
         if (botDetected) {
           finalState = 'failed';
+          finalErrorCode = 'COOKIES_REQUIRED';
           finalText = 'Download failed: Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.';
+        } else if (httpForbiddenDetected) {
+          finalState = 'failed';
+          finalErrorCode = 'COOKIES_RECOMMENDED';
+          finalText = 'Download failed: YouTube returned HTTP 403 (Forbidden). Please set cookies in your Configuration or try different cookies to resolve this issue.';
+        } else if (monitor.hasError && finalState === 'complete') {
+          finalState = 'error';
+          finalText = 'Download failed';
         } else if (finalState === 'complete') {
           const actualCount = monitor.videoCount.completed || videoCount;
           const skippedCount = monitor.videoCount.skipped || 0;
@@ -278,21 +348,32 @@ class DownloadExecutor {
           monitor.videoCount.completed = videoCount;
         }
 
+        const isFinalError = finalState !== 'complete';
+        const finalProgress = monitor.snapshot(finalState);
+        const finalPayload = {
+          text: finalText,
+          progress: finalProgress,
+          finalSummary: {
+            totalDownloaded: monitor.videoCount.completed || videoCount,
+            totalSkipped: monitor.videoCount.skipped || 0,
+            jobType: jobType,
+            completedAt: new Date().toISOString()
+          }
+        };
+
+        if (isFinalError) {
+          finalPayload.error = true;
+          if (finalErrorCode) {
+            finalPayload.errorCode = finalErrorCode;
+          }
+        }
+
         MessageEmitter.emitMessage(
           'broadcast',
           null,
           'download',
           'downloadProgress',
-          {
-            text: finalText,
-            progress: monitor.snapshot(finalState),
-            finalSummary: {
-              totalDownloaded: monitor.videoCount.completed || videoCount,
-              totalSkipped: monitor.videoCount.skipped || 0,
-              jobType: jobType,
-              completedAt: new Date().toISOString()
-            }
-          }
+          finalPayload
         );
 
         // Clean up temporary channels file if it exists

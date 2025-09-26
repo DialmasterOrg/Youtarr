@@ -4,7 +4,8 @@ const findRouteHandler = (app, method, routePath) => {
   const stack = app?._router?.stack || [];
   for (const layer of stack) {
     if (layer.route && layer.route.path === routePath && layer.route.methods[method]) {
-      return layer.route.stack[0].handle;
+      const routeStack = layer.route.stack;
+      return routeStack[routeStack.length - 1].handle;
     }
   }
   throw new Error(`Route ${method.toUpperCase()} ${routePath} not found`);
@@ -65,7 +66,8 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
     passwordHash,
     username: passwordHash ? 'tester' : null,
     dockerAutoCreated: false,
-    plexUrl: 'http://plex:32400'
+    plexUrl: 'http://plex:32400',
+    plexPort: '32400'
   };
 
   const configModuleMock = {
@@ -207,5 +209,50 @@ describe('Plex authentication routes', () => {
       message: 'Please complete initial setup first'
     });
     expect(plexModuleMock.checkPin).not.toHaveBeenCalled();
+  });
+
+  test('auto-saves Plex API key without overwriting managed URL IP', async () => {
+    const { app, configModuleMock, plexModuleMock } = await setupServer({ authEnabled: 'false', passwordHash: 'hash' });
+    plexModuleMock.getLibrariesWithParams.mockResolvedValue([{ id: 'lib' }]);
+
+    const handler = findRouteHandler(app, 'get', '/getplexlibraries');
+    const req = createMockRequest({
+      path: '/getplexlibraries',
+      query: { testIP: '', testApiKey: 'fresh-token' }
+    });
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(plexModuleMock.getLibrariesWithParams).toHaveBeenCalledWith('', 'fresh-token', undefined);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual([{ id: 'lib' }]);
+
+    expect(configModuleMock.updateConfig).toHaveBeenCalledTimes(1);
+    const updatedConfig = configModuleMock.updateConfig.mock.calls[0][0];
+    expect(updatedConfig.plexApiKey).toBe('fresh-token');
+    expect(updatedConfig.plexIP).toBeUndefined();
+    expect(updatedConfig.plexPort).toBe('32400');
+  });
+
+  test('auto-saves Plex IP when provided during test', async () => {
+    const { app, configModuleMock, plexModuleMock } = await setupServer({ authEnabled: 'false', passwordHash: 'hash' });
+    plexModuleMock.getLibrariesWithParams.mockResolvedValue([{ id: 'lib' }]);
+
+    const handler = findRouteHandler(app, 'get', '/getplexlibraries');
+    const req = createMockRequest({
+      path: '/getplexlibraries',
+      query: { testIP: '192.168.1.10', testApiKey: 'fresh-token', testPort: '23456' }
+    });
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(plexModuleMock.getLibrariesWithParams).toHaveBeenCalledWith('192.168.1.10', 'fresh-token', '23456');
+    expect(configModuleMock.updateConfig).toHaveBeenCalledTimes(1);
+    const updatedConfig = configModuleMock.updateConfig.mock.calls[0][0];
+    expect(updatedConfig.plexIP).toBe('192.168.1.10');
+    expect(updatedConfig.plexApiKey).toBe('fresh-token');
+    expect(updatedConfig.plexPort).toBe('23456');
   });
 });

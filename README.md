@@ -124,7 +124,11 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
   - Plex can read from the same media location
   - Youtarr can reach the Plex API over the network
 - **Network Storage**: Supports NAS, network shares, and mounted volumes
-- **Docker on Windows**: Use `host.docker.internal` as your Plex server address
+- **Docker Desktop (Windows/macOS)**: Use `host.docker.internal` as your Plex server address
+- **Docker on macOS without Docker Desktop (e.g., Colima)**: Use the Mac's LAN IP (e.g., `192.168.x.x`) or `host.lima.internal`
+- **Docker on Linux**: Use the host's LAN IP (e.g., `192.168.x.x`). `host.docker.internal` normally resolves to the Docker bridge and Plex may not be listening there.
+- **Custom Plex port**: Plex defaults to port `32400`, but you can change the Plex Port field (or include the port in `PLEX_URL`) if your server listens elsewhere.
+- **Library path translation**: When you pick a Plex library, confirm the suggested download path matches how Youtarr sees your storage (e.g., convert `C:\Media` to `/mnt/c/Media` on WSL).
 
 ### For Platform Deployments (Elfhosted, Kubernetes, etc.)
 Youtarr now fully supports platform-managed deployments with automatic configuration:
@@ -153,10 +157,6 @@ Licensed under the ISC License. See [LICENSE.md](LICENSE.md) for details.
 <img width="1916" height="1482" alt="image" src="https://github.com/user-attachments/assets/18625f29-61de-475d-b509-1654420e7612" />
 <img width="1907" height="1489" alt="image" src="https://github.com/user-attachments/assets/1151811e-0a8a-4960-897b-7b1eb3ab3546" />
 <img width="1905" height="1488" alt="image" src="https://github.com/user-attachments/assets/a9e10530-a966-42fa-b71d-b2d7bbbeadff" />
-
-
-
-
 
 
 

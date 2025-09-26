@@ -35,6 +35,8 @@ class ConfigModule extends EventEmitter {
       this.directoryPath = this.config.devYoutubeOutputDirectory;
     }
 
+    let configModified = false;
+
     if (!this.config.channelFilesToDownload) {
       this.config.channelFilesToDownload = 3;
     }
@@ -43,8 +45,15 @@ class ConfigModule extends EventEmitter {
       this.config.preferredResolution = '1080';
     }
 
+    if (this.config.plexPort === undefined || this.config.plexPort === null || this.config.plexPort === '') {
+      this.config.plexPort = '32400';
+      configModified = true;
+    } else if (typeof this.config.plexPort !== 'string') {
+      this.config.plexPort = String(this.config.plexPort);
+      configModified = true;
+    }
+
     // Initialize channel auto-download settings if not present
-    let configModified = false;
     if (this.config.channelAutoDownload === undefined) {
       this.config.channelAutoDownload = false;
       configModified = true;
@@ -196,6 +205,7 @@ class ConfigModule extends EventEmitter {
         channelAutoDownload: false,
         channelDownloadFrequency: '0 */6 * * *',
         plexApiKey: '',
+        plexPort: '32400',
         plexLibrarySection: '',
         youtubeApiKey: '',
         sponsorblockEnabled: false,
@@ -325,6 +335,7 @@ class ConfigModule extends EventEmitter {
 
       // Plex settings - use PLEX_URL if provided
       plexApiKey: '',
+      plexPort: '32400',
       plexLibrarySection: ''
     };
 
@@ -371,6 +382,8 @@ class ConfigModule extends EventEmitter {
     defaultConfig.uuid = uuidv4();
 
     // Write the config file
+    defaultConfig.plexPort = '32400';
+
     fs.writeFileSync(this.configPath, JSON.stringify(defaultConfig, null, 2));
     console.log(`Auto-created config.json with default settings at: ${this.configPath}`);
   }
@@ -470,6 +483,17 @@ class ConfigModule extends EventEmitter {
 
         if (migrated.writeVideoNfoFiles === undefined) {
           migrated.writeVideoNfoFiles = true;
+        }
+
+        return migrated;
+      },
+      '1.26.0': (cfg) => {
+        const migrated = { ...cfg };
+
+        if (migrated.plexPort === undefined || migrated.plexPort === null || migrated.plexPort === '') {
+          migrated.plexPort = '32400';
+        } else if (typeof migrated.plexPort !== 'string') {
+          migrated.plexPort = String(migrated.plexPort);
         }
 
         return migrated;

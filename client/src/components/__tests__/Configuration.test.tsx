@@ -37,6 +37,7 @@ const mockConfig = {
   youtubeOutputDirectory: '/videos',
   plexYoutubeLibraryId: 'lib-123',
   plexIP: '192.168.1.100',
+  plexPort: '32400',
   uuid: 'uuid-123',
   sponsorblockEnabled: false,
   sponsorblockAction: 'remove',
@@ -314,6 +315,58 @@ describe('Configuration Component', () => {
 
       const plexIpInput = screen.getByRole('textbox', { name: /Plex Server IP/i });
       expect(plexIpInput).toHaveValue('192.168.1.100');
+
+      const plexPortInput = screen.getByRole('spinbutton', { name: /Plex Port/i });
+      expect(plexPortInput).toHaveValue(32400);
+    });
+
+    test('keeps Plex actions enabled when platform manages Plex URL', async () => {
+      (global.fetch as jest.Mock).mockReset();
+
+      const platformManagedConfig = {
+        ...mockConfig,
+        plexIP: '',
+        plexPort: '32400',
+        isPlatformManaged: {
+          youtubeOutputDirectory: false,
+          plexUrl: true,
+          authEnabled: true,
+        },
+      };
+
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(platformManagedConfig),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            cookiesEnabled: false,
+            customCookiesUploaded: false,
+            customFileExists: false,
+          }),
+        } as Response)
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve([]),
+        } as Response);
+
+      renderWithProviders(<Configuration token={mockToken} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Core Settings')).toBeInTheDocument();
+      });
+
+      const user = userEvent.setup();
+      const accordion = screen.getByText('Optional: Plex Media Server Integration');
+      await user.click(accordion);
+
+      const testButton = await screen.findByRole('button', { name: /^Test Connection$/i });
+      expect(testButton).not.toBeDisabled();
+
+      const plexPortInput = await screen.findByRole('spinbutton', { name: /Plex Port/i });
+      expect(plexPortInput).toBeDisabled();
     });
 
     test('tests Plex connection successfully', async () => {
@@ -331,12 +384,17 @@ describe('Configuration Component', () => {
         ]),
       } as Response);
 
-      const testButtons = await screen.findAllByRole('button', { name: /Test Connection/i });
+      const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
       await user.click(testButtons[0]);
 
       await waitFor(() => {
         expect(screen.getByText(/Plex connection successful/i)).toBeInTheDocument();
       });
+
+      const calls = (global.fetch as jest.Mock).mock.calls;
+      const lastCall = calls[calls.length - 1];
+      expect(lastCall[0]).toContain('testIP=192.168.1.100');
+      expect(lastCall[0]).toContain('testPort=32400');
     });
 
     test('handles failed Plex connection test', async () => {
@@ -348,7 +406,7 @@ describe('Configuration Component', () => {
 
       (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Connection failed'));
 
-      const testButtons = await screen.findAllByRole('button', { name: /Test Connection/i });
+      const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
       await user.click(testButtons[0]);
 
       await waitFor(() => {
@@ -368,7 +426,7 @@ describe('Configuration Component', () => {
         json: () => Promise.resolve([{ key: '1', title: 'Library 1' }]),
       } as Response);
 
-      const testButtons = await screen.findAllByRole('button', { name: /Test Connection/i });
+      const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
       await user.click(testButtons[0]);
 
       await waitFor(() => {
@@ -377,6 +435,119 @@ describe('Configuration Component', () => {
 
       const selectLibraryButton = screen.getByRole('button', { name: /Select Plex Library/i });
       expect(selectLibraryButton).not.toBeDisabled();
+    });
+
+    test('suggests translated path for WSL when selecting Plex library', async () => {
+      (global.fetch as jest.Mock).mockReset();
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              ...mockConfig,
+              deploymentEnvironment: {
+                inDocker: false,
+                dockerAutoCreated: false,
+                platform: null,
+                isWsl: true
+              }
+            }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              cookiesEnabled: false,
+              customCookiesUploaded: false,
+              customFileExists: false,
+            }),
+        } as Response)
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve([]),
+        } as Response);
+
+      renderWithProviders(<Configuration token={mockToken} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Core Settings')).toBeInTheDocument();
+      });
+
+      const user = userEvent.setup();
+
+      const accordion = screen.getByText('Optional: Plex Media Server Integration');
+      await user.click(accordion);
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              key: '1',
+              title: 'WSL Library',
+            },
+          ]),
+      } as Response);
+
+      const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
+      await user.click(testButtons[0]);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Plex connection successful/i)).toBeInTheDocument();
+      });
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              id: '1',
+              title: 'WSL Library',
+              locations: [
+                {
+                  id: 'loc-1',
+                  path: 'Q:\\Youtube_test'
+                }
+              ]
+            }
+          ]),
+      } as Response);
+
+      const selectLibraryButton = screen.getByRole('button', { name: /Select Plex Library/i });
+      await user.click(selectLibraryButton);
+
+      const librarySelect = await screen.findByRole('button', { name: /Select a Plex Library/i });
+      await user.click(librarySelect);
+      const libraryOption = await screen.findByRole('option', { name: 'WSL Library' });
+      await user.click(libraryOption);
+
+      const pathSelect = await screen.findByRole('button', { name: /Select a Path/i });
+      await user.click(pathSelect);
+      const pathOption = await screen.findByRole('option', { name: /Q:\\Youtube_test/ });
+      await user.click(pathOption);
+
+      const saveSelectionButton = await screen.findByRole('button', { name: /Save Selection/i });
+      await user.click(saveSelectionButton);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(/reports its media path as/i)
+        ).toBeInTheDocument();
+      });
+
+      expect(screen.getByText(/\/mnt\/q\/Youtube_test/i)).toBeInTheDocument();
+
+      const applyButton = screen.getByRole('button', { name: /Use Suggested Path/i });
+      await user.click(applyButton);
+
+      const outputField = screen.getByRole('textbox', { name: /YouTube Output Directory/i });
+      await waitFor(() => {
+        expect(outputField).toHaveValue('/mnt/q/Youtube_test');
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByText(/Use Suggested Path/i)).not.toBeInTheDocument();
+      });
     });
   });
 

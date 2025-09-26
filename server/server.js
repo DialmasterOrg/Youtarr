@@ -4,6 +4,7 @@ const app = express();
 app.set('trust proxy', true); // Trust proxy headers for correct IP detection
 app.use(express.json());
 const path = require('path');
+const fs = require('fs');
 const db = require('./db');
 const https = require('https');
 const http = require('http');
@@ -53,6 +54,23 @@ function isLocalhostIP(ip) {
 
   return isLocal;
 }
+
+const isWslEnvironment = (() => {
+  if (process.platform !== 'linux') {
+    return false;
+  }
+
+  if (process.env.WSL_INTEROP || process.env.WSL_DISTRO_NAME) {
+    return true;
+  }
+
+  try {
+    const osRelease = fs.readFileSync('/proc/sys/kernel/osrelease', 'utf8');
+    return osRelease.toLowerCase().includes('microsoft');
+  } catch (error) {
+    return false;
+  }
+})();
 
 const initialize = async () => {
   try {
@@ -222,16 +240,28 @@ const initialize = async () => {
         // Check if test parameters are provided in query string
         const testIP = req.query.testIP;
         const testApiKey = req.query.testApiKey;
+        const testPortRaw = req.query.testPort;
+        const hasTestCredentials = typeof testApiKey === 'string' && testApiKey.length > 0;
+        let testPort;
+        if (typeof testPortRaw === 'string' && testPortRaw.trim().length > 0) {
+          const numericPort = testPortRaw.trim().replace(/[^0-9]/g, '');
+          testPort = numericPort.length > 0 ? numericPort : undefined;
+        }
 
         let libraries;
-        if (testIP && testApiKey) {
+        if (hasTestCredentials || typeof testIP === 'string') {
           // Use provided test values instead of saved config
-          libraries = await plexModule.getLibrariesWithParams(testIP, testApiKey);
+          libraries = await plexModule.getLibrariesWithParams(testIP, testApiKey, testPort);
 
           // If test was successful (got libraries), auto-save the credentials
-          if (libraries && libraries.length > 0) {
+          if (libraries && libraries.length > 0 && hasTestCredentials) {
             const currentConfig = configModule.getConfig();
-            currentConfig.plexIP = testIP;
+            if (testIP) {
+              currentConfig.plexIP = testIP;
+            }
+            if (testPort) {
+              currentConfig.plexPort = testPort;
+            }
             currentConfig.plexApiKey = testApiKey;
             configModule.updateConfig(currentConfig);
             console.log('Plex credentials auto-saved after successful test');
@@ -269,7 +299,8 @@ const initialize = async () => {
       safeConfig.deploymentEnvironment = {
         inDocker: !!process.env.IN_DOCKER_CONTAINER,
         dockerAutoCreated: !!safeConfig.dockerAutoCreated,
-        platform: process.env.PLATFORM || null
+        platform: process.env.PLATFORM || null,
+        isWsl: isWslEnvironment
       };
 
       res.json(safeConfig);
