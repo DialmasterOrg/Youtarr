@@ -863,8 +863,8 @@ const initialize = async () => {
     app.get('/plex/auth-url', async (req, res) => {
       const config = configModule.getConfig();
 
-      // If auth not configured, reject
-      if (!config.passwordHash) {
+      // If auth not configured, reject (unless platform auth is managing access)
+      if (process.env.AUTH_ENABLED !== 'false' && !config.passwordHash) {
         return res.status(503).json({
           error: 'Authentication not configured',
           requiresSetup: true,
@@ -883,8 +883,8 @@ const initialize = async () => {
     app.get('/plex/check-pin/:pinId', async (req, res) => {
       const config = configModule.getConfig();
 
-      // If auth not configured, reject
-      if (!config.passwordHash) {
+      // If auth not configured, reject (unless platform auth is managing access)
+      if (process.env.AUTH_ENABLED !== 'false' && !config.passwordHash) {
         return res.status(503).json({
           error: 'Authentication not configured',
           requiresSetup: true,
@@ -906,14 +906,16 @@ const initialize = async () => {
       res.sendFile(path.join(__dirname, '../client/build/index.html'));
     });
 
-    const port = process.env.PORT || 3011;
-    const server = http.createServer(app);
-    // pass the server to WebSocket server initialization function to allow it to use the same port
-    require('./modules/webSocketServer.js')(server);
+    if (process.env.NODE_ENV !== 'test') {
+      const port = process.env.PORT || 3011;
+      const server = http.createServer(app);
+      // pass the server to WebSocket server initialization function to allow it to use the same port
+      require('./modules/webSocketServer.js')(server);
 
-    server.listen(port, () => {
-      console.log(`Server listening on port ${port}`);
-    });
+      server.listen(port, () => {
+        console.log(`Server listening on port ${port}`);
+      });
+    }
 
     // Clean up expired sessions daily at 3 AM
     schedule.schedule('0 3 * * *', async () => {
@@ -947,4 +949,12 @@ const initialize = async () => {
   }
 };
 
-initialize();
+if (process.env.NODE_ENV !== 'test') {
+  initialize();
+}
+
+module.exports = {
+  app,
+  initialize,
+  isLocalhostIP
+};
