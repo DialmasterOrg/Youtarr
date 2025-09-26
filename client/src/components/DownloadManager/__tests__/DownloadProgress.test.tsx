@@ -20,6 +20,7 @@ describe('DownloadProgress', () => {
     subscribe: mockSubscribe,
     unsubscribe: mockUnsubscribe,
     ws: {},
+    socket: null,
     isConnected: true,
   };
 
