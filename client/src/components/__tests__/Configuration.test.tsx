@@ -1207,6 +1207,50 @@ describe('Configuration Component', () => {
       expect(outputDirInput).toBeDisabled();
     });
 
+    test('hides Account & Security section when auth is disabled', async () => {
+      const authDisabledConfig = {
+        ...mockConfig,
+        authEnabled: false,
+        isPlatformManaged: {
+          youtubeOutputDirectory: false,
+          plexUrl: false,
+          authEnabled: false,
+        },
+        deploymentEnvironment: {
+          inDocker: false,
+          dockerAutoCreated: false,
+          platform: null,
+        },
+      };
+
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(authDisabledConfig),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            cookiesEnabled: false,
+            customCookiesUploaded: false,
+            customFileExists: false,
+          }),
+        } as Response)
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve([]),
+        } as Response);
+
+      renderWithProviders(<Configuration token={mockToken} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Core Settings')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByText('Account & Security')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Change Password/i })).not.toBeInTheDocument();
+    });
+
     test('shows Docker volume indicator', async () => {
       const dockerConfig = {
         ...mockConfig,

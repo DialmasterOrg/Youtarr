@@ -140,6 +140,7 @@ function Configuration({ token }: ConfigurationProps) {
     !isPlatformManaged.youtubeOutputDirectory &&
     !deploymentEnvironment.dockerAutoCreated
   );
+  const showAccountSection = isPlatformManaged.authEnabled !== false;
 
   useEffect(() => {
     fetch('/getconfig', {
@@ -886,12 +887,14 @@ function Configuration({ token }: ConfigurationProps) {
         ))}
 
         {/* Loading skeleton for Account & Security */}
-        <Card elevation={8} sx={{ mb: 2 }}>
-          <CardContent>
-            <Skeleton variant="text" width={150} height={28} sx={{ mb: 2 }} />
-            <Skeleton variant="rectangular" width={130} height={36} />
-          </CardContent>
-        </Card>
+        {showAccountSection && (
+          <Card elevation={8} sx={{ mb: 2 }}>
+            <CardContent>
+              <Skeleton variant="text" width={150} height={28} sx={{ mb: 2 }} />
+              <Skeleton variant="rectangular" width={130} height={36} />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Loading skeleton for Save button */}
         <Box sx={{ height: 88 }} />
@@ -1717,81 +1720,83 @@ function Configuration({ token }: ConfigurationProps) {
         </AccordionDetails>
       </Accordion>
 
-      <Card elevation={8} sx={{ mb: 2 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Account & Security
-          </Typography>
-
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle1" gutterBottom>
-              Change Password
+      {showAccountSection && (
+        <Card elevation={8} sx={{ mb: 2 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Account & Security
             </Typography>
 
-            {!showPasswordChange ? (
-              <Button
-                variant="outlined"
-                onClick={() => setShowPasswordChange(true)}
-              >
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle1" gutterBottom>
                 Change Password
-              </Button>
-            ) : (
-              <Box component="form" onSubmit={handlePasswordChange}>
-                <TextField
-                  fullWidth
-                  type="password"
-                  label="Current Password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  margin="normal"
-                  required
-                />
-                <TextField
-                  fullWidth
-                  type="password"
-                  label="New Password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  margin="normal"
-                  required
-                  helperText="Minimum 8 characters"
-                />
-                <TextField
-                  fullWidth
-                  type="password"
-                  label="Confirm New Password"
-                  value={confirmNewPassword}
-                  onChange={(e) => setConfirmNewPassword(e.target.value)}
-                  margin="normal"
-                  required
-                  error={confirmNewPassword !== '' && newPassword !== confirmNewPassword}
-                  helperText={
-                    confirmNewPassword !== '' && newPassword !== confirmNewPassword
-                      ? "Passwords don't match"
-                      : ''
-                  }
-                />
-                <Box sx={{ mt: 2 }}>
-                  <Button type="submit" variant="contained" sx={{ mr: 1 }}>
-                    Update Password
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    onClick={() => {
-                      setShowPasswordChange(false);
-                      setCurrentPassword('');
-                      setNewPassword('');
-                      setConfirmNewPassword('');
-                    }}
-                  >
-                    Cancel
-                  </Button>
+              </Typography>
+
+              {!showPasswordChange ? (
+                <Button
+                  variant="outlined"
+                  onClick={() => setShowPasswordChange(true)}
+                >
+                  Change Password
+                </Button>
+              ) : (
+                <Box component="form" onSubmit={handlePasswordChange}>
+                  <TextField
+                    fullWidth
+                    type="password"
+                    label="Current Password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    margin="normal"
+                    required
+                  />
+                  <TextField
+                    fullWidth
+                    type="password"
+                    label="New Password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    margin="normal"
+                    required
+                    helperText="Minimum 8 characters"
+                  />
+                  <TextField
+                    fullWidth
+                    type="password"
+                    label="Confirm New Password"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    margin="normal"
+                    required
+                    error={confirmNewPassword !== '' && newPassword !== confirmNewPassword}
+                    helperText={
+                      confirmNewPassword !== '' && newPassword !== confirmNewPassword
+                        ? "Passwords don't match"
+                        : ''
+                    }
+                  />
+                  <Box sx={{ mt: 2 }}>
+                    <Button type="submit" variant="contained" sx={{ mr: 1 }}>
+                      Update Password
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      onClick={() => {
+                        setShowPasswordChange(false);
+                        setCurrentPassword('');
+                        setNewPassword('');
+                        setConfirmNewPassword('');
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </Box>
                 </Box>
-              </Box>
-            )}
-          </Box>
-        </CardContent>
-      </Card>
+              )}
+            </Box>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Spacer to prevent content from being hidden behind the fixed save bar */}
       <Box sx={{ height: youtubeDirectoryChanged ? { xs: 160, sm: 120 } : { xs: 88, sm: 80 } }} />
