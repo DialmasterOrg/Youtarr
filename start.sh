@@ -30,8 +30,12 @@ if [ ! -f "config/config.json" ]; then
   exit 1
 fi
 
-# Read the selected directory from the config file
-youtubeOutputDirectory=$(python -c "import json; print(json.load(open('config/config.json'))['youtubeOutputDirectory'])" 2>/dev/null)
+# Read the selected directory from the config file using shell commands
+# Extract the value between quotes after youtubeOutputDirectory
+youtubeOutputDirectory=$(grep '"youtubeOutputDirectory"' config/config.json | sed 's/.*"youtubeOutputDirectory"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+
+# Trim whitespace
+youtubeOutputDirectory=$(echo "$youtubeOutputDirectory" | xargs)
 
 # Check if the directory was successfully read and is not empty
 if [ -z "$youtubeOutputDirectory" ] || [ "$youtubeOutputDirectory" == "" ] || [ "$youtubeOutputDirectory" == "null" ]; then

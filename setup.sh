@@ -54,7 +54,8 @@ plex_ip_escaped=$(printf '%s\n' "$plex_ip" | sed 's:[][\/.^$*]:\\&:g')
 sed -i "s/\"plexIP\": \".*\"/\"plexIP\": \"$plex_ip_escaped\"/" ./config/config.json
 
 # Check if youtubeOutputDirectory is already set in config
-CURRENT_DIR=$(grep '"youtubeOutputDirectory"' ./config/config.json | sed 's/.*"youtubeOutputDirectory": "\(.*\)".*/\1/')
+# Extract the value between quotes after youtubeOutputDirectory
+CURRENT_DIR=$(grep '"youtubeOutputDirectory"' ./config/config.json | sed 's/.*"youtubeOutputDirectory"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 
 # Trim whitespace from CURRENT_DIR
 CURRENT_DIR=$(echo "$CURRENT_DIR" | xargs)
