@@ -19,6 +19,7 @@ yt-dlp.exe
 
 # testing
 /coverage
+/client/coverage
 
 # production
 client/build

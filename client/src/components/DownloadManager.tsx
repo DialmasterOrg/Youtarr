@@ -71,7 +71,6 @@ function DownloadManager({ token }: DownloadManagerProps) {
   );
 
   useEffect(() => {
-    console.log('useEffect for subscribe/unsubscribe');
     fetchRunningJobs();
     subscribe(filter, processMessagesCallback);
     return () => {

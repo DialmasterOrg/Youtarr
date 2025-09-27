@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   lint:
-    name: ESLint Check
+    name: ESLint & TypeScript Check
     runs-on: ubuntu-latest
 
     steps:
@@ -42,15 +42,23 @@ jobs:
         run: npx eslint ./client/src/. --ext .ts,.tsx
         continue-on-error: true
 
+      - name: Run TypeScript Type Checking
+        id: typescript-check
+        run: npm run lint:ts
+        continue-on-error: true
+
       - name: Check Linting Results
-        if: steps.lint-backend.outcome == 'failure' || steps.lint-frontend.outcome == 'failure'
+        if: steps.lint-backend.outcome == 'failure' || steps.lint-frontend.outcome == 'failure' || steps.typescript-check.outcome == 'failure'
         run: |
-          echo "❌ Linting failed!"
+          echo "❌ Linting/Type checking failed!"
           if [ "${{ steps.lint-backend.outcome }}" == "failure" ]; then
             echo "Backend linting failed"
           fi
           if [ "${{ steps.lint-frontend.outcome }}" == "failure" ]; then
             echo "Frontend linting failed"
+          fi
+          if [ "${{ steps.typescript-check.outcome }}" == "failure" ]; then
+            echo "TypeScript type checking failed"
           fi
           exit 1
 
@@ -75,6 +83,32 @@ jobs:
         run: npm run test:backend -- --coverage --coverageReporters=json-summary --coverageReporters=lcov --coverageReporters=text
         env:
           NODE_ENV: test
+
+      - name: Check backend coverage threshold
+        run: |
+          coverage_file="coverage/coverage-summary.json"
+          if [ -f "$coverage_file" ]; then
+            lines=$(node -p "require('./$coverage_file').total.lines.pct")
+            statements=$(node -p "require('./$coverage_file').total.statements.pct")
+            functions=$(node -p "require('./$coverage_file').total.functions.pct")
+            branches=$(node -p "require('./$coverage_file').total.branches.pct")
+
+            echo "Backend Coverage:"
+            echo "  Lines: ${lines}%"
+            echo "  Statements: ${statements}%"
+            echo "  Functions: ${functions}%"
+            echo "  Branches: ${branches}%"
+
+            if (( $(echo "$lines < 70" | bc -l) )); then
+              echo "❌ Backend line coverage is below 70% threshold (${lines}%)"
+              exit 1
+            fi
+
+            echo "✅ Backend coverage meets minimum threshold (70%)"
+          else
+            echo "❌ Coverage report not found"
+            exit 1
+          fi
 
       - name: Upload backend coverage artifacts
         uses: actions/upload-artifact@v4
@@ -110,6 +144,32 @@ jobs:
         run: cd client && npm test -- --coverage --coverageReporters=json-summary --coverageReporters=lcov --coverageReporters=text --watchAll=false
         env:
           CI: true
+
+      - name: Check frontend coverage threshold
+        run: |
+          coverage_file="client/coverage/coverage-summary.json"
+          if [ -f "$coverage_file" ]; then
+            lines=$(node -p "require('./$coverage_file').total.lines.pct")
+            statements=$(node -p "require('./$coverage_file').total.statements.pct")
+            functions=$(node -p "require('./$coverage_file').total.functions.pct")
+            branches=$(node -p "require('./$coverage_file').total.branches.pct")
+
+            echo "Frontend Coverage:"
+            echo "  Lines: ${lines}%"
+            echo "  Statements: ${statements}%"
+            echo "  Functions: ${functions}%"
+            echo "  Branches: ${branches}%"
+
+            if (( $(echo "$lines < 70" | bc -l) )); then
+              echo "❌ Frontend line coverage is below 70% threshold (${lines}%)"
+              exit 1
+            fi
+
+            echo "✅ Frontend coverage meets minimum threshold (70%)"
+          else
+            echo "❌ Coverage report not found"
+            exit 1
+          fi
 
       - name: Upload frontend coverage artifacts
         uses: actions/upload-artifact@v4
@@ -176,7 +236,7 @@ jobs:
             // Format coverage badge color
             function getBadgeColor(percentage) {
               if (percentage >= 80) return '🟢';
-              if (percentage >= 60) return '🟡';
+              if (percentage >= 70) return '🟡';
               return '🔴';
             }
 
@@ -217,6 +277,19 @@ jobs:
             `;
             } else {
               comment += `### Frontend Coverage\n⚠️ Coverage data not available (tests may have failed)\n\n`;
+            }
+
+            // Check if thresholds are met
+            const backendMeetsThreshold = backendAvailable && backendTotal.lines.pct >= 70;
+            const frontendMeetsThreshold = frontendAvailable && frontendTotal.lines.pct >= 70;
+
+            comment += `### Coverage Requirements\n`;
+            comment += `- **Minimum threshold:** 70% line coverage\n`;
+            comment += `- **Backend:** ${backendMeetsThreshold ? '✅ Passes' : backendAvailable ? '❌ Fails (below 70%)' : '⚠️ Not available'}\n`;
+            comment += `- **Frontend:** ${frontendMeetsThreshold ? '✅ Passes' : frontendAvailable ? '❌ Fails (below 70%)' : '⚠️ Not available'}\n\n`;
+
+            if (!backendMeetsThreshold || !frontendMeetsThreshold) {
+              comment += `> ⚠️ **This PR cannot be merged until both frontend and backend coverage meet the 70% threshold.**\n\n`;
             }
 
             comment += `---\n*Coverage report generated for commit ${context.sha.substring(0, 7)}*`;
