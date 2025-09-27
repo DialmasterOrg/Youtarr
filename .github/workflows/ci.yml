@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   lint:
-    name: ESLint Check
+    name: ESLint & TypeScript Check
     runs-on: ubuntu-latest
 
     steps:
@@ -42,15 +42,23 @@ jobs:
         run: npx eslint ./client/src/. --ext .ts,.tsx
         continue-on-error: true
 
+      - name: Run TypeScript Type Checking
+        id: typescript-check
+        run: npm run lint:ts
+        continue-on-error: true
+
       - name: Check Linting Results
-        if: steps.lint-backend.outcome == 'failure' || steps.lint-frontend.outcome == 'failure'
+        if: steps.lint-backend.outcome == 'failure' || steps.lint-frontend.outcome == 'failure' || steps.typescript-check.outcome == 'failure'
         run: |
-          echo "❌ Linting failed!"
+          echo "❌ Linting/Type checking failed!"
           if [ "${{ steps.lint-backend.outcome }}" == "failure" ]; then
             echo "Backend linting failed"
           fi
           if [ "${{ steps.lint-frontend.outcome }}" == "failure" ]; then
             echo "Frontend linting failed"
+          fi
+          if [ "${{ steps.typescript-check.outcome }}" == "failure" ]; then
+            echo "TypeScript type checking failed"
           fi
           exit 1
 

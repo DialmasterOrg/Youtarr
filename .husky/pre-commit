@@ -8,6 +8,13 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+echo "🔍 Running TypeScript type checking..."
+npm run lint:ts
+if [ $? -ne 0 ]; then
+  echo "❌ TypeScript type checking failed. Please fix the type errors before committing."
+  exit 1
+fi
+
 echo "🧪 Running tests..."
 cd client && CI=true npm test -- --watchAll=false --passWithNoTests --silent
 TEST_RESULT=$?

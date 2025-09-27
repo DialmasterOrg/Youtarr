@@ -109,7 +109,7 @@ describe('ChannelManager Component', () => {
 
       await screen.findByText('Alpha Channel');
       const listItems = screen.getAllByRole('listitem');
-      const texts = listItems.map((li) => (within(li).queryByText(/Channel$/)?.textContent ?? '').trim()).filter(Boolean);
+      const texts = listItems.map((li: HTMLElement) => (within(li).queryByText(/Channel$/)?.textContent ?? '').trim()).filter(Boolean);
       expect(texts).toEqual(['Alpha Channel', 'Beta Channel', 'Zebra Channel']);
     });
 
@@ -242,7 +242,7 @@ describe('ChannelManager Component', () => {
       renderChannelManager();
       await addChannel(user, '@NewChannel');
       const listItems = screen.getAllByRole('listitem');
-      const listItem = listItems.find((li) => within(li).queryByText('New Channel')) as HTMLElement;
+      const listItem = listItems.find((li: HTMLElement) => within(li).queryByText('New Channel')) as HTMLElement;
       expect(listItem).toHaveAttribute('data-state', 'new');
     });
   });
@@ -254,7 +254,7 @@ describe('ChannelManager Component', () => {
       renderChannelManager();
       await screen.findByText('Tech Channel');
       const listItems = screen.getAllByRole('listitem');
-      const techItem = listItems.find((li) => within(li).queryByText('Tech Channel')) as HTMLElement;
+      const techItem = listItems.find((li: HTMLElement) => within(li).queryByText('Tech Channel')) as HTMLElement;
       const delBtn = within(techItem).getByTestId('delete-channel-button');
       await user.click(delBtn);
 
@@ -290,7 +290,7 @@ describe('ChannelManager Component', () => {
       renderChannelManager();
       await screen.findByText('Tech Channel');
       const listItems = screen.getAllByRole('listitem');
-      const techItem = listItems.find((li) => within(li).queryByText('Tech Channel')) as HTMLElement;
+      const techItem = listItems.find((li: HTMLElement) => within(li).queryByText('Tech Channel')) as HTMLElement;
       const delBtn = within(techItem).getByTestId('delete-channel-button');
       await user.click(delBtn);
 
@@ -330,7 +330,7 @@ describe('ChannelManager Component', () => {
       renderChannelManager();
       await screen.findByText('Tech Channel');
       const listItems = screen.getAllByRole('listitem');
-      const techItem = listItems.find((li) => within(li).queryByText('Tech Channel')) as HTMLElement;
+      const techItem = listItems.find((li: HTMLElement) => within(li).queryByText('Tech Channel')) as HTMLElement;
       const delBtn = within(techItem).getByTestId('delete-channel-button');
       await user.click(delBtn);
 

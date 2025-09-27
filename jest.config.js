@@ -5,6 +5,7 @@ module.exports = {
   collectCoverageFrom: [
     'server/**/*.js',
     '!server/**/__tests__/**',
+    '!server/models/**',
     '!server/node_modules/**'
   ],
   coverageDirectory: 'coverage',
