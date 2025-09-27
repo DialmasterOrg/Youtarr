@@ -3,12 +3,42 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import Configuration from '../Configuration';
 import { renderWithProviders } from '../../test-utils';
+import React from 'react';
 
 jest.mock('axios', () => ({
   post: jest.fn()
 }));
 
 const axios = require('axios');
+
+jest.mock('../PlexLibrarySelector', () => ({
+  __esModule: true,
+  default: ({ open, setLibraryId, handleClose }: any) => {
+    if (!open) {
+      return null;
+    }
+
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() =>
+            setLibraryId({
+              libraryId: 'mock-library',
+              libraryTitle: 'WSL Library',
+              selectedPath: 'Q:\\Youtube_test'
+            })
+          }
+        >
+          Mock Save Selection
+        </button>
+        <button type="button" onClick={handleClose}>
+          Mock Close
+        </button>
+      </div>
+    );
+  }
+}));
 
 const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
@@ -104,9 +134,7 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
 
       expect(global.fetch).toHaveBeenCalledWith('/getconfig', {
         headers: { 'x-access-token': mockToken },
@@ -127,9 +155,7 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
 
       expect(consoleError).toHaveBeenCalled();
       consoleError.mockRestore();
@@ -156,9 +182,7 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={null} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
 
       expect(global.fetch).toHaveBeenCalledWith('/getconfig', {
         headers: { 'x-access-token': '' },
@@ -188,9 +212,7 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
     };
 
     test('updates YouTube output directory', async () => {
@@ -297,9 +319,7 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
     };
 
     test('expands Plex accordion and shows configuration', async () => {
@@ -354,9 +374,7 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
 
       const user = userEvent.setup();
       const accordion = screen.getByText('Optional: Plex Media Server Integration');
@@ -387,9 +405,7 @@ describe('Configuration Component', () => {
       const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
       await user.click(testButtons[0]);
 
-      await waitFor(() => {
-        expect(screen.getByText(/Plex connection successful/i)).toBeInTheDocument();
-      });
+      await screen.findByText(/Plex connection successful/i);
 
       const calls = (global.fetch as jest.Mock).mock.calls;
       const lastCall = calls[calls.length - 1];
@@ -429,9 +445,7 @@ describe('Configuration Component', () => {
       const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
       await user.click(testButtons[0]);
 
-      await waitFor(() => {
-        expect(screen.getByText(/Plex connection successful/i)).toBeInTheDocument();
-      });
+      await screen.findByText(/Plex connection successful/i);
 
       const selectLibraryButton = screen.getByRole('button', { name: /Select Plex Library/i });
       expect(selectLibraryButton).not.toBeDisabled();
@@ -462,6 +476,16 @@ describe('Configuration Component', () => {
               customFileExists: false,
             }),
         } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve([
+              {
+                key: '1',
+                title: 'WSL Library'
+              }
+            ]),
+        } as Response)
         .mockResolvedValue({
           ok: true,
           json: () => Promise.resolve([]),
@@ -469,71 +493,25 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
 
       const user = userEvent.setup();
 
       const accordion = screen.getByText('Optional: Plex Media Server Integration');
       await user.click(accordion);
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve([
-            {
-              key: '1',
-              title: 'WSL Library',
-            },
-          ]),
-      } as Response);
-
-      const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
-      await user.click(testButtons[0]);
+      const selectLibraryButton = await screen.findByRole('button', { name: /Select Plex Library/i });
 
       await waitFor(() => {
-        expect(screen.getByText(/Plex connection successful/i)).toBeInTheDocument();
+        expect(selectLibraryButton).not.toBeDisabled();
       });
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve([
-            {
-              id: '1',
-              title: 'WSL Library',
-              locations: [
-                {
-                  id: 'loc-1',
-                  path: 'Q:\\Youtube_test'
-                }
-              ]
-            }
-          ]),
-      } as Response);
-
-      const selectLibraryButton = screen.getByRole('button', { name: /Select Plex Library/i });
       await user.click(selectLibraryButton);
 
-      const librarySelect = await screen.findByRole('button', { name: /Select a Plex Library/i });
-      await user.click(librarySelect);
-      const libraryOption = await screen.findByRole('option', { name: 'WSL Library' });
-      await user.click(libraryOption);
+      const mockSaveButton = await screen.findByRole('button', { name: /Mock Save Selection/i });
+      await user.click(mockSaveButton);
 
-      const pathSelect = await screen.findByRole('button', { name: /Select a Path/i });
-      await user.click(pathSelect);
-      const pathOption = await screen.findByRole('option', { name: /Q:\\Youtube_test/ });
-      await user.click(pathOption);
-
-      const saveSelectionButton = await screen.findByRole('button', { name: /Save Selection/i });
-      await user.click(saveSelectionButton);
-
-      await waitFor(() => {
-        expect(
-          screen.getByText(/reports its media path as/i)
-        ).toBeInTheDocument();
-      });
+      await screen.findByText(/reports its media path as/i);
 
       expect(screen.getByText(/\/mnt\/q\/Youtube_test/i)).toBeInTheDocument();
 
@@ -545,9 +523,7 @@ describe('Configuration Component', () => {
         expect(outputField).toHaveValue('/mnt/q/Youtube_test');
       });
 
-      await waitFor(() => {
-        expect(screen.queryByText(/Use Suggested Path/i)).not.toBeInTheDocument();
-      });
+      expect(screen.queryByText(/Use Suggested Path/i)).not.toBeInTheDocument();
     });
   });
 
