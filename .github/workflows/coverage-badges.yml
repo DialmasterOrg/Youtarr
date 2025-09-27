@@ -1,0 +1,135 @@
+name: Update Coverage Badges
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-badges:
+    name: Update Coverage Badges
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd client && npm ci
+
+      - name: Run backend tests with coverage
+        run: npm run test:backend -- --coverage --coverageReporters=json-summary
+        env:
+          NODE_ENV: test
+        continue-on-error: true
+
+      - name: Run frontend tests with coverage
+        run: cd client && npm test -- --coverage --coverageReporters=json-summary --watchAll=false
+        env:
+          CI: true
+        continue-on-error: true
+
+      - name: Generate coverage badges
+        run: |
+          # Create badges directory if it doesn't exist
+          mkdir -p .github/badges
+
+          # Function to generate badge URL
+          generate_badge() {
+            local label=$1
+            local value=$2
+            local color=$3
+            echo "https://img.shields.io/badge/${label}-${value}%25-${color}"
+          }
+
+          # Function to determine color based on coverage
+          get_color() {
+            local coverage=$1
+            if (( $(echo "$coverage >= 80" | bc -l) )); then
+              echo "brightgreen"
+            elif (( $(echo "$coverage >= 70" | bc -l) )); then
+              echo "yellow"
+            elif (( $(echo "$coverage >= 50" | bc -l) )); then
+              echo "orange"
+            else
+              echo "red"
+            fi
+          }
+
+          # Extract backend coverage
+          backend_coverage=0
+          if [ -f "coverage/coverage-summary.json" ]; then
+            backend_coverage=$(node -p "require('./coverage/coverage-summary.json').total.lines.pct")
+          fi
+
+          # Extract frontend coverage
+          frontend_coverage=0
+          if [ -f "client/coverage/coverage-summary.json" ]; then
+            frontend_coverage=$(node -p "require('./client/coverage/coverage-summary.json').total.lines.pct")
+          fi
+
+          # Round to integers for cleaner badges
+          backend_int=$(printf "%.0f" "$backend_coverage")
+          frontend_int=$(printf "%.0f" "$frontend_coverage")
+
+          # Get colors
+          backend_color=$(get_color "$backend_coverage")
+          frontend_color=$(get_color "$frontend_coverage")
+
+          # Generate badge URLs
+          backend_badge=$(generate_badge "Backend_Coverage" "$backend_int" "$backend_color")
+          frontend_badge=$(generate_badge "Frontend_Coverage" "$frontend_int" "$frontend_color")
+
+          # Save badge URLs to files
+          echo "$backend_badge" > .github/badges/backend-coverage.txt
+          echo "$frontend_badge" > .github/badges/frontend-coverage.txt
+
+          echo "Backend Coverage: ${backend_int}% (${backend_color})"
+          echo "Frontend Coverage: ${frontend_int}% (${frontend_color})"
+
+      - name: Update README with badges
+        run: |
+          backend_badge=$(cat .github/badges/backend-coverage.txt)
+          frontend_badge=$(cat .github/badges/frontend-coverage.txt)
+
+          # Check if badges already exist in README
+          if grep -q "!\[Backend Coverage\]" README.md; then
+            # Update existing badges
+            sed -i "s|!\[Backend Coverage\](.*)|![Backend Coverage](${backend_badge})|" README.md
+            sed -i "s|!\[Frontend Coverage\](.*)|![Frontend Coverage](${frontend_badge})|" README.md
+          else
+            # Add badges after the main title
+            sed -i "2a\\
+\\
+![Backend Coverage](${backend_badge})\\
+![Frontend Coverage](${frontend_badge})\\
+![CI Status](https://github.com/DialmasterOrg/Youtarr/workflows/CI%20-%20Lint%20and%20Test/badge.svg)\\
+" README.md
+          fi
+
+      - name: Commit and push badge updates
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          # Check if there are changes
+          if [[ -n $(git status --porcelain) ]]; then
+            git add README.md .github/badges/
+            git commit -m "chore: update coverage badges [skip ci]"
+            git push
+          else
+            echo "No changes to coverage badges"
+          fi
