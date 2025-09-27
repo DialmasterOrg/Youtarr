@@ -165,6 +165,7 @@ describe('DownloadExecutor', () => {
       fsPromises.readdir.mockResolvedValue([
         'video.f137.mp4',
         'video.f140.m4a',
+        'video.f999.mp4',
         'other.mp4'
       ]);
       fsPromises.unlink.mockResolvedValue();
@@ -181,6 +182,7 @@ describe('DownloadExecutor', () => {
 
       expect(fsPromises.unlink).toHaveBeenCalledWith('/path/to/video.f137.mp4');
       expect(fsPromises.unlink).toHaveBeenCalledWith('/path/to/video.f140.m4a');
+      expect(fsPromises.unlink).toHaveBeenCalledWith('/path/to/video.f999.mp4');
     });
 
     it('should handle errors gracefully', async () => {
@@ -406,6 +408,50 @@ describe('DownloadExecutor', () => {
         );
         expect(plexModule.refreshLibrary).toHaveBeenCalled();
         expect(jobModule.startNextJob).toHaveBeenCalled();
+      });
+
+      it('should cleanup partial files on successful exit when destinations tracked', async () => {
+        fsPromises.access.mockResolvedValue();
+        fsPromises.readdir.mockResolvedValue(['video.f401.mp4', 'other.mp4']);
+        fsPromises.unlink.mockResolvedValue();
+
+        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+        mockProcess.stdout.emit('data', Buffer.from('[download] Destination: /path/to/video.mp4'));
+
+        mockProcess.emit('exit', 0);
+        await downloadPromise;
+
+        expect(fsPromises.unlink).toHaveBeenCalledWith('/path/to/video.mp4.part');
+        expect(fsPromises.unlink).toHaveBeenCalledWith('/path/to/video.f401.mp4');
+      });
+
+      it('should ignore cleanup when no destinations tracked', async () => {
+        fsPromises.unlink.mockResolvedValue();
+
+        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+        mockProcess.emit('exit', 0);
+        await downloadPromise;
+
+        expect(fsPromises.unlink).not.toHaveBeenCalledWith(expect.stringContaining('.part'));
+      });
+
+      it('should log errors when cleanup fails', async () => {
+        fsPromises.access.mockResolvedValue();
+        const cleanupError = new Error('permission denied');
+        fsPromises.unlink.mockRejectedValue(cleanupError);
+
+        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+        mockProcess.stdout.emit('data', Buffer.from('[download] Destination: /path/to/video.mp4'));
+        mockProcess.emit('exit', 0);
+        await downloadPromise;
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Error cleaning up'),
+          cleanupError
+        );
       });
 
       it('should handle exit with warnings (code 0 with stderr)', async () => {

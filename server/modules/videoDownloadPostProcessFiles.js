@@ -17,6 +17,40 @@ const jsonPath = path.format({
 const videoDirectory = path.dirname(videoPath);
 const imagePath = path.join(videoDirectory, 'poster.jpg'); // assume the image thumbnail is named 'poster.jpg'
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function moveWithRetries(src, dest, { retries = 5, delayMs = 200 } = {}) {
+  let attempt = 0;
+  let lastError;
+
+  while (attempt <= retries) {
+    try {
+      await fs.move(src, dest, { overwrite: true });
+      return;
+    } catch (err) {
+      lastError = err;
+      if (attempt === retries) {
+        throw err;
+      }
+      const backoff = delayMs * Math.pow(2, attempt);
+      await sleep(backoff);
+      attempt += 1;
+    }
+  }
+
+  throw lastError;
+}
+
+async function safeRemove(filePath) {
+  try {
+    await fs.remove(filePath);
+  } catch (err) {
+    if (err && err.code !== 'ENOENT') {
+      console.log(`Error deleting temp file ${filePath}: ${err.message}`);
+    }
+  }
+}
+
 function shouldWriteChannelPosters() {
   const config = configModule.getConfig() || {};
   return config.writeChannelPosters !== false;
@@ -199,27 +233,40 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       }
 
       // Replace original with temp file if successful
-      if (fs.existsSync(tempPath)) {
-        const tempStats = fs.statSync(tempPath);
-        const origStats = fs.statSync(videoPath);
+      if (await fs.pathExists(tempPath)) {
+        const tempStats = await fs.stat(tempPath);
+        let origStats = null;
+        try {
+          origStats = await fs.stat(videoPath);
+        } catch (statErr) {
+          if (!statErr || statErr.code !== 'ENOENT') {
+            throw statErr;
+          }
+        }
 
-        // Basic sanity check
-        if (tempStats.size >= origStats.size * 0.9) {
-          fs.renameSync(tempPath, videoPath);
-          console.log('Successfully added additional metadata to video file');
+        const originalSize = origStats ? origStats.size : 0;
+        const sizeThreshold = originalSize * 0.9;
+        const sizeCheckPassed = !origStats || tempStats.size >= sizeThreshold;
+
+        if (sizeCheckPassed) {
+          try {
+            await moveWithRetries(tempPath, videoPath);
+            console.log('Successfully added additional metadata to video file');
+          } catch (moveErr) {
+            console.log(`Note: Could not replace video with metadata-enhanced version: ${moveErr.message}`);
+            await safeRemove(tempPath);
+          }
         } else {
-          fs.unlinkSync(tempPath);
           console.log('Skipped metadata update due to file size mismatch');
+          await safeRemove(tempPath);
         }
       }
     } catch (err) {
       console.log(`Note: Could not add additional metadata: ${err.message}`);
       // Clean up temp file if exists
       const tempPath = videoPath + '.metadata_temp.mp4';
-      if (fs.existsSync(tempPath)) {
-        try { fs.unlinkSync(tempPath); } catch (e) {
-          console.log(`Error deleting temp file: ${e.message}`);
-        }
+      if (await fs.pathExists(tempPath)) {
+        await safeRemove(tempPath);
       }
     }
 
