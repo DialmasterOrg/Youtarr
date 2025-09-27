@@ -82,6 +82,7 @@ class DownloadExecutor {
       const proc = spawn('yt-dlp', args);
 
       const partialDestinations = new Set();
+      let partialCleanupPerformed = false;
       let httpForbiddenDetected = false;
       let cookiesSuggestionEmitted = false;
 
@@ -247,6 +248,7 @@ class DownloadExecutor {
           jobErrorCode = 'COOKIES_REQUIRED';
         } else if (httpForbiddenDetected) {
           await this.cleanupPartialFiles(Array.from(partialDestinations));
+          partialCleanupPerformed = true;
 
           status = 'Error';
           output = `${videoCount} videos. Error: YouTube returned HTTP 403 (Forbidden)`;
@@ -263,6 +265,7 @@ class DownloadExecutor {
         } else if (code !== 0) {
           // Cleanup partial files on failure
           await this.cleanupPartialFiles(Array.from(partialDestinations));
+          partialCleanupPerformed = true;
 
           const failureDetails = monitor.lastParsed || null;
 
@@ -376,6 +379,11 @@ class DownloadExecutor {
           finalPayload
         );
 
+        // Perform a best-effort cleanup of any partial download artifacts even on success
+        if (!partialCleanupPerformed && partialDestinations.size > 0) {
+          await this.cleanupPartialFiles(Array.from(partialDestinations));
+        }
+
         // Clean up temporary channels file if it exists
         if (this.tempChannelsFile) {
           const fs = require('fs').promises;
@@ -399,6 +407,7 @@ class DownloadExecutor {
       proc.on('error', async (err) => {
         clearTimeout(timer);
         await this.cleanupPartialFiles(Array.from(partialDestinations));
+        partialCleanupPerformed = true;
         reject(err);
       });
     }).catch((error) => {
