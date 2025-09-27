@@ -88,10 +88,10 @@ jobs:
         run: |
           coverage_file="coverage/coverage-summary.json"
           if [ -f "$coverage_file" ]; then
-            lines=$(node -p "require('$coverage_file').total.lines.pct")
-            statements=$(node -p "require('$coverage_file').total.statements.pct")
-            functions=$(node -p "require('$coverage_file').total.functions.pct")
-            branches=$(node -p "require('$coverage_file').total.branches.pct")
+            lines=$(node -p "require('./$coverage_file').total.lines.pct")
+            statements=$(node -p "require('./$coverage_file').total.statements.pct")
+            functions=$(node -p "require('./$coverage_file').total.functions.pct")
+            branches=$(node -p "require('./$coverage_file').total.branches.pct")
 
             echo "Backend Coverage:"
             echo "  Lines: ${lines}%"

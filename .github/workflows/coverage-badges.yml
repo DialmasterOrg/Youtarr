@@ -112,12 +112,12 @@ jobs:
             sed -i "s|!\[Frontend Coverage\](.*)|![Frontend Coverage](${frontend_badge})|" README.md
           else
             # Add badges after the main title
-            sed -i "2a\\
-\\
-![Backend Coverage](${backend_badge})\\
-![Frontend Coverage](${frontend_badge})\\
-![CI Status](https://github.com/DialmasterOrg/Youtarr/workflows/CI%20-%20Lint%20and%20Test/badge.svg)\\
-" README.md
+            {
+              echo ""
+              echo "![Backend Coverage](${backend_badge})"
+              echo "![Frontend Coverage](${frontend_badge})"
+              echo "![CI Status](https://github.com/DialmasterOrg/Youtarr/workflows/CI%20-%20Lint%20and%20Test/badge.svg)"
+            } | sed -i '2r /dev/stdin' README.md
           fi
 
       - name: Commit and push badge updates
