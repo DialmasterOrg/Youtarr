@@ -3,12 +3,42 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import Configuration from '../Configuration';
 import { renderWithProviders } from '../../test-utils';
+import React from 'react';
 
 jest.mock('axios', () => ({
   post: jest.fn()
 }));
 
 const axios = require('axios');
+
+jest.mock('../PlexLibrarySelector', () => ({
+  __esModule: true,
+  default: ({ open, setLibraryId, handleClose }: any) => {
+    if (!open) {
+      return null;
+    }
+
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() =>
+            setLibraryId({
+              libraryId: 'mock-library',
+              libraryTitle: 'WSL Library',
+              selectedPath: 'Q:\\Youtube_test'
+            })
+          }
+        >
+          Mock Save Selection
+        </button>
+        <button type="button" onClick={handleClose}>
+          Mock Close
+        </button>
+      </div>
+    );
+  }
+}));
 
 const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
@@ -37,6 +67,7 @@ const mockConfig = {
   youtubeOutputDirectory: '/videos',
   plexYoutubeLibraryId: 'lib-123',
   plexIP: '192.168.1.100',
+  plexPort: '32400',
   uuid: 'uuid-123',
   sponsorblockEnabled: false,
   sponsorblockAction: 'remove',
@@ -103,9 +134,7 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
 
       expect(global.fetch).toHaveBeenCalledWith('/getconfig', {
         headers: { 'x-access-token': mockToken },
@@ -126,9 +155,7 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
 
       expect(consoleError).toHaveBeenCalled();
       consoleError.mockRestore();
@@ -155,9 +182,7 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={null} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
 
       expect(global.fetch).toHaveBeenCalledWith('/getconfig', {
         headers: { 'x-access-token': '' },
@@ -187,9 +212,7 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
     };
 
     test('updates YouTube output directory', async () => {
@@ -296,9 +319,7 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
     };
 
     test('expands Plex accordion and shows configuration', async () => {
@@ -314,6 +335,56 @@ describe('Configuration Component', () => {
 
       const plexIpInput = screen.getByRole('textbox', { name: /Plex Server IP/i });
       expect(plexIpInput).toHaveValue('192.168.1.100');
+
+      const plexPortInput = screen.getByRole('spinbutton', { name: /Plex Port/i });
+      expect(plexPortInput).toHaveValue(32400);
+    });
+
+    test('keeps Plex actions enabled when platform manages Plex URL', async () => {
+      (global.fetch as jest.Mock).mockReset();
+
+      const platformManagedConfig = {
+        ...mockConfig,
+        plexIP: '',
+        plexPort: '32400',
+        isPlatformManaged: {
+          youtubeOutputDirectory: false,
+          plexUrl: true,
+          authEnabled: true,
+        },
+      };
+
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(platformManagedConfig),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            cookiesEnabled: false,
+            customCookiesUploaded: false,
+            customFileExists: false,
+          }),
+        } as Response)
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve([]),
+        } as Response);
+
+      renderWithProviders(<Configuration token={mockToken} />);
+
+      await screen.findByText('Core Settings');
+
+      const user = userEvent.setup();
+      const accordion = screen.getByText('Optional: Plex Media Server Integration');
+      await user.click(accordion);
+
+      const testButton = await screen.findByRole('button', { name: /^Test Connection$/i });
+      expect(testButton).not.toBeDisabled();
+
+      const plexPortInput = await screen.findByRole('spinbutton', { name: /Plex Port/i });
+      expect(plexPortInput).toBeDisabled();
     });
 
     test('tests Plex connection successfully', async () => {
@@ -331,12 +402,15 @@ describe('Configuration Component', () => {
         ]),
       } as Response);
 
-      const testButtons = await screen.findAllByRole('button', { name: /Test Connection/i });
+      const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
       await user.click(testButtons[0]);
 
-      await waitFor(() => {
-        expect(screen.getByText(/Plex connection successful/i)).toBeInTheDocument();
-      });
+      await screen.findByText(/Plex connection successful/i);
+
+      const calls = (global.fetch as jest.Mock).mock.calls;
+      const lastCall = calls[calls.length - 1];
+      expect(lastCall[0]).toContain('testIP=192.168.1.100');
+      expect(lastCall[0]).toContain('testPort=32400');
     });
 
     test('handles failed Plex connection test', async () => {
@@ -348,7 +422,7 @@ describe('Configuration Component', () => {
 
       (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Connection failed'));
 
-      const testButtons = await screen.findAllByRole('button', { name: /Test Connection/i });
+      const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
       await user.click(testButtons[0]);
 
       await waitFor(() => {
@@ -368,15 +442,88 @@ describe('Configuration Component', () => {
         json: () => Promise.resolve([{ key: '1', title: 'Library 1' }]),
       } as Response);
 
-      const testButtons = await screen.findAllByRole('button', { name: /Test Connection/i });
+      const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
       await user.click(testButtons[0]);
 
-      await waitFor(() => {
-        expect(screen.getByText(/Plex connection successful/i)).toBeInTheDocument();
-      });
+      await screen.findByText(/Plex connection successful/i);
 
       const selectLibraryButton = screen.getByRole('button', { name: /Select Plex Library/i });
       expect(selectLibraryButton).not.toBeDisabled();
+    });
+
+    test('suggests translated path for WSL when selecting Plex library', async () => {
+      (global.fetch as jest.Mock).mockReset();
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              ...mockConfig,
+              deploymentEnvironment: {
+                inDocker: false,
+                dockerAutoCreated: false,
+                platform: null,
+                isWsl: true
+              }
+            }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              cookiesEnabled: false,
+              customCookiesUploaded: false,
+              customFileExists: false,
+            }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve([
+              {
+                key: '1',
+                title: 'WSL Library'
+              }
+            ]),
+        } as Response)
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve([]),
+        } as Response);
+
+      renderWithProviders(<Configuration token={mockToken} />);
+
+      await screen.findByText('Core Settings');
+
+      const user = userEvent.setup();
+
+      const accordion = screen.getByText('Optional: Plex Media Server Integration');
+      await user.click(accordion);
+
+      const selectLibraryButton = await screen.findByRole('button', { name: /Select Plex Library/i });
+
+      await waitFor(() => {
+        expect(selectLibraryButton).not.toBeDisabled();
+      });
+
+      await user.click(selectLibraryButton);
+
+      const mockSaveButton = await screen.findByRole('button', { name: /Mock Save Selection/i });
+      await user.click(mockSaveButton);
+
+      await screen.findByText(/reports its media path as/i);
+
+      expect(screen.getByText(/\/mnt\/q\/Youtube_test/i)).toBeInTheDocument();
+
+      const applyButton = screen.getByRole('button', { name: /Use Suggested Path/i });
+      await user.click(applyButton);
+
+      const outputField = screen.getByRole('textbox', { name: /YouTube Output Directory/i });
+      await waitFor(() => {
+        expect(outputField).toHaveValue('/mnt/q/Youtube_test');
+      });
+
+      expect(screen.queryByText(/Use Suggested Path/i)).not.toBeInTheDocument();
     });
   });
 

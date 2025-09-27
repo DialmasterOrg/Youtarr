@@ -412,9 +412,11 @@ The application container includes health checks:
 
 #### Same Machine Setup
 When Youtarr and Plex run on the same machine:
-- `host.docker.internal` - Recommended for Docker Desktop
-- `172.17.0.1` - Default Docker bridge IP on Linux
-- Host machine's IP address - Works for any setup
+- Docker Desktop (Windows/macOS): `host.docker.internal`
+- Docker on macOS without Docker Desktop (e.g., Colima): host LAN IP (e.g., `192.168.x.x`) or `host.lima.internal`
+- Docker on Linux: host LAN IP (e.g., `192.168.x.x`). The default bridge IP (`172.17.0.1`) usually won't work unless Plex is bound to the Docker bridge.
+- Explicit host mapping: add `--add-host host.docker.internal:<host-ip>` when starting the container if you prefer that hostname on Linux.
+- Plex defaults to port `32400`. If you use a custom Plex port, update the Plex Port field or include the port in `PLEX_URL`.
 
 #### Separate Machine Setup
 When Youtarr and Plex run on different machines:

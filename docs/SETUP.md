@@ -66,11 +66,17 @@ After logging in, configure Youtarr through the Configuration page:
 ### Optional Settings
 
 1. **Plex Server Configuration**:
-   - **Plex Server IP**: For Docker installations, use `host.docker.internal`
+   - **Plex Server IP**:
+     - Docker Desktop (Windows/macOS): `host.docker.internal`
+     - Docker on macOS without Docker Desktop (e.g., Colima): host LAN IP (e.g., `192.168.x.x`) or `host.lima.internal`
+     - Docker on Linux or running inside WSL without Docker Desktop: host LAN IP (e.g., `192.168.x.x`)
+   - **Plex Port**: Defaults to `32400`. Update this if you've changed the Plex listening port or exposed it through a different mapping.
+     - The setup script will try to contact `http://<address>:<port>/identity`; if it fails you can retry or skip to keep the value.
    - **Plex API Key**: Get it automatically via the Configuration page or [manually](https://www.plexopedia.com/plex-media-server/general/plex-token/)
    - **Plex Library Section**: Select the library where videos will be stored
      - The app can attempt to automatically set the right download directory for your selected
        Plex library, but this will require a restart of Youtarr if changed.
+      - Paths are shown exactly as Plex reports them. Convert Windows paths (for example, `C:\Media`) to the mount that Youtarr can access (such as `/mnt/c/Media` on WSL or Docker) before saving.
    - The library should be configured as "Other Videos" with "Personal Media" agent in your Plex server
 
 2. **Download Schedule**:

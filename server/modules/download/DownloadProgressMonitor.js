@@ -10,6 +10,7 @@ class DownloadProgressMonitor {
     this.currentState = 'initiating';
     this.lastVideoInfo = null;
     this.lastEmittedState = null;
+    this.hasError = false;
     this.videoCount = {
       current: 1, // The first video is #1...
       total: 0,
@@ -167,6 +168,9 @@ class DownloadProgressMonitor {
     this.lastEmittedState = state;
     this.lastVideoInfo = videoInfo;
     this.stallRaised = state === 'stalled';
+    if (state === 'error' || state === 'failed') {
+      this.hasError = true;
+    }
 
     return payload;
   }
@@ -230,7 +234,10 @@ class DownloadProgressMonitor {
     if (line.includes('[Metadata]')) return 'metadata';
     if (line.includes('[MoveFiles]')) return 'processing';
     if (line.includes('Completed:')) return 'complete';
-    if (line.includes('ERROR:')) return 'error';
+    if (line.includes('ERROR:')) {
+      this.hasError = true;
+      return 'error';
+    }
 
     return null;
   }
@@ -359,6 +366,15 @@ class DownloadProgressMonitor {
 
     // Track final completion of current video (actual download)
     // A video is complete when we see various completion indicators
+    if (line.includes('Deleting original file')) {
+      const lowerLine = line.toLowerCase();
+      const isThumbnailCleanup = ['.webp', '.jpg', '.jpeg', '.png']
+        .some(ext => lowerLine.includes(ext));
+      if (isThumbnailCleanup) {
+        return true;
+      }
+    }
+
     const completionIndicators = [
       '[download] 100%',
       '[Merger] Merging formats into',
