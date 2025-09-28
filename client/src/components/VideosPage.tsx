@@ -435,7 +435,7 @@ function VideosPage({ token }: VideosPageProps) {
                                   }
                                 />
                               )}
-                              {video.removed && (
+                              {video.removed ? (
                                 <Box
                                   style={{
                                     position: 'absolute',
@@ -458,7 +458,7 @@ function VideosPage({ token }: VideosPageProps) {
                                     }}
                                   />
                                 </Box>
-                              )}
+                              ) : null}
                             </Box>
                             <Typography variant='subtitle1' textAlign='center'>
                               {video.youTubeVideoName}
@@ -575,7 +575,7 @@ function VideosPage({ token }: VideosPageProps) {
                                   }
                                 />
                               )}
-                              {video.removed && (
+                              {video.removed ? (
                                 <Box
                                   style={{
                                     position: 'absolute',
@@ -598,7 +598,7 @@ function VideosPage({ token }: VideosPageProps) {
                                     }}
                                   />
                                 </Box>
-                              )}
+                              ) : null}
                             </Box>
                           </TableCell>
                           <TableCell style={{ fontSize: 'medium' }}>
@@ -633,7 +633,7 @@ function VideosPage({ token }: VideosPageProps) {
                             )}
                           </TableCell>
                           <TableCell>
-                            <Stack direction="row" spacing={1}>
+                            <Stack direction={isMobile ? "row" : "column"} spacing={1}>
                               {video.fileSize && (
                                 <Tooltip title="File size on disk" enterTouchDelay={0}>
                                   <Chip
