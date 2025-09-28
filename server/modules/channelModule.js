@@ -1,6 +1,5 @@
 const configModule = require('./configModule');
 const downloadModule = require('./downloadModule');
-const archiveModule = require('./archiveModule');
 const cron = require('node-cron');
 const fs = require('fs-extra');
 const fsPromises = fs.promises;
@@ -687,18 +686,48 @@ class ChannelModule {
   }
 
   /**
-   * Enrich videos with download status
+   * Enrich videos with download status by checking Videos table
    * @param {Array} videos - Array of video objects
-   * @returns {Array} - Videos with 'added' property
+   * @returns {Promise<Array>} - Videos with 'added' and 'removed' properties
    */
-  enrichVideosWithDownloadStatus(videos) {
-    const completeListArray = archiveModule.readCompleteListLines();
+  async enrichVideosWithDownloadStatus(videos) {
+    const Video = require('../models/video');
+
+    // Get all youtube IDs from the input videos
+    const youtubeIds = videos.map(v => v.youtube_id || v.youtubeId);
+
+    // Query Videos table for ALL matching IDs (regardless of removed status)
+    const downloadedVideos = await Video.findAll({
+      where: {
+        youtubeId: youtubeIds
+      },
+      attributes: ['youtubeId', 'removed']
+    });
+
+    // Create Maps for O(1) lookup of download status
+    const downloadStatusMap = new Map();
+    downloadedVideos.forEach(v => {
+      downloadStatusMap.set(v.youtubeId, {
+        added: true,
+        removed: v.removed
+      });
+    });
 
     return videos.map((video) => {
       const plainVideoObject = video.toJSON ? video.toJSON() : video;
-      plainVideoObject.added = completeListArray.includes(
-        `youtube ${plainVideoObject.youtube_id}`
-      );
+      const videoId = plainVideoObject.youtube_id || plainVideoObject.youtubeId;
+      const status = downloadStatusMap.get(videoId);
+
+      if (status) {
+        // Video exists in database
+        plainVideoObject.added = true;
+        plainVideoObject.removed = status.removed;
+      } else {
+        // Video never downloaded
+        plainVideoObject.added = false;
+        plainVideoObject.removed = false;
+      }
+
       return plainVideoObject;
     });
   }
@@ -718,7 +747,7 @@ class ChannelModule {
       limit: 50,
     });
 
-    return this.enrichVideosWithDownloadStatus(videos);
+    return await this.enrichVideosWithDownloadStatus(videos);
   }
 
   /**

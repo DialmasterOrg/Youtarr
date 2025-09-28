@@ -4,6 +4,7 @@ jest.mock('fs-extra', () => {
   const mock = {
     existsSync: jest.fn(),
     readFileSync: jest.fn(),
+    writeFileSync: jest.fn(),
     ensureDirSync: jest.fn(),
     moveSync: jest.fn(),
     copySync: jest.fn(),
@@ -87,6 +88,7 @@ describe('videoDownloadPostProcessFiles', () => {
       categories: ['Education'],
       tags: ['tag1', 'tag2']
     }));
+    fs.writeFileSync.mockImplementation(() => {});
     fs.ensureDirSync.mockImplementation(() => {});
     fs.moveSync.mockImplementation(() => {});
     fs.pathExists.mockImplementation(async (path) => path === tempPath);
@@ -212,6 +214,17 @@ describe('videoDownloadPostProcessFiles', () => {
     expect(loggedError).toBe(true);
 
     consoleSpy.mockRestore();
+  });
+
+  it('writes actual filepath to JSON before moving', async () => {
+    await loadModule();
+    await settleAsync();
+
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      jsonPath,
+      expect.stringContaining('"_actual_filepath": "/library/Channel/Video Title [abc123].mp4"')
+    );
+    expect(fs.moveSync).toHaveBeenCalledWith(jsonPath, '/mock/jobs/info/abc123.info.json', { overwrite: true });
   });
 
   it('cleans up temp file in catch block when ffmpeg spawn fails', async () => {

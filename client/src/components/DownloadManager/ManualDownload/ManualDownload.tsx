@@ -36,6 +36,7 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [previouslyDownloadedCount, setPreviouslyDownloadedCount] = useState(0);
 
   const validateUrl = useCallback(async (url: string): Promise<boolean> => {
     setIsValidating(true);
@@ -64,15 +65,12 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
         return false;
       }
 
-      if (data.isAlreadyDownloaded) {
-        setErrorMessage('This video has already been downloaded.');
-        return false;
-      }
+      // Don't block already downloaded videos, just mark them
 
       if (data.metadata) {
         const videoInfo: VideoInfo = {
           ...data.metadata,
-          isAlreadyDownloaded: false,  // Always false since we return early if true
+          isAlreadyDownloaded: data.isAlreadyDownloaded || false,
           isMembersOnly: false  // Always false since we return early if true
         };
 
@@ -83,7 +81,14 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
         }
 
         setValidatedVideos(prev => [...prev, videoInfo]);
-        setSuccessMessage('Video added to download list.');
+
+        // Update count of previously downloaded videos
+        if (videoInfo.isAlreadyDownloaded) {
+          setPreviouslyDownloadedCount(prev => prev + 1);
+          setSuccessMessage('Video added to download list (previously downloaded).');
+        } else {
+          setSuccessMessage('Video added to download list.');
+        }
         return true;
       }
       return false;
@@ -103,11 +108,18 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
   }, [validatedVideos, token]);
 
   const handleRemoveVideo = useCallback((youtubeId: string) => {
-    setValidatedVideos(prev => prev.filter(v => v.youtubeId !== youtubeId));
+    setValidatedVideos(prev => {
+      const videoToRemove = prev.find(v => v.youtubeId === youtubeId);
+      if (videoToRemove?.isAlreadyDownloaded) {
+        setPreviouslyDownloadedCount(count => Math.max(0, count - 1));
+      }
+      return prev.filter(v => v.youtubeId !== youtubeId);
+    });
   }, []);
 
   const handleClearAll = useCallback(() => {
     setValidatedVideos([]);
+    setPreviouslyDownloadedCount(0);
     setErrorMessage(null);
     setSuccessMessage(null);
   }, []);
@@ -128,8 +140,10 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
     try {
       const urls = validatedVideos.map(v => v.url);
       await onStartDownload(urls, settings);
-      setSuccessMessage(`Started downloading ${validatedVideos.length} video(s).`);
+      const videoCount = validatedVideos.length;
+      setSuccessMessage(`Started downloading ${videoCount} video${videoCount !== 1 ? 's' : ''}.`);
       setValidatedVideos([]);
+      setPreviouslyDownloadedCount(0);
     } catch (error) {
       console.error('Error starting download:', error);
       setErrorMessage('Failed to start download. Please try again.');
@@ -163,7 +177,9 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
                 Download Queue
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {validatedVideos.length > 0 ? `${validatedVideos.length} video(s) ready to download` : 'No videos in queue'}
+                {validatedVideos.length > 0
+                  ? `${validatedVideos.length} video${validatedVideos.length !== 1 ? 's' : ''} to download`
+                  : 'No videos in queue'}
               </Typography>
             </Box>
             <Button
@@ -251,7 +267,9 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
         onClose={() => setShowSettingsDialog(false)}
         onConfirm={handleConfirmDownload}
         videoCount={validatedVideos.length}
+        missingVideoCount={previouslyDownloadedCount}
         defaultResolution={defaultResolution}
+        mode="manual"
       />
     </Box>
   );

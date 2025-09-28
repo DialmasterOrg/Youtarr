@@ -1092,6 +1092,7 @@ function Configuration({ token }: ConfigurationProps) {
                     <MenuItem value="1080">1080p</MenuItem>
                     <MenuItem value="720">720p</MenuItem>
                     <MenuItem value="480">480p</MenuItem>
+                    <MenuItem value="360">360p</MenuItem>
                   </Select>
                 </FormControl>
                 {getInfoIcon('The resolution we will try to download from YouTube. Note that this is not guaranteed as YouTube may not have your preferred resolution available.')}

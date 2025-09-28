@@ -162,7 +162,14 @@ const createServerModule = ({
         };
 
         const videosModuleMock = {
-          getVideos: jest.fn().mockResolvedValue([])
+          getVideos: jest.fn().mockResolvedValue([]),
+          getVideosPaginated: jest.fn().mockResolvedValue({
+            videos: [],
+            total: 0,
+            page: 1,
+            totalPages: 0
+          }),
+          backfillVideoMetadata: jest.fn().mockResolvedValue()
         };
 
         const videoValidationModuleMock = {
@@ -326,12 +333,15 @@ describe('server initialization', () => {
     expect(channelModuleMock.readChannels).not.toHaveBeenCalled();
   });
 
-  test('schedules nightly session cleanup with node-cron', async () => {
+  test('schedules nightly session cleanup and video metadata backfill with node-cron', async () => {
     const { cronMock, dbMock } = await createServerModule();
 
-    expect(cronMock.schedule).toHaveBeenCalledTimes(1);
-    const [expression, cleanupTask] = cronMock.schedule.mock.calls[0];
-    expect(expression).toBe('0 3 * * *');
+    // Two cron jobs should be scheduled: session cleanup and video metadata backfill
+    expect(cronMock.schedule).toHaveBeenCalledTimes(2);
+
+    // Check session cleanup schedule (first call)
+    const [sessionExpression, cleanupTask] = cronMock.schedule.mock.calls[0];
+    expect(sessionExpression).toBe('0 3 * * *');
 
     await cleanupTask();
 
@@ -339,6 +349,10 @@ describe('server initialization', () => {
     const destroyArgs = dbMock.Session.destroy.mock.calls[0][0];
     const orSymbol = dbMock.Sequelize.Op.or;
     expect(destroyArgs.where[orSymbol]).toBeDefined();
+
+    // Check video metadata backfill schedule (second call)
+    const [videoExpression] = cronMock.schedule.mock.calls[1];
+    expect(videoExpression).toBe('30 3 * * *');
   });
 
   test('configures login rate limiter with custom key generator', async () => {
@@ -362,5 +376,142 @@ describe('server initialization', () => {
     expect(res.json).toHaveBeenCalledWith({
       error: 'Too many failed login attempts. Please wait 15 minutes before trying again.'
     });
+  });
+
+  test('handles paginated /getVideos endpoint with query parameters', async () => {
+    const { app } = await createServerModule();
+    const videosModuleMock = require('../modules/videosModule');
+
+    const handlers = findRouteHandlers(app, 'get', '/getVideos');
+    const verifyToken = handlers[0];
+    const getVideosHandler = handlers[1];
+
+    const req = createMockRequest({
+      path: '/getVideos',
+      headers: { 'x-access-token': 'valid-token' },
+      query: {
+        page: '2',
+        limit: '20',
+        search: 'test video',
+        dateFrom: '2024-01-01',
+        dateTo: '2024-12-31',
+        sortBy: 'title',
+        sortOrder: 'asc',
+        channelFilter: 'channel123'
+      }
+    });
+    const res = createMockResponse();
+
+    await new Promise((resolve, reject) => {
+      verifyToken(req, res, (err) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+    });
+
+    await getVideosHandler(req, res);
+
+    expect(videosModuleMock.getVideosPaginated).toHaveBeenCalledTimes(1);
+    expect(videosModuleMock.getVideosPaginated).toHaveBeenCalledWith({
+      page: 2,
+      limit: 20,
+      search: 'test video',
+      dateFrom: '2024-01-01',
+      dateTo: '2024-12-31',
+      sortBy: 'title',
+      sortOrder: 'asc',
+      channelFilter: 'channel123'
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({
+      videos: [],
+      total: 0,
+      page: 1,
+      totalPages: 0
+    });
+  });
+
+  test('handles /getVideos endpoint with default parameters', async () => {
+    const { app } = await createServerModule();
+    const videosModuleMock = require('../modules/videosModule');
+
+    // Reset the mock before this test
+    videosModuleMock.getVideosPaginated.mockClear();
+
+    const handlers = findRouteHandlers(app, 'get', '/getVideos');
+    const verifyToken = handlers[0];
+    const getVideosHandler = handlers[1];
+
+    const req = createMockRequest({
+      path: '/getVideos',
+      headers: { 'x-access-token': 'valid-token' },
+      query: {}
+    });
+    const res = createMockResponse();
+
+    await new Promise((resolve, reject) => {
+      verifyToken(req, res, (err) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+    });
+
+    await getVideosHandler(req, res);
+
+    expect(videosModuleMock.getVideosPaginated).toHaveBeenCalledTimes(1);
+    expect(videosModuleMock.getVideosPaginated).toHaveBeenCalledWith({
+      page: 1,
+      limit: 12,
+      search: '',
+      dateFrom: null,
+      dateTo: null,
+      sortBy: 'added',
+      sortOrder: 'desc',
+      channelFilter: ''
+    });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  test('handles /getVideos endpoint errors gracefully', async () => {
+    const { app } = await createServerModule();
+    const videosModuleMock = require('../modules/videosModule');
+
+    // Reset and set up mock to reject
+    videosModuleMock.getVideosPaginated.mockClear();
+    videosModuleMock.getVideosPaginated.mockRejectedValueOnce(new Error('Database error'));
+
+    const handlers = findRouteHandlers(app, 'get', '/getVideos');
+    const verifyToken = handlers[0];
+    const getVideosHandler = handlers[1];
+
+    const req = createMockRequest({
+      path: '/getVideos',
+      headers: { 'x-access-token': 'valid-token' },
+      query: {}
+    });
+    const res = createMockResponse();
+
+    await new Promise((resolve, reject) => {
+      verifyToken(req, res, (err) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+    });
+
+    await getVideosHandler(req, res);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toEqual({ error: 'Database error' });
   });
 });

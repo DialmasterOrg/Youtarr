@@ -26,6 +26,7 @@ import {
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import InfoIcon from '@mui/icons-material/Info';
+import CloudOffIcon from '@mui/icons-material/CloudOff';
 
 import Pagination from '@mui/material/Pagination';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -34,6 +35,8 @@ import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { useNavigate } from 'react-router-dom';
 import { useSwipeable } from 'react-swipeable';
+import DownloadSettingsDialog from '../DownloadManager/ManualDownload/DownloadSettingsDialog';
+import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
 
 interface ChannelVideosProps {
   token: string | null;
@@ -48,6 +51,8 @@ function ChannelVideos({ token }: ChannelVideosProps) {
   const [checkedBoxes, setCheckedBoxes] = useState<string[]>([]); // new state variable
   const [hideDownloaded, setHideDownloaded] = useState(false);
   const [mobileTooltip, setMobileTooltip] = useState<string | null>(null);
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const [defaultResolution, setDefaultResolution] = useState<string>('1080');
   const { channel_id } = useParams();
 
   const navigate = useNavigate();
@@ -62,7 +67,26 @@ function ChannelVideos({ token }: ChannelVideosProps) {
     });
   };
 
-  const downloadChecked = async () => {
+  const downloadChecked = () => {
+    // Show the download settings dialog instead of immediately downloading
+    setDownloadDialogOpen(true);
+  };
+
+  const handleDownloadConfirm = async (settings: DownloadSettings | null) => {
+    setDownloadDialogOpen(false);
+
+    // Build request body with URLs and settings
+    const requestBody: any = {
+      urls: checkedBoxes.map(id => `https://www.youtube.com/watch?v=${id}`)
+    };
+
+    if (settings) {
+      requestBody.overrideSettings = {
+        resolution: settings.resolution,
+        allowRedownload: settings.allowRedownload
+      };
+    }
+
     // Start downloading the checked videos
     await fetch('/triggerspecificdownloads', {
       method: 'POST',
@@ -70,10 +94,27 @@ function ChannelVideos({ token }: ChannelVideosProps) {
         'Content-Type': 'application/json',
         'x-access-token': token || '',
       },
-      body: JSON.stringify({ urls: checkedBoxes }),
+      body: JSON.stringify(requestBody),
     });
-    // Navigate to the Manage Downloads page
+
+    // Clear selection and navigate to downloads page
+    setCheckedBoxes([]);
     navigate('/downloads');
+  };
+
+  const handleDownloadCancel = () => {
+    setDownloadDialogOpen(false);
+  };
+
+  // Calculate how many of the selected videos are missing (previously downloaded but removed)
+  const getMissingVideoCount = () => {
+    return checkedBoxes.reduce((count, videoId) => {
+      const video = videos.find(v => v.youtube_id === videoId);
+      if (video && video.added && video.removed) {
+        return count + 1;
+      }
+      return count;
+    }, 0);
   };
 
   const resetChecked = () => {
@@ -81,17 +122,21 @@ function ChannelVideos({ token }: ChannelVideosProps) {
   };
 
   const selectAllUndownloaded = () => {
-    // Get videos on current page that are not downloaded and not members-only
+    // Get videos on current page that are not downloaded OR are missing, and not members-only
     const currentPageVideos = videosToDisplay.slice(
       (page - 1) * videosPerPage,
       page * videosPerPage
     );
 
-    const undownloadedVideos = currentPageVideos.filter(
-      (video) => !video.added && video.availability !== 'subscriber_only'
+    const selectableVideos = currentPageVideos.filter(
+      (video) => {
+        const isMembersOnly = video.availability === 'subscriber_only';
+        const isSelectable = (!video.added || video.removed) && !isMembersOnly;
+        return isSelectable;
+      }
     );
 
-    const videoIds = undownloadedVideos.map((video) => video.youtube_id);
+    const videoIds = selectableVideos.map((video) => video.youtube_id);
 
     // Add these IDs to checked boxes (avoiding duplicates)
     setCheckedBoxes((prevState) => {
@@ -108,8 +153,26 @@ function ChannelVideos({ token }: ChannelVideosProps) {
     );
 
     return currentPageVideos.filter(
-      (video) => !video.added && video.availability !== 'subscriber_only'
+      (video) => {
+        const isMembersOnly = video.availability === 'subscriber_only';
+        const isSelectable = (!video.added || video.removed) && !isMembersOnly;
+        return isSelectable;
+      }
     ).length;
+  };
+
+  // Determine the download status of a video
+  const getVideoStatus = (video: ChannelVideo): 'never_downloaded' | 'downloaded' | 'missing' | 'members_only' => {
+    if (video.availability === 'subscriber_only') {
+      return 'members_only';
+    }
+    if (!video.added) {
+      return 'never_downloaded';
+    }
+    if (video.removed) {
+      return 'missing';
+    }
+    return 'downloaded';
   };
 
   function decodeHtml(html: string) {
@@ -140,6 +203,24 @@ function ChannelVideos({ token }: ChannelVideosProps) {
       })
       .catch((error) => console.error(error));
   }, [token, channel_id]);
+
+  // Fetch config to get default resolution
+  useEffect(() => {
+    if (!token) return;
+
+    fetch('/getconfig', {
+      headers: {
+        'x-access-token': token,
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.preferredResolution) {
+          setDefaultResolution(data.preferredResolution);
+        }
+      })
+      .catch((error) => console.error('Failed to fetch config:', error));
+  }, [token]);
 
   const handlePageChange = (
     event: React.ChangeEvent<unknown>,
@@ -278,6 +359,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                   width: isMobile ? '45%' : '186px',
                   fontSize: isMobile ? '12px' : '14px',
                 }}
+                title="Select all videos that need downloading (new and missing videos)"
               >
                 Select All
               </Button>
@@ -400,11 +482,16 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                   .slice((page - 1) * videosPerPage, page * videosPerPage)
                   .map((video) => {
                     const isMembersOnly = video.availability === 'subscriber_only';
+                    const status = getVideoStatus(video);
+                    const rowSx = {
+                      opacity: isMembersOnly ? 0.6 : 1,
+                      backgroundColor: status === 'missing' ? 'rgba(255, 152, 0, 0.05)' : 'inherit'
+                    };
                     return (
                     isMobile ? (
                       <TableRow
                         key={video.youtube_id}
-                        sx={{ opacity: isMembersOnly ? 0.6 : 1 }}
+                        sx={rowSx}
                       >
                         <TableCell>
                           <img
@@ -427,35 +514,73 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                         </TableCell>
 
                         <TableCell>
-                          {video.added ? (
-                            <CheckCircleIcon
-                              color='success'
-                              style={{ marginLeft: '8px' }}
-                            />
-                          ) : isMembersOnly ? (
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <Typography variant="body2" color="text.secondary">
-                                Members Only
-                              </Typography>
-                              {getInfoIcon('Unable to download Members Only/Subscribers Only videos')}
-                            </Box>
-                          ) : (
-                            <Checkbox
-                              checked={checkedBoxes.includes(video.youtube_id)}
-                              onChange={(e) =>
-                                handleCheckChange(
-                                  video.youtube_id,
-                                  e.target.checked
-                                )
-                              }
-                            />
-                          )}
+                          {(() => {
+                            const status = getVideoStatus(video);
+
+                            switch (status) {
+                              case 'members_only':
+                                return (
+                                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <Typography variant="body2" color="text.secondary">
+                                      Members Only
+                                    </Typography>
+                                    {getInfoIcon('Unable to download Members Only/Subscribers Only videos')}
+                                  </Box>
+                                );
+
+                              case 'downloaded':
+                                return (
+                                  <Tooltip title="Video downloaded and available" enterTouchDelay={0}>
+                                    <CheckCircleIcon
+                                      color='success'
+                                      style={{ marginLeft: '8px' }}
+                                    />
+                                  </Tooltip>
+                                );
+
+                              case 'missing':
+                                return (
+                                  <Box sx={{ display: 'flex', alignItems: 'center', flexDirection: 'column', gap: 0.5 }}>
+                                    <Tooltip title="Video was downloaded but is now missing (deleted, moved, or renamed)" enterTouchDelay={0}>
+                                      <CloudOffIcon
+                                        color='warning'
+                                        fontSize="small"
+                                      />
+                                    </Tooltip>
+                                    <Checkbox
+                                      size="small"
+                                      checked={checkedBoxes.includes(video.youtube_id)}
+                                      onChange={(e) =>
+                                        handleCheckChange(
+                                          video.youtube_id,
+                                          e.target.checked
+                                        )
+                                      }
+                                    />
+                                  </Box>
+                                );
+
+                              case 'never_downloaded':
+                              default:
+                                return (
+                                  <Checkbox
+                                    checked={checkedBoxes.includes(video.youtube_id)}
+                                    onChange={(e) =>
+                                      handleCheckChange(
+                                        video.youtube_id,
+                                        e.target.checked
+                                      )
+                                    }
+                                  />
+                                );
+                            }
+                          })()}
                         </TableCell>
                       </TableRow>
                     ) : (
                       <TableRow
                         key={video.youtube_id}
-                        sx={{ opacity: isMembersOnly ? 0.6 : 1 }}
+                        sx={rowSx}
                       >
                         <TableCell>
                           <img
@@ -476,29 +601,65 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                           {new Date(video.publishedAt).toLocaleDateString()}
                         </TableCell>
                         <TableCell>
-                          {video.added ? (
-                            <CheckCircleIcon
-                              color='success'
-                              style={{ marginLeft: '8px' }}
-                            />
-                          ) : isMembersOnly ? (
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <Typography variant="body2" color="text.secondary">
-                                Members Only
-                              </Typography>
-                              {getInfoIcon('Unable to download Members Only/Subscribers Only videos')}
-                            </Box>
-                          ) : (
-                            <Checkbox
-                              checked={checkedBoxes.includes(video.youtube_id)}
-                              onChange={(e) =>
-                                handleCheckChange(
-                                  video.youtube_id,
-                                  e.target.checked
-                                )
-                              }
-                            />
-                          )}
+                          {(() => {
+                            const status = getVideoStatus(video);
+
+                            switch (status) {
+                              case 'members_only':
+                                return (
+                                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <Typography variant="body2" color="text.secondary">
+                                      Members Only
+                                    </Typography>
+                                    {getInfoIcon('Unable to download Members Only/Subscribers Only videos')}
+                                  </Box>
+                                );
+
+                              case 'downloaded':
+                                return (
+                                  <Tooltip title="Video downloaded and available" enterTouchDelay={0}>
+                                    <CheckCircleIcon
+                                      color='success'
+                                      style={{ marginLeft: '8px' }}
+                                    />
+                                  </Tooltip>
+                                );
+
+                              case 'missing':
+                                return (
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Tooltip title="Video was downloaded but is now missing (deleted, moved, or renamed)" enterTouchDelay={0}>
+                                      <CloudOffIcon
+                                        color='warning'
+                                      />
+                                    </Tooltip>
+                                    <Checkbox
+                                      checked={checkedBoxes.includes(video.youtube_id)}
+                                      onChange={(e) =>
+                                        handleCheckChange(
+                                          video.youtube_id,
+                                          e.target.checked
+                                        )
+                                      }
+                                    />
+                                  </Box>
+                                );
+
+                              case 'never_downloaded':
+                              default:
+                                return (
+                                  <Checkbox
+                                    checked={checkedBoxes.includes(video.youtube_id)}
+                                    onChange={(e) =>
+                                      handleCheckChange(
+                                        video.youtube_id,
+                                        e.target.checked
+                                      )
+                                    }
+                                  />
+                                );
+                            }
+                          })()}
                         </TableCell>
                       </TableRow>
                     )
@@ -523,6 +684,16 @@ function ChannelVideos({ token }: ChannelVideosProps) {
           {mobileTooltip}
         </Alert>
       </Snackbar>
+
+      <DownloadSettingsDialog
+        open={downloadDialogOpen}
+        onClose={handleDownloadCancel}
+        onConfirm={handleDownloadConfirm}
+        videoCount={checkedBoxes.length}
+        missingVideoCount={getMissingVideoCount()}
+        defaultResolution={defaultResolution}
+        mode="manual"
+      />
     </Card>
   );
 }

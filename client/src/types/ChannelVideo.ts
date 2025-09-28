@@ -12,6 +12,7 @@ export interface ChannelVideo {
   publishedAt: string;
   thumbnail: string;
   added: boolean;
+  removed?: boolean;
   duration: number;
   availability?: string | null;
 }

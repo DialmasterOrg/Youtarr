@@ -14,4 +14,15 @@ export interface VideoData {
   originalDate: string | null;
   duration: number | null;
   description: string | null;
+  filePath?: string | null;
+  fileSize?: string | null;
+  removed?: boolean;
+}
+
+export interface PaginatedVideosResponse {
+  videos: VideoData[];
+  total: number;
+  page: number;
+  totalPages: number;
+  channels: string[];
 }

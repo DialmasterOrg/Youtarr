@@ -377,8 +377,8 @@ describe('ChannelModule', () => {
 
   describe('Video Operations', () => {
     describe('enrichVideosWithDownloadStatus', () => {
-      test('should add download status to videos', () => {
-        fs.readFileSync.mockReturnValue('youtube video1\nyoutube video2');
+      test('should add download status to videos based on Videos table', async () => {
+        const Video = require('../../models/video');
 
         const videos = [
           { youtube_id: 'video1', toJSON: () => ({ youtube_id: 'video1' }) },
@@ -386,36 +386,180 @@ describe('ChannelModule', () => {
           { youtube_id: 'video3', toJSON: () => ({ youtube_id: 'video3' }) }
         ];
 
-        const result = ChannelModule.enrichVideosWithDownloadStatus(videos);
+        // Mock Videos table response - video1 and video2 are downloaded, video2 is removed
+        Video.findAll = jest.fn().mockResolvedValue([
+          { youtubeId: 'video1', removed: false },
+          { youtubeId: 'video2', removed: true }
+        ]);
 
+        const result = await ChannelModule.enrichVideosWithDownloadStatus(videos);
+
+        expect(Video.findAll).toHaveBeenCalledWith({
+          where: {
+            youtubeId: ['video1', 'video2', 'video3']
+          },
+          attributes: ['youtubeId', 'removed']
+        });
         expect(result[0].added).toBe(true);
+        expect(result[0].removed).toBe(false);
         expect(result[1].added).toBe(true);
+        expect(result[1].removed).toBe(true);
         expect(result[2].added).toBe(false);
+        expect(result[2].removed).toBe(false);
       });
 
-      test('should handle plain objects without toJSON', () => {
-        fs.readFileSync.mockReturnValue('youtube video1');
+      test('should handle plain objects without toJSON', async () => {
+        const Video = require('../../models/video');
 
         const videos = [
           { youtube_id: 'video1' },
           { youtube_id: 'video2' }
         ];
 
-        const result = ChannelModule.enrichVideosWithDownloadStatus(videos);
+        // Mock Videos table response - only video1 is downloaded
+        Video.findAll = jest.fn().mockResolvedValue([
+          { youtubeId: 'video1', removed: false }
+        ]);
 
+        const result = await ChannelModule.enrichVideosWithDownloadStatus(videos);
+
+        expect(Video.findAll).toHaveBeenCalledWith({
+          where: {
+            youtubeId: ['video1', 'video2']
+          },
+          attributes: ['youtubeId', 'removed']
+        });
         expect(result[0].added).toBe(true);
+        expect(result[0].removed).toBe(false);
         expect(result[1].added).toBe(false);
+        expect(result[1].removed).toBe(false);
+      });
+
+      test('should correctly handle removed videos', async () => {
+        const Video = require('../../models/video');
+
+        const videos = [
+          { youtube_id: 'video1', toJSON: () => ({ youtube_id: 'video1' }) },
+          { youtube_id: 'video2', toJSON: () => ({ youtube_id: 'video2' }) },
+          { youtube_id: 'video3', toJSON: () => ({ youtube_id: 'video3' }) }
+        ];
+
+        // Mock Videos table response - video1 active, video2 removed, video3 not downloaded
+        Video.findAll = jest.fn().mockResolvedValue([
+          { youtubeId: 'video1', removed: false },
+          { youtubeId: 'video2', removed: true }
+        ]);
+
+        const result = await ChannelModule.enrichVideosWithDownloadStatus(videos);
+
+        // Verify Video1 is added and not removed
+        expect(result[0].added).toBe(true);
+        expect(result[0].removed).toBe(false);
+
+        // Verify Video2 is added but marked as removed
+        expect(result[1].added).toBe(true);
+        expect(result[1].removed).toBe(true);
+
+        // Verify Video3 is not downloaded at all
+        expect(result[2].added).toBe(false);
+        expect(result[2].removed).toBe(false);
+      });
+
+      test('should handle videos with youtubeId field instead of youtube_id', async () => {
+        const Video = require('../../models/video');
+
+        const videos = [
+          { youtubeId: 'video1', toJSON: () => ({ youtubeId: 'video1' }) },
+          { youtubeId: 'video2', toJSON: () => ({ youtubeId: 'video2' }) }
+        ];
+
+        // Mock Videos table response
+        Video.findAll = jest.fn().mockResolvedValue([
+          { youtubeId: 'video1', removed: false }
+        ]);
+
+        const result = await ChannelModule.enrichVideosWithDownloadStatus(videos);
+
+        expect(Video.findAll).toHaveBeenCalledWith({
+          where: {
+            youtubeId: ['video1', 'video2']
+          },
+          attributes: ['youtubeId', 'removed']
+        });
+        expect(result[0].added).toBe(true);
+        expect(result[0].removed).toBe(false);
+        expect(result[1].added).toBe(false);
+        expect(result[1].removed).toBe(false);
+      });
+
+      test('should handle mixed field names (youtube_id and youtubeId)', async () => {
+        const Video = require('../../models/video');
+
+        const videos = [
+          { youtube_id: 'video1' },
+          { youtubeId: 'video2' },
+          { youtube_id: 'video3', toJSON: () => ({ youtube_id: 'video3' }) }
+        ];
+
+        // Mock Videos table response
+        Video.findAll = jest.fn().mockResolvedValue([
+          { youtubeId: 'video2', removed: true },
+          { youtubeId: 'video3', removed: false }
+        ]);
+
+        const result = await ChannelModule.enrichVideosWithDownloadStatus(videos);
+
+        expect(Video.findAll).toHaveBeenCalledWith({
+          where: {
+            youtubeId: ['video1', 'video2', 'video3']
+          },
+          attributes: ['youtubeId', 'removed']
+        });
+
+        // Video1 - not downloaded
+        expect(result[0].added).toBe(false);
+        expect(result[0].removed).toBe(false);
+
+        // Video2 - downloaded but removed
+        expect(result[1].added).toBe(true);
+        expect(result[1].removed).toBe(true);
+
+        // Video3 - downloaded and not removed
+        expect(result[2].added).toBe(true);
+        expect(result[2].removed).toBe(false);
+      });
+
+      test('should handle empty video list', async () => {
+        const Video = require('../../models/video');
+        const videos = [];
+
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        const result = await ChannelModule.enrichVideosWithDownloadStatus(videos);
+
+        expect(Video.findAll).toHaveBeenCalledWith({
+          where: {
+            youtubeId: []
+          },
+          attributes: ['youtubeId', 'removed']
+        });
+        expect(result).toEqual([]);
       });
     });
 
     describe('fetchNewestVideosFromDb', () => {
       test('should fetch videos from database with download status', async () => {
+        const Video = require('../../models/video');
         const mockVideos = [
           { youtube_id: 'video1', toJSON: () => ({ youtube_id: 'video1' }) },
           { youtube_id: 'video2', toJSON: () => ({ youtube_id: 'video2' }) }
         ];
         ChannelVideo.findAll.mockResolvedValue(mockVideos);
-        fs.readFileSync.mockReturnValue('youtube video1');
+
+        // Mock Videos table response - only video1 is downloaded
+        Video.findAll = jest.fn().mockResolvedValue([
+          { youtubeId: 'video1', removed: false }
+        ]);
 
         const result = await ChannelModule.fetchNewestVideosFromDb('UC123');
 
@@ -424,8 +568,16 @@ describe('ChannelModule', () => {
           order: [['publishedAt', 'DESC']],
           limit: 50
         });
+        expect(Video.findAll).toHaveBeenCalledWith({
+          where: {
+            youtubeId: ['video1', 'video2']
+          },
+          attributes: ['youtubeId', 'removed']
+        });
         expect(result[0].added).toBe(true);
+        expect(result[0].removed).toBe(false);
         expect(result[1].added).toBe(false);
+        expect(result[1].removed).toBe(false);
       });
     });
 

@@ -496,18 +496,29 @@ const initialize = async () => {
       res.json(runningJobs);
     });
 
-    app.get('/getVideos', verifyToken, (req, res) => {
+    app.get('/getVideos', verifyToken, async (req, res) => {
       console.log('Getting videos');
 
-      //return res.json({ status: 'success' });
-      videosModule
-        .getVideos()
-        .then((videos) => {
-          res.json(videos);
-        })
-        .catch((error) => {
-          res.status(500).json({ error: error.message });
-        });
+      try {
+        const { page, limit, search, dateFrom, dateTo, sortBy, sortOrder, channelFilter } = req.query;
+
+        const options = {
+          page: parseInt(page) || 1,
+          limit: parseInt(limit) || 12,
+          search: search || '',
+          dateFrom: dateFrom || null,
+          dateTo: dateTo || null,
+          sortBy: sortBy || 'added',
+          sortOrder: sortOrder || 'desc',
+          channelFilter: channelFilter || ''
+        };
+
+        const result = await videosModule.getVideosPaginated(options);
+        res.json(result);
+      } catch (error) {
+        console.error('Error getting videos:', error);
+        res.status(500).json({ error: error.message });
+      }
     });
 
     app.get('/storage-status', verifyToken, async (req, res) => {
@@ -945,6 +956,18 @@ const initialize = async () => {
 
       server.listen(port, () => {
         console.log(`Server listening on port ${port}`);
+
+        // Run video metadata backfill asynchronously after server starts
+        setTimeout(() => {
+          console.log('Starting async video metadata backfill...');
+          videosModule.backfillVideoMetadata()
+            .then(() => {
+              console.log('Video metadata backfill completed successfully');
+            })
+            .catch(err => {
+              console.error('Video metadata backfill failed:', err);
+            });
+        }, 5000); // Delay 5 seconds to avoid blocking startup
       });
     }
 
@@ -971,6 +994,27 @@ const initialize = async () => {
         console.log(`[CLEANUP] Removed ${result} expired sessions`);
       } catch (error) {
         console.error('[CLEANUP] Error cleaning sessions:', error);
+      }
+    });
+
+    // Run video metadata backfill daily at 3:30 AM
+    schedule.schedule('30 3 * * *', async () => {
+      console.log('[CRON] Starting scheduled video metadata backfill at 3:30 AM...');
+      try {
+        // Run asynchronously without blocking - the method handles its own async flow
+        videosModule.backfillVideoMetadata()
+          .then(result => {
+            if (result && result.timedOut) {
+              console.log('[CRON] Video metadata backfill reached time limit, will continue tomorrow');
+            } else {
+              console.log('[CRON] Video metadata backfill completed successfully');
+            }
+          })
+          .catch(err => {
+            console.error('[CRON] Video metadata backfill failed:', err);
+          });
+      } catch (error) {
+        console.error('[CRON] Error starting video metadata backfill:', error);
       }
     });
   } catch (error) {

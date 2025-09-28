@@ -39,6 +39,19 @@ Video.init(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    filePath: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    fileSize: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+    },
+    removed: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
   },
   {
     sequelize,
