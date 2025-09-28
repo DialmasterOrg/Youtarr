@@ -229,7 +229,13 @@ class JobModule {
           });
 
           if (videoInstance) {
-            await videoInstance.update(video);
+            // IMPORTANT: Don't overwrite filePath, fileSize, or removed fields
+            // These are managed by the backfill process
+            const updateData = { ...video };
+            delete updateData.filePath;
+            delete updateData.fileSize;
+            delete updateData.removed;
+            await videoInstance.update(updateData);
           } else {
             videoInstance = await Video.create(video);
 

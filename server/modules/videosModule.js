@@ -202,12 +202,6 @@ class VideosModule {
           const match = entry.name.match(/\[([^[\]]+)\]\.mp4$/);
           if (match) {
             const youtubeId = match[1];
-
-            // Debug logging for specific problematic video
-            if (youtubeId === 'Ns3WJgYAtlg') {
-              console.log(`[DEBUG] Found Ns3WJgYAtlg at: ${fullPath}`);
-            }
-
             const stats = await fs.stat(fullPath);
 
             // Check for duplicates
@@ -238,7 +232,6 @@ class VideosModule {
       }
     } catch (err) {
       console.error(`Error scanning directory ${dir}:`, err.message);
-      console.error('Full error:', err);
     }
 
     return { fileMap, duplicates };
@@ -271,6 +264,7 @@ class VideosModule {
       logProgress('Scanning filesystem for video files...');
       const { fileMap, duplicates } = await this.scanForVideoFiles(outputDir);
       logProgress(`Found ${fileMap.size} video files on disk`);
+
 
       if (duplicates.size > 0) {
         console.log(`WARNING: Found ${duplicates.size} videos with duplicate files:`);
@@ -320,18 +314,6 @@ class VideosModule {
 
           const fileInfo = fileMap.get(video.youtubeId);
 
-          // Debug logging for specific problematic video
-          if (video.youtubeId === 'Ns3WJgYAtlg') {
-            console.log(`[DEBUG] Processing Ns3WJgYAtlg from DB:`, {
-              hasFileInfo: !!fileInfo,
-              currentFilePath: video.filePath,
-              currentRemoved: video.removed,
-              fileMapSize: fileMap.size
-            });
-            if (fileInfo) {
-              console.log(`[DEBUG] File info for Ns3WJgYAtlg:`, fileInfo);
-            }
-          }
 
           if (fileInfo) {
             // File exists - check if update needed
@@ -349,11 +331,14 @@ class VideosModule {
               chunkUpdated++;
             }
           } else {
-            // File doesn't exist
+            // File doesn't exist in fileMap
             if (!video.removed) {
+              // Only mark as removed, don't touch filePath or fileSize
+              // They might still be valid even if we can't find the file right now
               bulkUpdates.push({
                 id: video.id,
                 removed: true
+                // DO NOT include filePath or fileSize here - leave them unchanged
               });
               chunkRemoved++;
             }
@@ -374,6 +359,9 @@ class VideosModule {
             const batch = bulkUpdates.slice(i, i + BATCH_SIZE);
 
             // Use individual parameterized updates to handle special characters properly
+            let batchSuccess = 0;
+            let batchFailed = 0;
+
             for (const update of batch) {
               const setClauses = [];
               const replacements = [];
@@ -400,18 +388,16 @@ class VideosModule {
                     replacements: replacements,
                     type: Sequelize.QueryTypes.UPDATE
                   });
+                  batchSuccess++;
                 } catch (err) {
+                  batchFailed++;
                   console.error(`Failed to update video ${update.id}:`, err.message);
-                  // Extra debug for our problematic video
-                  if (update.filePath && update.filePath.includes('Ns3WJgYAtlg')) {
-                    console.error('[DEBUG] Failed to update Ns3WJgYAtlg:', {
-                      query: query,
-                      replacements: replacements,
-                      error: err
-                    });
-                  }
                 }
               }
+            }
+
+            if (batchFailed > 0) {
+              console.log(`Batch update results: ${batchSuccess} succeeded, ${batchFailed} failed`);
             }
           }
         }

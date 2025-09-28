@@ -368,7 +368,9 @@ describe('VideosModule', () => {
       expect(updateQuery).toContain('UPDATE Videos SET');
       expect(updateQuery).toContain('removed = ?');
     });
-    test('should find video file by scanning directory when no filePath stored', async () => {
+    test('should not scan for video files when no filePath stored', async () => {
+      // This behavior is intentional to avoid performance issues
+      // Videos without filePath are handled by the backfill process
       const mockVideos = [
         {
           id: 1,
@@ -384,24 +386,16 @@ describe('VideosModule', () => {
       mockSequelize.query.mockResolvedValueOnce([{ total: 1 }]);
       mockSequelize.query.mockResolvedValueOnce(mockVideos);
 
-      // Mock readdir to return directory entries with types
-      mockFs.readdir.mockResolvedValueOnce([
-        { name: 'video [abc123].mp4', isDirectory: () => false, isFile: () => true },
-        { name: 'other.mp4', isDirectory: () => false, isFile: () => true }
-      ]);
-
-      // Mock stat for the found file
-      mockFs.stat.mockResolvedValueOnce({ size: 3000 });
-
-      // Mock update query
-      mockSequelize.query.mockResolvedValueOnce();
-
       const result = await VideosModule.getVideosPaginated();
 
-      expect(mockFs.readdir).toHaveBeenCalledWith('/test/output/dir/Test Channel', { withFileTypes: true });
-      expect(mockFs.stat).toHaveBeenCalledWith('/test/output/dir/Test Channel/video [abc123].mp4');
-      expect(result.videos[0].filePath).toBe('/test/output/dir/Test Channel/video [abc123].mp4');
-      expect(result.videos[0].fileSize).toBe('3000');
+      // Should NOT attempt to scan directories for videos without filePath
+      expect(mockFs.readdir).not.toHaveBeenCalled();
+      expect(mockFs.stat).not.toHaveBeenCalled();
+
+      // Video should be returned as-is without modification
+      expect(result.videos[0].filePath).toBe(null);
+      expect(result.videos[0].fileSize).toBe(null);
+      expect(result.videos[0].removed).toBe(false);
     });
 
     test('should handle multiple WHERE conditions', async () => {
