@@ -384,8 +384,11 @@ describe('VideosModule', () => {
       mockSequelize.query.mockResolvedValueOnce([{ total: 1 }]);
       mockSequelize.query.mockResolvedValueOnce(mockVideos);
 
-      // Mock readdir to return files
-      mockFs.readdir.mockResolvedValueOnce(['video [abc123].mp4', 'other.mp4']);
+      // Mock readdir to return directory entries with types
+      mockFs.readdir.mockResolvedValueOnce([
+        { name: 'video [abc123].mp4', isDirectory: () => false, isFile: () => true },
+        { name: 'other.mp4', isDirectory: () => false, isFile: () => true }
+      ]);
 
       // Mock stat for the found file
       mockFs.stat.mockResolvedValueOnce({ size: 3000 });
@@ -395,7 +398,7 @@ describe('VideosModule', () => {
 
       const result = await VideosModule.getVideosPaginated();
 
-      expect(mockFs.readdir).toHaveBeenCalledWith('/test/output/dir/Test Channel');
+      expect(mockFs.readdir).toHaveBeenCalledWith('/test/output/dir/Test Channel', { withFileTypes: true });
       expect(mockFs.stat).toHaveBeenCalledWith('/test/output/dir/Test Channel/video [abc123].mp4');
       expect(result.videos[0].filePath).toBe('/test/output/dir/Test Channel/video [abc123].mp4');
       expect(result.videos[0].fileSize).toBe('3000');
@@ -534,11 +537,13 @@ describe('VideosModule', () => {
 
     test('should respect time limit', async () => {
       // Create a long-running scenario
+      // Mock readdir to take a long time (this will cause time limit to exceed during file scanning)
       mockFs.readdir.mockImplementation(() =>
-        new Promise(resolve => setTimeout(resolve, 100))
+        new Promise(resolve => setTimeout(() => resolve([]), 200))
       );
 
       mockVideo.count.mockResolvedValueOnce(1000);
+      // Don't need to mock findAll since we'll timeout during the file scan
 
       const result = await VideosModule.backfillVideoMetadata(100); // 100ms limit
 

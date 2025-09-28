@@ -140,55 +140,52 @@ class VideosModule {
               }
             }
           } else if (!video.removed && video.youTubeChannelName && video.youtubeId) {
-            // No file path stored, try to find the file by scanning the channel directory
+            // No file path stored, try to find the file by scanning the channel directory and subdirectories
             const channelDir = path.join(outputDir, video.youTubeChannelName);
             let found = false;
 
-            try {
-              const files = await fs.readdir(channelDir);
+            // Helper function to recursively search for video file
+            const findVideoFile = async (dir) => {
+              try {
+                const entries = await fs.readdir(dir, { withFileTypes: true });
 
-              // Look for a file ending with [youtubeId].mp4
-              for (const file of files) {
-                if (file.endsWith(`[${video.youtubeId}].mp4`)) {
-                  const filePath = path.join(channelDir, file);
-                  const stats = await fs.stat(filePath);
+                for (const entry of entries) {
+                  const fullPath = path.join(dir, entry.name);
 
-                  updates.push({
-                    id: video.id,
-                    filePath: filePath,
-                    fileSize: stats.size,
-                    removed: false
-                  });
-                  // Update the video object for immediate response
-                  video.filePath = filePath;
-                  video.fileSize = stats.size.toString();
-                  video.removed = false;
-                  found = true;
-                  break;
-                }
-              }
-
-              // If not found with brackets, check for simple format
-              if (!found) {
-                for (const file of files) {
-                  if (file === `${video.youtubeId}.mp4`) {
-                    const filePath = path.join(channelDir, file);
-                    const stats = await fs.stat(filePath);
-
-                    updates.push({
-                      id: video.id,
-                      filePath: filePath,
-                      fileSize: stats.size,
-                      removed: false
-                    });
-                    // Update the video object for immediate response
-                    video.filePath = filePath;
-                    video.fileSize = stats.size.toString();
-                    video.removed = false;
-                    found = true;
-                    break;
+                  if (entry.isDirectory()) {
+                    // Recursively search subdirectories
+                    const result = await findVideoFile(fullPath);
+                    if (result) return result;
+                  } else if (entry.isFile() && entry.name.endsWith('.mp4')) {
+                    // Check if this file matches our video ID
+                    if (entry.name.endsWith(`[${video.youtubeId}].mp4`) ||
+                        entry.name === `${video.youtubeId}.mp4`) {
+                      const stats = await fs.stat(fullPath);
+                      return { filePath: fullPath, fileSize: stats.size };
+                    }
                   }
                 }
+              } catch (err) {
+                // Ignore errors in subdirectories and continue searching
+              }
+              return null;
+            };
+
+            try {
+              const result = await findVideoFile(channelDir);
+
+              if (result) {
+                updates.push({
+                  id: video.id,
+                  filePath: result.filePath,
+                  fileSize: result.fileSize,
+                  removed: false
+                });
+                // Update the video object for immediate response
+                video.filePath = result.filePath;
+                video.fileSize = result.fileSize.toString();
+                video.removed = false;
+                found = true;
               }
 
               if (!found && !video.removed) {
@@ -270,9 +267,8 @@ class VideosModule {
           // Recursively scan subdirectories
           await this.scanForVideoFiles(fullPath, fileMap, duplicates);
         } else if (entry.isFile() && entry.name.endsWith('.mp4')) {
-          // Extract YouTube ID from filename (format: [title] [youtube_id].mp4)
-          // Match the LAST bracketed item before .mp4
-          // This handles titles with brackets like "Video [Part 1] [youtube_id].mp4"
+          // Extract YouTube ID from filename - matches any file ending with [youtube_id].mp4
+          // Captures the content within the brackets right before .mp4
           const match = entry.name.match(/\[([^[\]]+)\]\.mp4$/);
           if (match) {
             const youtubeId = match[1];
