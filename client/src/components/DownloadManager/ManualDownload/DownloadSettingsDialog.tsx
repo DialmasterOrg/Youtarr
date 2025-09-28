@@ -283,15 +283,6 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
               </>
             )}
 
-            {!useCustomSettings && (
-              <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1, p: 1.5, bgcolor: 'primary.main', borderRadius: 1, color: 'primary.contrastText' }}>
-                <InfoIcon fontSize="small" />
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  Using default settings{mode === 'channel' ? `: ${defaultVideoCount} videos per channel at ` : ': '}{RESOLUTION_OPTIONS.find(r => r.value === defaultResolution)?.label || `${defaultResolution}p`}
-                </Typography>
-              </Box>
-            )}
-
             {useCustomSettings && resolution === '2160' && (
               <Alert severity="warning" sx={{ mt: 2 }}>
                 <Typography variant="body2">
@@ -300,6 +291,15 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
               </Alert>
             )}
           </Box>
+
+          {!useCustomSettings && (
+            <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1, p: 1.5, bgcolor: 'primary.main', borderRadius: 1, color: 'primary.contrastText' }}>
+              <InfoIcon fontSize="small" />
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                Using default settings{mode === 'channel' ? `: ${defaultVideoCount} videos per channel at ` : ': '}{RESOLUTION_OPTIONS.find(r => r.value === defaultResolution)?.label || `${defaultResolution}p`}
+              </Typography>
+            </Box>
+          )}
 
           <Box sx={{ mt: 3, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
             <Typography variant="caption" color="text.secondary">

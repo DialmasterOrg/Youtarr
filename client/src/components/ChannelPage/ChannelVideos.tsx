@@ -52,6 +52,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
   const [hideDownloaded, setHideDownloaded] = useState(false);
   const [mobileTooltip, setMobileTooltip] = useState<string | null>(null);
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const [defaultResolution, setDefaultResolution] = useState<string>('1080');
   const { channel_id } = useParams();
 
   const navigate = useNavigate();
@@ -202,6 +203,24 @@ function ChannelVideos({ token }: ChannelVideosProps) {
       })
       .catch((error) => console.error(error));
   }, [token, channel_id]);
+
+  // Fetch config to get default resolution
+  useEffect(() => {
+    if (!token) return;
+
+    fetch('/getconfig', {
+      headers: {
+        'x-access-token': token,
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.preferredResolution) {
+          setDefaultResolution(data.preferredResolution);
+        }
+      })
+      .catch((error) => console.error('Failed to fetch config:', error));
+  }, [token]);
 
   const handlePageChange = (
     event: React.ChangeEvent<unknown>,
@@ -672,6 +691,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
         onConfirm={handleDownloadConfirm}
         videoCount={checkedBoxes.length}
         missingVideoCount={getMissingVideoCount()}
+        defaultResolution={defaultResolution}
         mode="manual"
       />
     </Card>

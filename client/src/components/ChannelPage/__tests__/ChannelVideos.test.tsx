@@ -61,6 +61,19 @@ jest.mock('../../../utils', () => ({
 const mockFetch = jest.fn();
 global.fetch = mockFetch as any;
 
+// Helper to setup standard fetch mocks
+const setupFetchMocks = (videosResponse: any, configResponse: any = { preferredResolution: '1080p' }) => {
+  mockFetch
+    .mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValueOnce(videosResponse),
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValueOnce(configResponse),
+    });
+};
+
 describe('ChannelVideos Component', () => {
   const mockToken = 'test-token';
   const mockVideos: ChannelVideo[] = [
@@ -102,10 +115,15 @@ describe('ChannelVideos Component', () => {
 
   describe('Initial Rendering', () => {
     test('renders component with title', () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: [] }),
-      });
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({ videos: [] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({ preferredResolution: '1080p' }),
+        });
 
       render(
         <BrowserRouter>
@@ -117,10 +135,15 @@ describe('ChannelVideos Component', () => {
     });
 
     test('shows loading skeletons when videos are loading', () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: [] }),
-      });
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({ videos: [] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({ preferredResolution: '1080p' }),
+        });
 
       render(
         <BrowserRouter>
@@ -132,10 +155,15 @@ describe('ChannelVideos Component', () => {
     });
 
     test('fetches channel videos with correct parameters', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({ preferredResolution: '1080p' }),
+        });
 
       render(
         <BrowserRouter>
@@ -182,10 +210,7 @@ describe('ChannelVideos Component', () => {
 
   describe('Video Display', () => {
     test('displays videos after successful fetch', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -202,10 +227,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('decodes HTML entities in video titles', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -219,10 +241,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('formats video duration correctly', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -242,10 +261,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('displays thumbnails with correct src and alt text', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -260,10 +276,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('shows check icon for downloaded videos', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -287,10 +300,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('shows "Members Only" for subscriber-only videos', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -319,10 +329,7 @@ describe('ChannelVideos Component', () => {
     }
 
     test('displays pagination controls when videos exceed page limit', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: manyVideos }),
-      });
+      setupFetchMocks({ videos: manyVideos });
 
       render(
         <BrowserRouter>
@@ -342,10 +349,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('shows correct number of videos per page on desktop', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: manyVideos }),
-      });
+      setupFetchMocks({ videos: manyVideos });
 
       render(
         <BrowserRouter>
@@ -363,10 +367,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('changes page when pagination is clicked', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: manyVideos }),
-      });
+      setupFetchMocks({ videos: manyVideos });
 
       render(
         <BrowserRouter>
@@ -391,10 +392,7 @@ describe('ChannelVideos Component', () => {
 
   describe('Hide Downloaded Videos', () => {
     test('shows hide downloaded checkbox', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -408,10 +406,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('filters out downloaded videos when checkbox is checked', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -444,10 +439,7 @@ describe('ChannelVideos Component', () => {
         });
       }
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: manyVideos }),
-      });
+      setupFetchMocks({ videos: manyVideos });
 
       render(
         <BrowserRouter>
@@ -473,10 +465,7 @@ describe('ChannelVideos Component', () => {
 
   describe('Video Selection', () => {
     test('shows checkboxes for non-downloaded videos', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -494,10 +483,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('handles checkbox selection and deselection', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -526,10 +512,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('does not show checkbox for members-only videos', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -555,10 +538,7 @@ describe('ChannelVideos Component', () => {
 
   describe('Bulk Actions', () => {
     test('renders Select All button', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -572,10 +552,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('selects all undownloaded non-members videos on current page', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -601,10 +578,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('Clear Selection button clears all selected videos', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -633,10 +607,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('Download Selected button shows count of selected videos', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -655,15 +626,11 @@ describe('ChannelVideos Component', () => {
     });
 
     test('triggers download and navigates when Download Selected is clicked', async () => {
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce({}),
-        });
+      setupFetchMocks({ videos: mockVideos });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({}),
+      });
 
       render(
         <BrowserRouter>
@@ -708,10 +675,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('cancels download when dialog is cancelled', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -744,7 +708,7 @@ describe('ChannelVideos Component', () => {
       });
 
       // Fetch should not have been called for download
-      expect(mockFetch).toHaveBeenCalledTimes(1); // Only initial video fetch
+      expect(mockFetch).toHaveBeenCalledTimes(2); // Initial video fetch + config fetch
       expect(mockNavigate).not.toHaveBeenCalled();
     });
 
@@ -772,10 +736,7 @@ describe('ChannelVideos Component', () => {
         }
       ];
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: videosWithMissing }),
-      });
+      setupFetchMocks({ videos: videosWithMissing });
 
       render(
         <BrowserRouter>
@@ -810,10 +771,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('disables buttons when appropriate', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: [mockVideos[1]] }), // Only downloaded video
-      });
+      setupFetchMocks({ videos: [mockVideos[1]] }); // Only downloaded video
 
       render(
         <BrowserRouter>
@@ -837,10 +795,7 @@ describe('ChannelVideos Component', () => {
 
   describe('Error Handling', () => {
     test('displays error alert when video fetch fails', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videoFail: true, videos: [] }),
-      });
+      setupFetchMocks({ videoFail: true, videos: [] });
 
       render(
         <BrowserRouter>
@@ -856,6 +811,7 @@ describe('ChannelVideos Component', () => {
     test('handles network error gracefully', async () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
+      mockFetch.mockRejectedValueOnce(new Error('Network error')); // For config fetch
 
       render(
         <BrowserRouter>
@@ -876,6 +832,10 @@ describe('ChannelVideos Component', () => {
         ok: false,
         statusText: 'Not Found',
       });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({ preferredResolution: '1080p' }),
+      });
 
       render(
         <BrowserRouter>
@@ -891,10 +851,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('handles old response format without videos key', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videoFail: false }), // Response without videos key
-      });
+      setupFetchMocks({ videoFail: false }); // Response without videos key
 
       render(
         <BrowserRouter>
@@ -931,10 +888,7 @@ describe('ChannelVideos Component', () => {
         });
       }
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: manyVideos }),
-      });
+      setupFetchMocks({ videos: manyVideos });
 
       render(
         <BrowserRouter>
@@ -951,10 +905,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('renders mobile table layout', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -970,10 +921,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('displays mobile tooltip as Snackbar', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -995,10 +943,7 @@ describe('ChannelVideos Component', () => {
     });
 
     test('button widths adapt to mobile view', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -1036,10 +981,7 @@ describe('ChannelVideos Component', () => {
         return {};
       });
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: manyVideos }),
-      });
+      setupFetchMocks({ videos: manyVideos });
 
       render(
         <BrowserRouter>
@@ -1082,10 +1024,7 @@ describe('ChannelVideos Component', () => {
         return {};
       });
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: manyVideos }),
-      });
+      setupFetchMocks({ videos: manyVideos });
 
       render(
         <BrowserRouter>
@@ -1124,10 +1063,7 @@ describe('ChannelVideos Component', () => {
         return {};
       });
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -1155,10 +1091,7 @@ describe('ChannelVideos Component', () => {
         return {};
       });
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -1184,10 +1117,7 @@ describe('ChannelVideos Component', () => {
     test('shows tooltip on desktop for members-only videos', async () => {
       (useMediaQuery as jest.Mock).mockReturnValue(false);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -1208,11 +1138,7 @@ describe('ChannelVideos Component', () => {
       (useMediaQuery as jest.Mock).mockReturnValue(true);
       jest.useFakeTimers();
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
-
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -1245,10 +1171,7 @@ describe('ChannelVideos Component', () => {
     test('closes mobile tooltip when close button is clicked', async () => {
       (useMediaQuery as jest.Mock).mockReturnValue(true);
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -1276,10 +1199,7 @@ describe('ChannelVideos Component', () => {
 
   describe('Date Formatting', () => {
     test('formats published dates correctly', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
@@ -1298,10 +1218,7 @@ describe('ChannelVideos Component', () => {
 
   describe('Opacity for Members-Only Videos', () => {
     test('applies reduced opacity to members-only video rows', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
-      });
+      setupFetchMocks({ videos: mockVideos });
 
       render(
         <BrowserRouter>
