@@ -203,7 +203,20 @@ const createServerModule = ({
             { id: 'video-1', title: 'Video 1' },
             { id: 'video-2', title: 'Video 2' }
           ]),
-          deleteVideos: jest.fn().mockResolvedValue({ deletedCount: 2 })
+          getVideosPaginated: jest.fn().mockResolvedValue({
+            videos: [
+              { id: 'video-1', title: 'Video 1' },
+              { id: 'video-2', title: 'Video 2' }
+            ],
+            pagination: {
+              page: 1,
+              limit: 12,
+              total: 2,
+              totalPages: 1
+            }
+          }),
+          deleteVideos: jest.fn().mockResolvedValue({ deletedCount: 2 }),
+          backfillVideoMetadata: jest.fn().mockResolvedValue({ processed: 0, errors: 0 })
         };
 
         const videoValidationModuleMock = {
@@ -613,7 +626,7 @@ describe('server routes - channels', () => {
 
 describe('server routes - videos', () => {
   describe('GET /getVideos', () => {
-    test('returns videos successfully', async () => {
+    test('returns videos with default pagination', async () => {
       const { app, videosModuleMock } = await createServerModule();
 
       const handlers = findRouteHandlers(app, 'get', '/getVideos');
@@ -624,17 +637,69 @@ describe('server routes - videos', () => {
 
       await getVideosHandler(req, res);
 
-      expect(videosModuleMock.getVideos).toHaveBeenCalled();
+      expect(videosModuleMock.getVideosPaginated).toHaveBeenCalledWith({
+        page: 1,
+        limit: 12,
+        search: '',
+        dateFrom: null,
+        dateTo: null,
+        sortBy: 'added',
+        sortOrder: 'desc',
+        channelFilter: ''
+      });
       expect(res.statusCode).toBe(200);
-      expect(res.body).toEqual([
-        { id: 'video-1', title: 'Video 1' },
-        { id: 'video-2', title: 'Video 2' }
-      ]);
+      expect(res.body).toEqual({
+        videos: [
+          { id: 'video-1', title: 'Video 1' },
+          { id: 'video-2', title: 'Video 2' }
+        ],
+        pagination: {
+          page: 1,
+          limit: 12,
+          total: 2,
+          totalPages: 1
+        }
+      });
+    });
+
+    test('accepts pagination and filter parameters', async () => {
+      const { app, videosModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'get', '/getVideos');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        query: {
+          page: '2',
+          limit: '24',
+          search: 'test video',
+          dateFrom: '2024-01-01',
+          dateTo: '2024-12-31',
+          sortBy: 'title',
+          sortOrder: 'asc',
+          channelFilter: 'channel123'
+        }
+      });
+      const res = createMockResponse();
+
+      await getVideosHandler(req, res);
+
+      expect(videosModuleMock.getVideosPaginated).toHaveBeenCalledWith({
+        page: 2,
+        limit: 24,
+        search: 'test video',
+        dateFrom: '2024-01-01',
+        dateTo: '2024-12-31',
+        sortBy: 'title',
+        sortOrder: 'asc',
+        channelFilter: 'channel123'
+      });
+      expect(res.statusCode).toBe(200);
     });
 
     test('handles error when fetching videos', async () => {
       const { app, videosModuleMock } = await createServerModule();
-      videosModuleMock.getVideos.mockRejectedValueOnce(new Error('Database error'));
+      videosModuleMock.getVideosPaginated.mockRejectedValueOnce(new Error('Database error'));
 
       const handlers = findRouteHandlers(app, 'get', '/getVideos');
       const getVideosHandler = handlers[handlers.length - 1];
@@ -642,10 +707,7 @@ describe('server routes - videos', () => {
       const req = createMockRequest({});
       const res = createMockResponse();
 
-      getVideosHandler(req, res);
-
-      // Wait for the promise to settle
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await getVideosHandler(req, res);
 
       expect(res.statusCode).toBe(500);
       expect(res.body).toEqual({ error: 'Database error' });

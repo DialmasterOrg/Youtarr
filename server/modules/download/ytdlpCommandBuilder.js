@@ -48,7 +48,7 @@ class YtdlpCommandBuilder {
   }
 
   // Build yt-dlp command args array for channel downloads
-  static getBaseCommandArgs(resolution) {
+  static getBaseCommandArgs(resolution, allowRedownload = false) {
     const config = configModule.getConfig();
     const res = resolution || config.preferredResolution || '1080';
     const baseOutputPath = configModule.directoryPath;
@@ -73,7 +73,14 @@ class YtdlpCommandBuilder {
       '-f', `bestvideo[height<=${res}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best`,
       '--write-thumbnail',
       '--convert-thumbnails', 'jpg',
-      '--download-archive', './config/complete.list',
+    ];
+
+    // Only use download archive if NOT allowing re-downloads
+    if (!allowRedownload) {
+      args.push('--download-archive', './config/complete.list');
+    }
+
+    args.push(
       '--ignore-errors',
       '--embed-metadata',
       '--write-info-json',
@@ -85,7 +92,7 @@ class YtdlpCommandBuilder {
       '-o', `thumbnail:${baseOutputPath}/${CHANNEL_TEMPLATE}/${VIDEO_FOLDER_TEMPLATE}/poster`,
       '-o', 'pl_thumbnail:',
       '--exec', `node ${path.resolve(__dirname, '../videoDownloadPostProcessFiles.js')} {}`
-    ];
+    );
 
     // Add Sponsorblock args if configured
     const sponsorblockArgs = this.buildSponsorblockArgs(config);
@@ -95,7 +102,7 @@ class YtdlpCommandBuilder {
   }
 
   // Build yt-dlp command args array for manual downloads - no duration filter
-  static getBaseCommandArgsForManualDownload(resolution) {
+  static getBaseCommandArgsForManualDownload(resolution, allowRedownload = false) {
     const config = configModule.getConfig();
     const res = resolution || config.preferredResolution || '1080';
     const baseOutputPath = configModule.directoryPath;
@@ -120,7 +127,14 @@ class YtdlpCommandBuilder {
       '-f', `bestvideo[height<=${res}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best`,
       '--write-thumbnail',
       '--convert-thumbnails', 'jpg',
-      '--download-archive', './config/complete.list',
+    ];
+
+    // Only use download archive if NOT allowing re-downloads
+    if (!allowRedownload) {
+      args.push('--download-archive', './config/complete.list');
+    }
+
+    args.push(
       '--ignore-errors',
       '--embed-metadata',
       '--write-info-json',
@@ -132,7 +146,7 @@ class YtdlpCommandBuilder {
       '-o', `thumbnail:${baseOutputPath}/${CHANNEL_TEMPLATE}/${VIDEO_FOLDER_TEMPLATE}/poster`,
       '-o', 'pl_thumbnail:',
       '--exec', `node ${path.resolve(__dirname, '../videoDownloadPostProcessFiles.js')} {}`
-    ];
+    );
 
     // Add Sponsorblock args if configured
     const sponsorblockArgs = this.buildSponsorblockArgs(config);

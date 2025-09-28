@@ -372,9 +372,16 @@ class JobModule {
 
         // Upsert into Videos table only if missing
         try {
+          const configModule = require('./configModule');
+          const baseOutputPath = configModule.directoryPath;
+          const preferredChannelName = info.uploader || info.channel || info.uploader_id || info.channel_id || 'Unknown Channel';
+          const videoFolder = `${preferredChannelName} - ${info.title} - ${info.id}`;
+          const videoFileName = `${preferredChannelName} - ${info.title}  [${info.id}].mp4`;
+          const fullPath = path.join(baseOutputPath, preferredChannelName, videoFolder, videoFileName);
+
           const payload = {
             youtubeId: info.id,
-            youTubeChannelName: info.uploader,
+            youTubeChannelName: preferredChannelName,
             youTubeVideoName: info.title,
             duration: info.duration,
             description: info.description,
@@ -382,10 +389,51 @@ class JobModule {
             channel_id: info.channel_id,
           };
 
+          // Check if file exists and get file size
+          try {
+            const stats = await fsPromises.stat(fullPath);
+            payload.filePath = fullPath;
+            payload.fileSize = stats.size.toString();
+            payload.removed = false;
+          } catch (err) {
+            // Try other common extensions
+            const extensions = ['.webm', '.mkv', '.m4v', '.avi'];
+            let fileFound = false;
+
+            for (const ext of extensions) {
+              const altPath = fullPath.replace('.mp4', ext);
+              try {
+                const stats = await fsPromises.stat(altPath);
+                payload.filePath = altPath;
+                payload.fileSize = stats.size.toString();
+                payload.removed = false;
+                fileFound = true;
+                break;
+              } catch (altErr) {
+                // Continue trying other extensions
+              }
+            }
+
+            if (!fileFound) {
+              payload.filePath = fullPath;
+              payload.fileSize = null;
+              payload.removed = false;
+            }
+          }
+
           let videoInstance = await Video.findOne({ where: { youtubeId: info.id } });
           if (!videoInstance && needsVideo) {
             await Video.create(payload);
             videosUpserts += 1;
+          } else if (videoInstance && (payload.filePath || payload.fileSize)) {
+            // Update existing video with file metadata if not already set
+            if (!videoInstance.filePath || !videoInstance.fileSize) {
+              await videoInstance.update({
+                filePath: payload.filePath,
+                fileSize: payload.fileSize,
+                removed: payload.removed
+              });
+            }
           }
         } catch (vidErr) {
           console.error('Error upserting Videos for', id, vidErr.message);

@@ -28,6 +28,7 @@ interface DownloadSettingsDialogProps {
   onClose: () => void;
   onConfirm: (settings: DownloadSettings | null) => void;
   videoCount?: number; // For manual downloads
+  missingVideoCount?: number; // Number of videos that were previously downloaded but are now missing
   defaultResolution?: string;
   defaultVideoCount?: number; // For channel downloads
   mode?: 'manual' | 'channel'; // To differentiate between modes
@@ -47,6 +48,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   onClose,
   onConfirm,
   videoCount,
+  missingVideoCount = 0,
   defaultResolution = '1080',
   defaultVideoCount = 3,
   mode = 'manual'
@@ -54,11 +56,17 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   const [useCustomSettings, setUseCustomSettings] = useState(false);
   const [resolution, setResolution] = useState(defaultResolution);
   const [channelVideoCount, setChannelVideoCount] = useState(defaultVideoCount);
+  const [allowRedownload, setAllowRedownload] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
 
-  // Load last used settings from localStorage
+  // Load last used settings from localStorage and auto-detect re-download need
   useEffect(() => {
     if (open && !hasUserInteracted) {
+      // Auto-check re-download if there are missing videos
+      if (missingVideoCount > 0) {
+        setAllowRedownload(true);
+      }
+
       try {
         const storageKey = mode === 'channel' ? 'youtarr_channel_settings' : 'youtarr_download_settings';
         const savedSettings = localStorage.getItem(storageKey);
@@ -74,6 +82,10 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
             if (mode === 'channel' && parsed.videoCount !== undefined) {
               setChannelVideoCount(parsed.videoCount);
             }
+            // Don't load allowRedownload from storage if we have missing videos
+            if (parsed.allowRedownload !== undefined && missingVideoCount === 0) {
+              setAllowRedownload(parsed.allowRedownload);
+            }
           } catch (e) {
             console.error('Failed to parse saved settings:', e);
           }
@@ -83,7 +95,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
         console.error('Failed to access localStorage:', e);
       }
     }
-  }, [open, hasUserInteracted, mode]);
+  }, [open, hasUserInteracted, mode, missingVideoCount]);
 
   const handleUseCustomToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
     setUseCustomSettings(event.target.checked);
@@ -124,7 +136,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       const storageKey = mode === 'channel' ? 'youtarr_channel_settings' : 'youtarr_download_settings';
       const settingsToSave: any = {
         useCustom: useCustomSettings,
-        resolution: resolution
+        resolution: resolution,
+        allowRedownload: allowRedownload
       };
 
       if (mode === 'channel') {
@@ -137,10 +150,11 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       console.error('Failed to save settings to localStorage:', e);
     }
 
-    if (useCustomSettings) {
+    if (useCustomSettings || allowRedownload) {
       onConfirm({
-        resolution,
-        videoCount: mode === 'channel' ? channelVideoCount : 0
+        resolution: useCustomSettings ? resolution : defaultResolution,
+        videoCount: mode === 'channel' ? (useCustomSettings ? channelVideoCount : defaultVideoCount) : 0,
+        allowRedownload
       });
     } else {
       onConfirm(null); // Use defaults
@@ -178,6 +192,16 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
             </Typography>
           </Alert>
 
+          {missingVideoCount > 0 && (
+            <Alert severity="warning" sx={{ mb: 3 }}>
+              <Typography variant="body2">
+                {missingVideoCount === 1
+                  ? 'Re-downloading 1 previously downloaded video that is now missing.'
+                  : `Re-downloading ${missingVideoCount} previously downloaded videos that are now missing.`}
+              </Typography>
+            </Alert>
+          )}
+
           <FormControlLabel
             control={
               <Switch
@@ -187,6 +211,21 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
               />
             }
             label="Use custom settings for this download"
+            sx={{ mb: 2 }}
+          />
+
+          <FormControlLabel
+            control={
+              <Switch
+                checked={allowRedownload}
+                onChange={(e) => {
+                  setAllowRedownload(e.target.checked);
+                  setHasUserInteracted(true);
+                }}
+                color="primary"
+              />
+            }
+            label="Allow re-downloading previously fetched videos"
             sx={{ mb: 3 }}
           />
 

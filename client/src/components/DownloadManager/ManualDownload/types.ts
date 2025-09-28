@@ -13,6 +13,7 @@ export interface VideoInfo {
 export interface DownloadSettings {
   resolution: string;
   videoCount: number;
+  allowRedownload?: boolean;
 }
 
 export interface ValidationResponse {

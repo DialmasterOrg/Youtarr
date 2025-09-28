@@ -56,6 +56,30 @@ describe('DownloadSettingsDialog', () => {
       expect(screen.getByLabelText('Use custom settings for this download')).toBeInTheDocument();
     });
 
+    test('renders re-download toggle', () => {
+      render(<DownloadSettingsDialog {...defaultProps} />);
+
+      expect(screen.getByLabelText('Allow re-downloading previously fetched videos')).toBeInTheDocument();
+    });
+
+    test('renders warning for missing videos when missingVideoCount is 1', () => {
+      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={1} />);
+
+      expect(screen.getByText('Re-downloading 1 previously downloaded video that is now missing.')).toBeInTheDocument();
+    });
+
+    test('renders warning for missing videos when missingVideoCount is greater than 1', () => {
+      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={5} />);
+
+      expect(screen.getByText('Re-downloading 5 previously downloaded videos that are now missing.')).toBeInTheDocument();
+    });
+
+    test('does not render missing videos warning when missingVideoCount is 0', () => {
+      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={0} />);
+
+      expect(screen.queryByText(/Re-downloading.*previously downloaded/)).not.toBeInTheDocument();
+    });
+
     test('renders resolution dropdown with all options', async () => {
       render(<DownloadSettingsDialog {...defaultProps} />);
 
@@ -318,6 +342,7 @@ describe('DownloadSettingsDialog', () => {
       const savedSettings = {
         useCustom: true,
         resolution: '720',
+        allowRedownload: true,
       };
       localStorage.setItem('youtarr_download_settings', JSON.stringify(savedSettings));
 
@@ -328,6 +353,9 @@ describe('DownloadSettingsDialog', () => {
 
       const resolutionSelect = screen.getByLabelText('Maximum Resolution');
       expect(resolutionSelect).toHaveTextContent('720p (HD)');
+
+      const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      expect(redownloadToggle).toBeChecked();
     });
 
     test('loads saved channel mode settings from localStorage', () => {
@@ -378,6 +406,7 @@ describe('DownloadSettingsDialog', () => {
       expect(saved).toEqual({
         useCustom: true,
         resolution: '720',
+        allowRedownload: false,
       });
     });
 
@@ -399,6 +428,7 @@ describe('DownloadSettingsDialog', () => {
         useCustom: true,
         resolution: '1080',
         videoCount: 10,
+        allowRedownload: false,
       });
     });
 
@@ -439,6 +469,7 @@ describe('DownloadSettingsDialog', () => {
       expect(mockOnConfirm).toHaveBeenCalledWith({
         resolution: '720',
         videoCount: 0,
+        allowRedownload: false,
       });
     });
 
@@ -467,6 +498,7 @@ describe('DownloadSettingsDialog', () => {
       expect(mockOnConfirm).toHaveBeenCalledWith({
         resolution: '1080',
         videoCount: 7,
+        allowRedownload: false,
       });
     });
   });
@@ -515,6 +547,99 @@ describe('DownloadSettingsDialog', () => {
       // Should have loaded localStorage settings since hasUserInteracted was reset
       const newToggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
       expect(newToggle).not.toBeChecked();
+    });
+  });
+
+  describe('Re-download Functionality', () => {
+    test('auto-checks re-download toggle when missing videos are present', () => {
+      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={3} />);
+
+      const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      expect(redownloadToggle).toBeChecked();
+    });
+
+    test('does not auto-check re-download toggle when no missing videos', () => {
+      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={0} />);
+
+      const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      expect(redownloadToggle).not.toBeChecked();
+    });
+
+    test('ignores allowRedownload from localStorage when missing videos exist', () => {
+      const savedSettings = {
+        useCustom: false,
+        resolution: '1080',
+        allowRedownload: false,
+      };
+      localStorage.setItem('youtarr_download_settings', JSON.stringify(savedSettings));
+
+      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={2} />);
+
+      const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      expect(redownloadToggle).toBeChecked(); // Should be checked despite localStorage
+    });
+
+    test('calls onConfirm with allowRedownload true when toggle is checked', () => {
+      render(<DownloadSettingsDialog {...defaultProps} />);
+
+      const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      fireEvent.click(redownloadToggle);
+
+      const confirmButton = screen.getByRole('button', { name: /Start Download/i });
+      fireEvent.click(confirmButton);
+
+      expect(mockOnConfirm).toHaveBeenCalledWith({
+        resolution: '1080',
+        videoCount: 0,
+        allowRedownload: true,
+      });
+    });
+
+    test('calls onConfirm with settings when only re-download is enabled', () => {
+      render(<DownloadSettingsDialog {...defaultProps} defaultResolution="720" />);
+
+      // Only enable re-download, not custom settings
+      const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      fireEvent.click(redownloadToggle);
+
+      const confirmButton = screen.getByRole('button', { name: /Start Download/i });
+      fireEvent.click(confirmButton);
+
+      expect(mockOnConfirm).toHaveBeenCalledWith({
+        resolution: '720', // Uses default
+        videoCount: 0,
+        allowRedownload: true,
+      });
+    });
+
+    test('saves allowRedownload state to localStorage', () => {
+      render(<DownloadSettingsDialog {...defaultProps} />);
+
+      const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      fireEvent.click(redownloadToggle);
+
+      const confirmButton = screen.getByRole('button', { name: /Start Download/i });
+      fireEvent.click(confirmButton);
+
+      const saved = JSON.parse(localStorage.getItem('youtarr_download_settings') || '{}');
+      expect(saved.allowRedownload).toBe(true);
+    });
+
+    test('marks user as having interacted when changing re-download toggle', () => {
+      render(<DownloadSettingsDialog {...defaultProps} />);
+
+      const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      fireEvent.click(redownloadToggle);
+
+      // Save something to localStorage
+      localStorage.setItem('youtarr_download_settings', JSON.stringify({
+        useCustom: true,
+        resolution: '360',
+        allowRedownload: false,
+      }));
+
+      // Component should not reload from localStorage after interaction
+      expect(redownloadToggle).toBeChecked();
     });
   });
 

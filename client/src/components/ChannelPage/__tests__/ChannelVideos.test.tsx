@@ -28,6 +28,25 @@ jest.mock('react-swipeable', () => ({
   useSwipeable: jest.fn(() => ({})),
 }));
 
+// Mock DownloadSettingsDialog
+jest.mock('../../DownloadManager/ManualDownload/DownloadSettingsDialog', () => ({
+  __esModule: true,
+  default: function MockDownloadSettingsDialog({ open, onClose, onConfirm }: any) {
+    const React = require('react');
+    if (!open) return null;
+    return React.createElement('div', { 'data-testid': 'download-settings-dialog' },
+      React.createElement('button', {
+        onClick: () => onConfirm(null),
+        'data-testid': 'dialog-confirm'
+      }, 'Confirm'),
+      React.createElement('button', {
+        onClick: onClose,
+        'data-testid': 'dialog-cancel'
+      }, 'Cancel')
+    );
+  }
+}));
+
 // Mock utils
 jest.mock('../../../utils', () => ({
   formatDuration: jest.fn((duration: number | null) => {
@@ -662,6 +681,15 @@ describe('ChannelVideos Component', () => {
       const downloadButton = screen.getByRole('button', { name: /Download Selected/ });
       fireEvent.click(downloadButton);
 
+      // Dialog should now be open
+      await waitFor(() => {
+        expect(screen.getByTestId('download-settings-dialog')).toBeInTheDocument();
+      });
+
+      // Click confirm in the dialog
+      const confirmButton = screen.getByTestId('dialog-confirm');
+      fireEvent.click(confirmButton);
+
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           '/triggerspecificdownloads',
@@ -671,12 +699,114 @@ describe('ChannelVideos Component', () => {
               'Content-Type': 'application/json',
               'x-access-token': mockToken,
             },
-            body: JSON.stringify({ urls: ['video1'] }),
+            body: JSON.stringify({ urls: ['https://www.youtube.com/watch?v=video1'] }),
           })
         );
       });
 
       expect(mockNavigate).toHaveBeenCalledWith('/downloads');
+    });
+
+    test('cancels download when dialog is cancelled', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({ videos: mockVideos }),
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      const selectAllButton = screen.getByRole('button', { name: 'Select All' });
+      fireEvent.click(selectAllButton);
+
+      const downloadButton = screen.getByRole('button', { name: /Download Selected/ });
+      fireEvent.click(downloadButton);
+
+      // Dialog should now be open
+      await waitFor(() => {
+        expect(screen.getByTestId('download-settings-dialog')).toBeInTheDocument();
+      });
+
+      // Click cancel in the dialog
+      const cancelButton = screen.getByTestId('dialog-cancel');
+      fireEvent.click(cancelButton);
+
+      // Dialog should close
+      await waitFor(() => {
+        expect(screen.queryByTestId('download-settings-dialog')).not.toBeInTheDocument();
+      });
+
+      // Fetch should not have been called for download
+      expect(mockFetch).toHaveBeenCalledTimes(1); // Only initial video fetch
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    test('selects missing videos (downloaded but removed)', async () => {
+      const videosWithMissing: ChannelVideo[] = [
+        {
+          title: 'Missing Video',
+          youtube_id: 'missing1',
+          publishedAt: '2024-01-15T10:00:00Z',
+          thumbnail: 'https://example.com/missing.jpg',
+          added: true,
+          removed: true,  // Video was downloaded but file removed
+          duration: 300,
+          availability: null,
+        },
+        {
+          title: 'Downloaded Video',
+          youtube_id: 'downloaded1',
+          publishedAt: '2024-01-15T10:00:00Z',
+          thumbnail: 'https://example.com/downloaded.jpg',
+          added: true,
+          removed: false,  // Video still exists
+          duration: 400,
+          availability: null,
+        }
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({ videos: videosWithMissing }),
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Missing Video')).toBeInTheDocument();
+      });
+
+      const selectAllButton = screen.getByRole('button', { name: 'Select All' });
+      fireEvent.click(selectAllButton);
+
+      // Should select the missing video but not the downloaded one
+      const tableRows = screen.getAllByRole('row');
+      const missingRow = tableRows.find(row =>
+        within(row).queryByText('Missing Video')
+      );
+
+      expect(missingRow).toBeTruthy();
+      const checkbox = within(missingRow!).getByRole('checkbox');
+      expect(checkbox).toBeChecked();
+
+      // Downloaded video should not have a checkbox
+      const downloadedRow = tableRows.find(row =>
+        within(row).queryByText('Downloaded Video')
+      );
+      expect(downloadedRow).toBeTruthy();
+      const downloadedCheckbox = within(downloadedRow!).queryByRole('checkbox');
+      expect(downloadedCheckbox).not.toBeInTheDocument();
     });
 
     test('disables buttons when appropriate', async () => {
@@ -922,7 +1052,9 @@ describe('ChannelVideos Component', () => {
       });
 
       // Simulate swipe left
-      swipeHandlers.onSwipedLeft();
+      act(() => {
+        swipeHandlers.onSwipedLeft();
+      });
 
       await waitFor(() => {
         expect(screen.getByText('Video 17')).toBeInTheDocument();
@@ -975,7 +1107,9 @@ describe('ChannelVideos Component', () => {
       });
 
       // Simulate swipe right
-      swipeHandlers.onSwipedRight();
+      act(() => {
+        swipeHandlers.onSwipedRight();
+      });
 
       await waitFor(() => {
         expect(screen.getByText('Video 1')).toBeInTheDocument();
@@ -1006,7 +1140,9 @@ describe('ChannelVideos Component', () => {
       });
 
       // Simulate swipe right on first page
-      swipeHandlers.onSwipedRight();
+      act(() => {
+        swipeHandlers.onSwipedRight();
+      });
 
       // Should still be on page 1
       expect(screen.getByText('Video Title 1')).toBeInTheDocument();
@@ -1035,7 +1171,9 @@ describe('ChannelVideos Component', () => {
       });
 
       // Simulate swipe left on last page (only 3 videos, so page 1 is the last)
-      swipeHandlers.onSwipedLeft();
+      act(() => {
+        swipeHandlers.onSwipedLeft();
+      });
 
       // Should still show same videos
       expect(screen.getByText('Video Title 1')).toBeInTheDocument();

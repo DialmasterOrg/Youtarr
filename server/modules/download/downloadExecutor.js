@@ -222,7 +222,7 @@ class DownloadExecutor {
         const newVideoUrls = this.getNewVideoUrls(initialCount);
         const videoCount = newVideoUrls.length;
 
-        let videoData = VideoMetadataProcessor.processVideoMetadata(newVideoUrls);
+        let videoData = await VideoMetadataProcessor.processVideoMetadata(newVideoUrls);
 
         console.log(
           `${jobType} complete (with or without errors) for Job ID: ${jobId}`

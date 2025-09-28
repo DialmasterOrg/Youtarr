@@ -97,9 +97,10 @@ class DownloadModule {
       // Use override settings if provided, otherwise use defaults
       const overrideSettings = jobData.overrideSettings || {};
       const resolution = overrideSettings.resolution || configModule.config.preferredResolution || '1080';
+      const allowRedownload = overrideSettings.allowRedownload || false;
 
       // For manual downloads, we don't apply duration filters but still exclude members-only
-      const args = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload(resolution);
+      const args = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload(resolution, allowRedownload);
 
       // Add URLs to args array
       urls.forEach((url) => {

@@ -67,7 +67,8 @@ describe('JobModule', () => {
       writeFileSync: jest.fn(),
       promises: {
         readFile: jest.fn(),
-        writeFile: jest.fn()
+        writeFile: jest.fn(),
+        stat: jest.fn()
       }
     }));
     fs = require('fs');
@@ -83,7 +84,8 @@ describe('JobModule', () => {
 
     // Mock configModule before it's required by jobModule
     jest.doMock('../configModule', () => ({
-      getJobsPath: jest.fn().mockReturnValue(mockJobsDir)
+      getJobsPath: jest.fn().mockReturnValue(mockJobsDir),
+      directoryPath: '/test/output'
     }));
 
     // Mock Sequelize models
@@ -913,6 +915,9 @@ describe('JobModule', () => {
         throw new Error('Unknown file');
       });
 
+      // Mock stat to simulate file not found (new functionality tries to check file existence)
+      fsPromises.stat.mockRejectedValue(new Error('ENOENT'));
+
       Video.findAll.mockResolvedValue([]);
       ChannelVideo.findAll.mockResolvedValue([]);
       Video.findOne.mockResolvedValue(null);
@@ -945,6 +950,9 @@ describe('JobModule', () => {
           upload_date: '20240101'
         });
       });
+
+      // Mock stat to simulate file not found
+      fsPromises.stat.mockRejectedValue(new Error('ENOENT'));
 
       Video.findAll.mockResolvedValue([]);
       ChannelVideo.findAll.mockResolvedValue([]);
@@ -1023,6 +1031,9 @@ describe('JobModule', () => {
         });
       });
 
+      // Mock stat to simulate file not found
+      fsPromises.stat.mockRejectedValue(new Error('ENOENT'));
+
       // Existing video already in DB
       Video.findAll.mockResolvedValue([
         { youtubeId: 'existing-video' }
@@ -1041,6 +1052,149 @@ describe('JobModule', () => {
       expect(Video.create).toHaveBeenCalledTimes(1);
       expect(Video.create).toHaveBeenCalledWith(
         expect.objectContaining({ youtubeId: 'new-video' })
+      );
+
+      consoleLogSpy.mockRestore();
+    });
+
+    test('should include file metadata when video file exists', async () => {
+      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
+
+      fsPromises.readFile.mockImplementation(async (path) => {
+        if (path.includes('complete.list')) {
+          return 'youtube video-1\n';
+        }
+        if (path.includes('video-1.info.json')) {
+          return JSON.stringify({
+            id: 'video-1',
+            uploader: 'Channel 1',
+            title: 'Video 1',
+            duration: 100,
+            description: 'Description 1',
+            upload_date: '20240101',
+            channel_id: 'channel-1'
+          });
+        }
+        throw new Error('Unknown file');
+      });
+
+      // Mock stat to simulate file exists with size
+      fsPromises.stat.mockResolvedValue({ size: 123456789 });
+
+      Video.findAll.mockResolvedValue([]);
+      ChannelVideo.findAll.mockResolvedValue([]);
+      Video.findOne.mockResolvedValue(null);
+
+      await JobModule.backfillFromCompleteList();
+
+      expect(Video.create).toHaveBeenCalledTimes(1);
+      expect(Video.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          youtubeId: 'video-1',
+          filePath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].mp4',
+          fileSize: '123456789',
+          removed: false
+        })
+      );
+
+      consoleLogSpy.mockRestore();
+    });
+
+    test('should update existing video with file metadata if not already set', async () => {
+      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
+
+      fsPromises.readFile.mockImplementation(async (path) => {
+        if (path.includes('complete.list')) {
+          return 'youtube video-1\n';
+        }
+        if (path.includes('video-1.info.json')) {
+          return JSON.stringify({
+            id: 'video-1',
+            uploader: 'Channel 1',
+            title: 'Video 1',
+            duration: 100,
+            description: 'Description 1',
+            upload_date: '20240101',
+            channel_id: 'channel-1'
+          });
+        }
+        throw new Error('Unknown file');
+      });
+
+      // Mock stat to simulate file exists with size
+      fsPromises.stat.mockResolvedValue({ size: 987654321 });
+
+      const mockVideoInstance = {
+        youtubeId: 'video-1',
+        filePath: null,
+        fileSize: null,
+        update: jest.fn()
+      };
+
+      Video.findAll.mockResolvedValue([{ youtubeId: 'video-1' }]);
+      ChannelVideo.findAll.mockResolvedValue([]);
+      Video.findOne.mockResolvedValue(mockVideoInstance);
+
+      await JobModule.backfillFromCompleteList();
+
+      // Should not create a new video
+      expect(Video.create).not.toHaveBeenCalled();
+      // Should update the existing video with file metadata
+      expect(mockVideoInstance.update).toHaveBeenCalledWith({
+        filePath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].mp4',
+        fileSize: '987654321',
+        removed: false
+      });
+
+      consoleLogSpy.mockRestore();
+    });
+
+    test('should try alternative video extensions when mp4 not found', async () => {
+      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
+
+      fsPromises.readFile.mockImplementation(async (path) => {
+        if (path.includes('complete.list')) {
+          return 'youtube video-1\n';
+        }
+        if (path.includes('video-1.info.json')) {
+          return JSON.stringify({
+            id: 'video-1',
+            uploader: 'Channel 1',
+            title: 'Video 1',
+            duration: 100,
+            description: 'Description 1',
+            upload_date: '20240101',
+            channel_id: 'channel-1'
+          });
+        }
+        throw new Error('Unknown file');
+      });
+
+      // Mock stat to fail for mp4 but succeed for webm
+      fsPromises.stat.mockImplementation(async (path) => {
+        if (path.includes('.mp4')) {
+          throw new Error('ENOENT');
+        }
+        if (path.includes('.webm')) {
+          return { size: 555555555 };
+        }
+        throw new Error('ENOENT');
+      });
+
+      Video.findAll.mockResolvedValue([]);
+      ChannelVideo.findAll.mockResolvedValue([]);
+      Video.findOne.mockResolvedValue(null);
+
+      await JobModule.backfillFromCompleteList();
+
+      expect(Video.create).toHaveBeenCalledTimes(1);
+      expect(Video.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          youtubeId: 'video-1',
+          filePath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].webm',
+          fileSize: '555555555',
+          removed: false
+        })
       );
 
       consoleLogSpy.mockRestore();
