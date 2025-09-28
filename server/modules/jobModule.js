@@ -229,12 +229,23 @@ class JobModule {
           });
 
           if (videoInstance) {
-            // IMPORTANT: Don't overwrite filePath, fileSize, or removed fields
-            // These are managed by the backfill process
             const updateData = { ...video };
-            delete updateData.filePath;
-            delete updateData.fileSize;
-            delete updateData.removed;
+            const hasVerifiedFile = Boolean(
+              video.filePath && video.fileSize !== null && video.fileSize !== undefined
+            );
+
+            if (hasVerifiedFile) {
+              // When we know the file exists, make sure the DB reflects the fresh download
+              updateData.filePath = video.filePath;
+              updateData.fileSize = video.fileSize;
+              updateData.removed = false;
+            } else {
+              // Otherwise leave these fields untouched so the backfill job can manage them
+              delete updateData.filePath;
+              delete updateData.fileSize;
+              delete updateData.removed;
+            }
+
             await videoInstance.update(updateData);
           } else {
             videoInstance = await Video.create(video);

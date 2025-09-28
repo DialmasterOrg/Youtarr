@@ -756,6 +756,76 @@ describe('JobModule', () => {
         })
       );
     });
+
+    test('should clear removed flag when new download provides file metadata', async () => {
+      const mockVideoInstance = {
+        update: jest.fn().mockResolvedValue(),
+        removed: true
+      };
+
+      JobModule.jobs = {
+        'job-1': {
+          id: 'job-1',
+          data: {
+            videos: [{
+              youtubeId: 'video-1',
+              youTubeVideoName: 'Test Video',
+              youTubeChannelName: 'Test Channel',
+              filePath: '/videos/Test Channel/Test Video.mp4',
+              fileSize: '12345',
+              removed: false
+            }]
+          }
+        }
+      };
+
+      Job.findOne.mockResolvedValue(null);
+      Video.findOne.mockResolvedValue(mockVideoInstance);
+
+      await JobModule.saveJobs();
+
+      expect(mockVideoInstance.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          youtubeId: 'video-1',
+          filePath: '/videos/Test Channel/Test Video.mp4',
+          fileSize: '12345',
+          removed: false
+        })
+      );
+    });
+
+    test('should leave removed flag untouched when file metadata is unavailable', async () => {
+      const mockVideoInstance = {
+        update: jest.fn().mockResolvedValue(),
+        removed: true
+      };
+
+      JobModule.jobs = {
+        'job-1': {
+          id: 'job-1',
+          data: {
+            videos: [{
+              youtubeId: 'video-1',
+              youTubeVideoName: 'Test Video',
+              youTubeChannelName: 'Test Channel',
+              filePath: '/videos/Test Channel/Test Video.mp4',
+              fileSize: null,
+              removed: false
+            }]
+          }
+        }
+      };
+
+      Job.findOne.mockResolvedValue(null);
+      Video.findOne.mockResolvedValue(mockVideoInstance);
+
+      await JobModule.saveJobs();
+
+      const updateArgs = mockVideoInstance.update.mock.calls[0][0];
+      expect(updateArgs.filePath).toBeUndefined();
+      expect(updateArgs.fileSize).toBeUndefined();
+      expect(updateArgs.removed).toBeUndefined();
+    });
   });
 
   describe('uploadDateToIso', () => {

@@ -169,6 +169,10 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     fs.ensureDirSync(directoryPath); // ensures that the directory exists, if it doesn't it will create it
     const newJsonPath = path.join(directoryPath, `${id}.info.json`); // define the new path
 
+    // Add the actual video filepath to the JSON data before moving it
+    jsonData._actual_filepath = videoPath;
+    fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 2));
+
     fs.moveSync(jsonPath, newJsonPath, { overwrite: true }); // move the file
 
     // Generate NFO file for Jellyfin/Kodi/Emby compatibility if enabled

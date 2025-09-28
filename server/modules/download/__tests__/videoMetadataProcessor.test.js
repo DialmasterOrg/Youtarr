@@ -31,6 +31,39 @@ describe('VideoMetadataProcessor', () => {
     jest.restoreAllMocks();
   });
 
+  describe('sanitizeFilename', () => {
+    it('should replace pipe character with full-width vertical bar', () => {
+      expect(VideoMetadataProcessor.sanitizeFilename('Title | With Pipe')).toBe('Title ｜ With Pipe');
+    });
+
+    it('should replace multiple special characters', () => {
+      expect(VideoMetadataProcessor.sanitizeFilename('Test: <file>|"name"?.mp4'))
+        .toBe('Test： ＜file＞｜＂name＂？.mp4');
+    });
+
+    it('should handle forward and back slashes', () => {
+      expect(VideoMetadataProcessor.sanitizeFilename('path/to\\file')).toBe('path／to＼file');
+    });
+
+    it('should replace asterisks', () => {
+      expect(VideoMetadataProcessor.sanitizeFilename('file*.txt')).toBe('file＊.txt');
+    });
+
+    it('should handle filenames with no special characters', () => {
+      expect(VideoMetadataProcessor.sanitizeFilename('normal_filename-123')).toBe('normal_filename-123');
+    });
+
+    it('should handle empty strings', () => {
+      expect(VideoMetadataProcessor.sanitizeFilename('')).toBe('');
+    });
+
+    it('should handle real-world video titles', () => {
+      const title = 'Harry Mack Goes It\'s A Party | Guerrilla Bars 68';
+      const expected = 'Harry Mack Goes It\'s A Party ｜ Guerrilla Bars 68';
+      expect(VideoMetadataProcessor.sanitizeFilename(title)).toBe(expected);
+    });
+  });
+
   describe('normalizeChannelName', () => {
     it('should return empty string for null or undefined', () => {
       expect(VideoMetadataProcessor.normalizeChannelName(null)).toBe('');
@@ -126,6 +159,44 @@ describe('VideoMetadataProcessor', () => {
       );
     });
 
+    it('should use actual filepath from yt-dlp when available', async () => {
+      const newVideoUrls = ['https://youtu.be/actual123'];
+      const mockDataWithActualPath = {
+        ...mockVideoData,
+        id: 'actual123',
+        title: 'Video With | Special: Characters',
+        _actual_filepath: '/output/directory/Harry Mack/Harry Mack - Video With ｜ Special： Characters - actual123/Harry Mack - Video With ｜ Special： Characters  [actual123].mp4'
+      };
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockReturnValue(JSON.stringify(mockDataWithActualPath));
+      fs.promises.stat.mockResolvedValue({ size: 1024000 });
+
+      const result = await VideoMetadataProcessor.processVideoMetadata(newVideoUrls);
+
+      expect(result).toHaveLength(1);
+      // Should use the actual filepath instead of calculating it
+      expect(result[0].filePath).toBe(mockDataWithActualPath._actual_filepath);
+      expect(fs.promises.stat).toHaveBeenCalledWith(mockDataWithActualPath._actual_filepath);
+    });
+
+    it('should sanitize special characters in video titles and channel names', async () => {
+      const newVideoUrls = ['https://youtu.be/pipe123'];
+      const mockDataWithPipe = {
+        ...mockVideoData,
+        id: 'pipe123',
+        title: 'Video | With Pipe: Test',
+        uploader: 'Channel/Name'
+      };
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockReturnValue(JSON.stringify(mockDataWithPipe));
+      fs.promises.stat.mockResolvedValue({ size: 1024000 });
+
+      const result = await VideoMetadataProcessor.processVideoMetadata(newVideoUrls);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].filePath).toBe('/output/directory/Channel／Name/Channel／Name - Video ｜ With Pipe： Test - pipe123/Channel／Name - Video ｜ With Pipe： Test  [pipe123].mp4');
+    });
+
     it('should handle missing video file', async () => {
       const newVideoUrls = ['https://youtu.be/abc123'];
       fs.existsSync.mockReturnValue(true);
@@ -141,23 +212,6 @@ describe('VideoMetadataProcessor', () => {
       expect(result[0].removed).toBe(false);
     });
 
-    it('should find video with alternative extension', async () => {
-      const newVideoUrls = ['https://youtu.be/abc123'];
-      fs.existsSync.mockReturnValue(true);
-      fs.readFileSync.mockReturnValue(JSON.stringify(mockVideoData));
-
-      // First call fails for .mp4, second succeeds for .webm
-      fs.promises.stat
-        .mockRejectedValueOnce(new Error('File not found'))
-        .mockResolvedValueOnce({ size: 2048000 });
-
-      const result = await VideoMetadataProcessor.processVideoMetadata(newVideoUrls);
-
-      expect(result).toHaveLength(1);
-      expect(result[0].filePath).toContain('.webm');
-      expect(result[0].fileSize).toBe('2048000');
-      expect(result[0].removed).toBe(false);
-    });
 
     it('should process multiple video URLs', async () => {
       const newVideoUrls = [
@@ -418,6 +472,147 @@ describe('VideoMetadataProcessor', () => {
       expect(result[0].description).toBeUndefined();
       expect(result[0].originalDate).toBeNull();
       expect(result[0].channel_id).toBeUndefined();
+    });
+  });
+
+  describe('waitForFile', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+      jest.useFakeTimers();
+      fs.promises.stat.mockReset();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('should return stats immediately when file exists on first try', async () => {
+      const mockStats = { size: 1024000 };
+      fs.promises.stat.mockResolvedValueOnce(mockStats);
+
+      const resultPromise = VideoMetadataProcessor.waitForFile('/test/file.mp4');
+      await jest.runAllTimersAsync();
+      const result = await resultPromise;
+
+      expect(result).toBe(mockStats);
+      expect(fs.promises.stat).toHaveBeenCalledTimes(1);
+    });
+
+    it('should retry with exponential backoff when file not found', async () => {
+      const mockStats = { size: 1024000 };
+      fs.promises.stat
+        .mockRejectedValueOnce(new Error('ENOENT'))
+        .mockRejectedValueOnce(new Error('ENOENT'))
+        .mockResolvedValueOnce(mockStats);
+
+      const resultPromise = VideoMetadataProcessor.waitForFile('/test/file.mp4');
+
+      // First attempt fails immediately
+      expect(fs.promises.stat).toHaveBeenCalledTimes(1);
+
+      // Wait 100ms for first retry
+      await jest.advanceTimersByTimeAsync(100);
+      expect(fs.promises.stat).toHaveBeenCalledTimes(2);
+
+      // Wait 200ms for second retry
+      await jest.advanceTimersByTimeAsync(200);
+      expect(fs.promises.stat).toHaveBeenCalledTimes(3);
+
+      const result = await resultPromise;
+      expect(result).toBe(mockStats);
+    });
+
+    it('should return null after all retries are exhausted', async () => {
+      fs.promises.stat.mockRejectedValue(new Error('ENOENT'));
+
+      const resultPromise = VideoMetadataProcessor.waitForFile('/test/file.mp4');
+
+      // Run through all retry delays: 100ms, 200ms, 400ms, 800ms
+      await jest.advanceTimersByTimeAsync(100);
+      await jest.advanceTimersByTimeAsync(200);
+      await jest.advanceTimersByTimeAsync(400);
+      await jest.advanceTimersByTimeAsync(800);
+
+      const result = await resultPromise;
+      expect(result).toBeNull();
+      expect(fs.promises.stat).toHaveBeenCalledTimes(4); // Initial + 3 retries
+    });
+
+    it('should wait for file to have non-zero size', async () => {
+      const mockStatsZero = { size: 0 };
+      const mockStatsNonZero = { size: 1024000 };
+
+      fs.promises.stat
+        .mockResolvedValueOnce(mockStatsZero)
+        .mockResolvedValueOnce(mockStatsZero)
+        .mockResolvedValueOnce(mockStatsNonZero);
+
+      const resultPromise = VideoMetadataProcessor.waitForFile('/test/file.mp4');
+
+      // First attempt finds file but size is 0
+      expect(fs.promises.stat).toHaveBeenCalledTimes(1);
+
+      // Wait 100ms for first retry
+      await jest.advanceTimersByTimeAsync(100);
+      expect(fs.promises.stat).toHaveBeenCalledTimes(2);
+
+      // Wait 200ms for second retry
+      await jest.advanceTimersByTimeAsync(200);
+      expect(fs.promises.stat).toHaveBeenCalledTimes(3);
+
+      const result = await resultPromise;
+      expect(result).toBe(mockStatsNonZero);
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('File found but size is 0'));
+    });
+
+    it('should use custom retry settings when provided', async () => {
+      const mockStats = { size: 1024000 };
+      fs.promises.stat
+        .mockRejectedValueOnce(new Error('ENOENT'))
+        .mockResolvedValueOnce(mockStats);
+
+      const resultPromise = VideoMetadataProcessor.waitForFile('/test/file.mp4', 2, 50);
+
+      // Wait 50ms for first retry (custom initial delay)
+      await jest.advanceTimersByTimeAsync(50);
+      expect(fs.promises.stat).toHaveBeenCalledTimes(2);
+
+      const result = await resultPromise;
+      expect(result).toBe(mockStats);
+    });
+
+    it('should handle stat errors other than ENOENT', async () => {
+      const mockStats = { size: 1024000 };
+      fs.promises.stat
+        .mockRejectedValueOnce(new Error('EACCES'))
+        .mockResolvedValueOnce(mockStats);
+
+      const resultPromise = VideoMetadataProcessor.waitForFile('/test/file.mp4');
+
+      // Wait 100ms for first retry
+      await jest.advanceTimersByTimeAsync(100);
+      expect(fs.promises.stat).toHaveBeenCalledTimes(2);
+
+      const result = await resultPromise;
+      expect(result).toBe(mockStats);
+    });
+
+    it('should log appropriate messages during retries', async () => {
+      fs.promises.stat.mockRejectedValue(new Error('ENOENT'));
+
+      const resultPromise = VideoMetadataProcessor.waitForFile('/test/file.mp4');
+
+      await jest.advanceTimersByTimeAsync(100);
+      expect(console.log).toHaveBeenCalledWith('Waiting 100ms for file to be available... (attempt 1/4)');
+
+      await jest.advanceTimersByTimeAsync(200);
+      expect(console.log).toHaveBeenCalledWith('Waiting 200ms for file to be available... (attempt 2/4)');
+
+      await jest.advanceTimersByTimeAsync(400);
+      expect(console.log).toHaveBeenCalledWith('Waiting 400ms for file to be available... (attempt 3/4)');
+
+      await jest.advanceTimersByTimeAsync(800);
+      await resultPromise;
     });
   });
 
