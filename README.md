@@ -124,6 +124,7 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 - **Storage**: Videos download to the directory you select during setup
 - **Storage Growth**: Downloads can consume significant disk space over time. The UI includes a storage status chip that shows total and free space for your selected directory/drive, making it easy to monitor and adjust limits/schedule as needed.
 - **Format**: Downloads as MP4 with comprehensive embedded metadata (title, genre, studio, keywords) and NFO files for maximum media server compatibility
+- **File Management**: Videos must retain their `[youtubeid].mp4` filename and remain in their download location. Moving or renaming files will cause Youtarr to mark them as "missing"
 - **Filtering**: Automatically skips YouTube Shorts and subscriber-only content
 - **Authentication**: Uses local authentication (create admin account on first access)
 
