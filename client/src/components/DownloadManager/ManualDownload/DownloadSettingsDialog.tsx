@@ -62,7 +62,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   // Load last used settings from localStorage and auto-detect re-download need
   useEffect(() => {
     if (open && !hasUserInteracted) {
-      // Auto-check re-download if there are missing videos
+      // Auto-check re-download if there are missing videos or previously downloaded videos in manual mode
       if (missingVideoCount > 0) {
         setAllowRedownload(true);
       }
@@ -182,7 +182,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
 
       <DialogContent>
         <Box sx={{ pt: 1 }}>
-          <Alert severity="info" sx={{ mb: 3 }}>
+          <Alert severity="info" sx={{ mb: 2 }}>
             <Typography variant="body2">
               {mode === 'channel'
                 ? 'This will download any new videos from all channels.'
@@ -193,26 +193,20 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
           </Alert>
 
           {missingVideoCount > 0 && (
-            <Alert severity="warning" sx={{ mb: 3 }}>
+            <Alert severity="warning" sx={{ mb: 2 }}>
               <Typography variant="body2">
-                {missingVideoCount === 1
-                  ? 'Re-downloading 1 previously downloaded video that is now missing.'
-                  : `Re-downloading ${missingVideoCount} previously downloaded videos that are now missing.`}
+                {mode === 'manual' ? (
+                  missingVideoCount === 1
+                    ? '1 video was previously downloaded.'
+                    : `${missingVideoCount} videos were previously downloaded.`
+                ) : (
+                  missingVideoCount === 1
+                    ? 'Re-downloading 1 previously downloaded video.'
+                    : `Re-downloading ${missingVideoCount} previously downloaded videos.`
+                )}
               </Typography>
             </Alert>
           )}
-
-          <FormControlLabel
-            control={
-              <Switch
-                checked={useCustomSettings}
-                onChange={handleUseCustomToggle}
-                color="primary"
-              />
-            }
-            label="Use custom settings for this download"
-            sx={{ mb: 2 }}
-          />
 
           <FormControlLabel
             control={
@@ -226,14 +220,26 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
               />
             }
             label="Allow re-downloading previously fetched videos"
-            sx={{ mb: 3 }}
+            sx={{ mb: 2 }}
           />
 
-          <Divider sx={{ mb: 3 }} />
+          <FormControlLabel
+            control={
+              <Switch
+                checked={useCustomSettings}
+                onChange={handleUseCustomToggle}
+                color="primary"
+              />
+            }
+            label="Use custom settings for this download"
+            sx={{ mb: 2 }}
+          />
+
+          <Divider sx={{ mb: 2 }} />
 
           <Box sx={{ opacity: useCustomSettings ? 1 : 0.5, transition: 'opacity 0.3s' }} data-testid="custom-settings-section">
             <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>
-              Video Quality
+              Custom Video Quality
             </Typography>
 
             <FormControl fullWidth disabled={!useCustomSettings}>
@@ -255,7 +261,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
 
             {mode === 'channel' && (
               <>
-                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2, mt: 3 }}>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2, mt: 2 }}>
                   Videos Per Channel
                 </Typography>
 
@@ -301,7 +307,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
             </Box>
           )}
 
-          <Box sx={{ mt: 3, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+          <Box sx={{ mt: 2, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
             <Typography variant="caption" color="text.secondary">
               <strong>Note:</strong> YouTube will provide the best available quality up to your selected resolution.
             </Typography>

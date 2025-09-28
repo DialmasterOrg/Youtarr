@@ -92,11 +92,11 @@ describe('VideoChip', () => {
   });
 
   describe('Status Icons and Colors', () => {
-    test('shows check icon for already downloaded videos', () => {
+    test('shows history icon for already downloaded videos', () => {
       const video = { ...baseVideo, isAlreadyDownloaded: true };
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
-      expect(screen.getByTestId('CheckCircleIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('HistoryIcon')).toBeInTheDocument();
     });
 
     test('shows lock icon for members-only videos', () => {
@@ -109,16 +109,16 @@ describe('VideoChip', () => {
     test('shows no status icon for regular videos', () => {
       render(<VideoChip video={baseVideo} onDelete={mockOnDelete} />);
 
-      expect(screen.queryByTestId('CheckCircleIcon')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('HistoryIcon')).not.toBeInTheDocument();
       expect(screen.queryByTestId('LockIcon')).not.toBeInTheDocument();
     });
 
-    test('applies success color for downloaded videos', () => {
+    test('applies warning color for downloaded videos', () => {
       const video = { ...baseVideo, isAlreadyDownloaded: true };
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
-      expect(chip).toHaveClass('MuiChip-colorSuccess');
+      expect(chip).toHaveClass('MuiChip-colorWarning');
     });
 
     test('applies error color for members-only videos', () => {
@@ -136,20 +136,20 @@ describe('VideoChip', () => {
       expect(chip).toHaveClass('MuiChip-colorDefault');
     });
 
-    test('applies outlined variant for downloaded videos', () => {
+    test('applies filled variant for downloaded videos', () => {
       const video = { ...baseVideo, isAlreadyDownloaded: true };
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
-      expect(chip).toHaveClass('MuiChip-outlined');
+      expect(chip).toHaveClass('MuiChip-filled');
     });
 
-    test('applies outlined variant for members-only videos', () => {
+    test('applies filled variant for members-only videos', () => {
       const video = { ...baseVideo, isMembersOnly: true };
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
-      expect(chip).toHaveClass('MuiChip-outlined');
+      expect(chip).toHaveClass('MuiChip-filled');
     });
 
     test('applies filled variant for regular videos', () => {
@@ -174,7 +174,7 @@ describe('VideoChip', () => {
       const video = { ...baseVideo, isAlreadyDownloaded: true };
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
-      const chip = screen.getByRole('button');
+      const chip = screen.getByRole('button', { name: /Test Video Title - Already downloaded/i });
       fireEvent.mouseOver(chip);
 
       expect(await screen.findByRole('tooltip')).toHaveTextContent('Test Video Title - Already downloaded');
@@ -264,11 +264,11 @@ describe('VideoChip', () => {
       };
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
-      // Should prioritize downloaded status
-      expect(screen.getByTestId('CheckCircleIcon')).toBeInTheDocument();
-      expect(screen.queryByTestId('LockIcon')).not.toBeInTheDocument();
+      // Should show both icons
+      expect(screen.getByTestId('HistoryIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('LockIcon')).toBeInTheDocument();
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
-      expect(chip).toHaveClass('MuiChip-colorSuccess');
+      expect(chip).toHaveClass('MuiChip-colorWarning');
     });
 
     test('renders chip with full width', () => {

@@ -62,16 +62,28 @@ describe('DownloadSettingsDialog', () => {
       expect(screen.getByLabelText('Allow re-downloading previously fetched videos')).toBeInTheDocument();
     });
 
-    test('renders warning for missing videos when missingVideoCount is 1', () => {
-      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={1} />);
+    test('renders warning for missing videos when missingVideoCount is 1 in manual mode', () => {
+      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={1} mode="manual" />);
 
-      expect(screen.getByText('Re-downloading 1 previously downloaded video that is now missing.')).toBeInTheDocument();
+      expect(screen.getByText('1 video was previously downloaded.')).toBeInTheDocument();
     });
 
-    test('renders warning for missing videos when missingVideoCount is greater than 1', () => {
-      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={5} />);
+    test('renders warning for missing videos when missingVideoCount is greater than 1 in manual mode', () => {
+      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={5} mode="manual" />);
 
-      expect(screen.getByText('Re-downloading 5 previously downloaded videos that are now missing.')).toBeInTheDocument();
+      expect(screen.getByText('5 videos were previously downloaded.')).toBeInTheDocument();
+    });
+
+    test('renders warning for missing videos when missingVideoCount is 1 in channel mode', () => {
+      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={1} mode="channel" />);
+
+      expect(screen.getByText('Re-downloading 1 previously downloaded video.')).toBeInTheDocument();
+    });
+
+    test('renders warning for missing videos when missingVideoCount is greater than 1 in channel mode', () => {
+      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={5} mode="channel" />);
+
+      expect(screen.getByText('Re-downloading 5 previously downloaded videos.')).toBeInTheDocument();
     });
 
     test('does not render missing videos warning when missingVideoCount is 0', () => {

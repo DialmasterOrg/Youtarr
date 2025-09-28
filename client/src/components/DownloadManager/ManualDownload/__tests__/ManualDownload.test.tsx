@@ -277,7 +277,7 @@ describe('ManualDownload', () => {
     expect(screen.queryByText('Download Queue')).not.toBeInTheDocument();
   });
 
-  test('starts download for new videos only', async () => {
+  test('starts download with both new and already downloaded videos', async () => {
     const newVideo = mockValidationResponse;
     const downloadedVideo = {
       ...mockValidationResponse,
@@ -299,14 +299,14 @@ describe('ManualDownload', () => {
     fireEvent.click(validateButton);
     await screen.findByTestId('video-chip-test123');
 
-    // Try to add already downloaded video - should show error instead
+    // Add already downloaded video - should be added with special message
     fireEvent.click(validateButton);
     await waitFor(() => {
-      expect(screen.getByText('This video has already been downloaded.')).toBeInTheDocument();
+      expect(screen.getByText('Video added to download list (previously downloaded).')).toBeInTheDocument();
     });
 
-    // Should not have added the downloaded video to the queue
-    expect(screen.queryByTestId('video-chip-downloaded123')).not.toBeInTheDocument();
+    // Should have added the downloaded video to the queue
+    expect(screen.getByTestId('video-chip-downloaded123')).toBeInTheDocument();
 
     const downloadButton = screen.getByRole('button', { name: /download videos/i });
     fireEvent.click(downloadButton);
@@ -319,40 +319,53 @@ describe('ManualDownload', () => {
     fireEvent.click(confirmButton);
 
     await waitFor(() => {
-      expect(mockOnStartDownload).toHaveBeenCalledWith(['https://youtube.com/watch?v=test123'], null);
+      expect(mockOnStartDownload).toHaveBeenCalledWith(
+        ['https://youtube.com/watch?v=test123', 'https://youtube.com/watch?v=test123'],
+        null
+      );
     });
-    expect(await screen.findByText('Started downloading 1 video(s).')).toBeInTheDocument();
+    expect(await screen.findByText('Started downloading 2 videos.')).toBeInTheDocument();
   });
 
-  test('prevents download when no new videos available', async () => {
+  test('allows downloading already downloaded videos', async () => {
     const downloadedVideo = {
       ...mockValidationResponse,
       isAlreadyDownloaded: true
     };
 
     mockedAxios.post.mockResolvedValueOnce({ data: downloadedVideo });
+    mockOnStartDownload.mockResolvedValueOnce(undefined);
 
     render(<ManualDownload onStartDownload={mockOnStartDownload} token={mockToken} />);
 
     const validateButton = screen.getByTestId('validate-button');
     fireEvent.click(validateButton);
 
-    // Should show error message for already downloaded video
+    // Should show success message for already downloaded video
     await waitFor(() => {
-      expect(screen.getByText('This video has already been downloaded.')).toBeInTheDocument();
+      expect(screen.getByText('Video added to download list (previously downloaded).')).toBeInTheDocument();
     });
 
-    // Video should not be added to the queue
-    expect(screen.queryByTestId('video-chip-test123')).not.toBeInTheDocument();
+    // Video should be added to the queue
+    expect(screen.getByTestId('video-chip-test123')).toBeInTheDocument();
 
-    // Download Queue section should not appear when there are no videos
-    expect(screen.queryByText('Download Queue')).not.toBeInTheDocument();
+    // Download Queue section should appear
+    expect(screen.getByText('Download Queue')).toBeInTheDocument();
 
-    // No download button should be available
-    expect(screen.queryByRole('button', { name: /download videos/i })).not.toBeInTheDocument();
+    // Download button should be available
+    const downloadButton = screen.getByRole('button', { name: /download videos/i });
+    expect(downloadButton).toBeInTheDocument();
 
-    // The onStartDownload should not be called
-    expect(mockOnStartDownload).not.toHaveBeenCalled();
+    // Start download
+    fireEvent.click(downloadButton);
+    await screen.findByTestId('download-settings-dialog');
+    const confirmButton = screen.getByTestId('confirm-download');
+    fireEvent.click(confirmButton);
+
+    // The onStartDownload should be called
+    await waitFor(() => {
+      expect(mockOnStartDownload).toHaveBeenCalledWith(['https://youtube.com/watch?v=test123'], null);
+    });
   });
 
   test('handles download error', async () => {
@@ -412,7 +425,7 @@ describe('ManualDownload', () => {
 
     // Wait for download to complete
     await waitFor(() => {
-      expect(screen.getByText('Started downloading 1 video(s).')).toBeInTheDocument();
+      expect(screen.getByText('Started downloading 1 video.')).toBeInTheDocument();
     });
   });
 
@@ -437,25 +450,25 @@ describe('ManualDownload', () => {
     // Add first video
     fireEvent.click(validateButton);
     await screen.findByTestId('video-chip-video1');
-    expect(screen.getByText('1 video(s) ready to download')).toBeInTheDocument();
+    expect(screen.getByText('1 video to download')).toBeInTheDocument();
 
     // Add second video
     fireEvent.click(validateButton);
     await screen.findByTestId('video-chip-video2');
-    expect(screen.getByText('2 video(s) ready to download')).toBeInTheDocument();
+    expect(screen.getByText('2 videos to download')).toBeInTheDocument();
 
-    // Try to add already downloaded video - should show error but not change count
+    // Add already downloaded video - should be added to queue
     fireEvent.click(validateButton);
     await waitFor(() => {
-      expect(screen.getByText('This video has already been downloaded.')).toBeInTheDocument();
+      expect(screen.getByText('Video added to download list (previously downloaded).')).toBeInTheDocument();
     });
-    // Count should still be 2
-    expect(screen.getByText('2 video(s) ready to download')).toBeInTheDocument();
+    // Count should now be 3
+    expect(screen.getByText('3 videos to download')).toBeInTheDocument();
 
-    // Only the new videos should be in the queue
+    // All videos should be in the queue
     expect(screen.getByTestId('video-chip-video1')).toBeInTheDocument();
     expect(screen.getByTestId('video-chip-video2')).toBeInTheDocument();
-    expect(screen.queryByTestId('video-chip-downloaded123')).not.toBeInTheDocument();
+    expect(screen.getByTestId('video-chip-downloaded123')).toBeInTheDocument();
   });
 
   test('shows download button badge with correct count', async () => {
