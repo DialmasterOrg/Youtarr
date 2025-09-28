@@ -27,8 +27,9 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 - **🖼️ Channel Artwork**: Automatic channel poster generation for media server folder displays
 - **⏰ Scheduled Downloads**: Configure automatic downloads on your schedule (cron-based)
 - **📱 Web Interface**: Manage everything through a responsive web UI
-- **🔍 Browse Channels**: View all videos from subscribed channels before downloading
+- **🔍 Browse Channels**: View and search all videos from subscribed channels with advanced filtering
 - **📊 Download History**: Track what you've downloaded with smart duplicate prevention
+- **♻️ Re-download Missing**: Easily identify and re-download videos that were removed from disk
 - **🔐 Secure Access**: Local authentication system with admin controls
 - **☁️ Platform Flexible**: Configurable storage paths for Kubernetes/Elfhosted deployments
 
@@ -102,6 +103,12 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 3. Choose action: Remove segments entirely or mark them as chapters
 4. Select which types of segments to handle (sponsors, intros, outros, etc.)
 5. All new downloads will automatically process selected segments
+
+### Re-download Missing Videos
+1. Go to Downloaded Videos or Channel Videos page
+2. Look for videos marked with cloud-off icon (missing from disk)
+3. Select videos to re-download with your preferred resolution
+4. Videos will be queued for download while preserving metadata
 
 ## 📖 Documentation
 
