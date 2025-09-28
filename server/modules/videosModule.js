@@ -373,45 +373,45 @@ class VideosModule {
 
             const batch = bulkUpdates.slice(i, i + BATCH_SIZE);
 
-            // Build bulk update query using CASE statements for efficiency
-            const updateIds = batch.map(u => u.id);
-
-            // Build CASE statements for each field
-            const filePathCases = [];
-            const fileSizeCases = [];
-            const removedCases = [];
-
+            // Use individual parameterized updates to handle special characters properly
             for (const update of batch) {
+              const setClauses = [];
+              const replacements = [];
+
               if (update.filePath !== undefined) {
-                filePathCases.push(`WHEN ${update.id} THEN '${update.filePath.replace(/'/g, '\'\'')}'`);
+                setClauses.push('filePath = ?');
+                replacements.push(update.filePath);
               }
               if (update.fileSize !== undefined) {
-                fileSizeCases.push(`WHEN ${update.id} THEN ${update.fileSize}`);
+                setClauses.push('fileSize = ?');
+                replacements.push(update.fileSize);
               }
               if (update.removed !== undefined) {
-                removedCases.push(`WHEN ${update.id} THEN ${update.removed ? 1 : 0}`);
+                setClauses.push('removed = ?');
+                replacements.push(update.removed ? 1 : 0);
               }
-            }
 
-            // Build and execute update query
-            let query = 'UPDATE Videos SET ';
-            const setClauses = [];
+              if (setClauses.length > 0) {
+                replacements.push(update.id);
+                const query = `UPDATE Videos SET ${setClauses.join(', ')} WHERE id = ?`;
 
-            if (filePathCases.length > 0) {
-              setClauses.push(`filePath = CASE id ${filePathCases.join(' ')} ELSE filePath END`);
-            }
-            if (fileSizeCases.length > 0) {
-              setClauses.push(`fileSize = CASE id ${fileSizeCases.join(' ')} ELSE fileSize END`);
-            }
-            if (removedCases.length > 0) {
-              setClauses.push(`removed = CASE id ${removedCases.join(' ')} ELSE removed END`);
-            }
-
-            if (setClauses.length > 0) {
-              query += setClauses.join(', ');
-              query += ` WHERE id IN (${updateIds.join(',')})`;
-
-              await sequelize.query(query);
+                try {
+                  await sequelize.query(query, {
+                    replacements: replacements,
+                    type: Sequelize.QueryTypes.UPDATE
+                  });
+                } catch (err) {
+                  console.error(`Failed to update video ${update.id}:`, err.message);
+                  // Extra debug for our problematic video
+                  if (update.filePath && update.filePath.includes('Ns3WJgYAtlg')) {
+                    console.error('[DEBUG] Failed to update Ns3WJgYAtlg:', {
+                      query: query,
+                      replacements: replacements,
+                      error: err
+                    });
+                  }
+                }
+              }
             }
           }
         }
