@@ -75,13 +75,19 @@ const mockVideos: VideoData[] = [
   }
 ];
 
-const mockPaginatedResponse = (videos: VideoData[], page = 1, limit = 12) => ({
-  videos: videos.slice((page - 1) * limit, page * limit),
-  total: videos.length,
-  totalPages: Math.ceil(videos.length / limit),
-  page,
-  limit
-});
+const mockPaginatedResponse = (videos: VideoData[], page = 1, limit = 12) => {
+  // Extract unique channels from all videos for the channels list
+  const uniqueChannels = Array.from(new Set(videos.map(v => v.youTubeChannelName))).sort();
+
+  return {
+    videos: videos.slice((page - 1) * limit, page * limit),
+    total: videos.length,
+    totalPages: Math.ceil(videos.length / limit),
+    page,
+    limit,
+    channels: uniqueChannels
+  };
+};
 
 describe('VideosPage Component', () => {
   const mockToken = 'test-token';

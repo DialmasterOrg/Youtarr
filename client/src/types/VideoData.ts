@@ -24,4 +24,5 @@ export interface PaginatedVideosResponse {
   total: number;
   page: number;
   totalPages: number;
+  channels: string[];
 }

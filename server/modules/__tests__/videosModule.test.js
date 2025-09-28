@@ -125,6 +125,7 @@ describe('VideosModule', () => {
       const result = await VideosModule.getVideosPaginated();
 
       expect(result).toEqual({
+        channels: [],
         videos: mockVideos,
         total: 2,
         page: 1,

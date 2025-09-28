@@ -108,11 +108,8 @@ function VideosPage({ token }: VideosPageProps) {
       setTotalVideos(response.data.total);
       setTotalPages(response.data.totalPages);
 
-      // Extract unique channels for filter menu
-      const channels = Array.from(
-        new Set(response.data.videos.map(v => v.youTubeChannelName))
-      ).sort();
-      setUniqueChannels(channels);
+      // Use channels list from API response (includes all channels, not just current page)
+      setUniqueChannels(response.data.channels || []);
     } catch (error) {
       console.error('Failed to fetch videos:', error);
       setLoadError('Failed to load videos. Please try refreshing the page. If this error persists, the Youtarr backend may be down.');

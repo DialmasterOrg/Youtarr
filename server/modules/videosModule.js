@@ -174,15 +174,65 @@ class VideosModule {
         }
       }
 
+      // Get all unique channels for the filter dropdown
+      const channels = await this.getAllUniqueChannels();
+
       return {
         videos,
         total,
         page,
-        totalPages: Math.ceil(total / limit)
+        totalPages: Math.ceil(total / limit),
+        channels
       };
     } catch (err) {
       console.error('Error in getVideosPaginated:', err);
       throw err;
+    }
+  }
+
+  async getAllUniqueChannels() {
+    try {
+      // Get all channels from the channels table
+      const Channel = require('../models/channel');
+      const allChannels = await Channel.findAll({
+        attributes: ['title'],
+        order: [['title', 'ASC']]
+      });
+
+      // Get all unique channel names from videos table
+      const videoChannelsQuery = `
+        SELECT DISTINCT youTubeChannelName
+        FROM Videos
+        WHERE youTubeChannelName IS NOT NULL
+        ORDER BY youTubeChannelName
+      `;
+
+      const videoChannels = await sequelize.query(videoChannelsQuery, {
+        type: Sequelize.QueryTypes.SELECT
+      });
+
+      // Combine both sets and deduplicate
+      const channelSet = new Set();
+
+      // Add channels from channels table
+      allChannels.forEach(channel => {
+        if (channel.uploader) {
+          channelSet.add(channel.uploader);
+        }
+      });
+
+      // Add channels from videos table
+      videoChannels.forEach(row => {
+        if (row.youTubeChannelName) {
+          channelSet.add(row.youTubeChannelName);
+        }
+      });
+
+      // Convert to sorted array
+      return Array.from(channelSet).sort();
+    } catch (err) {
+      console.error('Error in getAllUniqueChannels:', err);
+      return [];
     }
   }
 
