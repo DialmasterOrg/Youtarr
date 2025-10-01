@@ -3,6 +3,7 @@ const { Video } = require('../models');
 const fs = require('fs').promises;
 const path = require('path');
 const configModule = require('./configModule');
+const fileCheckModule = require('./fileCheckModule');
 
 class VideosModule {
   constructor() {}
@@ -110,69 +111,15 @@ class VideosModule {
       // Real-time file check for videos that have a known file path
       // Only check videos with an existing filePath to avoid incorrectly marking videos as removed
       // Videos without a filePath will be handled by the backfill process
-      const updates = [];
+      const { videos: checkedVideos, updates } = await fileCheckModule.checkVideoFiles(videos);
 
-      for (const video of videos) {
-        // Only check if we have a filePath stored - don't try to search for missing paths
-        if (video.filePath) {
-          try {
-            const stats = await fs.stat(video.filePath);
-
-            // File exists - update if marked as removed or size changed
-            if (video.removed || video.fileSize !== stats.size.toString()) {
-              updates.push({
-                id: video.id,
-                fileSize: stats.size,
-                removed: false
-              });
-              // Update the video object for immediate response
-              video.fileSize = stats.size.toString();
-              video.removed = false;
-            }
-          } catch (err) {
-            // File doesn't exist - mark as removed if not already
-            if (err.code === 'ENOENT' && !video.removed) {
-              updates.push({
-                id: video.id,
-                removed: true
-              });
-              // Update the video object for immediate response
-              video.removed = true;
-            }
-          }
-        }
-        // Intentionally NOT searching for videos without a filePath
-        // This prevents incorrectly marking videos as removed when we can't find them quickly
-        // The backfill process will handle finding and updating these videos
+      // Update the videos array with the checked results
+      for (let i = 0; i < videos.length; i++) {
+        videos[i] = checkedVideos[i];
       }
 
       // Batch update the database if there are changes
-      if (updates.length > 0) {
-        for (const update of updates) {
-          const setClauses = [];
-          const values = [];
-
-          if (update.fileSize !== undefined) {
-            setClauses.push('fileSize = ?');
-            values.push(update.fileSize);
-          }
-          if (update.removed !== undefined) {
-            setClauses.push('removed = ?');
-            values.push(update.removed ? 1 : 0);
-          }
-
-          if (setClauses.length > 0) {
-            values.push(update.id);
-            await sequelize.query(
-              `UPDATE Videos SET ${setClauses.join(', ')} WHERE id = ?`,
-              {
-                replacements: values,
-                type: Sequelize.QueryTypes.UPDATE
-              }
-            );
-          }
-        }
-      }
+      await fileCheckModule.applyVideoUpdates(sequelize, Sequelize, updates);
 
       // Get all unique channels for the filter dropdown
       const channels = await this.getAllUniqueChannels();

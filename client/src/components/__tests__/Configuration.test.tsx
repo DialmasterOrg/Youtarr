@@ -824,7 +824,7 @@ const renderConfiguration = async ({
       await user.type(newPasswordInput, 'newpassword123');
       await user.type(confirmPasswordInput, 'different123');
 
-      expect(screen.getByText("Passwords don't match")).toBeInTheDocument();
+      await screen.findByText("Passwords don't match");
 
       const updateButton = screen.getByRole('button', { name: 'Update Password' });
       await user.click(updateButton);

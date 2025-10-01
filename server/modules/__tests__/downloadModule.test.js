@@ -284,7 +284,9 @@ describe('DownloadModule', () => {
         ]),
         mockJobId,
         'Manually Added Urls',
-        2
+        2,
+        ['https://youtube.com/watch?v=abc123', 'https://youtube.com/watch?v=def456'],
+        false
       );
     });
 
@@ -311,7 +313,9 @@ describe('DownloadModule', () => {
         ]),
         mockJobId,
         'Manually Added Urls',
-        1
+        1,
+        ['https://youtube.com/watch?v=xyz789'],
+        false
       );
     });
 
@@ -333,7 +337,9 @@ describe('DownloadModule', () => {
         ]),
         mockJobId,
         'Manually Added Urls',
-        2
+        2,
+        ['-abc123', 'https://youtube.com/watch?v=def456'],
+        false
       );
     });
 
@@ -377,11 +383,15 @@ describe('DownloadModule', () => {
         ]),
         mockJobId,
         'Manually Added Urls',
-        2
+        2,
+        ['https://youtube.com/watch?v=test1', 'https://youtube.com/watch?v=test2'],
+        true
       );
       // Verify that --download-archive is NOT in the arguments when allowRedownload is true
       expect(mockDownloadExecutor.doDownload).not.toHaveBeenCalledWith(
         expect.arrayContaining(['--download-archive']),
+        expect.anything(),
+        expect.anything(),
         expect.anything(),
         expect.anything(),
         expect.anything()
@@ -412,7 +422,9 @@ describe('DownloadModule', () => {
         ]),
         mockJobId,
         'Manually Added Urls',
-        1
+        1,
+        ['https://youtube.com/watch?v=test'],
+        false
       );
     });
 
@@ -437,7 +449,9 @@ describe('DownloadModule', () => {
         ]),
         mockJobId,
         'Manually Added Urls',
-        1
+        1,
+        ['https://youtube.com/watch?v=default'],
+        false
       );
     });
 
@@ -491,7 +505,9 @@ describe('DownloadModule', () => {
         ]),
         mockJobId,
         'Manually Added Urls',
-        0
+        0,
+        [],
+        false
       );
     });
   });

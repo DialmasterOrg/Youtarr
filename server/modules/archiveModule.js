@@ -10,12 +10,14 @@ function getArchivePath() {
 // Read complete.list and return non-empty lines which will look like: youtube <youtube_id>
 // Handles missing file by returning an empty array.
 function readCompleteListLines() {
+  const archivePath = getArchivePath();
   try {
-    const content = fs.readFileSync(getArchivePath(), 'utf-8');
-    return content
+    const content = fs.readFileSync(archivePath, 'utf-8');
+    const lines = content
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter(Boolean);
+    return lines;
   } catch (err) {
     if (err && err.code === 'ENOENT') {
       return [];
@@ -43,9 +45,39 @@ async function isVideoInArchive(videoId) {
   });
 }
 
+// Add a video to the archive if it doesn't already exist
+async function addVideoToArchive(videoId) {
+  if (!videoId) {
+    console.log('[DEBUG] addVideoToArchive called with empty videoId, skipping');
+    return false;
+  }
+
+  // Check if video already exists in archive
+  const alreadyInArchive = await isVideoInArchive(videoId);
+  if (alreadyInArchive) {
+    console.log(`[DEBUG] Video ${videoId} already in archive, skipping`);
+    return false;
+  }
+
+  // Add the video to the archive
+  const archivePath = getArchivePath();
+  const archiveLine = `youtube ${videoId}\n`;
+
+  try {
+    // Append to the file (create if doesn't exist)
+    fs.appendFileSync(archivePath, archiveLine);
+    console.log(`[DEBUG] Added video ${videoId} to archive`);
+    return true;
+  } catch (err) {
+    console.error(`[ERROR] Failed to add video ${videoId} to archive:`, err.message);
+    return false;
+  }
+}
+
 module.exports = {
   getArchivePath,
   readCompleteListLines,
   getNewVideoUrlsSince,
   isVideoInArchive,
+  addVideoToArchive,
 };

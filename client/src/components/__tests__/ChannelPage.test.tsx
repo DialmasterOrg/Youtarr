@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ChannelPage from '../ChannelPage';
 import { BrowserRouter } from 'react-router-dom';
@@ -23,11 +23,9 @@ jest.mock('@mui/material/styles', () => ({
 }));
 
 // Mock react-router-dom
-const mockNavigate = jest.fn();
 const mockParams = { channel_id: 'UC123456' };
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
-  useNavigate: () => mockNavigate,
   useParams: () => mockParams,
 }));
 
@@ -47,7 +45,6 @@ describe('ChannelPage Component', () => {
     jest.clearAllMocks();
     mockFetch.mockReset();
     (useMediaQuery as jest.Mock).mockReturnValue(false); // Default to desktop
-    mockNavigate.mockClear();
   });
 
   describe('Component Rendering', () => {
@@ -66,7 +63,6 @@ describe('ChannelPage Component', () => {
       // There are multiple Loading... texts, so use getAllByText
       const loadingTexts = screen.getAllByText('Loading...');
       expect(loadingTexts.length).toBeGreaterThan(0);
-      expect(screen.getByRole('button', { name: /back to channels page/i })).toBeInTheDocument();
     });
 
     test('fetches and displays channel information', async () => {
@@ -93,22 +89,6 @@ describe('ChannelPage Component', () => {
       });
 
       expect(await screen.findByText('Tech Channel')).toBeInTheDocument();
-    });
-
-    test('renders back button with correct icon', () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce(mockChannel)
-      });
-
-      render(
-        <BrowserRouter>
-          <ChannelPage token={mockToken} />
-        </BrowserRouter>
-      );
-
-      const backButton = screen.getByRole('button', { name: /back to channels page/i });
-      expect(backButton).toBeInTheDocument();
     });
 
     test('renders ChannelVideos component with token prop', () => {
@@ -333,26 +313,6 @@ describe('ChannelPage Component', () => {
       await waitFor(() => {
         expect(screen.getByText(/\*\* No description available \*\*/)).toBeInTheDocument();
       });
-    });
-  });
-
-  describe('Navigation', () => {
-    test('navigates back when back button is clicked', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValueOnce(mockChannel)
-      });
-
-      render(
-        <BrowserRouter>
-          <ChannelPage token={mockToken} />
-        </BrowserRouter>
-      );
-
-      const backButton = screen.getByRole('button', { name: /back to channels page/i });
-      fireEvent.click(backButton);
-
-      expect(mockNavigate).toHaveBeenCalledWith(-1);
     });
   });
 
@@ -638,7 +598,6 @@ describe('ChannelPage Component', () => {
 
       // Check that the main elements are rendered
       expect(screen.getByRole('heading', { name: 'Tech Channel' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /back to channels page/i })).toBeInTheDocument();
       expect(screen.getByAltText('Channel thumbnail')).toBeInTheDocument();
     });
 

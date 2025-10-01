@@ -66,34 +66,6 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       if (missingVideoCount > 0) {
         setAllowRedownload(true);
       }
-
-      try {
-        const storageKey = mode === 'channel' ? 'youtarr_channel_settings' : 'youtarr_download_settings';
-        const savedSettings = localStorage.getItem(storageKey);
-        if (savedSettings) {
-          try {
-            const parsed = JSON.parse(savedSettings);
-            if (parsed.useCustom !== undefined) {
-              setUseCustomSettings(parsed.useCustom);
-            }
-            if (parsed.resolution) {
-              setResolution(parsed.resolution);
-            }
-            if (mode === 'channel' && parsed.videoCount !== undefined) {
-              setChannelVideoCount(parsed.videoCount);
-            }
-            // Don't load allowRedownload from storage if we have missing videos
-            if (parsed.allowRedownload !== undefined && missingVideoCount === 0) {
-              setAllowRedownload(parsed.allowRedownload);
-            }
-          } catch (e) {
-            console.error('Failed to parse saved settings:', e);
-          }
-        }
-      } catch (e) {
-        // localStorage might not be available
-        console.error('Failed to access localStorage:', e);
-      }
     }
   }, [open, hasUserInteracted, mode, missingVideoCount]);
 

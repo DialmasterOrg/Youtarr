@@ -54,7 +54,7 @@ class DownloadExecutor {
     }
   }
 
-  async doDownload(args, jobId, jobType, urlCount = 0) {
+  async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false) {
     const initialCount = this.getCountOfDownloadedVideos();
     const config = configModule.getConfig();
     const monitor = new DownloadProgressMonitor(jobId, jobType);
@@ -219,10 +219,41 @@ class DownloadExecutor {
           }
         }
 
-        const newVideoUrls = this.getNewVideoUrls(initialCount);
-        const videoCount = newVideoUrls.length;
+        let urlsToProcess;
+        if (jobType === 'Manually Added Urls' && originalUrls) {
+          urlsToProcess = originalUrls.map(url => {
+            // Convert full YouTube URLs to youtu.be format for consistency
+            if (url.includes('youtube.com/watch?v=')) {
+              const videoId = url.split('v=')[1].split('&')[0];
+              console.log(`[DEBUG] Converting ${url} to https://youtu.be/${videoId}`);
+              return `https://youtu.be/${videoId}`;
+            }
+            return url;
+          });
+        } else {
+          urlsToProcess = this.getNewVideoUrls(initialCount);
+        }
 
-        let videoData = await VideoMetadataProcessor.processVideoMetadata(newVideoUrls);
+        const videoCount = urlsToProcess.length;
+        let videoData = await VideoMetadataProcessor.processVideoMetadata(urlsToProcess);
+
+        // If allowRedownload is true, we need to manually update the archive since yt-dlp won't
+        if (allowRedownload && videoData.length > 0) {
+          const archiveModule = require('../archiveModule');
+          console.log(`[DEBUG] Updating archive for ${videoData.length} videos (allowRedownload was true)`);
+
+          for (const video of videoData) {
+            if (video.youtubeId && video.filePath) {
+              // Only add to archive if the video file actually exists (was successfully downloaded)
+              const fs = require('fs');
+              if (fs.existsSync(video.filePath)) {
+                await archiveModule.addVideoToArchive(video.youtubeId);
+              } else {
+                console.log(`[DEBUG] Skipping archive update for ${video.youtubeId} - file not found`);
+              }
+            }
+          }
+        }
 
         console.log(
           `${jobType} complete (with or without errors) for Job ID: ${jobId}`

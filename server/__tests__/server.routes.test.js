@@ -172,6 +172,11 @@ const createServerModule = ({
             videos: [{ id: 'video-1', title: 'Video 1' }],
             videoFail: false
           }),
+          fetchAllChannelVideos: jest.fn().mockResolvedValue({
+            success: true,
+            message: 'Fetching videos in progress',
+            videos: [{ id: 'video-1', title: 'Video 1' }]
+          }),
           deleteChannel: jest.fn().mockResolvedValue({ success: true })
         };
 
@@ -558,20 +563,29 @@ describe('server routes - configuration', () => {
 
 describe('server routes - channels', () => {
   describe('GET /getchannelvideos/:channelId', () => {
-    test('returns channel videos successfully', async () => {
+    test('returns channel videos successfully with default parameters', async () => {
       const { app, channelModuleMock } = await createServerModule();
 
       const handlers = findRouteHandlers(app, 'get', '/getchannelvideos/:channelId');
       const getVideosHandler = handlers[handlers.length - 1];
 
       const req = createMockRequest({
-        params: { channelId: 'channel-1' }
+        params: { channelId: 'channel-1' },
+        query: {}
       });
       const res = createMockResponse();
 
       await getVideosHandler(req, res);
 
-      expect(channelModuleMock.getChannelVideos).toHaveBeenCalledWith('channel-1');
+      expect(channelModuleMock.getChannelVideos).toHaveBeenCalledWith(
+        'channel-1',
+        1,    // default page
+        50,   // default pageSize
+        false, // default hideDownloaded
+        '',   // default searchQuery
+        'date', // default sortBy
+        'desc' // default sortOrder
+      );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
         videos: [{ id: 'video-1', title: 'Video 1' }],
@@ -589,7 +603,8 @@ describe('server routes - channels', () => {
       const getVideosHandler = handlers[handlers.length - 1];
 
       const req = createMockRequest({
-        params: { channelId: 'channel-1' }
+        params: { channelId: 'channel-1' },
+        query: {}
       });
       const res = createMockResponse();
 
@@ -599,6 +614,144 @@ describe('server routes - channels', () => {
       expect(res.body).toEqual({
         videos: [{ id: 'video-1', title: 'Video 1' }],
         videoFail: false
+      });
+    });
+
+    test('passes pagination and filter parameters to channel module', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'get', '/getchannelvideos/:channelId');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' },
+        query: {
+          page: '2',
+          pageSize: '25',
+          hideDownloaded: 'true',
+          searchQuery: 'test search',
+          sortBy: 'title',
+          sortOrder: 'asc'
+        }
+      });
+      const res = createMockResponse();
+
+      await getVideosHandler(req, res);
+
+      expect(channelModuleMock.getChannelVideos).toHaveBeenCalledWith(
+        'channel-1',
+        2,
+        25,
+        true,
+        'test search',
+        'title',
+        'asc'
+      );
+      expect(res.statusCode).toBe(200);
+    });
+  });
+
+  describe('POST /fetchallchannelvideos/:channelId', () => {
+    test('fetches all channel videos successfully with default parameters', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/fetchallchannelvideos/:channelId');
+      const fetchHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' },
+        query: {}
+      });
+      const res = createMockResponse();
+
+      await fetchHandler(req, res);
+
+      expect(channelModuleMock.fetchAllChannelVideos).toHaveBeenCalledWith(
+        'channel-1',
+        1,    // default page
+        50,   // default pageSize
+        false // default hideDownloaded
+      );
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({
+        success: true,
+        message: 'Fetching videos in progress',
+        videos: [{ id: 'video-1', title: 'Video 1' }]
+      });
+    });
+
+    test('passes pagination parameters when provided', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/fetchallchannelvideos/:channelId');
+      const fetchHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' },
+        query: {
+          page: '3',
+          pageSize: '100',
+          hideDownloaded: 'true'
+        }
+      });
+      const res = createMockResponse();
+
+      await fetchHandler(req, res);
+
+      expect(channelModuleMock.fetchAllChannelVideos).toHaveBeenCalledWith(
+        'channel-1',
+        3,
+        100,
+        true
+      );
+      expect(res.statusCode).toBe(200);
+    });
+
+    test('handles concurrency error with 409 status', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      const concurrencyError = new Error('A fetch operation is already in progress for this channel');
+      channelModuleMock.fetchAllChannelVideos.mockRejectedValueOnce(concurrencyError);
+
+      const handlers = findRouteHandlers(app, 'post', '/fetchallchannelvideos/:channelId');
+      const fetchHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' },
+        query: {}
+      });
+      const res = createMockResponse();
+
+      await fetchHandler(req, res);
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'FETCH_IN_PROGRESS',
+        message: 'A fetch operation is already in progress for this channel'
+      });
+    });
+
+    test('handles general error with 500 status', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      const generalError = new Error('Database connection failed');
+      channelModuleMock.fetchAllChannelVideos.mockRejectedValueOnce(generalError);
+
+      const handlers = findRouteHandlers(app, 'post', '/fetchallchannelvideos/:channelId');
+      const fetchHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' },
+        query: {}
+      });
+      const res = createMockResponse();
+
+      await fetchHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'Failed to fetch all channel videos',
+        message: 'Database connection failed'
       });
     });
   });
