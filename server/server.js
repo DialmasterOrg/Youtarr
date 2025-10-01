@@ -466,7 +466,13 @@ const initialize = async () => {
     app.get('/getchannelvideos/:channelId', verifyToken, async (req, res) => {
       console.log('Getting channel videos');
       const channelId = req.params.channelId;
-      const result = await channelModule.getChannelVideos(channelId);
+      const page = parseInt(req.query.page) || 1;
+      const pageSize = parseInt(req.query.pageSize) || 50;
+      const hideDownloaded = req.query.hideDownloaded === 'true';
+      const searchQuery = req.query.searchQuery || '';
+      const sortBy = req.query.sortBy || 'date';
+      const sortOrder = req.query.sortOrder || 'desc';
+      const result = await channelModule.getChannelVideos(channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder);
 
       // For backward compatibility, if result is an array, convert to old format
       if (Array.isArray(result)) {
@@ -477,6 +483,31 @@ const initialize = async () => {
       } else {
         // New format with additional metadata
         res.status(200).json(result);
+      }
+    });
+
+    app.post('/fetchallchannelvideos/:channelId', verifyToken, async (req, res) => {
+      console.log('Fetching all videos for channel');
+      const channelId = req.params.channelId;
+      const page = parseInt(req.query.page) || 1;
+      const pageSize = parseInt(req.query.pageSize) || 50;
+      const hideDownloaded = req.query.hideDownloaded === 'true';
+
+      try {
+        const result = await channelModule.fetchAllChannelVideos(channelId, page, pageSize, hideDownloaded);
+        res.status(200).json(result);
+      } catch (error) {
+        console.error('Error fetching all channel videos:', error);
+
+        // Check if this is a concurrency error
+        const isConcurrencyError = error.message.includes('fetch operation is already in progress');
+        const statusCode = isConcurrencyError ? 409 : 500; // 409 Conflict for concurrency issues
+
+        res.status(statusCode).json({
+          success: false,
+          error: isConcurrencyError ? 'FETCH_IN_PROGRESS' : 'Failed to fetch all channel videos',
+          message: error.message
+        });
       }
     });
 

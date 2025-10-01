@@ -201,14 +201,18 @@ class JobModule {
       return;
     }
     this.isSaving = true; // Set the locking variable
+    console.log(`[DEBUG] saveJobs() called - processing ${Object.keys(this.jobs).length} jobs`);
+
     for (let jobId in this.jobs) {
       let jobDataOriginal = this.jobs[jobId];
       const jobData = { ...jobDataOriginal };
 
       if (!jobData.data) {
+        console.log(`[DEBUG] Job ${jobId} has no data field, skipping`);
         continue;
       }
       let videos = jobData.data.videos ? jobData.data.videos : [];
+      console.log(`[DEBUG] Job ${jobId} has ${videos.length} videos to save`);
       delete jobData.data; // Remove videos from job data
 
       try {
@@ -224,11 +228,13 @@ class JobModule {
 
         // For each video, find it in the database. If it exists, update it. Otherwise, create it.
         for (let video of videos) {
+          console.log(`[DEBUG] Processing video: ${video.youtubeId} - ${video.youTubeVideoName}`);
           let videoInstance = await Video.findOne({
             where: { youtubeId: video.youtubeId },
           });
 
           if (videoInstance) {
+            console.log(`[DEBUG] Video ${video.youtubeId} already exists in DB, updating...`);
             const updateData = { ...video };
             const hasVerifiedFile = Boolean(
               video.filePath && video.fileSize !== null && video.fileSize !== undefined
@@ -247,14 +253,18 @@ class JobModule {
             }
 
             await videoInstance.update(updateData);
+            console.log(`[DEBUG] Video ${video.youtubeId} updated successfully`);
           } else {
+            console.log(`[DEBUG] Video ${video.youtubeId} not in DB, creating new entry...`);
             videoInstance = await Video.create(video);
+            console.log(`[DEBUG] Video ${video.youtubeId} created with ID: ${videoInstance.id}`);
 
             // Create jobVideo relationship
             await JobVideo.create({
               job_id: jobInstance.id,
               video_id: videoInstance.id,
             });
+            console.log(`[DEBUG] JobVideo relationship created for job ${jobInstance.id} and video ${videoInstance.id}`);
           }
 
           // Also upsert into channelvideos so Channel page reflects downloaded items
@@ -555,6 +565,11 @@ class JobModule {
   }
 
   updateJob(jobId, updatedFields) {
+    console.log(`[DEBUG] updateJob called for ${jobId} with status: ${updatedFields.status}`);
+    if (updatedFields.data && updatedFields.data.videos) {
+      console.log(`[DEBUG] updateJob data contains ${updatedFields.data.videos.length} videos`);
+    }
+
     if (
       updatedFields.status === 'Complete' ||
       updatedFields.status === 'Error' ||

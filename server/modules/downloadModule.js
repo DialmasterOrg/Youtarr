@@ -111,8 +111,8 @@ class DownloadModule {
         }
       });
 
-      // Pass URL count as additional parameter for manual downloads
-      this.downloadExecutor.doDownload(args, jobId, jobType, urls.length);
+      // Pass URL count, URLs, and allowRedownload flag as additional parameters for manual downloads
+      this.downloadExecutor.doDownload(args, jobId, jobType, urls.length, urls, allowRedownload);
     }
   }
 }
