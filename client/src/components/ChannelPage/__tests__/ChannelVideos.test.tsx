@@ -366,10 +366,12 @@ describe('ChannelVideos Component', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByRole('navigation')).toBeInTheDocument();
+        expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
       });
 
-      const pagination = screen.getByRole('navigation');
+      // We now have two pagination controls (top and bottom), use the first one
+      const paginations = screen.getAllByRole('navigation');
+      const pagination = paginations[0];
       const page1 = within(pagination).getByText('1');
       const page2 = within(pagination).getByText('2');
       expect(page1).toBeInTheDocument();
@@ -418,7 +420,9 @@ describe('ChannelVideos Component', () => {
         }),
       });
 
-      const pagination = screen.getByRole('navigation');
+      // We now have two pagination controls (top and bottom), use the first one
+      const paginations = screen.getAllByRole('navigation');
+      const pagination = paginations[0];
       const page2Button = within(pagination).getByText('2');
       fireEvent.click(page2Button);
 
@@ -426,6 +430,52 @@ describe('ChannelVideos Component', () => {
         expect(screen.getByText('Video 17')).toBeInTheDocument();
       });
       expect(screen.queryByText('Video 1')).not.toBeInTheDocument();
+    });
+
+    test('shows pagination at both top and bottom when there are multiple pages', async () => {
+      // Server returns first 16 videos with totalCount of 25
+      setupFetchMocks({ videos: manyVideos.slice(0, 16), totalCount: 25 });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getAllByRole('navigation').length).toBe(2);
+      });
+
+      // Both pagination controls should have the same page buttons
+      const paginations = screen.getAllByRole('navigation');
+      const topPagination = paginations[0];
+      const bottomPagination = paginations[1];
+
+      expect(within(topPagination).getByText('1')).toBeInTheDocument();
+      expect(within(topPagination).getByText('2')).toBeInTheDocument();
+      expect(within(bottomPagination).getByText('1')).toBeInTheDocument();
+      expect(within(bottomPagination).getByText('2')).toBeInTheDocument();
+    });
+
+    test('does not show pagination when only one page exists', async () => {
+      // Only 3 videos - less than pageSize of 16, so only 1 page
+      setupFetchMocks({ videos: mockVideos, totalCount: 3 });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      // When there's only 1 page, pagination should not be visible
+      // Verify by checking that there's no page 2 button
+      const allButtons = screen.getAllByRole('button');
+      const page2Button = allButtons.find(btn => btn.textContent === '2');
+      expect(page2Button).toBeUndefined();
     });
   });
 
@@ -499,7 +549,7 @@ describe('ChannelVideos Component', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByRole('navigation')).toBeInTheDocument();
+        expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
       });
 
       // Mock page 2 fetch
@@ -511,7 +561,9 @@ describe('ChannelVideos Component', () => {
         }),
       });
 
-      const pagination = screen.getByRole('navigation');
+      // We now have two pagination controls (top and bottom), use the first one
+      const paginations = screen.getAllByRole('navigation');
+      const pagination = paginations[0];
       const page2Button = within(pagination).getByText('2');
       fireEvent.click(page2Button);
 
@@ -1131,7 +1183,7 @@ describe('ChannelVideos Component', () => {
       expect(screen.queryByText('Video 9')).not.toBeInTheDocument();
     });
 
-    test('renders mobile grid layout', async () => {
+    test('renders mobile list layout by default', async () => {
       setupFetchMocks({ videos: mockVideos });
 
       render(
@@ -1141,11 +1193,11 @@ describe('ChannelVideos Component', () => {
       );
 
       await waitFor(() => {
-        // Mobile view still shows as grid by default now
+        // Mobile view defaults to list view now
         expect(screen.getByText('Video Title 1')).toBeInTheDocument();
       });
 
-      // Should have multiple video titles displayed in grid
+      // Should have multiple video titles displayed in list
       expect(screen.getByText('Video Title 1')).toBeInTheDocument();
       expect(screen.getByText('Video Title 2 & More')).toBeInTheDocument();
       expect(screen.getByText('Members Only Video')).toBeInTheDocument();
@@ -1203,6 +1255,49 @@ describe('ChannelVideos Component', () => {
       await waitFor(() => {
         const downloadIcon = screen.getByTestId('DownloadIcon');
         expect(downloadIcon).toBeInTheDocument();
+      });
+    });
+
+    test('toggles between list and grid view on mobile', async () => {
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      // Find the view toggle buttons
+      const toggleButtons = screen.getAllByRole('button');
+      const gridButton = toggleButtons.find(btn => btn.getAttribute('value') === 'grid');
+      const listButton = toggleButtons.find(btn => btn.getAttribute('value') === 'list');
+
+      // List view should be default on mobile
+      expect(listButton).toHaveAttribute('aria-pressed', 'true');
+      expect(gridButton).toHaveAttribute('aria-pressed', 'false');
+
+      // Click grid button
+      if (gridButton) {
+        fireEvent.click(gridButton);
+      }
+
+      // Grid button should now be pressed
+      await waitFor(() => {
+        expect(gridButton).toHaveAttribute('aria-pressed', 'true');
+      });
+
+      // Click list button
+      if (listButton) {
+        fireEvent.click(listButton);
+      }
+
+      // List button should now be pressed again
+      await waitFor(() => {
+        expect(listButton).toHaveAttribute('aria-pressed', 'true');
       });
     });
   });
@@ -1304,7 +1399,9 @@ describe('ChannelVideos Component', () => {
       });
 
       // Go to page 2 first
-      const pagination = screen.getByRole('navigation');
+      // We now have two pagination controls (top and bottom), use the first one
+      const paginations = screen.getAllByRole('navigation');
+      const pagination = paginations[0];
       const page2Button = within(pagination).getByText('2');
       fireEvent.click(page2Button);
 

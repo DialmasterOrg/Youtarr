@@ -39,6 +39,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  CardContent,
 } from '@mui/material';
 
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -46,6 +47,7 @@ import CloudOffIcon from '@mui/icons-material/CloudOff';
 import SearchIcon from '@mui/icons-material/Search';
 import ViewModuleIcon from '@mui/icons-material/ViewModule';
 import TableChartIcon from '@mui/icons-material/TableChart';
+import ViewListIcon from '@mui/icons-material/ViewList';
 import DownloadIcon from '@mui/icons-material/Download';
 import SelectAllIcon from '@mui/icons-material/SelectAll';
 import ClearIcon from '@mui/icons-material/Clear';
@@ -74,7 +76,7 @@ interface ChannelVideosProps {
   token: string | null;
 }
 
-type ViewMode = 'table' | 'grid';
+type ViewMode = 'table' | 'grid' | 'list';
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
 
@@ -83,7 +85,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // View and display states
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [viewMode, setViewMode] = useState<ViewMode>(isMobile ? 'list' : 'grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortBy>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -408,7 +410,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
             onClick={() => isSelectable && handleCheckChange(video.youtube_id, !isChecked)}
           >
             {/* Thumbnail with overlay */}
-            <Box sx={{ position: 'relative', paddingTop: '56.25%', bgcolor: 'grey.900' }}>
+            <Box sx={{ position: 'relative', paddingTop: isMobile ? '52%' : '56.25%', bgcolor: 'grey.900' }}>
               <img
                 src={video.thumbnail}
                 alt={decodeHtml(video.title)}
@@ -478,7 +480,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
             </Box>
 
             {/* Card content */}
-            <Box sx={{ p: 2, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ p: isMobile ? 1.5 : 2, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
               <Typography
                 variant="body2"
                 sx={{
@@ -497,11 +499,14 @@ function ChannelVideos({ token }: ChannelVideosProps) {
               </Typography>
 
               <Box sx={{ mt: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {/* Date and size */}
+                {/* Date, size, and status - same line on mobile, separate on desktop */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     <CalendarTodayIcon sx={{ fontSize: 12 }} />
-                    {new Date(video.publishedAt).toLocaleDateString()}
+                    {isMobile
+                      ? new Date(video.publishedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                      : new Date(video.publishedAt).toLocaleDateString()
+                    }
                   </Typography>
                   {video.fileSize && (
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -509,17 +514,29 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                       {formatFileSize(video.fileSize)}
                     </Typography>
                   )}
+                  {isMobile && (
+                    <Chip
+                      icon={getStatusIcon(status)}
+                      label={getStatusLabel(status)}
+                      size="small"
+                      color={getStatusColor(status)}
+                      variant={status === 'downloaded' ? 'filled' : 'outlined'}
+                      sx={{ height: 20, fontSize: '0.7rem' }}
+                    />
+                  )}
                 </Box>
 
-                {/* Status chip */}
-                <Chip
-                  icon={getStatusIcon(status)}
-                  label={getStatusLabel(status)}
-                  size="small"
-                  color={getStatusColor(status)}
-                  variant={status === 'downloaded' ? 'filled' : 'outlined'}
-                  sx={{ width: 'fit-content' }}
-                />
+                {/* Status chip for desktop only */}
+                {!isMobile && (
+                  <Chip
+                    icon={getStatusIcon(status)}
+                    label={getStatusLabel(status)}
+                    size="small"
+                    color={getStatusColor(status)}
+                    variant={status === 'downloaded' ? 'filled' : 'outlined'}
+                    sx={{ width: 'fit-content' }}
+                  />
+                )}
               </Box>
             </Box>
           </Card>
@@ -527,6 +544,144 @@ function ChannelVideos({ token }: ChannelVideosProps) {
       </Fade>
     );
   };
+
+  // Render video list item (compact view for mobile)
+  const renderVideoListItem = (video: ChannelVideo) => {
+    const status = getVideoStatus(video);
+    const isSelectable = status === 'never_downloaded' || status === 'missing';
+    const isChecked = checkedBoxes.includes(video.youtube_id);
+
+    return (
+      <Fade in timeout={300} key={video.youtube_id}>
+        <Card
+          sx={{
+            mb: 1.5,
+            display: 'flex',
+            position: 'relative',
+            transition: 'all 0.2s ease',
+            cursor: isSelectable ? 'pointer' : 'default',
+            opacity: status === 'members_only' ? 0.7 : 1,
+            '&:hover': {
+              boxShadow: theme.shadows[3],
+            },
+          }}
+          onClick={() => isSelectable && handleCheckChange(video.youtube_id, !isChecked)}
+        >
+          {/* Thumbnail */}
+          <Box
+            sx={{
+              position: 'relative',
+              width: 120,
+              minWidth: 120,
+              height: 90,
+              bgcolor: 'grey.900',
+            }}
+          >
+            <img
+              src={video.thumbnail}
+              alt={decodeHtml(video.title)}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+              }}
+              loading="lazy"
+            />
+
+            {/* Duration overlay */}
+            <Chip
+              label={formatDuration(video.duration)}
+              size="small"
+              sx={{
+                position: 'absolute',
+                bottom: 4,
+                right: 4,
+                bgcolor: 'rgba(0,0,0,0.8)',
+                color: 'white',
+                fontSize: '0.7rem',
+                height: 18,
+                '& .MuiChip-label': { px: 0.5 },
+              }}
+            />
+
+            {/* Checkbox for selectable videos */}
+            {isSelectable && (
+              <Checkbox
+                checked={isChecked}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  handleCheckChange(video.youtube_id, e.target.checked);
+                }}
+                sx={{
+                  position: 'absolute',
+                  top: 2,
+                  left: 2,
+                  color: 'white',
+                  bgcolor: 'rgba(0,0,0,0.5)',
+                  padding: 0.5,
+                  '&.Mui-checked': {
+                    color: 'primary.main',
+                    bgcolor: 'rgba(0,0,0,0.7)',
+                  },
+                  '& .MuiSvgIcon-root': { fontSize: 20 },
+                }}
+              />
+            )}
+          </Box>
+
+          {/* Content */}
+          <CardContent sx={{ flex: 1, py: 1, px: 1.5, '&:last-child': { pb: 1 } }}>
+            {/* Title */}
+            <Typography
+              variant="body2"
+              sx={{
+                mb: 0.5,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                lineHeight: 1.3,
+                fontSize: '0.875rem',
+              }}
+              title={decodeHtml(video.title)}
+            >
+              {decodeHtml(video.title)}
+            </Typography>
+
+            {/* Date, Size, and Status on same line */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mt: 'auto' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.3, fontSize: '0.7rem' }}>
+                <CalendarTodayIcon sx={{ fontSize: 11 }} />
+                {new Date(video.publishedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' })}
+              </Typography>
+              {video.fileSize && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.3, fontSize: '0.7rem' }}>
+                  <StorageIcon sx={{ fontSize: 11 }} />
+                  {formatFileSize(video.fileSize)}
+                </Typography>
+              )}
+              <Chip
+                icon={getStatusIcon(status)}
+                label={getStatusLabel(status)}
+                size="small"
+                color={getStatusColor(status)}
+                variant={status === 'downloaded' ? 'filled' : 'outlined'}
+                sx={{
+                  height: 20,
+                  fontSize: '0.7rem',
+                  '& .MuiChip-icon': { fontSize: 14, ml: 0.5 },
+                  '& .MuiChip-label': { px: 0.75 },
+                }}
+              />
+            </Box>
+          </CardContent>
+        </Card>
+      </Fade>
+    );
+  };
+
   // Mobile action drawer
   const renderMobileDrawer = () => (
     <Drawer
@@ -657,39 +812,48 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                 sx={{ flexGrow: 1, minWidth: 200 }}
               />
 
+              {/* View mode toggle - mobile shows list/grid, desktop shows table/grid */}
+              <ToggleButtonGroup
+                value={viewMode}
+                exclusive
+                onChange={handleViewModeChange}
+                size="small"
+              >
+                {!isMobile && (
+                  <ToggleButton value="table">
+                    <Tooltip title="Table View">
+                      <TableChartIcon fontSize="small" />
+                    </Tooltip>
+                  </ToggleButton>
+                )}
+                <ToggleButton value="grid">
+                  <Tooltip title="Grid View">
+                    <ViewModuleIcon fontSize="small" />
+                  </Tooltip>
+                </ToggleButton>
+                {isMobile && (
+                  <ToggleButton value="list">
+                    <Tooltip title="List View">
+                      <ViewListIcon fontSize="small" />
+                    </Tooltip>
+                  </ToggleButton>
+                )}
+              </ToggleButtonGroup>
+
               {!isMobile && (
-                <>
-                  <ToggleButtonGroup
-                    value={viewMode}
-                    exclusive
-                    onChange={handleViewModeChange}
-                    size="small"
-                  >
-                    <ToggleButton value="table">
-                      <Tooltip title="Table View">
-                        <TableChartIcon fontSize="small" />
-                      </Tooltip>
-                    </ToggleButton>
-                    <ToggleButton value="grid">
-                      <Tooltip title="Grid View">
-                        <ViewModuleIcon fontSize="small" />
-                      </Tooltip>
-                    </ToggleButton>
-                  </ToggleButtonGroup>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={hideDownloaded}
-                        onChange={(e) => {
-                          setHideDownloaded(e.target.checked);
-                          setPage(1);
-                        }}
-                        size="small"
-                      />
-                    }
-                    label="Hide Downloaded"
-                  />
-                </>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={hideDownloaded}
+                      onChange={(e) => {
+                        setHideDownloaded(e.target.checked);
+                        setPage(1);
+                      }}
+                      size="small"
+                    />
+                  }
+                  label="Hide Downloaded"
+                />
               )}
             </Box>
 
@@ -726,6 +890,20 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                 </Button>
               </Box>
             )}
+
+            {/* Pagination - Always visible at top */}
+            {totalPages > 1 && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+                <Pagination
+                  count={totalPages}
+                  page={page}
+                  onChange={handlePageChange}
+                  color="primary"
+                  size={isMobile ? 'small' : 'medium'}
+                  siblingCount={isMobile ? 0 : 1}
+                />
+              </Box>
+            )}
           </Box>
 
           {/* Progress bar */}
@@ -760,6 +938,12 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                 <Grid container spacing={2}>
                   {paginatedVideos.map(renderVideoCard)}
                 </Grid>
+              )}
+
+              {viewMode === 'list' && (
+                <Box>
+                  {paginatedVideos.map(renderVideoListItem)}
+                </Box>
               )}
 
               {viewMode === 'table' && (
