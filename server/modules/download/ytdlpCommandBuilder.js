@@ -86,7 +86,7 @@ class YtdlpCommandBuilder {
       '--write-info-json',
       '--no-write-playlist-metafiles',
       '--extractor-args', 'youtubetab:tab=videos;sort=dd',
-      '--match-filter', 'duration>70 & availability!=subscriber_only',
+      '--match-filter', 'availability!=subscriber_only',
       '-o', `${baseOutputPath}/${CHANNEL_TEMPLATE}/${VIDEO_FOLDER_TEMPLATE}/${VIDEO_FILE_TEMPLATE}`,
       '--datebefore', 'now',
       '-o', `thumbnail:${baseOutputPath}/${CHANNEL_TEMPLATE}/${VIDEO_FOLDER_TEMPLATE}/poster`,

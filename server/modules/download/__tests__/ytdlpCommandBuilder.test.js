@@ -176,7 +176,6 @@ describe('YtdlpCommandBuilder', () => {
 
       // Check filter for duration
       const filterIndex = result.indexOf('--match-filter');
-      expect(result[filterIndex + 1]).toContain('duration>70');
       expect(result[filterIndex + 1]).toContain('availability!=subscriber_only');
 
       // Check output paths
@@ -285,7 +284,6 @@ describe('YtdlpCommandBuilder', () => {
       // Check that duration filter is NOT included
       const filterIndex = result.indexOf('--match-filter');
       expect(result[filterIndex + 1]).toBe('availability!=subscriber_only');
-      expect(result[filterIndex + 1]).not.toContain('duration>70');
     });
 
     it('should otherwise be identical to regular command args', () => {
