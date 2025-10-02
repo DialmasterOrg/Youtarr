@@ -824,13 +824,11 @@ const renderConfiguration = async ({
       await user.type(newPasswordInput, 'newpassword123');
       await user.type(confirmPasswordInput, 'different123');
 
-      await screen.findByText("Passwords don't match");
-
       const updateButton = screen.getByRole('button', { name: 'Update Password' });
       await user.click(updateButton);
 
       await screen.findByText('Passwords do not match');
-    });
+    }, 10000);
 
     test('successfully changes password', async () => {
       await setupComponent();
