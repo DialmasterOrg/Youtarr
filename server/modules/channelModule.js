@@ -853,6 +853,13 @@ class ChannelModule {
         availability: v.availability
       }));
 
+      // If a video is removed from YouTube, fallback to using the locally stored thumbnail if available
+      for (const video of paginatedChannelVideos) {
+        if (video.youtube_removed) {
+          video.thumbnail = `/images/videothumb-${video.youtube_id}.jpg`;
+        }
+      }
+
       // This will check files for only the current page
       const checkedVideos = await this.enrichVideosWithDownloadStatus(paginatedChannelVideos, true);
 

@@ -17,4 +17,5 @@ export interface ChannelVideo {
   duration: number;
   availability?: string | null;
   fileSize?: number | null;
+  media_type?: string | null;
 }

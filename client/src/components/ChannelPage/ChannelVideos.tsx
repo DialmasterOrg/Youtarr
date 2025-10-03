@@ -59,6 +59,8 @@ import NewReleasesIcon from '@mui/icons-material/NewReleases';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import CloseIcon from '@mui/icons-material/Close';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
 
 import Pagination from '@mui/material/Pagination';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -176,6 +178,25 @@ function ChannelVideos({ token }: ChannelVideosProps) {
         return 'Members Only';
       default:
         return 'Not Downloaded';
+    }
+  };
+
+  const getMediaTypeInfo = (mediaType?: string | null) => {
+    switch (mediaType) {
+      case 'short':
+        return {
+          label: 'Short',
+          color: 'secondary' as const,
+          icon: <ScheduleIcon fontSize="small" />,
+        };
+      case 'livestream':
+        return {
+          label: 'Live',
+          color: 'error' as const,
+          icon: <VideoLibraryIcon fontSize="small" />,
+        };
+      default:
+        return null;
     }
   };
 
@@ -386,6 +407,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
     const status = getVideoStatus(video);
     const isSelectable = status === 'never_downloaded' || status === 'missing';
     const isChecked = checkedBoxes.includes(video.youtube_id);
+    const mediaTypeInfo = getMediaTypeInfo(video.media_type);
 
     return (
       <Fade in timeout={300} key={video.youtube_id}>
@@ -535,6 +557,16 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                       {formatFileSize(video.fileSize)}
                     </Typography>
                   )}
+                  {mediaTypeInfo && (
+                    <Chip
+                      size="small"
+                      icon={mediaTypeInfo.icon}
+                      label={mediaTypeInfo.label}
+                      color={mediaTypeInfo.color}
+                      variant="outlined"
+                      sx={{ height: 20, fontSize: '0.7rem' }}
+                    />
+                  )}
                   {isMobile && (
                     <Chip
                       icon={getStatusIcon(status)}
@@ -571,6 +603,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
     const status = getVideoStatus(video);
     const isSelectable = status === 'never_downloaded' || status === 'missing';
     const isChecked = checkedBoxes.includes(video.youtube_id);
+    const mediaTypeInfo = getMediaTypeInfo(video.media_type);
 
     return (
       <Fade in timeout={300} key={video.youtube_id}>
@@ -703,6 +736,21 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                   <StorageIcon sx={{ fontSize: 11 }} />
                   {formatFileSize(video.fileSize)}
                 </Typography>
+              )}
+              {mediaTypeInfo && (
+                <Chip
+                  size="small"
+                  icon={mediaTypeInfo.icon}
+                  label={mediaTypeInfo.label}
+                  color={mediaTypeInfo.color}
+                  variant="outlined"
+                  sx={{
+                    height: 18,
+                    fontSize: '0.7rem',
+                    '& .MuiChip-icon': { fontSize: 14, ml: 0.5 },
+                    '& .MuiChip-label': { px: 0.6 },
+                  }}
+                />
               )}
               <Chip
                 icon={getStatusIcon(status)}
@@ -1047,6 +1095,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                         const status = getVideoStatus(video);
                         const isSelectable = (status === 'never_downloaded' || status === 'missing') && !video.youtube_removed;
                         const isChecked = checkedBoxes.includes(video.youtube_id);
+                        const mediaTypeInfo = getMediaTypeInfo(video.media_type);
 
                         return (
                           <TableRow
@@ -1110,13 +1159,24 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                               {video.fileSize ? formatFileSize(video.fileSize) : '-'}
                             </TableCell>
                             <TableCell>
-                              <Chip
-                                icon={getStatusIcon(status)}
-                                label={getStatusLabel(status)}
-                                size="small"
-                                color={getStatusColor(status)}
-                                variant={status === 'downloaded' ? 'filled' : 'outlined'}
-                              />
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                {mediaTypeInfo && (
+                                  <Chip
+                                    size="small"
+                                    icon={mediaTypeInfo.icon}
+                                    label={mediaTypeInfo.label}
+                                    color={mediaTypeInfo.color}
+                                    variant="outlined"
+                                  />
+                                )}
+                                <Chip
+                                  icon={getStatusIcon(status)}
+                                  label={getStatusLabel(status)}
+                                  size="small"
+                                  color={getStatusColor(status)}
+                                  variant={status === 'downloaded' ? 'filled' : 'outlined'}
+                                />
+                              </Box>
                             </TableCell>
                           </TableRow>
                         );
