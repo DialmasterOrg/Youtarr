@@ -461,7 +461,7 @@ function VideosPage({ token }: VideosPageProps) {
                                   }
                                 />
                               )}
-                              {video.youtube_removed && (
+                              {video.youtube_removed ? (
                                 <Box
                                   style={{
                                     position: 'absolute',
@@ -479,7 +479,7 @@ function VideosPage({ token }: VideosPageProps) {
                                 >
                                   Removed From YouTube
                                 </Box>
-                              )}
+                              ) : null}
                               {video.removed ? (
                                 <Box
                                   style={{
@@ -653,7 +653,7 @@ function VideosPage({ token }: VideosPageProps) {
                                   }
                                 />
                               )}
-                              {video.youtube_removed && (
+                              {video.youtube_removed ? (
                                 <Box
                                   style={{
                                     position: 'absolute',
@@ -671,7 +671,7 @@ function VideosPage({ token }: VideosPageProps) {
                                 >
                                   Removed From YouTube
                                 </Box>
-                              )}
+                              ) : null}
                               {video.removed ? (
                                 <Box
                                   style={{

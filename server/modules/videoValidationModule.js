@@ -199,7 +199,8 @@ class VideoValidationModule {
       });
 
       // If status is not 404, video exists
-      return response.status !== 404;
+      // 403 means private and inaccessible
+      return response.status !== 404 && response.status !== 403;
     } catch (error) {
       console.error(`Error checking if video ${youtubeId} exists:`, error);
       // If there's a network error or other issue, assume video exists
