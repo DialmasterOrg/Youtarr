@@ -82,7 +82,8 @@ describe('ManualDownload', () => {
       channelName: 'Test Channel',
       videoTitle: 'Test Video',
       duration: 300,
-      publishedAt: 1234567890
+      publishedAt: 1234567890,
+      media_type: 'video'
     }
   };
 

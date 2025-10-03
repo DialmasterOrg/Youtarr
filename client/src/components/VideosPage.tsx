@@ -31,13 +31,16 @@ import StorageIcon from '@mui/icons-material/Storage';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { formatDuration, formatYTDate } from '../utils';
-import { VideoData, PaginatedVideosResponse } from '../types/VideoData';
+import { VideoData, PaginatedVideosResponse, EnabledChannel } from '../types/VideoData';
 import { useSwipeable } from 'react-swipeable';
 import FilterMenu from './VideosPage/FilterMenu';
 import SearchIcon from '@mui/icons-material/Search';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { debounce } from 'lodash';
+import { Link as RouterLink } from 'react-router-dom';
+import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
+import ScheduleIcon from '@mui/icons-material/Schedule';
 
 interface VideosPageProps {
   token: string | null;
@@ -63,6 +66,7 @@ function VideosPage({ token }: VideosPageProps) {
   const [dateFrom, setDateFrom] = useState<Date | null>(null);
   const [dateTo, setDateTo] = useState<Date | null>(null);
   const [uniqueChannels, setUniqueChannels] = useState<string[]>([]);
+  const [enabledChannels, setEnabledChannels] = useState<EnabledChannel[]>([]);
 
   const videosPerPage = isMobile ? 6 : 12;
 
@@ -110,6 +114,7 @@ function VideosPage({ token }: VideosPageProps) {
 
       // Use channels list from API response (includes all channels, not just current page)
       setUniqueChannels(response.data.channels || []);
+      setEnabledChannels(response.data.enabledChannels || []);
     } catch (error) {
       console.error('Failed to fetch videos:', error);
       setLoadError('Failed to load videos. Please try refreshing the page. If this error persists, the Youtarr backend may be down.');
@@ -171,6 +176,30 @@ function VideosPage({ token }: VideosPageProps) {
     }
 
     return `${formattedSize.toFixed(1)} ${units[unitIndex]}`;
+  };
+
+  const getMediaTypeInfo = (mediaType?: string) => {
+    switch (mediaType) {
+      case 'short':
+        return { label: 'Short', color: 'secondary' as const, icon: <ScheduleIcon /> };
+      case 'livestream':
+        return { label: 'Live', color: 'error' as const, icon: <VideoLibraryIcon /> };
+      case 'video':
+      default:
+        return null; // Don't show chip for regular videos
+    }
+  };
+
+  const getEnabledChannelId = (channelName: string, videoChannelId?: string | null): string | null => {
+    // First try to match by the video's channel_id
+    if (videoChannelId) {
+      const match = enabledChannels.find(ch => ch.channel_id === videoChannelId);
+      if (match) return match.channel_id;
+    }
+
+    // Fall back to matching by uploader name
+    const match = enabledChannels.find(ch => ch.uploader === channelName);
+    return match ? match.channel_id : null;
   };
 
 
@@ -432,6 +461,25 @@ function VideosPage({ token }: VideosPageProps) {
                                   }
                                 />
                               )}
+                              {video.youtube_removed && (
+                                <Box
+                                  style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    right: 0,
+                                    backgroundColor: 'rgba(211, 47, 47, 0.95)',
+                                    color: 'white',
+                                    padding: '4px 8px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 'bold',
+                                    textAlign: 'center',
+                                    zIndex: 2,
+                                  }}
+                                >
+                                  Removed From YouTube
+                                </Box>
+                              )}
                               {video.removed ? (
                                 <Box
                                   style={{
@@ -469,12 +517,32 @@ function VideosPage({ token }: VideosPageProps) {
                                 </Typography>
                               )}
                             </Typography>
-                            <Typography
-                              variant='subtitle2'
-                              color='text.secondary'
-                            >
-                              {video.youTubeChannelName}
-                            </Typography>
+                            {(() => {
+                              const channelId = getEnabledChannelId(video.youTubeChannelName, video.channel_id);
+                              return channelId ? (
+                                <Typography
+                                  component={RouterLink}
+                                  to={`/channel/${channelId}`}
+                                  variant='subtitle2'
+                                  sx={{
+                                    color: 'primary.main',
+                                    textDecoration: 'none',
+                                    '&:hover': {
+                                      textDecoration: 'underline',
+                                    },
+                                  }}
+                                >
+                                  {video.youTubeChannelName}
+                                </Typography>
+                              ) : (
+                                <Typography
+                                  variant='subtitle2'
+                                  color='text.secondary'
+                                >
+                                  {video.youTubeChannelName}
+                                </Typography>
+                              );
+                            })()}
 
                             <Stack direction="row" spacing={1} justifyContent="center" sx={{ mt: 0.5 }}>
                               <Typography
@@ -498,6 +566,19 @@ function VideosPage({ token }: VideosPageProps) {
                               alignItems="center"
                               sx={{ mt: 0.5 }}
                             >
+                              {(() => {
+                                const mediaTypeInfo = getMediaTypeInfo(video.media_type);
+                                return mediaTypeInfo ? (
+                                  <Chip
+                                    size="small"
+                                    icon={mediaTypeInfo.icon}
+                                    label={mediaTypeInfo.label}
+                                    color={mediaTypeInfo.color}
+                                    variant="outlined"
+                                    sx={{ height: 20, fontSize: '0.7rem' }}
+                                  />
+                                ) : null;
+                              })()}
                               {video.fileSize && (
                                 <Tooltip title="File size on disk" enterTouchDelay={0}>
                                   <Chip
@@ -572,6 +653,25 @@ function VideosPage({ token }: VideosPageProps) {
                                   }
                                 />
                               )}
+                              {video.youtube_removed && (
+                                <Box
+                                  style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    right: 0,
+                                    backgroundColor: 'rgba(211, 47, 47, 0.95)',
+                                    color: 'white',
+                                    padding: '4px 8px',
+                                    fontSize: '0.875rem',
+                                    fontWeight: 'bold',
+                                    textAlign: 'center',
+                                    zIndex: 2,
+                                  }}
+                                >
+                                  Removed From YouTube
+                                </Box>
+                              )}
                               {video.removed ? (
                                 <Box
                                   style={{
@@ -599,7 +699,26 @@ function VideosPage({ token }: VideosPageProps) {
                             </Box>
                           </TableCell>
                           <TableCell style={{ fontSize: 'medium' }}>
-                            {video.youTubeChannelName}
+                            {(() => {
+                              const channelId = getEnabledChannelId(video.youTubeChannelName, video.channel_id);
+                              return channelId ? (
+                                <Typography
+                                  component={RouterLink}
+                                  to={`/channel/${channelId}`}
+                                  sx={{
+                                    color: 'primary.main',
+                                    textDecoration: 'none',
+                                    '&:hover': {
+                                      textDecoration: 'underline',
+                                    },
+                                  }}
+                                >
+                                  {video.youTubeChannelName}
+                                </Typography>
+                              ) : (
+                                <>{video.youTubeChannelName}</>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell style={{ fontSize: 'medium' }}>
                             <Typography variant='subtitle1'>
@@ -631,6 +750,18 @@ function VideosPage({ token }: VideosPageProps) {
                           </TableCell>
                           <TableCell>
                             <Stack direction={isMobile ? "row" : "column"} spacing={1}>
+                              {(() => {
+                                const mediaTypeInfo = getMediaTypeInfo(video.media_type);
+                                return mediaTypeInfo ? (
+                                  <Chip
+                                    size="small"
+                                    icon={mediaTypeInfo.icon}
+                                    label={mediaTypeInfo.label}
+                                    color={mediaTypeInfo.color}
+                                    variant="outlined"
+                                  />
+                                ) : null;
+                              })()}
                               {video.fileSize && (
                                 <Tooltip title="File size on disk" enterTouchDelay={0}>
                                   <Chip

@@ -10,6 +10,8 @@ const cron = require('node-cron');
 const MessageEmitter = require('./messageEmitter.js'); // import the helper function
 const configModule = require('./configModule');
 
+const MAX_SAVE_RETRIES = 3;
+
 class JobModule {
   constructor() {
     this.jobsDir = configModule.getJobsPath();
@@ -54,20 +56,27 @@ class JobModule {
     }, 0);
   }
 
-  terminateInProgressJobs() {
+  async terminateInProgressJobs() {
     // Change the status of "In Progress" jobs to "Terminated".
     for (let jobId in this.jobs) {
       if (this.jobs[jobId].status === 'In Progress') {
         this.jobs[jobId].status = 'Terminated';
+        // Only update the job status in DB, don't touch video data
+        try {
+          await Job.update(
+            { status: 'Terminated' },
+            { where: { id: jobId } }
+          );
+        } catch (err) {
+          console.error(`Failed to terminate job ${jobId}:`, err.message);
+        }
       }
     }
   }
 
   saveJobsAndStartNext() {
-    // Save the jobs to the DB
-    this.saveJobs().then(() => {
-      this.startNextJob();
-    });
+    // Just start the next job - no need to save anything on startup
+    this.startNextJob();
   }
 
   async loadJobsFromDB() {
@@ -194,6 +203,80 @@ class JobModule {
     return jobId;
   }
 
+  // Save a single job and its video data to the database
+  async saveJobOnly(jobId, jobDataOriginal) {
+    const jobData = { ...jobDataOriginal };
+
+    if (!jobData.data) {
+      return;
+    }
+
+    let videos = jobData.data.videos ? jobData.data.videos : [];
+    delete jobData.data; // Remove videos from job data
+
+    try {
+      // Update the job in the database
+      let jobInstance = await Job.findOne({ where: { id: jobId } });
+      if (jobInstance) {
+        await jobInstance.update(jobData);
+      } else {
+        jobInstance = await Job.create(jobData);
+      }
+
+      // Process videos for this job only
+      for (let video of videos) {
+        let videoInstance = await Video.findOne({
+          where: { youtubeId: video.youtubeId },
+        });
+
+        if (videoInstance) {
+          const updateData = { ...video };
+          const hasVerifiedFile = Boolean(
+            video.filePath && video.fileSize !== null && video.fileSize !== undefined
+          );
+
+          if (hasVerifiedFile) {
+            updateData.filePath = video.filePath;
+            updateData.fileSize = video.fileSize;
+            updateData.removed = false;
+          } else {
+            delete updateData.filePath;
+            delete updateData.fileSize;
+            delete updateData.removed;
+          }
+
+          if (!video.media_type) {
+            delete updateData.media_type;
+          }
+
+          await videoInstance.update(updateData);
+        } else {
+          videoInstance = await Video.create(video);
+          await JobVideo.create({
+            job_id: jobInstance.id,
+            video_id: videoInstance.id,
+          });
+        }
+
+        // Upsert into channelvideos
+        try {
+          await this.upsertChannelVideoFromInfo({
+            id: video.youtubeId,
+            title: video.youTubeVideoName,
+            duration: video.duration,
+            upload_date: video.originalDate,
+            channel_id: video.channel_id,
+            media_type: video.media_type || 'video',
+          });
+        } catch (cvErr) {
+          console.error('Error upserting channel video:', cvErr.message);
+        }
+      }
+    } catch (error) {
+      console.error('Error saving job: ' + error.message);
+    }
+  }
+
   async saveJobs() {
     if (this.isSaving) {
       // If a save operation is already in progress, skip this one
@@ -226,59 +309,99 @@ class JobModule {
           jobInstance = await Job.create(jobData);
         }
 
+        // Skip updating video data for completed/terminated jobs to avoid overwriting fresher data
+        // UNLESS the job is marked as needing save (e.g., after saveJobOnly failed)
+        const isCompletedJob = jobData.status === 'Complete' ||
+                               jobData.status === 'Complete with Warnings' ||
+                               jobData.status === 'Error' ||
+                               jobData.status === 'Terminated' ||
+                               jobData.status === 'Killed';
+
+        if (isCompletedJob && !jobDataOriginal._needsSave) {
+          console.log(`[DEBUG] Skipping video updates for completed job ${jobId}`);
+          continue;
+        }
+
+        if (jobDataOriginal._needsSave) {
+          console.log(`[DEBUG] Processing job ${jobId} due to previous save failure (retry ${jobDataOriginal._saveRetries || 1})`);
+          // Don't clear flags yet - only clear after successful video processing
+        }
+
         // For each video, find it in the database. If it exists, update it. Otherwise, create it.
-        for (let video of videos) {
-          console.log(`[DEBUG] Processing video: ${video.youtubeId} - ${video.youTubeVideoName}`);
-          let videoInstance = await Video.findOne({
-            where: { youtubeId: video.youtubeId },
-          });
+        try {
+          for (let video of videos) {
+            console.log(`[DEBUG] Processing video: ${video.youtubeId} - ${video.youTubeVideoName}`);
+            let videoInstance = await Video.findOne({
+              where: { youtubeId: video.youtubeId },
+            });
 
-          if (videoInstance) {
-            console.log(`[DEBUG] Video ${video.youtubeId} already exists in DB, updating...`);
-            const updateData = { ...video };
-            const hasVerifiedFile = Boolean(
-              video.filePath && video.fileSize !== null && video.fileSize !== undefined
-            );
+            if (videoInstance) {
+              console.log(`[DEBUG] Video ${video.youtubeId} already exists in DB, updating...`);
+              const updateData = { ...video };
+              const hasVerifiedFile = Boolean(
+                video.filePath && video.fileSize !== null && video.fileSize !== undefined
+              );
 
-            if (hasVerifiedFile) {
-              // When we know the file exists, make sure the DB reflects the fresh download
-              updateData.filePath = video.filePath;
-              updateData.fileSize = video.fileSize;
-              updateData.removed = false;
+              if (hasVerifiedFile) {
+                // When we know the file exists, make sure the DB reflects the fresh download
+                updateData.filePath = video.filePath;
+                updateData.fileSize = video.fileSize;
+                updateData.removed = false;
+              } else {
+                // Otherwise leave these fields untouched so the backfill job can manage them
+                delete updateData.filePath;
+                delete updateData.fileSize;
+                delete updateData.removed;
+              }
+
+              // Don't overwrite media_type if the job data doesn't have it (leave backfill value intact)
+              if (!video.media_type) {
+                delete updateData.media_type;
+              }
+
+              await videoInstance.update(updateData);
+              console.log(`[DEBUG] Video ${video.youtubeId} updated successfully`);
             } else {
-              // Otherwise leave these fields untouched so the backfill job can manage them
-              delete updateData.filePath;
-              delete updateData.fileSize;
-              delete updateData.removed;
+              console.log(`[DEBUG] Video ${video.youtubeId} not in DB, creating new entry...`);
+              videoInstance = await Video.create(video);
+              console.log(`[DEBUG] Video ${video.youtubeId} created with ID: ${videoInstance.id}`);
+
+              // Create jobVideo relationship
+              await JobVideo.create({
+                job_id: jobInstance.id,
+                video_id: videoInstance.id,
+              });
+              console.log(`[DEBUG] JobVideo relationship created for job ${jobInstance.id} and video ${videoInstance.id}`);
             }
 
-            await videoInstance.update(updateData);
-            console.log(`[DEBUG] Video ${video.youtubeId} updated successfully`);
-          } else {
-            console.log(`[DEBUG] Video ${video.youtubeId} not in DB, creating new entry...`);
-            videoInstance = await Video.create(video);
-            console.log(`[DEBUG] Video ${video.youtubeId} created with ID: ${videoInstance.id}`);
-
-            // Create jobVideo relationship
-            await JobVideo.create({
-              job_id: jobInstance.id,
-              video_id: videoInstance.id,
-            });
-            console.log(`[DEBUG] JobVideo relationship created for job ${jobInstance.id} and video ${videoInstance.id}`);
+            // Also upsert into channelvideos so Channel page reflects downloaded items
+            try {
+              await this.upsertChannelVideoFromInfo({
+                id: video.youtubeId,
+                title: video.youTubeVideoName,
+                duration: video.duration,
+                upload_date: video.originalDate,
+                channel_id: video.channel_id,
+                media_type: video.media_type || 'video',
+              });
+            } catch (cvErr) {
+              console.error('Error upserting channel video:', cvErr.message);
+            }
           }
 
-          // Also upsert into channelvideos so Channel page reflects downloaded items
-          try {
-            await this.upsertChannelVideoFromInfo({
-              id: video.youtubeId,
-              title: video.youTubeVideoName,
-              duration: video.duration,
-              upload_date: video.originalDate,
-              channel_id: video.channel_id,
-            });
-          } catch (cvErr) {
-            console.error('Error upserting channel video:', cvErr.message);
+          // Only clear retry flags if video processing succeeded
+          if (jobDataOriginal._needsSave) {
+            console.log(`[DEBUG] Successfully saved job ${jobId} on retry, clearing flags`);
+            delete jobDataOriginal._needsSave;
+            delete jobDataOriginal._saveRetries;
           }
+        } catch (error) {
+          console.error(`Error saving videos for job ${jobId}:`, error.message);
+          // Don't clear flags - let retry logic handle it
+          if (jobDataOriginal._needsSave) {
+            console.error(`Retry failed for job ${jobId}, flags preserved for next attempt`);
+          }
+          throw error; // Re-throw to be caught by outer catch
         }
       } catch (error) {
         console.error('Error saving job: ' + error.message);
@@ -309,14 +432,15 @@ class JobModule {
     const duration = typeof info.duration === 'number' ? info.duration : null;
     const publishedAt = info.upload_date ? this.uploadDateToIso(info.upload_date) : null;
     const availability = info.availability || null;
+    const media_type = info.media_type || 'video';
     const thumbnail = `https://i.ytimg.com/vi/${youtube_id}/mqdefault.jpg`;
 
     const [record, created] = await ChannelVideo.findOrCreate({
       where: { youtube_id, channel_id },
-      defaults: { title, thumbnail, duration, publishedAt, availability },
+      defaults: { title, thumbnail, duration, publishedAt, availability, media_type },
     });
     if (!created && !skipUpdateIfExists) {
-      await record.update({ title, thumbnail, duration, publishedAt, availability });
+      await record.update({ title, thumbnail, duration, publishedAt, availability, media_type });
     }
   }
 
@@ -361,9 +485,8 @@ class JobModule {
         const id = ids[i];
         const needsVideo = !existingVideoIdSet.has(id);
         const needsChannelVideo = !existingChannelVideoIdSet.has(id);
-        if (needsVideo || needsChannelVideo) {
-          candidates.push({ id, needsVideo, needsChannelVideo });
-        }
+        // Always include in candidates - we may need to update media_type on existing records
+        candidates.push({ id, needsVideo, needsChannelVideo });
       }
 
       // Cap per run to 300 items
@@ -414,6 +537,7 @@ class JobModule {
             description: info.description,
             originalDate: info.upload_date,
             channel_id: info.channel_id,
+            media_type: info.media_type || 'video',
           };
 
           // Check if file exists and get file size
@@ -452,14 +576,25 @@ class JobModule {
           if (!videoInstance && needsVideo) {
             await Video.create(payload);
             videosUpserts += 1;
-          } else if (videoInstance && (payload.filePath || payload.fileSize)) {
-            // Update existing video with file metadata if not already set
+          } else if (videoInstance) {
+            const updates = {};
+
+            // Update file metadata only if not already set
             if (!videoInstance.filePath || !videoInstance.fileSize) {
-              await videoInstance.update({
-                filePath: payload.filePath,
-                fileSize: payload.fileSize,
-                removed: payload.removed
-              });
+              if (payload.filePath || payload.fileSize) {
+                updates.filePath = payload.filePath;
+                updates.fileSize = payload.fileSize;
+                updates.removed = payload.removed;
+              }
+            }
+
+            // Update media_type only if currently set to default 'video' (meaning it hasn't been set yet)
+            if (videoInstance.media_type === 'video' && payload.media_type && payload.media_type !== 'video') {
+              updates.media_type = payload.media_type;
+            }
+
+            if (Object.keys(updates).length > 0) {
+              await videoInstance.update(updates);
             }
           }
         } catch (vidErr) {
@@ -471,6 +606,14 @@ class JobModule {
           if (needsChannelVideo) {
             await this.upsertChannelVideoFromInfo(info, { skipUpdateIfExists: true });
             channelVideosUpserts += 1;
+          } else {
+            // For existing records, only update media_type if it's currently 'video' (default)
+            const existing = await ChannelVideo.findOne({
+              where: { youtube_id: info.id, channel_id: info.channel_id }
+            });
+            if (existing && existing.media_type === 'video' && info.media_type && info.media_type !== 'video') {
+              await existing.update({ media_type: info.media_type });
+            }
           }
         } catch (cvErr) {
           console.error('Error upserting channelvideos for', id, cvErr.message);
@@ -556,7 +699,15 @@ class JobModule {
     this.jobs[jobId] = job;
 
     try {
-      await this.saveJobs();
+      // Only save the new job to DB, don't touch other jobs
+      await Job.create({
+        id: jobId,
+        jobType: job.jobType,
+        status: job.status,
+        output: job.output || '',
+        timeInitiated: job.timeInitiated,
+        timeCreated: job.timeCreated,
+      });
       return jobId;
     } catch (error) {
       console.error('Error saving job: ' + error.message);
@@ -594,13 +745,45 @@ class JobModule {
       console.log('Job to update did not exist!');
       return;
     }
+
+    // Update in-memory job
     for (let field in updatedFields) {
       job[field] = updatedFields[field];
     }
 
-    this.saveJobs().then(() => {
-      return;
-    });
+    // Save only THIS job to DB, don't iterate through all jobs
+    const isCompletedJob = updatedFields.status === 'Complete' ||
+                           updatedFields.status === 'Complete with Warnings' ||
+                           updatedFields.status === 'Error' ||
+                           updatedFields.status === 'Terminated' ||
+                           updatedFields.status === 'Killed';
+
+    if (isCompletedJob) {
+      // For completed jobs, save the job and its video data with retry on failure
+      this.saveJobOnly(jobId, job).catch(err => {
+        console.error(`Failed to save completed job ${jobId}, marking for retry:`, err.message);
+        // Track retry attempts to avoid infinite loops
+        if (this.jobs[jobId]) {
+          this.jobs[jobId]._needsSave = true;
+          this.jobs[jobId]._saveRetries = (this.jobs[jobId]._saveRetries || 0) + 1;
+
+          // Only retry up to 3 times
+          if (this.jobs[jobId]._saveRetries <= MAX_SAVE_RETRIES) {
+            this.scheduleSaveRetry(jobId, this.jobs[jobId]._saveRetries);
+          } else {
+            console.error(`Max retries (${MAX_SAVE_RETRIES}) exceeded for job ${jobId}. Video data may be lost. Check database connectivity.`);
+            // Clear flags so we don't keep trying
+            delete this.jobs[jobId]._needsSave;
+            delete this.jobs[jobId]._saveRetries;
+          }
+        }
+      });
+    } else {
+      // For in-progress jobs, call saveJobs to handle updates
+      this.saveJobs().catch(err => {
+        console.error(`Failed to save in-progress job ${jobId}:`, err.message);
+      });
+    }
   }
 
   deleteJob(jobId) {
@@ -609,6 +792,62 @@ class JobModule {
     this.saveJobs().then(() => {
       return;
     });
+  }
+
+  scheduleSaveRetry(jobId, attempt) {
+    const job = this.jobs[jobId];
+    if (!job) {
+      console.warn(`Cannot schedule retry for missing job ${jobId}`);
+      return;
+    }
+
+    const retryDelay = 1000 * attempt; // Exponential backoff: 1s, 2s, 3s
+    console.log(`Will retry save for job ${jobId} (attempt ${attempt}/${MAX_SAVE_RETRIES}) in ${retryDelay}ms`);
+
+    setTimeout(() => {
+      this.runSaveRetry(jobId, attempt);
+    }, retryDelay);
+  }
+
+  async runSaveRetry(jobId, attempt) {
+    const jobBeforeRetry = this.jobs[jobId];
+    if (!jobBeforeRetry) {
+      console.warn(`Retry attempt ${attempt} skipped - job ${jobId} no longer exists in memory.`);
+      return;
+    }
+
+    try {
+      await this.saveJobs();
+    } catch (err) {
+      console.error(`Retry attempt ${attempt} for job ${jobId} failed while saving jobs: ${err.message}`);
+    }
+
+    const jobAfterRetry = this.jobs[jobId];
+    if (!jobAfterRetry) {
+      console.warn(`Retry attempt ${attempt} for job ${jobId} completed but job is no longer tracked.`);
+      return;
+    }
+
+    if (!jobAfterRetry._needsSave) {
+      // Retry succeeded - clear counters if present
+      if (jobAfterRetry._saveRetries) {
+        console.log(`[DEBUG] Successfully saved job ${jobId} after retry attempt ${attempt}, clearing retry flags`);
+        delete jobAfterRetry._saveRetries;
+      }
+      return;
+    }
+
+    if (attempt >= MAX_SAVE_RETRIES) {
+      console.error(`Max retries (${MAX_SAVE_RETRIES}) exhausted for job ${jobId}. Video data may be lost. Giving up.`);
+      delete jobAfterRetry._needsSave;
+      delete jobAfterRetry._saveRetries;
+      return;
+    }
+
+    const nextAttempt = attempt + 1;
+    jobAfterRetry._saveRetries = nextAttempt;
+    console.error(`Retry attempt ${attempt} for job ${jobId} did not clear the pending save. Scheduling attempt ${nextAttempt}/${MAX_SAVE_RETRIES}.`);
+    this.scheduleSaveRetry(jobId, nextAttempt);
   }
 }
 

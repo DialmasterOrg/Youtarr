@@ -151,6 +151,7 @@ describe('VideoMetadataProcessor', () => {
         channel_id: 'UC123456',
         filePath: '/output/directory/Test Channel/Test Channel - Test Video Title - abc123/Test Channel - Test Video Title  [abc123].mp4',
         fileSize: '1024000',
+        media_type: 'video',
         removed: false
       });
 
@@ -348,6 +349,7 @@ describe('VideoMetadataProcessor', () => {
         channel_id: undefined,
         filePath: '/output/directory/Unknown Channel/Unknown Channel - Incomplete Video - incomplete123/Unknown Channel - Incomplete Video  [incomplete123].mp4',
         fileSize: null,
+        media_type: 'video',
         removed: false
       });
     });

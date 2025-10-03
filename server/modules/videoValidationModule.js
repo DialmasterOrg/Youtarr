@@ -131,7 +131,8 @@ class VideoValidationModule {
             metadata.upload_date.substring(6, 8)
           ).getTime() / 1000) :
           null,
-        availability: metadata.availability || 'public'
+        availability: metadata.availability || 'public',
+        media_type: metadata.media_type || 'video'
       }
     };
   }
@@ -183,6 +184,30 @@ class VideoValidationModule {
   }
 
   /**
+   * Check if a YouTube video exists using the oEmbed API
+   * @param {string} youtubeId - YouTube video ID (11 characters)
+   * @returns {Promise<boolean>} - True if video exists, false otherwise
+   */
+  async checkVideoExistsOnYoutube(youtubeId) {
+    console.log(`Checking if video ${youtubeId} exists on YouTube`);
+    try {
+      const oEmbedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${youtubeId}&format=json`;
+
+      const response = await fetch(oEmbedUrl, {
+        method: 'HEAD',
+        redirect: 'follow'
+      });
+
+      // If status is not 404, video exists
+      return response.status !== 404;
+    } catch (error) {
+      console.error(`Error checking if video ${youtubeId} exists:`, error);
+      // If there's a network error or other issue, assume video exists
+      return true;
+    }
+  }
+
+  /**
    * Main validation function
    * @param {string} url - YouTube URL to validate
    * @returns {Promise<Object>} - Validation response
@@ -202,6 +227,9 @@ class VideoValidationModule {
         // Always check the current archive status, even for cached responses
         const currentDuplicateStatus = await this.isDuplicate(videoId);
         cachedResponse.isAlreadyDownloaded = currentDuplicateStatus;
+        if (cachedResponse.metadata && !cachedResponse.metadata.media_type) {
+          cachedResponse.metadata.media_type = 'video';
+        }
         // Update the cache with the current status
         this.setCachedResponse(videoId, cachedResponse);
         return cachedResponse;
@@ -213,6 +241,10 @@ class VideoValidationModule {
       const isDuplicateVideo = await this.isDuplicate(videoId);
 
       const response = this.toValidationResponse(videoId, metadata, isDuplicateVideo);
+
+      if (response.metadata && !response.metadata.media_type) {
+        response.metadata.media_type = 'video';
+      }
 
       this.setCachedResponse(videoId, response);
 
@@ -246,7 +278,8 @@ class VideoValidationModule {
             videoTitle: 'Members-only video',
             duration: 0,
             publishedAt: null,
-            availability: 'subscriber_only'
+            availability: 'subscriber_only',
+            media_type: 'video'
           }
         };
       } else if (error.message.includes('Invalid YouTube URL')) {

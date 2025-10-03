@@ -93,6 +93,7 @@ class VideoMetadataProcessor {
           description: data.description,
           originalDate: data.upload_date,
           channel_id: data.channel_id,
+          media_type: data.media_type || 'video',
         };
 
         // First check if we have the actual filepath from yt-dlp

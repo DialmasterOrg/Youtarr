@@ -225,27 +225,34 @@ describe('JobModule', () => {
   });
 
   describe('terminateInProgressJobs', () => {
-    test('should change In Progress jobs to Terminated', () => {
+    test('should change In Progress jobs to Terminated', async () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
         youtubeOutputDirectory: '/test/output'
       }));
 
+      Job.update = jest.fn().mockResolvedValue([1]);
+
       JobModule = require('../jobModule');
+
+      // Set jobs after requiring the module to avoid async initialization clearing them
+      await new Promise(resolve => setTimeout(resolve, 10));
+
       JobModule.jobs = {
-        'job-1': { status: 'In Progress' },
-        'job-2': { status: 'Pending' },
-        'job-3': { status: 'In Progress' },
-        'job-4': { status: 'Complete' }
+        'job-1': { status: 'In Progress', id: 'job-1' },
+        'job-2': { status: 'Pending', id: 'job-2' },
+        'job-3': { status: 'In Progress', id: 'job-3' },
+        'job-4': { status: 'Complete', id: 'job-4' }
       };
 
-      JobModule.terminateInProgressJobs();
+      await JobModule.terminateInProgressJobs();
 
       expect(JobModule.jobs['job-1'].status).toBe('Terminated');
       expect(JobModule.jobs['job-2'].status).toBe('Pending');
       expect(JobModule.jobs['job-3'].status).toBe('Terminated');
       expect(JobModule.jobs['job-4'].status).toBe('Complete');
+      expect(Job.update).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -417,11 +424,18 @@ describe('JobModule', () => {
         timeInitiated: expect.any(Number),
         timeCreated: expect.any(Number)
       });
-      expect(JobModule.saveJobs).toHaveBeenCalled();
+      expect(Job.create).toHaveBeenCalledWith({
+        id: 'generated-uuid',
+        jobType: 'download',
+        status: undefined,
+        output: '',
+        timeInitiated: expect.any(Number),
+        timeCreated: expect.any(Number)
+      });
     });
 
     test('should handle save errors', async () => {
-      JobModule.saveJobs.mockRejectedValue(new Error('Save failed'));
+      Job.create.mockRejectedValue(new Error('Save failed'));
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
 
       const jobData = { jobType: 'download' };
@@ -444,12 +458,15 @@ describe('JobModule', () => {
       JobModule.saveJobs = jest.fn().mockResolvedValue();
     });
 
-    test('should update job fields', () => {
+    test('should update job fields', async () => {
       JobModule.jobs = {
         'job-1': { status: 'In Progress', output: 'old' }
       };
 
       JobModule.updateJob('job-1', { status: 'Pending', output: 'new' });
+
+      // Wait for async save operation
+      await new Promise(resolve => setTimeout(resolve, 10));
 
       expect(JobModule.jobs['job-1']).toMatchObject({
         status: 'Pending',
@@ -458,15 +475,20 @@ describe('JobModule', () => {
       expect(JobModule.saveJobs).toHaveBeenCalled();
     });
 
-    test('should emit download complete message for completion statuses', () => {
+    test('should emit download complete message for completion statuses', async () => {
       JobModule.jobs = {
         'job-1': { status: 'In Progress' }
       };
+
+      JobModule.saveJobOnly = jest.fn().mockResolvedValue();
 
       JobModule.updateJob('job-1', {
         status: 'Complete',
         data: { videos: ['video1', 'video2'] }
       });
+
+      // Wait for async save operation
+      await new Promise(resolve => setTimeout(resolve, 10));
 
       expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
         'broadcast',
@@ -476,16 +498,19 @@ describe('JobModule', () => {
         expect.objectContaining({ videos: ['video1', 'video2'] })
       );
       expect(JobModule.jobs['job-1'].output).toBe('2 videos.');
+      expect(JobModule.saveJobOnly).toHaveBeenCalledWith('job-1', expect.any(Object));
     });
 
-    test('should handle job not found', () => {
+    test('should handle job not found', async () => {
       const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
       JobModule.jobs = {};
 
       JobModule.updateJob('nonexistent', { status: 'Pending' });
 
+      // Wait for async operation
+      await new Promise(resolve => setTimeout(resolve, 10));
+
       expect(consoleLogSpy).toHaveBeenCalledWith('Job to update did not exist!');
-      // Note: saveJobs is still called at end of updateJob even for non-existent jobs
 
       consoleLogSpy.mockRestore();
     });
@@ -653,7 +678,7 @@ describe('JobModule', () => {
       JobModule.jobs = {
         'job-1': {
           id: 'job-1',
-          status: 'Complete',
+          status: 'In Progress',
           data: {
             videos: [{
               youtubeId: 'video-1',
@@ -671,7 +696,7 @@ describe('JobModule', () => {
       expect(Job.create).toHaveBeenCalledWith(
         expect.objectContaining({
           id: 'job-1',
-          status: 'Complete'
+          status: 'In Progress'
         })
       );
       expect(Video.create).toHaveBeenCalledWith(
@@ -1013,8 +1038,10 @@ describe('JobModule', () => {
           return videoIds;
         }
         // Return valid info for any video
+        const match = path.match(/video-(\d+)/);
+        const videoNum = match ? match[1] : '0';
         return JSON.stringify({
-          id: path.match(/video-\d+/)[0],
+          id: `video-${videoNum}`,
           channel_id: 'channel-1',
           title: 'Video',
           upload_date: '20240101'
@@ -1027,23 +1054,22 @@ describe('JobModule', () => {
       Video.findAll.mockResolvedValue([]);
       ChannelVideo.findAll.mockResolvedValue([]);
 
-      // Mock Video.findOne to always return an existing video
-      // This prevents Video.create from being called
-      // The backfill logic skips creation if video already exists
-      let videoCreateCount = 0;
-      Video.findOne.mockImplementation(async () => {
-        // Allow first 300 videos to be created
-        videoCreateCount++;
-        if (videoCreateCount <= 300) {
-          return null; // Video doesn't exist, will be created
-        }
-        // After 300, pretend video exists to prevent creation
-        return { youtubeId: `video-${videoCreateCount}` };
-      });
+      // All videos return as "not exists"
+      Video.findOne.mockResolvedValue(null);
+
+      // Wait for any pending async operations from module init to complete
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // Clear any previous calls from module initialization
+      Video.create.mockClear();
+      ChannelVideo.findOrCreate.mockClear();
 
       await JobModule.backfillFromCompleteList();
 
-      // Should only process 300 items due to the cap
+      // Should only process 300 items per run
+      // Check that ChannelVideo operations are capped at 300
+      expect(ChannelVideo.findOrCreate).toHaveBeenCalledTimes(300);
+      // Video.create should also be capped at 300 for new videos
       expect(Video.create).toHaveBeenCalledTimes(300);
 
       consoleLogSpy.mockRestore();
@@ -1477,7 +1503,8 @@ describe('JobModule', () => {
       // Wait for async operation
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      expect(JobModule.saveJobs).toHaveBeenCalled();
+      // saveJobsAndStartNext now just starts the next job without saving
+      expect(JobModule.saveJobs).not.toHaveBeenCalled();
       expect(JobModule.startNextJob).toHaveBeenCalled();
     });
   });

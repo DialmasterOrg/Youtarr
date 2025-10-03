@@ -8,6 +8,29 @@ interface VideoChipProps {
   onDelete: (youtubeId: string) => void;
 }
 
+const formatMediaTypeLabel = (mediaType: string): string => {
+  return mediaType
+    .split(/[_-]/)
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+};
+
+const getMediaTypeInfo = (mediaType?: string) => {
+  if (!mediaType) return null;
+  const normalized = mediaType.toLowerCase();
+  if (normalized === 'video') return null;
+
+  switch (normalized) {
+    case 'short':
+      return { label: 'Short', color: 'secondary.main' } as const;
+    case 'livestream':
+      return { label: 'Live', color: 'error.main' } as const;
+    default:
+      return { label: formatMediaTypeLabel(normalized), color: 'info.main' } as const;
+  }
+};
+
 const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
@@ -21,6 +44,7 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
   };
 
   const open = Boolean(anchorEl);
+  const mediaTypeInfo = getMediaTypeInfo(video.media_type);
 
   const formatDuration = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
@@ -67,15 +91,41 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
           {truncateText(video.videoTitle, 40)}
         </Box>
       </Box>
-      <Box sx={{
-        fontSize: '0.65rem',
-        bgcolor: 'action.selected',
-        px: 0.5,
-        py: 0.25,
-        borderRadius: 1,
-        ml: 1
-      }}>
-        {formatDuration(video.duration)}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 1 }}>
+        {mediaTypeInfo && (
+          <Box
+            component="span"
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 0.4,
+              fontSize: '0.65rem',
+              fontWeight: 600,
+              color: 'text.secondary',
+            }}
+          >
+            <Box
+              component="span"
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                bgcolor: mediaTypeInfo.color,
+                flexShrink: 0
+              }}
+            />
+            {mediaTypeInfo.label}
+          </Box>
+        )}
+        <Box sx={{
+          fontSize: '0.65rem',
+          bgcolor: 'action.selected',
+          px: 0.5,
+          py: 0.25,
+          borderRadius: 1
+        }}>
+          {formatDuration(video.duration)}
+        </Box>
       </Box>
       {video.isMembersOnly && <Lock fontSize="small" sx={{ ml: 0.5 }} />}
     </Box>

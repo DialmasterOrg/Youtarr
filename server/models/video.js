@@ -62,6 +62,11 @@ Video.init(
       allowNull: false,
       defaultValue: false,
     },
+    youtube_removed_checked_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     sequelize,

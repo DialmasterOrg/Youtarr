@@ -425,6 +425,27 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                 loading="lazy"
               />
 
+              {/* YouTube Removed Banner */}
+              {video.youtube_removed ? (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    backgroundColor: 'rgba(211, 47, 47, 0.95)',
+                    color: 'white',
+                    padding: '4px 8px',
+                    fontSize: '0.75rem',
+                    fontWeight: 'bold',
+                    textAlign: 'center',
+                    zIndex: 2,
+                  }}
+                >
+                  Removed From YouTube
+                </Box>
+              ) : null}
+
               {/* Duration overlay */}
               <Chip
                 label={formatDuration(video.duration)}
@@ -587,6 +608,27 @@ function ChannelVideos({ token }: ChannelVideosProps) {
               }}
               loading="lazy"
             />
+
+            {/* YouTube Removed Banner */}
+            {video.youtube_removed ? (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  backgroundColor: 'rgba(211, 47, 47, 0.95)',
+                  color: 'white',
+                  padding: '2px 4px',
+                  fontSize: '0.65rem',
+                  fontWeight: 'bold',
+                  textAlign: 'center',
+                  zIndex: 2,
+                }}
+              >
+                Removed From YouTube
+              </Box>
+            ) : null}
 
             {/* Duration overlay */}
             <Chip
@@ -1003,7 +1045,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                     <TableBody>
                       {paginatedVideos.map((video) => {
                         const status = getVideoStatus(video);
-                        const isSelectable = status === 'never_downloaded' || status === 'missing';
+                        const isSelectable = (status === 'never_downloaded' || status === 'missing') && !video.youtube_removed;
                         const isChecked = checkedBoxes.includes(video.youtube_id);
 
                         return (
@@ -1024,12 +1066,34 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                               )}
                             </TableCell>
                             <TableCell>
-                              <img
-                                src={video.thumbnail}
-                                alt={decodeHtml(video.title)}
-                                style={{ width: 120, height: 67, objectFit: 'cover', borderRadius: 4 }}
-                                loading="lazy"
-                              />
+                              <Box sx={{ position: 'relative', display: 'inline-block' }}>
+                                <img
+                                  src={video.thumbnail}
+                                  alt={decodeHtml(video.title)}
+                                  style={{ width: 120, height: 67, objectFit: 'cover', borderRadius: 4, display: 'block' }}
+                                  loading="lazy"
+                                />
+                                {video.youtube_removed && (
+                                  <Box
+                                    sx={{
+                                      position: 'absolute',
+                                      top: 0,
+                                      left: 0,
+                                      right: 0,
+                                      backgroundColor: 'rgba(211, 47, 47, 0.95)',
+                                      color: 'white',
+                                      padding: '2px 4px',
+                                      fontSize: '0.65rem',
+                                      fontWeight: 'bold',
+                                      textAlign: 'center',
+                                      borderTopLeftRadius: 4,
+                                      borderTopRightRadius: 4,
+                                    }}
+                                  >
+                                    Removed From YouTube
+                                  </Box>
+                                )}
+                              </Box>
                             </TableCell>
                             <TableCell>
                               <Typography variant="body2" sx={{ mb: 0.5 }}>

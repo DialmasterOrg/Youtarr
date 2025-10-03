@@ -13,6 +13,7 @@ export interface ChannelVideo {
   thumbnail: string;
   added: boolean;
   removed?: boolean;
+  youtube_removed?: boolean;
   duration: number;
   availability?: string | null;
   fileSize?: number | null;

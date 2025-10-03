@@ -20,6 +20,12 @@ const TAB_TYPES = {
   LIVE: 'streams',
 };
 
+const MEDIA_TAB_TYPE_MAP = {
+  'videos': 'video',
+  'shorts': 'short',
+  'streams': 'livestream',
+};
+
 class ChannelModule {
   constructor() {
     this.channelAutoDownload = this.channelAutoDownload.bind(this);
@@ -663,7 +669,7 @@ class ChannelModule {
    * @param {string} channelId - Channel ID these videos belong to
    * @returns {Promise<void>}
    */
-  async insertVideosIntoDb(videos, channelId) {
+  async insertVideosIntoDb(videos, channelId, mediaType = 'video') {
     for (const video of videos) {
       const [videoRecord, created] = await ChannelVideo.findOrCreate({
         where: {
@@ -673,6 +679,7 @@ class ChannelModule {
         defaults: {
           ...video,
           channel_id: channelId,
+          media_type: mediaType,
         },
       });
 
@@ -683,6 +690,7 @@ class ChannelModule {
           duration: video.duration,
           publishedAt: video.publishedAt,
           availability: video.availability || null,
+          media_type: mediaType,
         });
       }
     }
@@ -970,6 +978,7 @@ class ChannelModule {
       thumbnail: this.extractThumbnailUrl(entry),
       duration: entry.duration || 0,
       availability: entry.availability || null,
+      media_type: entry.media_type || 'video',
     };
   }
 
@@ -1142,6 +1151,73 @@ class ChannelModule {
       const offset = (page - 1) * pageSize;
       const paginatedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true);
 
+      // Check if videos still exist on YouTube and mark as removed if they don't
+      const videoValidationModule = require('./videoValidationModule');
+      const updates = [];
+      const timestampUpdates = [];
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      // Check all videos concurrently for better performance
+      // Only check videos that haven't been checked in the last 24 hours
+      const checkPromises = paginatedVideos.map(async (video) => {
+        const youtubeId = video.youtube_id || video.youtubeId;
+        const lastChecked = video.youtube_removed_checked_at ? new Date(video.youtube_removed_checked_at) : null;
+
+        // Skip if already marked as removed or checked within last 24 hours
+        if (video.youtube_removed || (lastChecked && lastChecked > twentyFourHoursAgo)) {
+          return null;
+        }
+
+        if (youtubeId) {
+          const exists = await videoValidationModule.checkVideoExistsOnYoutube(youtubeId);
+          const now = new Date();
+
+          if (!exists) {
+            console.log(`Video ${youtubeId} no longer exists on YouTube, marking as removed in channelvideos`);
+            video.youtube_removed = true;
+            video.youtube_removed_checked_at = now;
+            return { youtube_id: youtubeId, channel_id: channelId, removed: true, checked_at: now };
+          } else {
+            // Video exists, just update the timestamp
+            video.youtube_removed_checked_at = now;
+            return { youtube_id: youtubeId, channel_id: channelId, removed: false, checked_at: now };
+          }
+        }
+        return null;
+      });
+
+      const checkResults = await Promise.all(checkPromises);
+      const validResults = checkResults.filter(result => result !== null);
+
+      // Separate updates for removed videos and timestamp updates
+      for (const result of validResults) {
+        if (result.removed) {
+          updates.push(result);
+        } else {
+          timestampUpdates.push(result);
+        }
+      }
+
+      // Bulk update channelvideos table for removed videos
+      if (updates.length > 0) {
+        for (const update of updates) {
+          await ChannelVideo.update(
+            { youtube_removed: true, youtube_removed_checked_at: update.checked_at },
+            { where: { youtube_id: update.youtube_id, channel_id: update.channel_id } }
+          );
+        }
+      }
+
+      // Bulk update channelvideos table for timestamp-only updates
+      if (timestampUpdates.length > 0) {
+        for (const update of timestampUpdates) {
+          await ChannelVideo.update(
+            { youtube_removed_checked_at: update.checked_at },
+            { where: { youtube_id: update.youtube_id, channel_id: update.channel_id } }
+          );
+        }
+      }
+
       // Get stats for the response
       const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery);
 
@@ -1173,7 +1249,7 @@ class ChannelModule {
       const { videos, currentChannelUrl } = result;
 
       if (videos.length > 0) {
-        await this.insertVideosIntoDb(videos, channelId);
+        await this.insertVideosIntoDb(videos, channelId, MEDIA_TAB_TYPE_MAP[tabType]);
       }
 
       if (channel) {
