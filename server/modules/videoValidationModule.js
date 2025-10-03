@@ -53,7 +53,7 @@ class VideoValidationModule {
         if (candidate && idPattern.test(candidate)) {
           videoId = candidate;
         }
-      } else if (pathSegments[0] === 'shorts' || pathSegments[0] === 'embed') {
+      } else if (pathSegments[0] === 'shorts' || pathSegments[0] === 'embed' || pathSegments[0] === 'live') {
         const candidate = pathSegments[1];
         if (candidate && idPattern.test(candidate)) {
           videoId = candidate;
