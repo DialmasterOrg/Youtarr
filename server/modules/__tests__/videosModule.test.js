@@ -191,7 +191,7 @@ describe('VideosModule', () => {
       expect(sqlQuery).toContain('Videos.removed');
       expect(sqlQuery).toContain('Videos.youtube_removed');
       expect(sqlQuery).toContain('Videos.media_type');
-      expect(sqlQuery).toContain('COALESCE(Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, \'%Y%m%d\')) AS timeCreated');
+      expect(sqlQuery).toContain('COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, \'%Y%m%d\')) AS timeCreated');
 
       // Verify the JOINs
       expect(sqlQuery).toContain('LEFT JOIN');
@@ -200,7 +200,7 @@ describe('VideosModule', () => {
 
       // Verify the ORDER BY clause
       expect(sqlQuery).toContain('ORDER BY');
-      expect(sqlQuery).toContain('COALESCE(Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, \'%Y%m%d\')) DESC');
+      expect(sqlQuery).toContain('COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, \'%Y%m%d\')) DESC');
 
       // Verify the LIMIT and OFFSET
       expect(sqlQuery).toContain('LIMIT :limit OFFSET :offset');
@@ -307,7 +307,7 @@ describe('VideosModule', () => {
       await VideosModule.getVideosPaginated();
 
       const query2 = mockSequelize.query.mock.calls[1][0];
-      expect(query2).toContain('ORDER BY COALESCE(Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, \'%Y%m%d\')) DESC');
+      expect(query2).toContain('ORDER BY COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, \'%Y%m%d\')) DESC');
     });
 
     test('should handle date filters correctly', async () => {

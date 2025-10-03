@@ -67,6 +67,11 @@ Video.init(
       allowNull: true,
       defaultValue: null,
     },
+    last_downloaded_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     sequelize,

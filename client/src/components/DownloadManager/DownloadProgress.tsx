@@ -340,7 +340,13 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             {/* Thicker progress bar with overlay text */}
             <Box sx={{ position: 'relative', mb: 1 }}>
               <LinearProgress
-                variant="determinate"
+                variant={
+                  currentProgress.state === 'merging' ||
+                  currentProgress.state === 'metadata' ||
+                  currentProgress.state === 'processing'
+                    ? 'indeterminate'
+                    : 'determinate'
+                }
                 value={currentProgress.progress.percent}
                 sx={{
                   height: 32,
