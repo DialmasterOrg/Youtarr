@@ -88,6 +88,8 @@ class VideosModule {
           Videos.filePath,
           Videos.fileSize,
           Videos.removed,
+          Videos.youtube_removed,
+          Videos.media_type,
           COALESCE(Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) AS timeCreated
         FROM Videos
         LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
@@ -121,15 +123,85 @@ class VideosModule {
       // Batch update the database if there are changes
       await fileCheckModule.applyVideoUpdates(sequelize, Sequelize, updates);
 
+      // Check if videos still exist on YouTube and mark as removed if they don't
+      const videoValidationModule = require('./videoValidationModule');
+      const youtubeUpdates = [];
+      const timestampUpdates = [];
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      // Check all videos concurrently for better performance
+      // Only check videos that haven't been checked in the last 24 hours
+      const checkPromises = videos.map(async (video) => {
+        const lastChecked = video.youtube_removed_checked_at ? new Date(video.youtube_removed_checked_at) : null;
+
+        // Skip if already marked as removed or checked within last 24 hours
+        if (video.youtube_removed || (lastChecked && lastChecked > twentyFourHoursAgo)) {
+          return null;
+        }
+
+        if (video.youtubeId) {
+          const exists = await videoValidationModule.checkVideoExistsOnYoutube(video.youtubeId);
+          const now = new Date();
+
+          if (!exists) {
+            console.log(`Video ${video.youtubeId} no longer exists on YouTube, marking as removed in Videos table`);
+            video.youtube_removed = true;
+            video.youtube_removed_checked_at = now;
+            return { id: video.id, removed: true, checked_at: now };
+          } else {
+            // Video exists, just update the timestamp
+            video.youtube_removed_checked_at = now;
+            return { id: video.id, removed: false, checked_at: now };
+          }
+        }
+        return null;
+      });
+
+      const checkResults = await Promise.all(checkPromises);
+      const validResults = checkResults.filter(result => result !== null);
+
+      // Separate updates for removed videos and timestamp updates
+      for (const result of validResults) {
+        if (result.removed) {
+          youtubeUpdates.push(result);
+        } else {
+          timestampUpdates.push(result);
+        }
+      }
+
+      // Bulk update Videos table for removed videos
+      if (youtubeUpdates.length > 0) {
+        await Video.update(
+          { youtube_removed: true, youtube_removed_checked_at: new Date() },
+          { where: { id: youtubeUpdates.map(u => u.id) } }
+        );
+      }
+
+      // Bulk update Videos table for timestamp-only updates
+      if (timestampUpdates.length > 0) {
+        await Video.update(
+          { youtube_removed_checked_at: new Date() },
+          { where: { id: timestampUpdates.map(u => u.id) } }
+        );
+      }
+
       // Get all unique channels for the filter dropdown
       const channels = await this.getAllUniqueChannels();
+
+      // Get enabled channels with their channel_ids
+      const Channel = require('../models/channel');
+      const enabledChannels = await Channel.findAll({
+        where: { enabled: true },
+        attributes: ['channel_id', 'uploader']
+      });
 
       return {
         videos,
         total,
         page,
         totalPages: Math.ceil(total / limit),
-        channels
+        channels,
+        enabledChannels: enabledChannels.map(ch => ({ channel_id: ch.channel_id, uploader: ch.uploader }))
       };
     } catch (err) {
       console.error('Error in getVideosPaginated:', err);

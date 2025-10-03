@@ -16,6 +16,7 @@ describe('VideoChip', () => {
     publishedAt: Date.now(),
     isAlreadyDownloaded: false,
     isMembersOnly: false,
+    media_type: 'video',
   };
 
   beforeEach(() => {
@@ -157,6 +158,36 @@ describe('VideoChip', () => {
 
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
       expect(chip).toHaveClass('MuiChip-filled');
+    });
+  });
+
+  describe('Media type indicator', () => {
+    test('does not render indicator for standard videos', () => {
+      render(<VideoChip video={baseVideo} onDelete={mockOnDelete} />);
+
+      expect(screen.queryByText('Short')).not.toBeInTheDocument();
+      expect(screen.queryByText('Live')).not.toBeInTheDocument();
+    });
+
+    test('renders label for shorts', () => {
+      const video = { ...baseVideo, media_type: 'short' };
+      render(<VideoChip video={video} onDelete={mockOnDelete} />);
+
+      expect(screen.getByText('Short')).toBeInTheDocument();
+    });
+
+    test('renders formatted label for livestreams', () => {
+      const video = { ...baseVideo, media_type: 'livestream' };
+      render(<VideoChip video={video} onDelete={mockOnDelete} />);
+
+      expect(screen.getByText('Live')).toBeInTheDocument();
+    });
+
+    test('formats custom media types', () => {
+      const video = { ...baseVideo, media_type: 'audio_only' };
+      render(<VideoChip video={video} onDelete={mockOnDelete} />);
+
+      expect(screen.getByText('Audio Only')).toBeInTheDocument();
     });
   });
 

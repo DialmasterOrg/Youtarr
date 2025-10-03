@@ -375,6 +375,7 @@ describe('ChannelModule', () => {
           title: mockVideoData.title,
           thumbnail: mockVideoData.thumbnail,
           duration: mockVideoData.duration,
+          media_type: 'video',
           publishedAt: mockVideoData.publishedAt,
           availability: mockVideoData.availability
         });
@@ -914,6 +915,7 @@ describe('ChannelModule', () => {
           publishedAt: '2024-01-01T00:00:00.000Z',
           thumbnail: 'https://thumb.jpg',
           duration: 300,
+          media_type: 'video',
           availability: 'public'
         });
       });
@@ -931,6 +933,7 @@ describe('ChannelModule', () => {
           publishedAt: expect.any(String),
           thumbnail: 'https://i.ytimg.com/vi/video123/mqdefault.jpg',
           duration: 0,
+          media_type: 'video',
           availability: null
         });
       });

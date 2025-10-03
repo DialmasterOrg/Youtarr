@@ -70,6 +70,7 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
       if (data.metadata) {
         const videoInfo: VideoInfo = {
           ...data.metadata,
+          media_type: data.metadata.media_type || 'video',
           isAlreadyDownloaded: data.isAlreadyDownloaded || false,
           isMembersOnly: false  // Always false since we return early if true
         };

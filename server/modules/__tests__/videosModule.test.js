@@ -7,6 +7,7 @@ describe('VideosModule', () => {
   let mockVideo;
   let mockFs;
   let mockConfigModule;
+  let mockVideoValidationModule;
   let consoleErrorSpy;
   let consoleLogSpy;
 
@@ -16,7 +17,13 @@ describe('VideosModule', () => {
     // Mock the Video model
     mockVideo = {
       count: jest.fn(),
-      findAll: jest.fn()
+      findAll: jest.fn(),
+      update: jest.fn().mockResolvedValue([0])
+    };
+
+    // Mock the Channel model
+    const mockChannel = {
+      findAll: jest.fn().mockResolvedValue([])
     };
 
     // Mock the sequelize instance
@@ -35,6 +42,10 @@ describe('VideosModule', () => {
       directoryPath: '/test/output/dir'
     };
 
+    mockVideoValidationModule = {
+      checkVideoExistsOnYoutube: jest.fn().mockResolvedValue(true)
+    };
+
     // Mock the database module
     jest.doMock('../../db.js', () => ({
       Sequelize,
@@ -46,6 +57,9 @@ describe('VideosModule', () => {
       Video: mockVideo
     }));
 
+    // Mock the Channel model
+    jest.doMock('../../models/channel', () => mockChannel);
+
     // Mock fs
     jest.doMock('fs', () => ({
       promises: mockFs
@@ -53,6 +67,8 @@ describe('VideosModule', () => {
 
     // Mock configModule
     jest.doMock('../configModule', () => mockConfigModule);
+
+    jest.doMock('../videoValidationModule', () => mockVideoValidationModule);
 
     // Spy on console.error and console.log
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
@@ -95,6 +111,8 @@ describe('VideosModule', () => {
           filePath: '/test/output/dir/Test Channel/video [abc123].mp4',
           fileSize: '1000',
           removed: false,
+          youtube_removed: false,
+          youtube_removed_checked_at: null,
           timeCreated: new Date('2024-01-01')
         },
         {
@@ -109,6 +127,8 @@ describe('VideosModule', () => {
           filePath: '/test/output/dir/Another Channel/video [def456].mp4',
           fileSize: '2000',
           removed: false,
+          youtube_removed: false,
+          youtube_removed_checked_at: null,
           timeCreated: new Date('2024-01-02')
         }
       ];
@@ -117,6 +137,8 @@ describe('VideosModule', () => {
       mockSequelize.query.mockResolvedValueOnce([{ total: 2 }]);
       // Mock videos query
       mockSequelize.query.mockResolvedValueOnce(mockVideos);
+      // Mock getAllUniqueChannels query
+      mockSequelize.query.mockResolvedValueOnce([]);
 
       // Mock file stat checks for both videos
       mockFs.stat.mockResolvedValueOnce({ size: 1000 });
@@ -126,22 +148,30 @@ describe('VideosModule', () => {
 
       expect(result).toEqual({
         channels: [],
+        enabledChannels: [],
         videos: mockVideos,
         total: 2,
         page: 1,
         totalPages: 1
       });
-      // Count query + videos query + no update queries needed
-      expect(mockSequelize.query).toHaveBeenCalledTimes(2);
+      // Count query + videos query + getAllUniqueChannels query + no update queries needed
+      expect(mockSequelize.query).toHaveBeenCalledTimes(3);
       // First call should be count query
       expect(mockSequelize.query.mock.calls[0][0]).toContain('COUNT');
       // Second call should be videos query
       expect(mockSequelize.query.mock.calls[1][0]).toContain('SELECT');
+      expect(mockVideoValidationModule.checkVideoExistsOnYoutube).toHaveBeenCalledTimes(2);
+      expect(mockVideo.update).toHaveBeenCalledTimes(1);
+      expect(mockVideo.update).toHaveBeenCalledWith(
+        { youtube_removed_checked_at: expect.any(Date) },
+        { where: { id: [1, 2] } }
+      );
     });
 
     test('should execute the correct SQL query', async () => {
       mockSequelize.query.mockResolvedValueOnce([{ total: 0 }]);
       mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
 
       await VideosModule.getVideosPaginated();
 
@@ -159,6 +189,8 @@ describe('VideosModule', () => {
       expect(sqlQuery).toContain('Videos.filePath');
       expect(sqlQuery).toContain('Videos.fileSize');
       expect(sqlQuery).toContain('Videos.removed');
+      expect(sqlQuery).toContain('Videos.youtube_removed');
+      expect(sqlQuery).toContain('Videos.media_type');
       expect(sqlQuery).toContain('COALESCE(Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, \'%Y%m%d\')) AS timeCreated');
 
       // Verify the JOINs
@@ -177,6 +209,7 @@ describe('VideosModule', () => {
     test('should pass correct query options to sequelize', async () => {
       mockSequelize.query.mockResolvedValueOnce([{ total: 0 }]);
       mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
 
       await VideosModule.getVideosPaginated();
 
@@ -194,13 +227,14 @@ describe('VideosModule', () => {
     test('should return empty array when no videos found', async () => {
       mockSequelize.query.mockResolvedValueOnce([{ total: 0 }]);
       mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
 
       const result = await VideosModule.getVideosPaginated();
 
       expect(result.videos).toEqual([]);
       expect(result.total).toBe(0);
       expect(result.totalPages).toBe(0);
-      expect(mockSequelize.query).toHaveBeenCalledTimes(2);
+      expect(mockSequelize.query).toHaveBeenCalledTimes(3);
     });
 
     test('should handle database query errors', async () => {
@@ -225,6 +259,7 @@ describe('VideosModule', () => {
     test('should handle search filter correctly', async () => {
       mockSequelize.query.mockResolvedValueOnce([{ total: 1 }]);
       mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
 
       await VideosModule.getVideosPaginated({ search: 'test video' });
 
@@ -241,6 +276,7 @@ describe('VideosModule', () => {
     test('should handle pagination parameters correctly', async () => {
       mockSequelize.query.mockResolvedValueOnce([{ total: 100 }]);
       mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
 
       await VideosModule.getVideosPaginated({ page: 3, limit: 20 });
 
@@ -254,6 +290,7 @@ describe('VideosModule', () => {
       // Test sort by published date ascending
       mockSequelize.query.mockResolvedValueOnce([{ total: 0 }]);
       mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
 
       await VideosModule.getVideosPaginated({ sortBy: 'published', sortOrder: 'asc' });
 
@@ -265,6 +302,7 @@ describe('VideosModule', () => {
       // Test default sort (added date descending)
       mockSequelize.query.mockResolvedValueOnce([{ total: 0 }]);
       mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
 
       await VideosModule.getVideosPaginated();
 
@@ -275,6 +313,7 @@ describe('VideosModule', () => {
     test('should handle date filters correctly', async () => {
       mockSequelize.query.mockResolvedValueOnce([{ total: 0 }]);
       mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
 
       await VideosModule.getVideosPaginated({
         dateFrom: '2024-01-01',
@@ -293,6 +332,7 @@ describe('VideosModule', () => {
     test('should handle channel filter correctly', async () => {
       mockSequelize.query.mockResolvedValueOnce([{ total: 5 }]);
       mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
 
       await VideosModule.getVideosPaginated({ channelFilter: 'Test Channel' });
 
@@ -312,18 +352,19 @@ describe('VideosModule', () => {
           youTubeVideoName: 'Test Video',
           filePath: '/test/output/dir/Test Channel/video [abc123].mp4',
           fileSize: '1000',
-          removed: false
+          removed: false,
+          youtube_removed: false,
+          youtube_removed_checked_at: null
         }
       ];
 
       mockSequelize.query.mockResolvedValueOnce([{ total: 1 }]);
       mockSequelize.query.mockResolvedValueOnce(mockVideos);
+      mockSequelize.query.mockResolvedValueOnce(); // Update query
+      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels query
 
       // Mock file exists with different size
       mockFs.stat.mockResolvedValueOnce({ size: 2000 });
-
-      // Mock update query
-      mockSequelize.query.mockResolvedValueOnce();
 
       const result = await VideosModule.getVideosPaginated();
 
@@ -332,7 +373,7 @@ describe('VideosModule', () => {
       expect(result.videos[0].removed).toBe(false);
 
       // Check update query was called
-      expect(mockSequelize.query).toHaveBeenCalledTimes(3);
+      expect(mockSequelize.query).toHaveBeenCalledTimes(4);
       const updateQuery = mockSequelize.query.mock.calls[2][0];
       expect(updateQuery).toContain('UPDATE Videos SET');
     });
@@ -346,29 +387,97 @@ describe('VideosModule', () => {
           youTubeVideoName: 'Test Video',
           filePath: '/test/output/dir/Test Channel/video [abc123].mp4',
           fileSize: '1000',
-          removed: false
+          removed: false,
+          youtube_removed: false,
+          youtube_removed_checked_at: null
         }
       ];
 
       mockSequelize.query.mockResolvedValueOnce([{ total: 1 }]);
       mockSequelize.query.mockResolvedValueOnce(mockVideos);
+      mockSequelize.query.mockResolvedValueOnce(); // Update query
+      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels query
 
       // Mock file does not exist
       mockFs.stat.mockRejectedValueOnce({ code: 'ENOENT' });
-
-      // Mock update query
-      mockSequelize.query.mockResolvedValueOnce();
 
       const result = await VideosModule.getVideosPaginated();
 
       expect(result.videos[0].removed).toBe(true);
 
       // Check update query was called
-      expect(mockSequelize.query).toHaveBeenCalledTimes(3);
+      expect(mockSequelize.query).toHaveBeenCalledTimes(4);
       const updateQuery = mockSequelize.query.mock.calls[2][0];
       expect(updateQuery).toContain('UPDATE Videos SET');
       expect(updateQuery).toContain('removed = ?');
     });
+
+    test('should mark video as YouTube removed when validation fails', async () => {
+      const mockVideos = [
+        {
+          id: 1,
+          youtubeId: 'abc123',
+          youTubeChannelName: 'Test Channel',
+          youTubeVideoName: 'Test Video',
+          filePath: '/test/output/dir/Test Channel/video [abc123].mp4',
+          fileSize: '1000',
+          removed: false,
+          youtube_removed: false,
+          youtube_removed_checked_at: null
+        }
+      ];
+
+      mockSequelize.query.mockResolvedValueOnce([{ total: 1 }]);
+      mockSequelize.query.mockResolvedValueOnce(mockVideos);
+      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+
+      mockFs.stat.mockResolvedValueOnce({ size: 1000 });
+      mockVideoValidationModule.checkVideoExistsOnYoutube.mockResolvedValueOnce(false);
+
+      const result = await VideosModule.getVideosPaginated();
+
+      expect(mockVideoValidationModule.checkVideoExistsOnYoutube).toHaveBeenCalledWith('abc123');
+      expect(mockVideo.update).toHaveBeenCalledTimes(1);
+      const [updateData, updateOptions] = mockVideo.update.mock.calls[0];
+      expect(updateData.youtube_removed).toBe(true);
+      expect(updateData.youtube_removed_checked_at).toBeInstanceOf(Date);
+      expect(updateOptions).toEqual({ where: { id: [1] } });
+      expect(result.videos[0].youtube_removed).toBe(true);
+      expect(result.videos[0].youtube_removed_checked_at).toBeInstanceOf(Date);
+    });
+
+    test('should skip YouTube validation when recently checked', async () => {
+      const twentyThreeHoursAgo = new Date(Date.now() - 23 * 60 * 60 * 1000);
+      const recentIso = twentyThreeHoursAgo.toISOString();
+
+      const mockVideos = [
+        {
+          id: 1,
+          youtubeId: 'abc123',
+          youTubeChannelName: 'Test Channel',
+          youTubeVideoName: 'Test Video',
+          filePath: '/test/output/dir/Test Channel/video [abc123].mp4',
+          fileSize: '1000',
+          removed: false,
+          youtube_removed: false,
+          youtube_removed_checked_at: recentIso
+        }
+      ];
+
+      mockSequelize.query.mockResolvedValueOnce([{ total: 1 }]);
+      mockSequelize.query.mockResolvedValueOnce(mockVideos);
+      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+
+      mockFs.stat.mockResolvedValueOnce({ size: 1000 });
+
+      const result = await VideosModule.getVideosPaginated();
+
+      expect(mockVideoValidationModule.checkVideoExistsOnYoutube).not.toHaveBeenCalled();
+      expect(mockVideo.update).not.toHaveBeenCalled();
+      expect(result.videos[0].youtube_removed).toBe(false);
+      expect(result.videos[0].youtube_removed_checked_at).toBe(recentIso);
+    });
+
     test('should not scan for video files when no filePath stored', async () => {
       // This behavior is intentional to avoid performance issues
       // Videos without filePath are handled by the backfill process
@@ -380,12 +489,15 @@ describe('VideosModule', () => {
           youTubeVideoName: 'Test Video',
           filePath: null, // No file path stored
           fileSize: null,
-          removed: false
+          removed: false,
+          youtube_removed: false,
+          youtube_removed_checked_at: null
         }
       ];
 
       mockSequelize.query.mockResolvedValueOnce([{ total: 1 }]);
       mockSequelize.query.mockResolvedValueOnce(mockVideos);
+      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
 
       const result = await VideosModule.getVideosPaginated();
 
@@ -402,6 +514,7 @@ describe('VideosModule', () => {
     test('should handle multiple WHERE conditions', async () => {
       mockSequelize.query.mockResolvedValueOnce([{ total: 0 }]);
       mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
 
       await VideosModule.getVideosPaginated({
         search: 'test',

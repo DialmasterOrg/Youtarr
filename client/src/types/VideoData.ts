@@ -17,6 +17,14 @@ export interface VideoData {
   filePath?: string | null;
   fileSize?: string | null;
   removed?: boolean;
+  youtube_removed?: boolean;
+  channel_id?: string | null;
+  media_type?: string;
+}
+
+export interface EnabledChannel {
+  channel_id: string;
+  uploader: string;
 }
 
 export interface PaginatedVideosResponse {
@@ -25,4 +33,5 @@ export interface PaginatedVideosResponse {
   page: number;
   totalPages: number;
   channels: string[];
+  enabledChannels: EnabledChannel[];
 }
