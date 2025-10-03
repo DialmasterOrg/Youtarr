@@ -850,15 +850,9 @@ class ChannelModule {
         thumbnail: v.thumbnail,
         duration: v.duration,
         publishedAt: v.publishedAt,
-        availability: v.availability
+        availability: v.availability,
+        youtube_removed: v.youtube_removed
       }));
-
-      // If a video is removed from YouTube, fallback to using the locally stored thumbnail if available
-      for (const video of paginatedChannelVideos) {
-        if (video.youtube_removed) {
-          video.thumbnail = `/images/videothumb-${video.youtube_id}.jpg`;
-        }
-      }
 
       // This will check files for only the current page
       const checkedVideos = await this.enrichVideosWithDownloadStatus(paginatedChannelVideos, true);
@@ -869,6 +863,10 @@ class ChannelModule {
           paginatedVideos[i].added = checkedVideos[i].added;
           paginatedVideos[i].removed = checkedVideos[i].removed;
           paginatedVideos[i].fileSize = checkedVideos[i].fileSize;
+        }
+        // If a video is removed from YouTube, fallback to using the locally stored thumbnail if available
+        if (paginatedVideos[i].youtube_removed) {
+          paginatedVideos[i].thumbnail = `/images/videothumb-${paginatedVideos[i].youtube_id}.jpg`;
         }
       }
     }
