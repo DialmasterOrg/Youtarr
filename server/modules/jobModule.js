@@ -49,11 +49,15 @@ class JobModule {
 
     // Schedule a daily backfill from complete.list and run an initial backfill
     this.scheduleDailyBackfill();
-    setTimeout(() => {
-      this.backfillFromCompleteList().catch((err) => {
-        console.error('Initial backfill failed:', err.message);
-      });
-    }, 0);
+
+    const disableInitialBackfill = process.env.JOBMODULE_DISABLE_INITIAL_BACKFILL === 'true';
+    if (!disableInitialBackfill) {
+      setTimeout(() => {
+        this.backfillFromCompleteList().catch((err) => {
+          console.error('Initial backfill failed:', err.message);
+        });
+      }, 0);
+    }
   }
 
   async terminateInProgressJobs() {

@@ -24,6 +24,7 @@ describe('JobModule', () => {
   let Video;
   let JobVideo;
   let ChannelVideo;
+  let originalDisableInitialBackfill;
 
   const mockJobsDir = '/test/jobs';
   const mockJobsFilePath = '/test/jobs/jobs.json';
@@ -53,6 +54,9 @@ describe('JobModule', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.resetModules();
+
+    originalDisableInitialBackfill = process.env.JOBMODULE_DISABLE_INITIAL_BACKFILL;
+    process.env.JOBMODULE_DISABLE_INITIAL_BACKFILL = 'true';
 
     // Reset uuid mock
     uuidv4.mockClear();
@@ -110,6 +114,11 @@ describe('JobModule', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+    if (originalDisableInitialBackfill === undefined) {
+      delete process.env.JOBMODULE_DISABLE_INITIAL_BACKFILL;
+    } else {
+      process.env.JOBMODULE_DISABLE_INITIAL_BACKFILL = originalDisableInitialBackfill;
+    }
   });
 
   describe('constructor', () => {
@@ -212,6 +221,8 @@ describe('JobModule', () => {
       fsPromises.readFile.mockRejectedValue({ code: 'ENOENT' });
 
       const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
+
+      process.env.JOBMODULE_DISABLE_INITIAL_BACKFILL = 'false';
 
       JobModule = require('../jobModule');
 
