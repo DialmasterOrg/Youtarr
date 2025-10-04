@@ -96,6 +96,17 @@ If you need to change the directory later:
 # Update "youtubeOutputDirectory" value
 ```
 
+## Using an External Database
+
+Some users prefer to supply their own MariaDB/MySQL instance instead of the bundled `youtarr-db` container. You now have two helper scripts:
+
+- Copy `config/external-db.env.example` to `config/external-db.env` and enter your credentials
+- Run `./start.sh --external-db` to launch only the application container via Docker Compose (uses `docker-compose.external-db.yml`)
+- Run `./start-with-external-db.sh` to launch a single container (should work for UNRAID or plain `docker run` workflows)
+- Follow the full walkthrough (including a local test harness) in [docs/EXTERNAL_DB.md](EXTERNAL_DB.md)
+
+Both helpers automatically run migrations against the external database on boot, so no manual schema management is required once connectivity is in place.
+
 ## Docker Commands
 
 ### Starting and Stopping
