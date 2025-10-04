@@ -84,6 +84,36 @@ const initialize = async () => {
     const jobModule = require('./modules/jobModule');
     const videosModule = require('./modules/videosModule');
 
+    const presetUsername = process.env.AUTH_PRESET_USERNAME;
+    const presetPassword = process.env.AUTH_PRESET_PASSWORD;
+
+    if (presetUsername || presetPassword) {
+      if (!presetUsername || !presetPassword) {
+        console.warn('[AUTH] Ignoring preset credentials because both AUTH_PRESET_USERNAME and AUTH_PRESET_PASSWORD must be set.');
+      } else {
+        const trimmedUsername = presetUsername.trim();
+        const config = configModule.getConfig();
+
+        if (config.username && config.passwordHash) {
+          console.log('[AUTH] Existing credentials found in config; preset environment values were ignored.');
+        } else if (!trimmedUsername) {
+          console.warn('[AUTH] Ignoring preset credentials because AUTH_PRESET_USERNAME is empty after trimming.');
+        } else if (trimmedUsername.length > userNameMaxLength) {
+          console.warn(`[AUTH] Ignoring preset credentials because username exceeds ${userNameMaxLength} characters.`);
+        } else if (presetPassword.length < 8) {
+          console.warn('[AUTH] Ignoring preset credentials because password must be at least 8 characters.');
+        } else if (presetPassword.length > passwordMaxLength) {
+          console.warn(`[AUTH] Ignoring preset credentials because password exceeds ${passwordMaxLength} characters.`);
+        } else {
+          const passwordHash = await bcrypt.hash(presetPassword, 10);
+          config.username = trimmedUsername;
+          config.passwordHash = passwordHash;
+          configModule.updateConfig(config);
+          console.log('[AUTH] Applied preset credentials from environment variables.');
+        }
+      }
+    }
+
     channelModule.subscribe();
 
     console.log(

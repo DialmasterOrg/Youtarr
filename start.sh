@@ -83,6 +83,12 @@ if [ "$NO_AUTH" = true ]; then
   echo "⚠️  Do not expose Youtarr directly to the internet when auth is disabled; protect access with your own auth proxy"
 fi
 
+# Track whether preset credentials were provided before running this script
+PRESET_SUPPLIED_ALREADY=false
+if [ -n "${AUTH_PRESET_USERNAME:-}" ] && [ -n "${AUTH_PRESET_PASSWORD:-}" ]; then
+  PRESET_SUPPLIED_ALREADY=true
+fi
+
 # Pull latest changes
 git pull
 
@@ -164,6 +170,83 @@ echo "YouTube output directory verified: $CHECK_DIR"
 # Export the YouTube output directory for docker-compose
 export YOUTUBE_OUTPUT_DIR="$youtubeOutputDirectory"
 
+# Determine if authentication is already configured in config.json
+passwordHash=$(grep -o '"passwordHash"[[:space:]]*:[[:space:]]*"[^"]*"' config/config.json 2>/dev/null | \
+  sed 's/.*"passwordHash"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' | head -n 1)
+passwordHash=$(echo "$passwordHash" | xargs)
+HAS_PASSWORD_HASH=""
+if [ -n "$passwordHash" ]; then
+  HAS_PASSWORD_HASH="yes"
+fi
+
+AUTH_PRESET_FROM_PROMPT=false
+
+if [ "$NO_AUTH" != true ] && [ -z "$HAS_PASSWORD_HASH" ]; then
+  if [ -n "${AUTH_PRESET_USERNAME:-}" ] && [ -n "${AUTH_PRESET_PASSWORD:-}" ]; then
+    echo "Using preset credentials from environment variables."
+  elif [ -n "${AUTH_PRESET_USERNAME:-}" ] || [ -n "${AUTH_PRESET_PASSWORD:-}" ]; then
+    echo "⚠️  Ignoring partial preset credentials. Both AUTH_PRESET_USERNAME and AUTH_PRESET_PASSWORD must be set." >&2
+    unset AUTH_PRESET_USERNAME
+    unset AUTH_PRESET_PASSWORD
+  else
+    echo ""
+    echo "================================================================"
+    echo "No admin credentials detected. Let's set them up now."
+    echo "These values will be written to config/config.json as soon as"
+    echo "the container starts. You can change them later from the UI."
+    echo "================================================================"
+
+    # Prompt for username (default to admin) and validate length
+    while true; do
+      read -r -p "Initial admin username [admin]: " INITIAL_USERNAME
+      INITIAL_USERNAME=${INITIAL_USERNAME:-admin}
+      # Trim leading/trailing whitespace
+      INITIAL_USERNAME=$(echo "$INITIAL_USERNAME" | xargs)
+      if [ -z "$INITIAL_USERNAME" ]; then
+        echo "Username cannot be blank."
+        continue
+      fi
+      if [ ${#INITIAL_USERNAME} -gt 32 ]; then
+        echo "Username must be 32 characters or fewer."
+        continue
+      fi
+      break
+    done
+
+    # Prompt for password and confirmation with validation
+    while true; do
+      read -r -s -p "Initial admin password (min 8 chars): " INITIAL_PASSWORD
+      echo ""
+      read -r -s -p "Confirm password: " INITIAL_PASSWORD_CONFIRM
+      echo ""
+
+      if [ "$INITIAL_PASSWORD" != "$INITIAL_PASSWORD_CONFIRM" ]; then
+        echo "Passwords do not match. Please try again."
+        continue
+      fi
+
+      PASS_LENGTH=${#INITIAL_PASSWORD}
+      if [ $PASS_LENGTH -lt 8 ]; then
+        echo "Password must be at least 8 characters."
+        continue
+      fi
+      if [ $PASS_LENGTH -gt 64 ]; then
+        echo "Password must be 64 characters or fewer."
+        continue
+      fi
+
+      break
+    done
+
+    export AUTH_PRESET_USERNAME="$INITIAL_USERNAME"
+    export AUTH_PRESET_PASSWORD="$INITIAL_PASSWORD"
+    AUTH_PRESET_FROM_PROMPT=true
+
+    echo "Preset credentials captured. They will be applied on container startup."
+    echo "Initial admin username: $INITIAL_USERNAME"
+  fi
+fi
+
 # Pull the latest images
 echo "Pulling latest images..."
 if [ "$USE_EXTERNAL_DB" = true ]; then
@@ -188,8 +271,8 @@ else
   $COMPOSE_CMD up -d
 fi
 
-# Check for auth setup after starting containers (skip if --no-auth was used)
-if [ "$NO_AUTH" != true ] && ! grep -q "passwordHash" config/config.json 2>/dev/null; then
+# Check for auth setup after starting containers (skip if presets were supplied)
+if [ "$NO_AUTH" != true ] && [ -z "$HAS_PASSWORD_HASH" ] && [ "$AUTH_PRESET_FROM_PROMPT" != true ] && [ "$PRESET_SUPPLIED_ALREADY" != true ] && { [ -z "${AUTH_PRESET_USERNAME:-}" ] || [ -z "${AUTH_PRESET_PASSWORD:-}" ]; }; then
   echo ""
   echo "================================================================"
   echo "⚠️  IMPORTANT: FIRST-TIME SETUP REQUIRED"
@@ -221,3 +304,11 @@ echo ""
 echo "Youtarr is starting up..."
 echo "You can check the logs with: $COMPOSE_CMD logs -f"
 echo "To stop Youtarr, run: ./stop.sh"
+
+if [ "$AUTH_PRESET_FROM_PROMPT" = true ]; then
+  unset AUTH_PRESET_USERNAME
+  unset AUTH_PRESET_PASSWORD
+  unset INITIAL_USERNAME
+  unset INITIAL_PASSWORD
+  unset INITIAL_PASSWORD_CONFIRM
+fi

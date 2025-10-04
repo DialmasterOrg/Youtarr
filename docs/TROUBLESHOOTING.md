@@ -7,9 +7,11 @@
 **Problem**: Unable to access the initial setup page or getting "Initial setup can only be performed from localhost" error.
 
 **Solution**:
-- Initial setup must be done from the same machine running Youtarr
-- Access the setup using `http://localhost:3087` not the machine's IP address
-- If running in Docker, ensure you're accessing from the host machine
+- Initial setup must be done from the same machine running Youtarr unless you seed credentials via environment variables
+- Run `./start.sh` (or `./start.sh --external-db`) – if no credentials exist you will be prompted for an initial admin username/password and the script will export the required `AUTH_PRESET_USERNAME` / `AUTH_PRESET_PASSWORD` values automatically
+- Alternatively, pass both preset variables yourself when launching the container (e.g. through Docker Compose, Unraid template's environment, or other orchestration tools)
+- If you prefer to use the UI wizard, access the setup using `http://localhost:3087` (not the machine's IP address)
+- When running in Docker, make sure you browse from the host machine or forward the port securely as described below
 
 #### Accessing from a Headless/Remote Server
 
@@ -30,6 +32,8 @@ ssh -L 3087:localhost:3087 username@<server-ip-address>
 ```
 
 This creates a secure tunnel between your local machine's port 3087 and the server's port 3087, allowing you to complete the initial setup as if you were on localhost. After completing the setup, you can access Youtarr normally using the server's IP address.
+
+> Tip: If you cannot use SSH port forwarding, provide `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` in your container environment (or via `./start.sh`) before the first boot. Youtarr will hash the password and skip the localhost-only wizard.
 
 ### Forgotten Admin Password {#reset-admin-password}
 
