@@ -15,6 +15,7 @@ RUN npm ci
 # Copy server code and built React app
 COPY server/ ./server/
 COPY client/build/ ./client/build/
+COPY migrations/ ./migrations/
 
 # ---- Release ----
 FROM node:20-slim AS release
@@ -41,6 +42,7 @@ COPY --from=dependencies /app/node_modules ./node_modules
 # Copy application files
 COPY --from=build /app/server ./server
 COPY --from=build /app/client/build ./client/build
+COPY --from=build /app/migrations ./migrations
 
 # Copy the new simplified entrypoint script
 COPY scripts/docker-entrypoint-simple.sh /usr/local/bin/docker-entrypoint.sh
