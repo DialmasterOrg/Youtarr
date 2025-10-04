@@ -38,6 +38,7 @@ Starting with version 1.23.0, Youtarr now **automatically creates** a `config/co
    - Run `./setup.sh` to configure your YouTube video directory
    - Script creates `config.json` with your chosen host path
    - Use `./start.sh` to start containers (reads path from config and sets volume mount)
+   - If no admin credentials exist, `./start.sh` prompts for an initial username/password and exports them as `AUTH_PRESET_USERNAME` / `AUTH_PRESET_PASSWORD` for the upcoming container boot
    - Use `./stop.sh` to stop containers
    - **UI Behavior**: YouTube Output Directory field is **editable** - changes require restart via `./start.sh`
 
@@ -193,6 +194,17 @@ Youtarr supports platform-managed deployments (Elfhosted, Kubernetes, etc.) with
 | `DATA_PATH` | Video storage path inside container | `/storage/rclone/storagebox/youtube` |
 | `AUTH_ENABLED` | Set to `false` to bypass internal authentication | `false` |
 | `PLEX_URL` | Pre-configured Plex server URL | `http://plex:32400` |
+
+### Preset Credentials for Headless Deployments
+
+For platforms where you cannot access `http://localhost:3087` (Unraid, Kubernetes, etc.), you can seed the initial login without touching the UI by setting both environment variables below. They are only applied when the config file does not already contain credentials.
+
+| Variable | Description |
+|----------|-------------|
+| `AUTH_PRESET_USERNAME` | Initial admin username. Trimmed and must be ≤ 32 characters. |
+| `AUTH_PRESET_PASSWORD` | Initial admin password (8–64 characters). Stored as a hash on first boot. |
+
+If only one variable is present, or the values fall outside the validation rules, the preset is ignored and the localhost-only setup wizard remains active. Once the credentials are saved to `config/config.json`, subsequent restarts ignore the preset variables so they can safely remain in your container template.
 
 #### What Happens in Platform Mode
 

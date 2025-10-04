@@ -161,6 +161,15 @@ if [[ -n "$AUTH_ENABLED_VALUE" ]]; then
   RUN_ARGS+=( -e "AUTH_ENABLED=${AUTH_ENABLED_VALUE}" )
 fi
 
+if [[ -n "${AUTH_PRESET_USERNAME:-}" && -n "${AUTH_PRESET_PASSWORD:-}" ]]; then
+  RUN_ARGS+=(
+    -e "AUTH_PRESET_USERNAME=${AUTH_PRESET_USERNAME}"
+    -e "AUTH_PRESET_PASSWORD=${AUTH_PRESET_PASSWORD}"
+  )
+elif [[ -n "${AUTH_PRESET_USERNAME:-}" || -n "${AUTH_PRESET_PASSWORD:-}" ]]; then
+  echo "⚠️  Ignoring partial preset credentials. Both AUTH_PRESET_USERNAME and AUTH_PRESET_PASSWORD must be set." >&2
+fi
+
 RUN_ARGS+=(
   -v "${DOCKER_MOUNT_SOURCE}:/usr/src/app/data"
   -v "${ROOT_DIR}/config:/app/config"

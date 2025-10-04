@@ -56,7 +56,8 @@ const createServerModule = ({
   passwordHash = 'hashed-password',
   session,
   skipInitialize = false,
-  configOverrides = {}
+  configOverrides = {},
+  authPreset
 } = {}) => {
   jest.resetModules();
   jest.clearAllMocks();
@@ -71,6 +72,18 @@ const createServerModule = ({
           delete process.env.AUTH_ENABLED;
         } else {
           process.env.AUTH_ENABLED = authEnabled;
+        }
+
+        if (authPreset?.username) {
+          process.env.AUTH_PRESET_USERNAME = authPreset.username;
+        } else {
+          delete process.env.AUTH_PRESET_USERNAME;
+        }
+
+        if (authPreset?.password) {
+          process.env.AUTH_PRESET_PASSWORD = authPreset.password;
+        } else {
+          delete process.env.AUTH_PRESET_PASSWORD;
         }
 
         const defaultSessionUpdate = jest.fn().mockResolvedValue();
@@ -221,6 +234,45 @@ const createServerModule = ({
 
 afterEach(() => {
   delete process.env.AUTH_ENABLED;
+  delete process.env.AUTH_PRESET_USERNAME;
+  delete process.env.AUTH_PRESET_PASSWORD;
+});
+
+describe('auth preset bootstrap', () => {
+  test('applies preset credentials when config is missing auth', async () => {
+    const presetPassword = 'supersecret!';
+    const { configModuleMock, bcryptMock } = await createServerModule({
+      passwordHash: null,
+      configOverrides: { username: null },
+      authPreset: { username: 'admin', password: presetPassword }
+    });
+
+    expect(bcryptMock.hash).toHaveBeenCalledWith(presetPassword, 10);
+    expect(configModuleMock.updateConfig).toHaveBeenCalledWith(expect.objectContaining({
+      username: 'admin',
+      passwordHash: 'new-hashed-password'
+    }));
+  });
+
+  test('ignores preset credentials when config already contains auth', async () => {
+    const { configModuleMock, bcryptMock } = await createServerModule({
+      authPreset: { username: 'admin', password: 'supersecret!' }
+    });
+
+    expect(bcryptMock.hash).not.toHaveBeenCalledWith('supersecret!', 10);
+    expect(configModuleMock.updateConfig).not.toHaveBeenCalledWith(expect.objectContaining({ username: 'admin' }));
+  });
+
+  test('ignores preset credentials when password is missing', async () => {
+    const { configModuleMock, bcryptMock } = await createServerModule({
+      passwordHash: null,
+      configOverrides: { username: null },
+      authPreset: { username: 'admin' }
+    });
+
+    expect(bcryptMock.hash).not.toHaveBeenCalled();
+    expect(configModuleMock.updateConfig).not.toHaveBeenCalledWith(expect.objectContaining({ username: 'admin' }));
+  });
 });
 
 describe('server routes - cookies', () => {

@@ -11,6 +11,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in config/external-db.env}
       DB_NAME: ${DB_NAME:-youtarr}
       AUTH_ENABLED: ${AUTH_ENABLED:-}
+      AUTH_PRESET_USERNAME: ${AUTH_PRESET_USERNAME:-}
+      AUTH_PRESET_PASSWORD: ${AUTH_PRESET_PASSWORD:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

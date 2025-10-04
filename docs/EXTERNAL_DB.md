@@ -49,6 +49,7 @@ If your platform limits wildcard access, replace `'%'` with the container's IP o
    - `./start-with-external-db.sh` wraps `docker run` for platforms where Docker Compose is unavailable
    - Both scripts use the same `config/external-db.env` file
    - Add `--no-auth` if you are fronting Youtarr with your own authentication layer
+   - Provide `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` (either exported before running the script or via your platform's UI) when you need to bypass the localhost-only setup wizard
    - Use `--image` with `start-with-external-db.sh` to pin a specific container tag when testing
 
 To revert to the bundled database, simply run `./start.sh` without the flag.
