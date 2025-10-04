@@ -670,4 +670,80 @@ describe('DownloadProgress', () => {
     });
     expect(screen.queryByText('Downloading video stream...')).not.toBeInTheDocument();
   });
+
+  test('uses indeterminate progress bar for merging, metadata, and processing states', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    const indeterminateStates = ['merging', 'metadata', 'processing'];
+
+    for (const state of indeterminateStates) {
+      await act(async () => {
+        processCallback({
+          progress: {
+            jobId: 'test-job',
+            progress: {
+              percent: 50,
+              downloadedBytes: 1024,
+              totalBytes: 2048,
+              speedBytesPerSecond: 512,
+              etaSeconds: 60,
+            },
+            stalled: false,
+            state,
+          },
+        });
+      });
+
+      await waitFor(() => {
+        const progressBar = screen.getByRole('progressbar');
+        // Indeterminate progress bars don't have aria-valuenow
+        expect(progressBar).not.toHaveAttribute('aria-valuenow');
+      });
+    }
+  });
+
+  test('uses determinate progress bar for download states', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    const determinateStates = ['downloading_video', 'downloading_audio', 'downloading_thumbnail'];
+
+    for (const state of determinateStates) {
+      await act(async () => {
+        processCallback({
+          progress: {
+            jobId: 'test-job',
+            progress: {
+              percent: 45.5,
+              downloadedBytes: 1024,
+              totalBytes: 2048,
+              speedBytesPerSecond: 512,
+              etaSeconds: 60,
+            },
+            stalled: false,
+            state,
+          },
+        });
+      });
+
+      await waitFor(() => {
+        const progressBar = screen.getByRole('progressbar');
+        // Determinate progress bars have aria-valuenow set to the percentage (rounded)
+        expect(progressBar).toHaveAttribute('aria-valuenow', '46');
+      });
+    }
+  });
 });

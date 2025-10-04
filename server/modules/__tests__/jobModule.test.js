@@ -663,6 +663,133 @@ describe('JobModule', () => {
     });
   });
 
+  describe('saveJobOnly', () => {
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        plexApiKey: 'test-key',
+        youtubeOutputDirectory: '/test/output'
+      }));
+      JobModule = require('../jobModule');
+    });
+
+    test('should set last_downloaded_at when file is verified', async () => {
+      const mockJobInstance = {
+        id: 'job-1',
+        update: jest.fn().mockResolvedValue()
+      };
+      const mockVideoInstance = {
+        youtubeId: 'video-1',
+        update: jest.fn().mockResolvedValue()
+      };
+
+      Job.findOne.mockResolvedValue(mockJobInstance);
+      Video.findOne.mockResolvedValue(mockVideoInstance);
+
+      const jobData = {
+        id: 'job-1',
+        status: 'Complete',
+        data: {
+          videos: [{
+            youtubeId: 'video-1',
+            youTubeVideoName: 'Test Video',
+            channel_id: 'channel-1',
+            filePath: '/videos/test.mp4',
+            fileSize: '12345'
+          }]
+        }
+      };
+
+      await JobModule.saveJobOnly('job-1', jobData);
+
+      expect(mockVideoInstance.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          youtubeId: 'video-1',
+          filePath: '/videos/test.mp4',
+          fileSize: '12345',
+          removed: false,
+          last_downloaded_at: expect.any(Date)
+        })
+      );
+    });
+
+    test('should not set last_downloaded_at when file is not verified', async () => {
+      const mockJobInstance = {
+        id: 'job-1',
+        update: jest.fn().mockResolvedValue()
+      };
+      const mockVideoInstance = {
+        youtubeId: 'video-1',
+        update: jest.fn().mockResolvedValue()
+      };
+
+      Job.findOne.mockResolvedValue(mockJobInstance);
+      Video.findOne.mockResolvedValue(mockVideoInstance);
+
+      const jobData = {
+        id: 'job-1',
+        status: 'Complete',
+        data: {
+          videos: [{
+            youtubeId: 'video-1',
+            youTubeVideoName: 'Test Video',
+            channel_id: 'channel-1',
+            filePath: '/videos/test.mp4',
+            fileSize: null
+          }]
+        }
+      };
+
+      await JobModule.saveJobOnly('job-1', jobData);
+
+      const updateArgs = mockVideoInstance.update.mock.calls[0][0];
+      expect(updateArgs.last_downloaded_at).toBeUndefined();
+      expect(updateArgs.filePath).toBeUndefined();
+      expect(updateArgs.fileSize).toBeUndefined();
+      expect(updateArgs.removed).toBeUndefined();
+    });
+
+    test('should create new video when it does not exist', async () => {
+      const mockJobInstance = {
+        id: 'job-1',
+        update: jest.fn().mockResolvedValue()
+      };
+
+      Job.findOne.mockResolvedValue(mockJobInstance);
+      Video.findOne.mockResolvedValue(null);
+
+      const jobData = {
+        id: 'job-1',
+        status: 'Complete',
+        data: {
+          videos: [{
+            youtubeId: 'video-1',
+            youTubeVideoName: 'Test Video',
+            channel_id: 'channel-1',
+            filePath: '/videos/test.mp4',
+            fileSize: '12345'
+          }]
+        }
+      };
+
+      await JobModule.saveJobOnly('job-1', jobData);
+
+      expect(Video.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          youtubeId: 'video-1',
+          youTubeVideoName: 'Test Video',
+          channel_id: 'channel-1',
+          filePath: '/videos/test.mp4',
+          fileSize: '12345'
+        })
+      );
+      expect(JobVideo.create).toHaveBeenCalledWith({
+        job_id: 'job-1',
+        video_id: 'video-1'
+      });
+    });
+  });
+
   describe('saveJobs', () => {
     beforeEach(() => {
       fs.existsSync.mockReturnValue(false);
@@ -825,7 +952,8 @@ describe('JobModule', () => {
           youtubeId: 'video-1',
           filePath: '/videos/Test Channel/Test Video.mp4',
           fileSize: '12345',
-          removed: false
+          removed: false,
+          last_downloaded_at: expect.any(Date)
         })
       );
     });
@@ -861,6 +989,41 @@ describe('JobModule', () => {
       expect(updateArgs.filePath).toBeUndefined();
       expect(updateArgs.fileSize).toBeUndefined();
       expect(updateArgs.removed).toBeUndefined();
+      expect(updateArgs.last_downloaded_at).toBeUndefined();
+    });
+
+    test('should create new video when it does not exist in database', async () => {
+      JobModule.jobs = {
+        'job-1': {
+          id: 'job-1',
+          status: 'In Progress',
+          data: {
+            videos: [{
+              youtubeId: 'video-1',
+              youTubeVideoName: 'Test Video',
+              channel_id: 'channel-1',
+              filePath: '/videos/test.mp4',
+              fileSize: '67890'
+            }]
+          }
+        }
+      };
+
+      Job.findOne.mockResolvedValue(null);
+      Video.findOne.mockResolvedValue(null);
+
+      await JobModule.saveJobs();
+
+      expect(Video.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          youtubeId: 'video-1',
+          youTubeVideoName: 'Test Video',
+          channel_id: 'channel-1',
+          filePath: '/videos/test.mp4',
+          fileSize: '67890'
+        })
+      );
+      expect(JobVideo.create).toHaveBeenCalled();
     });
   });
 

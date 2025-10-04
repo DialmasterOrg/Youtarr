@@ -243,10 +243,13 @@ class JobModule {
             updateData.filePath = video.filePath;
             updateData.fileSize = video.fileSize;
             updateData.removed = false;
+            updateData.last_downloaded_at = new Date();
+            console.log(`[DEBUG] Setting last_downloaded_at for ${video.youtubeId} - file verified with size ${video.fileSize}`);
           } else {
             delete updateData.filePath;
             delete updateData.fileSize;
             delete updateData.removed;
+            console.log(`[DEBUG] NOT setting last_downloaded_at for ${video.youtubeId} - hasVerifiedFile is false (filePath: ${video.filePath}, fileSize: ${video.fileSize})`);
           }
 
           if (!video.media_type) {
@@ -351,11 +354,14 @@ class JobModule {
                 updateData.filePath = video.filePath;
                 updateData.fileSize = video.fileSize;
                 updateData.removed = false;
+                updateData.last_downloaded_at = new Date();
+                console.log(`[DEBUG] Setting last_downloaded_at for ${video.youtubeId} - file verified with size ${video.fileSize}`);
               } else {
                 // Otherwise leave these fields untouched so the backfill job can manage them
                 delete updateData.filePath;
                 delete updateData.fileSize;
                 delete updateData.removed;
+                console.log(`[DEBUG] NOT setting last_downloaded_at for ${video.youtubeId} - hasVerifiedFile is false (filePath: ${video.filePath}, fileSize: ${video.fileSize})`);
               }
 
               // Don't overwrite media_type if the job data doesn't have it (leave backfill value intact)

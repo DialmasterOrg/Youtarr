@@ -33,6 +33,7 @@ jest.mock('../configModule', () => ({
   getImagePath: jest.fn(() => '/mock/images'),
   stopWatchingConfig: jest.fn(),
   getCookiesPath: jest.fn(() => null),
+  ffmpegPath: '/usr/bin/ffmpeg',
   __setConfig: (cfg) => {
     Object.keys(mockConfig).forEach((key) => delete mockConfig[key]);
     Object.assign(mockConfig, cfg);
@@ -237,5 +238,39 @@ describe('videoDownloadPostProcessFiles', () => {
 
     expect(fs.move).not.toHaveBeenCalled();
     expect(fs.remove).toHaveBeenCalledWith(tempPath);
+  });
+
+  it('adds release_date metadata when upload_date is present', async () => {
+    await loadModule();
+    await settleAsync();
+
+    expect(childProcess.spawnSync).toHaveBeenCalledWith(
+      '/usr/bin/ffmpeg',
+      expect.arrayContaining([
+        '-metadata', 'release_date=2024-01-31'
+      ]),
+      expect.any(Object)
+    );
+  });
+
+  it('skips release_date metadata when upload_date is missing', async () => {
+    fs.readFileSync.mockReturnValue(JSON.stringify({
+      id: 'abc123',
+      title: 'Video Title',
+      uploader: 'Channel',
+      channel_id: 'channel123'
+    }));
+
+    await loadModule();
+    await settleAsync();
+
+    const spawnCalls = childProcess.spawnSync.mock.calls;
+    if (spawnCalls.length > 0) {
+      const ffmpegArgs = spawnCalls[0][1];
+      const hasReleaseDate = ffmpegArgs.some((arg, idx) =>
+        arg === '-metadata' && ffmpegArgs[idx + 1]?.startsWith('release_date=')
+      );
+      expect(hasReleaseDate).toBe(false);
+    }
   });
 });
