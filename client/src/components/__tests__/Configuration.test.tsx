@@ -1,14 +1,98 @@
-import { screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { screen, waitFor, fireEvent } from '@testing-library/react';
+import userEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import Configuration from '../Configuration';
 import { renderWithProviders } from '../../test-utils';
+import React from 'react';
 
 jest.mock('axios', () => ({
   post: jest.fn()
 }));
 
 const axios = require('axios');
+
+// Set delay: null to make user interactions instant in tests
+const createUser = () =>
+  userEvent.setup({
+    pointerEventsCheck: PointerEventsCheckLevel.Never,
+    delay: null
+  });
+
+const buildMockResponse = <T,>(data: T, ok = true) => ({
+  ok,
+  json: () => Promise.resolve(data),
+}) as unknown as Response;
+
+const defaultCookieStatus = {
+  cookiesEnabled: false,
+  customCookiesUploaded: false,
+  customFileExists: false,
+};
+
+type ConfigOverrides = Partial<typeof mockConfig> & {
+  deploymentEnvironment?: {
+    inDocker: boolean;
+    dockerAutoCreated: boolean;
+    platform: string | null;
+    isWsl: boolean;
+  };
+  isPlatformManaged?: {
+    youtubeOutputDirectory: boolean;
+    plexUrl: boolean;
+    authEnabled: boolean;
+  };
+};
+
+const primeInitialFetches = (
+  configOverrides: ConfigOverrides = {},
+  cookieStatusOverrides: Partial<typeof defaultCookieStatus> = {},
+  additionalResponses: Array<{ data: unknown; ok?: boolean }> = [],
+) => {
+  const configResponse = { ...mockConfig, ...configOverrides };
+  const cookieResponse = { ...defaultCookieStatus, ...cookieStatusOverrides };
+
+  const mockFetch = global.fetch as jest.Mock;
+
+  mockFetch
+    .mockResolvedValueOnce(buildMockResponse(configResponse))
+    .mockResolvedValueOnce(buildMockResponse(cookieResponse));
+
+  additionalResponses.forEach(({ data, ok }) => {
+    mockFetch.mockResolvedValueOnce(buildMockResponse(data, ok));
+  });
+
+  // Default any subsequent fetch calls to return empty arrays unless a test overrides them.
+  mockFetch.mockResolvedValue(buildMockResponse([]));
+};
+
+jest.mock('../PlexLibrarySelector', () => ({
+  __esModule: true,
+  default: ({ open, setLibraryId, handleClose }: any) => {
+    if (!open) {
+      return null;
+    }
+
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() =>
+            setLibraryId({
+              libraryId: 'mock-library',
+              libraryTitle: 'WSL Library',
+              selectedPath: 'Q:\\Youtube_test'
+            })
+          }
+        >
+          Mock Save Selection
+        </button>
+        <button type="button" onClick={handleClose}>
+          Mock Close
+        </button>
+      </div>
+    );
+  }
+}));
 
 const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
@@ -37,6 +121,7 @@ const mockConfig = {
   youtubeOutputDirectory: '/videos',
   plexYoutubeLibraryId: 'lib-123',
   plexIP: '192.168.1.100',
+  plexPort: '32400',
   uuid: 'uuid-123',
   sponsorblockEnabled: false,
   sponsorblockAction: 'remove',
@@ -61,10 +146,29 @@ const mockConfig = {
   customCookiesUploaded: false,
   writeChannelPosters: true,
   writeVideoNfoFiles: true,
+  notificationsEnabled: false,
+  notificationService: 'discord',
+  discordWebhookUrl: '',
 };
 
 describe('Configuration Component', () => {
   const mockToken = 'test-token';
+
+const renderConfiguration = async ({
+    token = mockToken,
+    configOverrides = {},
+    cookieOverrides = {},
+    additionalFetchResponses = [],
+  }: {
+    token?: string | null;
+    configOverrides?: ConfigOverrides;
+    cookieOverrides?: Partial<typeof defaultCookieStatus>;
+    additionalFetchResponses?: Array<{ data: unknown; ok?: boolean }>;
+  } = {}) => {
+    primeInitialFetches(configOverrides, cookieOverrides, additionalFetchResponses);
+    renderWithProviders(<Configuration token={token} />);
+    await screen.findByText('Core Settings');
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -83,29 +187,7 @@ describe('Configuration Component', () => {
     });
 
     test('fetches and displays configuration on mount', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(mockConfig),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            cookiesEnabled: false,
-            customCookiesUploaded: false,
-            customFileExists: false,
-          }),
-        } as Response)
-        .mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve([]),
-        } as Response);
-
-      renderWithProviders(<Configuration token={mockToken} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await renderConfiguration();
 
       expect(global.fetch).toHaveBeenCalledWith('/getconfig', {
         headers: { 'x-access-token': mockToken },
@@ -126,38 +208,14 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
 
       expect(consoleError).toHaveBeenCalled();
       consoleError.mockRestore();
     });
 
     test('renders without token', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(mockConfig),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            cookiesEnabled: false,
-            customCookiesUploaded: false,
-            customFileExists: false,
-          }),
-        } as Response)
-        .mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve([]),
-        } as Response);
-
-      renderWithProviders(<Configuration token={null} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await renderConfiguration({ token: null });
 
       expect(global.fetch).toHaveBeenCalledWith('/getconfig', {
         headers: { 'x-access-token': '' },
@@ -167,34 +225,12 @@ describe('Configuration Component', () => {
 
   describe('Core Settings', () => {
     const setupComponent = async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(mockConfig),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            cookiesEnabled: false,
-            customCookiesUploaded: false,
-            customFileExists: false,
-          }),
-        } as Response)
-        .mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve([]),
-        } as Response);
-
-      renderWithProviders(<Configuration token={mockToken} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await renderConfiguration();
     };
 
     test('updates YouTube output directory', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
       const input = screen.getByRole('textbox', { name: /YouTube Output Directory/i });
 
       await user.clear(input);
@@ -205,7 +241,7 @@ describe('Configuration Component', () => {
 
     test('toggles automatic downloads', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
       const checkbox = screen.getByRole('checkbox', { name: /Enable Automatic Downloads/i });
 
       expect(checkbox).not.toBeChecked();
@@ -216,16 +252,13 @@ describe('Configuration Component', () => {
 
     test('changes download frequency', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       const checkbox = screen.getByRole('checkbox', { name: /Enable Automatic Downloads/i });
       await user.click(checkbox);
 
       // Wait for the select to be enabled after checkbox is checked
-      await waitFor(() => {
-        const labels = screen.getAllByText('Download Frequency');
-        expect(labels.length).toBeGreaterThan(0);
-      });
+      await screen.findAllByText('Download Frequency');
 
       // MUI Select renders as a div with role="button"
       const frequencySelect = screen.getByRole('button', { name: /Every 4 hours/i });
@@ -236,14 +269,12 @@ describe('Configuration Component', () => {
       await user.click(dailyOption);
 
       // Verify the selection was made
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Daily/i })).toBeInTheDocument();
-      });
+      await screen.findByRole('button', { name: /Daily/i });
     });
 
     test('changes files to download per channel', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       // MUI Select renders as a div with role="button" showing current value
       const selectButton = screen.getByRole('button', { name: /3 videos/i });
@@ -252,14 +283,12 @@ describe('Configuration Component', () => {
       const option = await screen.findByRole('option', { name: '5 videos' });
       await user.click(option);
 
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /5 videos/i })).toBeInTheDocument();
-      });
+      await screen.findByRole('button', { name: /5 videos/i });
     });
 
     test('changes preferred resolution', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       // MUI Select renders as a div with role="button" showing current value
       const selectButton = screen.getByRole('button', { name: /1080p/i });
@@ -268,57 +297,59 @@ describe('Configuration Component', () => {
       const option = await screen.findByRole('option', { name: '4K (2160p)' });
       await user.click(option);
 
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /4K \(2160p\)/i })).toBeInTheDocument();
-      });
+      await screen.findByRole('button', { name: /4K \(2160p\)/i });
     });
   });
 
   describe('Plex Integration', () => {
-    const setupComponent = async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(mockConfig),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            cookiesEnabled: false,
-            customCookiesUploaded: false,
-            customFileExists: false,
-          }),
-        } as Response)
-        .mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve([]),
-        } as Response);
-
-      renderWithProviders(<Configuration token={mockToken} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+    const setupComponent = async (configOverrides: ConfigOverrides = {}) => {
+      await renderConfiguration({ configOverrides });
     };
 
     test('expands Plex accordion and shows configuration', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       const accordion = screen.getByText('Optional: Plex Media Server Integration');
       await user.click(accordion);
 
-      await waitFor(() => {
-        expect(screen.getByText('Plex Integration is Optional')).toBeInTheDocument();
-      });
+      await screen.findByText('Plex Integration is Optional');
 
       const plexIpInput = screen.getByRole('textbox', { name: /Plex Server IP/i });
       expect(plexIpInput).toHaveValue('192.168.1.100');
+
+      const plexPortInput = screen.getByRole('spinbutton', { name: /Plex Port/i });
+      expect(plexPortInput).toHaveValue(32400);
+    });
+
+    test('keeps Plex actions enabled when platform manages Plex URL', async () => {
+      const platformManagedConfig = {
+        ...mockConfig,
+        plexIP: '',
+        plexPort: '32400',
+        isPlatformManaged: {
+          youtubeOutputDirectory: false,
+          plexUrl: true,
+          authEnabled: true,
+        },
+      };
+
+      await setupComponent(platformManagedConfig);
+
+      const user = createUser();
+      const accordion = screen.getByText('Optional: Plex Media Server Integration');
+      await user.click(accordion);
+
+      const testButton = await screen.findByRole('button', { name: /^Test Connection$/i });
+      expect(testButton).not.toBeDisabled();
+
+      const plexPortInput = await screen.findByRole('spinbutton', { name: /Plex Port/i });
+      expect(plexPortInput).toBeDisabled();
     });
 
     test('tests Plex connection successfully', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       const accordion = screen.getByText('Optional: Plex Media Server Integration');
       await user.click(accordion);
@@ -331,52 +362,97 @@ describe('Configuration Component', () => {
         ]),
       } as Response);
 
-      const testButtons = await screen.findAllByRole('button', { name: /Test Connection/i });
+      const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
       await user.click(testButtons[0]);
 
-      await waitFor(() => {
-        expect(screen.getByText(/Plex connection successful/i)).toBeInTheDocument();
-      });
+      await screen.findByText(/Plex connection successful/i);
+
+      const calls = (global.fetch as jest.Mock).mock.calls;
+      const lastCall = calls[calls.length - 1];
+      expect(lastCall[0]).toContain('testIP=192.168.1.100');
+      expect(lastCall[0]).toContain('testPort=32400');
     });
 
     test('handles failed Plex connection test', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       const accordion = screen.getByText('Optional: Plex Media Server Integration');
       await user.click(accordion);
 
       (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Connection failed'));
 
-      const testButtons = await screen.findAllByRole('button', { name: /Test Connection/i });
+      const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
       await user.click(testButtons[0]);
 
-      await waitFor(() => {
-        expect(screen.getByText(/Failed to connect to Plex server/i)).toBeInTheDocument();
-      });
+      await screen.findByText(/Failed to connect to Plex server/i);
     });
 
     test('opens library selector when connected', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       const accordion = screen.getByText('Optional: Plex Media Server Integration');
       await user.click(accordion);
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve([{ key: '1', title: 'Library 1' }]),
-      } as Response);
+      (global.fetch as jest.Mock).mockResolvedValueOnce(buildMockResponse([
+        { key: '1', title: 'Library 1' },
+      ]));
 
-      const testButtons = await screen.findAllByRole('button', { name: /Test Connection/i });
+      const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
       await user.click(testButtons[0]);
 
-      await waitFor(() => {
-        expect(screen.getByText(/Plex connection successful/i)).toBeInTheDocument();
-      });
+      await screen.findByText(/Plex connection successful/i);
 
       const selectLibraryButton = screen.getByRole('button', { name: /Select Plex Library/i });
       expect(selectLibraryButton).not.toBeDisabled();
+    });
+
+    test('suggests translated path for WSL when selecting Plex library', async () => {
+      await renderConfiguration({
+        configOverrides: {
+          deploymentEnvironment: {
+            inDocker: false,
+            dockerAutoCreated: false,
+            platform: null,
+            isWsl: true,
+          },
+        },
+        additionalFetchResponses: [
+          { data: [
+            {
+              key: '1',
+              title: 'WSL Library',
+            },
+          ] },
+        ],
+      });
+
+      const user = createUser();
+
+      const accordion = screen.getByText('Optional: Plex Media Server Integration');
+      await user.click(accordion);
+
+      const selectLibraryButton = await screen.findByRole('button', { name: /Select Plex Library/i });
+
+      await waitFor(() => expect(selectLibraryButton).not.toBeDisabled(), { timeout: 500 });
+
+      await user.click(selectLibraryButton);
+
+      const mockSaveButton = await screen.findByRole('button', { name: /Mock Save Selection/i });
+      await user.click(mockSaveButton);
+
+      await screen.findByText(/reports its media path as/i);
+
+      expect(screen.getByText(/\/mnt\/q\/Youtube_test/i)).toBeInTheDocument();
+
+      const applyButton = screen.getByRole('button', { name: /Use Suggested Path/i });
+      await user.click(applyButton);
+
+      const outputField = screen.getByRole('textbox', { name: /YouTube Output Directory/i });
+      await waitFor(() => expect(outputField).toHaveValue('/mnt/q/Youtube_test'), { timeout: 500 });
+
+      expect(screen.queryByText(/Use Suggested Path/i)).not.toBeInTheDocument();
     });
   });
 
@@ -402,14 +478,12 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
     };
 
     test('toggles SponsorBlock and configures settings', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       const accordion = screen.getByText('Optional: SponsorBlock Integration');
       await user.click(accordion);
@@ -417,10 +491,7 @@ describe('Configuration Component', () => {
       const enableCheckbox = screen.getByRole('checkbox', { name: /Enable SponsorBlock/i });
       await user.click(enableCheckbox);
 
-      await waitFor(() => {
-        const labels = screen.getAllByText('Action for Segments');
-        expect(labels.length).toBeGreaterThan(0);
-      });
+      await screen.findAllByText('Action for Segments');
 
       // MUI Select renders as a button showing current value
       const actionSelect = screen.getByRole('button', { name: /Remove segments from video/i });
@@ -429,14 +500,12 @@ describe('Configuration Component', () => {
       const markOption = await screen.findByRole('option', { name: 'Mark segments as chapters' });
       await user.click(markOption);
 
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Mark segments as chapters/i })).toBeInTheDocument();
-      });
+      await screen.findByRole('button', { name: /Mark segments as chapters/i });
     });
 
     test('configures SponsorBlock categories', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       const accordion = screen.getByText('Optional: SponsorBlock Integration');
       await user.click(accordion);
@@ -474,14 +543,12 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
     };
 
     test('toggles cookies and shows upload button', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       const accordion = screen.getByText('Cookie Configuration');
       await user.click(accordion);
@@ -489,9 +556,7 @@ describe('Configuration Component', () => {
       const enableSwitch = screen.getByRole('checkbox', { name: /Enable Cookies/i });
       await user.click(enableSwitch);
 
-      await waitFor(() => {
-        expect(screen.getByText('Upload Cookie File')).toBeInTheDocument();
-      });
+      await screen.findByText('Upload Cookie File');
     });
 
     test('handles cookie deletion', async () => {
@@ -518,11 +583,9 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
 
-      const user = userEvent.setup();
+      const user = createUser();
       const accordion = screen.getByText('Cookie Configuration');
       await user.click(accordion);
 
@@ -543,9 +606,7 @@ describe('Configuration Component', () => {
       const deleteButton = await screen.findByText('Delete Custom Cookies');
       await user.click(deleteButton);
 
-      await waitFor(() => {
-        expect(screen.getByText('Custom cookies deleted')).toBeInTheDocument();
-      });
+      await screen.findByText('Custom cookies deleted');
     });
   });
 
@@ -571,22 +632,17 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
     };
 
     test('configures download performance settings', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       const accordion = screen.getByText('Download Performance Settings');
       await user.click(accordion);
 
-      await waitFor(() => {
-        const labels = screen.getAllByText('Socket Timeout');
-        expect(labels.length).toBeGreaterThan(0);
-      });
+      await screen.findAllByText('Socket Timeout');
 
       // MUI Select renders as a button showing current value
       const timeoutSelect = screen.getByRole('button', { name: /30 seconds/i });
@@ -595,14 +651,12 @@ describe('Configuration Component', () => {
       const option = await screen.findByRole('option', { name: '10 seconds' });
       await user.click(option);
 
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /10 seconds/i })).toBeInTheDocument();
-      });
+      await screen.findByRole('button', { name: /10 seconds/i });
     });
 
     test('toggles and configures stall detection', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       const accordion = screen.getByText('Download Performance Settings');
       await user.click(accordion);
@@ -643,14 +697,12 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
     };
 
     test('toggles NFO file generation', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       const accordion = screen.getByText('Optional: Kodi, Emby and Jellyfin compatibility');
       await user.click(accordion);
@@ -664,7 +716,7 @@ describe('Configuration Component', () => {
 
     test('toggles channel poster generation', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       const accordion = screen.getByText('Optional: Kodi, Emby and Jellyfin compatibility');
       await user.click(accordion);
@@ -674,6 +726,113 @@ describe('Configuration Component', () => {
 
       await user.click(posterSwitch);
       expect(posterSwitch).not.toBeChecked();
+    });
+  });
+
+  describe('Notifications', () => {
+    test('shows notifications accordion and toggles settings', async () => {
+      await renderConfiguration();
+      const user = createUser();
+
+      const accordion = screen.getByText('Optional: Notifications');
+      expect(accordion).toBeInTheDocument();
+
+      await user.click(accordion);
+
+      const enableSwitch = screen.getByRole('checkbox', { name: /Enable Notifications/i });
+      expect(enableSwitch).not.toBeChecked();
+
+      await user.click(enableSwitch);
+      expect(enableSwitch).toBeChecked();
+
+      const webhookInput = await screen.findByRole('textbox', { name: /Discord Webhook URL/i });
+      expect(webhookInput).toBeInTheDocument();
+      expect(webhookInput).toHaveValue('');
+
+      fireEvent.change(webhookInput, { target: { value: 'https://discord.com/api/webhooks/123/test' } });
+      expect(webhookInput).toHaveValue('https://discord.com/api/webhooks/123/test');
+    });
+
+    test('shows enabled chip when notifications are configured', async () => {
+      const enabledConfig = { ...mockConfig, notificationsEnabled: true, discordWebhookUrl: 'https://discord.com/api/webhooks/test' };
+      await renderConfiguration({ configOverrides: enabledConfig });
+
+      const enabledChip = screen.getByText('Enabled');
+      expect(enabledChip).toBeInTheDocument();
+    });
+
+    test('validates webhook URL before sending test notification', async () => {
+      await renderConfiguration();
+      const user = createUser();
+
+      const accordion = screen.getByText('Optional: Notifications');
+      await user.click(accordion);
+
+      const enableSwitch = screen.getByRole('checkbox', { name: /Enable Notifications/i });
+      await user.click(enableSwitch);
+
+      const testButton = await screen.findByRole('button', { name: /Send Test Notification/i });
+      await user.click(testButton);
+
+      await screen.findByText('Please enter a Discord webhook URL first');
+    });
+
+    test('sends test notification successfully', async () => {
+      await renderConfiguration();
+      const user = createUser();
+
+      const accordion = screen.getByText('Optional: Notifications');
+      await user.click(accordion);
+
+      const enableSwitch = screen.getByRole('checkbox', { name: /Enable Notifications/i });
+      await user.click(enableSwitch);
+
+      const webhookInput = await screen.findByRole('textbox', { name: /Discord Webhook URL/i });
+      fireEvent.change(webhookInput, { target: { value: 'https://discord.com/api/webhooks/123/test' } });
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({ success: true })
+      } as unknown as Response);
+
+      const testButton = screen.getByRole('button', { name: /Send Test Notification/i });
+      await user.click(testButton);
+
+      await screen.findByText('Test notification sent! Check your Discord channel.');
+
+      const calls = (global.fetch as jest.Mock).mock.calls;
+      const lastCall = calls[calls.length - 1];
+      expect(lastCall[0]).toBe('/api/notifications/test');
+      expect(lastCall[1]).toMatchObject({
+        method: 'POST',
+        headers: {
+          'x-access-token': mockToken,
+        },
+      });
+    });
+
+    test('handles test notification errors', async () => {
+      await renderConfiguration();
+      const user = createUser();
+
+      const accordion = screen.getByText('Optional: Notifications');
+      await user.click(accordion);
+
+      const enableSwitch = screen.getByRole('checkbox', { name: /Enable Notifications/i });
+      await user.click(enableSwitch);
+
+      const webhookInput = await screen.findByRole('textbox', { name: /Discord Webhook URL/i });
+      fireEvent.change(webhookInput, { target: { value: 'https://discord.com/api/webhooks/123/test' } });
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: false,
+        json: jest.fn().mockResolvedValueOnce({ message: 'Invalid webhook URL' })
+      } as unknown as Response);
+
+      const testButton = screen.getByRole('button', { name: /Send Test Notification/i });
+      await user.click(testButton);
+
+      await screen.findByText('Invalid webhook URL');
     });
   });
 
@@ -699,14 +858,12 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
     };
 
     test('shows and hides password change form', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       // First, verify the button exists and is not showing the form
       const changePasswordButton = await screen.findByRole('button', { name: 'Change Password' });
@@ -719,10 +876,7 @@ describe('Configuration Component', () => {
       await user.click(changePasswordButton);
 
       // Wait for form to render
-      await waitFor(() => {
-        const currentPasswordField = screen.getByLabelText(/Current Password/i);
-        expect(currentPasswordField).toBeInTheDocument();
-      }, { timeout: 3000 });
+      await screen.findByLabelText(/Current Password/i);
 
       // Check that all three password fields are visible
       const passwordFields = screen.getAllByLabelText(/password/i);
@@ -731,22 +885,17 @@ describe('Configuration Component', () => {
       const cancelButton = screen.getByRole('button', { name: 'Cancel' });
       await user.click(cancelButton);
 
-      await waitFor(() => {
-        expect(screen.queryByLabelText(/Current Password/i)).not.toBeInTheDocument();
-      });
+      await waitFor(() => expect(screen.queryByLabelText(/Current Password/i)).not.toBeInTheDocument(), { timeout: 500 });
     });
 
     test('validates password requirements', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       const changePasswordButton = await screen.findByRole('button', { name: 'Change Password' });
       await user.click(changePasswordButton);
 
-      await waitFor(() => {
-        const currentPasswordField = screen.getByLabelText(/Current Password/i);
-        expect(currentPasswordField).toBeInTheDocument();
-      }, { timeout: 3000 });
+      await screen.findByLabelText(/Current Password/i);
 
       axios.post.mockResolvedValueOnce({ data: { success: true } });
 
@@ -763,22 +912,17 @@ describe('Configuration Component', () => {
       const updateButton = screen.getByRole('button', { name: 'Update Password' });
       await user.click(updateButton);
 
-      await waitFor(() => {
-        expect(screen.getByText('Password must be at least 8 characters')).toBeInTheDocument();
-      });
+      await screen.findByText('Password must be at least 8 characters');
     });
 
     test('handles password mismatch', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       const changePasswordButton = await screen.findByRole('button', { name: 'Change Password' });
       await user.click(changePasswordButton);
 
-      await waitFor(() => {
-        const currentPasswordField = screen.getByLabelText(/Current Password/i);
-        expect(currentPasswordField).toBeInTheDocument();
-      }, { timeout: 3000 });
+      await screen.findByLabelText(/Current Password/i);
 
       // Get all password fields and identify them by order
       const passwordFields = screen.getAllByLabelText(/password/i);
@@ -790,27 +934,20 @@ describe('Configuration Component', () => {
       await user.type(newPasswordInput, 'newpassword123');
       await user.type(confirmPasswordInput, 'different123');
 
-      expect(screen.getByText("Passwords don't match")).toBeInTheDocument();
-
       const updateButton = screen.getByRole('button', { name: 'Update Password' });
       await user.click(updateButton);
 
-      await waitFor(() => {
-        expect(screen.getByText('Passwords do not match')).toBeInTheDocument();
-      });
-    });
+      await screen.findByText('Passwords do not match');
+    }, 10000);
 
     test('successfully changes password', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       const changePasswordButton = await screen.findByRole('button', { name: 'Change Password' });
       await user.click(changePasswordButton);
 
-      await waitFor(() => {
-        const currentPasswordField = screen.getByLabelText(/Current Password/i);
-        expect(currentPasswordField).toBeInTheDocument();
-      }, { timeout: 3000 });
+      await screen.findByLabelText(/Current Password/i);
 
       axios.post.mockResolvedValueOnce({ data: { success: true } });
 
@@ -827,9 +964,7 @@ describe('Configuration Component', () => {
       const updateButton = screen.getByRole('button', { name: 'Update Password' });
       await user.click(updateButton);
 
-      await waitFor(() => {
-        expect(screen.getByText('Password updated successfully')).toBeInTheDocument();
-      });
+      await screen.findByText('Password updated successfully');
 
       expect(screen.queryByLabelText('Current Password')).not.toBeInTheDocument();
     });
@@ -857,14 +992,12 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
     };
 
     test('saves configuration successfully', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
@@ -874,9 +1007,7 @@ describe('Configuration Component', () => {
       const saveButton = screen.getByRole('button', { name: /Save Configuration/i });
       await user.click(saveButton);
 
-      await waitFor(() => {
-        expect(screen.getByText('Configuration saved successfully')).toBeInTheDocument();
-      });
+      await screen.findByText('Configuration saved successfully');
 
       expect(global.fetch).toHaveBeenCalledWith('/updateconfig', expect.objectContaining({
         method: 'POST',
@@ -890,20 +1021,17 @@ describe('Configuration Component', () => {
 
     test('shows unsaved changes indicator', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       const checkbox = screen.getByRole('checkbox', { name: /Enable Automatic Downloads/i });
       await user.click(checkbox);
 
-      await waitFor(() => {
-        const saveButton = screen.getByRole('button', { name: /Save Configuration/i });
-        expect(saveButton).toHaveTextContent('Save Configuration (Unsaved Changes)');
-      });
+      await screen.findByRole('button', { name: /Save Configuration \(Unsaved Changes\)/i });
     });
 
     test('shows restart warning when YouTube directory changes', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       const input = screen.getByRole('textbox', { name: /YouTube Output Directory/i });
       await user.clear(input);
@@ -918,9 +1046,7 @@ describe('Configuration Component', () => {
 
       await user.click(saveButton);
 
-      await waitFor(() => {
-        expect(screen.getByText(/Please restart Youtarr for YouTube directory changes/i)).toBeInTheDocument();
-      });
+      await screen.findByText(/Please restart Youtarr for YouTube directory changes/i);
     });
 
     test('shows confirmation dialog for initial setup', async () => {
@@ -947,29 +1073,23 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
 
-      const user = userEvent.setup();
+      const user = createUser();
       const saveButton = screen.getByRole('button', { name: /Save Configuration/i });
       await user.click(saveButton);
 
-      await waitFor(() => {
-        expect(screen.getByText('Confirm Save Configuration')).toBeInTheDocument();
-      });
+      await screen.findByText('Confirm Save Configuration');
 
       const cancelButton = screen.getByRole('button', { name: 'Cancel' });
       await user.click(cancelButton);
 
-      await waitFor(() => {
-        expect(screen.queryByText('Confirm Save Configuration')).not.toBeInTheDocument();
-      });
+      await waitFor(() => expect(screen.queryByText('Confirm Save Configuration')).not.toBeInTheDocument(), { timeout: 500 });
     });
 
     test('handles save configuration error', async () => {
       await setupComponent();
-      const user = userEvent.setup();
+      const user = createUser();
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: false,
@@ -979,9 +1099,7 @@ describe('Configuration Component', () => {
       const saveButton = screen.getByRole('button', { name: /Save Configuration/i });
       await user.click(saveButton);
 
-      await waitFor(() => {
-        expect(screen.getByText('Failed to save configuration')).toBeInTheDocument();
-      });
+      await screen.findByText('Failed to save configuration');
     });
   });
 
@@ -1025,15 +1143,55 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
 
       const managedLabels = screen.getAllByText('Managed by Elfhosted');
       expect(managedLabels.length).toBeGreaterThan(0);
 
       const outputDirInput = screen.getByRole('textbox', { name: /YouTube Output Directory/i });
       expect(outputDirInput).toBeDisabled();
+    });
+
+    test('hides Account & Security section when auth is disabled', async () => {
+      const authDisabledConfig = {
+        ...mockConfig,
+        authEnabled: false,
+        isPlatformManaged: {
+          youtubeOutputDirectory: false,
+          plexUrl: false,
+          authEnabled: false,
+        },
+        deploymentEnvironment: {
+          inDocker: false,
+          dockerAutoCreated: false,
+          platform: null,
+        },
+      };
+
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(authDisabledConfig),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            cookiesEnabled: false,
+            customCookiesUploaded: false,
+            customFileExists: false,
+          }),
+        } as Response)
+        .mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve([]),
+        } as Response);
+
+      renderWithProviders(<Configuration token={mockToken} />);
+
+      await screen.findByText('Core Settings');
+
+      expect(screen.queryByText('Account & Security')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Change Password/i })).not.toBeInTheDocument();
     });
 
     test('shows Docker volume indicator', async () => {
@@ -1065,9 +1223,7 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
 
       const dockerLabels = screen.getAllByText('Docker Volume');
       expect(dockerLabels.length).toBeGreaterThan(0);
@@ -1104,21 +1260,16 @@ describe('Configuration Component', () => {
 
       renderWithProviders(<Configuration token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      });
+      await screen.findByText('Core Settings');
 
-      const user = userEvent.setup();
+      const user = createUser();
 
       const infoButtons = screen.queryAllByTestId('InfoIcon');
       expect(infoButtons.length).toBeGreaterThan(0);
 
       await user.click(infoButtons[0]);
 
-      await waitFor(() => {
-        const alerts = screen.getAllByRole('alert');
-        expect(alerts.length).toBeGreaterThan(0);
-      });
+      await screen.findByRole('alert');
     });
   });
 });

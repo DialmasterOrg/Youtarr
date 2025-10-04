@@ -10,8 +10,11 @@ config/jobs.json
 config/config.json
 config/config.json.*
 config/cookies.user.txt
+config/*.env
 database
 server/images
+
+.env
 
 # Local dev exclusion
 ffmpeg.exe
@@ -19,6 +22,7 @@ yt-dlp.exe
 
 # testing
 /coverage
+/client/coverage
 
 # production
 client/build

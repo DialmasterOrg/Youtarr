@@ -42,6 +42,15 @@ interface ConfigurationProps {
   token: string | null;
 }
 
+interface PlexPathSuggestionState {
+  libraryTitle: string;
+  originalPath: string;
+  suggestedPath?: string;
+  note: string;
+  canApply: boolean;
+  severity: 'info' | 'warning';
+}
+
 function Configuration({ token }: ConfigurationProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [config, setConfig] = useState({
@@ -54,6 +63,7 @@ function Configuration({ token }: ConfigurationProps) {
     youtubeOutputDirectory: '',
     plexYoutubeLibraryId: '',
     plexIP: '',
+    plexPort: '32400',
     uuid: '',
     sponsorblockEnabled: false,
     sponsorblockAction: 'remove' as 'remove' | 'mark',
@@ -78,6 +88,9 @@ function Configuration({ token }: ConfigurationProps) {
     customCookiesUploaded: false,
     writeChannelPosters: true,
     writeVideoNfoFiles: true,
+    notificationsEnabled: false,
+    notificationService: 'discord',
+    discordWebhookUrl: '',
   });
   const [openPlexLibrarySelector, setOpenPlexLibrarySelector] = useState(false);
   const [openPlexAuthDialog, setOpenPlexAuthDialog] = useState(false);
@@ -92,9 +105,12 @@ function Configuration({ token }: ConfigurationProps) {
     inDocker: boolean;
     dockerAutoCreated: boolean;
     platform?: string | null;
+    isWsl: boolean;
   }>({
     inDocker: false,
     dockerAutoCreated: false,
+    platform: null,
+    isWsl: false,
   });
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -117,8 +133,18 @@ function Configuration({ token }: ConfigurationProps) {
     customFileExists: boolean;
   } | null>(null);
   const [uploadingCookie, setUploadingCookie] = useState(false);
+  const [testingNotification, setTestingNotification] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const hasPlexServerConfigured = isPlatformManaged.plexUrl || Boolean(config.plexIP);
+  const [plexPathSuggestion, setPlexPathSuggestion] = useState<PlexPathSuggestionState | null>(null);
+  const canApplyPlexSuggestion = !!(
+    plexPathSuggestion &&
+    plexPathSuggestion.canApply &&
+    !isPlatformManaged.youtubeOutputDirectory &&
+    !deploymentEnvironment.dockerAutoCreated
+  );
+  const showAccountSection = isPlatformManaged.authEnabled !== false;
 
   useEffect(() => {
     fetch('/getconfig', {
@@ -138,15 +164,30 @@ function Configuration({ token }: ConfigurationProps) {
           delete data.isPlatformManaged;
         }
         if (data.deploymentEnvironment) {
-          setDeploymentEnvironment(data.deploymentEnvironment);
+          const env = data.deploymentEnvironment;
+          setDeploymentEnvironment({
+            inDocker: !!env.inDocker,
+            dockerAutoCreated: !!env.dockerAutoCreated,
+            platform: env.platform ?? null,
+            isWsl: !!env.isWsl
+          });
           delete data.deploymentEnvironment;
+        } else {
+          setDeploymentEnvironment({
+            inDocker: false,
+            dockerAutoCreated: false,
+            platform: null,
+            isWsl: false
+          });
         }
         const resolvedConfig = {
           ...data,
           writeChannelPosters: data.writeChannelPosters ?? true,
           writeVideoNfoFiles: data.writeVideoNfoFiles ?? true,
+          plexPort: data.plexPort ? String(data.plexPort) : '32400'
         };
         setConfig(resolvedConfig);
+        setPlexPathSuggestion(null);
         setOriginalYoutubeDirectory(resolvedConfig.youtubeOutputDirectory || '');
         setInitialConfig(resolvedConfig);
         setIsLoading(false);
@@ -158,7 +199,7 @@ function Configuration({ token }: ConfigurationProps) {
   }, [token]);
 
   const checkPlexConnection = React.useCallback(() => {
-    if (config.plexIP) {
+    if (hasPlexServerConfigured) {
       fetch('/getplexlibraries', {
         headers: {
           'x-access-token': token || '',
@@ -172,15 +213,15 @@ function Configuration({ token }: ConfigurationProps) {
           setPlexConnectionStatus('not_connected');
         });
     }
-  }, [config.plexIP, token]);
+  }, [hasPlexServerConfigured, token]);
 
   // On first load after config arrives, check Plex connection if values exist
   useEffect(() => {
-    if (!didInitialPlexCheck && config.plexIP && config.plexApiKey) {
+    if (!didInitialPlexCheck && hasPlexServerConfigured && config.plexApiKey) {
       checkPlexConnection();
       setDidInitialPlexCheck(true);
     }
-  }, [didInitialPlexCheck, config.plexIP, config.plexApiKey, checkPlexConnection]);
+  }, [didInitialPlexCheck, hasPlexServerConfigured, config.plexApiKey, checkPlexConnection]);
 
   // Fetch cookie status
   useEffect(() => {
@@ -199,13 +240,41 @@ function Configuration({ token }: ConfigurationProps) {
   }, [token]);
 
   const testPlexConnection = async () => {
-    if (!config.plexIP || !config.plexApiKey) {
+    if (!hasPlexServerConfigured) {
       setSnackbar({
         open: true,
-        message: 'Please enter both Plex IP and API Key',
+        message: 'Please enter your Plex server address before testing the connection.',
         severity: 'warning'
       });
       return;
+    }
+
+    if (!config.plexApiKey) {
+      setSnackbar({
+        open: true,
+        message: 'Please enter your Plex API Key',
+        severity: 'warning'
+      });
+      return;
+    }
+
+    const rawPortInput = (config.plexPort ?? '').toString().trim();
+    const digitsOnlyPort = rawPortInput.replace(/[^0-9]/g, '');
+    let normalizedPort = '32400';
+
+    if (digitsOnlyPort.length > 0) {
+      const portNumber = Number.parseInt(digitsOnlyPort, 10);
+      if (!Number.isNaN(portNumber)) {
+        const clampedPort = Math.min(65535, Math.max(1, portNumber));
+        normalizedPort = String(clampedPort);
+      }
+    }
+
+    if (config.plexPort !== normalizedPort) {
+      setConfig((prev) => ({
+        ...prev,
+        plexPort: normalizedPort
+      }));
     }
 
     setPlexConnectionStatus('testing');
@@ -213,9 +282,14 @@ function Configuration({ token }: ConfigurationProps) {
     try {
       // Send the unsaved form values as query parameters for testing
       const params = new URLSearchParams({
-        testIP: config.plexIP,
         testApiKey: config.plexApiKey
       });
+
+      if (config.plexIP) {
+        params.set('testIP', config.plexIP);
+      }
+
+      params.set('testPort', normalizedPort);
 
       const response = await fetch(`/getplexlibraries?${params}`, {
         headers: {
@@ -228,7 +302,9 @@ function Configuration({ token }: ConfigurationProps) {
         setPlexConnectionStatus('connected');
         // Plex credentials are auto-saved. Update initial snapshot for those fields.
         setInitialConfig((prev) => (
-          prev ? { ...prev, plexIP: config.plexIP, plexApiKey: config.plexApiKey } : { ...config }
+          prev
+            ? { ...prev, plexIP: config.plexIP, plexApiKey: config.plexApiKey, plexPort: normalizedPort }
+            : { ...config, plexPort: normalizedPort }
         ));
         setSnackbar({
           open: true,
@@ -262,32 +338,158 @@ function Configuration({ token }: ConfigurationProps) {
     setOpenPlexLibrarySelector(false);
   };
 
-  const setLibraryId = (id: string, directory: string) => {
-    // Only update directory if one was selected (not empty string)
-    if (directory) {
-      setConfig({
-        ...config,
-        plexYoutubeLibraryId: id,
-        youtubeOutputDirectory: directory,
-      });
-      // Check if directory actually changed
-      if (directory !== originalYoutubeDirectory) {
-        setYoutubeDirectoryChanged(true);
-      }
-    } else {
-      // Just update library ID, keep existing directory
-      setConfig({
-        ...config,
-        plexYoutubeLibraryId: id,
-      });
+  const createPlexPathSuggestion = (
+    libraryTitle: string,
+    selectedPath: string
+  ): PlexPathSuggestionState | null => {
+    const trimmed = selectedPath.trim();
+    if (!trimmed) {
+      return null;
     }
+
+    const baseSuggestion: PlexPathSuggestionState = {
+      libraryTitle,
+      originalPath: trimmed,
+      suggestedPath: undefined,
+      note: '',
+      canApply: false,
+      severity: 'info'
+    };
+
+    if (/^\\\\/.test(trimmed)) {
+      return {
+        ...baseSuggestion,
+        note: 'Plex reported a network share (UNC) path. Mount this share inside Youtarr and update the YouTube output directory manually.',
+        severity: 'warning'
+      };
+    }
+
+    const windowsDriveMatch = /^[A-Za-z]:\\/.test(trimmed);
+    if (windowsDriveMatch) {
+      const drive = trimmed[0].toLowerCase();
+      const rest = trimmed.slice(2).replace(/\\/g, '/').replace(/^\/+/, '');
+      const wslPath = `/mnt/${drive}/${rest}`;
+      const dockerHostPath = `/host_mnt/${drive}/${rest}`;
+
+      if (deploymentEnvironment.isWsl) {
+        return {
+          ...baseSuggestion,
+          suggestedPath: wslPath,
+          note: 'Converted Windows drive path for WSL. Ensure the drive is mounted (e.g., /mnt/q) before applying.',
+          canApply: true,
+          severity: 'info'
+        };
+      }
+
+      if (deploymentEnvironment.inDocker) {
+        return {
+          ...baseSuggestion,
+          suggestedPath: dockerHostPath,
+          note: 'Plex reported a Windows drive path. Docker Desktop usually mounts drives under /host_mnt/<drive>/. Adjust the path if your bind mount differs before applying.',
+          canApply: true,
+          severity: 'warning'
+        };
+      }
+
+      return {
+        ...baseSuggestion,
+        suggestedPath: trimmed,
+        note: 'Plex reported a Windows path. If Youtarr runs directly on Windows you can apply it as-is; otherwise translate it to the mount that Youtarr can reach.',
+        canApply: true,
+        severity: 'warning'
+      };
+    }
+
+    if (trimmed.includes('\\')) {
+      return {
+        ...baseSuggestion,
+        note: 'Plex returned a Windows-style path. Replace backslashes with the path visible to Youtarr before saving.',
+        severity: 'warning'
+      };
+    }
+
+    if (trimmed.startsWith('/')) {
+      return {
+        ...baseSuggestion,
+        suggestedPath: trimmed,
+        note: 'Plex returned a Unix-style path. Ensure this folder exists inside Youtarr before applying.',
+        canApply: true,
+        severity: 'info'
+      };
+    }
+
+    return {
+      ...baseSuggestion,
+      note: 'Plex returned an unrecognized path format. Update the YouTube output directory manually after selecting the library.',
+      severity: 'warning'
+    };
+  };
+
+  const setLibraryId = ({
+    libraryId,
+    libraryTitle,
+    selectedPath
+  }: {
+    libraryId: string;
+    libraryTitle: string;
+    selectedPath: string;
+  }) => {
+    setConfig((prev) => ({
+      ...prev,
+      plexYoutubeLibraryId: libraryId,
+    }));
+
+    if (selectedPath) {
+      setPlexPathSuggestion(
+        createPlexPathSuggestion(libraryTitle, selectedPath)
+      );
+    } else {
+      setPlexPathSuggestion(null);
+    }
+
     closeLibrarySelector();
+  };
+
+  const applyPlexPathSuggestion = () => {
+    if (!plexPathSuggestion || !plexPathSuggestion.suggestedPath) {
+      setPlexPathSuggestion(null);
+      return;
+    }
+
+    const targetPath = plexPathSuggestion.suggestedPath;
+    setConfig((prev) => ({
+      ...prev,
+      youtubeOutputDirectory: targetPath
+    }));
+    setYoutubeDirectoryChanged(targetPath !== originalYoutubeDirectory);
+    setPlexPathSuggestion(null);
+    setSnackbar({
+      open: true,
+      message: `Updated YouTube directory to ${targetPath}`,
+      severity: 'success'
+    });
+  };
+
+  const dismissPlexPathSuggestion = () => {
+    setPlexPathSuggestion(null);
   };
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
-    const parsedValue =
-      name === 'channelFilesToDownload' ? Number(value) : value;
+    let parsedValue: any = value;
+
+    if (name === 'channelFilesToDownload') {
+      parsedValue = Number(value);
+    } else if (name === 'plexPort') {
+      const digitsOnly = value.replace(/[^0-9]/g, '');
+      if (digitsOnly.length === 0) {
+        parsedValue = '';
+      } else {
+        const numericPort = Math.min(65535, Math.max(1, Number.parseInt(digitsOnly, 10)));
+        parsedValue = String(numericPort);
+      }
+    }
+
     setConfig({
       ...config,
       [name]: parsedValue as any,
@@ -300,8 +502,12 @@ function Configuration({ token }: ConfigurationProps) {
       setYoutubeDirectoryChanged(false);
     }
 
+    if (name === 'youtubeOutputDirectory' && plexPathSuggestion) {
+      setPlexPathSuggestion(null);
+    }
+
     // Mark Plex connection as not tested if IP or API key changes
-    if (name === 'plexIP' || name === 'plexApiKey') {
+    if (name === 'plexIP' || name === 'plexApiKey' || name === 'plexPort') {
       setPlexConnectionStatus('not_tested');
     }
   };
@@ -368,7 +574,7 @@ function Configuration({ token }: ConfigurationProps) {
         }
 
         // Re-check Plex connection if IP changed
-        if (config.plexIP) {
+        if (hasPlexServerConfigured) {
           checkPlexConnection();
         }
       } else {
@@ -575,6 +781,7 @@ function Configuration({ token }: ConfigurationProps) {
       'youtubeOutputDirectory',
       'plexYoutubeLibraryId',
       'plexIP',
+      'plexPort',
       'sponsorblockEnabled',
       'sponsorblockAction',
       'sponsorblockCategories',
@@ -589,6 +796,8 @@ function Configuration({ token }: ConfigurationProps) {
       'customCookiesUploaded',
       'writeChannelPosters',
       'writeVideoNfoFiles',
+      'notificationsEnabled',
+      'discordWebhookUrl',
     ];
     const changed = keysToCompare.some((k) => {
       return (config as any)[k] !== (initialConfig as any)[k];
@@ -684,12 +893,14 @@ function Configuration({ token }: ConfigurationProps) {
         ))}
 
         {/* Loading skeleton for Account & Security */}
-        <Card elevation={8} sx={{ mb: 2 }}>
-          <CardContent>
-            <Skeleton variant="text" width={150} height={28} sx={{ mb: 2 }} />
-            <Skeleton variant="rectangular" width={130} height={36} />
-          </CardContent>
-        </Card>
+        {showAccountSection && (
+          <Card elevation={8} sx={{ mb: 2 }}>
+            <CardContent>
+              <Skeleton variant="text" width={150} height={28} sx={{ mb: 2 }} />
+              <Skeleton variant="rectangular" width={130} height={36} />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Loading skeleton for Save button */}
         <Box sx={{ height: 88 }} />
@@ -769,6 +980,47 @@ function Configuration({ token }: ConfigurationProps) {
                         : "Path where YouTube videos will be saved"
                 }
               />
+              {plexPathSuggestion && (
+                <Alert severity={plexPathSuggestion.severity} sx={{ mt: 2 }}>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    Plex library
+                    {plexPathSuggestion.libraryTitle
+                      ? ` "${plexPathSuggestion.libraryTitle}"`
+                      : ''} reports its media path as{' '}
+                    <code>{plexPathSuggestion.originalPath}</code>.
+                  </Typography>
+                  {plexPathSuggestion.suggestedPath && (
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                      Suggested path for Youtarr:{' '}
+                      <code>{plexPathSuggestion.suggestedPath}</code>
+                    </Typography>
+                  )}
+                  <Typography variant="body2">{plexPathSuggestion.note}</Typography>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 2 }}>
+                    {canApplyPlexSuggestion && (
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={applyPlexPathSuggestion}
+                      >
+                        Use Suggested Path
+                      </Button>
+                    )}
+                    <Button
+                      variant="text"
+                      size="small"
+                      onClick={dismissPlexPathSuggestion}
+                    >
+                      Dismiss
+                    </Button>
+                  </Box>
+                  {plexPathSuggestion.canApply && !canApplyPlexSuggestion && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                      Output directory changes are managed outside this UI. Update your platform or Docker volume configuration to apply the suggested path.
+                    </Typography>
+                  )}
+                </Alert>
+              )}
             </Grid>
 
             <Grid item xs={12} md={6}>
@@ -846,6 +1098,7 @@ function Configuration({ token }: ConfigurationProps) {
                     <MenuItem value="1080">1080p</MenuItem>
                     <MenuItem value="720">720p</MenuItem>
                     <MenuItem value="480">480p</MenuItem>
+                    <MenuItem value="360">360p</MenuItem>
                   </Select>
                 </FormControl>
                 {getInfoIcon('The resolution we will try to download from YouTube. Note that this is not guaranteed as YouTube may not have your preferred resolution available.')}
@@ -897,20 +1150,22 @@ function Configuration({ token }: ConfigurationProps) {
             </Alert>
           )}
 
-          {plexConnectionStatus === 'not_tested' && config.plexIP && config.plexApiKey && (
+          {plexConnectionStatus === 'not_tested' && hasPlexServerConfigured && config.plexApiKey && (
             <Alert severity="info" sx={{ mb: 2 }}>
               Plex configuration has changed. Click "Test Connection" to verify your settings.
             </Alert>
           )}
 
-          {(!config.plexIP || !config.plexApiKey) && (
+          {(!hasPlexServerConfigured || !config.plexApiKey) && (
             <Alert severity="info" sx={{ mb: 2 }}>
-              Enter both Plex IP and API Key to enable Plex integration.
+              {!hasPlexServerConfigured
+                ? 'Enter your Plex server IP to enable Plex integration.'
+                : 'Enter your Plex API Key to enable Plex integration.'}
             </Alert>
           )}
 
           <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={5}>
               <TextField
                 fullWidth
                 label={
@@ -923,7 +1178,7 @@ function Configuration({ token }: ConfigurationProps) {
                         sx={{ ml: 1 }}
                       />
                     ) : (
-                      getInfoIcon("The IP address of your Plex server. 'localhost' if you're on the same machine running in dev mode. 'host.docker.internal' for production Docker on the same machine. You can also use your public IP for your Plex server.")
+                      getInfoIcon("The IP address of your Plex server. Use 'host.docker.internal' on Docker Desktop (Windows/macOS), or the machine's LAN IP (e.g., 192.168.x.x) when running Docker natively on Linux. You can also use your public IP for your Plex server.")
                     )}
                   </Box>
                 }
@@ -933,11 +1188,32 @@ function Configuration({ token }: ConfigurationProps) {
                 disabled={isPlatformManaged.plexUrl}
                 helperText={isPlatformManaged.plexUrl
                   ? "Plex URL is configured by your platform deployment"
-                  : "e.g., 192.168.1.100 or host.docker.internal"}
+                  : "e.g., host LAN IP (192.168.x.x) or host.docker.internal (Docker Desktop)"}
               />
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={3}>
+              <TextField
+                fullWidth
+                type="number"
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    Plex Port
+                    {getInfoIcon('The TCP port Plex listens on. Defaults to 32400. Update this if you have changed the port in Plex settings or use a reverse proxy mapping.')}
+                  </Box>
+                }
+                name="plexPort"
+                value={config.plexPort}
+                onChange={handleInputChange}
+                disabled={isPlatformManaged.plexUrl}
+                inputProps={{ min: 1, max: 65535, step: 1 }}
+                helperText={isPlatformManaged.plexUrl
+                  ? 'Plex port is configured by your platform deployment'
+                  : 'Default: 32400'}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={4}>
               <Box>
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
                   <TextField
@@ -982,7 +1258,7 @@ function Configuration({ token }: ConfigurationProps) {
                 <Button
                   variant="contained"
                   onClick={testPlexConnection}
-                  disabled={!config.plexIP || !config.plexApiKey || plexConnectionStatus === 'testing'}
+                  disabled={!hasPlexServerConfigured || !config.plexApiKey || plexConnectionStatus === 'testing'}
                   color={plexConnectionStatus === 'connected' ? 'success' : 'primary'}
                 >
                   {plexConnectionStatus === 'testing' ? 'Testing...' : 'Test Connection'}
@@ -1315,6 +1591,130 @@ function Configuration({ token }: ConfigurationProps) {
       <Accordion elevation={8} defaultExpanded={false} sx={{ mb: 2 }}>
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
+            Optional: Notifications
+          </Typography>
+          <Chip
+            label={config.notificationsEnabled ? "Enabled" : "Disabled"}
+            color={config.notificationsEnabled ? "success" : "default"}
+            size="small"
+            sx={{ mr: 1 }}
+          />
+        </AccordionSummary>
+        <AccordionDetails>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <AlertTitle>Get Notified of New Downloads</AlertTitle>
+            <Typography variant="body2">
+              Receive notifications when new videos are downloaded. Currently supports Discord webhooks.
+            </Typography>
+          </Alert>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={config.notificationsEnabled}
+                    onChange={(e) => setConfig({ ...config, notificationsEnabled: e.target.checked })}
+                  />
+                }
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    Enable Notifications
+                    {getInfoIcon('Receive notifications when new videos are downloaded successfully.')}
+                  </Box>
+                }
+              />
+            </Grid>
+
+            {config.notificationsEnabled && (
+              <>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="Discord Webhook URL"
+                    name="discordWebhookUrl"
+                    value={config.discordWebhookUrl}
+                    onChange={handleInputChange}
+                    placeholder="https://discord.com/api/webhooks/..."
+                    helperText={
+                      <Box component="span">
+                        Get your webhook URL from Discord: Server Settings → Integrations → Webhooks.{' '}
+                        <a
+                          href="https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'inherit', textDecoration: 'underline' }}
+                        >
+                          How to get a webhook URL
+                        </a>
+                      </Box>
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Button
+                    variant="outlined"
+                    onClick={async () => {
+                      if (!config.discordWebhookUrl || config.discordWebhookUrl.trim().length === 0) {
+                        setSnackbar({
+                          open: true,
+                          message: 'Please enter a Discord webhook URL first',
+                          severity: 'warning'
+                        });
+                        return;
+                      }
+
+                      setTestingNotification(true);
+                      try {
+                        const response = await fetch('/api/notifications/test', {
+                          method: 'POST',
+                          headers: {
+                            'x-access-token': token || '',
+                          },
+                        });
+
+                        if (response.ok) {
+                          setSnackbar({
+                            open: true,
+                            message: 'Test notification sent! Check your Discord channel.',
+                            severity: 'success'
+                          });
+                        } else {
+                          const error = await response.json();
+                          setSnackbar({
+                            open: true,
+                            message: error.message || 'Failed to send test notification',
+                            severity: 'error'
+                          });
+                        }
+                      } catch (error) {
+                        setSnackbar({
+                          open: true,
+                          message: 'Failed to send test notification',
+                          severity: 'error'
+                        });
+                      } finally {
+                        setTestingNotification(false);
+                      }
+                    }}
+                    disabled={testingNotification}
+                  >
+                    {testingNotification ? 'Sending...' : 'Send Test Notification'}
+                  </Button>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                    Make sure to save your configuration before testing
+                  </Typography>
+                </Grid>
+              </>
+            )}
+          </Grid>
+        </AccordionDetails>
+      </Accordion>
+
+      <Accordion elevation={8} defaultExpanded={false} sx={{ mb: 2 }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Typography variant="h6" sx={{ flexGrow: 1 }}>
             Download Performance Settings
           </Typography>
           <Chip
@@ -1451,81 +1851,83 @@ function Configuration({ token }: ConfigurationProps) {
         </AccordionDetails>
       </Accordion>
 
-      <Card elevation={8} sx={{ mb: 2 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Account & Security
-          </Typography>
-
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle1" gutterBottom>
-              Change Password
+      {showAccountSection && (
+        <Card elevation={8} sx={{ mb: 2 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Account & Security
             </Typography>
 
-            {!showPasswordChange ? (
-              <Button
-                variant="outlined"
-                onClick={() => setShowPasswordChange(true)}
-              >
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle1" gutterBottom>
                 Change Password
-              </Button>
-            ) : (
-              <Box component="form" onSubmit={handlePasswordChange}>
-                <TextField
-                  fullWidth
-                  type="password"
-                  label="Current Password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  margin="normal"
-                  required
-                />
-                <TextField
-                  fullWidth
-                  type="password"
-                  label="New Password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  margin="normal"
-                  required
-                  helperText="Minimum 8 characters"
-                />
-                <TextField
-                  fullWidth
-                  type="password"
-                  label="Confirm New Password"
-                  value={confirmNewPassword}
-                  onChange={(e) => setConfirmNewPassword(e.target.value)}
-                  margin="normal"
-                  required
-                  error={confirmNewPassword !== '' && newPassword !== confirmNewPassword}
-                  helperText={
-                    confirmNewPassword !== '' && newPassword !== confirmNewPassword
-                      ? "Passwords don't match"
-                      : ''
-                  }
-                />
-                <Box sx={{ mt: 2 }}>
-                  <Button type="submit" variant="contained" sx={{ mr: 1 }}>
-                    Update Password
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    onClick={() => {
-                      setShowPasswordChange(false);
-                      setCurrentPassword('');
-                      setNewPassword('');
-                      setConfirmNewPassword('');
-                    }}
-                  >
-                    Cancel
-                  </Button>
+              </Typography>
+
+              {!showPasswordChange ? (
+                <Button
+                  variant="outlined"
+                  onClick={() => setShowPasswordChange(true)}
+                >
+                  Change Password
+                </Button>
+              ) : (
+                <Box component="form" onSubmit={handlePasswordChange}>
+                  <TextField
+                    fullWidth
+                    type="password"
+                    label="Current Password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    margin="normal"
+                    required
+                  />
+                  <TextField
+                    fullWidth
+                    type="password"
+                    label="New Password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    margin="normal"
+                    required
+                    helperText="Minimum 8 characters"
+                  />
+                  <TextField
+                    fullWidth
+                    type="password"
+                    label="Confirm New Password"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    margin="normal"
+                    required
+                    error={confirmNewPassword !== '' && newPassword !== confirmNewPassword}
+                    helperText={
+                      confirmNewPassword !== '' && newPassword !== confirmNewPassword
+                        ? "Passwords don't match"
+                        : ''
+                    }
+                  />
+                  <Box sx={{ mt: 2 }}>
+                    <Button type="submit" variant="contained" sx={{ mr: 1 }}>
+                      Update Password
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      onClick={() => {
+                        setShowPasswordChange(false);
+                        setCurrentPassword('');
+                        setNewPassword('');
+                        setConfirmNewPassword('');
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </Box>
                 </Box>
-              </Box>
-            )}
-          </Box>
-        </CardContent>
-      </Card>
+              )}
+            </Box>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Spacer to prevent content from being hidden behind the fixed save bar */}
       <Box sx={{ height: youtubeDirectoryChanged ? { xs: 160, sm: 120 } : { xs: 88, sm: 80 } }} />

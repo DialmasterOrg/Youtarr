@@ -96,6 +96,17 @@ If you need to change the directory later:
 # Update "youtubeOutputDirectory" value
 ```
 
+## Using an External Database
+
+Some users prefer to supply their own MariaDB/MySQL instance instead of the bundled `youtarr-db` container. You now have two helper scripts:
+
+- Copy `config/external-db.env.example` to `config/external-db.env` and enter your credentials
+- Run `./start.sh --external-db` to launch only the application container via Docker Compose (uses `docker-compose.external-db.yml`)
+- Run `./start-with-external-db.sh` to launch a single container (should work for UNRAID or plain `docker run` workflows)
+- Follow the full walkthrough (including a local test harness) in [docs/EXTERNAL_DB.md](EXTERNAL_DB.md)
+
+Both helpers automatically run migrations against the external database on boot, so no manual schema management is required once connectivity is in place.
+
 ## Docker Commands
 
 ### Starting and Stopping
@@ -412,9 +423,11 @@ The application container includes health checks:
 
 #### Same Machine Setup
 When Youtarr and Plex run on the same machine:
-- `host.docker.internal` - Recommended for Docker Desktop
-- `172.17.0.1` - Default Docker bridge IP on Linux
-- Host machine's IP address - Works for any setup
+- Docker Desktop (Windows/macOS): `host.docker.internal`
+- Docker on macOS without Docker Desktop (e.g., Colima): host LAN IP (e.g., `192.168.x.x`) or `host.lima.internal`
+- Docker on Linux: host LAN IP (e.g., `192.168.x.x`). The default bridge IP (`172.17.0.1`) usually won't work unless Plex is bound to the Docker bridge.
+- Explicit host mapping: add `--add-host host.docker.internal:<host-ip>` when starting the container if you prefer that hostname on Linux.
+- Plex defaults to port `32400`. If you use a custom Plex port, update the Plex Port field or include the port in `PLEX_URL`.
 
 #### Separate Machine Setup
 When Youtarr and Plex run on different machines:

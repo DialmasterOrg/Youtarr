@@ -484,7 +484,16 @@ function AppContent() {
                   setRequiresSetup(false);
                   window.location.href = '/configuration';
                 }} />} />
-                <Route path='/login' element={<LocalLogin setToken={setToken} />} />
+                <Route
+                  path='/login'
+                  element={
+                    isPlatformManaged ? (
+                      <Navigate to='/configuration' replace />
+                    ) : (
+                      <LocalLogin setToken={setToken} />
+                    )
+                  }
+                />
                 {token ? (
                   <>
                     <Route

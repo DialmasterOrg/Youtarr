@@ -8,11 +8,13 @@ export interface VideoInfo {
   availability?: string;
   isAlreadyDownloaded: boolean;
   isMembersOnly: boolean;
+  media_type?: string;
 }
 
 export interface DownloadSettings {
   resolution: string;
   videoCount: number;
+  allowRedownload?: boolean;
 }
 
 export interface ValidationResponse {
@@ -27,6 +29,7 @@ export interface ValidationResponse {
     duration: number;
     publishedAt: number;
     availability?: string;
+    media_type?: string;
   };
   error?: string;
 }

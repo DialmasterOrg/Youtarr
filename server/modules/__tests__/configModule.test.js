@@ -13,6 +13,7 @@ describe('ConfigModule', () => {
   const mockConfigPath = path.join(__dirname, '../../../config/config.json');
   const mockConfig = {
     plexApiKey: 'test-plex-key',
+    plexPort: '32400',
     youtubeOutputDirectory: '/test/output',
     plexLibrarySection: 1,
     channelAutoDownload: false,
@@ -486,6 +487,7 @@ describe('ConfigModule', () => {
       expect(writtenConfig.channelAutoDownload).toBe(false);
       expect(writtenConfig.channelDownloadFrequency).toBe('0 */6 * * *');
       expect(writtenConfig.plexApiKey).toBe('');
+      expect(writtenConfig.plexPort).toBe('32400');
       expect(consoleSpy).toHaveBeenCalledWith('Platform deployment detected (DATA_PATH is set). Auto-creating config.json...');
 
       consoleSpy.mockRestore();
@@ -521,6 +523,7 @@ describe('ConfigModule', () => {
         preferredResolution: '1080',
         '//comment': 'This should be stripped',
         plexApiKey: '',
+        plexPort: '32400',
         youtubeOutputDirectory: '/some/path'
       };
 
@@ -539,6 +542,7 @@ describe('ConfigModule', () => {
             channelFilesToDownload: 5,
             preferredResolution: '1080',
             plexApiKey: '',
+            plexPort: '32400',
             youtubeOutputDirectory: '/usr/src/app/data',
             uuid: 'auto-generated-uuid'
           });
@@ -559,6 +563,7 @@ describe('ConfigModule', () => {
       expect(writtenConfig.youtubeOutputDirectory).toBe('/usr/src/app/data');
       expect(writtenConfig.uuid).toBe('auto-generated-uuid');
       expect(writtenConfig.dockerAutoCreated).toBe(true);
+      expect(writtenConfig.plexPort).toBe('32400');
 
       // Should not have the comment field
       expect(writtenConfig['//comment']).toBeUndefined();
@@ -586,6 +591,7 @@ describe('ConfigModule', () => {
           return JSON.stringify({
             channelFilesToDownload: 3,
             preferredResolution: '1080',
+            plexPort: '32400',
             youtubeOutputDirectory: '/usr/src/app/data',
             uuid: 'auto-generated-uuid'
           });
@@ -605,6 +611,7 @@ describe('ConfigModule', () => {
       expect(writtenConfig.channelFilesToDownload).toBe(3);
       expect(writtenConfig.uuid).toBe('auto-generated-uuid');
       expect(writtenConfig.dockerAutoCreated).toBe(true);
+      expect(writtenConfig.plexPort).toBe('32400');
 
       expect(consoleSpy).toHaveBeenCalledWith('Could not load config.example.json, using inline defaults');
 
@@ -685,6 +692,7 @@ describe('ConfigModule', () => {
 
       const writtenConfig = JSON.parse(mockFs.writeFileSync.mock.calls[0][1]);
       expect(writtenConfig.plexUrl).toBe('http://plex:32400');
+      expect(writtenConfig.plexPort).toBe('32400');
 
       delete process.env.DATA_PATH;
       delete process.env.PLEX_URL;
@@ -729,6 +737,97 @@ describe('ConfigModule', () => {
       delete process.env.DATA_PATH;
       const jobsPath = ConfigModule.getJobsPath();
       expect(jobsPath).toContain('/jobs');
+    });
+  });
+
+  describe('notification settings', () => {
+    test('should initialize notification settings when missing', () => {
+      const configWithoutNotifications = { ...mockConfig };
+      delete configWithoutNotifications.notificationsEnabled;
+      delete configWithoutNotifications.notificationService;
+      delete configWithoutNotifications.discordWebhookUrl;
+
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithoutNotifications));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithoutNotifications)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.notificationsEnabled).toBe(false);
+      expect(FreshConfigModule.config.notificationService).toBe('discord');
+      expect(FreshConfigModule.config.discordWebhookUrl).toBe('');
+    });
+
+    test('should preserve existing notification settings', () => {
+      const configWithNotifications = {
+        ...mockConfig,
+        notificationsEnabled: true,
+        notificationService: 'discord',
+        discordWebhookUrl: 'https://discord.com/api/webhooks/test'
+      };
+
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithNotifications));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithNotifications)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.notificationsEnabled).toBe(true);
+      expect(FreshConfigModule.config.notificationService).toBe('discord');
+      expect(FreshConfigModule.config.discordWebhookUrl).toBe('https://discord.com/api/webhooks/test');
+    });
+
+    test('migration 1.35.0 should add notification settings', () => {
+      ConfigModule = require('../configModule');
+
+      const configWithoutNotifications = {
+        plexApiKey: 'test',
+        youtubeOutputDirectory: '/test'
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithoutNotifications);
+
+      expect(migrated.notificationsEnabled).toBe(false);
+      expect(migrated.notificationService).toBe('discord');
+      expect(migrated.discordWebhookUrl).toBe('');
+    });
+
+    test('migration 1.35.0 should preserve existing notification settings', () => {
+      ConfigModule = require('../configModule');
+
+      const configWithNotifications = {
+        plexApiKey: 'test',
+        youtubeOutputDirectory: '/test',
+        notificationsEnabled: true,
+        notificationService: 'discord',
+        discordWebhookUrl: 'https://discord.com/api/webhooks/existing'
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithNotifications);
+
+      expect(migrated.notificationsEnabled).toBe(true);
+      expect(migrated.notificationService).toBe('discord');
+      expect(migrated.discordWebhookUrl).toBe('https://discord.com/api/webhooks/existing');
     });
   });
 

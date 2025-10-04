@@ -4,6 +4,7 @@ const app = express();
 app.set('trust proxy', true); // Trust proxy headers for correct IP detection
 app.use(express.json());
 const path = require('path');
+const fs = require('fs');
 const db = require('./db');
 const https = require('https');
 const http = require('http');
@@ -53,6 +54,23 @@ function isLocalhostIP(ip) {
 
   return isLocal;
 }
+
+const isWslEnvironment = (() => {
+  if (process.platform !== 'linux') {
+    return false;
+  }
+
+  if (process.env.WSL_INTEROP || process.env.WSL_DISTRO_NAME) {
+    return true;
+  }
+
+  try {
+    const osRelease = fs.readFileSync('/proc/sys/kernel/osrelease', 'utf8');
+    return osRelease.toLowerCase().includes('microsoft');
+  } catch (error) {
+    return false;
+  }
+})();
 
 const initialize = async () => {
   try {
@@ -222,16 +240,28 @@ const initialize = async () => {
         // Check if test parameters are provided in query string
         const testIP = req.query.testIP;
         const testApiKey = req.query.testApiKey;
+        const testPortRaw = req.query.testPort;
+        const hasTestCredentials = typeof testApiKey === 'string' && testApiKey.length > 0;
+        let testPort;
+        if (typeof testPortRaw === 'string' && testPortRaw.trim().length > 0) {
+          const numericPort = testPortRaw.trim().replace(/[^0-9]/g, '');
+          testPort = numericPort.length > 0 ? numericPort : undefined;
+        }
 
         let libraries;
-        if (testIP && testApiKey) {
+        if (hasTestCredentials || typeof testIP === 'string') {
           // Use provided test values instead of saved config
-          libraries = await plexModule.getLibrariesWithParams(testIP, testApiKey);
+          libraries = await plexModule.getLibrariesWithParams(testIP, testApiKey, testPort);
 
           // If test was successful (got libraries), auto-save the credentials
-          if (libraries && libraries.length > 0) {
+          if (libraries && libraries.length > 0 && hasTestCredentials) {
             const currentConfig = configModule.getConfig();
-            currentConfig.plexIP = testIP;
+            if (testIP) {
+              currentConfig.plexIP = testIP;
+            }
+            if (testPort) {
+              currentConfig.plexPort = testPort;
+            }
             currentConfig.plexApiKey = testApiKey;
             configModule.updateConfig(currentConfig);
             console.log('Plex credentials auto-saved after successful test');
@@ -269,7 +299,8 @@ const initialize = async () => {
       safeConfig.deploymentEnvironment = {
         inDocker: !!process.env.IN_DOCKER_CONTAINER,
         dockerAutoCreated: !!safeConfig.dockerAutoCreated,
-        platform: process.env.PLATFORM || null
+        platform: process.env.PLATFORM || null,
+        isWsl: isWslEnvironment
       };
 
       res.json(safeConfig);
@@ -349,6 +380,23 @@ const initialize = async () => {
       } catch (error) {
         console.error('Error deleting cookie file:', error);
         res.status(500).json({ error: 'Failed to delete cookie file' });
+      }
+    });
+
+    app.post('/api/notifications/test', verifyToken, async (req, res) => {
+      try {
+        const notificationModule = require('./modules/notificationModule');
+        await notificationModule.sendTestNotification();
+        res.json({
+          status: 'success',
+          message: 'Test notification sent successfully'
+        });
+      } catch (error) {
+        console.error('Error sending test notification:', error);
+        res.status(500).json({
+          error: 'Failed to send test notification',
+          message: error.message
+        });
       }
     });
 
@@ -435,7 +483,13 @@ const initialize = async () => {
     app.get('/getchannelvideos/:channelId', verifyToken, async (req, res) => {
       console.log('Getting channel videos');
       const channelId = req.params.channelId;
-      const result = await channelModule.getChannelVideos(channelId);
+      const page = parseInt(req.query.page) || 1;
+      const pageSize = parseInt(req.query.pageSize) || 50;
+      const hideDownloaded = req.query.hideDownloaded === 'true';
+      const searchQuery = req.query.searchQuery || '';
+      const sortBy = req.query.sortBy || 'date';
+      const sortOrder = req.query.sortOrder || 'desc';
+      const result = await channelModule.getChannelVideos(channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder);
 
       // For backward compatibility, if result is an array, convert to old format
       if (Array.isArray(result)) {
@@ -446,6 +500,31 @@ const initialize = async () => {
       } else {
         // New format with additional metadata
         res.status(200).json(result);
+      }
+    });
+
+    app.post('/fetchallchannelvideos/:channelId', verifyToken, async (req, res) => {
+      console.log('Fetching all videos for channel');
+      const channelId = req.params.channelId;
+      const page = parseInt(req.query.page) || 1;
+      const pageSize = parseInt(req.query.pageSize) || 50;
+      const hideDownloaded = req.query.hideDownloaded === 'true';
+
+      try {
+        const result = await channelModule.fetchAllChannelVideos(channelId, page, pageSize, hideDownloaded);
+        res.status(200).json(result);
+      } catch (error) {
+        console.error('Error fetching all channel videos:', error);
+
+        // Check if this is a concurrency error
+        const isConcurrencyError = error.message.includes('fetch operation is already in progress');
+        const statusCode = isConcurrencyError ? 409 : 500; // 409 Conflict for concurrency issues
+
+        res.status(statusCode).json({
+          success: false,
+          error: isConcurrencyError ? 'FETCH_IN_PROGRESS' : 'Failed to fetch all channel videos',
+          message: error.message
+        });
       }
     });
 
@@ -465,18 +544,29 @@ const initialize = async () => {
       res.json(runningJobs);
     });
 
-    app.get('/getVideos', verifyToken, (req, res) => {
+    app.get('/getVideos', verifyToken, async (req, res) => {
       console.log('Getting videos');
 
-      //return res.json({ status: 'success' });
-      videosModule
-        .getVideos()
-        .then((videos) => {
-          res.json(videos);
-        })
-        .catch((error) => {
-          res.status(500).json({ error: error.message });
-        });
+      try {
+        const { page, limit, search, dateFrom, dateTo, sortBy, sortOrder, channelFilter } = req.query;
+
+        const options = {
+          page: parseInt(page) || 1,
+          limit: parseInt(limit) || 12,
+          search: search || '',
+          dateFrom: dateFrom || null,
+          dateTo: dateTo || null,
+          sortBy: sortBy || 'added',
+          sortOrder: sortOrder || 'desc',
+          channelFilter: channelFilter || ''
+        };
+
+        const result = await videosModule.getVideosPaginated(options);
+        res.json(result);
+      } catch (error) {
+        console.error('Error getting videos:', error);
+        res.status(500).json({ error: error.message });
+      }
     });
 
     app.get('/storage-status', verifyToken, async (req, res) => {
@@ -863,8 +953,8 @@ const initialize = async () => {
     app.get('/plex/auth-url', async (req, res) => {
       const config = configModule.getConfig();
 
-      // If auth not configured, reject
-      if (!config.passwordHash) {
+      // If auth not configured, reject (unless platform auth is managing access)
+      if (process.env.AUTH_ENABLED !== 'false' && !config.passwordHash) {
         return res.status(503).json({
           error: 'Authentication not configured',
           requiresSetup: true,
@@ -883,8 +973,8 @@ const initialize = async () => {
     app.get('/plex/check-pin/:pinId', async (req, res) => {
       const config = configModule.getConfig();
 
-      // If auth not configured, reject
-      if (!config.passwordHash) {
+      // If auth not configured, reject (unless platform auth is managing access)
+      if (process.env.AUTH_ENABLED !== 'false' && !config.passwordHash) {
         return res.status(503).json({
           error: 'Authentication not configured',
           requiresSetup: true,
@@ -906,14 +996,28 @@ const initialize = async () => {
       res.sendFile(path.join(__dirname, '../client/build/index.html'));
     });
 
-    const port = process.env.PORT || 3011;
-    const server = http.createServer(app);
-    // pass the server to WebSocket server initialization function to allow it to use the same port
-    require('./modules/webSocketServer.js')(server);
+    if (process.env.NODE_ENV !== 'test') {
+      const port = process.env.PORT || 3011;
+      const server = http.createServer(app);
+      // pass the server to WebSocket server initialization function to allow it to use the same port
+      require('./modules/webSocketServer.js')(server);
 
-    server.listen(port, () => {
-      console.log(`Server listening on port ${port}`);
-    });
+      server.listen(port, () => {
+        console.log(`Server listening on port ${port}`);
+
+        // Run video metadata backfill asynchronously after server starts
+        setTimeout(() => {
+          console.log('Starting async video metadata backfill...');
+          videosModule.backfillVideoMetadata()
+            .then(() => {
+              console.log('Video metadata backfill completed successfully');
+            })
+            .catch(err => {
+              console.error('Video metadata backfill failed:', err);
+            });
+        }, 5000); // Delay 5 seconds to avoid blocking startup
+      });
+    }
 
     // Clean up expired sessions daily at 3 AM
     schedule.schedule('0 3 * * *', async () => {
@@ -940,6 +1044,27 @@ const initialize = async () => {
         console.error('[CLEANUP] Error cleaning sessions:', error);
       }
     });
+
+    // Run video metadata backfill daily at 3:30 AM
+    schedule.schedule('30 3 * * *', async () => {
+      console.log('[CRON] Starting scheduled video metadata backfill at 3:30 AM...');
+      try {
+        // Run asynchronously without blocking - the method handles its own async flow
+        videosModule.backfillVideoMetadata()
+          .then(result => {
+            if (result && result.timedOut) {
+              console.log('[CRON] Video metadata backfill reached time limit, will continue tomorrow');
+            } else {
+              console.log('[CRON] Video metadata backfill completed successfully');
+            }
+          })
+          .catch(err => {
+            console.error('[CRON] Video metadata backfill failed:', err);
+          });
+      } catch (error) {
+        console.error('[CRON] Error starting video metadata backfill:', error);
+      }
+    });
   } catch (error) {
     console.error('Failed to initialize the application:', error);
     // Handle the error here, e.g. exit the process
@@ -947,4 +1072,12 @@ const initialize = async () => {
   }
 };
 
-initialize();
+if (process.env.NODE_ENV !== 'test') {
+  initialize();
+}
+
+module.exports = {
+  app,
+  initialize,
+  isLocalhostIP
+};

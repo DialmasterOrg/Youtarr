@@ -73,10 +73,18 @@ describe('DownloadModule', () => {
       '--format', 'best[height<=1080]',
       '--output', '/mock/output/dir'
     ]);
-    YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload = jest.fn().mockReturnValue([
-      '--format', 'best[height<=1080]',
-      '--output', '/mock/output/dir'
-    ]);
+    YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload = jest.fn().mockImplementation((resolution, allowRedownload) => {
+      const res = resolution || '1080';
+      const baseArgs = [
+        '--format', `best[height<=${res}]`,
+        '--output', '/mock/output/dir'
+      ];
+      // Include download archive flag only when NOT allowing re-downloads
+      if (!allowRedownload) {
+        baseArgs.push('--download-archive', './config/complete.list');
+      }
+      return baseArgs;
+    });
 
     const jobModuleMock = require('../jobModule');
     jobModuleMock.addOrUpdateJob = jest.fn().mockResolvedValue('job-123');
@@ -265,17 +273,20 @@ describe('DownloadModule', () => {
         }),
         false
       );
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080');
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false);
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--format', 'best[height<=1080]',
           '--output', '/mock/output/dir',
+          '--download-archive', './config/complete.list',
           'https://youtube.com/watch?v=abc123',
           'https://youtube.com/watch?v=def456'
         ]),
         mockJobId,
         'Manually Added Urls',
-        2
+        2,
+        ['https://youtube.com/watch?v=abc123', 'https://youtube.com/watch?v=def456'],
+        false
       );
     });
 
@@ -297,11 +308,14 @@ describe('DownloadModule', () => {
       );
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
+          '--download-archive', './config/complete.list',
           'https://youtube.com/watch?v=xyz789'
         ]),
         mockJobId,
         'Manually Added Urls',
-        1
+        1,
+        ['https://youtube.com/watch?v=xyz789'],
+        false
       );
     });
 
@@ -317,12 +331,15 @@ describe('DownloadModule', () => {
 
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
+          '--download-archive', './config/complete.list',
           '--', '-abc123',
           'https://youtube.com/watch?v=def456'
         ]),
         mockJobId,
         'Manually Added Urls',
-        2
+        2,
+        ['-abc123', 'https://youtube.com/watch?v=def456'],
+        false
       );
     });
 
@@ -339,7 +356,103 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('480');
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('480', false);
+    });
+
+    it('should handle allowRedownload override setting', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+      const request = {
+        body: {
+          urls: ['https://youtube.com/watch?v=test1', 'https://youtube.com/watch?v=test2'],
+          overrideSettings: {
+            resolution: '720',
+            allowRedownload: true
+          }
+        }
+      };
+
+      await downloadModule.doSpecificDownloads(request);
+
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', true);
+      expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          '--format', 'best[height<=720]',
+          '--output', '/mock/output/dir',
+          'https://youtube.com/watch?v=test1',
+          'https://youtube.com/watch?v=test2'
+        ]),
+        mockJobId,
+        'Manually Added Urls',
+        2,
+        ['https://youtube.com/watch?v=test1', 'https://youtube.com/watch?v=test2'],
+        true
+      );
+      // Verify that --download-archive is NOT in the arguments when allowRedownload is true
+      expect(mockDownloadExecutor.doDownload).not.toHaveBeenCalledWith(
+        expect.arrayContaining(['--download-archive']),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        expect.anything()
+      );
+    });
+
+    it('should handle only resolution override when allowRedownload is false', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+      const request = {
+        body: {
+          urls: ['https://youtube.com/watch?v=test'],
+          overrideSettings: {
+            resolution: '480',
+            allowRedownload: false
+          }
+        }
+      };
+
+      await downloadModule.doSpecificDownloads(request);
+
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('480', false);
+      expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          '--format', 'best[height<=480]',
+          '--output', '/mock/output/dir',
+          '--download-archive', './config/complete.list',
+          'https://youtube.com/watch?v=test'
+        ]),
+        mockJobId,
+        'Manually Added Urls',
+        1,
+        ['https://youtube.com/watch?v=test'],
+        false
+      );
+    });
+
+    it('should default allowRedownload to false when not specified in overrideSettings', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+      const request = {
+        body: {
+          urls: ['https://youtube.com/watch?v=default'],
+          overrideSettings: {
+            // No allowRedownload specified, should default to false
+          }
+        }
+      };
+
+      await downloadModule.doSpecificDownloads(request);
+
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false);
+      expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          '--download-archive', './config/complete.list',
+          'https://youtube.com/watch?v=default'
+        ]),
+        mockJobId,
+        'Manually Added Urls',
+        1,
+        ['https://youtube.com/watch?v=default'],
+        false
+      );
     });
 
     it('should handle existing job id', async () => {
@@ -387,11 +500,14 @@ describe('DownloadModule', () => {
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--format', 'best[height<=1080]',
-          '--output', '/mock/output/dir'
+          '--output', '/mock/output/dir',
+          '--download-archive', './config/complete.list'
         ]),
         mockJobId,
         'Manually Added Urls',
-        0
+        0,
+        [],
+        false
       );
     });
   });

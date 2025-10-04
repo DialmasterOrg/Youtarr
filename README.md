@@ -1,5 +1,9 @@
 # Youtarr
 
+![Backend Coverage](https://img.shields.io/badge/Backend_Coverage-87%25-brightgreen)
+![Frontend Coverage](https://img.shields.io/badge/Frontend_Coverage-81%25-brightgreen)
+![CI Status](https://github.com/DialmasterOrg/Youtarr/workflows/CI%20-%20Lint%20and%20Test/badge.svg)
+
 Youtarr is a self-hosted YouTube downloader that automatically downloads videos from your favorite channels or specific URLs. With optional Plex integration, it can refresh your media library for a seamless, ad-free viewing experience.
 
 ## 🤔 Why Youtarr?
@@ -23,8 +27,10 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 - **🖼️ Channel Artwork**: Automatic channel poster generation for media server folder displays
 - **⏰ Scheduled Downloads**: Configure automatic downloads on your schedule (cron-based)
 - **📱 Web Interface**: Manage everything through a responsive web UI
-- **🔍 Browse Channels**: View all videos from subscribed channels before downloading
+- **🔍 Browse Channels**: View and search all videos from subscribed channels with advanced filtering
 - **📊 Download History**: Track what you've downloaded with smart duplicate prevention
+- **🔔 Discord Alerts**: Send optional webhook notifications when new videos finish downloading
+- **♻️ Re-download Missing**: Easily identify and re-download videos that were removed from disk
 - **🔐 Secure Access**: Local authentication system with admin controls
 - **☁️ Platform Flexible**: Configurable storage paths for Kubernetes/Elfhosted deployments
 
@@ -64,6 +70,8 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
    ```bash
    ./start.sh
    ```
+   - Optional: run `./start.sh --no-auth` only when Youtarr sits behind your own authentication layer (Cloudflare Tunnel, OAuth proxy, VPN, etc.)
+   - ⚠️ Never expose Youtarr directly to the internet when using `--no-auth`; always require upstream authentication
 
 4. **Access the web interface**:
    - Navigate to `http://localhost:3087`
@@ -72,6 +80,12 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
      - The app works fine without Plex integration and will still download videos from YouTube automatically and
        allow you to add and browse YouTube channels
    - If containers don’t start or the app isn’t reachable, see [Troubleshooting](docs/TROUBLESHOOTING.md)
+
+### Using an External Database
+- Already running MariaDB/MySQL elsewhere? Copy `config/external-db.env.example` to `config/external-db.env`, fill in your connection details, then either:
+  - Run `./start.sh --external-db` (Docker Compose helper) or
+  - Run `./start-with-external-db.sh` (single-container helper for platforms like UNRAID)
+- Full walkthrough (including local testing steps) lives in [docs/EXTERNAL_DB.md](docs/EXTERNAL_DB.md)
 
 ## 📋 Usage Examples
 
@@ -99,6 +113,18 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 4. Select which types of segments to handle (sponsors, intros, outros, etc.)
 5. All new downloads will automatically process selected segments
 
+### Enable Download Notifications
+1. Open Configuration → Optional: Notifications
+2. Toggle notifications on and paste your Discord webhook URL (Server Settings → Integrations → Webhooks)
+3. Save configuration, then use "Send Test Notification" to verify delivery
+4. Youtarr will notify the channel after successful downloads that include at least one new video
+
+### Re-download Missing Videos
+1. Go to Downloaded Videos or Channel Videos page
+2. Look for videos marked with cloud-off icon (missing from disk)
+3. Select videos to re-download with your preferred resolution
+4. Videos will be queued for download while preserving metadata
+
 ## 📖 Documentation
 
 - **[Setup Guide](docs/SETUP.md)** - Detailed installation and configuration instructions
@@ -113,8 +139,10 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 - **Storage**: Videos download to the directory you select during setup
 - **Storage Growth**: Downloads can consume significant disk space over time. The UI includes a storage status chip that shows total and free space for your selected directory/drive, making it easy to monitor and adjust limits/schedule as needed.
 - **Format**: Downloads as MP4 with comprehensive embedded metadata (title, genre, studio, keywords) and NFO files for maximum media server compatibility
+- **File Management**: Videos must retain their `[youtubeid].mp4` filename and remain in their download location. Moving or renaming files will cause Youtarr to mark them as "missing"
 - **Filtering**: Automatically skips YouTube Shorts and subscriber-only content
 - **Authentication**: Uses local authentication (create admin account on first access)
+- **Security**: Leave authentication enabled unless you have your own auth in front of Youtarr. If you launch with `--no-auth` (or set `AUTH_ENABLED=false`), never expose that instance directly to the public internet.
 
 ### For Plex Users (Optional)
 - **Library Type**: Must be configured as "Other Videos" with "Personal Media" agent
@@ -124,13 +152,17 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
   - Plex can read from the same media location
   - Youtarr can reach the Plex API over the network
 - **Network Storage**: Supports NAS, network shares, and mounted volumes
-- **Docker on Windows**: Use `host.docker.internal` as your Plex server address
+- **Docker Desktop (Windows/macOS)**: Use `host.docker.internal` as your Plex server address
+- **Docker on macOS without Docker Desktop (e.g., Colima)**: Use the Mac's LAN IP (e.g., `192.168.x.x`) or `host.lima.internal`
+- **Docker on Linux**: Use the host's LAN IP (e.g., `192.168.x.x`). `host.docker.internal` normally resolves to the Docker bridge and Plex may not be listening there.
+- **Custom Plex port**: Plex defaults to port `32400`, but you can change the Plex Port field (or include the port in `PLEX_URL`) if your server listens elsewhere.
+- **Library path translation**: When you pick a Plex library, confirm the suggested download path matches how Youtarr sees your storage (e.g., convert `C:\Media` to `/mnt/c/Media` on WSL).
 
 ### For Platform Deployments (Elfhosted, Kubernetes, etc.)
 Youtarr now fully supports platform-managed deployments with automatic configuration:
 
 - **Auto-Configuration**: When `DATA_PATH` is set, config.json is auto-created on first run
-- **Platform Authentication**: Set `AUTH_ENABLED=false` to bypass internal auth (when platform handles it)
+- **Platform Authentication**: Set `AUTH_ENABLED=false` to bypass internal auth (only when platform handles it). ⚠️ Never expose a no-auth instance directly; protect it behind your platform's authentication layer.
 - **Pre-configured Plex**: Set `PLEX_URL` for automatic Plex server configuration
 - **Consolidated Storage**: All persistent data stored under single `/app/config` mount
 - **Example**: `DATA_PATH=/storage/rclone/storagebox/youtube`
@@ -153,11 +185,3 @@ Licensed under the ISC License. See [LICENSE.md](LICENSE.md) for details.
 <img width="1916" height="1482" alt="image" src="https://github.com/user-attachments/assets/18625f29-61de-475d-b509-1654420e7612" />
 <img width="1907" height="1489" alt="image" src="https://github.com/user-attachments/assets/1151811e-0a8a-4960-897b-7b1eb3ab3546" />
 <img width="1905" height="1488" alt="image" src="https://github.com/user-attachments/assets/a9e10530-a966-42fa-b71d-b2d7bbbeadff" />
-
-
-
-
-
-
-
-

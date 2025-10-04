@@ -26,6 +26,11 @@ jest.mock('../downloadModule', () => ({
   doChannelDownloads: jest.fn()
 }));
 
+jest.mock('../fileCheckModule', () => ({
+  checkVideoFiles: jest.fn(),
+  applyVideoUpdates: jest.fn()
+}));
+
 describe('ChannelModule', () => {
   let ChannelModule;
   let fs;
@@ -34,6 +39,7 @@ describe('ChannelModule', () => {
   let cron;
   let configModule;
   let downloadModule;
+  let fileCheckModule;
   let MessageEmitter;
   let Channel;
   let ChannelVideo;
@@ -106,6 +112,7 @@ describe('ChannelModule', () => {
 
     configModule = require('../configModule');
     downloadModule = require('../downloadModule');
+    fileCheckModule = require('../fileCheckModule');
     MessageEmitter = require('../messageEmitter.js');
     MessageEmitter.emitMessage = jest.fn();
 
@@ -368,6 +375,7 @@ describe('ChannelModule', () => {
           title: mockVideoData.title,
           thumbnail: mockVideoData.thumbnail,
           duration: mockVideoData.duration,
+          media_type: 'video',
           publishedAt: mockVideoData.publishedAt,
           availability: mockVideoData.availability
         });
@@ -377,8 +385,8 @@ describe('ChannelModule', () => {
 
   describe('Video Operations', () => {
     describe('enrichVideosWithDownloadStatus', () => {
-      test('should add download status to videos', () => {
-        fs.readFileSync.mockReturnValue('youtube video1\nyoutube video2');
+      test('should add download status to videos based on Videos table', async () => {
+        const Video = require('../../models/video');
 
         const videos = [
           { youtube_id: 'video1', toJSON: () => ({ youtube_id: 'video1' }) },
@@ -386,46 +394,417 @@ describe('ChannelModule', () => {
           { youtube_id: 'video3', toJSON: () => ({ youtube_id: 'video3' }) }
         ];
 
-        const result = ChannelModule.enrichVideosWithDownloadStatus(videos);
+        // Mock Videos table response - video1 and video2 are downloaded, video2 is removed
+        Video.findAll = jest.fn().mockResolvedValue([
+          { youtubeId: 'video1', removed: false },
+          { youtubeId: 'video2', removed: true }
+        ]);
 
+        const result = await ChannelModule.enrichVideosWithDownloadStatus(videos);
+
+        expect(Video.findAll).toHaveBeenCalledWith({
+          where: {
+            youtubeId: ['video1', 'video2', 'video3']
+          },
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+        });
         expect(result[0].added).toBe(true);
+        expect(result[0].removed).toBe(false);
         expect(result[1].added).toBe(true);
+        expect(result[1].removed).toBe(true);
         expect(result[2].added).toBe(false);
+        expect(result[2].removed).toBe(false);
       });
 
-      test('should handle plain objects without toJSON', () => {
-        fs.readFileSync.mockReturnValue('youtube video1');
+      test('should handle plain objects without toJSON', async () => {
+        const Video = require('../../models/video');
 
         const videos = [
           { youtube_id: 'video1' },
           { youtube_id: 'video2' }
         ];
 
-        const result = ChannelModule.enrichVideosWithDownloadStatus(videos);
+        // Mock Videos table response - only video1 is downloaded
+        Video.findAll = jest.fn().mockResolvedValue([
+          { youtubeId: 'video1', removed: false }
+        ]);
 
+        const result = await ChannelModule.enrichVideosWithDownloadStatus(videos);
+
+        expect(Video.findAll).toHaveBeenCalledWith({
+          where: {
+            youtubeId: ['video1', 'video2']
+          },
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+        });
         expect(result[0].added).toBe(true);
+        expect(result[0].removed).toBe(false);
         expect(result[1].added).toBe(false);
+        expect(result[1].removed).toBe(false);
+      });
+
+      test('should correctly handle removed videos', async () => {
+        const Video = require('../../models/video');
+
+        const videos = [
+          { youtube_id: 'video1', toJSON: () => ({ youtube_id: 'video1' }) },
+          { youtube_id: 'video2', toJSON: () => ({ youtube_id: 'video2' }) },
+          { youtube_id: 'video3', toJSON: () => ({ youtube_id: 'video3' }) }
+        ];
+
+        // Mock Videos table response - video1 active, video2 removed, video3 not downloaded
+        Video.findAll = jest.fn().mockResolvedValue([
+          { youtubeId: 'video1', removed: false },
+          { youtubeId: 'video2', removed: true }
+        ]);
+
+        const result = await ChannelModule.enrichVideosWithDownloadStatus(videos);
+
+        // Verify Video1 is added and not removed
+        expect(result[0].added).toBe(true);
+        expect(result[0].removed).toBe(false);
+
+        // Verify Video2 is added but marked as removed
+        expect(result[1].added).toBe(true);
+        expect(result[1].removed).toBe(true);
+
+        // Verify Video3 is not downloaded at all
+        expect(result[2].added).toBe(false);
+        expect(result[2].removed).toBe(false);
+      });
+
+      test('should handle videos with youtubeId field instead of youtube_id', async () => {
+        const Video = require('../../models/video');
+
+        const videos = [
+          { youtubeId: 'video1', toJSON: () => ({ youtubeId: 'video1' }) },
+          { youtubeId: 'video2', toJSON: () => ({ youtubeId: 'video2' }) }
+        ];
+
+        // Mock Videos table response
+        Video.findAll = jest.fn().mockResolvedValue([
+          { youtubeId: 'video1', removed: false }
+        ]);
+
+        const result = await ChannelModule.enrichVideosWithDownloadStatus(videos);
+
+        expect(Video.findAll).toHaveBeenCalledWith({
+          where: {
+            youtubeId: ['video1', 'video2']
+          },
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+        });
+        expect(result[0].added).toBe(true);
+        expect(result[0].removed).toBe(false);
+        expect(result[1].added).toBe(false);
+        expect(result[1].removed).toBe(false);
+      });
+
+      test('should handle mixed field names (youtube_id and youtubeId)', async () => {
+        const Video = require('../../models/video');
+
+        const videos = [
+          { youtube_id: 'video1' },
+          { youtubeId: 'video2' },
+          { youtube_id: 'video3', toJSON: () => ({ youtube_id: 'video3' }) }
+        ];
+
+        // Mock Videos table response
+        Video.findAll = jest.fn().mockResolvedValue([
+          { youtubeId: 'video2', removed: true },
+          { youtubeId: 'video3', removed: false }
+        ]);
+
+        const result = await ChannelModule.enrichVideosWithDownloadStatus(videos);
+
+        expect(Video.findAll).toHaveBeenCalledWith({
+          where: {
+            youtubeId: ['video1', 'video2', 'video3']
+          },
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+        });
+
+        // Video1 - not downloaded
+        expect(result[0].added).toBe(false);
+        expect(result[0].removed).toBe(false);
+
+        // Video2 - downloaded but removed
+        expect(result[1].added).toBe(true);
+        expect(result[1].removed).toBe(true);
+
+        // Video3 - downloaded and not removed
+        expect(result[2].added).toBe(true);
+        expect(result[2].removed).toBe(false);
+      });
+
+      test('should handle empty video list', async () => {
+        const Video = require('../../models/video');
+        const videos = [];
+
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        const result = await ChannelModule.enrichVideosWithDownloadStatus(videos);
+
+        expect(Video.findAll).toHaveBeenCalledWith({
+          where: {
+            youtubeId: []
+          },
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+        });
+        expect(result).toEqual([]);
+      });
+
+      test('should check file existence when checkFiles=true', async () => {
+        const Video = require('../../models/video');
+        const { sequelize, Sequelize } = require('../../db');
+
+        const videos = [
+          { youtube_id: 'video1', toJSON: () => ({ youtube_id: 'video1' }) },
+          { youtube_id: 'video2', toJSON: () => ({ youtube_id: 'video2' }) }
+        ];
+
+        // Mock Videos table response with file paths
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000, filePath: '/path/to/video1.mp4' },
+          { id: 2, youtubeId: 'video2', removed: false, fileSize: 2000, filePath: '/path/to/video2.mp4' }
+        ]);
+
+        // Mock file check module
+        fileCheckModule.checkVideoFiles.mockResolvedValue({
+          videos: [
+            { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000 },
+            { id: 2, youtubeId: 'video2', removed: true, fileSize: 0 } // File not found
+          ],
+          updates: [
+            { id: 2, removed: true, fileSize: null }
+          ]
+        });
+
+        const result = await ChannelModule.enrichVideosWithDownloadStatus(videos, true);
+
+        expect(fileCheckModule.checkVideoFiles).toHaveBeenCalledWith([
+          { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000, filePath: '/path/to/video1.mp4' },
+          { id: 2, youtubeId: 'video2', removed: false, fileSize: 2000, filePath: '/path/to/video2.mp4' }
+        ]);
+        expect(fileCheckModule.applyVideoUpdates).toHaveBeenCalledWith(
+          sequelize,
+          Sequelize,
+          [{ id: 2, removed: true, fileSize: null }]
+        );
+        expect(result[0].added).toBe(true);
+        expect(result[0].removed).toBe(false);
+        expect(result[1].added).toBe(true);
+        expect(result[1].removed).toBe(true);
+      });
+
+      test('should not check files when checkFiles=false', async () => {
+        const Video = require('../../models/video');
+
+        const videos = [
+          { youtube_id: 'video1', toJSON: () => ({ youtube_id: 'video1' }) }
+        ];
+
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000, filePath: '/path/to/video1.mp4' }
+        ]);
+
+        await ChannelModule.enrichVideosWithDownloadStatus(videos, false);
+
+        expect(fileCheckModule.checkVideoFiles).not.toHaveBeenCalled();
+        expect(fileCheckModule.applyVideoUpdates).not.toHaveBeenCalled();
+      });
+
+      test('should handle fileSize in enriched videos', async () => {
+        const Video = require('../../models/video');
+
+        const videos = [
+          { youtube_id: 'video1', toJSON: () => ({ youtube_id: 'video1' }) }
+        ];
+
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'video1', removed: false, fileSize: 5000, filePath: '/path/to/video1.mp4' }
+        ]);
+
+        const result = await ChannelModule.enrichVideosWithDownloadStatus(videos);
+
+        expect(result[0].fileSize).toBe(5000);
       });
     });
 
     describe('fetchNewestVideosFromDb', () => {
       test('should fetch videos from database with download status', async () => {
+        const Video = require('../../models/video');
         const mockVideos = [
           { youtube_id: 'video1', toJSON: () => ({ youtube_id: 'video1' }) },
           { youtube_id: 'video2', toJSON: () => ({ youtube_id: 'video2' }) }
         ];
         ChannelVideo.findAll.mockResolvedValue(mockVideos);
-        fs.readFileSync.mockReturnValue('youtube video1');
+
+        // Mock Videos table response - only video1 is downloaded
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000, filePath: '/path/to/video1.mp4' }
+        ]);
 
         const result = await ChannelModule.fetchNewestVideosFromDb('UC123');
 
         expect(ChannelVideo.findAll).toHaveBeenCalledWith({
           where: { channel_id: 'UC123' },
-          order: [['publishedAt', 'DESC']],
-          limit: 50
+          order: [['publishedAt', 'DESC']]
+        });
+        expect(Video.findAll).toHaveBeenCalledWith({
+          where: {
+            youtubeId: ['video1', 'video2']
+          },
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
         });
         expect(result[0].added).toBe(true);
+        expect(result[0].removed).toBe(false);
         expect(result[1].added).toBe(false);
+        expect(result[1].removed).toBe(false);
+      });
+
+      test('should handle pagination with limit and offset', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = Array.from({ length: 100 }, (_, i) => ({
+          youtube_id: `video${i}`,
+          title: `Video ${i}`,
+          publishedAt: new Date(Date.now() - i * 1000).toISOString(),
+          toJSON() { return { youtube_id: this.youtube_id, title: this.title, publishedAt: this.publishedAt }; }
+        }));
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb('UC123', 10, 20);
+
+        expect(result).toHaveLength(10);
+        expect(result[0].youtube_id).toBe('video20');
+      });
+
+      test('should filter out downloaded videos when excludeDownloaded=true', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video1', title: 'Video 1', toJSON() { return this; } },
+          { youtube_id: 'video2', title: 'Video 2', toJSON() { return this; } },
+          { youtube_id: 'video3', title: 'Video 3', toJSON() { return this; } }
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000, filePath: '/path' },
+          { id: 2, youtubeId: 'video2', removed: true, fileSize: null, filePath: '/path' }
+        ]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb('UC123', 50, 0, true);
+
+        // Should only return video2 (removed) and video3 (not downloaded)
+        expect(result).toHaveLength(2);
+        expect(result.find(v => v.youtube_id === 'video1')).toBeUndefined();
+      });
+
+      test('should filter by search query', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video1', title: 'How to cook pasta', toJSON() { return this; } },
+          { youtube_id: 'video2', title: 'Cooking tutorial', toJSON() { return this; } },
+          { youtube_id: 'video3', title: 'Gaming video', toJSON() { return this; } }
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb('UC123', 50, 0, false, 'cook');
+
+        expect(result).toHaveLength(2);
+        expect(result.every(v => v.title.toLowerCase().includes('cook'))).toBe(true);
+      });
+
+      test('should sort by title', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video1', title: 'Zebra', publishedAt: '2024-01-01', toJSON() { return this; } },
+          { youtube_id: 'video2', title: 'Apple', publishedAt: '2024-01-02', toJSON() { return this; } },
+          { youtube_id: 'video3', title: 'Banana', publishedAt: '2024-01-03', toJSON() { return this; } }
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb('UC123', 50, 0, false, '', 'title', 'asc');
+
+        expect(result[0].title).toBe('Apple');
+        expect(result[1].title).toBe('Banana');
+        expect(result[2].title).toBe('Zebra');
+      });
+
+      test('should sort by duration', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video1', duration: 300, toJSON() { return this; } },
+          { youtube_id: 'video2', duration: 100, toJSON() { return this; } },
+          { youtube_id: 'video3', duration: 200, toJSON() { return this; } }
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb('UC123', 50, 0, false, '', 'duration', 'asc');
+
+        expect(result[0].duration).toBe(100);
+        expect(result[1].duration).toBe(200);
+        expect(result[2].duration).toBe(300);
+      });
+
+      test('should sort by size', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video1', toJSON() { return this; } },
+          { youtube_id: 'video2', toJSON() { return this; } },
+          { youtube_id: 'video3', toJSON() { return this; } }
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'video1', removed: false, fileSize: 3000, filePath: '/path' },
+          { id: 2, youtubeId: 'video2', removed: false, fileSize: 1000, filePath: '/path' },
+          { id: 3, youtubeId: 'video3', removed: false, fileSize: 2000, filePath: '/path' }
+        ]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb('UC123', 50, 0, false, '', 'size', 'asc');
+
+        expect(result[0].fileSize).toBe(1000);
+        expect(result[1].fileSize).toBe(2000);
+        expect(result[2].fileSize).toBe(3000);
+      });
+
+      test('should check files for paginated videos when checkFiles=true', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video1', title: 'Video 1', publishedAt: '2024-01-02', toJSON() { return this; } },
+          { youtube_id: 'video2', title: 'Video 2', publishedAt: '2024-01-01', toJSON() { return this; } }
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+
+        // First call without checkFiles
+        Video.findAll = jest.fn()
+          .mockResolvedValueOnce([
+            { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000, filePath: '/path1' },
+            { id: 2, youtubeId: 'video2', removed: false, fileSize: 2000, filePath: '/path2' }
+          ])
+          // Second call with checkFiles for paginated videos
+          .mockResolvedValueOnce([
+            { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000, filePath: '/path1' },
+            { id: 2, youtubeId: 'video2', removed: false, fileSize: 2000, filePath: '/path2' }
+          ]);
+
+        fileCheckModule.checkVideoFiles.mockResolvedValue({
+          videos: [
+            { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000 },
+            { id: 2, youtubeId: 'video2', removed: true, fileSize: 0 }
+          ],
+          updates: [{ id: 2, removed: true, fileSize: null }]
+        });
+
+        const result = await ChannelModule.fetchNewestVideosFromDb('UC123', 50, 0, false, '', 'date', 'desc', true);
+
+        expect(fileCheckModule.checkVideoFiles).toHaveBeenCalled();
+        // video1 is at index 0, video2 is at index 1, and should be marked as removed after file check
+        expect(result[1].added).toBe(true);
+        expect(result[1].removed).toBe(true);
       });
     });
 
@@ -536,6 +915,7 @@ describe('ChannelModule', () => {
           publishedAt: '2024-01-01T00:00:00.000Z',
           thumbnail: 'https://thumb.jpg',
           duration: 300,
+          media_type: 'video',
           availability: 'public'
         });
       });
@@ -553,7 +933,97 @@ describe('ChannelModule', () => {
           publishedAt: expect.any(String),
           thumbnail: 'https://i.ytimg.com/vi/video123/mqdefault.jpg',
           duration: 0,
+          media_type: 'video',
           availability: null
+        });
+      });
+    });
+
+    describe('getChannelVideoStats', () => {
+      test('should return totalCount and oldestVideoDate for channel without filters', async () => {
+        const oldestDate = '2023-01-01T00:00:00Z';
+        ChannelVideo.count.mockResolvedValue(100);
+        ChannelVideo.findOne.mockResolvedValue({
+          publishedAt: oldestDate
+        });
+
+        const result = await ChannelModule.getChannelVideoStats('UC123');
+
+        expect(ChannelVideo.count).toHaveBeenCalledWith({
+          where: { channel_id: 'UC123' }
+        });
+        expect(ChannelVideo.findOne).toHaveBeenCalledWith({
+          where: { channel_id: 'UC123' },
+          order: [['publishedAt', 'ASC']],
+          attributes: ['publishedAt']
+        });
+        expect(result).toEqual({
+          totalCount: 100,
+          oldestVideoDate: oldestDate
+        });
+      });
+
+      test('should filter by excludeDownloaded when specified', async () => {
+        const Video = require('../../models/video');
+        // Videos should be in DESC order (newest first) as returned by the database
+        const mockVideos = [
+          { youtube_id: 'video3', publishedAt: '2024-01-03', toJSON() { return this; } },
+          { youtube_id: 'video2', publishedAt: '2024-01-02', toJSON() { return this; } },
+          { youtube_id: 'video1', publishedAt: '2024-01-01', toJSON() { return this; } }
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000, filePath: '/path' }
+        ]);
+
+        const result = await ChannelModule.getChannelVideoStats('UC123', true);
+
+        expect(result.totalCount).toBe(2); // video2 and video3 are not downloaded
+        expect(result.oldestVideoDate).toBe('2024-01-02');
+      });
+
+      test('should filter by search query', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video1', title: 'How to cook', publishedAt: '2024-01-01', toJSON() { return this; } },
+          { youtube_id: 'video2', title: 'Gaming video', publishedAt: '2024-01-02', toJSON() { return this; } },
+          { youtube_id: 'video3', title: 'Cooking tips', publishedAt: '2024-01-03', toJSON() { return this; } }
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        const result = await ChannelModule.getChannelVideoStats('UC123', false, 'cook');
+
+        expect(result.totalCount).toBe(2); // Only videos with 'cook' in title
+      });
+
+      test('should combine excludeDownloaded and search filters', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'video1', title: 'How to cook', publishedAt: '2024-01-01', toJSON() { return this; } },
+          { youtube_id: 'video2', title: 'Gaming video', publishedAt: '2024-01-02', toJSON() { return this; } },
+          { youtube_id: 'video3', title: 'Cooking tips', publishedAt: '2024-01-03', toJSON() { return this; } }
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([
+          { id: 1, youtubeId: 'video1', removed: false, fileSize: 1000, filePath: '/path' }
+        ]);
+
+        const result = await ChannelModule.getChannelVideoStats('UC123', true, 'cook');
+
+        expect(result.totalCount).toBe(1); // Only video3 matches both filters
+        expect(result.oldestVideoDate).toBe('2024-01-03');
+      });
+
+      test('should return null oldestVideoDate when no videos', async () => {
+        ChannelVideo.count.mockResolvedValue(0);
+        ChannelVideo.findOne.mockResolvedValue(null);
+
+        const result = await ChannelModule.getChannelVideoStats('UC123');
+
+        expect(result).toEqual({
+          totalCount: 0,
+          oldestVideoDate: null
         });
       });
     });
@@ -794,7 +1264,9 @@ describe('ChannelModule', () => {
           videoFail: false,
           failureReason: null,
           dataSource: 'yt_dlp',
-          lastFetched: channel.lastFetched
+          lastFetched: channel.lastFetched,
+          totalCount: videos.length,
+          oldestVideoDate: null
         });
       });
 
@@ -806,7 +1278,9 @@ describe('ChannelModule', () => {
           videoFail: true,
           failureReason: 'fetch_error',
           dataSource: 'cache',
-          lastFetched: mockChannelData.lastFetched
+          lastFetched: mockChannelData.lastFetched,
+          totalCount: 0,
+          oldestVideoDate: null
         });
       });
 
@@ -814,6 +1288,189 @@ describe('ChannelModule', () => {
         const result = ChannelModule.buildChannelVideosResponse([mockVideoData], null);
 
         expect(result.lastFetched).toBeNull();
+      });
+
+      test('should include stats when provided', () => {
+        const stats = {
+          totalCount: 150,
+          oldestVideoDate: '2023-01-01T00:00:00Z'
+        };
+        const result = ChannelModule.buildChannelVideosResponse([mockVideoData], mockChannelData, 'cache', stats);
+
+        expect(result.totalCount).toBe(150);
+        expect(result.oldestVideoDate).toBe('2023-01-01T00:00:00Z');
+      });
+
+      test('should not fail when videos empty but stats show totalCount > 0', () => {
+        const stats = {
+          totalCount: 50,
+          oldestVideoDate: '2023-01-01T00:00:00Z'
+        };
+        const result = ChannelModule.buildChannelVideosResponse([], mockChannelData, 'cache', stats);
+
+        expect(result.videoFail).toBe(false);
+        expect(result.failureReason).toBeNull();
+      });
+    });
+
+    describe('getChannelVideos', () => {
+      test('should return paginated videos with stats', async () => {
+        const Video = require('../../models/video');
+        const mockChannel = { ...mockChannelData, lastFetched: new Date() };
+        const mockVideos = [
+          { youtube_id: 'video1', publishedAt: new Date().toISOString(), toJSON() { return this; } }
+        ];
+
+        Channel.findOne.mockResolvedValue(mockChannel);
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        ChannelVideo.count.mockResolvedValue(10);
+        ChannelVideo.findOne.mockResolvedValue({ publishedAt: '2023-01-01' });
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        const result = await ChannelModule.getChannelVideos('UC123', 1, 50);
+
+        expect(result.videos).toBeDefined();
+        expect(result.totalCount).toBe(10);
+        expect(result.oldestVideoDate).toBe('2023-01-01');
+      });
+
+      test('should skip auto-refresh when fetch already in progress', async () => {
+        const Video = require('../../models/video');
+        const mockChannel = { ...mockChannelData, lastFetched: null };
+
+        Channel.findOne.mockResolvedValue(mockChannel);
+        ChannelVideo.findAll.mockResolvedValue([]);
+        ChannelVideo.count.mockResolvedValue(0);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        // Simulate an active fetch
+        ChannelModule.activeFetches.set('UC123', {
+          startTime: new Date().toISOString(),
+          type: 'fetchAll'
+        });
+
+        const result = await ChannelModule.getChannelVideos('UC123');
+
+        // Should not throw, should return cached data
+        expect(result.videos).toBeDefined();
+        expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Skipping auto-refresh'));
+
+        // Clean up
+        ChannelModule.activeFetches.delete('UC123');
+      });
+
+      test('should handle errors and return cached data', async () => {
+        const Video = require('../../models/video');
+        const mockChannel = { ...mockChannelData };
+        const mockVideos = [
+          { youtube_id: 'video1', toJSON() { return this; } }
+        ];
+
+        Channel.findOne.mockResolvedValue(mockChannel);
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        ChannelVideo.count.mockResolvedValue(1);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        // Make fetchAndSaveVideosViaYtDlp throw an error
+        jest.spyOn(ChannelModule, 'fetchAndSaveVideosViaYtDlp').mockRejectedValue(new Error('Network error'));
+
+        const result = await ChannelModule.getChannelVideos('UC123');
+
+        expect(result.videos).toBeDefined();
+        expect(consoleErrorSpy).toHaveBeenCalledWith('Error fetching channel videos:', 'Network error');
+      });
+    });
+
+    describe('fetchAllChannelVideos', () => {
+      test('should fetch all videos and return paginated results', async () => {
+        const Video = require('../../models/video');
+        const mockChannel = { ...mockChannelData, save: jest.fn(), url: 'https://youtube.com/@test' };
+
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        // Mock executeYtDlpCommand to return video data
+        jest.spyOn(ChannelModule, 'executeYtDlpCommand').mockResolvedValue(JSON.stringify({
+          entries: [
+            { id: 'video1', title: 'Video 1', timestamp: 1704067200 },
+            { id: 'video2', title: 'Video 2', timestamp: 1704067300 }
+          ],
+          uploader_url: 'https://youtube.com/@test'
+        }));
+
+        ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
+        ChannelVideo.findAll.mockResolvedValue([
+          { youtube_id: 'video1', title: 'Video 1', publishedAt: '2024-01-01', toJSON() { return this; } },
+          { youtube_id: 'video2', title: 'Video 2', publishedAt: '2024-01-02', toJSON() { return this; } }
+        ]);
+        ChannelVideo.count.mockResolvedValue(2);
+        ChannelVideo.findOne.mockResolvedValue({ publishedAt: '2024-01-01' });
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        const result = await ChannelModule.fetchAllChannelVideos('UC123', 1, 50);
+
+        expect(result.success).toBe(true);
+        expect(result.videosFound).toBe(2);
+        expect(result.videos).toBeDefined();
+        expect(mockChannel.save).toHaveBeenCalled();
+      });
+
+      test('should throw error when fetch already in progress', async () => {
+        ChannelModule.activeFetches.set('UC123', {
+          startTime: new Date().toISOString(),
+          type: 'autoRefresh'
+        });
+
+        await expect(ChannelModule.fetchAllChannelVideos('UC123')).rejects.toThrow('fetch operation is already in progress');
+
+        // Clean up
+        ChannelModule.activeFetches.delete('UC123');
+      });
+
+      test('should throw error when channel not found', async () => {
+        Channel.findOne.mockResolvedValue(null);
+
+        await expect(ChannelModule.fetchAllChannelVideos('UC999')).rejects.toThrow('Channel not found in database');
+      });
+
+      test('should clean up activeFetches on error', async () => {
+        const mockChannel = { ...mockChannelData };
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        jest.spyOn(ChannelModule, 'executeYtDlpCommand').mockRejectedValue(new Error('yt-dlp error'));
+
+        await expect(ChannelModule.fetchAllChannelVideos('UC123')).rejects.toThrow('yt-dlp error');
+
+        // Verify activeFetches was cleaned up
+        expect(ChannelModule.activeFetches.has('UC123')).toBe(false);
+      });
+
+      test('should update channel URL if changed', async () => {
+        const Video = require('../../models/video');
+        const newUrl = 'https://youtube.com/@newhandle';
+        const mockChannel = {
+          ...mockChannelData,
+          url: 'https://youtube.com/@oldhandle',
+          save: jest.fn()
+        };
+
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        jest.spyOn(ChannelModule, 'executeYtDlpCommand').mockResolvedValue(JSON.stringify({
+          entries: [{ id: 'video1', title: 'Video 1', timestamp: 1704067200 }],
+          uploader_url: newUrl
+        }));
+
+        ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
+        ChannelVideo.findAll.mockResolvedValue([
+          { youtube_id: 'video1', toJSON() { return this; } }
+        ]);
+        ChannelVideo.count.mockResolvedValue(1);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        await ChannelModule.fetchAllChannelVideos('UC123');
+
+        expect(mockChannel.url).toBe(newUrl);
+        expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Channel URL updated'));
       });
     });
   });

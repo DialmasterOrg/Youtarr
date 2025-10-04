@@ -85,7 +85,7 @@ jobs:
           npm version ${{ steps.calculate_version.outputs.new_tag }} --no-git-tag-version
           cd ..
           git add package.json package-lock.json client/package.json client/package-lock.json
-          git commit -m "Bump version to ${{ steps.calculate_version.outputs.new_tag }}"
+          git commit -m "Bump version to ${{ steps.calculate_version.outputs.new_tag }} [skip ci]"
           git push
 
       - name: Build client (verification)
@@ -176,7 +176,7 @@ jobs:
 
           # Commit the CHANGELOG update
           git add CHANGELOG.md
-          git commit -m "docs: update CHANGELOG for ${{ steps.calculate_version.outputs.new_tag }}"
+          git commit -m "docs: update CHANGELOG for ${{ steps.calculate_version.outputs.new_tag }} [skip ci]"
           git push
 
       - name: Record CHANGELOG commit SHA

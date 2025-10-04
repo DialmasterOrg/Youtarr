@@ -85,6 +85,26 @@ This creates a secure tunnel between your local machine's port 3087 and the serv
    - Restart: `./start.sh`
    - Get a new key using method 1 or 2 above
 
+### Discord Notifications Not Sending
+
+**Problem**: You never receive Discord alerts after downloads.
+
+**Solution**:
+1. Open Configuration → Optional: Notifications and confirm **Enable Notifications** is on.
+2. Verify the Discord webhook URL is correct and saved; click "Send Test Notification" to confirm delivery.
+3. Notifications only send when at least one new video downloads successfully—skipped runs will not trigger an alert.
+4. Check the server logs (`docker compose logs -f`) for `Failed to send notification` errors that may indicate network or webhook permission issues.
+
+### Test Notification Fails
+
+**Problem**: "Send Test Notification" shows an error.
+
+**Solution**:
+1. Ensure the webhook URL is saved and not blank or whitespace.
+2. Confirm the webhook belongs to Discord (URL should start with `https://discord.com/api/webhooks/`).
+3. Make sure the Discord channel still exists and the webhook has permission to post.
+4. Retry after checking network/firewall rules that may block outbound HTTPS requests.
+
 ## Docker Issues
 
 ### Docker Desktop Mount Path Error (Windows)
@@ -215,14 +235,22 @@ New installations automatically support full UTF-8 (utf8mb4).
 2. Ensure Plex agent is "Personal Media"
 3. Check Plex has access to the download directory
 4. Manually scan the library in Plex
-5. Verify Plex server IP is correct (use `host.docker.internal` for Docker)
+5. Verify Plex server IP and port are correct
+   - Docker Desktop (Windows/macOS): `host.docker.internal`
+   - Docker on macOS without Docker Desktop (e.g., Colima): host LAN IP (e.g., `192.168.x.x`) or `host.lima.internal`
+   - Docker on Linux or running inside WSL2 without Docker Desktop: host LAN IP (e.g., `192.168.x.x`)
+   - Ensure the Plex Port matches your Plex configuration (default `32400`).
 
 ### Cannot Connect to Plex
 
 **Problem**: Youtarr cannot communicate with Plex server.
 
 **Solution**:
-1. For Docker installations, use `host.docker.internal` as the Plex IP
+1. Verify the Plex IP and port settings:
+  - Docker Desktop (Windows/macOS): use `host.docker.internal`
+  - Docker on macOS without Docker Desktop (e.g., Colima): use the host LAN IP (e.g., `192.168.x.x`) or `host.lima.internal`
+  - Docker on Linux or running inside WSL2 without Docker Desktop: use the host LAN IP (e.g., `192.168.x.x`)
+  - Update the Plex Port field if Plex listens on a non-default port (default `32400`).
 2. Ensure Plex is running on the same machine
 3. Check firewall isn't blocking local connections
 4. Verify Plex is accessible at the configured IP and port

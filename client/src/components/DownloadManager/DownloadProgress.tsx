@@ -273,7 +273,10 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             <Alert
               severity="error"
               action={
-                errorDetails.code === 'COOKIES_REQUIRED' || errorDetails.message.includes('Bot detection') ? (
+                errorDetails.code === 'COOKIES_REQUIRED' ||
+                errorDetails.code === 'COOKIES_RECOMMENDED' ||
+                errorDetails.message.includes('Bot detection') ||
+                errorDetails.message.toLowerCase().includes('cookie') ? (
                   <Button
                     color="inherit"
                     size="small"
@@ -337,7 +340,13 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             {/* Thicker progress bar with overlay text */}
             <Box sx={{ position: 'relative', mb: 1 }}>
               <LinearProgress
-                variant="determinate"
+                variant={
+                  currentProgress.state === 'merging' ||
+                  currentProgress.state === 'metadata' ||
+                  currentProgress.state === 'processing'
+                    ? 'indeterminate'
+                    : 'determinate'
+                }
                 value={currentProgress.progress.percent}
                 sx={{
                   height: 32,

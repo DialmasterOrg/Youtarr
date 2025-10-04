@@ -48,7 +48,7 @@ class YtdlpCommandBuilder {
   }
 
   // Build yt-dlp command args array for channel downloads
-  static getBaseCommandArgs(resolution) {
+  static getBaseCommandArgs(resolution, allowRedownload = false) {
     const config = configModule.getConfig();
     const res = resolution || config.preferredResolution || '1080';
     const baseOutputPath = configModule.directoryPath;
@@ -73,54 +73,14 @@ class YtdlpCommandBuilder {
       '-f', `bestvideo[height<=${res}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best`,
       '--write-thumbnail',
       '--convert-thumbnails', 'jpg',
-      '--download-archive', './config/complete.list',
-      '--ignore-errors',
-      '--embed-metadata',
-      '--write-info-json',
-      '--no-write-playlist-metafiles',
-      '--extractor-args', 'youtubetab:tab=videos;sort=dd',
-      '--match-filter', 'duration>70 & availability!=subscriber_only',
-      '-o', `${baseOutputPath}/${CHANNEL_TEMPLATE}/${VIDEO_FOLDER_TEMPLATE}/${VIDEO_FILE_TEMPLATE}`,
-      '--datebefore', 'now',
-      '-o', `thumbnail:${baseOutputPath}/${CHANNEL_TEMPLATE}/${VIDEO_FOLDER_TEMPLATE}/poster`,
-      '-o', 'pl_thumbnail:',
-      '--exec', `node ${path.resolve(__dirname, '../videoDownloadPostProcessFiles.js')} {}`
     ];
 
-    // Add Sponsorblock args if configured
-    const sponsorblockArgs = this.buildSponsorblockArgs(config);
-    args.push(...sponsorblockArgs);
+    // Only use download archive if NOT allowing re-downloads
+    if (!allowRedownload) {
+      args.push('--download-archive', './config/complete.list');
+    }
 
-    return args;
-  }
-
-  // Build yt-dlp command args array for manual downloads - no duration filter
-  static getBaseCommandArgsForManualDownload(resolution) {
-    const config = configModule.getConfig();
-    const res = resolution || config.preferredResolution || '1080';
-    const baseOutputPath = configModule.directoryPath;
-
-    // Add cookies args first if enabled
-    const cookiesArgs = this.buildCookiesArgs();
-    const args = [
-      ...cookiesArgs,
-      '-4',
-      '--ffmpeg-location', configModule.ffmpegPath,
-      '--socket-timeout', String(config.downloadSocketTimeoutSeconds || 30),
-      '--throttled-rate', config.downloadThrottledRate || '100K',
-      '--retries', String(config.downloadRetryCount || 2),
-      '--fragment-retries', String(config.downloadRetryCount || 2),
-      '--newline',
-      '--progress',
-      '--progress-template',
-      '{"percent":"%(progress._percent_str)s","downloaded":"%(progress.downloaded_bytes|0)s","total":"%(progress.total_bytes|0)s","speed":"%(progress.speed|0)s","eta":"%(progress.eta|0)s"}',
-      '--output-na-placeholder', 'Unknown Channel',
-      // Clean @ prefix from uploader_id when it's used as fallback
-      '--replace-in-metadata', 'uploader_id', '^@', '',
-      '-f', `bestvideo[height<=${res}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best`,
-      '--write-thumbnail',
-      '--convert-thumbnails', 'jpg',
-      '--download-archive', './config/complete.list',
+    args.push(
       '--ignore-errors',
       '--embed-metadata',
       '--write-info-json',
@@ -132,7 +92,61 @@ class YtdlpCommandBuilder {
       '-o', `thumbnail:${baseOutputPath}/${CHANNEL_TEMPLATE}/${VIDEO_FOLDER_TEMPLATE}/poster`,
       '-o', 'pl_thumbnail:',
       '--exec', `node ${path.resolve(__dirname, '../videoDownloadPostProcessFiles.js')} {}`
+    );
+
+    // Add Sponsorblock args if configured
+    const sponsorblockArgs = this.buildSponsorblockArgs(config);
+    args.push(...sponsorblockArgs);
+
+    return args;
+  }
+
+  // Build yt-dlp command args array for manual downloads - no duration filter
+  static getBaseCommandArgsForManualDownload(resolution, allowRedownload = false) {
+    const config = configModule.getConfig();
+    const res = resolution || config.preferredResolution || '1080';
+    const baseOutputPath = configModule.directoryPath;
+
+    // Add cookies args first if enabled
+    const cookiesArgs = this.buildCookiesArgs();
+    const args = [
+      ...cookiesArgs,
+      '-4',
+      '--ffmpeg-location', configModule.ffmpegPath,
+      '--socket-timeout', String(config.downloadSocketTimeoutSeconds || 30),
+      '--throttled-rate', config.downloadThrottledRate || '100K',
+      '--retries', String(config.downloadRetryCount || 2),
+      '--fragment-retries', String(config.downloadRetryCount || 2),
+      '--newline',
+      '--progress',
+      '--progress-template',
+      '{"percent":"%(progress._percent_str)s","downloaded":"%(progress.downloaded_bytes|0)s","total":"%(progress.total_bytes|0)s","speed":"%(progress.speed|0)s","eta":"%(progress.eta|0)s"}',
+      '--output-na-placeholder', 'Unknown Channel',
+      // Clean @ prefix from uploader_id when it's used as fallback
+      '--replace-in-metadata', 'uploader_id', '^@', '',
+      '-f', `bestvideo[height<=${res}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best`,
+      '--write-thumbnail',
+      '--convert-thumbnails', 'jpg',
     ];
+
+    // Only use download archive if NOT allowing re-downloads
+    if (!allowRedownload) {
+      args.push('--download-archive', './config/complete.list');
+    }
+
+    args.push(
+      '--ignore-errors',
+      '--embed-metadata',
+      '--write-info-json',
+      '--no-write-playlist-metafiles',
+      '--extractor-args', 'youtubetab:tab=videos;sort=dd',
+      '--match-filter', 'availability!=subscriber_only',
+      '-o', `${baseOutputPath}/${CHANNEL_TEMPLATE}/${VIDEO_FOLDER_TEMPLATE}/${VIDEO_FILE_TEMPLATE}`,
+      '--datebefore', 'now',
+      '-o', `thumbnail:${baseOutputPath}/${CHANNEL_TEMPLATE}/${VIDEO_FOLDER_TEMPLATE}/poster`,
+      '-o', 'pl_thumbnail:',
+      '--exec', `node ${path.resolve(__dirname, '../videoDownloadPostProcessFiles.js')} {}`
+    );
 
     // Add Sponsorblock args if configured
     const sponsorblockArgs = this.buildSponsorblockArgs(config);

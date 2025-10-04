@@ -122,7 +122,8 @@ describe('VideoValidationModule', () => {
           videoTitle: 'Rick Astley - Never Gonna Give You Up',
           duration: 213,
           publishedAt: Math.floor(new Date('2009-10-25').getTime() / 1000),
-          availability: 'public'
+          availability: 'public',
+          media_type: 'video'
         }
       });
     });
@@ -169,6 +170,7 @@ describe('VideoValidationModule', () => {
       expect(result.metadata.duration).toBe(0);
       expect(result.metadata.publishedAt).toBe(null);
       expect(result.metadata.availability).toBe('public');
+      expect(result.metadata.media_type).toBe('video');
     });
   });
 

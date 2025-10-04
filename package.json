@@ -1,6 +1,6 @@
 {
   "name": "youtarr",
-  "version": "1.29.2",
+  "version": "1.35.0",
   "description": "",
   "main": "server/index.js",
   "scripts": {
@@ -12,6 +12,7 @@
     "lint": "eslint ./client/src/. --ext .ts,.tsx && eslint ./server/. --ext .js",
     "lint:frontend": "eslint ./client/src/. --ext .ts,.tsx",
     "lint:backend": "eslint ./server/. --ext .js",
+    "lint:ts": "cd client && npx tsc --noEmit",
     "lint:fix": "eslint ./client/src/. --ext .ts,.tsx --fix && eslint ./server/. --ext .js --fix",
     "lint-staged": "lint-staged",
     "prepare": "husky install",
