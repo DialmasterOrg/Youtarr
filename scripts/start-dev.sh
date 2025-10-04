@@ -16,6 +16,29 @@ get_compose_command() {
 # Get the appropriate compose command
 COMPOSE_CMD=$(get_compose_command)
 
+# Parse command line arguments
+NO_AUTH=false
+for arg in "$@"; do
+  case $arg in
+    --no-auth)
+      NO_AUTH=true
+      shift
+      ;;
+    *)
+      echo "Unknown option: $arg"
+      echo "Usage: $0 [--no-auth]"
+      exit 1
+      ;;
+  esac
+done
+
+# Export AUTH_ENABLED for docker-compose if --no-auth flag is present
+if [ "$NO_AUTH" = true ]; then
+  export AUTH_ENABLED=false
+  echo "⚠️  Authentication disabled via --no-auth flag"
+  echo "⚠️  Do not expose Youtarr directly to the internet when auth is disabled; protect access with your own auth proxy"
+fi
+
 # Check if config file exists
 if [ ! -f "config/config.json" ]; then
   echo ""

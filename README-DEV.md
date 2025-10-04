@@ -18,6 +18,7 @@ Youtarr now uses Docker Compose with separate containers:
    ./scripts/build-dev.sh
    ./scripts/start-dev.sh
    ```
+   - Optional: append `--no-auth` only when developing behind your own authentication gateway (Cloudflare Tunnel, VPN, etc.); never expose a no-auth instance directly to the internet
 
 2. View logs:
    ```bash
