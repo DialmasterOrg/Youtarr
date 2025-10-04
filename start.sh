@@ -18,19 +18,63 @@ COMPOSE_CMD=$(get_compose_command)
 
 # Parse command line arguments
 NO_AUTH=false
-for arg in "$@"; do
-  case $arg in
+USE_EXTERNAL_DB=false
+COMPOSE_FILE_ARGS=("-f" "docker-compose.yml")
+DB_ENV_FILE="./config/external-db.env"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
     --no-auth)
       NO_AUTH=true
       shift
       ;;
+    --external-db)
+      USE_EXTERNAL_DB=true
+      COMPOSE_FILE_ARGS=("-f" "docker-compose.external-db.yml")
+      shift
+      ;;
     *)
-      echo "Unknown option: $arg"
-      echo "Usage: $0 [--no-auth]"
+      echo "Unknown option: $1"
+      echo "Usage: $0 [--no-auth] [--external-db]"
       exit 1
       ;;
   esac
 done
+
+if [ "$USE_EXTERNAL_DB" = true ] && [ ! -f "$DB_ENV_FILE" ]; then
+  echo ""
+  echo "==============================================="
+  echo "ERROR: External DB configuration missing!"
+  echo "==============================================="
+  echo "Expected environment file: $DB_ENV_FILE"
+  echo "Create it from config/external-db.env.example and set"
+  echo "DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, and DB_NAME."
+  echo "==============================================="
+  exit 1
+fi
+
+if [ "$USE_EXTERNAL_DB" = true ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$DB_ENV_FILE"
+  set +a
+
+  REQUIRED_VARS=(DB_HOST DB_USER DB_PASSWORD)
+  for var in "${REQUIRED_VARS[@]}"; do
+    if [ -z "${!var}" ]; then
+      echo ""
+      echo "==============================================="
+      echo "ERROR: Missing required variable $var in $DB_ENV_FILE"
+      echo "==============================================="
+      exit 1
+    fi
+  done
+
+  export DB_PORT=${DB_PORT:-3306}
+  export DB_NAME=${DB_NAME:-youtarr}
+
+  echo "External database target: ${DB_HOST}:${DB_PORT} (schema: ${DB_NAME})"
+fi
 
 # Export AUTH_ENABLED for docker-compose if --no-auth flag is present
 if [ "$NO_AUTH" = true ]; then
@@ -122,15 +166,27 @@ export YOUTUBE_OUTPUT_DIR="$youtubeOutputDirectory"
 
 # Pull the latest images
 echo "Pulling latest images..."
-$COMPOSE_CMD pull
+if [ "$USE_EXTERNAL_DB" = true ]; then
+  $COMPOSE_CMD "${COMPOSE_FILE_ARGS[@]}" pull youtarr
+else
+  $COMPOSE_CMD pull
+fi
 
 # Stop and remove existing containers (if any)
 echo "Stopping existing containers..."
-$COMPOSE_CMD down
+if [ "$USE_EXTERNAL_DB" = true ]; then
+  $COMPOSE_CMD "${COMPOSE_FILE_ARGS[@]}" down
+else
+  $COMPOSE_CMD down
+fi
 
 # Start the containers using docker-compose
 echo "Starting Youtarr with docker-compose..."
-$COMPOSE_CMD up -d
+if [ "$USE_EXTERNAL_DB" = true ]; then
+  $COMPOSE_CMD "${COMPOSE_FILE_ARGS[@]}" up -d youtarr
+else
+  $COMPOSE_CMD up -d
+fi
 
 # Check for auth setup after starting containers (skip if --no-auth was used)
 if [ "$NO_AUTH" != true ] && ! grep -q "passwordHash" config/config.json 2>/dev/null; then

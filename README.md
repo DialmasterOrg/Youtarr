@@ -81,6 +81,12 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
        allow you to add and browse YouTube channels
    - If containers don’t start or the app isn’t reachable, see [Troubleshooting](docs/TROUBLESHOOTING.md)
 
+### Using an External Database
+- Already running MariaDB/MySQL elsewhere? Copy `config/external-db.env.example` to `config/external-db.env`, fill in your connection details, then either:
+  - Run `./start.sh --external-db` (Docker Compose helper) or
+  - Run `./start-with-external-db.sh` (single-container helper for platforms like UNRAID)
+- Full walkthrough (including local testing steps) lives in [docs/EXTERNAL_DB.md](docs/EXTERNAL_DB.md)
+
 ## 📋 Usage Examples
 
 ### Download Individual Videos
@@ -179,5 +185,3 @@ Licensed under the ISC License. See [LICENSE.md](LICENSE.md) for details.
 <img width="1916" height="1482" alt="image" src="https://github.com/user-attachments/assets/18625f29-61de-475d-b509-1654420e7612" />
 <img width="1907" height="1489" alt="image" src="https://github.com/user-attachments/assets/1151811e-0a8a-4960-897b-7b1eb3ab3546" />
 <img width="1905" height="1488" alt="image" src="https://github.com/user-attachments/assets/a9e10530-a966-42fa-b71d-b2d7bbbeadff" />
-
-
