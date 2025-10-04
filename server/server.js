@@ -383,6 +383,23 @@ const initialize = async () => {
       }
     });
 
+    app.post('/api/notifications/test', verifyToken, async (req, res) => {
+      try {
+        const notificationModule = require('./modules/notificationModule');
+        await notificationModule.sendTestNotification();
+        res.json({
+          status: 'success',
+          message: 'Test notification sent successfully'
+        });
+      } catch (error) {
+        console.error('Error sending test notification:', error);
+        res.status(500).json({
+          error: 'Failed to send test notification',
+          message: error.message
+        });
+      }
+    });
+
     app.get('/getchannels', verifyToken, (req, res) => {
       channelModule.readChannels().then((channels) => {
         res.json(channels);

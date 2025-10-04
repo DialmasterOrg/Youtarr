@@ -85,6 +85,26 @@ This creates a secure tunnel between your local machine's port 3087 and the serv
    - Restart: `./start.sh`
    - Get a new key using method 1 or 2 above
 
+### Discord Notifications Not Sending
+
+**Problem**: You never receive Discord alerts after downloads.
+
+**Solution**:
+1. Open Configuration → Optional: Notifications and confirm **Enable Notifications** is on.
+2. Verify the Discord webhook URL is correct and saved; click "Send Test Notification" to confirm delivery.
+3. Notifications only send when at least one new video downloads successfully—skipped runs will not trigger an alert.
+4. Check the server logs (`docker compose logs -f`) for `Failed to send notification` errors that may indicate network or webhook permission issues.
+
+### Test Notification Fails
+
+**Problem**: "Send Test Notification" shows an error.
+
+**Solution**:
+1. Ensure the webhook URL is saved and not blank or whitespace.
+2. Confirm the webhook belongs to Discord (URL should start with `https://discord.com/api/webhooks/`).
+3. Make sure the Discord channel still exists and the webhook has permission to post.
+4. Retry after checking network/firewall rules that may block outbound HTTPS requests.
+
 ## Docker Issues
 
 ### Docker Desktop Mount Path Error (Windows)

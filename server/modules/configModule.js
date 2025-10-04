@@ -142,6 +142,22 @@ class ConfigModule extends EventEmitter {
       configModified = true;
     }
 
+    // Initialize notification settings if not present
+    if (this.config.notificationsEnabled === undefined) {
+      this.config.notificationsEnabled = false;
+      configModified = true;
+    }
+
+    if (!this.config.notificationService) {
+      this.config.notificationService = 'discord';
+      configModified = true;
+    }
+
+    if (this.config.discordWebhookUrl === undefined) {
+      this.config.discordWebhookUrl = '';
+      configModified = true;
+    }
+
     // Check if a UUID exists in the config
     if (!this.config.uuid) {
       // Generate a new UUID
@@ -230,7 +246,10 @@ class ConfigModule extends EventEmitter {
         cookiesEnabled: false,
         customCookiesUploaded: false,
         writeChannelPosters: true,
-        writeVideoNfoFiles: true
+        writeVideoNfoFiles: true,
+        notificationsEnabled: false,
+        notificationService: 'discord',
+        discordWebhookUrl: ''
       };
     }
 
@@ -378,6 +397,11 @@ class ConfigModule extends EventEmitter {
     defaultConfig.writeChannelPosters = true;
     defaultConfig.writeVideoNfoFiles = true;
 
+    // Notification settings - disabled by default
+    defaultConfig.notificationsEnabled = false;
+    defaultConfig.notificationService = 'discord';
+    defaultConfig.discordWebhookUrl = '';
+
     // Generate UUID for instance identification
     defaultConfig.uuid = uuidv4();
 
@@ -494,6 +518,22 @@ class ConfigModule extends EventEmitter {
           migrated.plexPort = '32400';
         } else if (typeof migrated.plexPort !== 'string') {
           migrated.plexPort = String(migrated.plexPort);
+        }
+
+        return migrated;
+      },
+      '1.35.0': (cfg) => {
+        const migrated = { ...cfg };
+
+        // Add notification settings
+        if (migrated.notificationsEnabled === undefined) {
+          migrated.notificationsEnabled = false;
+        }
+        if (!migrated.notificationService) {
+          migrated.notificationService = 'discord';
+        }
+        if (migrated.discordWebhookUrl === undefined) {
+          migrated.discordWebhookUrl = '';
         }
 
         return migrated;

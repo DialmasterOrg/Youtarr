@@ -410,6 +410,19 @@ class DownloadExecutor {
           finalPayload
         );
 
+        // Send notification if download was successful and notifications are enabled
+        if (finalState === 'complete' && !isFinalError) {
+          const notificationModule = require('../notificationModule');
+          notificationModule.sendDownloadNotification({
+            finalSummary: finalPayload.finalSummary,
+            videoData: videoData,
+            channelName: monitor.currentChannelName
+          }).catch(err => {
+            console.error('Failed to send notification:', err.message);
+            // Continue execution - don't crash if notification fails
+          });
+        }
+
         // Perform a best-effort cleanup of any partial download artifacts even on success
         if (!partialCleanupPerformed && partialDestinations.size > 0) {
           await this.cleanupPartialFiles(Array.from(partialDestinations));

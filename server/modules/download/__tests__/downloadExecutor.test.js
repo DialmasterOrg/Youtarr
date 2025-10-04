@@ -25,6 +25,9 @@ jest.mock('../../archiveModule', () => ({
   readCompleteListLines: jest.fn(),
   getNewVideoUrlsSince: jest.fn()
 }));
+jest.mock('../../notificationModule', () => ({
+  sendDownloadNotification: jest.fn().mockResolvedValue()
+}));
 
 const { spawn } = require('child_process');
 const { EventEmitter } = require('events');
@@ -35,6 +38,7 @@ const configModule = require('../../configModule');
 const plexModule = require('../../plexModule');
 const jobModule = require('../../jobModule');
 const MessageEmitter = require('../../messageEmitter');
+const notificationModule = require('../../notificationModule');
 
 describe('DownloadExecutor', () => {
   let executor;
@@ -59,7 +63,7 @@ describe('DownloadExecutor', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.resetModules();
+    // Don't reset modules - it breaks the jest.mock() setup
     jest.useFakeTimers();
 
     // Setup fs mocks
@@ -102,7 +106,9 @@ describe('DownloadExecutor', () => {
         state: 'downloading',
         progress: { percent: 50 }
       }),
-      lastParsed: null
+      lastParsed: null,
+      hasError: false,
+      currentChannelName: null
     };
     DownloadProgressMonitor.mockImplementation(() => mockMonitor);
 
@@ -124,6 +130,7 @@ describe('DownloadExecutor', () => {
     jobModule.updateJob = jest.fn().mockResolvedValue();
     jobModule.startNextJob = jest.fn();
     MessageEmitter.emitMessage = jest.fn();
+    notificationModule.sendDownloadNotification = jest.fn().mockResolvedValue();
 
     executor = new DownloadExecutor();
   });
@@ -768,6 +775,137 @@ describe('DownloadExecutor', () => {
             error: 'COOKIES_REQUIRED'
           })
         );
+      });
+    });
+
+    describe('notification handling', () => {
+      it('should send notification on successful download', async () => {
+        mockMonitor.videoCount.completed = 2;
+        mockMonitor.currentChannelName = 'Test Channel';
+
+        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+        mockProcess.emit('exit', 0);
+        await downloadPromise;
+
+        expect(notificationModule.sendDownloadNotification).toHaveBeenCalledWith(
+          expect.objectContaining({
+            finalSummary: expect.objectContaining({
+              totalDownloaded: 2,
+              totalSkipped: 0,
+              jobType: mockJobType
+            }),
+            videoData: expect.any(Array),
+            channelName: 'Test Channel'
+          })
+        );
+      });
+
+      it('should not send notification on failed download', async () => {
+        mockMonitor.videoCount.completed = 0;
+        mockMonitor.videoCount.skipped = 0;
+        archiveModule.getNewVideoUrlsSince.mockReturnValueOnce([]);
+        VideoMetadataProcessor.processVideoMetadata.mockResolvedValueOnce([]);
+
+        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+        mockProcess.emit('exit', 1);
+        await downloadPromise;
+
+        expect(notificationModule.sendDownloadNotification).not.toHaveBeenCalled();
+      });
+
+      it('should not send notification on bot detection error', async () => {
+        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+        mockProcess.stderr.emit('data', Buffer.from('Sign in to confirm you are not a bot'));
+        mockProcess.emit('exit', 1);
+        await downloadPromise;
+
+        expect(notificationModule.sendDownloadNotification).not.toHaveBeenCalled();
+      });
+
+      it('should not send notification on HTTP 403 error', async () => {
+        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+        mockProcess.stderr.emit('data', Buffer.from('HTTP Error 403: Forbidden'));
+        mockProcess.emit('exit', 1);
+        await downloadPromise;
+
+        expect(notificationModule.sendDownloadNotification).not.toHaveBeenCalled();
+      });
+
+      it('should continue execution if notification fails', async () => {
+        const notificationError = new Error('Notification service unavailable');
+        notificationModule.sendDownloadNotification.mockRejectedValueOnce(notificationError);
+        mockMonitor.videoCount.completed = 1;
+
+        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+        mockProcess.emit('exit', 0);
+        await downloadPromise;
+
+        // Should still complete the job successfully
+        expect(plexModule.refreshLibrary).toHaveBeenCalled();
+        expect(jobModule.startNextJob).toHaveBeenCalled();
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          'Failed to send notification:',
+          'Notification service unavailable'
+        );
+      });
+
+      it('should send notification with correct video data', async () => {
+        const testVideoData = [
+          { title: 'Video 1', url: 'https://youtube.com/watch?v=abc123', youtubeId: 'abc123' },
+          { title: 'Video 2', url: 'https://youtube.com/watch?v=def456', youtubeId: 'def456' }
+        ];
+        VideoMetadataProcessor.processVideoMetadata.mockResolvedValueOnce(testVideoData);
+        mockMonitor.videoCount.completed = 2;
+        mockMonitor.currentChannelName = 'Tech Tutorials';
+
+        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+        mockProcess.emit('exit', 0);
+        await downloadPromise;
+
+        expect(notificationModule.sendDownloadNotification).toHaveBeenCalledWith({
+          finalSummary: expect.objectContaining({
+            totalDownloaded: 2,
+            totalSkipped: 0,
+            jobType: mockJobType,
+            completedAt: expect.any(String)
+          }),
+          videoData: testVideoData,
+          channelName: 'Tech Tutorials'
+        });
+      });
+
+      it('should send notification when warnings are present but download succeeded', async () => {
+        mockMonitor.videoCount.completed = 1;
+        mockMonitor.videoCount.skipped = 2;
+
+        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+        mockProcess.stderr.emit('data', Buffer.from('WARNING: Some non-critical warning'));
+        mockProcess.emit('exit', 1); // Exit code 1 with completed videos is treated as success
+        await downloadPromise;
+
+        expect(notificationModule.sendDownloadNotification).toHaveBeenCalled();
+      });
+
+      it('should send notification even when no new videos downloaded', async () => {
+        archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+        VideoMetadataProcessor.processVideoMetadata.mockReturnValue([]);
+        mockMonitor.videoCount.completed = 0;
+        mockMonitor.videoCount.skipped = 0;
+
+        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+        mockProcess.emit('exit', 0);
+        await downloadPromise;
+
+        // Should still send notification for "no new videos" case
+        expect(notificationModule.sendDownloadNotification).toHaveBeenCalled();
       });
     });
   });

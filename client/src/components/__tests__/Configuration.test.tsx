@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import Configuration from '../Configuration';
@@ -146,6 +146,9 @@ const mockConfig = {
   customCookiesUploaded: false,
   writeChannelPosters: true,
   writeVideoNfoFiles: true,
+  notificationsEnabled: false,
+  notificationService: 'discord',
+  discordWebhookUrl: '',
 };
 
 describe('Configuration Component', () => {
@@ -723,6 +726,113 @@ const renderConfiguration = async ({
 
       await user.click(posterSwitch);
       expect(posterSwitch).not.toBeChecked();
+    });
+  });
+
+  describe('Notifications', () => {
+    test('shows notifications accordion and toggles settings', async () => {
+      await renderConfiguration();
+      const user = createUser();
+
+      const accordion = screen.getByText('Optional: Notifications');
+      expect(accordion).toBeInTheDocument();
+
+      await user.click(accordion);
+
+      const enableSwitch = screen.getByRole('checkbox', { name: /Enable Notifications/i });
+      expect(enableSwitch).not.toBeChecked();
+
+      await user.click(enableSwitch);
+      expect(enableSwitch).toBeChecked();
+
+      const webhookInput = await screen.findByRole('textbox', { name: /Discord Webhook URL/i });
+      expect(webhookInput).toBeInTheDocument();
+      expect(webhookInput).toHaveValue('');
+
+      fireEvent.change(webhookInput, { target: { value: 'https://discord.com/api/webhooks/123/test' } });
+      expect(webhookInput).toHaveValue('https://discord.com/api/webhooks/123/test');
+    });
+
+    test('shows enabled chip when notifications are configured', async () => {
+      const enabledConfig = { ...mockConfig, notificationsEnabled: true, discordWebhookUrl: 'https://discord.com/api/webhooks/test' };
+      await renderConfiguration({ configOverrides: enabledConfig });
+
+      const enabledChip = screen.getByText('Enabled');
+      expect(enabledChip).toBeInTheDocument();
+    });
+
+    test('validates webhook URL before sending test notification', async () => {
+      await renderConfiguration();
+      const user = createUser();
+
+      const accordion = screen.getByText('Optional: Notifications');
+      await user.click(accordion);
+
+      const enableSwitch = screen.getByRole('checkbox', { name: /Enable Notifications/i });
+      await user.click(enableSwitch);
+
+      const testButton = await screen.findByRole('button', { name: /Send Test Notification/i });
+      await user.click(testButton);
+
+      await screen.findByText('Please enter a Discord webhook URL first');
+    });
+
+    test('sends test notification successfully', async () => {
+      await renderConfiguration();
+      const user = createUser();
+
+      const accordion = screen.getByText('Optional: Notifications');
+      await user.click(accordion);
+
+      const enableSwitch = screen.getByRole('checkbox', { name: /Enable Notifications/i });
+      await user.click(enableSwitch);
+
+      const webhookInput = await screen.findByRole('textbox', { name: /Discord Webhook URL/i });
+      fireEvent.change(webhookInput, { target: { value: 'https://discord.com/api/webhooks/123/test' } });
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({ success: true })
+      } as unknown as Response);
+
+      const testButton = screen.getByRole('button', { name: /Send Test Notification/i });
+      await user.click(testButton);
+
+      await screen.findByText('Test notification sent! Check your Discord channel.');
+
+      const calls = (global.fetch as jest.Mock).mock.calls;
+      const lastCall = calls[calls.length - 1];
+      expect(lastCall[0]).toBe('/api/notifications/test');
+      expect(lastCall[1]).toMatchObject({
+        method: 'POST',
+        headers: {
+          'x-access-token': mockToken,
+        },
+      });
+    });
+
+    test('handles test notification errors', async () => {
+      await renderConfiguration();
+      const user = createUser();
+
+      const accordion = screen.getByText('Optional: Notifications');
+      await user.click(accordion);
+
+      const enableSwitch = screen.getByRole('checkbox', { name: /Enable Notifications/i });
+      await user.click(enableSwitch);
+
+      const webhookInput = await screen.findByRole('textbox', { name: /Discord Webhook URL/i });
+      fireEvent.change(webhookInput, { target: { value: 'https://discord.com/api/webhooks/123/test' } });
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: false,
+        json: jest.fn().mockResolvedValueOnce({ message: 'Invalid webhook URL' })
+      } as unknown as Response);
+
+      const testButton = screen.getByRole('button', { name: /Send Test Notification/i });
+      await user.click(testButton);
+
+      await screen.findByText('Invalid webhook URL');
     });
   });
 
