@@ -69,6 +69,8 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
    ```bash
    ./start.sh
    ```
+   - Optional: run `./start.sh --no-auth` only when Youtarr sits behind your own authentication layer (Cloudflare Tunnel, OAuth proxy, VPN, etc.)
+   - ⚠️ Never expose Youtarr directly to the internet when using `--no-auth`; always require upstream authentication
 
 4. **Access the web interface**:
    - Navigate to `http://localhost:3087`
@@ -127,6 +129,7 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 - **File Management**: Videos must retain their `[youtubeid].mp4` filename and remain in their download location. Moving or renaming files will cause Youtarr to mark them as "missing"
 - **Filtering**: Automatically skips YouTube Shorts and subscriber-only content
 - **Authentication**: Uses local authentication (create admin account on first access)
+- **Security**: Leave authentication enabled unless you have your own auth in front of Youtarr. If you launch with `--no-auth` (or set `AUTH_ENABLED=false`), never expose that instance directly to the public internet.
 
 ### For Plex Users (Optional)
 - **Library Type**: Must be configured as "Other Videos" with "Personal Media" agent
@@ -146,7 +149,7 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 Youtarr now fully supports platform-managed deployments with automatic configuration:
 
 - **Auto-Configuration**: When `DATA_PATH` is set, config.json is auto-created on first run
-- **Platform Authentication**: Set `AUTH_ENABLED=false` to bypass internal auth (when platform handles it)
+- **Platform Authentication**: Set `AUTH_ENABLED=false` to bypass internal auth (only when platform handles it). ⚠️ Never expose a no-auth instance directly; protect it behind your platform's authentication layer.
 - **Pre-configured Plex**: Set `PLEX_URL` for automatic Plex server configuration
 - **Consolidated Storage**: All persistent data stored under single `/app/config` mount
 - **Example**: `DATA_PATH=/storage/rclone/storagebox/youtube`
@@ -169,7 +172,6 @@ Licensed under the ISC License. See [LICENSE.md](LICENSE.md) for details.
 <img width="1916" height="1482" alt="image" src="https://github.com/user-attachments/assets/18625f29-61de-475d-b509-1654420e7612" />
 <img width="1907" height="1489" alt="image" src="https://github.com/user-attachments/assets/1151811e-0a8a-4960-897b-7b1eb3ab3546" />
 <img width="1905" height="1488" alt="image" src="https://github.com/user-attachments/assets/a9e10530-a966-42fa-b71d-b2d7bbbeadff" />
-
 
 
 

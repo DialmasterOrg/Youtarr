@@ -40,6 +40,8 @@ services:
       DB_USER: root
       DB_PASSWORD: 123qweasd
       DB_NAME: youtarr
+      # Optional: Disable authentication (for platforms with external auth like Elfhosted)
+      AUTH_ENABLED: ${AUTH_ENABLED:-}
       # Optional: Custom data path for platforms like Elfhosted (defaults to /usr/src/app/data)
       # DATA_PATH: /storage/rclone/storagebox/youtube
     ports:

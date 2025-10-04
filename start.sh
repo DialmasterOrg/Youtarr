@@ -16,6 +16,29 @@ get_compose_command() {
 # Get the appropriate compose command
 COMPOSE_CMD=$(get_compose_command)
 
+# Parse command line arguments
+NO_AUTH=false
+for arg in "$@"; do
+  case $arg in
+    --no-auth)
+      NO_AUTH=true
+      shift
+      ;;
+    *)
+      echo "Unknown option: $arg"
+      echo "Usage: $0 [--no-auth]"
+      exit 1
+      ;;
+  esac
+done
+
+# Export AUTH_ENABLED for docker-compose if --no-auth flag is present
+if [ "$NO_AUTH" = true ]; then
+  export AUTH_ENABLED=false
+  echo "⚠️  Authentication disabled via --no-auth flag"
+  echo "⚠️  Do not expose Youtarr directly to the internet when auth is disabled; protect access with your own auth proxy"
+fi
+
 # Pull latest changes
 git pull
 
@@ -109,8 +132,8 @@ $COMPOSE_CMD down
 echo "Starting Youtarr with docker-compose..."
 $COMPOSE_CMD up -d
 
-# Check for auth setup after starting containers
-if ! grep -q "passwordHash" config/config.json 2>/dev/null; then
+# Check for auth setup after starting containers (skip if --no-auth was used)
+if [ "$NO_AUTH" != true ] && ! grep -q "passwordHash" config/config.json 2>/dev/null; then
   echo ""
   echo "================================================================"
   echo "⚠️  IMPORTANT: FIRST-TIME SETUP REQUIRED"

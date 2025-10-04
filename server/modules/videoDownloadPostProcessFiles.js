@@ -216,12 +216,16 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       }
 
       // Add release date for Plex/mp4 embedded metadata
+      // Good lord Plex is finicky
       if (jsonData.upload_date) {
         const year = jsonData.upload_date.substring(0, 4);
         const month = jsonData.upload_date.substring(4, 6);
         const day = jsonData.upload_date.substring(6, 8);
         const releaseDate = `${year}-${month}-${day}`;
         ffmpegArgs.push('-metadata', `release_date=${releaseDate}`);
+        ffmpegArgs.push('-metadata', `date=${releaseDate}`);
+        ffmpegArgs.push('-metadata', `year=${year}`);
+        ffmpegArgs.push('-metadata', `originaldate=${releaseDate}`);
       }
 
       // Add media type hint for Plex (9 = Home Video)
