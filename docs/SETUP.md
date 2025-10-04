@@ -99,6 +99,12 @@ After logging in, configure Youtarr through the Configuration page:
    - Includes: genre (from categories), studio/network (channel name), keywords (from tags)
    - Ensures Plex can read metadata even without Local Media Assets configured
 
+4. **Notifications (Discord Webhooks)**:
+   - Toggle **Enable Notifications** to allow Discord alerts when new videos finish downloading
+   - Paste your Discord webhook URL (Discord → Server Settings → Integrations → Webhooks)
+   - Save the configuration before sending a test message with **Send Test Notification**
+   - Notifications are sent only after successful downloads that include at least one new video
+
 ## Plex Library Setup
 
 For Youtarr to work correctly with Plex:

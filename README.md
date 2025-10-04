@@ -29,6 +29,7 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 - **📱 Web Interface**: Manage everything through a responsive web UI
 - **🔍 Browse Channels**: View and search all videos from subscribed channels with advanced filtering
 - **📊 Download History**: Track what you've downloaded with smart duplicate prevention
+- **🔔 Discord Alerts**: Send optional webhook notifications when new videos finish downloading
 - **♻️ Re-download Missing**: Easily identify and re-download videos that were removed from disk
 - **🔐 Secure Access**: Local authentication system with admin controls
 - **☁️ Platform Flexible**: Configurable storage paths for Kubernetes/Elfhosted deployments
@@ -106,6 +107,12 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 4. Select which types of segments to handle (sponsors, intros, outros, etc.)
 5. All new downloads will automatically process selected segments
 
+### Enable Download Notifications
+1. Open Configuration → Optional: Notifications
+2. Toggle notifications on and paste your Discord webhook URL (Server Settings → Integrations → Webhooks)
+3. Save configuration, then use "Send Test Notification" to verify delivery
+4. Youtarr will notify the channel after successful downloads that include at least one new video
+
 ### Re-download Missing Videos
 1. Go to Downloaded Videos or Channel Videos page
 2. Look for videos marked with cloud-off icon (missing from disk)
@@ -172,6 +179,5 @@ Licensed under the ISC License. See [LICENSE.md](LICENSE.md) for details.
 <img width="1916" height="1482" alt="image" src="https://github.com/user-attachments/assets/18625f29-61de-475d-b509-1654420e7612" />
 <img width="1907" height="1489" alt="image" src="https://github.com/user-attachments/assets/1151811e-0a8a-4960-897b-7b1eb3ab3546" />
 <img width="1905" height="1488" alt="image" src="https://github.com/user-attachments/assets/a9e10530-a966-42fa-b71d-b2d7bbbeadff" />
-
 
 

@@ -88,6 +88,9 @@ function Configuration({ token }: ConfigurationProps) {
     customCookiesUploaded: false,
     writeChannelPosters: true,
     writeVideoNfoFiles: true,
+    notificationsEnabled: false,
+    notificationService: 'discord',
+    discordWebhookUrl: '',
   });
   const [openPlexLibrarySelector, setOpenPlexLibrarySelector] = useState(false);
   const [openPlexAuthDialog, setOpenPlexAuthDialog] = useState(false);
@@ -130,6 +133,7 @@ function Configuration({ token }: ConfigurationProps) {
     customFileExists: boolean;
   } | null>(null);
   const [uploadingCookie, setUploadingCookie] = useState(false);
+  const [testingNotification, setTestingNotification] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const hasPlexServerConfigured = isPlatformManaged.plexUrl || Boolean(config.plexIP);
@@ -792,6 +796,8 @@ function Configuration({ token }: ConfigurationProps) {
       'customCookiesUploaded',
       'writeChannelPosters',
       'writeVideoNfoFiles',
+      'notificationsEnabled',
+      'discordWebhookUrl',
     ];
     const changed = keysToCompare.some((k) => {
       return (config as any)[k] !== (initialConfig as any)[k];
@@ -1576,6 +1582,130 @@ function Configuration({ token }: ConfigurationProps) {
                     </Typography>
                   </Grid>
                 )}
+              </>
+            )}
+          </Grid>
+        </AccordionDetails>
+      </Accordion>
+
+      <Accordion elevation={8} defaultExpanded={false} sx={{ mb: 2 }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Typography variant="h6" sx={{ flexGrow: 1 }}>
+            Optional: Notifications
+          </Typography>
+          <Chip
+            label={config.notificationsEnabled ? "Enabled" : "Disabled"}
+            color={config.notificationsEnabled ? "success" : "default"}
+            size="small"
+            sx={{ mr: 1 }}
+          />
+        </AccordionSummary>
+        <AccordionDetails>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <AlertTitle>Get Notified of New Downloads</AlertTitle>
+            <Typography variant="body2">
+              Receive notifications when new videos are downloaded. Currently supports Discord webhooks.
+            </Typography>
+          </Alert>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={config.notificationsEnabled}
+                    onChange={(e) => setConfig({ ...config, notificationsEnabled: e.target.checked })}
+                  />
+                }
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    Enable Notifications
+                    {getInfoIcon('Receive notifications when new videos are downloaded successfully.')}
+                  </Box>
+                }
+              />
+            </Grid>
+
+            {config.notificationsEnabled && (
+              <>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="Discord Webhook URL"
+                    name="discordWebhookUrl"
+                    value={config.discordWebhookUrl}
+                    onChange={handleInputChange}
+                    placeholder="https://discord.com/api/webhooks/..."
+                    helperText={
+                      <Box component="span">
+                        Get your webhook URL from Discord: Server Settings → Integrations → Webhooks.{' '}
+                        <a
+                          href="https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'inherit', textDecoration: 'underline' }}
+                        >
+                          How to get a webhook URL
+                        </a>
+                      </Box>
+                    }
+                  />
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Button
+                    variant="outlined"
+                    onClick={async () => {
+                      if (!config.discordWebhookUrl || config.discordWebhookUrl.trim().length === 0) {
+                        setSnackbar({
+                          open: true,
+                          message: 'Please enter a Discord webhook URL first',
+                          severity: 'warning'
+                        });
+                        return;
+                      }
+
+                      setTestingNotification(true);
+                      try {
+                        const response = await fetch('/api/notifications/test', {
+                          method: 'POST',
+                          headers: {
+                            'x-access-token': token || '',
+                          },
+                        });
+
+                        if (response.ok) {
+                          setSnackbar({
+                            open: true,
+                            message: 'Test notification sent! Check your Discord channel.',
+                            severity: 'success'
+                          });
+                        } else {
+                          const error = await response.json();
+                          setSnackbar({
+                            open: true,
+                            message: error.message || 'Failed to send test notification',
+                            severity: 'error'
+                          });
+                        }
+                      } catch (error) {
+                        setSnackbar({
+                          open: true,
+                          message: 'Failed to send test notification',
+                          severity: 'error'
+                        });
+                      } finally {
+                        setTestingNotification(false);
+                      }
+                    }}
+                    disabled={testingNotification}
+                  >
+                    {testingNotification ? 'Sending...' : 'Send Test Notification'}
+                  </Button>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                    Make sure to save your configuration before testing
+                  </Typography>
+                </Grid>
               </>
             )}
           </Grid>
