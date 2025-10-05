@@ -108,6 +108,17 @@ Some users prefer to supply their own MariaDB/MySQL instance instead of the bund
 
 Both helpers automatically run migrations against the external database on boot, so no manual schema management is required once connectivity is in place.
 
+## Unraid Community Applications Template
+
+Youtarr provides a community Unraid Community Applications template that mirrors the `start-with-external-db.sh` flow.
+
+- Add the template repository URL `https://github.com/DialmasterOrg/unraid-templates` under **Apps → Settings → Manage Template Repositories** on your Unraid server.
+- Search for **Youtarr** in the Apps tab and install it. The XML source lives at [DialmasterOrg/unraid-templates/Youtarr.xml](https://github.com/DialmasterOrg/unraid-templates/blob/main/Youtarr/Youtarr.xml) if you want to review or fork it.
+- The template is currently distributed from this repository while it awaits inclusion in the main Community Applications feed.
+- The template expects an external MariaDB instance. Supply the connection details and map your persistent host paths before clicking **Apply**.
+- Provide both `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` so the container initializes with working credentials. If you intentionally leave them blank, be ready to complete the setup wizard from the Unraid host's localhost (for example, by SSH tunneling) because remote access is blocked until auth is configured.
+- After installation you can access the UI from the Apps page using the WebUI button (maps to `http://[IP]:[PORT:3011]/` by default).
+
 ## Docker Commands
 
 ### Starting and Stopping
