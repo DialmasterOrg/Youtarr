@@ -219,8 +219,8 @@ const initialize = async () => {
 
     /**** ONLY ROUTES BELOW THIS LINE *********/
 
-    // Health check endpoint
-    app.get('/health', (req, res) => {
+    // Health check endpoint - unauthenticated for Docker health checks
+    app.get('/api/health', (req, res) => {
       res.status(200).json({ status: 'healthy' });
     });
 

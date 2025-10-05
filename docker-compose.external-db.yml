@@ -23,6 +23,12 @@ services:
       - ./config:/app/config
       - ./jobs:/app/jobs
       - ./migrations:/app/migrations
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--output", "/dev/null", "http://localhost:3011/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 networks:
   default:

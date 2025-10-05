@@ -246,8 +246,8 @@ describe('server initialization', () => {
     expect(dbMock.initializeDatabase).toHaveBeenCalledTimes(1);
     expect(channelModuleMock.subscribe).toHaveBeenCalledTimes(1);
 
-    const [healthHandler] = findRouteHandlers(app, 'get', '/health');
-    const req = createMockRequest({ path: '/health' });
+    const [healthHandler] = findRouteHandlers(app, 'get', '/api/health');
+    const req = createMockRequest({ path: '/api/health' });
     const res = createMockResponse();
 
     await healthHandler(req, res);
