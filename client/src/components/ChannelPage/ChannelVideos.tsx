@@ -61,6 +61,7 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import CloseIcon from '@mui/icons-material/Close';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 import Pagination from '@mui/material/Pagination';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -73,6 +74,8 @@ import { useNavigate } from 'react-router-dom';
 import { useSwipeable } from 'react-swipeable';
 import DownloadSettingsDialog from '../DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
+import DeleteVideosDialog from '../shared/DeleteVideosDialog';
+import { useVideoDeletion } from '../shared/useVideoDeletion';
 
 interface ChannelVideosProps {
   token: string | null;
@@ -109,6 +112,12 @@ function ChannelVideos({ token }: ChannelVideosProps) {
   const [fetchAllError, setFetchAllError] = useState<string | null>(null);
   const [hoveredVideo, setHoveredVideo] = useState<string | null>(null);
   const [refreshConfirmOpen, setRefreshConfirmOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const { deleteVideosByYoutubeIds, loading: deleteLoading } = useVideoDeletion();
 
   const { channel_id } = useParams();
   const navigate = useNavigate();
@@ -305,6 +314,98 @@ function ChannelVideos({ token }: ChannelVideosProps) {
     setRefreshConfirmOpen(false);
   };
 
+  const toggleDeletionSelection = (youtubeId: string) => {
+    setSelectedForDeletion(prev => {
+      if (prev.includes(youtubeId)) {
+        return prev.filter(id => id !== youtubeId);
+      } else {
+        return [...prev, youtubeId];
+      }
+    });
+  };
+
+  const handleDeleteClick = () => {
+    if (selectedForDeletion.length === 0) {
+      setErrorMessage('No videos selected for deletion');
+      return;
+    }
+
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    setDeleteDialogOpen(false);
+
+    const result = await deleteVideosByYoutubeIds(selectedForDeletion, token);
+
+    if (result.success) {
+      setSuccessMessage(`Successfully deleted ${result.deleted.length} video${result.deleted.length !== 1 ? 's' : ''}`);
+      setSelectedForDeletion([]);
+      // Refresh the videos list
+      const queryParams = new URLSearchParams({
+        page: page.toString(),
+        pageSize: pageSize.toString(),
+        hideDownloaded: hideDownloaded.toString(),
+        searchQuery: searchQuery,
+        sortBy: sortBy,
+        sortOrder: sortOrder
+      });
+
+      fetch(`/getchannelvideos/${channel_id}?${queryParams}`, {
+        headers: {
+          'x-access-token': token || '',
+        },
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.videos !== undefined) {
+            setVideos(data.videos || []);
+          }
+          setTotalCount(data.totalCount || 0);
+          setOldestVideoDate(data.oldestVideoDate || null);
+        })
+        .catch((error) => console.error(error));
+    } else {
+      const deletedCount = result.deleted.length;
+      const failedCount = result.failed.length;
+
+      if (deletedCount > 0) {
+        setSuccessMessage(`Deleted ${deletedCount} video${deletedCount !== 1 ? 's' : ''}, but ${failedCount} failed`);
+        setSelectedForDeletion(prev => prev.filter(id => !result.deleted.includes(id)));
+        // Refresh list
+        const queryParams = new URLSearchParams({
+          page: page.toString(),
+          pageSize: pageSize.toString(),
+          hideDownloaded: hideDownloaded.toString(),
+          searchQuery: searchQuery,
+          sortBy: sortBy,
+          sortOrder: sortOrder
+        });
+
+        fetch(`/getchannelvideos/${channel_id}?${queryParams}`, {
+          headers: {
+            'x-access-token': token || '',
+          },
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.videos !== undefined) {
+              setVideos(data.videos || []);
+            }
+            setTotalCount(data.totalCount || 0);
+            setOldestVideoDate(data.oldestVideoDate || null);
+          })
+          .catch((error) => console.error(error));
+      } else {
+        setErrorMessage(`Failed to delete videos: ${result.failed[0]?.error || 'Unknown error'}`);
+      }
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+  };
+
   const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
     setPage(value);
   };
@@ -482,7 +583,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                 }}
               />
 
-              {/* Selection overlay */}
+              {/* Selection overlay for download */}
               {isSelectable && (
                 <Box
                   sx={{
@@ -518,6 +619,31 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                     }}
                   />
                 </Box>
+              )}
+
+              {/* Delete icon for downloaded videos */}
+              {status === 'downloaded' && (
+                <IconButton
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleDeletionSelection(video.youtube_id);
+                  }}
+                  sx={{
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                    bgcolor: selectedForDeletion.includes(video.youtube_id) ? 'error.main' : 'rgba(0,0,0,0.6)',
+                    color: 'white',
+                    '&:hover': {
+                      bgcolor: selectedForDeletion.includes(video.youtube_id) ? 'error.dark' : 'rgba(0,0,0,0.8)',
+                    },
+                    transition: 'all 0.2s',
+                    zIndex: 3,
+                  }}
+                  size="small"
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
               )}
             </Box>
 
@@ -702,6 +828,31 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                 }}
               />
             )}
+
+            {/* Delete icon for downloaded videos */}
+            {status === 'downloaded' && (
+              <IconButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleDeletionSelection(video.youtube_id);
+                }}
+                sx={{
+                  position: 'absolute',
+                  top: 2,
+                  left: 2,
+                  bgcolor: selectedForDeletion.includes(video.youtube_id) ? 'error.main' : 'rgba(0,0,0,0.6)',
+                  color: 'white',
+                  padding: 0.5,
+                  '&:hover': {
+                    bgcolor: selectedForDeletion.includes(video.youtube_id) ? 'error.dark' : 'rgba(0,0,0,0.8)',
+                  },
+                  transition: 'all 0.2s',
+                }}
+                size="small"
+              >
+                <DeleteIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            )}
           </Box>
 
           {/* Content */}
@@ -813,32 +964,70 @@ function ChannelVideos({ token }: ChannelVideosProps) {
               secondary={getMissingVideoCount() > 0 ? `${getMissingVideoCount()} missing files will be re-downloaded` : undefined}
             />
           </ListItem>
+
+          <ListItem button onClick={handleDeleteClick} disabled={selectedForDeletion.length === 0 || deleteLoading}>
+            <ListItemIcon><DeleteIcon color={selectedForDeletion.length > 0 ? "error" : "disabled"} /></ListItemIcon>
+            <ListItemText
+              primary={`Delete ${selectedForDeletion.length} ${selectedForDeletion.length === 1 ? 'Video' : 'Videos'}`}
+              secondary={selectedForDeletion.length > 0 ? `Remove videos from disk` : 'No videos selected for deletion'}
+            />
+          </ListItem>
         </List>
       </Box>
     </Drawer>
   );
 
-  // Mobile floating action button
+  // Mobile floating action buttons
   const renderMobileFAB = () => {
-    if (!isMobile || checkedBoxes.length === 0) return null;
+    if (!isMobile) return null;
+
+    const hasDownloadSelection = checkedBoxes.length > 0;
+    const hasDeletionSelection = selectedForDeletion.length > 0;
+
+    if (!hasDownloadSelection && !hasDeletionSelection) return null;
 
     return (
-      <Zoom in={checkedBoxes.length > 0}>
-        <Fab
-          color="primary"
-          sx={{
-            position: 'fixed',
-            bottom: 16,
-            right: 16,
-            zIndex: theme.zIndex.fab,
-          }}
-          onClick={() => setMobileDrawerOpen(true)}
-        >
-          <Badge badgeContent={checkedBoxes.length} color="error">
-            <DownloadIcon />
-          </Badge>
-        </Fab>
-      </Zoom>
+      <>
+        {/* Download FAB */}
+        {hasDownloadSelection && (
+          <Zoom in={hasDownloadSelection}>
+            <Fab
+              color="primary"
+              sx={{
+                position: 'fixed',
+                bottom: hasDeletionSelection ? 88 : 16,
+                right: 16,
+                zIndex: theme.zIndex.fab,
+              }}
+              onClick={() => setMobileDrawerOpen(true)}
+            >
+              <Badge badgeContent={checkedBoxes.length} color="error">
+                <DownloadIcon />
+              </Badge>
+            </Fab>
+          </Zoom>
+        )}
+
+        {/* Delete FAB */}
+        {hasDeletionSelection && (
+          <Zoom in={hasDeletionSelection}>
+            <Fab
+              color="error"
+              sx={{
+                position: 'fixed',
+                bottom: 16,
+                right: 16,
+                zIndex: theme.zIndex.fab,
+              }}
+              onClick={handleDeleteClick}
+            >
+              <Badge badgeContent={selectedForDeletion.length} color="primary">
+                <DeleteIcon />
+              </Badge>
+            </Fab>
+          </Zoom>
+        )}
+      </>
     );
   };
 
@@ -977,6 +1166,16 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                 >
                   Clear
                 </Button>
+                <Button
+                  variant="contained"
+                  color="error"
+                  size="small"
+                  startIcon={<DeleteIcon />}
+                  onClick={handleDeleteClick}
+                  disabled={selectedForDeletion.length === 0 || deleteLoading}
+                >
+                  Delete {selectedForDeletion.length > 0 ? `${selectedForDeletion.length}` : 'Selected'}
+                </Button>
               </Box>
             )}
 
@@ -1111,6 +1310,24 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                                   checked={isChecked}
                                   onChange={(e) => handleCheckChange(video.youtube_id, e.target.checked)}
                                 />
+                              )}
+                              {status === 'downloaded' && (
+                                <IconButton
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleDeletionSelection(video.youtube_id);
+                                  }}
+                                  sx={{
+                                    color: selectedForDeletion.includes(video.youtube_id) ? 'error.main' : 'action.active',
+                                    '&:hover': {
+                                      color: 'error.main',
+                                      bgcolor: 'error.light',
+                                    },
+                                  }}
+                                  size="small"
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
                               )}
                             </TableCell>
                             <TableCell>
@@ -1258,6 +1475,35 @@ function ChannelVideos({ token }: ChannelVideosProps) {
       >
         <Alert onClose={() => setMobileTooltip(null)} severity="info">
           {mobileTooltip}
+        </Alert>
+      </Snackbar>
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteVideosDialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        videoCount={selectedForDeletion.length}
+      />
+
+      {/* Success/Error Snackbars for Deletion */}
+      <Snackbar
+        open={successMessage !== null}
+        autoHideDuration={6000}
+        onClose={() => setSuccessMessage(null)}
+      >
+        <Alert onClose={() => setSuccessMessage(null)} severity="success">
+          {successMessage}
+        </Alert>
+      </Snackbar>
+
+      <Snackbar
+        open={errorMessage !== null}
+        autoHideDuration={6000}
+        onClose={() => setErrorMessage(null)}
+      >
+        <Alert onClose={() => setErrorMessage(null)} severity="error">
+          {errorMessage}
         </Alert>
       </Snackbar>
     </>

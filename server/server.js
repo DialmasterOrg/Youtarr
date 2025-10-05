@@ -599,6 +599,41 @@ const initialize = async () => {
       }
     });
 
+    app.delete('/api/videos', verifyToken, async (req, res) => {
+      try {
+        const { videoIds, youtubeIds } = req.body;
+
+        // Support both videoIds (database IDs) and youtubeIds (YouTube video IDs)
+        if ((!videoIds && !youtubeIds) ||
+            (videoIds && !Array.isArray(videoIds)) ||
+            (youtubeIds && !Array.isArray(youtubeIds)) ||
+            (videoIds && videoIds.length === 0 && (!youtubeIds || youtubeIds.length === 0)) ||
+            (youtubeIds && youtubeIds.length === 0 && (!videoIds || videoIds.length === 0))) {
+          return res.status(400).json({
+            success: false,
+            error: 'videoIds or youtubeIds array is required'
+          });
+        }
+
+        const videoDeletionModule = require('./modules/videoDeletionModule');
+        let result;
+
+        if (youtubeIds && youtubeIds.length > 0) {
+          result = await videoDeletionModule.deleteVideosByYoutubeIds(youtubeIds);
+        } else {
+          result = await videoDeletionModule.deleteVideos(videoIds);
+        }
+
+        res.json(result);
+      } catch (error) {
+        console.error('Error deleting videos:', error);
+        res.status(500).json({
+          success: false,
+          error: error.message
+        });
+      }
+    });
+
     app.get('/storage-status', verifyToken, async (req, res) => {
       try {
         const status = await configModule.getStorageStatus();

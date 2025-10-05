@@ -22,12 +22,18 @@ import {
   Stack,
   Chip,
   Tooltip,
+  Checkbox,
+  Snackbar,
+  Fab,
+  Badge,
+  Zoom,
 } from '@mui/material';
 import Pagination from '@mui/material/Pagination';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import StorageIcon from '@mui/icons-material/Storage';
+import DeleteIcon from '@mui/icons-material/Delete';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { formatDuration, formatYTDate } from '../utils';
@@ -41,6 +47,8 @@ import { debounce } from 'lodash';
 import { Link as RouterLink } from 'react-router-dom';
 import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
 import ScheduleIcon from '@mui/icons-material/Schedule';
+import DeleteVideosDialog from './shared/DeleteVideosDialog';
+import { useVideoDeletion } from './shared/useVideoDeletion';
 
 interface VideosPageProps {
   token: string | null;
@@ -67,6 +75,13 @@ function VideosPage({ token }: VideosPageProps) {
   const [dateTo, setDateTo] = useState<Date | null>(null);
   const [uniqueChannels, setUniqueChannels] = useState<string[]>([]);
   const [enabledChannels, setEnabledChannels] = useState<EnabledChannel[]>([]);
+  const [selectedVideos, setSelectedVideos] = useState<number[]>([]);
+  const [selectedForDeletion, setSelectedForDeletion] = useState<number[]>([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const { deleteVideos, loading: deleteLoading } = useVideoDeletion();
 
   const videosPerPage = isMobile ? 6 : 12;
 
@@ -202,6 +217,75 @@ function VideosPage({ token }: VideosPageProps) {
     return match ? match.channel_id : null;
   };
 
+  const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.checked) {
+      // Select all videos that are not already removed
+      const selectableVideos = videos.filter(v => !v.removed).map(v => v.id);
+      setSelectedVideos(selectableVideos);
+    } else {
+      setSelectedVideos([]);
+    }
+  };
+
+  const handleSelectVideo = (videoId: number) => {
+    setSelectedVideos(prev => {
+      if (prev.includes(videoId)) {
+        return prev.filter(id => id !== videoId);
+      } else {
+        return [...prev, videoId];
+      }
+    });
+  };
+
+  const toggleDeletionSelection = (videoId: number) => {
+    setSelectedForDeletion(prev => {
+      if (prev.includes(videoId)) {
+        return prev.filter(id => id !== videoId);
+      } else {
+        return [...prev, videoId];
+      }
+    });
+  };
+
+  const handleDeleteClick = () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    setDeleteDialogOpen(false);
+
+    const videosToDelete = isMobile ? selectedForDeletion : selectedVideos;
+    const result = await deleteVideos(videosToDelete, token);
+
+    if (result.success) {
+      setSuccessMessage(`Successfully deleted ${result.deleted.length} video${result.deleted.length !== 1 ? 's' : ''}`);
+      setSelectedVideos([]);
+      setSelectedForDeletion([]);
+      // Refresh the videos list
+      fetchVideos();
+    } else {
+      const deletedCount = result.deleted.length;
+      const failedCount = result.failed.length;
+
+      if (deletedCount > 0) {
+        setSuccessMessage(`Deleted ${deletedCount} video${deletedCount !== 1 ? 's' : ''}, but ${failedCount} failed`);
+        setSelectedVideos([]);
+        setSelectedForDeletion([]);
+        fetchVideos();
+      } else {
+        setErrorMessage(`Failed to delete videos: ${result.failed[0]?.error || 'Unknown error'}`);
+      }
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+  };
+
+  const handleDeleteSingleVideo = (videoId: number) => {
+    setSelectedVideos([videoId]);
+    setDeleteDialogOpen(true);
+  };
 
   const handlers = useSwipeable({
     onSwipedLeft: () => {
@@ -287,6 +371,29 @@ function VideosPage({ token }: VideosPageProps) {
               </Stack>
             </LocalizationProvider>
           )}
+
+          {selectedVideos.length > 0 && (
+            <Box display="flex" gap={2} alignItems="center">
+              <Typography variant="body2" color="text.secondary">
+                {selectedVideos.length} video{selectedVideos.length !== 1 ? 's' : ''} selected
+              </Typography>
+              <Button
+                variant="contained"
+                color="error"
+                startIcon={<DeleteIcon />}
+                onClick={handleDeleteClick}
+                disabled={deleteLoading}
+              >
+                Delete Selected
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={() => setSelectedVideos([])}
+              >
+                Clear Selection
+              </Button>
+            </Box>
+          )}
         </Stack>
 
         {isMobile && (
@@ -330,6 +437,13 @@ function VideosPage({ token }: VideosPageProps) {
               ) : (
                 <TableHead>
                   <TableRow>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        indeterminate={selectedVideos.length > 0 && selectedVideos.length < videos.filter(v => !v.removed).length}
+                        checked={videos.filter(v => !v.removed).length > 0 && selectedVideos.length === videos.filter(v => !v.removed).length}
+                        onChange={handleSelectAll}
+                      />
+                    </TableCell>
                     <TableCell
                       style={{ fontWeight: 'bold', fontSize: 'medium' }}
                     >
@@ -387,19 +501,24 @@ function VideosPage({ token }: VideosPageProps) {
                     >
                       File Info
                     </TableCell>
+                    <TableCell
+                      style={{ fontWeight: 'bold', fontSize: 'medium' }}
+                    >
+                      Actions
+                    </TableCell>
                   </TableRow>
                 </TableHead>
               )}
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={isMobile ? 1 : 6} align="center">
+                    <TableCell colSpan={isMobile ? 1 : 8} align="center">
                       <Typography>Loading videos...</Typography>
                     </TableCell>
                   </TableRow>
                 ) : videos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={isMobile ? 1 : 6} align="center">
+                    <TableCell colSpan={isMobile ? 1 : 8} align="center">
                       <Typography>No videos found</Typography>
                     </TableCell>
                   </TableRow>
@@ -504,6 +623,30 @@ function VideosPage({ token }: VideosPageProps) {
                                   />
                                 </Box>
                               ) : null}
+                              {/* Delete icon for downloaded videos on mobile */}
+                              {!video.removed && video.fileSize && (
+                                <IconButton
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleDeletionSelection(video.id);
+                                  }}
+                                  sx={{
+                                    position: 'absolute',
+                                    top: 8,
+                                    right: 8,
+                                    bgcolor: selectedForDeletion.includes(video.id) ? 'error.main' : 'rgba(0,0,0,0.6)',
+                                    color: 'white',
+                                    '&:hover': {
+                                      bgcolor: selectedForDeletion.includes(video.id) ? 'error.dark' : 'rgba(0,0,0,0.8)',
+                                    },
+                                    transition: 'all 0.2s',
+                                    zIndex: 3,
+                                  }}
+                                  size="small"
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              )}
                             </Box>
                             <Typography variant='subtitle1' textAlign='center'>
                               {video.youTubeVideoName}
@@ -618,6 +761,13 @@ function VideosPage({ token }: VideosPageProps) {
                         </TableCell>
                       ) : (
                         <>
+                          <TableCell padding="checkbox">
+                            <Checkbox
+                              checked={selectedVideos.includes(video.id)}
+                              onChange={() => handleSelectVideo(video.id)}
+                              disabled={video.removed}
+                            />
+                          </TableCell>
                           <TableCell>
                             <Box
                               width={256}
@@ -795,6 +945,20 @@ function VideosPage({ token }: VideosPageProps) {
                               ) : null}
                             </Stack>
                           </TableCell>
+                          <TableCell>
+                            <Tooltip title="Delete video from disk">
+                              <span>
+                                <IconButton
+                                  color="error"
+                                  size="small"
+                                  onClick={() => handleDeleteSingleVideo(video.id)}
+                                  disabled={video.removed || deleteLoading}
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </TableCell>
                         </>
                       )}
                     </TableRow>
@@ -805,6 +969,55 @@ function VideosPage({ token }: VideosPageProps) {
           </div>
         </TableContainer>
       </CardContent>
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteVideosDialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        videoCount={isMobile ? selectedForDeletion.length : selectedVideos.length}
+      />
+
+      {/* Mobile Delete FAB */}
+      {isMobile && selectedForDeletion.length > 0 && (
+        <Zoom in={selectedForDeletion.length > 0}>
+          <Fab
+            color="error"
+            sx={{
+              position: 'fixed',
+              bottom: 16,
+              right: 16,
+              zIndex: 1000,
+            }}
+            onClick={handleDeleteClick}
+          >
+            <Badge badgeContent={selectedForDeletion.length} color="primary">
+              <DeleteIcon />
+            </Badge>
+          </Fab>
+        </Zoom>
+      )}
+
+      {/* Success/Error Snackbars */}
+      <Snackbar
+        open={successMessage !== null}
+        autoHideDuration={6000}
+        onClose={() => setSuccessMessage(null)}
+      >
+        <Alert onClose={() => setSuccessMessage(null)} severity="success">
+          {successMessage}
+        </Alert>
+      </Snackbar>
+
+      <Snackbar
+        open={errorMessage !== null}
+        autoHideDuration={6000}
+        onClose={() => setErrorMessage(null)}
+      >
+        <Alert onClose={() => setErrorMessage(null)} severity="error">
+          {errorMessage}
+        </Alert>
+      </Snackbar>
     </Card>
   );
 }

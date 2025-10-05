@@ -52,6 +52,36 @@ jest.mock('../../DownloadManager/ManualDownload/DownloadSettingsDialog', () => (
   }
 }));
 
+// Mock DeleteVideosDialog
+jest.mock('../../shared/DeleteVideosDialog', () => ({
+  __esModule: true,
+  default: function MockDeleteVideosDialog({ open, onClose, onConfirm }: any) {
+    const React = require('react');
+    if (!open) return null;
+    return React.createElement('div', { 'data-testid': 'delete-videos-dialog' },
+      React.createElement('button', {
+        onClick: onConfirm,
+        'data-testid': 'delete-confirm'
+      }, 'Delete Videos'),
+      React.createElement('button', {
+        onClick: onClose,
+        'data-testid': 'delete-cancel'
+      }, 'Cancel')
+    );
+  }
+}));
+
+// Mock useVideoDeletion hook
+const mockDeleteVideosByYoutubeIds = jest.fn();
+jest.mock('../../shared/useVideoDeletion', () => ({
+  useVideoDeletion: () => ({
+    deleteVideosByYoutubeIds: mockDeleteVideosByYoutubeIds,
+    deleteVideos: jest.fn(),
+    loading: false,
+    error: null,
+  }),
+}));
+
 // Mock utils
 jest.mock('../../../utils', () => ({
   formatDuration: jest.fn((duration: number | null) => {
@@ -132,6 +162,7 @@ describe('ChannelVideos Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockFetch.mockReset();
+    mockDeleteVideosByYoutubeIds.mockReset();
     (useMediaQuery as jest.Mock).mockReturnValue(false); // Default to desktop
     mockNavigate.mockClear();
   });
@@ -1583,6 +1614,1697 @@ describe('ChannelVideos Component', () => {
       // Check that the members-only badge is present
       const badges = screen.getAllByText(/members only/i);
       expect(badges.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Refresh Channel Videos', () => {
+    test('opens refresh confirmation dialog when refresh button is clicked', async () => {
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      const refreshButton = screen.getByRole('button', { name: /refresh/i });
+      fireEvent.click(refreshButton);
+
+      await waitFor(() => {
+        expect(screen.getByText('Refresh Channel Videos')).toBeInTheDocument();
+      });
+    });
+
+    test('cancels refresh when dialog is cancelled', async () => {
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      const refreshButton = screen.getByRole('button', { name: /refresh/i });
+      fireEvent.click(refreshButton);
+
+      await waitFor(() => {
+        expect(screen.getByText('Refresh Channel Videos')).toBeInTheDocument();
+      });
+
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      fireEvent.click(cancelButton);
+
+      await waitFor(() => {
+        expect(screen.queryByText('Refresh Channel Videos')).not.toBeInTheDocument();
+      });
+    });
+
+    test('fetches all channel videos when refresh is confirmed', async () => {
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      const refreshButton = screen.getByRole('button', { name: /refresh/i });
+      fireEvent.click(refreshButton);
+
+      await waitFor(() => {
+        expect(screen.getByText('Refresh Channel Videos')).toBeInTheDocument();
+      });
+
+      // Mock the fetchallchannelvideos response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          success: true,
+          videos: mockVideos,
+          totalCount: mockVideos.length,
+          oldestVideoDate: '2024-01-13T10:00:00Z',
+        }),
+      });
+
+      const continueButton = screen.getByRole('button', { name: /continue/i });
+      fireEvent.click(continueButton);
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining('/fetchallchannelvideos/'),
+          expect.objectContaining({
+            method: 'POST',
+          })
+        );
+      });
+    });
+
+    test('handles 409 conflict error when refresh is already in progress', async () => {
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      const refreshButton = screen.getByRole('button', { name: /refresh/i });
+      fireEvent.click(refreshButton);
+
+      // Mock 409 conflict response
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: jest.fn().mockResolvedValueOnce({
+          success: false,
+          error: 'FETCH_IN_PROGRESS',
+        }),
+      });
+
+      const continueButton = screen.getByRole('button', { name: /continue/i });
+      fireEvent.click(continueButton);
+
+      await waitFor(() => {
+        expect(screen.getByText(/already in progress/i)).toBeInTheDocument();
+      });
+    });
+
+    test('handles general error during refresh', async () => {
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      const refreshButton = screen.getByRole('button', { name: /refresh/i });
+      fireEvent.click(refreshButton);
+
+      // Mock general error response
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: jest.fn().mockResolvedValueOnce({
+          success: false,
+          message: 'Server error',
+        }),
+      });
+
+      const continueButton = screen.getByRole('button', { name: /continue/i });
+      fireEvent.click(continueButton);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Server error/i)).toBeInTheDocument();
+      });
+    });
+
+    test('displays error snackbar when refresh fails', async () => {
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      const refreshButton = screen.getByRole('button', { name: /refresh/i });
+      fireEvent.click(refreshButton);
+
+      // Mock error response
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: jest.fn().mockResolvedValueOnce({
+          success: false,
+          message: 'Test error',
+        }),
+      });
+
+      const continueButton = screen.getByRole('button', { name: /continue/i });
+      fireEvent.click(continueButton);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Test error/i)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Sorting', () => {
+    test('changes sort order when clicking same sort column', async () => {
+      (useMediaQuery as jest.Mock).mockReturnValue(false); // Desktop for table view
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      // Switch to table view
+      const toggleButtons = screen.getAllByRole('button');
+      const tableButton = toggleButtons.find(btn => btn.getAttribute('value') === 'table');
+      if (tableButton) {
+        fireEvent.click(tableButton);
+      }
+
+      await waitFor(() => {
+        expect(screen.getByText('Title')).toBeInTheDocument();
+      });
+
+      // Mock the sorted fetch (ascending)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          videos: [...mockVideos].sort((a, b) => a.title.localeCompare(b.title)),
+          totalCount: mockVideos.length,
+        }),
+      });
+
+      // Click on Title column header to sort
+      const titleHeader = screen.getByText('Title');
+      fireEvent.click(titleHeader);
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining('sortBy=title'),
+          expect.anything()
+        );
+      });
+
+      // Mock the sorted fetch (descending)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          videos: [...mockVideos].sort((a, b) => b.title.localeCompare(a.title)),
+          totalCount: mockVideos.length,
+        }),
+      });
+
+      // Click again to toggle sort order
+      fireEvent.click(titleHeader);
+
+      await waitFor(() => {
+        const fetchCalls = mockFetch.mock.calls;
+        const lastCall = fetchCalls[fetchCalls.length - 1][0] as string;
+        expect(lastCall).toContain('sortBy=title');
+      });
+
+      const fetchCalls = mockFetch.mock.calls;
+      const lastCall = fetchCalls[fetchCalls.length - 1][0] as string;
+      expect(lastCall).toContain('sortOrder=asc');
+    });
+
+    test('sorts by duration when clicking duration column', async () => {
+      (useMediaQuery as jest.Mock).mockReturnValue(false); // Desktop for table view
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      // Switch to table view
+      const toggleButtons = screen.getAllByRole('button');
+      const tableButton = toggleButtons.find(btn => btn.getAttribute('value') === 'table');
+      if (tableButton) {
+        fireEvent.click(tableButton);
+      }
+
+      await waitFor(() => {
+        expect(screen.getByText('Duration')).toBeInTheDocument();
+      });
+
+      // Mock the sorted fetch
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          videos: mockVideos,
+          totalCount: mockVideos.length,
+        }),
+      });
+
+      const durationHeader = screen.getByText('Duration');
+      fireEvent.click(durationHeader);
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining('sortBy=duration'),
+          expect.anything()
+        );
+      });
+    });
+
+    test('sorts by size when clicking size column', async () => {
+      (useMediaQuery as jest.Mock).mockReturnValue(false); // Desktop for table view
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      // Switch to table view
+      const toggleButtons = screen.getAllByRole('button');
+      const tableButton = toggleButtons.find(btn => btn.getAttribute('value') === 'table');
+      if (tableButton) {
+        fireEvent.click(tableButton);
+      }
+
+      await waitFor(() => {
+        expect(screen.getByText('Size')).toBeInTheDocument();
+      });
+
+      // Mock the sorted fetch
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          videos: mockVideos,
+          totalCount: mockVideos.length,
+        }),
+      });
+
+      const sizeHeader = screen.getByText('Size');
+      fireEvent.click(sizeHeader);
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining('sortBy=size'),
+          expect.anything()
+        );
+      });
+    });
+  });
+
+  describe('Table View', () => {
+    beforeEach(() => {
+      (useMediaQuery as jest.Mock).mockReturnValue(false); // Desktop
+    });
+
+    test('switches to table view when table button is clicked', async () => {
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      // Find and click table view button
+      const toggleButtons = screen.getAllByRole('button');
+      const tableButton = toggleButtons.find(btn => btn.getAttribute('value') === 'table');
+
+      if (tableButton) {
+        fireEvent.click(tableButton);
+      }
+
+      await waitFor(() => {
+        expect(screen.getByText('Thumbnail')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('Title')).toBeInTheDocument();
+      expect(screen.getByText('Published')).toBeInTheDocument();
+    });
+
+    test('displays videos in table format', async () => {
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      // Switch to table view
+      const toggleButtons = screen.getAllByRole('button');
+      const tableButton = toggleButtons.find(btn => btn.getAttribute('value') === 'table');
+      if (tableButton) {
+        fireEvent.click(tableButton);
+      }
+
+      await waitFor(() => {
+        const table = screen.getByRole('table');
+        expect(table).toBeInTheDocument();
+      });
+    });
+
+    test('shows checkboxes for selectable videos in table view', async () => {
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      // Switch to table view
+      const toggleButtons = screen.getAllByRole('button');
+      const tableButton = toggleButtons.find(btn => btn.getAttribute('value') === 'table');
+      if (tableButton) {
+        fireEvent.click(tableButton);
+      }
+
+      await waitFor(() => {
+        const checkboxes = screen.getAllByRole('checkbox');
+        // Should have at least the hide downloaded checkbox and select-all checkbox
+        expect(checkboxes.length).toBeGreaterThan(1);
+      });
+    });
+
+    test('selects all videos via table header checkbox', async () => {
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      // Switch to table view
+      const toggleButtons = screen.getAllByRole('button');
+      const tableButton = toggleButtons.find(btn => btn.getAttribute('value') === 'table');
+      if (tableButton) {
+        fireEvent.click(tableButton);
+      }
+
+      await waitFor(() => {
+        expect(screen.getByRole('table')).toBeInTheDocument();
+      });
+
+      // Find the select-all checkbox in the table header
+      const allCheckboxes = screen.getAllByRole('checkbox');
+      const tableCheckboxes = allCheckboxes.filter(cb => {
+        const hideDownloadedCheckbox = screen.queryByRole('checkbox', { name: /hide downloaded/i });
+        return cb !== hideDownloadedCheckbox;
+      });
+
+      // The first checkbox in the table should be the select-all
+      const selectAllCheckbox = tableCheckboxes[0];
+      fireEvent.click(selectAllCheckbox);
+
+      // Download button should now show count
+      await waitFor(() => {
+        const downloadButton = screen.getByRole('button', { name: /Download \d+ Video/i });
+        expect(downloadButton).toBeInTheDocument();
+      });
+    });
+
+    test('shows delete icon for downloaded videos in table view', async () => {
+      const downloadedVideos: ChannelVideo[] = [
+        {
+          title: 'Downloaded Video',
+          youtube_id: 'dl_video1',
+          publishedAt: '2024-01-15T10:00:00Z',
+          thumbnail: 'https://example.com/thumb1.jpg',
+          added: true,
+          removed: false,
+          duration: 3600,
+          availability: null,
+        },
+      ];
+
+      setupFetchMocks({ videos: downloadedVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Downloaded Video')).toBeInTheDocument();
+      });
+
+      // Switch to table view
+      const toggleButtons = screen.getAllByRole('button');
+      const tableButton = toggleButtons.find(btn => btn.getAttribute('value') === 'table');
+      if (tableButton) {
+        fireEvent.click(tableButton);
+      }
+
+      await waitFor(() => {
+        const deleteIcons = screen.getAllByTestId('DeleteIcon');
+        expect(deleteIcons.length).toBeGreaterThan(0);
+      });
+    });
+
+    test('shows youtube removed banner in table view', async () => {
+      const removedVideo: ChannelVideo[] = [
+        {
+          title: 'Removed Video',
+          youtube_id: 'removed1',
+          publishedAt: '2024-01-15T10:00:00Z',
+          thumbnail: 'https://example.com/thumb1.jpg',
+          added: true,
+          removed: false,
+          duration: 3600,
+          availability: null,
+          youtube_removed: true,
+        },
+      ];
+
+      setupFetchMocks({ videos: removedVideo });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Removed Video')).toBeInTheDocument();
+      });
+
+      // Switch to table view
+      const toggleButtons = screen.getAllByRole('button');
+      const tableButton = toggleButtons.find(btn => btn.getAttribute('value') === 'table');
+      if (tableButton) {
+        fireEvent.click(tableButton);
+      }
+
+      await waitFor(() => {
+        const removedBanners = screen.getAllByText('Removed From YouTube');
+        expect(removedBanners.length).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  describe('Card Click Selection', () => {
+    test('selects video when clicking on card in grid view', async () => {
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      // Click on the card by clicking the title (event bubbles to card)
+      const videoTitle = screen.getAllByText('Video Title 1')[0];
+      fireEvent.click(videoTitle);
+
+      // Download button should update to show selection
+      await waitFor(() => {
+        const downloadButton = screen.getByRole('button', { name: /Download 1 Video/i });
+        expect(downloadButton).toBeInTheDocument();
+      });
+    });
+
+    test('deselects video when clicking on selected card in grid view', async () => {
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      // Select the video first
+      const hideDownloadedCheckbox = screen.queryByRole('checkbox', { name: /hide downloaded/i });
+      const allCheckboxes = screen.getAllByRole('checkbox');
+      const videoCheckboxes = allCheckboxes.filter(cb => cb !== hideDownloadedCheckbox);
+      const checkbox = videoCheckboxes[0];
+      fireEvent.click(checkbox);
+
+      await waitFor(() => {
+        expect(checkbox).toBeChecked();
+      });
+
+      // Now click the card again to deselect
+      const videoTitle = screen.getAllByText('Video Title 1')[0];
+      fireEvent.click(videoTitle);
+
+      await waitFor(() => {
+        expect(checkbox).not.toBeChecked();
+      });
+    });
+
+    test('selects video when clicking on card in list view (mobile)', async () => {
+      (useMediaQuery as jest.Mock).mockReturnValue(true); // Mobile
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      // Mobile defaults to list view - click on title to select
+      const videoTitle = screen.getAllByText('Video Title 1')[0];
+      fireEvent.click(videoTitle);
+
+      // Check if FAB appears
+      await waitFor(() => {
+        const downloadIcon = screen.queryByTestId('DownloadIcon');
+        expect(downloadIcon).toBeInTheDocument();
+      });
+    });
+
+    test('does not select when clicking on non-selectable card', async () => {
+      setupFetchMocks({ videos: [mockVideos[1]] }); // Downloaded video (not selectable)
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 2 & More')).toBeInTheDocument();
+      });
+
+      // Click on the non-selectable video title
+      const videoTitle = screen.getAllByText('Video Title 2 & More')[0];
+      fireEvent.click(videoTitle);
+
+      // Download button should remain disabled
+      const downloadButton = screen.getByRole('button', { name: /download/i });
+      expect(downloadButton).toBeDisabled();
+    });
+  });
+
+  describe('Mobile Drawer', () => {
+    beforeEach(() => {
+      (useMediaQuery as jest.Mock).mockReturnValue(true); // Mobile
+    });
+
+    test('opens mobile drawer when FAB is clicked', async () => {
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      // Select a video to show FAB
+      const hideDownloadedCheckbox = screen.queryByRole('checkbox', { name: /hide downloaded/i });
+      const allCheckboxes = screen.getAllByRole('checkbox');
+      const videoCheckboxes = allCheckboxes.filter(cb => cb !== hideDownloadedCheckbox);
+      fireEvent.click(videoCheckboxes[0]);
+
+      await waitFor(() => {
+        const downloadIcon = screen.getByTestId('DownloadIcon');
+        expect(downloadIcon).toBeInTheDocument();
+      });
+
+      // Find and click the FAB
+      const allButtons = screen.getAllByRole('button');
+      const fabs = allButtons.filter(btn => btn.classList.contains('MuiFab-root'));
+      const downloadFab = fabs.find(fab => {
+        const downloadIcon = within(fab).queryByTestId('DownloadIcon');
+        return downloadIcon !== null;
+      });
+
+      expect(downloadFab).toBeDefined();
+      fireEvent.click(downloadFab!);
+
+      await waitFor(() => {
+        expect(screen.getByText('Batch Actions')).toBeInTheDocument();
+      });
+    });
+
+    test('closes mobile drawer when close button is clicked', async () => {
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      // Select a video and open drawer
+      const hideDownloadedCheckbox = screen.queryByRole('checkbox', { name: /hide downloaded/i });
+      const allCheckboxes = screen.getAllByRole('checkbox');
+      const videoCheckboxes = allCheckboxes.filter(cb => cb !== hideDownloadedCheckbox);
+      fireEvent.click(videoCheckboxes[0]);
+
+      await waitFor(() => {
+        const downloadIcon = screen.getByTestId('DownloadIcon');
+        expect(downloadIcon).toBeInTheDocument();
+      });
+
+      const allButtons = screen.getAllByRole('button');
+      const fabs = allButtons.filter(btn => btn.classList.contains('MuiFab-root'));
+      const downloadFab = fabs.find(fab => within(fab).queryByTestId('DownloadIcon'));
+
+      expect(downloadFab).toBeDefined();
+      fireEvent.click(downloadFab!);
+
+      await waitFor(() => {
+        expect(screen.getByText('Batch Actions')).toBeInTheDocument();
+      });
+
+      // Find the drawer by its role and close it
+      const drawer = screen.getByRole('presentation');
+      const closeButton = within(drawer).getByTestId('CloseIcon');
+      fireEvent.click(closeButton);
+
+      await waitFor(() => {
+        expect(screen.queryByText('Batch Actions')).not.toBeInTheDocument();
+      });
+    });
+
+    test('drawer shows correct selected count', async () => {
+      setupFetchMocks({ videos: mockVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      // Select a video
+      const hideDownloadedCheckbox = screen.queryByRole('checkbox', { name: /hide downloaded/i });
+      const allCheckboxes = screen.getAllByRole('checkbox');
+      const videoCheckboxes = allCheckboxes.filter(cb => cb !== hideDownloadedCheckbox);
+      fireEvent.click(videoCheckboxes[0]);
+
+      await waitFor(() => {
+        const downloadIcon = screen.getByTestId('DownloadIcon');
+        expect(downloadIcon).toBeInTheDocument();
+      });
+
+      // Open drawer
+      const allButtons = screen.getAllByRole('button');
+      const fabs = allButtons.filter(btn => btn.classList.contains('MuiFab-root'));
+      const downloadFab = fabs.find(fab => within(fab).queryByTestId('DownloadIcon'));
+
+      expect(downloadFab).toBeDefined();
+      fireEvent.click(downloadFab!);
+
+      await waitFor(() => {
+        expect(screen.getByText(/1 selected/i)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Search Functionality', () => {
+    test('resets page to 1 when search query changes', async () => {
+      const manyVideos: ChannelVideo[] = [];
+      for (let i = 0; i < 20; i++) {
+        manyVideos.push({
+          title: `Video ${i + 1}`,
+          youtube_id: `video${i + 1}`,
+          publishedAt: '2024-01-15T10:00:00Z',
+          thumbnail: `https://example.com/thumb${i + 1}.jpg`,
+          added: false,
+          duration: 1800,
+          availability: null,
+        });
+      }
+
+      setupFetchMocks({ videos: manyVideos.slice(0, 16), totalCount: 20 });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video 1')).toBeInTheDocument();
+      });
+
+      // Go to page 2
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          videos: manyVideos.slice(16, 20),
+          totalCount: 20,
+        }),
+      });
+
+      const paginations = screen.getAllByRole('navigation');
+      const pagination = paginations[0];
+      const page2Button = within(pagination).getByText('2');
+      fireEvent.click(page2Button);
+
+      await waitFor(() => {
+        expect(screen.getByText('Video 17')).toBeInTheDocument();
+      });
+
+      // Now search - should reset to page 1
+      const searchResults = manyVideos.filter(v => v.title.includes('5'));
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          videos: searchResults,
+          totalCount: searchResults.length,
+        }),
+      });
+
+      const searchInput = screen.getByPlaceholderText('Search videos...');
+      fireEvent.change(searchInput, { target: { value: '5' } });
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining('page=1'),
+          expect.anything()
+        );
+      });
+    });
+  });
+
+  describe('Video Deletion', () => {
+    const downloadedVideos: ChannelVideo[] = [
+      {
+        title: 'Downloaded Video 1',
+        youtube_id: 'dl_video1',
+        publishedAt: '2024-01-15T10:00:00Z',
+        thumbnail: 'https://example.com/thumb1.jpg',
+        added: true,
+        removed: false,
+        duration: 3600,
+        availability: null,
+      },
+      {
+        title: 'Downloaded Video 2',
+        youtube_id: 'dl_video2',
+        publishedAt: '2024-01-14T10:00:00Z',
+        thumbnail: 'https://example.com/thumb2.jpg',
+        added: true,
+        removed: false,
+        duration: 1800,
+        availability: null,
+      },
+    ];
+
+    test('deselects video for deletion when toggle is clicked again', async () => {
+      setupFetchMocks({ videos: downloadedVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Downloaded Video 1')).toBeInTheDocument();
+      });
+
+      // Select a video for deletion
+      const deleteIcons = screen.getAllByTestId('DeleteIcon');
+      const videoDeleteIcon = deleteIcons[deleteIcons.length - 1];
+      fireEvent.click(videoDeleteIcon);
+
+      await waitFor(() => {
+        const actionBarButtons = screen.getAllByRole('button');
+        const deleteActionButton = actionBarButtons.find(btn =>
+          btn.textContent?.match(/^Delete\s+1$/)
+        );
+        expect(deleteActionButton).toBeDefined();
+      });
+
+      // Click again to deselect
+      fireEvent.click(videoDeleteIcon);
+
+      await waitFor(() => {
+        const deleteButton = screen.getByRole('button', { name: /Delete Selected/i });
+        expect(deleteButton).toBeDisabled();
+      });
+    });
+
+    test('shows delete button for downloaded videos in grid view', async () => {
+      setupFetchMocks({ videos: downloadedVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Downloaded Video 1')).toBeInTheDocument();
+      });
+
+      // Should have delete icons for downloaded videos
+      const deleteIcons = screen.getAllByTestId('DeleteIcon');
+      expect(deleteIcons.length).toBeGreaterThan(0);
+
+      // Should have a Delete Selected button in the action bar (desktop)
+      const deleteButton = screen.getByRole('button', { name: /Delete Selected/i });
+      expect(deleteButton).toBeInTheDocument();
+      expect(deleteButton).toBeDisabled(); // Should be disabled when nothing selected
+    });
+
+    test('toggles video selection for deletion when delete icon is clicked', async () => {
+      setupFetchMocks({ videos: downloadedVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Downloaded Video 1')).toBeInTheDocument();
+      });
+
+      // Get delete icons - last ones should be video card icons (not action bar icons)
+      const deleteIcons = screen.getAllByTestId('DeleteIcon');
+      expect(deleteIcons.length).toBeGreaterThan(0);
+
+      // Click the last delete icon (video card icon) - the click event will bubble to its parent button
+      fireEvent.click(deleteIcons[deleteIcons.length - 1]);
+
+      // Wait for the action bar Delete button to update from "Delete Selected" to "Delete 1"
+      await waitFor(() => {
+        const actionBarButtons = screen.getAllByRole('button');
+        const deleteActionButton = actionBarButtons.find(btn =>
+          btn.textContent?.match(/^Delete\s+1$/)
+        );
+        expect(deleteActionButton).toBeDefined();
+      });
+
+      // Verify the button is not disabled
+      const actionBarButtons = screen.getAllByRole('button');
+      const deleteActionButton = actionBarButtons.find(btn =>
+        btn.textContent?.match(/^Delete\s+1$/)
+      );
+      expect(deleteActionButton).not.toBeDisabled();
+    });
+
+    test('opens delete confirmation dialog when delete button is clicked', async () => {
+      setupFetchMocks({ videos: downloadedVideos });
+      const user = userEvent.setup();
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Downloaded Video 1')).toBeInTheDocument();
+      });
+
+      // Select a video for deletion by clicking a video card delete icon
+      const deleteIcons = screen.getAllByTestId('DeleteIcon');
+      // Click the last delete icon (video card icon, not action bar) - event will bubble to button
+      fireEvent.click(deleteIcons[deleteIcons.length - 1]);
+
+      // Wait for and click the Delete button in the action bar
+      await waitFor(() => {
+        const actionBarButtons = screen.getAllByRole('button');
+        const deleteActionButton = actionBarButtons.find(btn =>
+          btn.textContent?.match(/^Delete\s+1$/)
+        );
+        expect(deleteActionButton).toBeDefined();
+      });
+
+      const deleteActionButton = screen.getAllByRole('button').find(btn =>
+        btn.textContent?.match(/^Delete\s+1$/)
+      );
+      await user.click(deleteActionButton!);
+
+      // Dialog should be open
+      await waitFor(() => {
+        expect(screen.getByTestId('delete-videos-dialog')).toBeInTheDocument();
+      });
+    });
+
+    test('cancels deletion when dialog is cancelled', async () => {
+      setupFetchMocks({ videos: downloadedVideos });
+      const user = userEvent.setup();
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Downloaded Video 1')).toBeInTheDocument();
+      });
+
+      // Select a video for deletion by clicking a video card delete icon
+      const deleteIcons = screen.getAllByTestId('DeleteIcon');
+      // Click the last delete icon (video card icon, not action bar) - event will bubble to button
+      fireEvent.click(deleteIcons[deleteIcons.length - 1]);
+
+      // Wait for and click the Delete button
+      await waitFor(() => {
+        const actionBarButtons = screen.getAllByRole('button');
+        const deleteActionButton = actionBarButtons.find(btn =>
+          btn.textContent?.match(/^Delete\s+1$/)
+        );
+        expect(deleteActionButton).toBeDefined();
+      });
+
+      const deleteActionButton = screen.getAllByRole('button').find(btn =>
+        btn.textContent?.match(/^Delete\s+1$/)
+      );
+      await user.click(deleteActionButton!);
+
+      // Dialog should be open
+      await waitFor(() => {
+        expect(screen.getByTestId('delete-videos-dialog')).toBeInTheDocument();
+      });
+
+      // Cancel the dialog
+      const cancelButton = screen.getByTestId('delete-cancel');
+      await user.click(cancelButton);
+
+      // Dialog should close
+      await waitFor(() => {
+        expect(screen.queryByTestId('delete-videos-dialog')).not.toBeInTheDocument();
+      });
+
+      // deleteVideosByYoutubeIds should not have been called
+      expect(mockDeleteVideosByYoutubeIds).not.toHaveBeenCalled();
+    });
+
+    test('deletes videos successfully when confirmed', async () => {
+      setupFetchMocks({ videos: downloadedVideos });
+      const user = userEvent.setup();
+
+      // Mock successful deletion (for dl_video2, the last video we'll click)
+      mockDeleteVideosByYoutubeIds.mockResolvedValueOnce({
+        success: true,
+        deleted: ['dl_video2'],
+        failed: [],
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Downloaded Video 1')).toBeInTheDocument();
+      });
+
+      // Select a video for deletion by clicking a video card delete icon
+      const deleteIcons = screen.getAllByTestId('DeleteIcon');
+      // Click the last delete icon (video card icon, not action bar) - event will bubble to button
+      fireEvent.click(deleteIcons[deleteIcons.length - 1]);
+
+      // Wait for and click the Delete button
+      await waitFor(() => {
+        const actionBarButtons = screen.getAllByRole('button');
+        const deleteActionButton = actionBarButtons.find(btn =>
+          btn.textContent?.match(/^Delete\s+1$/)
+        );
+        expect(deleteActionButton).toBeDefined();
+      });
+
+      const deleteActionButton = screen.getAllByRole('button').find(btn =>
+        btn.textContent?.match(/^Delete\s+1$/)
+      );
+      await user.click(deleteActionButton!);
+
+      // Confirm deletion
+      const confirmButton = await screen.findByTestId('delete-confirm');
+      fireEvent.click(confirmButton);
+
+      // Wait for deletion to complete (we clicked the last video, which is dl_video2)
+      await waitFor(() => {
+        expect(mockDeleteVideosByYoutubeIds).toHaveBeenCalledWith(['dl_video2'], mockToken);
+      });
+
+      // Success message should be shown
+      await waitFor(() => {
+        expect(screen.getByText(/Successfully deleted 1 video/i)).toBeInTheDocument();
+      });
+    });
+
+    test('handles partial deletion (some succeed, some fail)', async () => {
+      setupFetchMocks({ videos: downloadedVideos });
+      const user = userEvent.setup();
+
+      // Mock partial deletion
+      mockDeleteVideosByYoutubeIds.mockResolvedValueOnce({
+        success: false,
+        deleted: ['dl_video1'],
+        failed: [{ youtubeId: 'dl_video2', error: 'File not found' }],
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Downloaded Video 1')).toBeInTheDocument();
+      });
+
+      // Select both videos for deletion
+      const deleteIcons = screen.getAllByTestId('DeleteIcon');
+      for (const icon of deleteIcons) {
+        // Click each delete icon - the click event will bubble to its parent button
+        fireEvent.click(icon);
+      }
+
+      // Click the Delete button
+      const deleteActionButton = await screen.findByRole('button', { name: /Delete 2/i });
+      await user.click(deleteActionButton);
+
+      // Confirm deletion
+      const confirmButton = await screen.findByTestId('delete-confirm');
+      fireEvent.click(confirmButton);
+
+      // Wait for deletion to complete
+      await waitFor(() => {
+        expect(mockDeleteVideosByYoutubeIds).toHaveBeenCalledWith(['dl_video1', 'dl_video2'], mockToken);
+      });
+
+      // Partial success message should be shown
+      await waitFor(() => {
+        expect(screen.getByText(/Deleted 1 video, but 1 failed/i)).toBeInTheDocument();
+      });
+    });
+
+    test('handles complete deletion failure', async () => {
+      setupFetchMocks({ videos: downloadedVideos });
+      const user = userEvent.setup();
+
+      // Mock complete deletion failure (for dl_video2, the last video we'll click)
+      mockDeleteVideosByYoutubeIds.mockResolvedValueOnce({
+        success: false,
+        deleted: [],
+        failed: [{ youtubeId: 'dl_video2', error: 'Permission denied' }],
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Downloaded Video 1')).toBeInTheDocument();
+      });
+
+      // Select a video for deletion by clicking a video card delete icon
+      const deleteIcons = screen.getAllByTestId('DeleteIcon');
+      // Click the last delete icon (video card icon, not action bar) - event will bubble to button
+      fireEvent.click(deleteIcons[deleteIcons.length - 1]);
+
+      // Wait for and click the Delete button
+      await waitFor(() => {
+        const actionBarButtons = screen.getAllByRole('button');
+        const deleteActionButton = actionBarButtons.find(btn =>
+          btn.textContent?.match(/^Delete\s+1$/)
+        );
+        expect(deleteActionButton).toBeDefined();
+      });
+
+      const deleteActionButton = screen.getAllByRole('button').find(btn =>
+        btn.textContent?.match(/^Delete\s+1$/)
+      );
+      await user.click(deleteActionButton!);
+
+      // Confirm deletion
+      const confirmButton = await screen.findByTestId('delete-confirm');
+      fireEvent.click(confirmButton);
+
+      // Wait for deletion to complete (we clicked the last video, which is dl_video2)
+      await waitFor(() => {
+        expect(mockDeleteVideosByYoutubeIds).toHaveBeenCalledWith(['dl_video2'], mockToken);
+      });
+
+      // Error message should be shown
+      await waitFor(() => {
+        expect(screen.getByText(/Failed to delete videos: Permission denied/i)).toBeInTheDocument();
+      });
+    });
+
+    test('shows error when trying to delete without selection', async () => {
+      setupFetchMocks({ videos: downloadedVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Downloaded Video 1')).toBeInTheDocument();
+      });
+
+      // Click the Delete button without selecting any videos
+      const deleteActionButton = screen.getByRole('button', { name: /Delete Selected/i });
+      expect(deleteActionButton).toBeDisabled();
+    });
+
+    test('refreshes video list after successful deletion', async () => {
+      setupFetchMocks({ videos: downloadedVideos });
+      const user = userEvent.setup();
+
+      // Mock successful deletion (for dl_video2, the last video we'll click)
+      mockDeleteVideosByYoutubeIds.mockResolvedValueOnce({
+        success: true,
+        deleted: ['dl_video2'],
+        failed: [],
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Downloaded Video 1')).toBeInTheDocument();
+      });
+
+      // Select a video for deletion by clicking a video card delete icon
+      const deleteIcons = screen.getAllByTestId('DeleteIcon');
+      // Click the last delete icon (video card icon, not action bar) - event will bubble to button
+      fireEvent.click(deleteIcons[deleteIcons.length - 1]);
+
+      // Wait for and click the Delete button
+      await waitFor(() => {
+        const actionBarButtons = screen.getAllByRole('button');
+        const deleteActionButton = actionBarButtons.find(btn =>
+          btn.textContent?.match(/^Delete\s+1$/)
+        );
+        expect(deleteActionButton).toBeDefined();
+      });
+
+      const deleteActionButton = screen.getAllByRole('button').find(btn =>
+        btn.textContent?.match(/^Delete\s+1$/)
+      );
+      await user.click(deleteActionButton!);
+
+      // Mock the refresh fetch
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          videos: [downloadedVideos[1]], // Only second video remains
+          totalCount: 1,
+        }),
+      });
+
+      // Confirm deletion
+      const confirmButton = await screen.findByTestId('delete-confirm');
+      fireEvent.click(confirmButton);
+
+      // Wait for deletion and refresh
+      await waitFor(() => {
+        expect(mockDeleteVideosByYoutubeIds).toHaveBeenCalled();
+      });
+
+      // Verify fetch was called to refresh the list
+      await waitFor(() => {
+        const fetchCalls = mockFetch.mock.calls;
+        const refreshCall = fetchCalls.find((call: any) =>
+          call[0].includes('/getchannelvideos/') && fetchCalls.indexOf(call) > 1
+        );
+        expect(refreshCall).toBeDefined();
+      });
+    });
+
+    test('shows delete FAB on mobile when videos selected for deletion', async () => {
+      (useMediaQuery as jest.Mock).mockReturnValue(true); // Mobile
+      setupFetchMocks({ videos: downloadedVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Downloaded Video 1')).toBeInTheDocument();
+      });
+
+      // Select a video for deletion
+      const deleteIcons = screen.getAllByTestId('DeleteIcon');
+      if (deleteIcons.length > 0) {
+        // Click the last delete icon (video card icon) - event will bubble to button
+        fireEvent.click(deleteIcons[deleteIcons.length - 1]);
+      }
+
+      // Delete FAB should appear
+      await waitFor(() => {
+        const deleteFABIcons = screen.getAllByTestId('DeleteIcon');
+        // Should have multiple delete icons - one for each video thumbnail and one for the FAB
+        expect(deleteFABIcons.length).toBeGreaterThan(downloadedVideos.length);
+      });
+    });
+
+    test('includes delete option in mobile drawer', async () => {
+      (useMediaQuery as jest.Mock).mockReturnValue(true); // Mobile
+
+      // Create videos that can be selected for download
+      const selectableVideos: ChannelVideo[] = [
+        {
+          title: 'Not Downloaded Video',
+          youtube_id: 'not_dl_1',
+          publishedAt: '2024-01-15T10:00:00Z',
+          thumbnail: 'https://example.com/thumb1.jpg',
+          added: false,
+          duration: 3600,
+          availability: null,
+        },
+      ];
+
+      setupFetchMocks({ videos: selectableVideos });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Not Downloaded Video')).toBeInTheDocument();
+      });
+
+      // Select a video for download by clicking its checkbox
+      const checkboxes = screen.getAllByRole('checkbox');
+      const hideDownloadedCheckbox = screen.queryByRole('checkbox', { name: /hide downloaded/i });
+      const videoCheckboxes = checkboxes.filter(cb => cb !== hideDownloadedCheckbox);
+      if (videoCheckboxes.length > 0) {
+        fireEvent.click(videoCheckboxes[0]);
+      }
+
+      // Wait for download FAB to appear
+      let downloadFab: HTMLElement | undefined;
+      await waitFor(() => {
+        const allButtons = screen.getAllByRole('button');
+        const fabs = allButtons.filter(btn =>
+          btn.classList.contains('MuiFab-root')
+        );
+        // Find the FAB that contains a DownloadIcon
+        downloadFab = fabs.find(fab => {
+          const downloadIcon = within(fab).queryByTestId('DownloadIcon');
+          return downloadIcon !== null;
+        });
+        expect(downloadFab).toBeDefined();
+      });
+
+      // Click the download FAB to open drawer
+      fireEvent.click(downloadFab!);
+
+      // Wait for drawer to open
+      await waitFor(() => {
+        const drawer = screen.queryByRole('presentation');
+        expect(drawer).toBeInTheDocument();
+      });
+
+      // Drawer should have delete option (even if disabled)
+      const deleteText = screen.queryByText(/Delete \d+ Videos?/i);
+      expect(deleteText).toBeInTheDocument();
+    });
+  });
+
+  describe('Media Type Display', () => {
+    test('shows short badge for short videos', async () => {
+      const shortVideo: ChannelVideo[] = [
+        {
+          title: 'Short Video',
+          youtube_id: 'short1',
+          publishedAt: '2024-01-15T10:00:00Z',
+          thumbnail: 'https://example.com/thumb1.jpg',
+          added: false,
+          duration: 60,
+          availability: null,
+          media_type: 'short',
+        },
+      ];
+
+      setupFetchMocks({ videos: shortVideo });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Short Video')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('Short')).toBeInTheDocument();
+    });
+
+    test('shows live badge for livestream videos', async () => {
+      const liveVideo: ChannelVideo[] = [
+        {
+          title: 'Live Video',
+          youtube_id: 'live1',
+          publishedAt: '2024-01-15T10:00:00Z',
+          thumbnail: 'https://example.com/thumb1.jpg',
+          added: false,
+          duration: 7200,
+          availability: null,
+          media_type: 'livestream',
+        },
+      ];
+
+      setupFetchMocks({ videos: liveVideo });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Live Video')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('Live')).toBeInTheDocument();
+    });
+
+    test('does not show media type badge for regular videos', async () => {
+      setupFetchMocks({ videos: [mockVideos[0]] });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Video Title 1')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByText('Short')).not.toBeInTheDocument();
+      expect(screen.queryByText('Live')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('File Size Formatting', () => {
+    test('formats file size in GB when larger than 1GB', async () => {
+      const largeVideo: ChannelVideo[] = [
+        {
+          title: 'Large Video',
+          youtube_id: 'large1',
+          publishedAt: '2024-01-15T10:00:00Z',
+          thumbnail: 'https://example.com/thumb1.jpg',
+          added: true,
+          removed: false,
+          duration: 3600,
+          availability: null,
+          fileSize: 2147483648,
+        },
+      ];
+
+      setupFetchMocks({ videos: largeVideo });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Large Video')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('2.0GB')).toBeInTheDocument();
+    });
+
+    test('formats file size in MB when smaller than 1GB', async () => {
+      const smallVideo: ChannelVideo[] = [
+        {
+          title: 'Small Video',
+          youtube_id: 'small1',
+          publishedAt: '2024-01-15T10:00:00Z',
+          thumbnail: 'https://example.com/thumb1.jpg',
+          added: true,
+          removed: false,
+          duration: 300,
+          availability: null,
+          fileSize: 52428800,
+        },
+      ];
+
+      setupFetchMocks({ videos: smallVideo });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Small Video')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText('50MB')).toBeInTheDocument();
+    });
+  });
+
+  describe('Success and Error Snackbars', () => {
+    test('closes success snackbar when close button is clicked', async () => {
+      const downloadedVideos: ChannelVideo[] = [
+        {
+          title: 'Downloaded Video 1',
+          youtube_id: 'dl_video1',
+          publishedAt: '2024-01-15T10:00:00Z',
+          thumbnail: 'https://example.com/thumb1.jpg',
+          added: true,
+          removed: false,
+          duration: 3600,
+          availability: null,
+        },
+      ];
+
+      setupFetchMocks({ videos: downloadedVideos });
+      const user = userEvent.setup();
+
+      mockDeleteVideosByYoutubeIds.mockResolvedValueOnce({
+        success: true,
+        deleted: ['dl_video1'],
+        failed: [],
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Downloaded Video 1')).toBeInTheDocument();
+      });
+
+      const deleteIcons = screen.getAllByTestId('DeleteIcon');
+      fireEvent.click(deleteIcons[deleteIcons.length - 1]);
+
+      await waitFor(() => {
+        const actionBarButtons = screen.getAllByRole('button');
+        const deleteActionButton = actionBarButtons.find(btn =>
+          btn.textContent?.match(/^Delete\s+1$/)
+        );
+        expect(deleteActionButton).toBeDefined();
+      });
+
+      const deleteActionButton = screen.getAllByRole('button').find(btn =>
+        btn.textContent?.match(/^Delete\s+1$/)
+      );
+      await user.click(deleteActionButton!);
+
+      const confirmButton = await screen.findByTestId('delete-confirm');
+      fireEvent.click(confirmButton);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Successfully deleted 1 video/i)).toBeInTheDocument();
+      });
+
+      // Find and click the close button in the alert
+      const alerts = screen.getAllByRole('alert');
+      const successAlert = alerts.find(alert => alert.textContent?.includes('Successfully deleted'));
+      expect(successAlert).toBeDefined();
+      const closeButton = within(successAlert!).getByRole('button', { name: /close/i });
+      fireEvent.click(closeButton);
+
+      await waitFor(() => {
+        expect(screen.queryByText(/Successfully deleted 1 video/i)).not.toBeInTheDocument();
+      });
+    });
+
+    test('closes error snackbar when close button is clicked', async () => {
+      const downloadedVideos: ChannelVideo[] = [
+        {
+          title: 'Downloaded Video 1',
+          youtube_id: 'dl_video1',
+          publishedAt: '2024-01-15T10:00:00Z',
+          thumbnail: 'https://example.com/thumb1.jpg',
+          added: true,
+          removed: false,
+          duration: 3600,
+          availability: null,
+        },
+      ];
+
+      setupFetchMocks({ videos: downloadedVideos });
+      const user = userEvent.setup();
+
+      mockDeleteVideosByYoutubeIds.mockResolvedValueOnce({
+        success: false,
+        deleted: [],
+        failed: [{ youtubeId: 'dl_video1', error: 'Test error message' }],
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelVideos token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Downloaded Video 1')).toBeInTheDocument();
+      });
+
+      const deleteIcons = screen.getAllByTestId('DeleteIcon');
+      fireEvent.click(deleteIcons[deleteIcons.length - 1]);
+
+      await waitFor(() => {
+        const actionBarButtons = screen.getAllByRole('button');
+        const deleteActionButton = actionBarButtons.find(btn =>
+          btn.textContent?.match(/^Delete\s+1$/)
+        );
+        expect(deleteActionButton).toBeDefined();
+      });
+
+      const deleteActionButton = screen.getAllByRole('button').find(btn =>
+        btn.textContent?.match(/^Delete\s+1$/)
+      );
+      await user.click(deleteActionButton!);
+
+      const confirmButton = await screen.findByTestId('delete-confirm');
+      fireEvent.click(confirmButton);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Failed to delete videos: Test error message/i)).toBeInTheDocument();
+      });
+
+      // Find and click the close button in the alert
+      const alerts = screen.getAllByRole('alert');
+      const errorAlert = alerts.find(alert => alert.textContent?.includes('Failed to delete'));
+      expect(errorAlert).toBeDefined();
+      const closeButton = within(errorAlert!).getByRole('button', { name: /close/i });
+      fireEvent.click(closeButton);
+
+      await waitFor(() => {
+        expect(screen.queryByText(/Failed to delete videos: Test error message/i)).not.toBeInTheDocument();
+      });
     });
   });
 });
