@@ -33,6 +33,7 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 - **♻️ Re-download Missing**: Easily identify and re-download videos that were removed from disk
 - **🔐 Secure Access**: Local authentication system with admin controls
 - **☁️ Platform Flexible**: Configurable storage paths for Kubernetes/Elfhosted deployments
+- **🖥️ Unraid Ready**: Community Applications template (via DialmasterOrg repo) with headless-friendly credential presets
 
 ### Optional Plex Integration
 - **🔄 Auto Library Refresh**: Automatically update Plex after downloads
@@ -86,6 +87,14 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
   - Run `./start.sh --external-db` (Docker Compose helper) or
   - Run `./start-with-external-db.sh` (single-container helper for platforms like UNRAID)
 - Full walkthrough (including local testing steps) lives in [docs/EXTERNAL_DB.md](docs/EXTERNAL_DB.md)
+
+### Deploying on Unraid
+- Requires a running MariaDB instance reachable from the container. You can run MariaDB directly on Unraid or point to an existing server.
+- Install the Community Applications plugin (if you have not already), then add the template repo URL `https://github.com/DialmasterOrg/unraid-templates` under **Apps → Settings → Manage Template Repositories**.
+- Search for **Youtarr** under the Apps tab and launch the template. The XML lives at `https://github.com/DialmasterOrg/unraid-templates/blob/main/Youtarr/Youtarr.xml` for reference.
+- Until the template is accepted into the main Community Applications feed, it is available directly from this repository.
+- Map your persistent paths (for example `/mnt/user/appdata/youtarr/config` for `/app/config` and `/mnt/user/media/youtube` for `/data`) and supply the MariaDB connection variables before deploying.
+- Set both `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` so the container boots with working credentials. Leaving them blank requires completing the setup wizard from the Unraid host's localhost (e.g., via SSH port forwarding), which most headless installs won't have handy. You can change the credentials later from the Youtarr UI.
 
 ## 📋 Usage Examples
 
