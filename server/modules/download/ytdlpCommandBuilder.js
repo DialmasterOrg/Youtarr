@@ -9,6 +9,38 @@ const VIDEO_FOLDER_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title)s - %(id)s`;
 const VIDEO_FILE_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title)s  [%(id)s].%(ext)s`;
 
 class YtdlpCommandBuilder {
+  // Build format string based on resolution and codec preference
+  static buildFormatString(resolution, videoCodec = 'default') {
+    const res = resolution || '1080';
+
+    // Base format components
+    const audioFormat = 'bestaudio[ext=m4a]';
+    const fallbackMp4 = 'best[ext=mp4]';
+    const ultimateFallback = 'best';
+
+    let videoFormat;
+
+    switch (videoCodec) {
+    case 'h264':
+      // Prefer H.264/AVC codec, fallback to any codec at preferred resolution, then fallback to best
+      videoFormat = `bestvideo[height<=${res}][ext=mp4][vcodec^=avc]+${audioFormat}/bestvideo[height<=${res}][ext=mp4]+${audioFormat}/${fallbackMp4}/${ultimateFallback}`;
+      break;
+
+    case 'h265':
+      // Prefer H.265/HEVC codec, fallback to any codec at preferred resolution, then fallback to best
+      videoFormat = `bestvideo[height<=${res}][ext=mp4][vcodec^=hev]+${audioFormat}/bestvideo[height<=${res}][ext=mp4]+${audioFormat}/${fallbackMp4}/${ultimateFallback}`;
+      break;
+
+    case 'default':
+    default:
+      // Default behavior: no codec preference, just resolution and container
+      videoFormat = `bestvideo[height<=${res}][ext=mp4]+${audioFormat}/${fallbackMp4}/${ultimateFallback}`;
+      break;
+    }
+
+    return videoFormat;
+  }
+
   // Build Sponsorblock args based on configuration
   static buildSponsorblockArgs(config) {
     const args = [];
@@ -51,6 +83,7 @@ class YtdlpCommandBuilder {
   static getBaseCommandArgs(resolution, allowRedownload = false) {
     const config = configModule.getConfig();
     const res = resolution || config.preferredResolution || '1080';
+    const videoCodec = config.videoCodec || 'default';
     const baseOutputPath = configModule.directoryPath;
 
     // Add cookies args first if enabled
@@ -70,7 +103,7 @@ class YtdlpCommandBuilder {
       '--output-na-placeholder', 'Unknown Channel',
       // Clean @ prefix from uploader_id when it's used as fallback
       '--replace-in-metadata', 'uploader_id', '^@', '',
-      '-f', `bestvideo[height<=${res}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best`,
+      '-f', this.buildFormatString(res, videoCodec),
       '--write-thumbnail',
       '--convert-thumbnails', 'jpg',
     ];
@@ -105,6 +138,7 @@ class YtdlpCommandBuilder {
   static getBaseCommandArgsForManualDownload(resolution, allowRedownload = false) {
     const config = configModule.getConfig();
     const res = resolution || config.preferredResolution || '1080';
+    const videoCodec = config.videoCodec || 'default';
     const baseOutputPath = configModule.directoryPath;
 
     // Add cookies args first if enabled
@@ -124,7 +158,7 @@ class YtdlpCommandBuilder {
       '--output-na-placeholder', 'Unknown Channel',
       // Clean @ prefix from uploader_id when it's used as fallback
       '--replace-in-metadata', 'uploader_id', '^@', '',
-      '-f', `bestvideo[height<=${res}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best`,
+      '-f', this.buildFormatString(res, videoCodec),
       '--write-thumbnail',
       '--convert-thumbnails', 'jpg',
     ];

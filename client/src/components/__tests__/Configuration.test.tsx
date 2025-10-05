@@ -116,6 +116,7 @@ const mockConfig = {
   channelDownloadFrequency: '0 */4 * * *',
   channelFilesToDownload: 3,
   preferredResolution: '1080',
+  videoCodec: 'default',
   initialSetup: false,
   plexApiKey: 'test-plex-key',
   youtubeOutputDirectory: '/videos',
@@ -298,6 +299,34 @@ const renderConfiguration = async ({
       await user.click(option);
 
       await screen.findByRole('button', { name: /4K \(2160p\)/i });
+    });
+
+    test('changes preferred video codec', async () => {
+      await setupComponent();
+      const user = createUser();
+
+      // MUI Select renders as a div with role="button" showing current value
+      const selectButton = screen.getByRole('button', { name: /Default \(No Preference\)/i });
+      await user.click(selectButton);
+
+      const option = await screen.findByRole('option', { name: 'H.264/AVC (Best Compatibility)' });
+      await user.click(option);
+
+      await screen.findByRole('button', { name: /H\.264\/AVC \(Best Compatibility\)/i });
+    });
+
+    test('changes preferred video codec to H.265', async () => {
+      await setupComponent();
+      const user = createUser();
+
+      // MUI Select renders as a div with role="button" showing current value
+      const selectButton = screen.getByRole('button', { name: /Default \(No Preference\)/i });
+      await user.click(selectButton);
+
+      const option = await screen.findByRole('option', { name: 'H.265/HEVC (Balanced)' });
+      await user.click(option);
+
+      await screen.findByRole('button', { name: /H\.265\/HEVC \(Balanced\)/i });
     });
   });
 

@@ -58,6 +58,7 @@ function Configuration({ token }: ConfigurationProps) {
     channelDownloadFrequency: '',
     channelFilesToDownload: 3,
     preferredResolution: '1080',
+    videoCodec: 'default',
     initialSetup: true,
     plexApiKey: '',
     youtubeOutputDirectory: '',
@@ -777,6 +778,7 @@ function Configuration({ token }: ConfigurationProps) {
       'channelDownloadFrequency',
       'channelFilesToDownload',
       'preferredResolution',
+      'videoCodec',
       'plexApiKey',
       'youtubeOutputDirectory',
       'plexYoutubeLibraryId',
@@ -1102,6 +1104,31 @@ function Configuration({ token }: ConfigurationProps) {
                   </Select>
                 </FormControl>
                 {getInfoIcon('The resolution we will try to download from YouTube. Note that this is not guaranteed as YouTube may not have your preferred resolution available.')}
+              </Box>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <FormControl fullWidth>
+                    <InputLabel>Preferred Video Codec</InputLabel>
+                    <Select
+                      value={config.videoCodec}
+                      onChange={(e: SelectChangeEvent<string>) =>
+                        setConfig({ ...config, videoCodec: e.target.value })
+                      }
+                      label="Preferred Video Codec"
+                    >
+                      <MenuItem value="default">Default (No Preference)</MenuItem>
+                      <MenuItem value="h264">H.264/AVC (Best Compatibility)</MenuItem>
+                      <MenuItem value="h265">H.265/HEVC (Balanced)</MenuItem>
+                    </Select>
+                  </FormControl>
+                  {getInfoIcon('Select your preferred video codec. Youtarr will download this codec when available, but will automatically fall back to other codecs if your preference is not available for a video. H.264 is recommended for Apple TV and maximum device compatibility.')}
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                  Note: H.264 produces larger file sizes but offers maximum compatibility. This is a preference and will fall back to available codecs.
+                </Typography>
               </Box>
             </Grid>
 
