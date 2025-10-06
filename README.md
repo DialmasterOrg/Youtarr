@@ -16,7 +16,7 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 - **Plex-Ready**: Seamlessly integrates with Plex if desired, but never requires it
 
 ## 🎯 Key Features
-
+ 
 ### Core Features (No Plex Required)
 - **📥 Smart Downloads**: Pre-validate YouTube URLs with metadata preview before downloading (powered by [yt-dlp](https://github.com/yt-dlp/yt-dlp))
 - **🎯 Custom Quality Settings**: Per-download resolution control with support from 360p to 4K
@@ -26,6 +26,7 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 - **📝 Multi-Server Support**: Compatible with Plex, Kodi, Jellyfin, and Emby through NFO metadata files and embedded MP4 metadata
 - **🖼️ Channel Artwork**: Automatic channel poster generation for media server folder displays
 - **⏰ Scheduled Downloads**: Configure automatic downloads on your schedule (cron-based)
+- **🧹 Automatic Cleanup**: Nightly auto-removal with configurable age and free-space thresholds plus dry-run previews
 - **📱 Web Interface**: Manage everything through a responsive web UI
 - **🔍 Browse Channels**: View and search all videos from subscribed channels with advanced filtering
 - **📊 Download History**: Track what you've downloaded with smart duplicate prevention
@@ -113,7 +114,11 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 1. Visit Configuration page
 2. Set download schedule (e.g., every 6 hours)
 3. Choose video resolution and download limits
-4. (Optional) Connect Plex for auto-refresh
+4. Enable Automatic Video Removal (optional):
+   - Toggle "Enable Automatic Video Removal"
+   - Pick a free-space and/or age threshold
+   - Use "Preview Automatic Removal" to simulate deletions before saving
+5. (Optional) Connect Plex for auto-refresh
 
 ### Configure SponsorBlock
 1. Go to Configuration page → SponsorBlock Integration section
@@ -146,7 +151,7 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 
 ### For All Users
 - **Storage**: Videos download to the directory you select during setup
-- **Storage Growth**: Downloads can consume significant disk space over time. The UI includes a storage status chip that shows total and free space for your selected directory/drive, making it easy to monitor and adjust limits/schedule as needed.
+- **Storage Growth**: Downloads can consume significant disk space over time. The UI includes a storage status chip that shows total and free space for your selected directory/drive, making it easy to monitor and adjust limits/schedule as needed. Automatic Video Removal can purge old videos nightly at 2:00 AM once you configure age or free-space thresholds; space-based cleanup relies on the storage status chip reporting accurate disk usage.
 - **Format**: Downloads as MP4 with comprehensive embedded metadata (title, genre, studio, keywords) and NFO files for maximum media server compatibility
 - **File Management**: Videos must retain their `[youtubeid].mp4` filename and remain in their download location. Moving or renaming files will cause Youtarr to mark them as "missing"
 - **Filtering**: Automatically skips YouTube Shorts and subscriber-only content
