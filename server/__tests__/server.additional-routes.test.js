@@ -230,6 +230,7 @@ const createServerModule = ({
         jest.doMock('../modules/downloadModule', () => downloadModuleMock);
         jest.doMock('../modules/jobModule', () => jobModuleMock);
         jest.doMock('../modules/videosModule', () => videosModuleMock);
+        jest.doMock('../modules/cronJobs', () => ({ initialize: jest.fn() }));
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => ({ schedule: jest.fn() }));
         jest.doMock('express-rate-limit', () => jest.fn(() => (req, res, next) => next()));
@@ -562,6 +563,256 @@ describe('server routes - validateToken', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ valid: true, username: 'tester' });
+  });
+});
+
+describe('server routes - auto-removal dry run', () => {
+  test('performs dry run with boolean autoRemovalEnabled', async () => {
+    const { app } = await createServerModule();
+
+    const videoDeletionModuleMock = {
+      performAutomaticCleanup: jest.fn().mockResolvedValue({
+        success: true,
+        dryRun: true,
+        totalDeleted: 0,
+        deletedByAge: 0,
+        deletedBySpace: 0,
+        freedBytes: 0,
+        errors: [],
+        plan: {
+          ageStrategy: { enabled: true, candidateCount: 5 },
+          spaceStrategy: { enabled: false, candidateCount: 0 }
+        },
+        simulationTotals: { byAge: 5, bySpace: 0, total: 5, estimatedFreedBytes: 1024000 }
+      })
+    };
+
+    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+
+    const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
+    const dryRunHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({
+      body: {
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: 30,
+        autoRemovalFreeSpaceThreshold: '10GB'
+      }
+    });
+    const res = createMockResponse();
+
+    await dryRunHandler(req, res);
+
+    expect(videoDeletionModuleMock.performAutomaticCleanup).toHaveBeenCalledWith({
+      dryRun: true,
+      overrides: {
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: 30,
+        autoRemovalFreeSpaceThreshold: '10GB'
+      }
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.dryRun).toBe(true);
+  });
+
+  test('performs dry run with string "true" autoRemovalEnabled', async () => {
+    const { app } = await createServerModule();
+
+    const videoDeletionModuleMock = {
+      performAutomaticCleanup: jest.fn().mockResolvedValue({
+        success: true,
+        dryRun: true,
+        totalDeleted: 0,
+        errors: []
+      })
+    };
+
+    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+
+    const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
+    const dryRunHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({
+      body: {
+        autoRemovalEnabled: 'true'
+      }
+    });
+    const res = createMockResponse();
+
+    await dryRunHandler(req, res);
+
+    expect(videoDeletionModuleMock.performAutomaticCleanup).toHaveBeenCalledWith({
+      dryRun: true,
+      overrides: {
+        autoRemovalEnabled: true
+      }
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  test('performs dry run with string "false" autoRemovalEnabled', async () => {
+    const { app } = await createServerModule();
+
+    const videoDeletionModuleMock = {
+      performAutomaticCleanup: jest.fn().mockResolvedValue({
+        success: true,
+        dryRun: true,
+        totalDeleted: 0,
+        errors: []
+      })
+    };
+
+    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+
+    const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
+    const dryRunHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({
+      body: {
+        autoRemovalEnabled: 'false'
+      }
+    });
+    const res = createMockResponse();
+
+    await dryRunHandler(req, res);
+
+    expect(videoDeletionModuleMock.performAutomaticCleanup).toHaveBeenCalledWith({
+      dryRun: true,
+      overrides: {
+        autoRemovalEnabled: false
+      }
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  test('performs dry run with numeric autoRemovalEnabled (truthy)', async () => {
+    const { app } = await createServerModule();
+
+    const videoDeletionModuleMock = {
+      performAutomaticCleanup: jest.fn().mockResolvedValue({
+        success: true,
+        dryRun: true,
+        totalDeleted: 0,
+        errors: []
+      })
+    };
+
+    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+
+    const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
+    const dryRunHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({
+      body: {
+        autoRemovalEnabled: 1
+      }
+    });
+    const res = createMockResponse();
+
+    await dryRunHandler(req, res);
+
+    expect(videoDeletionModuleMock.performAutomaticCleanup).toHaveBeenCalledWith({
+      dryRun: true,
+      overrides: {
+        autoRemovalEnabled: true
+      }
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  test('performs dry run with only threshold values', async () => {
+    const { app } = await createServerModule();
+
+    const videoDeletionModuleMock = {
+      performAutomaticCleanup: jest.fn().mockResolvedValue({
+        success: true,
+        dryRun: true,
+        totalDeleted: 0,
+        errors: []
+      })
+    };
+
+    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+
+    const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
+    const dryRunHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({
+      body: {
+        autoRemovalVideoAgeThreshold: 60,
+        autoRemovalFreeSpaceThreshold: '5GB'
+      }
+    });
+    const res = createMockResponse();
+
+    await dryRunHandler(req, res);
+
+    expect(videoDeletionModuleMock.performAutomaticCleanup).toHaveBeenCalledWith({
+      dryRun: true,
+      overrides: {
+        autoRemovalVideoAgeThreshold: 60,
+        autoRemovalFreeSpaceThreshold: '5GB'
+      }
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  test('performs dry run with empty body', async () => {
+    const { app } = await createServerModule();
+
+    const videoDeletionModuleMock = {
+      performAutomaticCleanup: jest.fn().mockResolvedValue({
+        success: true,
+        dryRun: true,
+        totalDeleted: 0,
+        errors: []
+      })
+    };
+
+    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+
+    const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
+    const dryRunHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({
+      body: {}
+    });
+    const res = createMockResponse();
+
+    await dryRunHandler(req, res);
+
+    expect(videoDeletionModuleMock.performAutomaticCleanup).toHaveBeenCalledWith({
+      dryRun: true,
+      overrides: {}
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  test('handles error during dry run', async () => {
+    const { app } = await createServerModule();
+
+    const videoDeletionModuleMock = {
+      performAutomaticCleanup: jest.fn().mockRejectedValue(new Error('Cleanup failed'))
+    };
+
+    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+
+    const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
+    const dryRunHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({
+      body: {
+        autoRemovalEnabled: true
+      }
+    });
+    const res = createMockResponse();
+
+    await dryRunHandler(req, res);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toBe('Cleanup failed');
   });
 });
 

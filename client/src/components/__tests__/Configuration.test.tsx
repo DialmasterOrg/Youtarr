@@ -409,6 +409,12 @@ const renderConfiguration = async ({
           },
         },
         additionalFetchResponses: [
+          { data: {
+            availableGB: 512,
+            totalGB: 1024,
+            percentFree: 50,
+            percentUsed: 50,
+          } },
           { data: [
             {
               key: '1',
