@@ -1,5 +1,38 @@
 # Changelog
 
+## [v1.38.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.38.0) - 2025-10-06
+
+## [1.38.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.37.0...v1.38.0) (2025-10-06)
+
+
+### Features
+
+* add automatic video removal with dry-run preview ([fb16aea](https://github.com/DialmasterOrg/Youtarr/commit/fb16aeab59dcec73e04885212c8bb2434ea43535))
+* add video codec preference configuration ([08661fb](https://github.com/DialmasterOrg/Youtarr/commit/08661fbb0d7bdbb81c77c0d89ab3436e4a11fe88))
+* add video deletion functionality to channel page ([2300f1c](https://github.com/DialmasterOrg/Youtarr/commit/2300f1cadebc0b9805d8e311ee304f4118807756))
+* standardize health checks with curl and update endpoint path ([e5b243d](https://github.com/DialmasterOrg/Youtarr/commit/e5b243d102d36e4392367c68e1d5d30ce1eef1e7))
+
+
+### Bug Fixes
+
+* newly uploaded videos get last_downloaded_at ([5cb5fb8](https://github.com/DialmasterOrg/Youtarr/commit/5cb5fb8a19035e92ba2ec2e224735dd6a1096f76))
+
+
+### Tests
+
+* speed up Configuration component tests ([77be651](https://github.com/DialmasterOrg/Youtarr/commit/77be65154f6381540ca4b298a7377bd917e2b375))
+
+
+### Documentation
+
+* update CHANGELOG for v1.37.0 [skip ci] ([e87427c](https://github.com/DialmasterOrg/Youtarr/commit/e87427cbccd2a19e9419c37c80e23f3796d2a5ad))
+* Update documentation for Unraid ([e0eeb67](https://github.com/DialmasterOrg/Youtarr/commit/e0eeb67dac121f68170c8987d6dce914bd48edb4))
+* Update documentation for video removal ([d540ac2](https://github.com/DialmasterOrg/Youtarr/commit/d540ac2a4dd50336b13dd8730bc3489aabfc6aa9))
+
+
+
+
+
 ## [v1.37.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.37.0) - 2025-10-04
 
 ## [1.37.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.36.0...v1.37.0) (2025-10-04)
