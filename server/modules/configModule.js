@@ -163,6 +163,22 @@ class ConfigModule extends EventEmitter {
       configModified = true;
     }
 
+    // Initialize automatic video removal settings if not present
+    if (this.config.autoRemovalEnabled === undefined) {
+      this.config.autoRemovalEnabled = false;
+      configModified = true;
+    }
+
+    if (this.config.autoRemovalFreeSpaceThreshold === undefined) {
+      this.config.autoRemovalFreeSpaceThreshold = null;
+      configModified = true;
+    }
+
+    if (this.config.autoRemovalVideoAgeThreshold === undefined) {
+      this.config.autoRemovalVideoAgeThreshold = null;
+      configModified = true;
+    }
+
     // Check if a UUID exists in the config
     if (!this.config.uuid) {
       // Generate a new UUID
@@ -545,6 +561,21 @@ class ConfigModule extends EventEmitter {
 
         return migrated;
       },
+      '1.36.0': (cfg) => {
+        const migrated = { ...cfg };
+
+        // Add automatic video removal settings
+        if (migrated.autoRemovalEnabled === undefined) {
+          migrated.autoRemovalEnabled = false;
+        }
+        if (migrated.autoRemovalFreeSpaceThreshold === undefined) {
+          migrated.autoRemovalFreeSpaceThreshold = null;
+        }
+        if (migrated.autoRemovalVideoAgeThreshold === undefined) {
+          migrated.autoRemovalVideoAgeThreshold = null;
+        }
+        return migrated;
+      },
       '1.38.0': (cfg) => {
         const migrated = { ...cfg };
 
@@ -634,27 +665,31 @@ class ConfigModule extends EventEmitter {
     const { execFile } = require('child_process');
     const util = require('util');
     const execFilePromise = util.promisify(execFile);
-    
+
     try {
-      // Use configurable data path (falls back to /usr/src/app/data for backward compatibility)
-      const dataPath = process.env.DATA_PATH || '/usr/src/app/data';
-      
+      const targetPath = process.env.DATA_PATH || '/usr/src/app/data';
+
+      if (!targetPath) {
+        console.warn('[Storage] No YouTube output directory configured, cannot check storage status');
+        return null;
+      }
+
       // Use execFile with array arguments to prevent shell injection
       // -B 1 forces output in bytes for accurate calculations
-      const { stdout } = await execFilePromise('df', ['-B', '1', dataPath]);
+      const { stdout } = await execFilePromise('df', ['-B', '1', targetPath]);
       const lines = stdout.trim().split('\n');
-      
+
       if (lines.length < 2) {
         throw new Error('Unexpected df output');
       }
-      
+
       // Parse the second line which contains the actual data
       const parts = lines[1].split(/\s+/);
       const total = parseInt(parts[1]);
       const used = parseInt(parts[2]);
       const available = parseInt(parts[3]);
       const percentUsed = Math.round((used / total) * 100);
-      
+
       return {
         total,
         used,
@@ -670,6 +705,60 @@ class ConfigModule extends EventEmitter {
       console.error('Error getting storage status:', error);
       return null;
     }
+  }
+
+  /**
+   * Convert storage threshold string (e.g., "1GB") to bytes
+   * @param {string} threshold - Threshold string like "500MB", "1GB", etc.
+   * @returns {number|null} - Threshold in bytes, or null if invalid/not set
+   */
+  convertStorageThresholdToBytes(threshold) {
+    if (!threshold || threshold === null) {
+      return null;
+    }
+
+    const units = {
+      'MB': 1024 * 1024,
+      'GB': 1024 * 1024 * 1024
+    };
+
+    // Match pattern like "500MB" or "1GB"
+    const match = threshold.toString().match(/^(\d+)(MB|GB)$/);
+    if (!match) {
+      console.warn(`Invalid storage threshold format: ${threshold}`);
+      return null;
+    }
+
+    const value = parseInt(match[1]);
+    const unit = match[2];
+
+    return value * units[unit];
+  }
+
+  /**
+   * Check if current storage is below the threshold
+   * @param {number} currentAvailable - Current available bytes
+   * @param {string|number} threshold - Threshold (string like "1GB" or number in bytes)
+   * @returns {boolean} - true if below threshold, false otherwise
+   */
+  isStorageBelowThreshold(currentAvailable, threshold) {
+    if (currentAvailable === null || currentAvailable === undefined) {
+      console.warn('Cannot check storage threshold: currentAvailable is null/undefined');
+      return false;
+    }
+
+    let thresholdBytes;
+    if (typeof threshold === 'string') {
+      thresholdBytes = this.convertStorageThresholdToBytes(threshold);
+    } else {
+      thresholdBytes = threshold;
+    }
+
+    if (thresholdBytes === null || thresholdBytes === undefined) {
+      return false;
+    }
+
+    return currentAvailable < thresholdBytes;
   }
 }
 

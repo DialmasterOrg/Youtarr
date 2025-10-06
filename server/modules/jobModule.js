@@ -207,6 +207,64 @@ class JobModule {
     return jobId;
   }
 
+  /**
+   * Prepares video data for database save, setting last_downloaded_at if file is verified
+   */
+  prepareVideoDataForSave(video, isNewVideo = false) {
+    const data = { ...video };
+    const hasVerifiedFile = Boolean(
+      video.filePath && video.fileSize !== null && video.fileSize !== undefined
+    );
+
+    if (hasVerifiedFile) {
+      // Always set these fields when file is verified
+      data.filePath = video.filePath;
+      data.fileSize = video.fileSize;
+      data.removed = false;
+      data.last_downloaded_at = new Date();
+      console.log(`[DEBUG] Setting last_downloaded_at for ${isNewVideo ? 'NEW' : ''} video ${video.youtubeId} - file verified with size ${video.fileSize}`);
+    } else {
+      if (!isNewVideo) {
+        // For updates, delete fields to leave them untouched
+        delete data.filePath;
+        delete data.fileSize;
+        delete data.removed;
+      }
+      console.log(`[DEBUG] NOT setting last_downloaded_at for ${isNewVideo ? 'NEW' : ''} video ${video.youtubeId} - hasVerifiedFile is false (filePath: ${video.filePath}, fileSize: ${video.fileSize})`);
+    }
+
+    if (!video.media_type) {
+      delete data.media_type;
+    }
+
+    return data;
+  }
+
+  /**
+   * Upserts a video and creates JobVideo relationship
+   */
+  async upsertVideoForJob(video, jobInstance) {
+    let videoInstance = await Video.findOne({
+      where: { youtubeId: video.youtubeId },
+    });
+
+    if (videoInstance) {
+      const updateData = this.prepareVideoDataForSave(video, false);
+      await videoInstance.update(updateData);
+    } else {
+      const createData = this.prepareVideoDataForSave(video, true);
+      videoInstance = await Video.create(createData);
+
+      // Create JobVideo relationship for new videos
+      await JobVideo.create({
+        job_id: jobInstance.id,
+        video_id: videoInstance.id,
+      });
+    }
+
+    return videoInstance;
+  }
+
   // Save a single job and its video data to the database
   async saveJobOnly(jobId, jobDataOriginal) {
     const jobData = { ...jobDataOriginal };
@@ -229,41 +287,7 @@ class JobModule {
 
       // Process videos for this job only
       for (let video of videos) {
-        let videoInstance = await Video.findOne({
-          where: { youtubeId: video.youtubeId },
-        });
-
-        if (videoInstance) {
-          const updateData = { ...video };
-          const hasVerifiedFile = Boolean(
-            video.filePath && video.fileSize !== null && video.fileSize !== undefined
-          );
-
-          if (hasVerifiedFile) {
-            updateData.filePath = video.filePath;
-            updateData.fileSize = video.fileSize;
-            updateData.removed = false;
-            updateData.last_downloaded_at = new Date();
-            console.log(`[DEBUG] Setting last_downloaded_at for ${video.youtubeId} - file verified with size ${video.fileSize}`);
-          } else {
-            delete updateData.filePath;
-            delete updateData.fileSize;
-            delete updateData.removed;
-            console.log(`[DEBUG] NOT setting last_downloaded_at for ${video.youtubeId} - hasVerifiedFile is false (filePath: ${video.filePath}, fileSize: ${video.fileSize})`);
-          }
-
-          if (!video.media_type) {
-            delete updateData.media_type;
-          }
-
-          await videoInstance.update(updateData);
-        } else {
-          videoInstance = await Video.create(video);
-          await JobVideo.create({
-            job_id: jobInstance.id,
-            video_id: videoInstance.id,
-          });
-        }
+        await this.upsertVideoForJob(video, jobInstance);
 
         // Upsert into channelvideos
         try {
@@ -338,51 +362,7 @@ class JobModule {
         try {
           for (let video of videos) {
             console.log(`[DEBUG] Processing video: ${video.youtubeId} - ${video.youTubeVideoName}`);
-            let videoInstance = await Video.findOne({
-              where: { youtubeId: video.youtubeId },
-            });
-
-            if (videoInstance) {
-              console.log(`[DEBUG] Video ${video.youtubeId} already exists in DB, updating...`);
-              const updateData = { ...video };
-              const hasVerifiedFile = Boolean(
-                video.filePath && video.fileSize !== null && video.fileSize !== undefined
-              );
-
-              if (hasVerifiedFile) {
-                // When we know the file exists, make sure the DB reflects the fresh download
-                updateData.filePath = video.filePath;
-                updateData.fileSize = video.fileSize;
-                updateData.removed = false;
-                updateData.last_downloaded_at = new Date();
-                console.log(`[DEBUG] Setting last_downloaded_at for ${video.youtubeId} - file verified with size ${video.fileSize}`);
-              } else {
-                // Otherwise leave these fields untouched so the backfill job can manage them
-                delete updateData.filePath;
-                delete updateData.fileSize;
-                delete updateData.removed;
-                console.log(`[DEBUG] NOT setting last_downloaded_at for ${video.youtubeId} - hasVerifiedFile is false (filePath: ${video.filePath}, fileSize: ${video.fileSize})`);
-              }
-
-              // Don't overwrite media_type if the job data doesn't have it (leave backfill value intact)
-              if (!video.media_type) {
-                delete updateData.media_type;
-              }
-
-              await videoInstance.update(updateData);
-              console.log(`[DEBUG] Video ${video.youtubeId} updated successfully`);
-            } else {
-              console.log(`[DEBUG] Video ${video.youtubeId} not in DB, creating new entry...`);
-              videoInstance = await Video.create(video);
-              console.log(`[DEBUG] Video ${video.youtubeId} created with ID: ${videoInstance.id}`);
-
-              // Create jobVideo relationship
-              await JobVideo.create({
-                job_id: jobInstance.id,
-                video_id: videoInstance.id,
-              });
-              console.log(`[DEBUG] JobVideo relationship created for job ${jobInstance.id} and video ${videoInstance.id}`);
-            }
+            await this.upsertVideoForJob(video, jobInstance);
 
             // Also upsert into channelvideos so Channel page reflects downloaded items
             try {

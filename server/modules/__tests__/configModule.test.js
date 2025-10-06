@@ -832,6 +832,200 @@ describe('ConfigModule', () => {
     });
   });
 
+  describe('automatic video removal settings', () => {
+    beforeEach(() => {
+      ConfigModule = require('../configModule');
+    });
+
+    test('should initialize auto removal settings when missing', () => {
+      const configWithoutAutoRemoval = { ...mockConfig };
+      delete configWithoutAutoRemoval.autoRemovalEnabled;
+      delete configWithoutAutoRemoval.autoRemovalFreeSpaceThreshold;
+      delete configWithoutAutoRemoval.autoRemovalVideoAgeThreshold;
+
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithoutAutoRemoval));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithoutAutoRemoval)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.autoRemovalEnabled).toBe(false);
+      expect(FreshConfigModule.config.autoRemovalFreeSpaceThreshold).toBeNull();
+      expect(FreshConfigModule.config.autoRemovalVideoAgeThreshold).toBeNull();
+    });
+
+    test('should preserve existing auto removal settings', () => {
+      const configWithAutoRemoval = {
+        ...mockConfig,
+        autoRemovalEnabled: true,
+        autoRemovalFreeSpaceThreshold: '1GB',
+        autoRemovalVideoAgeThreshold: 30
+      };
+
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithAutoRemoval));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithAutoRemoval)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.autoRemovalEnabled).toBe(true);
+      expect(FreshConfigModule.config.autoRemovalFreeSpaceThreshold).toBe('1GB');
+      expect(FreshConfigModule.config.autoRemovalVideoAgeThreshold).toBe(30);
+    });
+
+    test('migration 1.36.0 should add auto removal settings', () => {
+      const configWithoutAutoRemoval = {
+        plexApiKey: 'test',
+        youtubeOutputDirectory: '/test'
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithoutAutoRemoval);
+
+      expect(migrated.autoRemovalEnabled).toBe(false);
+      expect(migrated.autoRemovalFreeSpaceThreshold).toBeNull();
+      expect(migrated.autoRemovalVideoAgeThreshold).toBeNull();
+    });
+
+    test('migration 1.36.0 should preserve existing auto removal settings', () => {
+      const configWithAutoRemoval = {
+        plexApiKey: 'test',
+        youtubeOutputDirectory: '/test',
+        autoRemovalEnabled: true,
+        autoRemovalFreeSpaceThreshold: '500MB',
+        autoRemovalVideoAgeThreshold: 60
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithAutoRemoval);
+
+      expect(migrated.autoRemovalEnabled).toBe(true);
+      expect(migrated.autoRemovalFreeSpaceThreshold).toBe('500MB');
+      expect(migrated.autoRemovalVideoAgeThreshold).toBe(60);
+    });
+  });
+
+  describe('convertStorageThresholdToBytes', () => {
+    beforeEach(() => {
+      ConfigModule = require('../configModule');
+    });
+
+    test('should convert MB to bytes correctly', () => {
+      expect(ConfigModule.convertStorageThresholdToBytes('500MB')).toBe(500 * 1024 * 1024);
+      expect(ConfigModule.convertStorageThresholdToBytes('100MB')).toBe(100 * 1024 * 1024);
+    });
+
+    test('should convert GB to bytes correctly', () => {
+      expect(ConfigModule.convertStorageThresholdToBytes('1GB')).toBe(1 * 1024 * 1024 * 1024);
+      expect(ConfigModule.convertStorageThresholdToBytes('5GB')).toBe(5 * 1024 * 1024 * 1024);
+    });
+
+    test('should return null for invalid formats', () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      expect(ConfigModule.convertStorageThresholdToBytes('invalid')).toBeNull();
+      expect(ConfigModule.convertStorageThresholdToBytes('100')).toBeNull();
+      expect(ConfigModule.convertStorageThresholdToBytes('100TB')).toBeNull();
+      expect(ConfigModule.convertStorageThresholdToBytes('GB100')).toBeNull();
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid storage threshold format'));
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    test('should return null for null or undefined input', () => {
+      expect(ConfigModule.convertStorageThresholdToBytes(null)).toBeNull();
+      expect(ConfigModule.convertStorageThresholdToBytes(undefined)).toBeNull();
+      expect(ConfigModule.convertStorageThresholdToBytes('')).toBeNull();
+    });
+
+    test('should handle numeric string inputs', () => {
+      expect(ConfigModule.convertStorageThresholdToBytes('250MB')).toBe(250 * 1024 * 1024);
+      expect(ConfigModule.convertStorageThresholdToBytes('10GB')).toBe(10 * 1024 * 1024 * 1024);
+    });
+  });
+
+  describe('isStorageBelowThreshold', () => {
+    beforeEach(() => {
+      ConfigModule = require('../configModule');
+    });
+
+    test('should return true when storage is below threshold (string format)', () => {
+      const available = 500 * 1024 * 1024; // 500MB
+      expect(ConfigModule.isStorageBelowThreshold(available, '1GB')).toBe(true);
+      expect(ConfigModule.isStorageBelowThreshold(available, '600MB')).toBe(true);
+    });
+
+    test('should return false when storage is above threshold (string format)', () => {
+      const available = 2 * 1024 * 1024 * 1024; // 2GB
+      expect(ConfigModule.isStorageBelowThreshold(available, '1GB')).toBe(false);
+      expect(ConfigModule.isStorageBelowThreshold(available, '500MB')).toBe(false);
+    });
+
+    test('should return true when storage equals threshold', () => {
+      const available = 1 * 1024 * 1024 * 1024; // 1GB
+      expect(ConfigModule.isStorageBelowThreshold(available, '1GB')).toBe(false);
+    });
+
+    test('should handle numeric threshold (bytes)', () => {
+      const available = 500 * 1024 * 1024; // 500MB
+      const threshold = 1024 * 1024 * 1024; // 1GB
+      expect(ConfigModule.isStorageBelowThreshold(available, threshold)).toBe(true);
+    });
+
+    test('should return false for null/undefined threshold', () => {
+      const available = 500 * 1024 * 1024;
+      expect(ConfigModule.isStorageBelowThreshold(available, null)).toBe(false);
+      expect(ConfigModule.isStorageBelowThreshold(available, undefined)).toBe(false);
+    });
+
+    test('should return false and log warning for null/undefined currentAvailable', () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      expect(ConfigModule.isStorageBelowThreshold(null, '1GB')).toBe(false);
+      expect(ConfigModule.isStorageBelowThreshold(undefined, '1GB')).toBe(false);
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Cannot check storage threshold')
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    test('should handle invalid threshold format gracefully', () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const available = 500 * 1024 * 1024;
+
+      expect(ConfigModule.isStorageBelowThreshold(available, 'invalid')).toBe(false);
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    test('should correctly compare edge cases', () => {
+      const available = 1 * 1024 * 1024; // 1MB
+      expect(ConfigModule.isStorageBelowThreshold(available, '1MB')).toBe(false);
+      expect(ConfigModule.isStorageBelowThreshold(available - 1, '1MB')).toBe(true);
+    });
+  });
+
   describe('video codec configuration', () => {
     beforeEach(() => {
       ConfigModule = require('../configModule');

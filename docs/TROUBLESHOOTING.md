@@ -109,6 +109,28 @@ This creates a secure tunnel between your local machine's port 3087 and the serv
 3. Make sure the Discord channel still exists and the webhook has permission to post.
 4. Retry after checking network/firewall rules that may block outbound HTTPS requests.
 
+## Automatic Video Removal Issues
+
+### Dry Run Preview Fails or Shows "Storage status unavailable"
+
+**Problem**: Previewing automatic removal returns an error, or the space-based strategy is disabled.
+
+**Solution**:
+- Confirm the storage indicator at the top of the Configuration page is visible and shows valid values. Space-based removal requires the server to resolve the download directory path and gather disk usage via `df`.
+- Ensure the `DATA_PATH` (or selected YouTube directory) exists within the container/host and is mounted with read access to filesystem metadata.
+- If you're running on network storage or uncommon mounts, try remounting with `df` support or rely on age-based cleanup instead.
+- Retry the preview after saving the configuration again. The preview endpoint requires a valid auth token; log back in if necessary.
+
+### Nightly Cleanup Didn't Delete Anything
+
+**Problem**: Automatic cleanup runs at 2:00 AM but no videos are removed.
+
+**Solution**:
+- Verify Automatic Video Removal is enabled and at least one threshold (age or free space) is configured on the Configuration page.
+- Run the dry-run preview to see how many videos currently match the thresholds and adjust values if needed (for example, lower the free-space threshold or reduce the age requirement).
+- Check server logs around 2:00 AM for messages prefixed with `[CRON]` or `[Auto-Removal]` to confirm the job is executing (`docker compose logs -f app`).
+- If errors appear in the logs (e.g., permission issues deleting files), resolve those first—the cron job will skip files it cannot delete.
+
 ## Docker Issues
 
 ### Docker Desktop Mount Path Error (Windows)

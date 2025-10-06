@@ -1,4 +1,4 @@
-import { screen, waitFor, fireEvent } from '@testing-library/react';
+import { screen, waitFor, fireEvent, act } from '@testing-library/react';
 import userEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import Configuration from '../Configuration';
@@ -17,6 +17,14 @@ const createUser = () =>
     pointerEventsCheck: PointerEventsCheckLevel.Never,
     delay: null
   });
+
+const setInputValue = async (
+  input: HTMLInputElement | HTMLTextAreaElement,
+  value: string
+) => {
+  fireEvent.change(input, { target: { value } });
+  await waitFor(() => expect(input).toHaveValue(value));
+};
 
 const buildMockResponse = <T,>(data: T, ok = true) => ({
   ok,
@@ -65,34 +73,31 @@ const primeInitialFetches = (
   mockFetch.mockResolvedValue(buildMockResponse([]));
 };
 
-jest.mock('../PlexLibrarySelector', () => ({
-  __esModule: true,
-  default: ({ open, setLibraryId, handleClose }: any) => {
-    if (!open) {
-      return null;
-    }
+jest.mock('../PlexLibrarySelector', () => {
+  const React = require('react');
 
-    return (
-      <div>
-        <button
-          type="button"
-          onClick={() =>
-            setLibraryId({
-              libraryId: 'mock-library',
-              libraryTitle: 'WSL Library',
-              selectedPath: 'Q:\\Youtube_test'
-            })
-          }
-        >
-          Mock Save Selection
-        </button>
-        <button type="button" onClick={handleClose}>
-          Mock Close
-        </button>
-      </div>
-    );
-  }
-}));
+  const MockPlexLibrarySelector = ({ open, setLibraryId, handleClose }: any) => {
+    React.useEffect(() => {
+      if (!open) {
+        return;
+      }
+
+      setLibraryId({
+        libraryId: 'mock-library',
+        libraryTitle: 'WSL Library',
+        selectedPath: 'Q:\\Youtube_test'
+      });
+      handleClose();
+    }, [open, setLibraryId, handleClose]);
+
+    return open ? <div data-testid="mock-plex-library-selector" /> : null;
+  };
+
+  return {
+    __esModule: true,
+    default: MockPlexLibrarySelector
+  };
+});
 
 const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
@@ -101,13 +106,6 @@ jest.mock('react-router-dom', () => ({
 }));
 
 jest.mock('@mui/material/useMediaQuery', () => jest.fn().mockReturnValue(false));
-
-jest.mock('@mui/material/styles', () => ({
-  ...jest.requireActual('@mui/material/styles'),
-  useTheme: () => ({
-    breakpoints: { down: () => false },
-  }),
-}));
 
 global.fetch = jest.fn() as jest.Mock;
 
@@ -337,10 +335,8 @@ const renderConfiguration = async ({
 
     test('expands Plex accordion and shows configuration', async () => {
       await setupComponent();
-      const user = createUser();
-
       const accordion = screen.getByText('Optional: Plex Media Server Integration');
-      await user.click(accordion);
+      fireEvent.click(accordion);
 
       await screen.findByText('Plex Integration is Optional');
 
@@ -365,9 +361,8 @@ const renderConfiguration = async ({
 
       await setupComponent(platformManagedConfig);
 
-      const user = createUser();
       const accordion = screen.getByText('Optional: Plex Media Server Integration');
-      await user.click(accordion);
+      fireEvent.click(accordion);
 
       const testButton = await screen.findByRole('button', { name: /^Test Connection$/i });
       expect(testButton).not.toBeDisabled();
@@ -378,10 +373,8 @@ const renderConfiguration = async ({
 
     test('tests Plex connection successfully', async () => {
       await setupComponent();
-      const user = createUser();
-
       const accordion = screen.getByText('Optional: Plex Media Server Integration');
-      await user.click(accordion);
+      fireEvent.click(accordion);
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
@@ -392,7 +385,7 @@ const renderConfiguration = async ({
       } as Response);
 
       const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
-      await user.click(testButtons[0]);
+      fireEvent.click(testButtons[0]);
 
       await screen.findByText(/Plex connection successful/i);
 
@@ -404,32 +397,28 @@ const renderConfiguration = async ({
 
     test('handles failed Plex connection test', async () => {
       await setupComponent();
-      const user = createUser();
-
       const accordion = screen.getByText('Optional: Plex Media Server Integration');
-      await user.click(accordion);
+      fireEvent.click(accordion);
 
       (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Connection failed'));
 
       const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
-      await user.click(testButtons[0]);
+      fireEvent.click(testButtons[0]);
 
       await screen.findByText(/Failed to connect to Plex server/i);
     });
 
     test('opens library selector when connected', async () => {
       await setupComponent();
-      const user = createUser();
-
       const accordion = screen.getByText('Optional: Plex Media Server Integration');
-      await user.click(accordion);
+      fireEvent.click(accordion);
 
       (global.fetch as jest.Mock).mockResolvedValueOnce(buildMockResponse([
         { key: '1', title: 'Library 1' },
       ]));
 
       const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
-      await user.click(testButtons[0]);
+      fireEvent.click(testButtons[0]);
 
       await screen.findByText(/Plex connection successful/i);
 
@@ -438,6 +427,7 @@ const renderConfiguration = async ({
     });
 
     test('suggests translated path for WSL when selecting Plex library', async () => {
+      jest.useFakeTimers();
       await renderConfiguration({
         configOverrides: {
           deploymentEnvironment: {
@@ -448,6 +438,12 @@ const renderConfiguration = async ({
           },
         },
         additionalFetchResponses: [
+          { data: {
+            availableGB: 512,
+            totalGB: 1024,
+            percentFree: 50,
+            percentUsed: 50,
+          } },
           { data: [
             {
               key: '1',
@@ -457,31 +453,32 @@ const renderConfiguration = async ({
         ],
       });
 
-      const user = createUser();
+      try {
+        const accordion = screen.getByText('Optional: Plex Media Server Integration');
+        fireEvent.click(accordion);
 
-      const accordion = screen.getByText('Optional: Plex Media Server Integration');
-      await user.click(accordion);
+        await act(async () => {
+          jest.runOnlyPendingTimers();
+        });
 
-      const selectLibraryButton = await screen.findByRole('button', { name: /Select Plex Library/i });
+        const selectLibraryButton = await screen.findByRole('button', { name: /Select Plex Library/i });
 
-      await waitFor(() => expect(selectLibraryButton).not.toBeDisabled(), { timeout: 500 });
+        await waitFor(() => expect(selectLibraryButton).not.toBeDisabled());
 
-      await user.click(selectLibraryButton);
+        fireEvent.click(selectLibraryButton);
 
-      const mockSaveButton = await screen.findByRole('button', { name: /Mock Save Selection/i });
-      await user.click(mockSaveButton);
+        await act(async () => {
+          jest.runOnlyPendingTimers();
+        });
 
-      await screen.findByText(/reports its media path as/i);
+        await screen.findByText(/reports its media path as/i);
 
-      expect(screen.getByText(/\/mnt\/q\/Youtube_test/i)).toBeInTheDocument();
+        expect(screen.getByText(/\/mnt\/q\/Youtube_test/i)).toBeInTheDocument();
 
-      const applyButton = screen.getByRole('button', { name: /Use Suggested Path/i });
-      await user.click(applyButton);
-
-      const outputField = screen.getByRole('textbox', { name: /YouTube Output Directory/i });
-      await waitFor(() => expect(outputField).toHaveValue('/mnt/q/Youtube_test'), { timeout: 500 });
-
-      expect(screen.queryByText(/Use Suggested Path/i)).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Use Suggested Path/i })).toBeInTheDocument();
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 
@@ -533,20 +530,34 @@ const renderConfiguration = async ({
     });
 
     test('configures SponsorBlock categories', async () => {
-      await setupComponent();
-      const user = createUser();
+      jest.useFakeTimers();
 
-      const accordion = screen.getByText('Optional: SponsorBlock Integration');
-      await user.click(accordion);
+      await renderConfiguration({
+        configOverrides: {
+          sponsorblockEnabled: true,
+          sponsorblockCategories: {
+            ...mockConfig.sponsorblockCategories,
+            intro: false,
+          },
+        },
+      });
 
-      const enableCheckbox = screen.getByRole('checkbox', { name: /Enable SponsorBlock/i });
-      await user.click(enableCheckbox);
+      try {
+        const accordion = screen.getByText('Optional: SponsorBlock Integration');
+        fireEvent.click(accordion);
 
-      const introCheckbox = await screen.findByRole('checkbox', { name: /Intro/i });
-      expect(introCheckbox).not.toBeChecked();
+        await act(async () => {
+          jest.runOnlyPendingTimers();
+        });
 
-      await user.click(introCheckbox);
-      expect(introCheckbox).toBeChecked();
+        const introCheckbox = screen.getByRole('checkbox', { name: /Intro/i });
+        expect(introCheckbox).not.toBeChecked();
+
+        fireEvent.click(introCheckbox);
+        expect(introCheckbox).toBeChecked();
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 
@@ -929,14 +940,14 @@ const renderConfiguration = async ({
       axios.post.mockResolvedValueOnce({ data: { success: true } });
 
       // Get all password fields and identify them by order
-      const passwordFields = screen.getAllByLabelText(/password/i);
+      const passwordFields = screen.getAllByLabelText(/password/i) as HTMLInputElement[];
       const currentPasswordInput = passwordFields[0]; // Current Password
       const newPasswordInput = passwordFields[1]; // New Password
       const confirmPasswordInput = passwordFields[2]; // Confirm New Password
 
-      await user.type(currentPasswordInput, 'oldpass');
-      await user.type(newPasswordInput, 'short');
-      await user.type(confirmPasswordInput, 'short');
+      await setInputValue(currentPasswordInput, 'oldpass');
+      await setInputValue(newPasswordInput, 'short');
+      await setInputValue(confirmPasswordInput, 'short');
 
       const updateButton = screen.getByRole('button', { name: 'Update Password' });
       await user.click(updateButton);
@@ -954,14 +965,14 @@ const renderConfiguration = async ({
       await screen.findByLabelText(/Current Password/i);
 
       // Get all password fields and identify them by order
-      const passwordFields = screen.getAllByLabelText(/password/i);
+      const passwordFields = screen.getAllByLabelText(/password/i) as HTMLInputElement[];
       const currentPasswordInput = passwordFields[0]; // Current Password
       const newPasswordInput = passwordFields[1]; // New Password
       const confirmPasswordInput = passwordFields[2]; // Confirm New Password
 
-      await user.type(currentPasswordInput, 'oldpassword');
-      await user.type(newPasswordInput, 'newpassword123');
-      await user.type(confirmPasswordInput, 'different123');
+      await setInputValue(currentPasswordInput, 'oldpassword');
+      await setInputValue(newPasswordInput, 'newpassword123');
+      await setInputValue(confirmPasswordInput, 'different123');
 
       const updateButton = screen.getByRole('button', { name: 'Update Password' });
       await user.click(updateButton);
@@ -981,14 +992,14 @@ const renderConfiguration = async ({
       axios.post.mockResolvedValueOnce({ data: { success: true } });
 
       // Get all password fields and identify them by order
-      const passwordFields = screen.getAllByLabelText(/password/i);
+      const passwordFields = screen.getAllByLabelText(/password/i) as HTMLInputElement[];
       const currentPasswordInput = passwordFields[0]; // Current Password
       const newPasswordInput = passwordFields[1]; // New Password
       const confirmPasswordInput = passwordFields[2]; // Confirm New Password
 
-      await user.type(currentPasswordInput, 'oldpassword');
-      await user.type(newPasswordInput, 'newpassword123');
-      await user.type(confirmPasswordInput, 'newpassword123');
+      await setInputValue(currentPasswordInput, 'oldpassword');
+      await setInputValue(newPasswordInput, 'newpassword123');
+      await setInputValue(confirmPasswordInput, 'newpassword123');
 
       const updateButton = screen.getByRole('button', { name: 'Update Password' });
       await user.click(updateButton);

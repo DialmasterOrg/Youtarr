@@ -224,6 +224,19 @@ const createServerModule = ({
           backfillVideoMetadata: jest.fn().mockResolvedValue({ processed: 0, errors: 0 })
         };
 
+        const videoDeletionModuleMock = {
+          deleteVideos: jest.fn().mockResolvedValue({
+            success: true,
+            deleted: [1, 2],
+            failed: []
+          }),
+          deleteVideosByYoutubeIds: jest.fn().mockResolvedValue({
+            success: true,
+            deleted: ['vid1', 'vid2'],
+            failed: []
+          })
+        };
+
         const videoValidationModuleMock = {
           validateVideo: jest.fn().mockResolvedValue({
             isValidUrl: true,
@@ -278,6 +291,7 @@ const createServerModule = ({
         jest.doMock('../modules/downloadModule', () => downloadModuleMock);
         jest.doMock('../modules/jobModule', () => jobModuleMock);
         jest.doMock('../modules/videosModule', () => videosModuleMock);
+        jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
         jest.doMock('../modules/videoValidationModule', () => videoValidationModuleMock);
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => cronMock);
@@ -300,6 +314,7 @@ const createServerModule = ({
         state.downloadModuleMock = downloadModuleMock;
         state.jobModuleMock = jobModuleMock;
         state.videosModuleMock = videosModuleMock;
+        state.videoDeletionModuleMock = videoDeletionModuleMock;
         state.videoValidationModuleMock = videoValidationModuleMock;
         state.bcryptMock = bcryptMock;
         state.uuidMock = uuidMock;
@@ -928,6 +943,194 @@ describe('server routes - videos', () => {
       expect(res.body).toEqual({
         isValidUrl: false,
         error: 'Internal server error'
+      });
+    });
+  });
+
+  describe('DELETE /api/videos', () => {
+    test('deletes videos by database IDs successfully', async () => {
+      const { app, videoDeletionModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'delete', '/api/videos');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { videoIds: [1, 2, 3] }
+      });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(videoDeletionModuleMock.deleteVideos).toHaveBeenCalledWith([1, 2, 3]);
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({
+        success: true,
+        deleted: [1, 2],
+        failed: []
+      });
+    });
+
+    test('deletes videos by YouTube IDs successfully', async () => {
+      const { app, videoDeletionModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'delete', '/api/videos');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { youtubeIds: ['vid1', 'vid2'] }
+      });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(videoDeletionModuleMock.deleteVideosByYoutubeIds).toHaveBeenCalledWith(['vid1', 'vid2']);
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({
+        success: true,
+        deleted: ['vid1', 'vid2'],
+        failed: []
+      });
+    });
+
+    test('prefers youtubeIds over videoIds when both provided', async () => {
+      const { app, videoDeletionModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'delete', '/api/videos');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: {
+          videoIds: [1, 2],
+          youtubeIds: ['vid1', 'vid2']
+        }
+      });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(videoDeletionModuleMock.deleteVideosByYoutubeIds).toHaveBeenCalledWith(['vid1', 'vid2']);
+      expect(videoDeletionModuleMock.deleteVideos).not.toHaveBeenCalled();
+      expect(res.statusCode).toBe(200);
+    });
+
+    test('returns 400 when videoIds is not an array', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'delete', '/api/videos');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { videoIds: 'not-an-array' }
+      });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'videoIds or youtubeIds array is required'
+      });
+    });
+
+    test('returns 400 when youtubeIds is not an array', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'delete', '/api/videos');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { youtubeIds: 123 }
+      });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'videoIds or youtubeIds array is required'
+      });
+    });
+
+    test('returns 400 when videoIds array is empty', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'delete', '/api/videos');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { videoIds: [] }
+      });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'videoIds or youtubeIds array is required'
+      });
+    });
+
+    test('returns 400 when youtubeIds array is empty', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'delete', '/api/videos');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { youtubeIds: [] }
+      });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'videoIds or youtubeIds array is required'
+      });
+    });
+
+    test('returns 400 when neither videoIds nor youtubeIds provided', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'delete', '/api/videos');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: {}
+      });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'videoIds or youtubeIds array is required'
+      });
+    });
+
+    test('returns 500 when deletion module throws error', async () => {
+      const { app, videoDeletionModuleMock } = await createServerModule();
+      videoDeletionModuleMock.deleteVideos.mockRejectedValueOnce(new Error('Database error'));
+
+      const handlers = findRouteHandlers(app, 'delete', '/api/videos');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { videoIds: [1, 2] }
+      });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'Database error'
       });
     });
   });

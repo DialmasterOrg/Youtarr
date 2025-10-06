@@ -51,6 +51,51 @@ interface PlexPathSuggestionState {
   severity: 'info' | 'warning';
 }
 
+interface AutoRemovalDryRunVideoSummary {
+  id: number;
+  youtubeId: string;
+  title: string;
+  channel: string;
+  fileSize: number;
+  timeCreated: string | null;
+}
+
+interface AutoRemovalDryRunPlanStrategy {
+  enabled: boolean;
+  thresholdDays?: number | null;
+  threshold?: string | null;
+  thresholdBytes?: number | null;
+  candidateCount: number;
+  estimatedFreedBytes: number;
+  deletedCount: number;
+  failedCount: number;
+  needsCleanup?: boolean;
+  iterations?: number;
+  storageStatus?: {
+    availableGB: string;
+    totalGB: string;
+    percentFree: number;
+    percentUsed: number;
+  } | null;
+  sampleVideos: AutoRemovalDryRunVideoSummary[];
+}
+
+interface AutoRemovalDryRunResult {
+  dryRun: boolean;
+  success: boolean;
+  errors: string[];
+  plan: {
+    ageStrategy: AutoRemovalDryRunPlanStrategy;
+    spaceStrategy: AutoRemovalDryRunPlanStrategy;
+  };
+  simulationTotals: {
+    byAge: number;
+    bySpace: number;
+    total: number;
+    estimatedFreedBytes: number;
+  } | null;
+}
+
 function Configuration({ token }: ConfigurationProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [config, setConfig] = useState({
@@ -92,6 +137,9 @@ function Configuration({ token }: ConfigurationProps) {
     notificationsEnabled: false,
     notificationService: 'discord',
     discordWebhookUrl: '',
+    autoRemovalEnabled: false,
+    autoRemovalFreeSpaceThreshold: '',
+    autoRemovalVideoAgeThreshold: '',
   });
   const [openPlexLibrarySelector, setOpenPlexLibrarySelector] = useState(false);
   const [openPlexAuthDialog, setOpenPlexAuthDialog] = useState(false);
@@ -135,6 +183,16 @@ function Configuration({ token }: ConfigurationProps) {
   } | null>(null);
   const [uploadingCookie, setUploadingCookie] = useState(false);
   const [testingNotification, setTestingNotification] = useState(false);
+  const [autoRemovalDryRun, setAutoRemovalDryRun] = useState<{
+    loading: boolean;
+    result: AutoRemovalDryRunResult | null;
+    error: string | null;
+  }>({
+    loading: false,
+    result: null,
+    error: null
+  });
+  const [storageAvailable, setStorageAvailable] = useState<boolean | null>(null);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const hasPlexServerConfigured = isPlatformManaged.plexUrl || Boolean(config.plexIP);
@@ -146,6 +204,7 @@ function Configuration({ token }: ConfigurationProps) {
     !deploymentEnvironment.dockerAutoCreated
   );
   const showAccountSection = isPlatformManaged.authEnabled !== false;
+  const autoRemovalHasStrategy = Boolean(config.autoRemovalFreeSpaceThreshold) || Boolean(config.autoRemovalVideoAgeThreshold);
 
   useEffect(() => {
     fetch('/getconfig', {
@@ -239,6 +298,55 @@ function Configuration({ token }: ConfigurationProps) {
         .catch((error) => console.error('Error fetching cookie status:', error));
     }
   }, [token]);
+
+  // Fetch storage status to determine if space-based auto-removal is available
+  useEffect(() => {
+    if (token) {
+      fetch('/storage-status', {
+        headers: {
+          'x-access-token': token,
+        },
+      })
+        .then((response) => {
+          if (!response.ok) {
+            setStorageAvailable(false);
+            return;
+          }
+          return response.json();
+        })
+        .then((data) => {
+          if (data && data.availableGB !== undefined) {
+            setStorageAvailable(true);
+          } else {
+            setStorageAvailable(false);
+          }
+        })
+        .catch((error) => {
+          console.error('Error fetching storage status:', error);
+          setStorageAvailable(false);
+        });
+    }
+  }, [token]);
+
+  useEffect(() => {
+    setAutoRemovalDryRun((prev) => {
+      if (prev.loading) {
+        return prev;
+      }
+      if (!prev.result && !prev.error) {
+        return prev;
+      }
+      return {
+        loading: false,
+        result: null,
+        error: null
+      };
+    });
+  }, [
+    config.autoRemovalEnabled,
+    config.autoRemovalFreeSpaceThreshold,
+    config.autoRemovalVideoAgeThreshold
+  ]);
 
   const testPlexConnection = async () => {
     if (!hasPlexServerConfigured) {
@@ -542,6 +650,44 @@ function Configuration({ token }: ConfigurationProps) {
     });
   };
 
+  const runAutoRemovalDryRun = async () => {
+    setAutoRemovalDryRun({ loading: true, result: null, error: null });
+
+    try {
+      const response = await fetch('/api/auto-removal/dry-run', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-access-token': token || '',
+        },
+        body: JSON.stringify({
+          autoRemovalEnabled: config.autoRemovalEnabled,
+          autoRemovalVideoAgeThreshold: config.autoRemovalVideoAgeThreshold || '',
+          autoRemovalFreeSpaceThreshold: config.autoRemovalFreeSpaceThreshold || ''
+        })
+      });
+
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok || !payload) {
+        const message = payload?.error || 'Failed to preview automatic removal';
+        throw new Error(message);
+      }
+
+      setAutoRemovalDryRun({
+        loading: false,
+        result: payload as AutoRemovalDryRunResult,
+        error: null
+      });
+    } catch (err: any) {
+      setAutoRemovalDryRun({
+        loading: false,
+        result: null,
+        error: err?.message || 'Failed to preview automatic removal'
+      });
+    }
+  };
+
   const saveConfig = async () => {
     try {
       const response = await fetch('/updateconfig', {
@@ -747,6 +893,18 @@ function Configuration({ token }: ConfigurationProps) {
     }
   };
 
+  const formatBytes = (bytes: number) => {
+    if (!bytes || Number.isNaN(bytes) || bytes <= 0) {
+      return '0 B';
+    }
+
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    const value = bytes / Math.pow(1024, exponent);
+    const decimals = exponent === 0 ? 0 : exponent === 1 ? 1 : 2;
+    return `${value.toFixed(decimals)} ${units[exponent]}`;
+  };
+
   const frequencyMapping: { [key: string]: string } = {
     'Every 15 minutes': '*/15 * * * *',
     'Every 30 minutes': '*/30 * * * *',
@@ -800,6 +958,9 @@ function Configuration({ token }: ConfigurationProps) {
       'writeVideoNfoFiles',
       'notificationsEnabled',
       'discordWebhookUrl',
+      'autoRemovalEnabled',
+      'autoRemovalFreeSpaceThreshold',
+      'autoRemovalVideoAgeThreshold',
     ];
     const changed = keysToCompare.some((k) => {
       return (config as any)[k] !== (initialConfig as any)[k];
@@ -849,6 +1010,13 @@ function Configuration({ token }: ConfigurationProps) {
       </Tooltip>
     );
   };
+
+  const dryRunPlan = autoRemovalDryRun.result?.plan;
+  const dryRunSimulation = autoRemovalDryRun.result?.simulationTotals;
+  const dryRunSampleVideos = dryRunPlan
+    ? [...(dryRunPlan.ageStrategy.sampleVideos || []), ...(dryRunPlan.spaceStrategy.sampleVideos || [])].slice(0, 5)
+    : [];
+  const hasDryRunSpaceThreshold = dryRunPlan?.spaceStrategy.thresholdBytes != null;
 
 
   if (isLoading) {
@@ -1872,6 +2040,245 @@ function Configuration({ token }: ConfigurationProps) {
                     </FormHelperText>
                   </FormControl>
                 </Grid>
+              </>
+            )}
+          </Grid>
+        </AccordionDetails>
+      </Accordion>
+
+      <Accordion elevation={8} defaultExpanded={false} sx={{ mb: 2 }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Typography variant="h6" sx={{ flexGrow: 1 }}>
+            Optional: Automatic Video Removal
+          </Typography>
+          <Chip
+            label={config.autoRemovalEnabled ? "Enabled" : "Disabled"}
+            color={config.autoRemovalEnabled ? "success" : "default"}
+            size="small"
+            sx={{ mr: 1 }}
+          />
+        </AccordionSummary>
+        <AccordionDetails>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <AlertTitle>Automatic Deletion</AlertTitle>
+            <Typography variant="body2">
+              This feature automatically deletes downloaded videos based on your configured thresholds.
+              Deletions run nightly at 2:00 AM and are permanent - deleted videos cannot be recovered.
+              <br /><br />
+              Use this feature to manage storage automatically and keep only recent content.
+            </Typography>
+          </Alert>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={config.autoRemovalEnabled}
+                    onChange={(e) => setConfig({ ...config, autoRemovalEnabled: e.target.checked })}
+                  />
+                }
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    Enable Automatic Video Removal
+                    {getInfoIcon('Automatically delete videos based on the thresholds configured below. Deletions run nightly at 2:00 AM.')}
+                  </Box>
+                }
+              />
+            </Grid>
+
+            {config.autoRemovalEnabled && (
+              <>
+                <Grid item xs={12}>
+                  <Alert severity="info" sx={{ mb: 1 }}>
+                    <Typography variant="body2">
+                      Configure one or both removal strategies. Videos will be deleted if they meet any enabled threshold.
+                    </Typography>
+                  </Alert>
+                </Grid>
+
+                {storageAvailable === false && (
+                  <Grid item xs={12}>
+                    <Alert severity="warning" sx={{ mb: 1 }}>
+                      <AlertTitle>Space-Based Removal Unavailable</AlertTitle>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        Storage reporting is not available on your system, so the Free Space Threshold option is disabled.
+                        This can happen with certain mount types like network shares, cloud storage, or virtual filesystems.
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        Check the storage indicator at the top of this page - if it shows an error or is not present,
+                        storage-based auto-removal will not work.
+                      </Typography>
+                      <Typography variant="body2">
+                        <strong>You can still use Age-Based Removal</strong> (see below), which doesn't require storage reporting.
+                      </Typography>
+                    </Alert>
+                  </Grid>
+                )}
+
+                {storageAvailable !== false && (
+                  <Grid item xs={12} md={6}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <FormControl fullWidth disabled={storageAvailable === null}>
+                        <InputLabel>Free Space Threshold (Optional)</InputLabel>
+                        <Select
+                          value={config.autoRemovalFreeSpaceThreshold || ''}
+                          onChange={(e) => setConfig({ ...config, autoRemovalFreeSpaceThreshold: e.target.value })}
+                          label="Free Space Threshold (Optional)"
+                        >
+                          <MenuItem value="">
+                            <em>Disabled</em>
+                          </MenuItem>
+                          <MenuItem value="500MB">500 MB</MenuItem>
+                          <MenuItem value="1GB">1 GB</MenuItem>
+                          <MenuItem value="2GB">2 GB</MenuItem>
+                          <MenuItem value="5GB">5 GB</MenuItem>
+                          <MenuItem value="10GB">10 GB</MenuItem>
+                          <MenuItem value="20GB">20 GB</MenuItem>
+                          <MenuItem value="50GB">50 GB</MenuItem>
+                          <MenuItem value="100GB">100 GB</MenuItem>
+                        </Select>
+                        <FormHelperText>
+                          {storageAvailable === null
+                            ? 'Checking storage availability...'
+                            : 'Delete oldest videos when free space falls below this threshold'}
+                        </FormHelperText>
+                      </FormControl>
+                      {getInfoIcon('Some mount types (network shares, overlays, bind mounts) may report incorrect free space. Before enabling this, verify that the storage display at the top of this page shows accurate values. If the reported storage is incorrect, do not use space-based removal.')}
+                    </Box>
+                  </Grid>
+                )}
+
+                <Grid item xs={12} md={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Video Age Threshold (Optional)</InputLabel>
+                    <Select
+                      value={config.autoRemovalVideoAgeThreshold || ''}
+                      onChange={(e) => setConfig({ ...config, autoRemovalVideoAgeThreshold: e.target.value })}
+                      label="Video Age Threshold (Optional)"
+                    >
+                      <MenuItem value="">
+                        <em>Disabled</em>
+                      </MenuItem>
+                      <MenuItem value="7">7 days</MenuItem>
+                      <MenuItem value="14">14 days</MenuItem>
+                      <MenuItem value="30">30 days</MenuItem>
+                      <MenuItem value="60">60 days</MenuItem>
+                      <MenuItem value="120">120 days</MenuItem>
+                      <MenuItem value="180">180 days</MenuItem>
+                      <MenuItem value="365">1 year</MenuItem>
+                      <MenuItem value="730">2 years</MenuItem>
+                      <MenuItem value="1095">3 years</MenuItem>
+                      <MenuItem value="1825">5 years</MenuItem>
+                    </Select>
+                    <FormHelperText>
+                      Delete videos older than this threshold
+                    </FormHelperText>
+                  </FormControl>
+                </Grid>
+
+                {(config.autoRemovalFreeSpaceThreshold || config.autoRemovalVideoAgeThreshold) && (
+                  <Grid item xs={12}>
+                    <Alert severity="success" sx={{ mt: 1 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
+                        Active Removal Strategy:
+                      </Typography>
+                      <Typography variant="body2" component="div">
+                        {config.autoRemovalFreeSpaceThreshold && (
+                          <>• Delete oldest videos when free space &lt; <strong>{config.autoRemovalFreeSpaceThreshold}</strong><br /></>
+                        )}
+                        {config.autoRemovalVideoAgeThreshold && (
+                          <>• Delete videos older than <strong>{
+                            parseInt(config.autoRemovalVideoAgeThreshold) >= 365
+                              ? `${Math.round(parseInt(config.autoRemovalVideoAgeThreshold) / 365)} year${Math.round(parseInt(config.autoRemovalVideoAgeThreshold) / 365) > 1 ? 's' : ''}`
+                              : `${config.autoRemovalVideoAgeThreshold} days`
+                          }</strong></>
+                        )}
+                      </Typography>
+                    </Alert>
+                  </Grid>
+                )}
+
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: autoRemovalHasStrategy ? 1 : 0 }}>
+                    <Button
+                      variant="outlined"
+                      onClick={runAutoRemovalDryRun}
+                      disabled={autoRemovalDryRun.loading || !autoRemovalHasStrategy}
+                    >
+                      {autoRemovalDryRun.loading ? 'Running preview…' : 'Preview Automatic Removal'}
+                    </Button>
+                    {autoRemovalDryRun.loading && <CircularProgress size={18} />}
+                  </Box>
+                  {!autoRemovalHasStrategy && (
+                    <FormHelperText sx={{ mt: 1 }}>
+                      Select at least one threshold to run a preview.
+                    </FormHelperText>
+                  )}
+                </Grid>
+
+                {autoRemovalDryRun.error && (
+                  <Grid item xs={12}>
+                    <Alert severity="error" sx={{ mt: 1 }}>
+                      {autoRemovalDryRun.error}
+                    </Alert>
+                  </Grid>
+                )}
+
+                {autoRemovalDryRun.result && dryRunSimulation && (
+                  <Grid item xs={12}>
+                    <Alert
+                      severity={autoRemovalDryRun.result.errors.length > 0 ? 'warning' : 'info'}
+                      sx={{ mt: 1 }}
+                    >
+                      <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                        Preview Summary
+                      </Typography>
+                      <Typography variant="body2">
+                        Would remove <strong>{dryRunSimulation.total}</strong> videos (~{formatBytes(dryRunSimulation.estimatedFreedBytes)}).
+                      </Typography>
+                      {dryRunPlan?.ageStrategy.enabled && dryRunPlan.ageStrategy.candidateCount > 0 && (
+                        <Typography variant="body2">
+                          • Age threshold: {dryRunPlan.ageStrategy.candidateCount} videos (~{formatBytes(dryRunPlan.ageStrategy.estimatedFreedBytes)})
+                        </Typography>
+                      )}
+                      {dryRunPlan?.spaceStrategy.enabled && dryRunPlan.spaceStrategy.needsCleanup && (
+                        <Typography variant="body2">
+                          • Space threshold: {dryRunPlan.spaceStrategy.candidateCount} videos (~{formatBytes(dryRunPlan.spaceStrategy.estimatedFreedBytes)})
+                        </Typography>
+                      )}
+                      {hasDryRunSpaceThreshold && dryRunPlan?.spaceStrategy.needsCleanup === false && (
+                        <Typography variant="body2">
+                          Storage is currently above the free space threshold; no space-based deletions are needed.
+                        </Typography>
+                      )}
+                      {dryRunSampleVideos.length > 0 && (
+                        <Box sx={{ mt: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                            Sample videos
+                          </Typography>
+                          {dryRunSampleVideos.map((video) => (
+                            <Typography key={`dryrun-video-${video.id}`} variant="body2">
+                              {video.title} ({video.youtubeId}) • {formatBytes(video.fileSize)}
+                            </Typography>
+                          ))}
+                        </Box>
+                      )}
+                      {autoRemovalDryRun.result.errors.length > 0 && (
+                        <Box sx={{ mt: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                            Warnings
+                          </Typography>
+                          {autoRemovalDryRun.result.errors.map((err, index) => (
+                            <Typography key={`dryrun-warning-${index}`} variant="body2">
+                              {err}
+                            </Typography>
+                          ))}
+                        </Box>
+                      )}
+                    </Alert>
+                  </Grid>
+                )}
               </>
             )}
           </Grid>

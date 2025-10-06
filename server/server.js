@@ -10,7 +10,6 @@ const https = require('https');
 const http = require('http');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
-const schedule = require('node-cron');
 const multer = require('multer');
 const userNameMaxLength = 32;
 const passwordMaxLength = 64;
@@ -599,6 +598,82 @@ const initialize = async () => {
       }
     });
 
+    app.delete('/api/videos', verifyToken, async (req, res) => {
+      try {
+        const { videoIds, youtubeIds } = req.body;
+
+        // Support both videoIds (database IDs) and youtubeIds (YouTube video IDs)
+        if ((!videoIds && !youtubeIds) ||
+            (videoIds && !Array.isArray(videoIds)) ||
+            (youtubeIds && !Array.isArray(youtubeIds)) ||
+            (videoIds && videoIds.length === 0 && (!youtubeIds || youtubeIds.length === 0)) ||
+            (youtubeIds && youtubeIds.length === 0 && (!videoIds || videoIds.length === 0))) {
+          return res.status(400).json({
+            success: false,
+            error: 'videoIds or youtubeIds array is required'
+          });
+        }
+
+        const videoDeletionModule = require('./modules/videoDeletionModule');
+        let result;
+
+        if (youtubeIds && youtubeIds.length > 0) {
+          result = await videoDeletionModule.deleteVideosByYoutubeIds(youtubeIds);
+        } else {
+          result = await videoDeletionModule.deleteVideos(videoIds);
+        }
+
+        res.json(result);
+      } catch (error) {
+        console.error('Error deleting videos:', error);
+        res.status(500).json({
+          success: false,
+          error: error.message
+        });
+      }
+    });
+
+    app.post('/api/auto-removal/dry-run', verifyToken, async (req, res) => {
+      try {
+        const {
+          autoRemovalEnabled,
+          autoRemovalVideoAgeThreshold,
+          autoRemovalFreeSpaceThreshold
+        } = req.body || {};
+
+        const overrides = {};
+
+        if (autoRemovalEnabled !== undefined) {
+          if (typeof autoRemovalEnabled === 'boolean') {
+            overrides.autoRemovalEnabled = autoRemovalEnabled;
+          } else if (typeof autoRemovalEnabled === 'string') {
+            overrides.autoRemovalEnabled = autoRemovalEnabled.toLowerCase() === 'true';
+          } else {
+            overrides.autoRemovalEnabled = Boolean(autoRemovalEnabled);
+          }
+        }
+
+        if (autoRemovalVideoAgeThreshold !== undefined) {
+          overrides.autoRemovalVideoAgeThreshold = autoRemovalVideoAgeThreshold;
+        }
+
+        if (autoRemovalFreeSpaceThreshold !== undefined) {
+          overrides.autoRemovalFreeSpaceThreshold = autoRemovalFreeSpaceThreshold;
+        }
+
+        const videoDeletionModule = require('./modules/videoDeletionModule');
+        const result = await videoDeletionModule.performAutomaticCleanup({
+          dryRun: true,
+          overrides
+        });
+
+        res.json(result);
+      } catch (error) {
+        console.error('Error performing auto-removal dry run:', error);
+        res.status(500).json({ success: false, error: error.message || 'Failed to run auto-removal dry run' });
+      }
+    });
+
     app.get('/storage-status', verifyToken, async (req, res) => {
       try {
         const status = await configModule.getStorageStatus();
@@ -1035,6 +1110,10 @@ const initialize = async () => {
       server.listen(port, () => {
         console.log(`Server listening on port ${port}`);
 
+        // Initialize cron jobs
+        const cronJobs = require('./modules/cronJobs');
+        cronJobs.initialize();
+
         // Run video metadata backfill asynchronously after server starts
         setTimeout(() => {
           console.log('Starting async video metadata backfill...');
@@ -1049,52 +1128,6 @@ const initialize = async () => {
       });
     }
 
-    // Clean up expired sessions daily at 3 AM
-    schedule.schedule('0 3 * * *', async () => {
-      try {
-        const result = await db.Session.destroy({
-          where: {
-            [db.Sequelize.Op.or]: [
-              {
-                expires_at: {
-                  [db.Sequelize.Op.lt]: new Date()
-                }
-              },
-              {
-                is_active: false,
-                updatedAt: {
-                  [db.Sequelize.Op.lt]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // 30 days old
-                }
-              }
-            ]
-          }
-        });
-        console.log(`[CLEANUP] Removed ${result} expired sessions`);
-      } catch (error) {
-        console.error('[CLEANUP] Error cleaning sessions:', error);
-      }
-    });
-
-    // Run video metadata backfill daily at 3:30 AM
-    schedule.schedule('30 3 * * *', async () => {
-      console.log('[CRON] Starting scheduled video metadata backfill at 3:30 AM...');
-      try {
-        // Run asynchronously without blocking - the method handles its own async flow
-        videosModule.backfillVideoMetadata()
-          .then(result => {
-            if (result && result.timedOut) {
-              console.log('[CRON] Video metadata backfill reached time limit, will continue tomorrow');
-            } else {
-              console.log('[CRON] Video metadata backfill completed successfully');
-            }
-          })
-          .catch(err => {
-            console.error('[CRON] Video metadata backfill failed:', err);
-          });
-      } catch (error) {
-        console.error('[CRON] Error starting video metadata backfill:', error);
-      }
-    });
   } catch (error) {
     console.error('Failed to initialize the application:', error);
     // Handle the error here, e.g. exit the process

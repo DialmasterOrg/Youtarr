@@ -36,6 +36,33 @@ jest.mock('@mui/material/styles', () => ({
   })
 }));
 
+jest.mock('../shared/DeleteVideosDialog', () => ({
+  __esModule: true,
+  default: function MockDeleteVideosDialog(props: any) {
+    const React = require('react');
+    return React.createElement('div', {
+      'data-testid': 'delete-videos-dialog',
+      'data-open': props.open,
+      'data-video-count': props.videoCount,
+    }, [
+      React.createElement('button', {
+        key: 'cancel',
+        'data-testid': 'dialog-cancel',
+        onClick: props.onClose
+      }, 'Cancel'),
+      React.createElement('button', {
+        key: 'confirm',
+        'data-testid': 'dialog-confirm',
+        onClick: props.onConfirm
+      }, 'Confirm Delete')
+    ]);
+  }
+}));
+
+jest.mock('../shared/useVideoDeletion', () => ({
+  useVideoDeletion: jest.fn()
+}));
+
 const mockVideos: VideoData[] = [
   {
     id: 1,
@@ -92,10 +119,21 @@ const mockPaginatedResponse = (videos: VideoData[], page = 1, limit = 12) => {
 describe('VideosPage Component', () => {
   const mockToken = 'test-token';
   const useMediaQuery = require('@mui/material/useMediaQuery');
+  const { useVideoDeletion } = require('../shared/useVideoDeletion');
+
+  const mockDeleteVideos = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
     useMediaQuery.default.mockReturnValue(false);
+
+    // Mock useVideoDeletion to return a mock function
+    useVideoDeletion.mockReturnValue({
+      deleteVideos: mockDeleteVideos,
+      deleteVideosByYoutubeIds: jest.fn(),
+      loading: false,
+      error: null
+    });
   });
 
   describe('Desktop View', () => {
@@ -681,6 +719,554 @@ describe('VideosPage Component', () => {
         expect(screen.getByText('Video 0')).toBeInTheDocument();  // First Channel A video
       });
       expect(screen.queryByText('Video 1')).not.toBeInTheDocument(); // Channel B video
+    });
+  });
+
+  describe('Video Deletion Features', () => {
+    describe('Desktop View - Checkbox Selection and Deletion', () => {
+      test('renders checkboxes for video selection in desktop view', async () => {
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        // Should have a "select all" checkbox in the header
+        const checkboxes = screen.getAllByRole('checkbox');
+        expect(checkboxes.length).toBeGreaterThan(0);
+      });
+
+      test('allows selecting and deselecting individual videos', async () => {
+        const user = userEvent.setup();
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        // Get all checkboxes (first is "select all", rest are individual videos)
+        const checkboxes = screen.getAllByRole('checkbox');
+        const firstVideoCheckbox = checkboxes[1];
+
+        // Initially unchecked
+        expect(firstVideoCheckbox).not.toBeChecked();
+
+        // Click to select
+        await user.click(firstVideoCheckbox);
+
+        // Should show selection info
+        await waitFor(() => {
+          expect(screen.getByText(/1 video selected/)).toBeInTheDocument();
+        });
+
+        // Click again to deselect
+        await user.click(firstVideoCheckbox);
+
+        await waitFor(() => {
+          expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
+        });
+      });
+
+      test('select all checkbox selects all non-removed videos', async () => {
+        const user = userEvent.setup();
+        const videosWithRemoved = [
+          ...mockVideos,
+          {
+            id: 4,
+            youtubeId: 'removed123',
+            youTubeChannelName: 'Test Channel',
+            youTubeVideoName: 'Removed Video',
+            timeCreated: '2024-01-15T10:30:00',
+            originalDate: '20240110',
+            duration: 600,
+            description: 'Removed',
+            removed: true,
+            fileSize: null
+          }
+        ];
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(videosWithRemoved) });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        const checkboxes = screen.getAllByRole('checkbox');
+        const selectAllCheckbox = checkboxes[0];
+
+        await user.click(selectAllCheckbox);
+
+        // Should show that 3 videos are selected (excluding the removed one)
+        await waitFor(() => {
+          expect(screen.getByText(/3 videos selected/)).toBeInTheDocument();
+        });
+      });
+
+      test('shows delete button when videos are selected', async () => {
+        const user = userEvent.setup();
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        // Delete button should not be visible initially
+        expect(screen.queryByText('Delete Selected')).not.toBeInTheDocument();
+
+        // Select a video
+        const checkboxes = screen.getAllByRole('checkbox');
+        await user.click(checkboxes[1]);
+
+        // Delete button should now be visible
+        await waitFor(() => {
+          expect(screen.getByText('Delete Selected')).toBeInTheDocument();
+        });
+      });
+
+      test('clears selection when clear button is clicked', async () => {
+        const user = userEvent.setup();
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        // Select a video
+        const checkboxes = screen.getAllByRole('checkbox');
+        await user.click(checkboxes[1]);
+
+        await waitFor(() => {
+          expect(screen.getByText(/1 video selected/)).toBeInTheDocument();
+        });
+
+        // Click clear selection
+        const clearButton = screen.getByText('Clear Selection');
+        await user.click(clearButton);
+
+        await waitFor(() => {
+          expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
+        });
+      });
+
+      test('opens delete dialog when delete button is clicked', async () => {
+        const user = userEvent.setup();
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        // Select videos
+        const checkboxes = screen.getAllByRole('checkbox');
+        await user.click(checkboxes[1]);
+        await user.click(checkboxes[2]);
+
+        await waitFor(() => {
+          expect(screen.getByText(/2 videos selected/)).toBeInTheDocument();
+        });
+
+        // Click delete button
+        const deleteButton = screen.getByText('Delete Selected');
+        await user.click(deleteButton);
+
+        // Dialog should open
+        await waitFor(() => {
+          const dialog = screen.getByTestId('delete-videos-dialog');
+          expect(dialog.getAttribute('data-open')).toBe('true');
+        });
+
+        // Verify video count
+        const dialog = screen.getByTestId('delete-videos-dialog');
+        expect(dialog.getAttribute('data-video-count')).toBe('2');
+      });
+
+      test('single video delete button opens dialog with one video', async () => {
+        const user = userEvent.setup();
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        // Find and click the delete icon button for a single video
+        const deleteButtons = screen.getAllByTestId('DeleteIcon');
+        await user.click(deleteButtons[0]);
+
+        // Dialog should open with 1 video
+        await waitFor(() => {
+          const dialog = screen.getByTestId('delete-videos-dialog');
+          expect(dialog.getAttribute('data-open')).toBe('true');
+        });
+
+        // Verify video count
+        const dialog = screen.getByTestId('delete-videos-dialog');
+        expect(dialog.getAttribute('data-video-count')).toBe('1');
+      });
+
+      test('removed videos cannot be selected', async () => {
+        const removedVideo = {
+          ...mockVideos[0],
+          removed: true
+        };
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([removedVideo]) });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        const checkboxes = screen.getAllByRole('checkbox');
+        const videoCheckbox = checkboxes[1]; // First video checkbox (after select all)
+
+        expect(videoCheckbox).toBeDisabled();
+      });
+    });
+
+    describe('Mobile View - FAB Deletion', () => {
+      beforeEach(() => {
+        useMediaQuery.default.mockReturnValue(true);
+      });
+
+      test('shows delete icon on video thumbnails in mobile view', async () => {
+        const videosWithFiles = mockVideos.filter(v => v.fileSize);
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(videosWithFiles) });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        // Should have delete icons for videos with fileSize
+        const deleteIcons = screen.getAllByTestId('DeleteIcon');
+        expect(deleteIcons.length).toBeGreaterThan(0);
+      });
+
+      test('toggles video selection when delete icon is clicked in mobile', async () => {
+        const user = userEvent.setup();
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[0]]) });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        const deleteIcons = screen.getAllByTestId('DeleteIcon');
+        const thumbnailDeleteIcon = deleteIcons[0];
+
+        // Click to select
+        await user.click(thumbnailDeleteIcon);
+
+        // FAB should appear with badge - there should now be more delete icons
+        await waitFor(() => {
+          const iconsAfterClick = screen.getAllByTestId('DeleteIcon');
+          expect(iconsAfterClick.length).toBeGreaterThanOrEqual(deleteIcons.length);
+        });
+      });
+
+      test('shows FAB with badge when videos are selected for deletion in mobile', async () => {
+        const user = userEvent.setup();
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos.slice(0, 2)) });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        // Select first video via delete icon
+        const deleteIcons = screen.getAllByTestId('DeleteIcon');
+        await user.click(deleteIcons[0]);
+
+        // Should show FAB (checking for presence in DOM)
+        await waitFor(() => {
+          expect(deleteIcons.length).toBeGreaterThan(0);
+        });
+      });
+    });
+
+    describe('Delete Confirmation and Execution', () => {
+      test('successfully deletes videos and shows success message', async () => {
+        const user = userEvent.setup();
+
+        // Initial load
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
+        // After deletion refresh
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[2]]) });
+
+        // Mock successful deletion
+        mockDeleteVideos.mockResolvedValueOnce({
+          success: true,
+          deleted: [1, 2],
+          failed: []
+        });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        // Select videos
+        const checkboxes = screen.getAllByRole('checkbox');
+        await user.click(checkboxes[1]);
+        await user.click(checkboxes[2]);
+
+        // Click delete
+        const deleteButton = screen.getByText('Delete Selected');
+        await user.click(deleteButton);
+
+        // Confirm deletion
+        const confirmButton = screen.getByTestId('dialog-confirm');
+        await user.click(confirmButton);
+
+        // Should call deleteVideos with correct params
+        await waitFor(() => {
+          expect(mockDeleteVideos).toHaveBeenCalledWith([1, 2], mockToken);
+        });
+
+        // Success message should appear
+        await waitFor(() => {
+          expect(screen.getByText(/Successfully deleted 2 videos/)).toBeInTheDocument();
+        });
+
+        // Should refresh videos list
+        expect(axios.get).toHaveBeenCalledTimes(2);
+      });
+
+      test('handles partial deletion failure', async () => {
+        const user = userEvent.setup();
+
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[1], mockVideos[2]]) });
+
+        // Mock partial failure
+        mockDeleteVideos.mockResolvedValueOnce({
+          success: false,
+          deleted: [1],
+          failed: [{ videoId: 2, error: 'File not found' }]
+        });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        // Select videos
+        const checkboxes = screen.getAllByRole('checkbox');
+        await user.click(checkboxes[1]);
+        await user.click(checkboxes[2]);
+
+        // Delete
+        await user.click(screen.getByText('Delete Selected'));
+        await user.click(screen.getByTestId('dialog-confirm'));
+
+        // Should show partial success message
+        await waitFor(() => {
+          expect(screen.getByText(/Deleted 1 video, but 1 failed/)).toBeInTheDocument();
+        });
+      });
+
+      test('handles complete deletion failure', async () => {
+        const user = userEvent.setup();
+
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
+
+        // Mock complete failure
+        mockDeleteVideos.mockResolvedValueOnce({
+          success: false,
+          deleted: [],
+          failed: [
+            { videoId: 1, error: 'Permission denied' },
+            { videoId: 2, error: 'Permission denied' }
+          ]
+        });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        // Select and delete
+        const checkboxes = screen.getAllByRole('checkbox');
+        await user.click(checkboxes[1]);
+        await user.click(checkboxes[2]);
+        await user.click(screen.getByText('Delete Selected'));
+        await user.click(screen.getByTestId('dialog-confirm'));
+
+        // Should show error message
+        await waitFor(() => {
+          expect(screen.getByText(/Failed to delete videos: Permission denied/)).toBeInTheDocument();
+        });
+      });
+
+      test('cancels deletion when cancel button is clicked', async () => {
+        const user = userEvent.setup();
+
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        // Select and open dialog
+        const checkboxes = screen.getAllByRole('checkbox');
+        await user.click(checkboxes[1]);
+        await user.click(screen.getByText('Delete Selected'));
+
+        // Cancel
+        const cancelButton = screen.getByTestId('dialog-cancel');
+        await user.click(cancelButton);
+
+        // Dialog should close without calling delete
+        await waitFor(() => {
+          const dialog = screen.getByTestId('delete-videos-dialog');
+          expect(dialog.getAttribute('data-open')).toBe('false');
+        });
+        expect(mockDeleteVideos).not.toHaveBeenCalled();
+      });
+
+      test('clears selection after successful deletion', async () => {
+        const user = userEvent.setup();
+
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[2]]) });
+
+        mockDeleteVideos.mockResolvedValueOnce({
+          success: true,
+          deleted: [1, 2],
+          failed: []
+        });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        // Select and delete
+        const checkboxes = screen.getAllByRole('checkbox');
+        await user.click(checkboxes[1]);
+        await user.click(checkboxes[2]);
+
+        expect(screen.getByText(/2 videos selected/)).toBeInTheDocument();
+
+        await user.click(screen.getByText('Delete Selected'));
+        await user.click(screen.getByTestId('dialog-confirm'));
+
+        // Selection should be cleared
+        await waitFor(() => {
+          expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
+        });
+      });
+
+      test('disables delete button while deletion is in progress', async () => {
+        const user = userEvent.setup();
+
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
+
+        // Set loading state
+        useVideoDeletion.mockReturnValue({
+          deleteVideos: mockDeleteVideos,
+          deleteVideosByYoutubeIds: jest.fn(),
+          loading: true,
+          error: null
+        });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        // Select video
+        const checkboxes = screen.getAllByRole('checkbox');
+        await user.click(checkboxes[1]);
+
+        // Delete button should be disabled
+        const deleteButton = screen.getByText('Delete Selected');
+        expect(deleteButton).toBeDisabled();
+      });
+    });
+
+    describe('Snackbar Messages', () => {
+      test('success snackbar can be dismissed', async () => {
+        const user = userEvent.setup();
+
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[2]]) });
+
+        mockDeleteVideos.mockResolvedValueOnce({
+          success: true,
+          deleted: [1],
+          failed: []
+        });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        // Delete video
+        const checkboxes = screen.getAllByRole('checkbox');
+        await user.click(checkboxes[1]);
+        await user.click(screen.getByText('Delete Selected'));
+        await user.click(screen.getByTestId('dialog-confirm'));
+
+        // Success message appears
+        await waitFor(() => {
+          expect(screen.getByText(/Successfully deleted 1 video/)).toBeInTheDocument();
+        });
+      });
+
+      test('error snackbar shows when deletion fails', async () => {
+        const user = userEvent.setup();
+
+        axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
+
+        mockDeleteVideos.mockResolvedValueOnce({
+          success: false,
+          deleted: [],
+          failed: [{ videoId: 1, error: 'Network error' }]
+        });
+
+        render(<VideosPage token={mockToken} />);
+
+        await waitFor(() => {
+          expect(screen.getByText('How to Code')).toBeInTheDocument();
+        });
+
+        // Delete and fail
+        const checkboxes = screen.getAllByRole('checkbox');
+        await user.click(checkboxes[1]);
+        await user.click(screen.getByText('Delete Selected'));
+        await user.click(screen.getByTestId('dialog-confirm'));
+
+        // Error message appears
+        await waitFor(() => {
+          expect(screen.getByText(/Failed to delete videos: Network error/)).toBeInTheDocument();
+        });
+      });
     });
   });
 });

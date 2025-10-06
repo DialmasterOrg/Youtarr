@@ -83,7 +83,15 @@ After logging in, configure Youtarr through the Configuration page:
     - Configure how often Youtarr checks for new and downloads new videos for your channels
     - Default: Every 6 hours
 
-3. **Media Server Compatibility Settings**:
+3. **Automatic Video Removal**:
+   - Toggle **Enable Automatic Video Removal** to allow nightly cleanup at 2:00 AM
+   - Pick one or both strategies:
+     - **Free Space Threshold**: Delete the oldest videos until free space meets the selected minimum (requires the storage indicator at the top of Configuration to show valid data)
+     - **Video Age Threshold**: Delete videos older than the chosen number of days
+   - Use **Preview Automatic Removal** to run a dry-run simulation before saving changes; previews show estimated deletions, recovered space, and sample videos
+   - Save the configuration to apply your thresholds—deletions are permanent, so review the dry-run results first
+
+4. **Media Server Compatibility Settings**:
 
    **NFO File Generation** (enabled by default):
    - Automatically creates .nfo metadata files alongside each video
@@ -99,7 +107,7 @@ After logging in, configure Youtarr through the Configuration page:
    - Includes: genre (from categories), studio/network (channel name), keywords (from tags)
    - Ensures Plex can read metadata even without Local Media Assets configured
 
-4. **Notifications (Discord Webhooks)**:
+5. **Notifications (Discord Webhooks)**:
    - Toggle **Enable Notifications** to allow Discord alerts when new videos finish downloading
    - Paste your Discord webhook URL (Discord → Server Settings → Integrations → Webhooks)
    - Save the configuration before sending a test message with **Send Test Notification**
