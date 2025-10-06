@@ -4,6 +4,7 @@
   "channelAutoDownload": false,
   "channelDownloadFrequency": "0 * * * *",
   "preferredResolution": "1080",
+  "videoCodec": "default",
   "plexIP": "",
   "plexPort": "32400",
   "plexApiKey": "",

@@ -428,6 +428,7 @@ describe('ConfigModule', () => {
 
       expect(ConfigModule.config.channelFilesToDownload).toBe(3);
       expect(ConfigModule.config.preferredResolution).toBe('1080');
+      expect(ConfigModule.config.videoCodec).toBe('default');
       expect(ConfigModule.ffmpegPath).toBeUndefined();
       expect(ConfigModule.directoryPath).toBeUndefined();
     });
@@ -1022,6 +1023,86 @@ describe('ConfigModule', () => {
       const available = 1 * 1024 * 1024; // 1MB
       expect(ConfigModule.isStorageBelowThreshold(available, '1MB')).toBe(false);
       expect(ConfigModule.isStorageBelowThreshold(available - 1, '1MB')).toBe(true);
+    });
+  });
+
+  describe('video codec configuration', () => {
+    beforeEach(() => {
+      ConfigModule = require('../configModule');
+    });
+
+    test('should initialize videoCodec to default when missing', () => {
+      const configWithoutCodec = { ...mockConfig };
+      delete configWithoutCodec.videoCodec;
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithoutCodec));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithoutCodec)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.videoCodec).toBe('default');
+    });
+
+    test('should preserve existing videoCodec setting', () => {
+      const configWithCodec = {
+        ...mockConfig,
+        videoCodec: 'h264'
+      };
+
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithCodec));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithCodec)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.videoCodec).toBe('h264');
+    });
+
+    test('migration 1.38.0 should add videoCodec setting', () => {
+      ConfigModule = require('../configModule');
+
+      const configWithoutCodec = {
+        plexApiKey: 'test',
+        youtubeOutputDirectory: '/test'
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithoutCodec);
+
+      expect(migrated.videoCodec).toBe('default');
+    });
+
+    test('migration 1.38.0 should preserve existing videoCodec setting', () => {
+      ConfigModule = require('../configModule');
+
+      const configWithCodec = {
+        plexApiKey: 'test',
+        youtubeOutputDirectory: '/test',
+        videoCodec: 'h265'
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithCodec);
+
+      expect(migrated.videoCodec).toBe('h265');
     });
   });
 

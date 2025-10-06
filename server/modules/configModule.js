@@ -45,6 +45,11 @@ class ConfigModule extends EventEmitter {
       this.config.preferredResolution = '1080';
     }
 
+    if (!this.config.videoCodec) {
+      this.config.videoCodec = 'default';
+      configModified = true;
+    }
+
     if (this.config.plexPort === undefined || this.config.plexPort === null || this.config.plexPort === '') {
       this.config.plexPort = '32400';
       configModified = true;
@@ -234,6 +239,7 @@ class ConfigModule extends EventEmitter {
       defaultConfig = {
         channelFilesToDownload: 3,
         preferredResolution: '1080',
+        videoCodec: 'default',
         channelAutoDownload: false,
         channelDownloadFrequency: '0 */6 * * *',
         plexApiKey: '',
@@ -363,6 +369,7 @@ class ConfigModule extends EventEmitter {
       youtubeOutputDirectory: process.env.DATA_PATH,
       channelFilesToDownload: 3,
       preferredResolution: '1080',
+      videoCodec: 'default',
 
       // Channel auto-download settings
       channelAutoDownload: false,
@@ -566,6 +573,15 @@ class ConfigModule extends EventEmitter {
         }
         if (migrated.autoRemovalVideoAgeThreshold === undefined) {
           migrated.autoRemovalVideoAgeThreshold = null;
+        }
+        return migrated;
+      },
+      '1.38.0': (cfg) => {
+        const migrated = { ...cfg };
+
+        // Add video codec preference setting
+        if (!migrated.videoCodec) {
+          migrated.videoCodec = 'default';
         }
 
         return migrated;
