@@ -85,11 +85,11 @@ function ChannelVideosDialogs({
         aria-describedby="refresh-dialog-description"
       >
         <DialogTitle id="refresh-dialog-title">
-          Fetch All {tabLabel} Videos
+          Refresh All {tabLabel} Videos
         </DialogTitle>
         <DialogContent>
           <DialogContentText id="refresh-dialog-description">
-            This will fetch all &apos;{tabLabel}&apos; videos for this Channel. This may take some time to complete.
+            This will refresh all &apos;{tabLabel}&apos; videos for this Channel. This may take some time to complete.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
