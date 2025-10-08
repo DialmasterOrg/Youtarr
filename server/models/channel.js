@@ -40,6 +40,16 @@ Channel.init(
       allowNull: false,
       defaultValue: false,
     },
+    available_tabs: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      defaultValue: null,
+    },
+    auto_download_enabled_tabs: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+      defaultValue: 'video',
+    },
   },
   {
     sequelize,

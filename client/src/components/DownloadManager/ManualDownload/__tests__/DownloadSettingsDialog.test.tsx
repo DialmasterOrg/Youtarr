@@ -47,7 +47,7 @@ describe('DownloadSettingsDialog', () => {
     test('renders channel mode alert', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="channel" />);
 
-      expect(screen.getByText('This will download any new videos from all channels.')).toBeInTheDocument();
+      expect(screen.getByText('This will download any new videos from all channels and tabs that are enabled for automatic downloads.')).toBeInTheDocument();
     });
 
     test('renders custom settings toggle', () => {

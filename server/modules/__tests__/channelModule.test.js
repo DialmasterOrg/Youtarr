@@ -220,7 +220,8 @@ describe('ChannelModule', () => {
           uploader_id: 'UC123',
           title: 'Test Channel',
           description: 'Test Description',
-          url: 'https://youtube.com/@test'
+          url: 'https://youtube.com/@test',
+          auto_download_enabled_tabs: 'video,short'
         };
 
         const result = ChannelModule.mapChannelToResponse(channel);
@@ -231,8 +232,25 @@ describe('ChannelModule', () => {
           uploader_id: 'UC123',
           title: 'Test Channel',
           description: 'Test Description',
-          url: 'https://youtube.com/@test'
+          url: 'https://youtube.com/@test',
+          auto_download_enabled_tabs: 'video,short'
         });
+      });
+
+      test('should use default value for auto_download_enabled_tabs when null', () => {
+        const channel = {
+          channel_id: 'UC123',
+          uploader: 'Test User',
+          uploader_id: 'UC123',
+          title: 'Test Channel',
+          description: 'Test Description',
+          url: 'https://youtube.com/@test',
+          auto_download_enabled_tabs: null
+        };
+
+        const result = ChannelModule.mapChannelToResponse(channel);
+
+        expect(result.auto_download_enabled_tabs).toBe('video');
       });
     });
 
@@ -377,8 +395,155 @@ describe('ChannelModule', () => {
           duration: mockVideoData.duration,
           media_type: 'video',
           publishedAt: mockVideoData.publishedAt,
-          availability: mockVideoData.availability
+          availability: mockVideoData.availability,
+          live_status: null
         });
+      });
+
+      test('should insert videos with live_status field', async () => {
+        const videoWithLiveStatus = {
+          ...mockVideoData,
+          live_status: 'was_live'
+        };
+
+        ChannelVideo.findOrCreate.mockResolvedValue([{}, true]);
+
+        await ChannelModule.insertVideosIntoDb([videoWithLiveStatus], 'UC123');
+
+        expect(ChannelVideo.findOrCreate).toHaveBeenCalledWith({
+          where: {
+            youtube_id: videoWithLiveStatus.youtube_id,
+            channel_id: 'UC123'
+          },
+          defaults: expect.objectContaining({
+            live_status: 'was_live'
+          })
+        });
+      });
+
+      test('should generate synthetic publishedAt for videos without dates', async () => {
+        const videosWithoutDates = [
+          { youtube_id: 'video1', title: 'Video 1', publishedAt: null },
+          { youtube_id: 'video2', title: 'Video 2', publishedAt: null },
+          { youtube_id: 'video3', title: 'Video 3', publishedAt: null }
+        ];
+
+        ChannelVideo.findOrCreate
+          .mockResolvedValueOnce([{}, true])
+          .mockResolvedValueOnce([{}, true])
+          .mockResolvedValueOnce([{}, true]);
+
+        const beforeTime = Date.now();
+        await ChannelModule.insertVideosIntoDb(videosWithoutDates, 'UC123');
+        const afterTime = Date.now();
+
+        // Verify all videos got synthetic timestamps
+        expect(ChannelVideo.findOrCreate).toHaveBeenCalledTimes(3);
+
+        // First video should have the most recent synthetic timestamp
+        const firstCall = ChannelVideo.findOrCreate.mock.calls[0][0];
+        const firstTimestamp = new Date(firstCall.defaults.publishedAt).getTime();
+        expect(firstTimestamp).toBeGreaterThanOrEqual(beforeTime - 1000);
+        expect(firstTimestamp).toBeLessThanOrEqual(afterTime + 1000);
+
+        // Second video should be 1 second earlier
+        const secondCall = ChannelVideo.findOrCreate.mock.calls[1][0];
+        const secondTimestamp = new Date(secondCall.defaults.publishedAt).getTime();
+        expect(secondTimestamp).toBe(firstTimestamp - 1000);
+
+        // Third video should be 2 seconds earlier
+        const thirdCall = ChannelVideo.findOrCreate.mock.calls[2][0];
+        const thirdTimestamp = new Date(thirdCall.defaults.publishedAt).getTime();
+        expect(thirdTimestamp).toBe(firstTimestamp - 2000);
+      });
+
+      test('should preserve publishedAt when provided', async () => {
+        const videosWithDates = [
+          { youtube_id: 'video1', title: 'Video 1', publishedAt: '2024-01-01T00:00:00Z' },
+          { youtube_id: 'video2', title: 'Video 2', publishedAt: '2024-01-02T00:00:00Z' }
+        ];
+
+        ChannelVideo.findOrCreate
+          .mockResolvedValueOnce([{}, true])
+          .mockResolvedValueOnce([{}, true]);
+
+        await ChannelModule.insertVideosIntoDb(videosWithDates, 'UC123');
+
+        const firstCall = ChannelVideo.findOrCreate.mock.calls[0][0];
+        expect(firstCall.defaults.publishedAt).toBe('2024-01-01T00:00:00Z');
+
+        const secondCall = ChannelVideo.findOrCreate.mock.calls[1][0];
+        expect(secondCall.defaults.publishedAt).toBe('2024-01-02T00:00:00Z');
+      });
+
+      test('should update publishedAt only when provided on existing videos', async () => {
+        const mockVideo = {
+          publishedAt: '2024-01-01T00:00:00Z',
+          update: jest.fn()
+        };
+
+        const videoWithoutDate = {
+          ...mockVideoData,
+          publishedAt: null
+        };
+
+        ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
+
+        await ChannelModule.insertVideosIntoDb([videoWithoutDate], 'UC123');
+
+        // Should not include publishedAt in the update when video has existing date
+        expect(mockVideo.update).toHaveBeenCalledWith(
+          expect.not.objectContaining({
+            publishedAt: expect.anything()
+          })
+        );
+      });
+
+      test('should set synthetic publishedAt on existing videos without dates', async () => {
+        const mockVideo = {
+          publishedAt: null,
+          update: jest.fn()
+        };
+
+        const videoWithoutDate = {
+          ...mockVideoData,
+          publishedAt: null
+        };
+
+        ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
+
+        const beforeTime = Date.now();
+        await ChannelModule.insertVideosIntoDb([videoWithoutDate], 'UC123');
+        const afterTime = Date.now();
+
+        // Should set synthetic publishedAt when existing video has no date
+        const updateCall = mockVideo.update.mock.calls[0][0];
+        expect(updateCall.publishedAt).toBeDefined();
+        const timestamp = new Date(updateCall.publishedAt).getTime();
+        expect(timestamp).toBeGreaterThanOrEqual(beforeTime - 1000);
+        expect(timestamp).toBeLessThanOrEqual(afterTime + 1000);
+      });
+
+      test('should update publishedAt when new date is provided for existing video', async () => {
+        const mockVideo = {
+          publishedAt: '2024-01-01T00:00:00Z',
+          update: jest.fn()
+        };
+
+        const videoWithNewDate = {
+          ...mockVideoData,
+          publishedAt: '2024-01-15T00:00:00Z'
+        };
+
+        ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
+
+        await ChannelModule.insertVideosIntoDb([videoWithNewDate], 'UC123');
+
+        expect(mockVideo.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            publishedAt: '2024-01-15T00:00:00Z'
+          })
+        );
       });
     });
   });
@@ -648,7 +813,7 @@ describe('ChannelModule', () => {
         const result = await ChannelModule.fetchNewestVideosFromDb('UC123');
 
         expect(ChannelVideo.findAll).toHaveBeenCalledWith({
-          where: { channel_id: 'UC123' },
+          where: { channel_id: 'UC123', media_type: 'video' },
           order: [['publishedAt', 'DESC']]
         });
         expect(Video.findAll).toHaveBeenCalledWith({
@@ -661,6 +826,22 @@ describe('ChannelModule', () => {
         expect(result[0].removed).toBe(false);
         expect(result[1].added).toBe(false);
         expect(result[1].removed).toBe(false);
+      });
+
+      test('should filter by mediaType parameter', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          { youtube_id: 'short1', media_type: 'short', toJSON() { return this; } }
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        await ChannelModule.fetchNewestVideosFromDb('UC123', 50, 0, false, '', 'date', 'desc', false, 'short');
+
+        expect(ChannelVideo.findAll).toHaveBeenCalledWith({
+          where: { channel_id: 'UC123', media_type: 'short' },
+          order: [['publishedAt', 'DESC']]
+        });
       });
 
       test('should handle pagination with limit and offset', async () => {
@@ -825,16 +1006,20 @@ describe('ChannelModule', () => {
         expect(result).toBe('2024-01-15T00:00:00.000Z');
       });
 
-      test('should use fallback date when no date info available', () => {
+      test('should return null when no date info available', () => {
         const entry = {};
 
         const result = ChannelModule.extractPublishedDate(entry);
 
-        const resultDate = new Date(result);
-        const ninetyDaysAgo = new Date();
-        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+        expect(result).toBeNull();
+      });
 
-        expect(Math.abs(resultDate - ninetyDaysAgo)).toBeLessThan(1000);
+      test('should extract date from release_timestamp', () => {
+        const entry = { release_timestamp: 1704067200 };
+
+        const result = ChannelModule.extractPublishedDate(entry);
+
+        expect(result).toBe('2024-01-01T00:00:00.000Z');
       });
     });
 
@@ -904,7 +1089,8 @@ describe('ChannelModule', () => {
           duration: 300,
           timestamp: 1704067200,
           thumbnail: 'https://thumb.jpg',
-          availability: 'public'
+          availability: 'public',
+          live_status: 'not_live'
         };
 
         const result = ChannelModule.parseVideoMetadata(entry);
@@ -916,7 +1102,8 @@ describe('ChannelModule', () => {
           thumbnail: 'https://thumb.jpg',
           duration: 300,
           media_type: 'video',
-          availability: 'public'
+          availability: 'public',
+          live_status: 'not_live'
         });
       });
 
@@ -930,12 +1117,25 @@ describe('ChannelModule', () => {
         expect(result).toEqual({
           title: 'Untitled',
           youtube_id: 'video123',
-          publishedAt: expect.any(String),
+          publishedAt: null,
           thumbnail: 'https://i.ytimg.com/vi/video123/mqdefault.jpg',
           duration: 0,
           media_type: 'video',
-          availability: null
+          availability: null,
+          live_status: null
         });
+      });
+
+      test('should include live_status field when provided', () => {
+        const entry = {
+          id: 'video123',
+          title: 'Live Stream',
+          live_status: 'was_live'
+        };
+
+        const result = ChannelModule.parseVideoMetadata(entry);
+
+        expect(result.live_status).toBe('was_live');
       });
     });
 
@@ -950,16 +1150,32 @@ describe('ChannelModule', () => {
         const result = await ChannelModule.getChannelVideoStats('UC123');
 
         expect(ChannelVideo.count).toHaveBeenCalledWith({
-          where: { channel_id: 'UC123' }
+          where: { channel_id: 'UC123', media_type: 'video' }
         });
         expect(ChannelVideo.findOne).toHaveBeenCalledWith({
-          where: { channel_id: 'UC123' },
+          where: { channel_id: 'UC123', media_type: 'video' },
           order: [['publishedAt', 'ASC']],
           attributes: ['publishedAt']
         });
         expect(result).toEqual({
           totalCount: 100,
           oldestVideoDate: oldestDate
+        });
+      });
+
+      test('should filter by mediaType parameter', async () => {
+        ChannelVideo.count.mockResolvedValue(25);
+        ChannelVideo.findOne.mockResolvedValue({ publishedAt: '2024-01-01' });
+
+        await ChannelModule.getChannelVideoStats('UC123', false, '', 'short');
+
+        expect(ChannelVideo.count).toHaveBeenCalledWith({
+          where: { channel_id: 'UC123', media_type: 'short' }
+        });
+        expect(ChannelVideo.findOne).toHaveBeenCalledWith({
+          where: { channel_id: 'UC123', media_type: 'short' },
+          order: [['publishedAt', 'ASC']],
+          attributes: ['publishedAt']
         });
       });
 
@@ -1074,13 +1290,15 @@ describe('ChannelModule', () => {
             url: 'https://youtube.com/@channel1',
             uploader: 'Channel 1',
             channel_id: 'UC111',
-            enabled: true
+            enabled: true,
+            auto_download_enabled_tabs: 'video,short'
           },
           {
             url: 'https://youtube.com/@channel2',
             uploader: 'Channel 2',
             channel_id: 'UC222',
-            enabled: true
+            enabled: true,
+            auto_download_enabled_tabs: 'video'
           }
         ];
 
@@ -1096,12 +1314,14 @@ describe('ChannelModule', () => {
           {
             url: 'https://youtube.com/@channel1',
             uploader: 'Channel 1',
-            channel_id: 'UC111'
+            channel_id: 'UC111',
+            auto_download_enabled_tabs: 'video,short'
           },
           {
             url: 'https://youtube.com/@channel2',
             uploader: 'Channel 2',
-            channel_id: 'UC222'
+            channel_id: 'UC222',
+            auto_download_enabled_tabs: 'video'
           }
         ]);
       });
@@ -1112,6 +1332,24 @@ describe('ChannelModule', () => {
         const result = await ChannelModule.readChannels();
 
         expect(result).toEqual([]);
+      });
+
+      test('should use default value for auto_download_enabled_tabs when null', async () => {
+        const mockChannels = [
+          {
+            url: 'https://youtube.com/@channel1',
+            uploader: 'Channel 1',
+            channel_id: 'UC111',
+            enabled: true,
+            auto_download_enabled_tabs: null
+          }
+        ];
+
+        Channel.findAll = jest.fn().mockResolvedValue(mockChannels);
+
+        const result = await ChannelModule.readChannels();
+
+        expect(result[0].auto_download_enabled_tabs).toBe('video');
       });
     });
 
@@ -1169,10 +1407,10 @@ describe('ChannelModule', () => {
     });
 
     describe('generateChannelsFile', () => {
-      test('should generate temp file with enabled channel URLs', async () => {
+      test('should generate temp file with enabled channel URLs for videos tab only', async () => {
         const mockChannels = [
-          { url: 'https://youtube.com/@channel1' },
-          { url: 'https://youtube.com/@channel2' }
+          { channel_id: 'UC111', url: 'https://youtube.com/@channel1', auto_download_enabled_tabs: 'video' },
+          { channel_id: 'UC222', url: 'https://youtube.com/@channel2', auto_download_enabled_tabs: 'video' }
         ];
 
         Channel.findAll = jest.fn().mockResolvedValue(mockChannels);
@@ -1182,15 +1420,63 @@ describe('ChannelModule', () => {
 
         expect(Channel.findAll).toHaveBeenCalledWith({
           where: { enabled: true },
-          attributes: ['channel_id', 'url']
+          attributes: ['channel_id', 'url', 'auto_download_enabled_tabs']
         });
 
         expect(fsPromises.writeFile).toHaveBeenCalledWith(
           expect.stringContaining('channels-temp-'),
-          'https://youtube.com/@channel1\nhttps://youtube.com/@channel2'
+          'https://www.youtube.com/channel/UC111/videos\nhttps://www.youtube.com/channel/UC222/videos'
         );
 
         expect(tempPath).toContain('channels-temp-');
+      });
+
+      test('should generate URLs for multiple enabled tabs', async () => {
+        const mockChannels = [
+          { channel_id: 'UC111', url: 'https://youtube.com/@channel1', auto_download_enabled_tabs: 'video,short,livestream' }
+        ];
+
+        Channel.findAll = jest.fn().mockResolvedValue(mockChannels);
+        fsPromises.writeFile.mockResolvedValue();
+
+        await ChannelModule.generateChannelsFile();
+
+        expect(fsPromises.writeFile).toHaveBeenCalledWith(
+          expect.stringContaining('channels-temp-'),
+          'https://www.youtube.com/channel/UC111/videos\nhttps://www.youtube.com/channel/UC111/shorts\nhttps://www.youtube.com/channel/UC111/streams'
+        );
+      });
+
+      test('should handle channels without channel_id', async () => {
+        const mockChannels = [
+          { channel_id: null, url: 'https://youtube.com/@channel1', auto_download_enabled_tabs: 'video' }
+        ];
+
+        Channel.findAll = jest.fn().mockResolvedValue(mockChannels);
+        fsPromises.writeFile.mockResolvedValue();
+
+        await ChannelModule.generateChannelsFile();
+
+        expect(fsPromises.writeFile).toHaveBeenCalledWith(
+          expect.stringContaining('channels-temp-'),
+          'https://youtube.com/@channel1'
+        );
+      });
+
+      test('should skip channel when auto_download_enabled_tabs is null', async () => {
+        const mockChannels = [
+          { channel_id: 'UC111', url: 'https://youtube.com/@channel1', auto_download_enabled_tabs: null }
+        ];
+
+        Channel.findAll = jest.fn().mockResolvedValue(mockChannels);
+        fsPromises.writeFile.mockResolvedValue();
+
+        await ChannelModule.generateChannelsFile();
+
+        expect(fsPromises.writeFile).toHaveBeenCalledWith(
+          expect.stringContaining('channels-temp-'),
+          ''
+        );
       });
 
       test('should handle error and cleanup temp file', async () => {
@@ -1266,7 +1552,8 @@ describe('ChannelModule', () => {
           dataSource: 'yt_dlp',
           lastFetched: channel.lastFetched,
           totalCount: videos.length,
-          oldestVideoDate: null
+          oldestVideoDate: null,
+          autoDownloadsEnabled: false
         });
       });
 
@@ -1280,7 +1567,8 @@ describe('ChannelModule', () => {
           dataSource: 'cache',
           lastFetched: mockChannelData.lastFetched,
           totalCount: 0,
-          oldestVideoDate: null
+          oldestVideoDate: null,
+          autoDownloadsEnabled: false
         });
       });
 
@@ -1311,12 +1599,24 @@ describe('ChannelModule', () => {
         expect(result.videoFail).toBe(false);
         expect(result.failureReason).toBeNull();
       });
+
+      test('should include autoDownloadsEnabled parameter', () => {
+        const result = ChannelModule.buildChannelVideosResponse([mockVideoData], mockChannelData, 'cache', null, true);
+
+        expect(result.autoDownloadsEnabled).toBe(true);
+      });
+
+      test('should default autoDownloadsEnabled to false', () => {
+        const result = ChannelModule.buildChannelVideosResponse([mockVideoData], mockChannelData, 'cache');
+
+        expect(result.autoDownloadsEnabled).toBe(false);
+      });
     });
 
     describe('getChannelVideos', () => {
       test('should return paginated videos with stats', async () => {
         const Video = require('../../models/video');
-        const mockChannel = { ...mockChannelData, lastFetched: new Date() };
+        const mockChannel = { ...mockChannelData, lastFetched: new Date(), auto_download_enabled_tabs: 'video' };
         const mockVideos = [
           { youtube_id: 'video1', publishedAt: new Date().toISOString(), toJSON() { return this; } }
         ];
@@ -1336,7 +1636,7 @@ describe('ChannelModule', () => {
 
       test('should skip auto-refresh when fetch already in progress', async () => {
         const Video = require('../../models/video');
-        const mockChannel = { ...mockChannelData, lastFetched: null };
+        const mockChannel = { ...mockChannelData, lastFetched: null, auto_download_enabled_tabs: 'video' };
 
         Channel.findOne.mockResolvedValue(mockChannel);
         ChannelVideo.findAll.mockResolvedValue([]);
@@ -1361,7 +1661,7 @@ describe('ChannelModule', () => {
 
       test('should handle errors and return cached data', async () => {
         const Video = require('../../models/video');
-        const mockChannel = { ...mockChannelData };
+        const mockChannel = { ...mockChannelData, auto_download_enabled_tabs: 'video' };
         const mockVideos = [
           { youtube_id: 'video1', toJSON() { return this; } }
         ];
@@ -1471,6 +1771,148 @@ describe('ChannelModule', () => {
 
         expect(mockChannel.url).toBe(newUrl);
         expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Channel URL updated'));
+      });
+    });
+
+    describe('getChannelAvailableTabs', () => {
+      test('should return cached available tabs if already stored', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          available_tabs: 'videos,shorts'
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        const result = await ChannelModule.getChannelAvailableTabs('UC123');
+
+        expect(result).toEqual(['videos', 'shorts']);
+        expect(Channel.findOne).toHaveBeenCalledWith({
+          where: { channel_id: 'UC123' }
+        });
+      });
+
+      test('should detect and cache available tabs when not stored', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          available_tabs: null,
+          save: jest.fn()
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        // Mock successful yt-dlp execution for videos and shorts, fail for streams
+        jest.spyOn(ChannelModule, 'executeYtDlpCommand')
+          .mockResolvedValueOnce('{"entries": []}') // videos tab exists
+          .mockResolvedValueOnce('{"entries": []}') // shorts tab exists
+          .mockRejectedValueOnce(new Error('Not found')); // streams tab doesn't exist
+
+        const result = await ChannelModule.getChannelAvailableTabs('UC123');
+
+        expect(result).toEqual(['videos', 'shorts']);
+        expect(mockChannel.available_tabs).toBe('videos,shorts');
+        expect(mockChannel.save).toHaveBeenCalled();
+      });
+
+      test('should throw error when channel not found', async () => {
+        Channel.findOne.mockResolvedValue(null);
+
+        await expect(ChannelModule.getChannelAvailableTabs('UC999')).rejects.toThrow('Channel not found in database');
+      });
+
+      test('should handle channel with no available tabs', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          available_tabs: null,
+          save: jest.fn()
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        // All tabs fail
+        jest.spyOn(ChannelModule, 'executeYtDlpCommand')
+          .mockRejectedValueOnce(new Error('Not found'))
+          .mockRejectedValueOnce(new Error('Not found'))
+          .mockRejectedValueOnce(new Error('Not found'));
+
+        const result = await ChannelModule.getChannelAvailableTabs('UC123');
+
+        expect(result).toEqual([]);
+        expect(mockChannel.save).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('updateAutoDownloadForTab', () => {
+      test('should enable auto download for a tab type', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          auto_download_enabled_tabs: 'video',
+          save: jest.fn()
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        await ChannelModule.updateAutoDownloadForTab('UC123', 'shorts', true);
+
+        expect(mockChannel.auto_download_enabled_tabs).toBe('video,short');
+        expect(mockChannel.save).toHaveBeenCalled();
+      });
+
+      test('should disable auto download for a tab type', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          auto_download_enabled_tabs: 'video,short,livestream',
+          save: jest.fn()
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        await ChannelModule.updateAutoDownloadForTab('UC123', 'shorts', false);
+
+        expect(mockChannel.auto_download_enabled_tabs).toBe('video,livestream');
+        expect(mockChannel.save).toHaveBeenCalled();
+      });
+
+      test('should not duplicate tab types when already enabled', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          auto_download_enabled_tabs: 'video,short',
+          save: jest.fn()
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        await ChannelModule.updateAutoDownloadForTab('UC123', 'shorts', true);
+
+        expect(mockChannel.auto_download_enabled_tabs).toBe('video,short');
+        expect(mockChannel.save).toHaveBeenCalled();
+      });
+
+      test('should handle null auto_download_enabled_tabs', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          auto_download_enabled_tabs: null,
+          save: jest.fn()
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        await ChannelModule.updateAutoDownloadForTab('UC123', 'shorts', true);
+
+        expect(mockChannel.auto_download_enabled_tabs).toBe('video,short');
+        expect(mockChannel.save).toHaveBeenCalled();
+      });
+
+      test('should throw error when channel not found', async () => {
+        Channel.findOne.mockResolvedValue(null);
+
+        await expect(ChannelModule.updateAutoDownloadForTab('UC999', 'videos', true)).rejects.toThrow('Channel not found in database');
+      });
+
+      test('should handle disabling all tabs', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          auto_download_enabled_tabs: 'video',
+          save: jest.fn()
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        await ChannelModule.updateAutoDownloadForTab('UC123', 'videos', false);
+
+        expect(mockChannel.auto_download_enabled_tabs).toBe('');
+        expect(mockChannel.save).toHaveBeenCalled();
       });
     });
   });

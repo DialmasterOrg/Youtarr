@@ -96,7 +96,7 @@ function ChannelPage({ token }: ChannelPageProps) {
         </CardContent>
       </Card>
 
-      <ChannelVideos token={token} />
+      <ChannelVideos token={token} channelAutoDownloadTabs={channel?.auto_download_enabled_tabs} />
     </>
   );
 }
