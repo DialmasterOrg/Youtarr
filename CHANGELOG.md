@@ -1,5 +1,30 @@
 # Changelog
 
+## [v1.39.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.39.0) - 2025-10-08
+
+## [1.39.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.38.0...v1.39.0) (2025-10-08)
+
+
+### Features
+
+* add support for downloading shorts and live streams from YouTube channels ([c020e0b](https://github.com/DialmasterOrg/Youtarr/commit/c020e0b4533459ed143119e1f59a1dc0a5a2b26e))
+* handle missing and approximate publish dates ([a0b4708](https://github.com/DialmasterOrg/Youtarr/commit/a0b4708d2ba6cc73560c88389de30c2002b0672b))
+
+
+### Code Refactoring
+
+* Break up ChannelVideos into more maintainable structure ([6de14a7](https://github.com/DialmasterOrg/Youtarr/commit/6de14a7d7d323eddbcaeaa1015939ad8407c49de))
+
+
+### Documentation
+
+* update CHANGELOG for v1.38.0 [skip ci] ([695dc98](https://github.com/DialmasterOrg/Youtarr/commit/695dc98e97c26e394981e511bbbea6d3b3ad341b))
+* Update Readme for live/shorts support ([9a409f5](https://github.com/DialmasterOrg/Youtarr/commit/9a409f51d9a6b1cd4d9fc05440153c4630bca560))
+
+
+
+
+
 ## [v1.38.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.38.0) - 2025-10-06
 
 ## [1.38.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.37.0...v1.38.0) (2025-10-06)
