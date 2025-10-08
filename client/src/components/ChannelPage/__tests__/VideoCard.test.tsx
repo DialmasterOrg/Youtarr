@@ -70,10 +70,12 @@ describe('VideoCard Component', () => {
     });
 
     test('does not render duration chip for shorts', () => {
-      const shortVideo = { ...mockVideo, media_type: 'short' };
+      const shortVideo = { ...mockVideo, media_type: 'short', duration: 45 };
       renderWithProviders(<VideoCard {...defaultProps} video={shortVideo} />);
-      // Verify duration doesn't appear by checking for the CalendarTodayIcon but not duration text
-      expect(screen.getByTestId('CalendarTodayIcon')).toBeInTheDocument();
+      // Shorts should still render "Short" chip (which has ScheduleIcon)
+      expect(screen.getByText('Short')).toBeInTheDocument();
+      // But should not show duration text (like "0:45") since duration chip is hidden
+      expect(screen.queryByText('0:45')).not.toBeInTheDocument();
     });
 
     test('renders published date', () => {
@@ -84,6 +86,14 @@ describe('VideoCard Component', () => {
     test('renders short date format on mobile', () => {
       renderWithProviders(<VideoCard {...defaultProps} isMobile={true} />);
       expect(screen.getByText(/Jan 15/)).toBeInTheDocument();
+    });
+
+    test('does not render published date for shorts', () => {
+      const shortVideo = { ...mockVideo, media_type: 'short' };
+      renderWithProviders(<VideoCard {...defaultProps} video={shortVideo} />);
+      // Shorts should not show the CalendarTodayIcon or published date
+      expect(screen.queryByTestId('CalendarTodayIcon')).not.toBeInTheDocument();
+      expect(screen.queryByText(/1\/15\/2023/)).not.toBeInTheDocument();
     });
   });
 

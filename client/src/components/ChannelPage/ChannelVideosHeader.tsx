@@ -78,14 +78,12 @@ function ChannelVideosHeader({
   onDeleteClick,
   onInfoIconClick,
 }: ChannelVideosHeaderProps) {
-  const tooltipText = "Enable this if you want videos from this tab to automatically download when scheduled channel downloads occur, or when you trigger channel downloads from the Manage Downloads page";
-
-  const getInfoIcon = () => {
+  const renderInfoIcon = (message: string) => {
     const handleClick = (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
       if (isMobile) {
-        onInfoIconClick(tooltipText);
+        onInfoIconClick(message);
       }
     };
 
@@ -102,13 +100,20 @@ function ChannelVideosHeader({
     }
 
     return (
-      <Tooltip title={tooltipText} arrow placement="top">
-        <IconButton size="small" sx={{ ml: 0.5, p: 0.5 }}>
+      <Tooltip title={message} arrow placement="top">
+        <IconButton size="small" sx={{ ml: 0.5, p: 0.5 }} onClick={(e) => e.stopPropagation()}>
           <InfoIcon fontSize="small" />
         </IconButton>
       </Tooltip>
     );
   };
+
+  const autoDownloadTooltip = "Enable this if you want videos from this tab to automatically download when scheduled channel downloads occur, or when you trigger channel downloads from the Manage Downloads page";
+
+  const dateTooltipBase = "Publish dates come from yt-dlp and may be approximate when YouTube only provides relative times. Videos remain sorted to match YouTube.";
+  const dateTooltipText = selectedTab === 'shorts'
+    ? "Shorts do not expose publish dates via yt-dlp, so dates are hidden. " + dateTooltipBase
+    : dateTooltipBase;
 
   return (
     <Box
@@ -128,11 +133,12 @@ function ChannelVideosHeader({
             {totalCount > 0 && (
               <Chip label={totalCount} size="small" color="primary" />
             )}
-            {oldestVideoDate && !isMobile && (
+            {oldestVideoDate && selectedTab !== 'shorts' && !isMobile && (
               <Typography variant="caption" color="text.secondary">
                 Oldest: {new Date(oldestVideoDate).toLocaleDateString()}
               </Typography>
             )}
+            {renderInfoIcon(dateTooltipText)}
           </Box>
 
           <Button
@@ -158,7 +164,7 @@ function ChannelVideosHeader({
             }
             label="Enable Channel Downloads for this tab"
           />
-          {getInfoIcon()}
+          {renderInfoIcon(autoDownloadTooltip)}
         </Box>
 
         {/* Search and filters */}

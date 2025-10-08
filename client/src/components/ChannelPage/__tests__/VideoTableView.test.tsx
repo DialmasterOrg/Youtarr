@@ -99,6 +99,25 @@ describe('VideoTableView Component', () => {
       expect(screen.getByText(/1\/15\/2023/)).toBeInTheDocument();
     });
 
+    test('renders N/A for published date when video is a short', () => {
+      const shortVideo = { ...mockVideo, media_type: 'short' };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[shortVideo]} />);
+      const allNAs = screen.getAllByText('N/A');
+      expect(allNAs.length).toBeGreaterThan(0);
+    });
+
+    test('renders N/A for published date when publishedAt is null', () => {
+      const videoNoDate = { ...mockVideo, publishedAt: null };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[videoNoDate]} />);
+      expect(screen.getByText('N/A')).toBeInTheDocument();
+    });
+
+    test('renders N/A for published date when publishedAt is undefined', () => {
+      const videoNoDate = { ...mockVideo, publishedAt: undefined };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[videoNoDate]} />);
+      expect(screen.getByText('N/A')).toBeInTheDocument();
+    });
+
     test('renders duration for regular videos', () => {
       renderWithProviders(<VideoTableView {...defaultProps} />);
       // Duration is 600 seconds = 10 minutes
@@ -108,7 +127,9 @@ describe('VideoTableView Component', () => {
     test('renders N/A for short videos duration', () => {
       const shortVideo = { ...mockVideo, media_type: 'short' };
       renderWithProviders(<VideoTableView {...defaultProps} videos={[shortVideo]} />);
-      expect(screen.getByText('N/A')).toBeInTheDocument();
+      const allNAs = screen.getAllByText('N/A');
+      // Shorts should have N/A for both published date and duration
+      expect(allNAs.length).toBeGreaterThanOrEqual(2);
     });
 
     test('renders file size when available', () => {

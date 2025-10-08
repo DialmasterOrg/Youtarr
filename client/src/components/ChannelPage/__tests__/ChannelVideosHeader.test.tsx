@@ -208,26 +208,31 @@ describe('ChannelVideosHeader Component', () => {
       expect(onAutoDownloadChange).toHaveBeenCalledWith(true);
     });
 
-    test('renders info icon for auto-download switch on desktop', () => {
+    test('renders info icons for both date and auto-download on desktop', () => {
       renderWithProviders(<ChannelVideosHeader {...defaultProps} />);
-      const infoIcon = screen.getByTestId('InfoIcon');
-      expect(infoIcon).toBeInTheDocument();
+      const infoIcons = screen.getAllByTestId('InfoIcon');
+      // Should have 2 info icons: one for date tooltip, one for auto-download
+      expect(infoIcons).toHaveLength(2);
     });
 
-    test('info icon shows tooltip on desktop', () => {
-      renderWithProviders(<ChannelVideosHeader {...defaultProps} />);
-      expect(screen.getByTestId('InfoIcon')).toBeInTheDocument();
-    });
+    test('info icons are clickable on mobile', async () => {
+      const user = userEvent.setup();
+      const onInfoIconClick = jest.fn();
 
-    test('info icon is rendered on mobile', () => {
       renderWithProviders(
         <ChannelVideosHeader
           {...defaultProps}
           isMobile={true}
+          onInfoIconClick={onInfoIconClick}
         />
       );
 
-      expect(screen.getByTestId('InfoIcon')).toBeInTheDocument();
+      const infoIcons = screen.getAllByTestId('InfoIcon');
+      expect(infoIcons).toHaveLength(2);
+
+      // Click the first info icon (date tooltip)
+      await user.click(infoIcons[0]);
+      expect(onInfoIconClick).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -751,6 +756,45 @@ describe('ChannelVideosHeader Component', () => {
       );
 
       expect(screen.getByText('Channel Videos')).toBeInTheDocument();
+    });
+
+    test('hides oldest video date for shorts tab', () => {
+      renderWithProviders(
+        <ChannelVideosHeader
+          {...defaultProps}
+          selectedTab="shorts"
+          oldestVideoDate="2023-01-15T00:00:00Z"
+        />
+      );
+
+      // Should not display oldest date for shorts
+      expect(screen.queryByText(/Oldest:/)).not.toBeInTheDocument();
+    });
+
+    test('shows oldest video date for videos tab', () => {
+      renderWithProviders(
+        <ChannelVideosHeader
+          {...defaultProps}
+          selectedTab="videos"
+          oldestVideoDate="2023-01-15T00:00:00Z"
+        />
+      );
+
+      // Should display oldest date for videos tab
+      expect(screen.getByText(/Oldest:/)).toBeInTheDocument();
+    });
+
+    test('shows oldest video date for streams tab', () => {
+      renderWithProviders(
+        <ChannelVideosHeader
+          {...defaultProps}
+          selectedTab="streams"
+          oldestVideoDate="2023-01-15T00:00:00Z"
+        />
+      );
+
+      // Should display oldest date for streams tab
+      expect(screen.getByText(/Oldest:/)).toBeInTheDocument();
     });
   });
 

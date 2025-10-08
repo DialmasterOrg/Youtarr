@@ -228,7 +228,8 @@ function VideoCard({
 
             <Box sx={{ mt: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
               {/* Date, size, and status - same line on mobile, separate on desktop */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              {video.media_type !== 'short' && video.publishedAt && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <CalendarTodayIcon sx={{ fontSize: 12 }} />
                   {isMobile
@@ -236,6 +237,7 @@ function VideoCard({
                     : new Date(video.publishedAt).toLocaleDateString()
                   }
                 </Typography>
+              )}
                 {video.fileSize && (
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     <StorageIcon sx={{ fontSize: 12 }} />

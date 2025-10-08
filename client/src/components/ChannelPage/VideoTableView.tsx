@@ -194,7 +194,9 @@ function VideoTableView({
                   </Typography>
                 </TableCell>
                 <TableCell>
-                  {new Date(video.publishedAt).toLocaleDateString()}
+                  {video.media_type === 'short' || !video.publishedAt
+                    ? 'N/A'
+                    : new Date(video.publishedAt).toLocaleDateString()}
                 </TableCell>
                 <TableCell>
                   {video.media_type === 'short' ? 'N/A' : formatDuration(video.duration)}

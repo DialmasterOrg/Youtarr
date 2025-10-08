@@ -9,7 +9,7 @@
 export interface ChannelVideo {
   title: string;
   youtube_id: string;
-  publishedAt: string;
+  publishedAt: string | null | undefined;
   thumbnail: string;
   added: boolean;
   removed?: boolean;

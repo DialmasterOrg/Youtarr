@@ -420,6 +420,131 @@ describe('ChannelModule', () => {
           })
         });
       });
+
+      test('should generate synthetic publishedAt for videos without dates', async () => {
+        const videosWithoutDates = [
+          { youtube_id: 'video1', title: 'Video 1', publishedAt: null },
+          { youtube_id: 'video2', title: 'Video 2', publishedAt: null },
+          { youtube_id: 'video3', title: 'Video 3', publishedAt: null }
+        ];
+
+        ChannelVideo.findOrCreate
+          .mockResolvedValueOnce([{}, true])
+          .mockResolvedValueOnce([{}, true])
+          .mockResolvedValueOnce([{}, true]);
+
+        const beforeTime = Date.now();
+        await ChannelModule.insertVideosIntoDb(videosWithoutDates, 'UC123');
+        const afterTime = Date.now();
+
+        // Verify all videos got synthetic timestamps
+        expect(ChannelVideo.findOrCreate).toHaveBeenCalledTimes(3);
+
+        // First video should have the most recent synthetic timestamp
+        const firstCall = ChannelVideo.findOrCreate.mock.calls[0][0];
+        const firstTimestamp = new Date(firstCall.defaults.publishedAt).getTime();
+        expect(firstTimestamp).toBeGreaterThanOrEqual(beforeTime - 1000);
+        expect(firstTimestamp).toBeLessThanOrEqual(afterTime + 1000);
+
+        // Second video should be 1 second earlier
+        const secondCall = ChannelVideo.findOrCreate.mock.calls[1][0];
+        const secondTimestamp = new Date(secondCall.defaults.publishedAt).getTime();
+        expect(secondTimestamp).toBe(firstTimestamp - 1000);
+
+        // Third video should be 2 seconds earlier
+        const thirdCall = ChannelVideo.findOrCreate.mock.calls[2][0];
+        const thirdTimestamp = new Date(thirdCall.defaults.publishedAt).getTime();
+        expect(thirdTimestamp).toBe(firstTimestamp - 2000);
+      });
+
+      test('should preserve publishedAt when provided', async () => {
+        const videosWithDates = [
+          { youtube_id: 'video1', title: 'Video 1', publishedAt: '2024-01-01T00:00:00Z' },
+          { youtube_id: 'video2', title: 'Video 2', publishedAt: '2024-01-02T00:00:00Z' }
+        ];
+
+        ChannelVideo.findOrCreate
+          .mockResolvedValueOnce([{}, true])
+          .mockResolvedValueOnce([{}, true]);
+
+        await ChannelModule.insertVideosIntoDb(videosWithDates, 'UC123');
+
+        const firstCall = ChannelVideo.findOrCreate.mock.calls[0][0];
+        expect(firstCall.defaults.publishedAt).toBe('2024-01-01T00:00:00Z');
+
+        const secondCall = ChannelVideo.findOrCreate.mock.calls[1][0];
+        expect(secondCall.defaults.publishedAt).toBe('2024-01-02T00:00:00Z');
+      });
+
+      test('should update publishedAt only when provided on existing videos', async () => {
+        const mockVideo = {
+          publishedAt: '2024-01-01T00:00:00Z',
+          update: jest.fn()
+        };
+
+        const videoWithoutDate = {
+          ...mockVideoData,
+          publishedAt: null
+        };
+
+        ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
+
+        await ChannelModule.insertVideosIntoDb([videoWithoutDate], 'UC123');
+
+        // Should not include publishedAt in the update when video has existing date
+        expect(mockVideo.update).toHaveBeenCalledWith(
+          expect.not.objectContaining({
+            publishedAt: expect.anything()
+          })
+        );
+      });
+
+      test('should set synthetic publishedAt on existing videos without dates', async () => {
+        const mockVideo = {
+          publishedAt: null,
+          update: jest.fn()
+        };
+
+        const videoWithoutDate = {
+          ...mockVideoData,
+          publishedAt: null
+        };
+
+        ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
+
+        const beforeTime = Date.now();
+        await ChannelModule.insertVideosIntoDb([videoWithoutDate], 'UC123');
+        const afterTime = Date.now();
+
+        // Should set synthetic publishedAt when existing video has no date
+        const updateCall = mockVideo.update.mock.calls[0][0];
+        expect(updateCall.publishedAt).toBeDefined();
+        const timestamp = new Date(updateCall.publishedAt).getTime();
+        expect(timestamp).toBeGreaterThanOrEqual(beforeTime - 1000);
+        expect(timestamp).toBeLessThanOrEqual(afterTime + 1000);
+      });
+
+      test('should update publishedAt when new date is provided for existing video', async () => {
+        const mockVideo = {
+          publishedAt: '2024-01-01T00:00:00Z',
+          update: jest.fn()
+        };
+
+        const videoWithNewDate = {
+          ...mockVideoData,
+          publishedAt: '2024-01-15T00:00:00Z'
+        };
+
+        ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
+
+        await ChannelModule.insertVideosIntoDb([videoWithNewDate], 'UC123');
+
+        expect(mockVideo.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            publishedAt: '2024-01-15T00:00:00Z'
+          })
+        );
+      });
     });
   });
 
@@ -881,16 +1006,20 @@ describe('ChannelModule', () => {
         expect(result).toBe('2024-01-15T00:00:00.000Z');
       });
 
-      test('should use fallback date when no date info available', () => {
+      test('should return null when no date info available', () => {
         const entry = {};
 
         const result = ChannelModule.extractPublishedDate(entry);
 
-        const resultDate = new Date(result);
-        const ninetyDaysAgo = new Date();
-        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+        expect(result).toBeNull();
+      });
 
-        expect(Math.abs(resultDate - ninetyDaysAgo)).toBeLessThan(1000);
+      test('should extract date from release_timestamp', () => {
+        const entry = { release_timestamp: 1704067200 };
+
+        const result = ChannelModule.extractPublishedDate(entry);
+
+        expect(result).toBe('2024-01-01T00:00:00.000Z');
       });
     });
 
@@ -988,7 +1117,7 @@ describe('ChannelModule', () => {
         expect(result).toEqual({
           title: 'Untitled',
           youtube_id: 'video123',
-          publishedAt: expect.any(String),
+          publishedAt: null,
           thumbnail: 'https://i.ytimg.com/vi/video123/mqdefault.jpg',
           duration: 0,
           media_type: 'video',

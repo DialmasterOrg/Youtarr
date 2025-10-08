@@ -718,7 +718,11 @@ class ChannelModule {
    * @returns {Promise<void>}
    */
   async insertVideosIntoDb(videos, channelId, mediaType = 'video') {
-    for (const video of videos) {
+    const syntheticBaseTime = Date.now();
+
+    for (const [index, video] of videos.entries()) {
+      const syntheticPublishedAt = video.publishedAt || new Date(syntheticBaseTime - index * 1000).toISOString();
+
       const [videoRecord, created] = await ChannelVideo.findOrCreate({
         where: {
           youtube_id: video.youtube_id,
@@ -726,21 +730,29 @@ class ChannelModule {
         },
         defaults: {
           ...video,
+          publishedAt: syntheticPublishedAt,
           channel_id: channelId,
           media_type: mediaType,
         },
       });
 
       if (!created) {
-        await videoRecord.update({
+        const updates = {
           title: video.title,
           thumbnail: video.thumbnail,
           duration: video.duration,
-          publishedAt: video.publishedAt,
           availability: video.availability || null,
           media_type: mediaType,
           live_status: video.live_status || null,
-        });
+        };
+
+        if (video.publishedAt) {
+          updates.publishedAt = video.publishedAt;
+        } else if (!videoRecord.publishedAt) {
+          updates.publishedAt = syntheticPublishedAt;
+        }
+
+        await videoRecord.update(updates);
       }
     }
   }
@@ -1007,9 +1019,10 @@ class ChannelModule {
       const day = entry.upload_date.substring(6, 8);
       return new Date(`${year}-${month}-${day}`).toISOString();
     }
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-    return ninetyDaysAgo.toISOString();
+    if (entry.release_timestamp) {
+      return new Date(entry.release_timestamp * 1000).toISOString();
+    }
+    return null;
   }
 
   /**

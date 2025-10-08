@@ -205,11 +205,13 @@ function VideoListItem({
           </Typography>
 
           {/* Date, Size, and Status on same line */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mt: 'auto' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mt: 'auto' }}>
+          {video.media_type !== 'short' && video.publishedAt && (
             <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.3, fontSize: '0.7rem' }}>
               <CalendarTodayIcon sx={{ fontSize: 11 }} />
               {new Date(video.publishedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' })}
             </Typography>
+          )}
             {video.fileSize && (
               <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.3, fontSize: '0.7rem' }}>
                 <StorageIcon sx={{ fontSize: 11 }} />
