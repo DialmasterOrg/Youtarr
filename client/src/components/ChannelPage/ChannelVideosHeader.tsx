@@ -148,7 +148,7 @@ function ChannelVideosHeader({
             disabled={fetchingAllVideos}
             startIcon={<RefreshIcon />}
           >
-            {fetchingAllVideos ? 'Fetching...' : 'Fetch All'}
+            {fetchingAllVideos ? 'Refreshing...' : 'Refresh All'}
           </Button>
         </Box>
 

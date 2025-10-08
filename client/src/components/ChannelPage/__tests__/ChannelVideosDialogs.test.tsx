@@ -83,7 +83,7 @@ describe('ChannelVideosDialogs Component', () => {
       expect(screen.getByTestId('delete-videos-dialog')).toBeInTheDocument();
 
       // Should render refresh confirmation dialog (even if closed)
-      expect(screen.queryByText('Fetch All Videos Videos')).not.toBeInTheDocument();
+      expect(screen.queryByText('Refresh All Videos Videos')).not.toBeInTheDocument();
     });
   });
 
@@ -130,7 +130,7 @@ describe('ChannelVideosDialogs Component', () => {
     test('does not show refresh dialog when closed', () => {
       renderWithProviders(<ChannelVideosDialogs {...defaultProps} />);
 
-      expect(screen.queryByText(/Fetch All/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Refresh All/)).not.toBeInTheDocument();
     });
 
     test('shows refresh dialog when open', () => {
@@ -141,7 +141,7 @@ describe('ChannelVideosDialogs Component', () => {
         />
       );
 
-      expect(screen.getByText('Fetch All Videos Videos')).toBeInTheDocument();
+      expect(screen.getByText('Refresh All Videos Videos')).toBeInTheDocument();
     });
 
     test('displays correct tab label in refresh dialog', () => {
@@ -153,8 +153,8 @@ describe('ChannelVideosDialogs Component', () => {
         />
       );
 
-      expect(screen.getByText('Fetch All Shorts Videos')).toBeInTheDocument();
-      expect(screen.getByText(/This will fetch all 'Shorts' videos for this Channel/)).toBeInTheDocument();
+      expect(screen.getByText('Refresh All Shorts Videos')).toBeInTheDocument();
+      expect(screen.getByText(/This will refresh all 'Shorts' videos for this Channel/)).toBeInTheDocument();
     });
 
     test('calls onRefreshCancel when Cancel is clicked', async () => {
@@ -448,7 +448,7 @@ describe('ChannelVideosDialogs Component', () => {
         />
       );
 
-      expect(screen.getByText('Fetch All Videos Videos')).toBeInTheDocument();
+      expect(screen.getByText('Refresh All Videos Videos')).toBeInTheDocument();
       expect(screen.getByText('Operation completed')).toBeInTheDocument();
     });
   });
@@ -525,7 +525,7 @@ describe('ChannelVideosDialogs Component', () => {
         />
       );
 
-      expect(screen.getByText('Fetch All Live & Upcoming Videos')).toBeInTheDocument();
+      expect(screen.getByText('Refresh All Live & Upcoming Videos')).toBeInTheDocument();
     });
 
     test('handles zero video count in download dialog', () => {
@@ -575,7 +575,7 @@ describe('ChannelVideosDialogs Component', () => {
       // All components should render
       expect(screen.getByTestId('download-settings-dialog')).toBeInTheDocument();
       expect(screen.getByTestId('delete-videos-dialog')).toBeInTheDocument();
-      expect(screen.getByText('Fetch All Videos Videos')).toBeInTheDocument();
+      expect(screen.getByText('Refresh All Videos Videos')).toBeInTheDocument();
 
       // Multiple snackbars should show
       expect(screen.getByText('Error 1')).toBeInTheDocument();
