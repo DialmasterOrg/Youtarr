@@ -509,6 +509,45 @@ const initialize = async () => {
       res.json(channelInfo);
     });
 
+    app.get('/api/channels/:channelId/tabs', verifyToken, async (req, res) => {
+      console.log('Getting available tabs for channel');
+      const channelId = req.params.channelId;
+
+      try {
+        const availableTabs = await channelModule.getChannelAvailableTabs(channelId);
+        res.status(200).json({ availableTabs });
+      } catch (error) {
+        console.error('Error getting available tabs:', error);
+        res.status(500).json({
+          error: 'Failed to get available tabs',
+          message: error.message
+        });
+      }
+    });
+
+    app.patch('/api/channels/:channelId/tabs/:tabType/auto-download', verifyToken, async (req, res) => {
+      const { channelId, tabType } = req.params;
+      const { enabled } = req.body;
+
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({
+          error: 'Bad request',
+          message: 'enabled must be a boolean value'
+        });
+      }
+
+      try {
+        await channelModule.updateAutoDownloadForTab(channelId, tabType, enabled);
+        res.status(200).json({ success: true });
+      } catch (error) {
+        console.error('Error updating auto download setting:', error);
+        res.status(500).json({
+          error: 'Failed to update auto download setting',
+          message: error.message
+        });
+      }
+    });
+
     app.get('/getchannelvideos/:channelId', verifyToken, async (req, res) => {
       console.log('Getting channel videos');
       const channelId = req.params.channelId;
@@ -518,7 +557,8 @@ const initialize = async () => {
       const searchQuery = req.query.searchQuery || '';
       const sortBy = req.query.sortBy || 'date';
       const sortOrder = req.query.sortOrder || 'desc';
-      const result = await channelModule.getChannelVideos(channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder);
+      const tabType = req.query.tabType || 'videos';
+      const result = await channelModule.getChannelVideos(channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType);
 
       // For backward compatibility, if result is an array, convert to old format
       if (Array.isArray(result)) {
@@ -538,9 +578,10 @@ const initialize = async () => {
       const page = parseInt(req.query.page) || 1;
       const pageSize = parseInt(req.query.pageSize) || 50;
       const hideDownloaded = req.query.hideDownloaded === 'true';
+      const tabType = req.query.tabType || 'videos';
 
       try {
-        const result = await channelModule.fetchAllChannelVideos(channelId, page, pageSize, hideDownloaded);
+        const result = await channelModule.fetchAllChannelVideos(channelId, page, pageSize, hideDownloaded, tabType);
         res.status(200).json(result);
       } catch (error) {
         console.error('Error fetching all channel videos:', error);

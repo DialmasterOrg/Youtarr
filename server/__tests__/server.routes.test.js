@@ -177,7 +177,9 @@ const createServerModule = ({
             message: 'Fetching videos in progress',
             videos: [{ id: 'video-1', title: 'Video 1' }]
           }),
-          deleteChannel: jest.fn().mockResolvedValue({ success: true })
+          deleteChannel: jest.fn().mockResolvedValue({ success: true }),
+          getChannelAvailableTabs: jest.fn().mockResolvedValue(['videos', 'shorts', 'streams']),
+          updateAutoDownloadForTab: jest.fn().mockResolvedValue()
         };
 
         const plexModuleMock = {
@@ -577,6 +579,134 @@ describe('server routes - configuration', () => {
 });
 
 describe('server routes - channels', () => {
+  describe('GET /api/channels/:channelId/tabs', () => {
+    test('returns available tabs for a channel', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'get', '/api/channels/:channelId/tabs');
+      const getTabsHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' }
+      });
+      const res = createMockResponse();
+
+      await getTabsHandler(req, res);
+
+      expect(channelModuleMock.getChannelAvailableTabs).toHaveBeenCalledWith('channel-1');
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({
+        availableTabs: ['videos', 'shorts', 'streams']
+      });
+    });
+
+    test('handles error when getting available tabs', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      channelModuleMock.getChannelAvailableTabs.mockRejectedValueOnce(new Error('Failed to fetch tabs'));
+
+      const handlers = findRouteHandlers(app, 'get', '/api/channels/:channelId/tabs');
+      const getTabsHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' }
+      });
+      const res = createMockResponse();
+
+      await getTabsHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({
+        error: 'Failed to get available tabs',
+        message: 'Failed to fetch tabs'
+      });
+    });
+  });
+
+  describe('PATCH /api/channels/:channelId/tabs/:tabType/auto-download', () => {
+    test('updates auto-download setting successfully', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'patch', '/api/channels/:channelId/tabs/:tabType/auto-download');
+      const updateHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1', tabType: 'shorts' },
+        body: { enabled: true }
+      });
+      const res = createMockResponse();
+
+      await updateHandler(req, res);
+
+      expect(channelModuleMock.updateAutoDownloadForTab).toHaveBeenCalledWith('channel-1', 'shorts', true);
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({ success: true });
+    });
+
+    test('validates enabled parameter is boolean', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'patch', '/api/channels/:channelId/tabs/:tabType/auto-download');
+      const updateHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1', tabType: 'shorts' },
+        body: { enabled: 'yes' }
+      });
+      const res = createMockResponse();
+
+      await updateHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        error: 'Bad request',
+        message: 'enabled must be a boolean value'
+      });
+    });
+
+    test('handles missing enabled parameter', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'patch', '/api/channels/:channelId/tabs/:tabType/auto-download');
+      const updateHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1', tabType: 'shorts' },
+        body: {}
+      });
+      const res = createMockResponse();
+
+      await updateHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        error: 'Bad request',
+        message: 'enabled must be a boolean value'
+      });
+    });
+
+    test('handles error during update', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      channelModuleMock.updateAutoDownloadForTab.mockRejectedValueOnce(new Error('Database error'));
+
+      const handlers = findRouteHandlers(app, 'patch', '/api/channels/:channelId/tabs/:tabType/auto-download');
+      const updateHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1', tabType: 'shorts' },
+        body: { enabled: false }
+      });
+      const res = createMockResponse();
+
+      await updateHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({
+        error: 'Failed to update auto download setting',
+        message: 'Database error'
+      });
+    });
+  });
+
   describe('GET /getchannelvideos/:channelId', () => {
     test('returns channel videos successfully with default parameters', async () => {
       const { app, channelModuleMock } = await createServerModule();
@@ -599,7 +729,8 @@ describe('server routes - channels', () => {
         false, // default hideDownloaded
         '',   // default searchQuery
         'date', // default sortBy
-        'desc' // default sortOrder
+        'desc', // default sortOrder
+        'videos' // default tabType
       );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -660,7 +791,43 @@ describe('server routes - channels', () => {
         true,
         'test search',
         'title',
-        'asc'
+        'asc',
+        'videos' // default tabType
+      );
+      expect(res.statusCode).toBe(200);
+    });
+
+    test('passes tabType parameter to channel module when provided', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'get', '/getchannelvideos/:channelId');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' },
+        query: {
+          page: '1',
+          pageSize: '50',
+          hideDownloaded: 'false',
+          searchQuery: '',
+          sortBy: 'date',
+          sortOrder: 'desc',
+          tabType: 'shorts'
+        }
+      });
+      const res = createMockResponse();
+
+      await getVideosHandler(req, res);
+
+      expect(channelModuleMock.getChannelVideos).toHaveBeenCalledWith(
+        'channel-1',
+        1,
+        50,
+        false,
+        '',
+        'date',
+        'desc',
+        'shorts'
       );
       expect(res.statusCode).toBe(200);
     });
@@ -685,7 +852,8 @@ describe('server routes - channels', () => {
         'channel-1',
         1,    // default page
         50,   // default pageSize
-        false // default hideDownloaded
+        false, // default hideDownloaded
+        'videos' // default tabType
       );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -717,7 +885,37 @@ describe('server routes - channels', () => {
         'channel-1',
         3,
         100,
-        true
+        true,
+        'videos' // default tabType
+      );
+      expect(res.statusCode).toBe(200);
+    });
+
+    test('passes tabType parameter when provided', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/fetchallchannelvideos/:channelId');
+      const fetchHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' },
+        query: {
+          page: '1',
+          pageSize: '50',
+          hideDownloaded: 'false',
+          tabType: 'streams'
+        }
+      });
+      const res = createMockResponse();
+
+      await fetchHandler(req, res);
+
+      expect(channelModuleMock.fetchAllChannelVideos).toHaveBeenCalledWith(
+        'channel-1',
+        1,
+        50,
+        false,
+        'streams'
       );
       expect(res.statusCode).toBe(200);
     });

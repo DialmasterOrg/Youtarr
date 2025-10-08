@@ -1205,7 +1205,7 @@ function Configuration({ token }: ConfigurationProps) {
                   }
                   label="Enable Automatic Downloads"
                 />
-                {getInfoIcon('Check to enable automatic scheduled downloading of videos from your Channels.')}
+                {getInfoIcon('Enable automatic scheduled downloading of videos from your channels. Only channels and tabs that are enabled for automatic downloads will be downloaded on your schedule.')}
               </Box>
             </Grid>
 

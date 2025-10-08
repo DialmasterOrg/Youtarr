@@ -19,10 +19,12 @@ import {
   Snackbar,
   Alert,
   CircularProgress,
+  Chip,
 } from '@mui/material';
 import Delete from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import InfoIcon from '@mui/icons-material/Info';
+import AlarmOnIcon from '@mui/icons-material/AlarmOn';
 import axios from 'axios';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
@@ -336,6 +338,60 @@ function ChannelManager({ token }: ChannelManagerProps) {
     setIsDialogOpen(false);
   };
 
+  const renderAutoDownloadBadges = (autoDownloadTabs: string | undefined) => {
+    const tabMap: Record<string, { full: string; short: string }> = {
+      'video': { full: 'Videos', short: 'Videos' },
+      'short': { full: 'Shorts', short: 'Shorts' },
+      'livestream': { full: 'Live', short: 'Live' },
+    };
+
+    const tabs = autoDownloadTabs
+      ? autoDownloadTabs
+          .split(',')
+          .map(tab => tab.trim())
+          .filter(tab => tab.length > 0)
+      : [];
+
+    if (tabs.length === 0) {
+      return (
+        <Box sx={{ mt: 0.5 }}>
+          <span style={{ fontSize: isMobile ? '0.65rem' : '0.75rem', color: '#888' }}>
+            Automatic downloads disabled
+          </span>
+        </Box>
+      );
+    }
+
+    return (
+      <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
+        {tabs.map((tab) => {
+          const tabInfo = tabMap[tab];
+          if (!tabInfo) return null;
+
+          return (
+            <Chip
+              key={tab}
+              label={isMobile ? tabInfo.short : tabInfo.full}
+              size="small"
+              variant="outlined"
+              icon={<AlarmOnIcon sx={{ fontSize: isMobile ? '0.75rem' : '0.85rem', color: 'error.main' }} />}
+              sx={{
+                height: isMobile ? '18px' : '20px',
+                fontSize: isMobile ? '0.65rem' : '0.7rem',
+                '& .MuiChip-label': {
+                  px: isMobile ? 0.5 : 0.75,
+                },
+                '& .MuiChip-icon': {
+                  ml: isMobile ? 0.25 : 0.5,
+                },
+              }}
+            />
+          );
+        })}
+      </Box>
+    );
+  };
+
   return (
     <Card elevation={8} style={{
       padding: '8px',
@@ -436,6 +492,8 @@ function ChannelManager({ token }: ChannelManagerProps) {
                               {channel.uploader || channel.url}
                             </div>
                           }
+                          secondary={renderAutoDownloadBadges(channel.auto_download_enabled_tabs)}
+                          secondaryTypographyProps={{ component: 'div' }}
                         />
                       </div>{' '}
                     </Grid>

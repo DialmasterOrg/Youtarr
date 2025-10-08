@@ -25,6 +25,8 @@ interface ChannelVideosDialogsProps {
   missingVideoCount: number;
   selectedForDeletion: number;
   defaultResolution: string;
+  selectedTab: string;
+  tabLabel: string;
   onDownloadDialogClose: () => void;
   onDownloadConfirm: (settings: DownloadSettings | null) => void;
   onRefreshCancel: () => void;
@@ -49,6 +51,8 @@ function ChannelVideosDialogs({
   missingVideoCount,
   selectedForDeletion,
   defaultResolution,
+  selectedTab,
+  tabLabel,
   onDownloadDialogClose,
   onDownloadConfirm,
   onRefreshCancel,
@@ -81,11 +85,11 @@ function ChannelVideosDialogs({
         aria-describedby="refresh-dialog-description"
       >
         <DialogTitle id="refresh-dialog-title">
-          Refresh Channel Videos
+          Fetch All {tabLabel} Videos
         </DialogTitle>
         <DialogContent>
           <DialogContentText id="refresh-dialog-description">
-            Refresh will fetch data for all videos for this Channel. This may take some time to complete.
+            This will fetch all &apos;{tabLabel}&apos; videos for this Channel. This may take some time to complete.
           </DialogContentText>
         </DialogContent>
         <DialogActions>

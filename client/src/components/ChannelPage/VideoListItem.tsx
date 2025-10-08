@@ -17,6 +17,7 @@ import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { formatFileSize, decodeHtml } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
+import StillLiveDot from './StillLiveDot';
 
 interface VideoListItemProps {
   video: ChannelVideo;
@@ -24,6 +25,7 @@ interface VideoListItemProps {
   selectedForDeletion: string[];
   onCheckChange: (videoId: string, isChecked: boolean) => void;
   onToggleDeletion: (youtubeId: string) => void;
+  onMobileTooltip?: (message: string) => void;
 }
 
 function VideoListItem({
@@ -32,10 +34,13 @@ function VideoListItem({
   selectedForDeletion,
   onCheckChange,
   onToggleDeletion,
+  onMobileTooltip,
 }: VideoListItemProps) {
   const theme = useTheme();
   const status = getVideoStatus(video);
-  const isSelectable = status === 'never_downloaded' || status === 'missing';
+  // Check if video is still live (not "was_live" and not null/undefined)
+  const isStillLive = video.live_status && video.live_status !== 'was_live';
+  const isSelectable = (status === 'never_downloaded' || status === 'missing') && !isStillLive;
   const isChecked = checkedBoxes.includes(video.youtube_id);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
 
@@ -59,6 +64,7 @@ function VideoListItem({
         <Box
           sx={{
             position: 'relative',
+            // Keep container size consistent for all videos
             width: 120,
             minWidth: 120,
             height: 90,
@@ -71,7 +77,8 @@ function VideoListItem({
             style={{
               width: '100%',
               height: '100%',
-              objectFit: 'cover',
+              // Shorts use contain to show full portrait thumbnail with black bars
+              objectFit: video.media_type === 'short' ? 'contain' : 'cover',
             }}
             loading="lazy"
           />
@@ -97,24 +104,37 @@ function VideoListItem({
             </Box>
           ) : null}
 
-          {/* Duration overlay */}
-          <Chip
-            label={formatDuration(video.duration)}
-            size="small"
-            sx={{
-              position: 'absolute',
-              bottom: 4,
-              right: 4,
-              bgcolor: 'rgba(0,0,0,0.8)',
-              color: 'white',
-              fontSize: '0.7rem',
-              height: 18,
-              '& .MuiChip-label': { px: 0.5 },
-            }}
-          />
+          {/* Duration overlay - hide for shorts since duration isn't available from flat-playlist */}
+          {video.media_type !== 'short' && (
+            <Chip
+              label={formatDuration(video.duration)}
+              size="small"
+              sx={{
+                position: 'absolute',
+                bottom: 4,
+                right: 4,
+                bgcolor: 'rgba(0,0,0,0.8)',
+                color: 'white',
+                fontSize: '0.7rem',
+                height: 18,
+                '& .MuiChip-label': { px: 0.5 },
+              }}
+            />
+          )}
 
-          {/* Checkbox for selectable videos */}
-          {isSelectable && (
+          {/* Still Live indicator or Checkbox for selectable videos */}
+          {isStillLive ? (
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 4,
+                left: 4,
+                zIndex: 2,
+              }}
+            >
+              <StillLiveDot isMobile onMobileClick={onMobileTooltip} />
+            </Box>
+          ) : isSelectable && (
             <Checkbox
               checked={isChecked}
               onClick={(e) => e.stopPropagation()}

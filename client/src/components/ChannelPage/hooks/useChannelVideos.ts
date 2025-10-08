@@ -9,6 +9,7 @@ interface UseChannelVideosParams {
   searchQuery: string;
   sortBy: string;
   sortOrder: string;
+  tabType: string;
   token: string | null;
 }
 
@@ -19,6 +20,7 @@ interface UseChannelVideosResult {
   videoFailed: boolean;
   loading: boolean;
   error: Error | null;
+  autoDownloadsEnabled: boolean;
   refetch: () => Promise<void>;
 }
 
@@ -30,6 +32,7 @@ export function useChannelVideos({
   searchQuery,
   sortBy,
   sortOrder,
+  tabType,
   token,
 }: UseChannelVideosParams): UseChannelVideosResult {
   const [videos, setVideos] = useState<ChannelVideo[]>([]);
@@ -38,6 +41,7 @@ export function useChannelVideos({
   const [videoFailed, setVideoFailed] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
+  const [autoDownloadsEnabled, setAutoDownloadsEnabled] = useState<boolean>(false);
 
   const fetchVideos = useCallback(async () => {
     if (!channelId || !token) return;
@@ -53,6 +57,7 @@ export function useChannelVideos({
         searchQuery: searchQuery,
         sortBy: sortBy,
         sortOrder: sortOrder,
+        tabType: tabType,
       });
 
       const response = await fetch(`/getchannelvideos/${channelId}?${queryParams}`, {
@@ -73,13 +78,14 @@ export function useChannelVideos({
       setVideoFailed(data.videoFail || false);
       setTotalCount(data.totalCount || 0);
       setOldestVideoDate(data.oldestVideoDate || null);
+      setAutoDownloadsEnabled(data.autoDownloadsEnabled || false);
     } catch (err) {
       console.error('Error fetching channel videos:', err);
       setError(err instanceof Error ? err : new Error('Unknown error'));
     } finally {
       setLoading(false);
     }
-  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, token]);
+  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, token]);
 
   useEffect(() => {
     fetchVideos();
@@ -92,6 +98,7 @@ export function useChannelVideos({
     videoFailed,
     loading,
     error,
+    autoDownloadsEnabled,
     refetch: fetchVideos,
   };
 }

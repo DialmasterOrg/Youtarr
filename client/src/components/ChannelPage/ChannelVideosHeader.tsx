@@ -11,8 +11,8 @@ import {
   Switch,
   Tooltip,
   Chip,
-  Pagination,
   LinearProgress,
+  IconButton,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ViewModuleIcon from '@mui/icons-material/ViewModule';
@@ -21,6 +21,7 @@ import ViewListIcon from '@mui/icons-material/ViewList';
 import DownloadIcon from '@mui/icons-material/Download';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
+import InfoIcon from '@mui/icons-material/Info';
 import { getVideoStatus } from '../../utils/videoStatus';
 import { ChannelVideo } from '../../types/ChannelVideo';
 
@@ -38,17 +39,18 @@ interface ChannelVideosHeaderProps {
   selectedForDeletion: string[];
   deleteLoading: boolean;
   paginatedVideos: ChannelVideo[];
-  page: number;
-  totalPages: number;
+  autoDownloadsEnabled: boolean;
+  selectedTab: string;
   onViewModeChange: (event: React.MouseEvent<HTMLElement>, newMode: ViewMode | null) => void;
   onSearchChange: (query: string) => void;
   onHideDownloadedChange: (hide: boolean) => void;
+  onAutoDownloadChange: (enabled: boolean) => void;
   onRefreshClick: () => void;
   onDownloadClick: () => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
   onDeleteClick: () => void;
-  onPageChange: (event: React.ChangeEvent<unknown>, value: number) => void;
+  onInfoIconClick: (tooltip: string) => void;
 }
 
 function ChannelVideosHeader({
@@ -63,18 +65,51 @@ function ChannelVideosHeader({
   selectedForDeletion,
   deleteLoading,
   paginatedVideos,
-  page,
-  totalPages,
+  autoDownloadsEnabled,
+  selectedTab,
   onViewModeChange,
   onSearchChange,
   onHideDownloadedChange,
+  onAutoDownloadChange,
   onRefreshClick,
   onDownloadClick,
   onSelectAll,
   onClearSelection,
   onDeleteClick,
-  onPageChange,
+  onInfoIconClick,
 }: ChannelVideosHeaderProps) {
+  const tooltipText = "Enable this if you want videos from this tab to automatically download when scheduled channel downloads occur, or when you trigger channel downloads from the Manage Downloads page";
+
+  const getInfoIcon = () => {
+    const handleClick = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (isMobile) {
+        onInfoIconClick(tooltipText);
+      }
+    };
+
+    if (isMobile) {
+      return (
+        <IconButton
+          size="small"
+          sx={{ ml: 0.5, p: 0.5 }}
+          onClick={handleClick}
+        >
+          <InfoIcon fontSize="small" />
+        </IconButton>
+      );
+    }
+
+    return (
+      <Tooltip title={tooltipText} arrow placement="top">
+        <IconButton size="small" sx={{ ml: 0.5, p: 0.5 }}>
+          <InfoIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+    );
+  };
+
   return (
     <Box
       sx={{
@@ -107,8 +142,23 @@ function ChannelVideosHeader({
             disabled={fetchingAllVideos}
             startIcon={<RefreshIcon />}
           >
-            {fetchingAllVideos ? 'Refreshing...' : 'Refresh'}
+            {fetchingAllVideos ? 'Fetching...' : 'Fetch All'}
           </Button>
+        </Box>
+
+        {/* Auto-download setting for this tab */}
+        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={autoDownloadsEnabled}
+                onChange={(e) => onAutoDownloadChange(e.target.checked)}
+                size="small"
+              />
+            }
+            label="Enable Channel Downloads for this tab"
+          />
+          {getInfoIcon()}
         </Box>
 
         {/* Search and filters */}
@@ -211,20 +261,6 @@ function ChannelVideosHeader({
             >
               Delete {selectedForDeletion.length > 0 ? `${selectedForDeletion.length}` : 'Selected'}
             </Button>
-          </Box>
-        )}
-
-        {/* Pagination - Always visible at top */}
-        {totalPages > 1 && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-            <Pagination
-              count={totalPages}
-              page={page}
-              onChange={onPageChange}
-              color="primary"
-              size={isMobile ? 'small' : 'medium'}
-              siblingCount={isMobile ? 0 : 1}
-            />
           </Box>
         )}
       </Box>

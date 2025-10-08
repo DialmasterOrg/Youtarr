@@ -518,6 +518,98 @@ describe('ChannelManager Component', () => {
     });
   });
 
+  describe('Auto Download Badges', () => {
+    test('displays video badge for channels with video auto-download enabled', async () => {
+      const channelWithVideoTab: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel/videos', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: 'video' }
+      ];
+      mockGetChannelsOnce(channelWithVideoTab);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.getByText('Videos')).toBeInTheDocument();
+    });
+
+    test('displays shorts badge for channels with shorts auto-download enabled', async () => {
+      const channelWithShortsTab: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel/videos', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: 'short' }
+      ];
+      mockGetChannelsOnce(channelWithShortsTab);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.getByText('Shorts')).toBeInTheDocument();
+    });
+
+    test('displays live badge for channels with livestream auto-download enabled', async () => {
+      const channelWithLiveTab: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel/videos', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: 'livestream' }
+      ];
+      mockGetChannelsOnce(channelWithLiveTab);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.getByText('Live')).toBeInTheDocument();
+    });
+
+    test('displays multiple badges for channels with multiple tabs enabled', async () => {
+      const channelWithMultipleTabs: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel/videos', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: 'video,short,livestream' }
+      ];
+      mockGetChannelsOnce(channelWithMultipleTabs);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.getByText('Videos')).toBeInTheDocument();
+      expect(screen.getByText('Shorts')).toBeInTheDocument();
+      expect(screen.getByText('Live')).toBeInTheDocument();
+    });
+
+    test('handles tabs with whitespace in the comma-separated string', async () => {
+      const channelWithSpaces: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel/videos', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: 'video , short , livestream' }
+      ];
+      mockGetChannelsOnce(channelWithSpaces);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.getByText('Videos')).toBeInTheDocument();
+      expect(screen.getByText('Shorts')).toBeInTheDocument();
+      expect(screen.getByText('Live')).toBeInTheDocument();
+    });
+
+    test('does not render badges when auto_download_enabled_tabs is undefined', async () => {
+      const channelWithoutTabs: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel/videos', uploader: 'Test Channel', channel_id: 'UC123' }
+      ];
+      mockGetChannelsOnce(channelWithoutTabs);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.queryByText('Videos')).not.toBeInTheDocument();
+      expect(screen.queryByText('Shorts')).not.toBeInTheDocument();
+      expect(screen.queryByText('Live')).not.toBeInTheDocument();
+    });
+
+    test('does not render badges when auto_download_enabled_tabs is empty string', async () => {
+      const channelWithEmptyTabs: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel/videos', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: '' }
+      ];
+      mockGetChannelsOnce(channelWithEmptyTabs);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.queryByText('Videos')).not.toBeInTheDocument();
+      expect(screen.queryByText('Shorts')).not.toBeInTheDocument();
+      expect(screen.queryByText('Live')).not.toBeInTheDocument();
+    });
+
+    test('ignores unknown tab types in the string', async () => {
+      const channelWithUnknownTab: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel/videos', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: 'video,unknown,short' }
+      ];
+      mockGetChannelsOnce(channelWithUnknownTab);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.getByText('Videos')).toBeInTheDocument();
+      expect(screen.getByText('Shorts')).toBeInTheDocument();
+      expect(screen.queryByText('unknown')).not.toBeInTheDocument();
+    });
+  });
+
   describe('Edge Cases', () => {
     test('handles empty channel list', async () => {
       mockGetChannelsOnce([]);

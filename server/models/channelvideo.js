@@ -55,6 +55,11 @@ ChannelVideo.init(
       allowNull: true,
       defaultValue: null,
     },
+    live_status: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     sequelize,

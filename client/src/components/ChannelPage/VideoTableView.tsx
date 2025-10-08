@@ -19,6 +19,7 @@ import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { formatFileSize, decodeHtml } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
+import StillLiveDot from './StillLiveDot';
 
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
@@ -34,6 +35,7 @@ interface VideoTableViewProps {
   onClearSelection: () => void;
   onSortChange: (newSortBy: SortBy) => void;
   onToggleDeletion: (youtubeId: string) => void;
+  onMobileTooltip?: (message: string) => void;
 }
 
 function VideoTableView({
@@ -47,6 +49,7 @@ function VideoTableView({
   onClearSelection,
   onSortChange,
   onToggleDeletion,
+  onMobileTooltip,
 }: VideoTableViewProps) {
   return (
     <TableContainer>
@@ -105,7 +108,9 @@ function VideoTableView({
         <TableBody>
           {videos.map((video) => {
             const status = getVideoStatus(video);
-            const isSelectable = (status === 'never_downloaded' || status === 'missing') && !video.youtube_removed;
+            // Check if video is still live (not "was_live" and not null/undefined)
+            const isStillLive = video.live_status && video.live_status !== 'was_live';
+            const isSelectable = (status === 'never_downloaded' || status === 'missing') && !video.youtube_removed && !isStillLive;
             const isChecked = checkedBoxes.includes(video.youtube_id);
             const mediaTypeInfo = getMediaTypeInfo(video.media_type);
 
@@ -119,7 +124,9 @@ function VideoTableView({
                 }}
               >
                 <TableCell padding="checkbox">
-                  {isSelectable && (
+                  {isStillLive ? (
+                    <StillLiveDot isMobile={false} onMobileClick={onMobileTooltip} />
+                  ) : isSelectable && (
                     <Checkbox
                       checked={isChecked}
                       onChange={(e) => onCheckChange(video.youtube_id, e.target.checked)}
@@ -145,11 +152,18 @@ function VideoTableView({
                   )}
                 </TableCell>
                 <TableCell>
-                  <Box sx={{ position: 'relative', display: 'inline-block' }}>
+                  <Box sx={{ position: 'relative', display: 'inline-block', bgcolor: 'grey.900', borderRadius: '4px' }}>
                     <img
                       src={video.thumbnail}
                       alt={decodeHtml(video.title)}
-                      style={{ width: 120, height: 67, objectFit: 'cover', borderRadius: 4, display: 'block' }}
+                      style={{
+                        // Keep container size consistent - shorts use contain to show with black bars
+                        width: 120,
+                        height: 67,
+                        objectFit: video.media_type === 'short' ? 'contain' : 'cover',
+                        borderRadius: 4,
+                        display: 'block'
+                      }}
                       loading="lazy"
                     />
                     {video.youtube_removed && (
@@ -183,7 +197,7 @@ function VideoTableView({
                   {new Date(video.publishedAt).toLocaleDateString()}
                 </TableCell>
                 <TableCell>
-                  {formatDuration(video.duration)}
+                  {video.media_type === 'short' ? 'N/A' : formatDuration(video.duration)}
                 </TableCell>
                 <TableCell>
                   {video.fileSize ? formatFileSize(video.fileSize) : '-'}

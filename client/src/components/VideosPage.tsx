@@ -541,6 +541,7 @@ function VideosPage({ token }: VideosPageProps) {
                               borderColor='grey.500'
                               overflow='hidden'
                               position='relative'
+                              bgcolor='grey.900'
                             >
                               {imageErrors[video.youtubeId] ? (
                                 <Box
@@ -568,11 +569,11 @@ function VideosPage({ token }: VideosPageProps) {
                                   alt='thumbnail'
                                   style={{
                                     position: 'absolute',
-                                    top: '50%',
-                                    left: '50%',
-                                    transform: 'translate(-50%, -50%)',
-                                    maxWidth: '100%',
-                                    maxHeight: '100%',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: video.media_type === 'short' ? 'contain' : 'cover',
                                     filter: video.removed ? 'grayscale(100%) brightness(0.6)' : 'none',
                                   }}
                                   onError={() =>
@@ -779,6 +780,7 @@ function VideosPage({ token }: VideosPageProps) {
                               justifyContent='center'
                               position='relative'
                               overflow='hidden'
+                              bgcolor='grey.900'
                             >
                               {imageErrors[video.youtubeId] ? (
                                 <Typography
@@ -793,9 +795,10 @@ function VideosPage({ token }: VideosPageProps) {
                                 <img
                                   src={`/images/videothumb-${video.youtubeId}.jpg`}
                                   alt='thumbnail'
-                                  width='256'
-                                  height='144'
                                   style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: video.media_type === 'short' ? 'contain' : 'cover',
                                     filter: video.removed ? 'grayscale(100%) brightness(0.6)' : 'none',
                                   }}
                                   onError={() =>

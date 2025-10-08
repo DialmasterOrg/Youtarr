@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Card,
@@ -18,6 +18,8 @@ import {
   Divider,
   IconButton,
   Pagination,
+  Tabs,
+  Tab,
 } from '@mui/material';
 
 import DownloadIcon from '@mui/icons-material/Download';
@@ -25,6 +27,7 @@ import SelectAllIcon from '@mui/icons-material/SelectAll';
 import ClearIcon from '@mui/icons-material/Clear';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
+import AlarmOnIcon from '@mui/icons-material/AlarmOn';
 
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
@@ -45,13 +48,14 @@ import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
 
 interface ChannelVideosProps {
   token: string | null;
+  channelAutoDownloadTabs?: string;
 }
 
 type ViewMode = 'table' | 'grid' | 'list';
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
 
-function ChannelVideos({ token }: ChannelVideosProps) {
+function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -61,6 +65,12 @@ function ChannelVideos({ token }: ChannelVideosProps) {
   const [sortBy, setSortBy] = useState<SortBy>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+
+  // Tab states
+  const [selectedTab, setSelectedTab] = useState<string>('videos');
+  const [availableTabs, setAvailableTabs] = useState<string[]>(['videos']);
+  const [tabsLoading, setTabsLoading] = useState<boolean>(true);
+  const [tabAutoDownloadStatus, setTabAutoDownloadStatus] = useState<Record<string, boolean>>({});
 
   // Data states
   const pageSize = isMobile ? 8 : 16;
@@ -80,12 +90,67 @@ function ChannelVideos({ token }: ChannelVideosProps) {
 
   const { channel_id } = useParams();
 
+  // Fetch available tabs on mount
+  useEffect(() => {
+    const fetchAvailableTabs = async () => {
+      if (!channel_id || !token) return;
+
+      setTabsLoading(true);
+      try {
+        const response = await fetch(`/api/channels/${channel_id}/tabs`, {
+          headers: {
+            'x-access-token': token,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.availableTabs && data.availableTabs.length > 0) {
+            setAvailableTabs(data.availableTabs);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching available tabs:', err);
+      } finally {
+        setTabsLoading(false);
+      }
+    };
+
+    fetchAvailableTabs();
+  }, [channel_id, token]);
+
+  // Initialize tab auto-download status from prop
+  useEffect(() => {
+    if (!channelAutoDownloadTabs) {
+      setTabAutoDownloadStatus({});
+      return;
+    }
+
+    const mediaTypeMap: Record<string, string> = {
+      'videos': 'video',
+      'shorts': 'short',
+      'streams': 'livestream',
+    };
+
+    const enabledTabs = channelAutoDownloadTabs.split(',').map(t => t.trim());
+    const status: Record<string, boolean> = {};
+
+    availableTabs.forEach(tabType => {
+      const mediaType = mediaTypeMap[tabType];
+      status[tabType] = mediaType ? enabledTabs.includes(mediaType) : false;
+    });
+
+    setTabAutoDownloadStatus(status);
+  }, [channelAutoDownloadTabs, availableTabs]);
+
   // Use custom hooks for data fetching
   const {
     videos,
     totalCount,
     oldestVideoDate,
     videoFailed,
+    autoDownloadsEnabled,
+    loading: videosLoading,
     refetch: refetchVideos,
   } = useChannelVideos({
     channelId: channel_id,
@@ -95,6 +160,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
     searchQuery,
     sortBy,
     sortOrder,
+    tabType: selectedTab,
     token,
   });
 
@@ -108,7 +174,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
     loading: fetchingAllVideos,
     error: fetchAllError,
     clearError: clearFetchAllError,
-  } = useRefreshChannelVideos(channel_id, page, pageSize, hideDownloaded, token);
+  } = useRefreshChannelVideos(channel_id, page, pageSize, hideDownloaded, selectedTab, token);
   const navigate = useNavigate();
 
   // Videos are already filtered, sorted, and paginated by the server
@@ -229,6 +295,46 @@ function ChannelVideos({ token }: ChannelVideosProps) {
     setDeleteDialogOpen(false);
   };
 
+  const handleTabChange = (event: React.SyntheticEvent, newTab: string) => {
+    // Prevent tab changes while videos are still loading
+    if (videosLoading) {
+      return;
+    }
+
+    setSelectedTab(newTab);
+    setPage(1); // Reset to first page when changing tabs
+    setCheckedBoxes([]); // Clear selections when changing tabs
+    setSelectedForDeletion([]); // Clear deletion selections when changing tabs
+  };
+
+  const handleAutoDownloadChange = async (enabled: boolean) => {
+    if (!channel_id || !token) return;
+
+    try {
+      const response = await fetch(`/api/channels/${channel_id}/tabs/${selectedTab}/auto-download`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-access-token': token,
+        },
+        body: JSON.stringify({ enabled }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update auto download setting');
+      }
+
+      // Update local state to reflect the change immediately
+      setTabAutoDownloadStatus(prev => ({
+        ...prev,
+        [selectedTab]: enabled,
+      }));
+    } catch (error) {
+      console.error('Error updating auto download setting:', error);
+      setErrorMessage('Failed to update auto download setting');
+    }
+  };
+
   const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
     setPage(value);
   };
@@ -258,6 +364,40 @@ function ChannelVideos({ token }: ChannelVideosProps) {
       }
       return count;
     }, 0);
+  };
+
+  // Helper function to get tab label
+  const getTabLabel = (tabType: string) => {
+    switch (tabType) {
+    case 'videos':
+      return 'Videos';
+    case 'shorts':
+      return 'Shorts';
+    case 'streams':
+      return 'Live';
+    default:
+      return tabType;
+    }
+  };
+
+  // Helper function to check if a tab has auto-downloads enabled
+  const isTabAutoDownloadEnabled = (tabType: string): boolean => {
+    return tabAutoDownloadStatus[tabType] || false;
+  };
+
+  // Helper function to render tab label with optional alarm icon
+  const renderTabLabel = (tabType: string) => {
+    const label = getTabLabel(tabType);
+    const isEnabled = isTabAutoDownloadEnabled(tabType);
+
+    if (!isEnabled) return label;
+
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        {label}
+        <AlarmOnIcon sx={{ fontSize: '1rem', color: 'error.main' }} />
+      </Box>
+    );
   };
 
   // Swipe handlers for mobile
@@ -399,8 +539,8 @@ function ChannelVideos({ token }: ChannelVideosProps) {
           selectedForDeletion={selectedForDeletion}
           deleteLoading={deleteLoading}
           paginatedVideos={paginatedVideos}
-          page={page}
-          totalPages={totalPages}
+          autoDownloadsEnabled={tabAutoDownloadStatus[selectedTab] ?? autoDownloadsEnabled}
+          selectedTab={selectedTab}
           onViewModeChange={handleViewModeChange}
           onSearchChange={(query) => {
             setSearchQuery(query);
@@ -410,13 +550,45 @@ function ChannelVideos({ token }: ChannelVideosProps) {
             setHideDownloaded(hide);
             setPage(1);
           }}
+          onAutoDownloadChange={handleAutoDownloadChange}
           onRefreshClick={handleRefreshClick}
           onDownloadClick={handleDownloadClick}
           onSelectAll={handleSelectAll}
           onClearSelection={handleClearSelection}
           onDeleteClick={handleDeleteClick}
-          onPageChange={handlePageChange}
+          onInfoIconClick={(tooltip) => setMobileTooltip(tooltip)}
         />
+
+        {/* Tabs */}
+        {!tabsLoading && availableTabs.length > 1 && (
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
+            <Tabs
+              value={selectedTab}
+              onChange={handleTabChange}
+              variant={isMobile ? 'fullWidth' : 'standard'}
+              centered={!isMobile}
+              aria-label="channel video tabs"
+            >
+              {availableTabs.map((tab) => (
+                <Tab key={tab} label={renderTabLabel(tab)} value={tab} />
+              ))}
+            </Tabs>
+          </Box>
+        )}
+
+        {/* Pagination - directly under tabs */}
+        {totalPages > 1 && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2, px: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Pagination
+              count={totalPages}
+              page={page}
+              onChange={handlePageChange}
+              color="primary"
+              size={isMobile ? 'small' : 'medium'}
+              siblingCount={isMobile ? 0 : 1}
+            />
+          </Box>
+        )}
 
         {/* Content area */}
         <Box sx={{ p: 2 }} {...(isMobile ? handlers : {})}>
@@ -424,7 +596,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
             <Alert severity="error">
               Failed to fetch channel videos. Please try again later.
             </Alert>
-          ) : videos.length === 0 ? (
+          ) : videosLoading ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <Typography variant="body1" color="text.secondary" gutterBottom>
                 Loading channel videos...
@@ -438,6 +610,12 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                   </Grid>
                 ))}
               </Grid>
+            </Box>
+          ) : videos.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography variant="body1" color="text.secondary">
+                No videos found
+              </Typography>
             </Box>
           ) : (
             <>
@@ -455,6 +633,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                       onCheckChange={handleCheckChange}
                       onHoverChange={setHoveredVideo}
                       onToggleDeletion={toggleDeletionSelection}
+                      onMobileTooltip={setMobileTooltip}
                     />
                   ))}
                 </Grid>
@@ -470,6 +649,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                       selectedForDeletion={selectedForDeletion}
                       onCheckChange={handleCheckChange}
                       onToggleDeletion={toggleDeletionSelection}
+                      onMobileTooltip={setMobileTooltip}
                     />
                   ))}
                 </Box>
@@ -487,6 +667,7 @@ function ChannelVideos({ token }: ChannelVideosProps) {
                   onClearSelection={handleClearSelection}
                   onSortChange={handleSortChange}
                   onToggleDeletion={toggleDeletionSelection}
+                  onMobileTooltip={setMobileTooltip}
                 />
               )}
 
@@ -523,6 +704,8 @@ function ChannelVideos({ token }: ChannelVideosProps) {
         missingVideoCount={getMissingVideoCount()}
         selectedForDeletion={selectedForDeletion.length}
         defaultResolution={defaultResolution}
+        selectedTab={selectedTab}
+        tabLabel={getTabLabel(selectedTab)}
         onDownloadDialogClose={() => setDownloadDialogOpen(false)}
         onDownloadConfirm={handleDownloadConfirm}
         onRefreshCancel={handleRefreshCancel}

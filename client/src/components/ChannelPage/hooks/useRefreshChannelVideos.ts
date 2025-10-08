@@ -19,6 +19,7 @@ export function useRefreshChannelVideos(
   page: number,
   pageSize: number,
   hideDownloaded: boolean,
+  tabType: string,
   token: string | null
 ): UseRefreshChannelVideosResult {
   const [loading, setLoading] = useState<boolean>(false);
@@ -32,7 +33,7 @@ export function useRefreshChannelVideos(
 
     try {
       const response = await fetch(
-        `/fetchallchannelvideos/${channelId}?page=${page}&pageSize=${pageSize}&hideDownloaded=${hideDownloaded}`,
+        `/fetchallchannelvideos/${channelId}?page=${page}&pageSize=${pageSize}&hideDownloaded=${hideDownloaded}&tabType=${tabType}`,
         {
           method: 'POST',
           headers: {
@@ -62,7 +63,7 @@ export function useRefreshChannelVideos(
     } finally {
       setLoading(false);
     }
-  }, [channelId, page, pageSize, hideDownloaded, token]);
+  }, [channelId, page, pageSize, hideDownloaded, tabType, token]);
 
   const clearError = useCallback(() => {
     setError(null);

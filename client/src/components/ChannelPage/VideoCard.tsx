@@ -17,6 +17,7 @@ import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { formatFileSize, decodeHtml } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
+import StillLiveDot from './StillLiveDot';
 
 interface VideoCardProps {
   video: ChannelVideo;
@@ -27,6 +28,7 @@ interface VideoCardProps {
   onCheckChange: (videoId: string, isChecked: boolean) => void;
   onHoverChange: (videoId: string | null) => void;
   onToggleDeletion: (youtubeId: string) => void;
+  onMobileTooltip?: (message: string) => void;
 }
 
 function VideoCard({
@@ -38,10 +40,13 @@ function VideoCard({
   onCheckChange,
   onHoverChange,
   onToggleDeletion,
+  onMobileTooltip,
 }: VideoCardProps) {
   const theme = useTheme();
   const status = getVideoStatus(video);
-  const isSelectable = status === 'never_downloaded' || status === 'missing';
+  // Check if video is still live (not "was_live" and not null/undefined)
+  const isStillLive = video.live_status && video.live_status !== 'was_live';
+  const isSelectable = (status === 'never_downloaded' || status === 'missing') && !isStillLive;
   const isChecked = checkedBoxes.includes(video.youtube_id);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
 
@@ -68,7 +73,12 @@ function VideoCard({
           onClick={() => isSelectable && onCheckChange(video.youtube_id, !isChecked)}
         >
           {/* Thumbnail with overlay */}
-          <Box sx={{ position: 'relative', paddingTop: isMobile ? '52%' : '56.25%', bgcolor: 'grey.900' }}>
+          <Box sx={{
+            position: 'relative',
+            // Keep container size consistent - shorts use contain to show with black bars
+            paddingTop: isMobile ? '52%' : '56.25%',
+            bgcolor: 'grey.900'
+          }}>
             <img
               src={video.thumbnail}
               alt={decodeHtml(video.title)}
@@ -78,7 +88,8 @@ function VideoCard({
                 left: 0,
                 width: '100%',
                 height: '100%',
-                objectFit: 'cover',
+                // Shorts use contain to show full portrait thumbnail with black bars
+                objectFit: video.media_type === 'short' ? 'contain' : 'cover',
               }}
               loading="lazy"
             />
@@ -104,23 +115,36 @@ function VideoCard({
               </Box>
             ) : null}
 
-            {/* Duration overlay */}
-            <Chip
-              label={formatDuration(video.duration)}
-              size="small"
-              sx={{
-                position: 'absolute',
-                bottom: 8,
-                right: 8,
-                bgcolor: 'rgba(0,0,0,0.8)',
-                color: 'white',
-                fontSize: '0.75rem',
-                height: 22,
-              }}
-            />
+            {/* Duration overlay - hide for shorts since duration isn't available from flat-playlist */}
+            {video.media_type !== 'short' && (
+              <Chip
+                label={formatDuration(video.duration)}
+                size="small"
+                sx={{
+                  position: 'absolute',
+                  bottom: 8,
+                  right: 8,
+                  bgcolor: 'rgba(0,0,0,0.8)',
+                  color: 'white',
+                  fontSize: '0.75rem',
+                  height: 22,
+                }}
+              />
+            )}
 
-            {/* Selection overlay for download */}
-            {isSelectable && (
+            {/* Still Live indicator or Selection overlay for download */}
+            {isStillLive ? (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 8,
+                  left: 8,
+                  zIndex: 2,
+                }}
+              >
+                <StillLiveDot isMobile={isMobile} onMobileClick={onMobileTooltip} />
+              </Box>
+            ) : isSelectable && (
               <Box
                 sx={{
                   position: 'absolute',

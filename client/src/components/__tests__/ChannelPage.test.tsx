@@ -9,7 +9,11 @@ jest.mock('../ChannelPage/ChannelVideos', () => ({
   __esModule: true,
   default: function MockChannelVideos(props: any) {
     const React = require('react');
-    return React.createElement('div', { 'data-testid': 'channel-videos', 'data-token': props.token }, 'Channel Videos');
+    return React.createElement('div', {
+      'data-testid': 'channel-videos',
+      'data-token': props.token,
+      'data-auto-download-tabs': String(props.channelAutoDownloadTabs)
+    }, 'Channel Videos');
   }
 }));
 
@@ -38,7 +42,8 @@ describe('ChannelPage Component', () => {
   const mockChannel = {
     uploader: 'Tech Channel',
     description: 'This is a test channel description\nWith multiple lines\nhttps://example.com',
-    channel_id: 'UC123456'
+    channel_id: 'UC123456',
+    auto_download_enabled_tabs: 'videos,shorts'
   };
 
   beforeEach(() => {
@@ -91,7 +96,7 @@ describe('ChannelPage Component', () => {
       expect(await screen.findByText('Tech Channel')).toBeInTheDocument();
     });
 
-    test('renders ChannelVideos component with token prop', () => {
+    test('renders ChannelVideos component with token and channelAutoDownloadTabs props', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: jest.fn().mockResolvedValueOnce(mockChannel)
@@ -106,6 +111,13 @@ describe('ChannelPage Component', () => {
       const channelVideos = screen.getByTestId('channel-videos');
       expect(channelVideos).toBeInTheDocument();
       expect(channelVideos).toHaveAttribute('data-token', mockToken);
+
+      // Initially channelAutoDownloadTabs should be undefined
+      expect(channelVideos).toHaveAttribute('data-auto-download-tabs', 'undefined');
+
+      // After channel data loads, it should be set
+      await screen.findByText('Tech Channel');
+      expect(channelVideos).toHaveAttribute('data-auto-download-tabs', 'videos,shorts');
     });
 
     test('renders with null token', () => {
@@ -128,6 +140,31 @@ describe('ChannelPage Component', () => {
           }
         }
       );
+    });
+
+    test('passes undefined channelAutoDownloadTabs when not present in channel data', async () => {
+      const channelWithoutTabs = {
+        uploader: 'Tech Channel',
+        description: 'Test description',
+        channel_id: 'UC123456'
+        // auto_download_enabled_tabs is not present
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(channelWithoutTabs)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+
+      const channelVideos = screen.getByTestId('channel-videos');
+      expect(channelVideos).toHaveAttribute('data-auto-download-tabs', 'undefined');
     });
   });
 
