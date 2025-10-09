@@ -94,6 +94,9 @@ function DownloadManager({ token }: DownloadManagerProps) {
     }));
   };
 
+  // Filter pending jobs
+  const pendingJobs = jobs.filter(job => job.status === 'Pending');
+
   return (
     <Grid container spacing={2}>
       <DownloadNew
@@ -106,6 +109,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
       <DownloadProgress
         downloadProgressRef={downloadProgressRef}
         downloadInitiatedRef={downloadInitiatedRef}
+        pendingJobs={pendingJobs}
       />
       <DownloadHistory
         jobs={jobs}

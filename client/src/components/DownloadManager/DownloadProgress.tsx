@@ -15,9 +15,17 @@ import {
   Alert,
   AlertTitle,
   Button,
+  Chip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import QueueIcon from '@mui/icons-material/Queue';
+import PlaylistPlayIcon from '@mui/icons-material/PlaylistPlay';
 import { useNavigate } from 'react-router-dom';
 import WebSocketContext from '../../contexts/WebSocketContext';
+import { Job } from '../../types/Job';
 
 interface DownloadProgressProps {
   downloadProgressRef: React.MutableRefObject<{
@@ -25,6 +33,7 @@ interface DownloadProgressProps {
     message: string;
   }>;
   downloadInitiatedRef: React.MutableRefObject<boolean>;
+  pendingJobs: Job[];
 }
 
 interface ErrorDetails {
@@ -83,6 +92,7 @@ export const formatEta = (seconds: number): string => {
 const DownloadProgress: React.FC<DownloadProgressProps> = ({
   downloadProgressRef,
   downloadInitiatedRef,
+  pendingJobs,
 }) => {
   const [currentProgress, setCurrentProgress] = useState<StructuredProgress | null>(null);
   const [videoCount, setVideoCount] = useState<{ current: number; total: number; completed: number; skipped: number, skippedThisChannel: number }>({
@@ -311,6 +321,59 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     <Grid item xs={12} md={12} paddingBottom={'8px'}>
       <Card elevation={8}>
         <CardHeader title='Download Progress' align='center' />
+
+        {/* Show queued jobs if any */}
+        {pendingJobs.length > 0 && (
+          <Box sx={{ px: 2, pb: 1 }}>
+            <Accordion
+              elevation={0}
+              sx={{
+                backgroundColor: 'rgba(0, 0, 0, 0.02)',
+                '&:before': { display: 'none' },
+                borderRadius: 1,
+              }}
+            >
+              <AccordionSummary
+                expandIcon={<ExpandMoreIcon />}
+                sx={{
+                  minHeight: '42px',
+                  '& .MuiAccordionSummary-content': {
+                    alignItems: 'center',
+                    gap: 1,
+                    my: 0.5
+                  }
+                }}
+              >
+                <QueueIcon fontSize="small" color="action" />
+                <Typography variant="body2" color="text.secondary">
+                  {pendingJobs.length} {pendingJobs.length === 1 ? 'job' : 'jobs'} queued
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ pt: 0, pb: 1.5 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  {pendingJobs.map((job, index) => {
+                    const isChannelDownload = job.jobType === 'Channel Downloads';
+                    const label = isChannelDownload ? 'Channel Update' : 'Manual Download';
+                    const icon = isChannelDownload ?
+                      <PlaylistPlayIcon fontSize="small" /> :
+                      <QueueIcon fontSize="small" />;
+
+                    return (
+                      <Chip
+                        key={job.id}
+                        icon={icon}
+                        label={`${index + 1}. ${label}`}
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                      />
+                    );
+                  })}
+                </Box>
+              </AccordionDetails>
+            </Accordion>
+          </Box>
+        )}
 
         {/* Show error if available */}
         {errorDetails && !currentProgress && (

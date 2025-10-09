@@ -41,6 +41,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -54,6 +55,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -72,6 +74,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -114,6 +117,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -158,6 +162,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -190,6 +195,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -230,6 +236,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -258,6 +265,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -285,6 +293,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -313,6 +322,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -337,6 +347,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -374,6 +385,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -416,6 +428,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -455,6 +468,7 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={[]}
         />
       );
     }).toThrow('WebSocketContext not found');
@@ -465,6 +479,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -499,6 +514,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -539,6 +555,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -586,6 +603,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -619,6 +637,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -676,6 +695,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -714,6 +734,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -795,6 +816,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -834,6 +856,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -874,6 +897,7 @@ describe('DownloadProgress', () => {
       <DownloadProgress
         downloadProgressRef={mockDownloadProgressRef}
         downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
       />
     );
 
@@ -917,6 +941,7 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={[]}
         />
       );
 
@@ -989,6 +1014,7 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={[]}
         />
       );
 
@@ -1041,6 +1067,7 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={[]}
         />
       );
 
@@ -1091,6 +1118,7 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={[]}
         />
       );
 
@@ -1125,6 +1153,7 @@ describe('DownloadProgress', () => {
         <DownloadProgress
           downloadProgressRef={mockDownloadProgressRef}
           downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={[]}
         />
       );
 
@@ -1184,6 +1213,127 @@ describe('DownloadProgress', () => {
       expect(screen.getByText('Initiating download...')).toBeInTheDocument();
 
       jest.useRealTimers();
+    });
+  });
+
+  describe('queued jobs display', () => {
+    test('does not show queued jobs section when pendingJobs is empty', () => {
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={[]}
+        />
+      );
+
+      expect(screen.queryByText(/jobs queued/)).not.toBeInTheDocument();
+    });
+
+    test('shows single queued job', async () => {
+      const user = userEvent.setup();
+      const pendingJobs = [
+        {
+          id: 'job-1',
+          jobType: 'Channel Downloads',
+          status: 'Pending',
+          timeCreated: Date.now(),
+          timeInitiated: Date.now(),
+          output: '',
+          data: { videos: [] }
+        }
+      ];
+
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={pendingJobs}
+        />
+      );
+
+      expect(screen.getByText('1 job queued')).toBeInTheDocument();
+
+      // Expand accordion to see details
+      const accordion = screen.getByText('1 job queued');
+      await user.click(accordion);
+
+      await waitFor(() => {
+        expect(screen.getByText('1. Channel Update')).toBeInTheDocument();
+      });
+    });
+
+    test('shows multiple queued jobs with correct grammar', async () => {
+      const user = userEvent.setup();
+      const pendingJobs = [
+        {
+          id: 'job-1',
+          jobType: 'Channel Downloads',
+          status: 'Pending',
+          timeCreated: Date.now(),
+          timeInitiated: Date.now(),
+          output: '',
+          data: { videos: [] }
+        },
+        {
+          id: 'job-2',
+          jobType: 'Manually Added Urls',
+          status: 'Pending',
+          timeCreated: Date.now() + 1000,
+          timeInitiated: Date.now() + 1000,
+          output: '',
+          data: { videos: [] }
+        }
+      ];
+
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={pendingJobs}
+        />
+      );
+
+      expect(screen.getByText('2 jobs queued')).toBeInTheDocument();
+
+      // Expand accordion to see details
+      const accordion = screen.getByText('2 jobs queued');
+      await user.click(accordion);
+
+      await waitFor(() => {
+        expect(screen.getByText('1. Channel Update')).toBeInTheDocument();
+      });
+      expect(screen.getByText('2. Manual Download')).toBeInTheDocument();
+    });
+
+    test('displays job types correctly', async () => {
+      const user = userEvent.setup();
+      const pendingJobs = [
+        {
+          id: 'job-1',
+          jobType: 'Manually Added Urls',
+          status: 'Pending',
+          timeCreated: Date.now(),
+          timeInitiated: Date.now(),
+          output: '',
+          data: { videos: [] }
+        }
+      ];
+
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={pendingJobs}
+        />
+      );
+
+      // Expand accordion
+      const accordion = screen.getByText('1 job queued');
+      await user.click(accordion);
+
+      await waitFor(() => {
+        expect(screen.getByText('1. Manual Download')).toBeInTheDocument();
+      });
     });
   });
 });
