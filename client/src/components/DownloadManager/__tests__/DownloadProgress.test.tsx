@@ -105,8 +105,9 @@ describe('DownloadProgress', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Test Video Title · ETA 2m')).toBeInTheDocument();
+      expect(screen.getByText('Test Video Title')).toBeInTheDocument();
     });
+    expect(screen.getByText('· ETA 2m')).toBeInTheDocument();
     expect(screen.getByText('Downloading video stream...')).toBeInTheDocument();
     expect(screen.getByText(/45.5%/)).toBeInTheDocument();
     expect(screen.getByText(/500.0 KB\/s/)).toBeInTheDocument();
@@ -847,8 +848,9 @@ describe('DownloadProgress', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('My Awesome Video Title · ETA 2m5s')).toBeInTheDocument();
+      expect(screen.getByText('My Awesome Video Title')).toBeInTheDocument();
     });
+    expect(screen.getByText('· ETA 2m5s')).toBeInTheDocument();
   });
 
   test('displays title without ETA when etaSeconds is zero', async () => {

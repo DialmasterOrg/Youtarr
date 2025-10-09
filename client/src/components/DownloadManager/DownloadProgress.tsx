@@ -128,25 +128,22 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     }
   }, [currentProgress]);
 
-  const overlayTitle = useMemo(() => {
+  const overlayContent = useMemo(() => {
     if (!currentProgress) {
-      return '';
+      return { title: '', eta: '' };
     }
     // Don't show "Unknown title" - just show empty if no title
     const title = currentProgress.videoInfo?.displayTitle || '';
-    if (title === 'Unknown title' || title === 'Unknown Title') {
-      return '';
-    }
+    const displayTitle = (title === 'Unknown title' || title === 'Unknown Title') ? '' : title;
 
-    // Append ETA if available
+    // Get ETA if available
     const eta = currentProgress.progress?.etaSeconds;
     const formattedEta = formatEta(eta || 0);
 
-    if (formattedEta && title) {
-      return `${title} · ETA ${formattedEta}`;
-    }
-
-    return title;
+    return {
+      title: displayTitle,
+      eta: formattedEta
+    };
   }, [currentProgress]);
 
   // Derive status message from state
@@ -491,19 +488,47 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                 justifyContent: 'center',
                 px: 1
               }}>
-                <Typography
-                  variant="body2"
-                  noWrap
-                  sx={{
-                    color: currentProgress.progress.percent > 50 ? 'white' : 'black',
-                    fontWeight: 'bold',
-                    textShadow: currentProgress.progress.percent > 50 ?
-                      '1px 1px 2px rgba(0,0,0,0.7)' :
-                      '1px 1px 2px rgba(255,255,255,0.7)'
-                  }}
-                >
-                  {overlayTitle}
-                </Typography>
+                <Box sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  maxWidth: '100%',
+                  overflow: 'hidden'
+                }}>
+                  {overlayContent.title && (
+                    <Typography
+                      variant="body2"
+                      noWrap
+                      sx={{
+                        flex: 1,
+                        minWidth: 0,
+                        color: currentProgress.progress.percent > 50 ? 'white' : 'black',
+                        fontWeight: 'bold',
+                        textShadow: currentProgress.progress.percent > 50 ?
+                          '1px 1px 2px rgba(0,0,0,0.7)' :
+                          '1px 1px 2px rgba(255,255,255,0.7)'
+                      }}
+                    >
+                      {overlayContent.title}
+                    </Typography>
+                  )}
+                  {overlayContent.eta && (
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        flexShrink: 0,
+                        whiteSpace: 'nowrap',
+                        color: currentProgress.progress.percent > 50 ? 'white' : 'black',
+                        fontWeight: 'bold',
+                        textShadow: currentProgress.progress.percent > 50 ?
+                          '1px 1px 2px rgba(0,0,0,0.7)' :
+                          '1px 1px 2px rgba(255,255,255,0.7)'
+                      }}
+                    >
+                      {overlayContent.title ? `· ETA ${overlayContent.eta}` : `ETA ${overlayContent.eta}`}
+                    </Typography>
+                  )}
+                </Box>
               </Box>
             </Box>
 
