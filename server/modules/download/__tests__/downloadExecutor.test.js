@@ -253,24 +253,20 @@ describe('DownloadExecutor', () => {
       await downloadPromise;
     });
 
-    it('should set timeout based on configuration', () => {
-      const expectedTimeout = Math.max(
-        mockConfig.downloadSocketTimeoutSeconds * 1000 * (mockConfig.downloadRetryCount + 1),
-        20 * 60 * 1000
-      );
-
+    it('should set timeout based on activity tracking', () => {
       executor.doDownload(mockArgs, mockJobId, mockJobType);
 
-      // Check that setTimeout was called by checking timer count
-      expect(jest.getTimerCount()).toBe(1);
+      // Check that an interval timer was set (timeout checker runs every minute)
+      expect(jest.getTimerCount()).toBeGreaterThan(0);
 
-      // Advance timers to just before timeout
-      jest.advanceTimersByTime(expectedTimeout - 1);
-      expect(mockProcess.kill).not.toHaveBeenCalled();
+      // Advance to activity timeout (30 minutes of no activity)
+      // The timeout checker runs every minute, so we need to advance in minute increments
+      for (let i = 0; i < 31; i++) {
+        jest.advanceTimersByTime(60 * 1000); // Advance 1 minute at a time
+      }
 
-      // Advance to timeout
-      jest.advanceTimersByTime(1);
-      expect(mockProcess.kill).toHaveBeenCalledWith('SIGKILL');
+      // After 30+ minutes of no activity, graceful shutdown should be initiated with SIGTERM
+      expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
     });
 
     describe('stdout handling', () => {
@@ -618,23 +614,30 @@ describe('DownloadExecutor', () => {
         // The error is caught but not rethrown in the implementation
         await downloadPromise;
 
-        // The process cleanup should happen
-        expect(consoleLogSpy).toHaveBeenCalledWith('Spawn failed');
+        // The process cleanup should happen with the new error message format
+        expect(consoleLogSpy).toHaveBeenCalledWith('Download process error:', 'Spawn failed');
       });
 
       it('should kill process on timeout', async () => {
         const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
 
-        jest.advanceTimersByTime(mockConfig.downloadSocketTimeoutSeconds * 1000 * (mockConfig.downloadRetryCount + 1));
+        // Advance in minute increments to trigger the activity timeout (30 minutes)
+        for (let i = 0; i < 31; i++) {
+          jest.advanceTimersByTime(60 * 1000);
+        }
+
+        // Emit exit event to complete the promise
+        mockProcess.emit('exit', 1, 'SIGTERM');
 
         await downloadPromise;
 
-        expect(mockProcess.kill).toHaveBeenCalledWith('SIGKILL');
+        // Should call SIGTERM for graceful shutdown, not SIGKILL
+        expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
         expect(jobModule.updateJob).toHaveBeenCalledWith(
           mockJobId,
           expect.objectContaining({
-            status: 'Killed',
-            output: 'Job time exceeded timeout'
+            status: 'Terminated',
+            notes: expect.stringContaining('No download activity')
           })
         );
       });
@@ -645,8 +648,13 @@ describe('DownloadExecutor', () => {
 
         const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
 
-        // Trigger timeout
-        jest.advanceTimersByTime(mockConfig.downloadSocketTimeoutSeconds * 1000 * (mockConfig.downloadRetryCount + 1));
+        // Trigger activity timeout by advancing 31 minutes
+        for (let i = 0; i < 31; i++) {
+          jest.advanceTimersByTime(60 * 1000);
+        }
+
+        // Emit exit to complete the promise
+        mockProcess.emit('exit', 1, 'SIGTERM');
 
         await downloadPromise;
 

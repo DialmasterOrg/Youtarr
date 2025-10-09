@@ -699,4 +699,253 @@ describe('DownloadProgressMonitor', () => {
       expect(monitor.videoCount.current).toBe(5);
     });
   });
+
+  describe('exponential smoothing functionality', () => {
+    describe('applySpeedSmoothing', () => {
+      it('should use first value directly', () => {
+        const result = monitor.applySpeedSmoothing(500000);
+        expect(result).toBe(500000);
+        expect(monitor.smoothedSpeed).toBe(500000);
+      });
+
+      it('should apply EMA formula on subsequent values', () => {
+        // First value
+        monitor.applySpeedSmoothing(500000);
+
+        // Second value: alpha=0.15, so 0.15*100000 + 0.85*500000 = 15000 + 425000 = 440000
+        const result = monitor.applySpeedSmoothing(100000);
+        expect(result).toBe(440000);
+        expect(monitor.smoothedSpeed).toBe(440000);
+      });
+
+      it('should smooth volatile values', () => {
+        // Simulate the real-world pattern from user's data
+        monitor.applySpeedSmoothing(3759600); // First
+
+        let smoothed = monitor.applySpeedSmoothing(6574037); // Spike
+        // 0.15 * 6574037 + 0.85 * 3759600 = 986105.55 + 3195660 = 4181765.55
+        expect(smoothed).toBeCloseTo(4181765.55, 0);
+
+        smoothed = monitor.applySpeedSmoothing(31017087); // Big spike
+        // 0.15 * 31017087 + 0.85 * 4181765.55 = 4652563.05 + 3554500.72 = 8207063.77
+        // Should dampen the spike significantly - 31M spike only shows as ~8M
+        expect(smoothed).toBeLessThan(10000000); // Much less than 31M
+        expect(smoothed).toBeGreaterThan(4000000); // But still increased
+      });
+
+      it('should reset to null when starting new video', () => {
+        monitor.applySpeedSmoothing(500000);
+        expect(monitor.smoothedSpeed).toBe(500000);
+
+        monitor.resetProgressTracking();
+        expect(monitor.smoothedSpeed).toBeNull();
+        expect(monitor.smoothedEta).toBeNull();
+
+        // Next value should be used directly again
+        const result = monitor.applySpeedSmoothing(300000);
+        expect(result).toBe(300000);
+      });
+    });
+
+    describe('applyEtaSmoothing', () => {
+      it('should use first value directly', () => {
+        const result = monitor.applyEtaSmoothing(1000);
+        expect(result).toBe(1000);
+        expect(monitor.smoothedEta).toBe(1000);
+      });
+
+      it('should apply heavy EMA smoothing on subsequent values', () => {
+        // First value
+        monitor.applyEtaSmoothing(1187);
+
+        // Spike to 4069: alpha=0.05, so 0.05*4069 + 0.95*1187 = 203.45 + 1127.65 = 1331.1
+        const result = monitor.applyEtaSmoothing(4069);
+        expect(result).toBeCloseTo(1331, 0);
+      });
+
+      it('should heavily dampen volatile ETA values', () => {
+        // Simulate real-world pattern from user's data
+        monitor.applyEtaSmoothing(138); // Low ETA
+
+        let smoothed = monitor.applyEtaSmoothing(11450); // Huge spike
+        // 0.05 * 11450 + 0.95 * 138 = 572.5 + 131.1 = 703.6
+        expect(smoothed).toBeCloseTo(704, 0);
+        expect(smoothed).toBeLessThan(2000); // Much less than 11450
+
+        // Continue with more values
+        smoothed = monitor.applyEtaSmoothing(4517);
+        // 0.05 * 4517 + 0.95 * 703.6 = 225.85 + 668.42 = 894.27
+        expect(smoothed).toBeCloseTo(894, 0);
+      });
+
+      it('should return 0 when ETA is 0', () => {
+        monitor.applyEtaSmoothing(1000);
+        const result = monitor.applyEtaSmoothing(0);
+        expect(result).toBe(0);
+        expect(monitor.smoothedEta).toBe(0);
+      });
+    });
+
+    describe('calculateRawEta', () => {
+      it('should calculate ETA from smoothed speed', () => {
+        const downloaded = 1000;
+        const total = 10000;
+        const speed = 1000; // 1000 bytes/sec
+
+        // (10000 - 1000) / 1000 = 9 seconds
+        const eta = monitor.calculateRawEta(downloaded, total, speed);
+        expect(eta).toBe(9);
+      });
+
+      it('should return 0 when speed is 0', () => {
+        const eta = monitor.calculateRawEta(1000, 10000, 0);
+        expect(eta).toBe(0);
+      });
+
+      it('should return 0 when total is 0', () => {
+        const eta = monitor.calculateRawEta(1000, 0, 1000);
+        expect(eta).toBe(0);
+      });
+
+      it('should return 0 when download is complete', () => {
+        const eta = monitor.calculateRawEta(10000, 10000, 1000);
+        expect(eta).toBe(0);
+      });
+
+      it('should not round (raw calculation)', () => {
+        const downloaded = 1000;
+        const total = 10000;
+        const speed = 1300; // Results in 6.923... seconds
+
+        const eta = monitor.calculateRawEta(downloaded, total, speed);
+        expect(eta).toBeCloseTo(6.923, 2);
+      });
+    });
+
+    describe('integrated EMA smoothing in processProgress', () => {
+      it('should apply separate EMA smoothing to speed and ETA', () => {
+        const mockConfig = { enableStallDetection: false };
+
+        // First value - both used directly
+        let result = monitor.processProgress(
+          JSON.stringify({ percent: '10%', downloaded: 1000000, total: 10000000, speed: 500000, eta: 100 }),
+          '[download] 10.0%',
+          mockConfig
+        );
+        expect(result.progress.speedBytesPerSecond).toBe(500000);
+        // Raw ETA: (10000000-1000000)/500000 = 18s, smoothed first time = 18s
+        expect(result.progress.etaSeconds).toBe(18);
+
+        // Second value - EMA applied to both
+        result = monitor.processProgress(
+          JSON.stringify({ percent: '20%', downloaded: 2000000, total: 10000000, speed: 100000, eta: 10 }),
+          '[download] 20.0%',
+          mockConfig
+        );
+        // Speed: 0.15 * 100000 + 0.85 * 500000 = 15000 + 425000 = 440000
+        expect(result.progress.speedBytesPerSecond).toBe(440000);
+        // Raw ETA: (10000000-2000000)/440000 ≈ 18.18s
+        // Smoothed ETA: 0.05 * 18.18 + 0.95 * 18 = 0.909 + 17.1 = 18.009 ≈ 18
+        expect(result.progress.etaSeconds).toBe(18);
+      });
+
+      it('should dampen speed spikes', () => {
+        const mockConfig = { enableStallDetection: false };
+
+        // Start with moderate speed
+        monitor.processProgress(
+          JSON.stringify({ percent: '10%', downloaded: 26681427, total: 295190109, speed: 3759600, eta: 7 }),
+          '[download] 10.0%',
+          mockConfig
+        );
+
+        // Spike to high speed (from real data)
+        let result = monitor.processProgress(
+          JSON.stringify({ percent: '20%', downloaded: 28729236, total: 295190109, speed: 31017087, eta: 0 }),
+          '[download] 20.0%',
+          mockConfig
+        );
+
+        // Speed should be dampened significantly
+        const smoothedSpeed = result.progress.speedBytesPerSecond;
+        expect(smoothedSpeed).toBeGreaterThan(3759600); // Increased from baseline
+        expect(smoothedSpeed).toBeLessThan(20000000); // But much less than the spike
+      });
+
+      it('should heavily dampen ETA spikes', () => {
+        const mockConfig = { enableStallDetection: false };
+
+        // Start with stable ETA
+        monitor.processProgress(
+          JSON.stringify({ percent: '24.3%', downloaded: 1225640573, total: 5040637977, speed: 23437665, eta: 162 }),
+          '[download] 24.3%',
+          mockConfig
+        );
+
+        // Huge ETA spike (from real data: 138 → 11450)
+        let result = monitor.processProgress(
+          JSON.stringify({ percent: '24.4%', downloaded: 1227411593, total: 5040637977, speed: 333978, eta: 11450 }),
+          '[download] 24.4%',
+          mockConfig
+        );
+
+        // ETA should be heavily dampened
+        const smoothedEta = result.progress.etaSeconds;
+        expect(smoothedEta).toBeGreaterThan(150); // Increased from baseline
+        expect(smoothedEta).toBeLessThan(1000); // But MUCH less than 11450
+      });
+
+      it('should not smooth percent or byte values', () => {
+        const mockConfig = { enableStallDetection: false };
+
+        monitor.processProgress(
+          JSON.stringify({ percent: '10%', downloaded: 1000, total: 10000, speed: 500000, eta: 100 }),
+          '[download] 10.0%',
+          mockConfig
+        );
+
+        let result = monitor.processProgress(
+          JSON.stringify({ percent: '25%', downloaded: 2500, total: 10000, speed: 300000, eta: 80 }),
+          '[download] 25.0%',
+          mockConfig
+        );
+
+        // Percent and bytes should be exact, not smoothed
+        expect(result.progress.percent).toBe(25);
+        expect(result.progress.downloadedBytes).toBe(2500);
+        expect(result.progress.totalBytes).toBe(10000);
+
+        // Speed should be smoothed: 0.15 * 300000 + 0.85 * 500000 = 45000 + 425000 = 470000
+        expect(result.progress.speedBytesPerSecond).toBe(470000);
+      });
+
+      it('should reset smoothing when starting new video', () => {
+        const mockConfig = { enableStallDetection: false };
+
+        // Build up smoothed speed and ETA
+        monitor.processProgress(
+          JSON.stringify({ percent: '10%', downloaded: 1000000, total: 10000000, speed: 500000, eta: 100 }),
+          '[download] 10.0%',
+          mockConfig
+        );
+
+        expect(monitor.smoothedSpeed).toBe(500000);
+        expect(monitor.smoothedEta).not.toBeNull();
+
+        // Reset for new video
+        monitor.resetProgressTracking();
+        expect(monitor.smoothedSpeed).toBeNull();
+        expect(monitor.smoothedEta).toBeNull();
+
+        // Next value should be fresh
+        let result = monitor.processProgress(
+          JSON.stringify({ percent: '5%', downloaded: 500, total: 10000, speed: 200000, eta: 50 }),
+          '[download] 5.0%',
+          mockConfig
+        );
+
+        expect(result.progress.speedBytesPerSecond).toBe(200000); // Used directly, not influenced by previous
+      });
+    });
+  });
 });

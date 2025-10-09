@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import DownloadProgress from '../DownloadProgress';
+import DownloadProgress, { formatEta } from '../DownloadProgress';
 import WebSocketContext from '../../../contexts/WebSocketContext';
 
 const mockNavigate = jest.fn();
@@ -102,7 +102,7 @@ describe('DownloadProgress', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Test Video Title')).toBeInTheDocument();
+      expect(screen.getByText('Test Video Title · ETA 2m')).toBeInTheDocument();
     });
     expect(screen.getByText('Downloading video stream...')).toBeInTheDocument();
     expect(screen.getByText(/45.5%/)).toBeInTheDocument();
@@ -745,5 +745,445 @@ describe('DownloadProgress', () => {
         expect(progressBar).toHaveAttribute('aria-valuenow', '46');
       });
     }
+  });
+
+  describe('formatEta', () => {
+    test('returns empty string for zero seconds', () => {
+      expect(formatEta(0)).toBe('');
+    });
+
+    test('returns empty string for negative seconds', () => {
+      expect(formatEta(-10)).toBe('');
+    });
+
+    test('formats seconds only', () => {
+      expect(formatEta(45)).toBe('45s');
+    });
+
+    test('formats minutes and seconds', () => {
+      expect(formatEta(125)).toBe('2m5s');
+    });
+
+    test('formats minutes without seconds when seconds is zero', () => {
+      expect(formatEta(120)).toBe('2m');
+    });
+
+    test('formats hours only', () => {
+      expect(formatEta(3600)).toBe('1h');
+    });
+
+    test('formats hours and minutes', () => {
+      expect(formatEta(3900)).toBe('1h5m');
+    });
+
+    test('formats hours and minutes without seconds', () => {
+      expect(formatEta(3665)).toBe('1h1m');
+    });
+
+    test('does not show seconds when hours are present', () => {
+      expect(formatEta(3665)).toBe('1h1m');
+      expect(formatEta(3665)).not.toContain('s');
+    });
+
+    test('formats large values', () => {
+      expect(formatEta(7265)).toBe('2h1m');
+    });
+  });
+
+  test('displays ETA in overlay title when available', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    const progressPayload = {
+      progress: {
+        jobId: 'test-job-1',
+        progress: {
+          percent: 45.5,
+          downloadedBytes: 1024000,
+          totalBytes: 2048000,
+          speedBytesPerSecond: 512000,
+          etaSeconds: 125, // 2m5s
+        },
+        stalled: false,
+        state: 'downloading_video',
+        videoInfo: {
+          channel: 'Test Channel',
+          title: 'My Awesome Video Title',
+          displayTitle: 'My Awesome Video Title',
+        },
+      },
+    };
+
+    await act(async () => {
+      processCallback(progressPayload);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('My Awesome Video Title · ETA 2m5s')).toBeInTheDocument();
+    });
+  });
+
+  test('displays title without ETA when etaSeconds is zero', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    const progressPayload = {
+      progress: {
+        jobId: 'test-job-1',
+        progress: {
+          percent: 45.5,
+          downloadedBytes: 1024000,
+          totalBytes: 2048000,
+          speedBytesPerSecond: 512000,
+          etaSeconds: 0,
+        },
+        stalled: false,
+        state: 'downloading_video',
+        videoInfo: {
+          channel: 'Test Channel',
+          title: 'My Awesome Video Title',
+          displayTitle: 'My Awesome Video Title',
+        },
+      },
+    };
+
+    await act(async () => {
+      processCallback(progressPayload);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('My Awesome Video Title')).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/ETA/)).not.toBeInTheDocument();
+  });
+
+  test('displays title without ETA when etaSeconds is missing', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    const progressPayload = {
+      progress: {
+        jobId: 'test-job-1',
+        progress: {
+          percent: 45.5,
+          downloadedBytes: 1024000,
+          totalBytes: 2048000,
+          speedBytesPerSecond: 512000,
+          // etaSeconds is missing
+        },
+        stalled: false,
+        state: 'downloading_video',
+        videoInfo: {
+          channel: 'Test Channel',
+          title: 'My Awesome Video Title',
+          displayTitle: 'My Awesome Video Title',
+        },
+      },
+    };
+
+    await act(async () => {
+      processCallback(progressPayload);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('My Awesome Video Title')).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/ETA/)).not.toBeInTheDocument();
+  });
+
+  describe('terminated state handling', () => {
+    test('hides progress after terminated state with delay', async () => {
+      jest.useFakeTimers();
+
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+        />
+      );
+
+      const [, processCallback] = mockSubscribe.mock.calls[0];
+
+      // First show progress
+      await act(async () => {
+        processCallback({
+          progress: {
+            jobId: 'test-job',
+            progress: {
+              percent: 50,
+              downloadedBytes: 1024,
+              totalBytes: 2048,
+              speedBytesPerSecond: 512,
+              etaSeconds: 60,
+            },
+            stalled: false,
+            state: 'downloading_video',
+          },
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Downloading video stream...')).toBeInTheDocument();
+      });
+
+      // Then trigger terminated state
+      await act(async () => {
+        processCallback({
+          progress: {
+            jobId: 'test-job',
+            progress: {
+              percent: 50,
+              downloadedBytes: 1024,
+              totalBytes: 2048,
+              speedBytesPerSecond: 0,
+              etaSeconds: 0,
+            },
+            stalled: false,
+            state: 'terminated',
+          },
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Download terminated')).toBeInTheDocument();
+      });
+
+      // Progress should still be visible before delay
+      expect(screen.getByText('Download terminated')).toBeInTheDocument();
+
+      // Advance timer by 2 seconds
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+
+      // Progress should be hidden after delay
+      await waitFor(() => {
+        expect(screen.queryByText('Download terminated')).not.toBeInTheDocument();
+      });
+
+      jest.useRealTimers();
+    });
+
+    test('displays warning alert with termination reason', async () => {
+      jest.useFakeTimers();
+
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+        />
+      );
+
+      const [, processCallback] = mockSubscribe.mock.calls[0];
+
+      await act(async () => {
+        processCallback({
+          warning: true,
+          terminationReason: 'Download inactive for 30 minutes - terminated to free resources',
+          text: 'Download terminated: Download inactive for 30 minutes. 3 videos completed successfully.',
+          progress: {
+            jobId: 'test-job',
+            progress: {
+              percent: 50,
+              downloadedBytes: 1024,
+              totalBytes: 2048,
+              speedBytesPerSecond: 0,
+              etaSeconds: 0,
+            },
+            stalled: false,
+            state: 'terminated',
+          },
+          finalSummary: {
+            totalDownloaded: 3,
+            totalSkipped: 1,
+            jobType: 'Channel Downloads',
+            completedAt: '2024-01-15T10:30:00Z',
+          },
+        });
+      });
+
+      // Wait for terminated state to clear (2 second delay)
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+
+      // Warning alert should be displayed
+      await waitFor(() => {
+        expect(screen.getByText('Download Terminated')).toBeInTheDocument();
+      });
+      expect(screen.getByText('Download inactive for 30 minutes - terminated to free resources')).toBeInTheDocument();
+
+      jest.useRealTimers();
+    });
+
+    test('displays final summary after terminated state', async () => {
+      jest.useFakeTimers();
+
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+        />
+      );
+
+      const [, processCallback] = mockSubscribe.mock.calls[0];
+
+      await act(async () => {
+        processCallback({
+          warning: true,
+          terminationReason: 'Download inactive for 30 minutes',
+          progress: {
+            jobId: 'test-job',
+            progress: {
+              percent: 50,
+              downloadedBytes: 1024,
+              totalBytes: 2048,
+              speedBytesPerSecond: 0,
+              etaSeconds: 0,
+            },
+            stalled: false,
+            state: 'terminated',
+          },
+          finalSummary: {
+            totalDownloaded: 5,
+            totalSkipped: 2,
+            jobType: 'Channel Downloads',
+            completedAt: '2024-01-15T10:30:00Z',
+          },
+        });
+      });
+
+      // Wait for terminated state to clear (2 second delay)
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+
+      // Both warning and summary should be displayed
+      await waitFor(() => {
+        expect(screen.getByText('Download Terminated')).toBeInTheDocument();
+      });
+      expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+      expect(screen.getByText(/5 new videos downloaded, 2 already existed or members only/)).toBeInTheDocument();
+
+      jest.useRealTimers();
+    });
+
+    test('shows "Download terminated" status message', async () => {
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+        />
+      );
+
+      const [, processCallback] = mockSubscribe.mock.calls[0];
+
+      await act(async () => {
+        processCallback({
+          progress: {
+            jobId: 'test-job',
+            progress: {
+              percent: 50,
+              downloadedBytes: 1024,
+              totalBytes: 2048,
+              speedBytesPerSecond: 0,
+              etaSeconds: 0,
+            },
+            stalled: false,
+            state: 'terminated',
+          },
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Download terminated')).toBeInTheDocument();
+      });
+    });
+
+    test('clears warning when new download starts', async () => {
+      jest.useFakeTimers();
+
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+        />
+      );
+
+      const [, processCallback] = mockSubscribe.mock.calls[0];
+
+      // First show terminated state with warning
+      await act(async () => {
+        processCallback({
+          warning: true,
+          terminationReason: 'Download inactive',
+          progress: {
+            jobId: 'test-job',
+            progress: {
+              percent: 50,
+              downloadedBytes: 1024,
+              totalBytes: 2048,
+              speedBytesPerSecond: 0,
+              etaSeconds: 0,
+            },
+            stalled: false,
+            state: 'terminated',
+          },
+        });
+      });
+
+      // Wait for state to clear
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Download Terminated')).toBeInTheDocument();
+      });
+
+      // Start new download
+      await act(async () => {
+        processCallback({
+          progress: {
+            jobId: 'test-job-2',
+            progress: {
+              percent: 10,
+              downloadedBytes: 100,
+              totalBytes: 1000,
+              speedBytesPerSecond: 500,
+              etaSeconds: 20,
+            },
+            stalled: false,
+            state: 'initiating',
+          },
+        });
+      });
+
+      // Warning should be cleared
+      await waitFor(() => {
+        expect(screen.queryByText('Download Terminated')).not.toBeInTheDocument();
+      });
+      expect(screen.getByText('Initiating download...')).toBeInTheDocument();
+
+      jest.useRealTimers();
+    });
   });
 });

@@ -1248,7 +1248,7 @@ function Configuration({ token }: ConfigurationProps) {
                     ))}
                   </Select>
                 </FormControl>
-                {getInfoIcon('How many videos (starting from the most recent) should be downloaded for each channel when channel downloads are initiated.')}
+                {getInfoIcon('How many videos (starting from the most recent) should be downloaded for each channel when channel downloads are initiated. Already downloaded videos will not be re-downloaded.')}
               </Box>
             </Grid>
 
