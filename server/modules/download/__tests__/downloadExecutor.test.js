@@ -143,6 +143,17 @@ describe('DownloadExecutor', () => {
     it('should initialize with null tempChannelsFile', () => {
       expect(executor.tempChannelsFile).toBeNull();
     });
+
+    it('should initialize timeout configuration', () => {
+      expect(executor.activityTimeoutMs).toBe(30 * 60 * 1000);
+      expect(executor.maxAbsoluteTimeoutMs).toBe(4 * 60 * 60 * 1000);
+    });
+
+    it('should initialize process tracking properties', () => {
+      expect(executor.currentProcess).toBeNull();
+      expect(executor.currentJobId).toBeNull();
+      expect(executor.manualTerminationReason).toBeNull();
+    });
   });
 
   describe('getCountOfDownloadedVideos', () => {
@@ -251,6 +262,28 @@ describe('DownloadExecutor', () => {
 
       mockProcess.emit('exit', 0);
       await downloadPromise;
+    });
+
+    it('should store process references for manual termination', () => {
+      executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(executor.currentProcess).toBe(mockProcess);
+      expect(executor.currentJobId).toBe(mockJobId);
+    });
+
+    it('should clear process references after successful completion', async () => {
+      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Verify references are set
+      expect(executor.currentProcess).toBe(mockProcess);
+      expect(executor.currentJobId).toBe(mockJobId);
+
+      mockProcess.emit('exit', 0);
+      await downloadPromise;
+
+      // Verify references are cleared
+      expect(executor.currentProcess).toBeNull();
+      expect(executor.currentJobId).toBeNull();
     });
 
     it('should set timeout based on activity tracking', () => {
@@ -618,6 +651,29 @@ describe('DownloadExecutor', () => {
         expect(consoleLogSpy).toHaveBeenCalledWith('Download process error:', 'Spawn failed');
       });
 
+      it('should clear process references on error', async () => {
+        fsPromises.access.mockRejectedValue(new Error('Not found'));
+        fsPromises.unlink.mockResolvedValue();
+        fsPromises.readdir.mockResolvedValue([]);
+
+        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+        // Verify references are set
+        expect(executor.currentProcess).toBe(mockProcess);
+        expect(executor.currentJobId).toBe(mockJobId);
+
+        jest.clearAllTimers();
+
+        const spawnError = new Error('Spawn failed');
+        mockProcess.emit('error', spawnError);
+
+        await downloadPromise;
+
+        // Verify references are cleared after error
+        expect(executor.currentProcess).toBeNull();
+        expect(executor.currentJobId).toBeNull();
+      });
+
       it('should kill process on timeout', async () => {
         const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
 
@@ -915,6 +971,197 @@ describe('DownloadExecutor', () => {
         // Should still send notification for "no new videos" case
         expect(notificationModule.sendDownloadNotification).toHaveBeenCalled();
       });
+    });
+  });
+
+  describe('terminateCurrentJob', () => {
+    const mockArgs = ['--output', '/path/to/video.mp4', 'https://youtube.com/watch?v=123'];
+    const mockJobId = 'job-123';
+    const mockJobType = 'Channel Downloads';
+
+    it('should return null when no job is running', () => {
+      const result = executor.terminateCurrentJob('Test reason');
+
+      expect(result).toBeNull();
+      expect(consoleLogSpy).toHaveBeenCalledWith('No job currently running to terminate');
+    });
+
+    it('should terminate current job with SIGTERM', () => {
+      executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      const result = executor.terminateCurrentJob('User requested termination');
+
+      expect(result).toBe(mockJobId);
+      expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(consoleLogSpy).toHaveBeenCalledWith(`Terminating job ${mockJobId}: User requested termination`);
+      expect(consoleLogSpy).toHaveBeenCalledWith(`Sent SIGTERM to job ${mockJobId}`);
+    });
+
+    it('should use default reason when none provided', () => {
+      executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      const result = executor.terminateCurrentJob();
+
+      expect(result).toBe(mockJobId);
+      expect(consoleLogSpy).toHaveBeenCalledWith(`Terminating job ${mockJobId}: User requested termination`);
+    });
+
+    it('should use custom termination reason', () => {
+      executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      const customReason = 'Custom termination reason';
+      executor.terminateCurrentJob(customReason);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(`Terminating job ${mockJobId}: ${customReason}`);
+    });
+
+    it('should set manualTerminationReason for exit handler', () => {
+      executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      const reason = 'Test termination';
+      executor.terminateCurrentJob(reason);
+
+      expect(executor.manualTerminationReason).toBe(reason);
+    });
+
+    it('should schedule SIGKILL after grace period', () => {
+      executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      executor.terminateCurrentJob('Test reason');
+
+      // Advance timers by 60 seconds (grace period)
+      jest.advanceTimersByTime(60 * 1000);
+
+      // Should send SIGKILL after grace period
+      expect(mockProcess.kill).toHaveBeenCalledWith('SIGKILL');
+      expect(consoleLogSpy).toHaveBeenCalledWith(`Grace period expired for job ${mockJobId}, forcing kill with SIGKILL`);
+    });
+
+    it('should not send SIGKILL if process already exited', async () => {
+      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      executor.terminateCurrentJob('Test reason');
+
+      // Clear the kill mock to check if SIGKILL is sent
+      mockProcess.kill.mockClear();
+
+      // Simulate process exit before grace period
+      mockProcess.emit('exit', 1, 'SIGTERM');
+      await downloadPromise;
+
+      // Now advance past grace period
+      jest.advanceTimersByTime(60 * 1000);
+
+      // Should NOT send SIGKILL since process already exited
+      expect(mockProcess.kill).not.toHaveBeenCalled();
+    });
+
+    it('should handle error when sending SIGTERM', () => {
+      executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      const killError = new Error('Process already terminated');
+      mockProcess.kill.mockImplementationOnce(() => {
+        throw killError;
+      });
+
+      const result = executor.terminateCurrentJob('Test reason');
+
+      expect(result).toBeNull();
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Error terminating job:', killError.message);
+      expect(executor.manualTerminationReason).toBeNull();
+    });
+
+    it('should handle error when sending SIGKILL during grace period', () => {
+      executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // First kill succeeds (SIGTERM)
+      mockProcess.kill.mockImplementationOnce(() => {});
+      // Second kill fails (SIGKILL)
+      mockProcess.kill.mockImplementationOnce(() => {
+        throw new Error('Cannot kill process');
+      });
+
+      executor.terminateCurrentJob('Test reason');
+
+      // Advance to grace period expiration
+      jest.advanceTimersByTime(60 * 1000);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith('Error sending SIGKILL:', 'Cannot kill process');
+    });
+
+    it('should update job with manual termination reason on exit', async () => {
+      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      const customReason = 'Manual user termination';
+      executor.terminateCurrentJob(customReason);
+
+      mockProcess.emit('exit', 1, 'SIGTERM');
+      await downloadPromise;
+
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          status: 'Terminated',
+          notes: customReason,
+          output: expect.stringContaining('completed before termination')
+        })
+      );
+    });
+
+    it('should emit terminated state message with manual reason', async () => {
+      mockMonitor.videoCount.completed = 3;
+      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      const customReason = 'User cancelled download';
+      executor.terminateCurrentJob(customReason);
+
+      mockProcess.emit('exit', 1, 'SIGTERM');
+      await downloadPromise;
+
+      const emitCalls = MessageEmitter.emitMessage.mock.calls;
+      const finalCall = emitCalls[emitCalls.length - 1];
+
+      expect(finalCall[4]).toMatchObject({
+        text: expect.stringContaining('Download terminated: User cancelled download'),
+        warning: true,
+        terminationReason: customReason
+      });
+    });
+
+    it('should clear process references after manual termination exit', async () => {
+      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      executor.terminateCurrentJob('Test reason');
+
+      // Verify references are set during execution
+      expect(executor.currentJobId).toBe(mockJobId);
+      expect(executor.currentProcess).toBe(mockProcess);
+
+      mockProcess.emit('exit', 1, 'SIGTERM');
+      await downloadPromise;
+
+      // Verify references are cleared after exit
+      expect(executor.currentJobId).toBeNull();
+      expect(executor.currentProcess).toBeNull();
+      expect(executor.manualTerminationReason).toBeNull();
+    });
+
+    it('should cleanup partial files on manual termination', async () => {
+      fsPromises.access.mockResolvedValue();
+      fsPromises.unlink.mockResolvedValue();
+      fsPromises.readdir.mockResolvedValue([]);
+
+      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Track a destination
+      mockProcess.stdout.emit('data', Buffer.from('[download] Destination: /path/to/video.mp4'));
+
+      executor.terminateCurrentJob('User requested');
+
+      mockProcess.emit('exit', 1, 'SIGTERM');
+      await downloadPromise;
+
+      expect(fsPromises.unlink).toHaveBeenCalledWith('/path/to/video.mp4.part');
     });
   });
 });

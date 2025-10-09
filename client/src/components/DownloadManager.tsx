@@ -110,6 +110,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
         downloadProgressRef={downloadProgressRef}
         downloadInitiatedRef={downloadInitiatedRef}
         pendingJobs={pendingJobs}
+        token={token}
       />
       <DownloadHistory
         jobs={jobs}

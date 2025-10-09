@@ -8,7 +8,6 @@ import React, {
 import {
   Grid,
   Card,
-  CardHeader,
   Typography,
   LinearProgress,
   Box,
@@ -19,13 +18,16 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  Tooltip,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import QueueIcon from '@mui/icons-material/Queue';
 import PlaylistPlayIcon from '@mui/icons-material/PlaylistPlay';
+import StopIcon from '@mui/icons-material/Stop';
 import { useNavigate } from 'react-router-dom';
 import WebSocketContext from '../../contexts/WebSocketContext';
 import { Job } from '../../types/Job';
+import TerminateJobDialog from './TerminateJobDialog';
 
 interface DownloadProgressProps {
   downloadProgressRef: React.MutableRefObject<{
@@ -34,6 +36,7 @@ interface DownloadProgressProps {
   }>;
   downloadInitiatedRef: React.MutableRefObject<boolean>;
   pendingJobs: Job[];
+  token: string | null;
 }
 
 interface ErrorDetails {
@@ -93,6 +96,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
   downloadProgressRef,
   downloadInitiatedRef,
   pendingJobs,
+  token,
 }) => {
   const [currentProgress, setCurrentProgress] = useState<StructuredProgress | null>(null);
   const [videoCount, setVideoCount] = useState<{ current: number; total: number; completed: number; skipped: number, skippedThisChannel: number }>({
@@ -106,6 +110,8 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
   const [showProgress, setShowProgress] = useState(false);
   const [errorDetails, setErrorDetails] = useState<ErrorDetails | null>(null);
   const [warningDetails, setWarningDetails] = useState<{ message: string; reason?: string } | null>(null);
+  const [showTerminateDialog, setShowTerminateDialog] = useState(false);
+  const [isTerminating, setIsTerminating] = useState(false);
   const navigate = useNavigate();
   const wsContext = useContext(WebSocketContext);
   if (!wsContext) {
@@ -188,6 +194,32 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
       hour12: true
     };
     return date.toLocaleString('en-US', options);
+  };
+
+  const handleTerminate = async () => {
+    setIsTerminating(true);
+    try {
+      const response = await fetch('/api/jobs/terminate', {
+        method: 'POST',
+        headers: {
+          'x-access-token': token || '',
+        },
+      });
+
+      if (response.ok) {
+        // Success - job will update via WebSocket
+        console.log('Job termination initiated successfully');
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to terminate job');
+      }
+    } catch (error) {
+      console.error('Error terminating job:', error);
+      alert('Error terminating job');
+    } finally {
+      setIsTerminating(false);
+      setShowTerminateDialog(false);
+    }
   };
 
   const filter = useCallback((message: any) => {
@@ -314,10 +346,61 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     };
   }, [subscribe, unsubscribe, filter, processMessagesCallback]);
 
+  // Determine if terminate button should be shown
+  const showTerminateButton = currentProgress &&
+                               showProgress &&
+                               currentProgress.state !== 'complete' &&
+                               currentProgress.state !== 'terminated' &&
+                               currentProgress.state !== 'error' &&
+                               currentProgress.state !== 'failed';
+
   return (
     <Grid item xs={12} md={12} paddingBottom={'8px'}>
       <Card elevation={8}>
-        <CardHeader title='Download Progress' align='center' />
+        <Box sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative',
+          py: 2,
+          px: 2,
+          borderBottom: '1px solid',
+          borderColor: 'divider'
+        }}>
+          <Typography variant="h6" component="h2" sx={{ textAlign: 'center' }}>
+            Download Progress
+          </Typography>
+          {showTerminateButton && (
+            <Box sx={{ position: 'absolute', right: 16 }}>
+              <Tooltip title="Stop the current download job">
+                <Button
+                  onClick={() => setShowTerminateDialog(true)}
+                  disabled={isTerminating}
+                  variant="contained"
+                  color="error"
+                  size="small"
+                  startIcon={<StopIcon />}
+                  sx={{
+                    minWidth: { xs: 'auto', sm: '120px' },
+                    px: { xs: 1, sm: 2 },
+                    '& .MuiButton-startIcon': {
+                      margin: { xs: 0, sm: '0 8px 0 -4px' }
+                    }
+                  }}
+                >
+                  <Box
+                    component="span"
+                    sx={{
+                      display: { xs: 'none', sm: 'inline' }
+                    }}
+                  >
+                    Stop Job
+                  </Box>
+                </Button>
+              </Tooltip>
+            </Box>
+          )}
+        </Box>
 
         {/* Show queued jobs if any */}
         {pendingJobs.length > 0 && (
@@ -600,6 +683,13 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             </Box>
           </Box>
         )}
+
+        {/* Terminate Job Dialog */}
+        <TerminateJobDialog
+          open={showTerminateDialog}
+          onClose={() => setShowTerminateDialog(false)}
+          onConfirm={handleTerminate}
+        />
       </Card>
     </Grid>
   );

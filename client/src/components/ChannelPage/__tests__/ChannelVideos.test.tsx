@@ -267,6 +267,34 @@ describe('ChannelVideos Component', () => {
   });
 
   describe('Tab Management', () => {
+    test('does not show tabs while fetching, then shows tabs after loading', async () => {
+      // Setup a delayed response to catch the loading state
+      let resolveTabsFetch: (value: any) => void;
+      const tabsFetchPromise = new Promise((resolve) => {
+        resolveTabsFetch = resolve;
+      });
+
+      mockFetch.mockReturnValueOnce(tabsFetchPromise as any);
+
+      renderChannelVideos();
+
+      // While loading, tabs should not be present
+      expect(screen.queryByRole('tab', { name: /Videos/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('tab', { name: /Shorts/i })).not.toBeInTheDocument();
+
+      // Resolve the fetch with multiple tabs
+      resolveTabsFetch!({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({ availableTabs: ['videos', 'shorts'] }),
+      });
+
+      // Wait for tabs to appear after loading
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /Videos/i })).toBeInTheDocument();
+      });
+      expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
+    });
+
     test('fetches available tabs on mount', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,

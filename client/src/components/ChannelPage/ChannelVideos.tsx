@@ -560,7 +560,15 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
         />
 
         {/* Tabs */}
-        {!tabsLoading && availableTabs.length > 1 && (
+        {tabsLoading ? (
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2, py: 1.5 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3 }}>
+              <Skeleton variant="rectangular" width={80} height={36} sx={{ borderRadius: 1 }} />
+              <Skeleton variant="rectangular" width={80} height={36} sx={{ borderRadius: 1 }} />
+              <Skeleton variant="rectangular" width={80} height={36} sx={{ borderRadius: 1 }} />
+            </Box>
+          </Box>
+        ) : availableTabs.length > 1 ? (
           <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
             <Tabs
               value={selectedTab}
@@ -574,7 +582,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
               ))}
             </Tabs>
           </Box>
-        )}
+        ) : null}
 
         {/* Pagination - directly under tabs */}
         {totalPages > 1 && (

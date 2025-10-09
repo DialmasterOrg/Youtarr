@@ -115,6 +115,11 @@ class DownloadModule {
       this.downloadExecutor.doDownload(args, jobId, jobType, urls.length, urls, allowRedownload);
     }
   }
+
+  terminateCurrentDownload() {
+    const terminatedJobId = this.downloadExecutor.terminateCurrentJob('User requested termination');
+    return terminatedJobId;
+  }
 }
 
 module.exports = new DownloadModule();
