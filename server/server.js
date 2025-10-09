@@ -783,6 +783,35 @@ const initialize = async () => {
       res.json({ status: 'success' });
     });
 
+    // Terminate the currently running download job
+    app.post('/api/jobs/terminate', verifyToken, (req, res) => {
+      // Get currently running job
+      const inProgressJobId = jobModule.getInProgressJobId();
+
+      if (!inProgressJobId) {
+        return res.status(400).json({
+          error: 'No job is currently running',
+          success: false
+        });
+      }
+
+      // Terminate the download
+      const terminatedJobId = downloadModule.terminateCurrentDownload();
+
+      if (terminatedJobId) {
+        res.json({
+          success: true,
+          jobId: terminatedJobId,
+          message: 'Download termination initiated'
+        });
+      } else {
+        res.status(500).json({
+          error: 'Failed to terminate job',
+          success: false
+        });
+      }
+    });
+
     // Manually trigger the channel downloads
     app.post('/triggerchanneldownloads', verifyToken, (req, res) => {
       // Check if there is a running channel downloads job

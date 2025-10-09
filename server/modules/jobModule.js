@@ -714,7 +714,8 @@ class JobModule {
     if (
       updatedFields.status === 'Complete' ||
       updatedFields.status === 'Error' ||
-      updatedFields.status === 'Complete with Warnings'
+      updatedFields.status === 'Complete with Warnings' ||
+      updatedFields.status === 'Terminated'
     ) {
       // downloadModule already sends proper completion messages with finalSummary
       // Only send the downloadComplete event for backwards compatibility
@@ -726,9 +727,12 @@ class JobModule {
         { text: 'Download job completed.', videos: updatedFields.data.videos || [] }
       );
 
-      let numVideos = updatedFields.data?.videos?.length || 0;
-      updatedFields.output = numVideos + ' videos.';
-      updatedFields.status = 'Complete';
+      // Only modify output and status for actual completions, not terminations
+      if (updatedFields.status !== 'Terminated') {
+        let numVideos = updatedFields.data?.videos?.length || 0;
+        updatedFields.output = numVideos + ' videos.';
+        updatedFields.status = 'Complete';
+      }
     }
     const job = this.jobs[jobId];
     if (!job) {

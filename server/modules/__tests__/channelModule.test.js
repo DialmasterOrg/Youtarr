@@ -480,7 +480,7 @@ describe('ChannelModule', () => {
         expect(secondCall.defaults.publishedAt).toBe('2024-01-02T00:00:00Z');
       });
 
-      test('should update publishedAt only when provided on existing videos', async () => {
+      test('should update publishedAt with synthetic date when not provided on existing videos', async () => {
         const mockVideo = {
           publishedAt: '2024-01-01T00:00:00Z',
           update: jest.fn()
@@ -493,14 +493,16 @@ describe('ChannelModule', () => {
 
         ChannelVideo.findOrCreate.mockResolvedValue([mockVideo, false]);
 
+        const beforeTime = Date.now();
         await ChannelModule.insertVideosIntoDb([videoWithoutDate], 'UC123');
+        const afterTime = Date.now();
 
-        // Should not include publishedAt in the update when video has existing date
-        expect(mockVideo.update).toHaveBeenCalledWith(
-          expect.not.objectContaining({
-            publishedAt: expect.anything()
-          })
-        );
+        // Should always update publishedAt (with synthetic date if not provided)
+        const updateCall = mockVideo.update.mock.calls[0][0];
+        expect(updateCall.publishedAt).toBeDefined();
+        const timestamp = new Date(updateCall.publishedAt).getTime();
+        expect(timestamp).toBeGreaterThanOrEqual(beforeTime - 1000);
+        expect(timestamp).toBeLessThanOrEqual(afterTime + 1000);
       });
 
       test('should set synthetic publishedAt on existing videos without dates', async () => {

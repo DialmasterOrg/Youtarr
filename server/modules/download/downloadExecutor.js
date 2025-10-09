@@ -13,6 +13,10 @@ class DownloadExecutor {
     // Timeout configuration
     this.activityTimeoutMs = 30 * 60 * 1000; // 30 minutes of no activity
     this.maxAbsoluteTimeoutMs = 4 * 60 * 60 * 1000; // 4 hours maximum runtime
+    // Current process tracking for manual termination
+    this.currentProcess = null;
+    this.currentJobId = null;
+    this.manualTerminationReason = null;
   }
 
   getCountOfDownloadedVideos() {
@@ -71,6 +75,10 @@ class DownloadExecutor {
       console.log(`Running yt-dlp for ${jobType}`);
       console.log('Command args:', args);
       const proc = spawn('yt-dlp', args);
+
+      // Store process reference for manual termination
+      this.currentProcess = proc;
+      this.currentJobId = jobId;
 
       // Activity-based timeout tracking
       let lastActivityTime = Date.now();
@@ -282,6 +290,15 @@ class DownloadExecutor {
           timeoutChecker = null;
         }
 
+        // Check for manual termination before clearing references
+        const wasManuallyTerminated = this.manualTerminationReason !== null;
+        const manualReason = this.manualTerminationReason;
+
+        // Clear current process references
+        this.currentProcess = null;
+        this.currentJobId = null;
+        this.manualTerminationReason = null;
+
         // Also check the complete stderr buffer for bot detection
         if (!botDetected && stderrBuffer &&
             stderrBuffer.includes('Sign in to confirm') &&
@@ -357,8 +374,8 @@ class DownloadExecutor {
             error: 'COOKIES_REQUIRED'
           });
           jobErrorCode = 'COOKIES_REQUIRED';
-        } else if (gracefulShutdownInProgress || shutdownReason) {
-          // Handle timeout/graceful shutdown
+        } else if (gracefulShutdownInProgress || shutdownReason || wasManuallyTerminated) {
+          // Handle timeout/graceful shutdown or manual termination
           await this.cleanupPartialFiles(Array.from(partialDestinations));
           partialCleanupPerformed = true;
 
@@ -366,15 +383,19 @@ class DownloadExecutor {
           status = 'Terminated';
           output = `${completedCount} video${completedCount !== 1 ? 's' : ''} completed before termination`;
 
+          const terminationReason = wasManuallyTerminated
+            ? manualReason
+            : (shutdownReason || 'Download terminated due to timeout');
+
           await jobModule.updateJob(jobId, {
             status: status,
             endDate: Date.now(),
             output: output,
             data: { videos: videoData || [] },
-            notes: shutdownReason || 'Download terminated due to timeout',
+            notes: terminationReason,
           });
 
-          console.log(`Job terminated: ${shutdownReason}. Saved ${completedCount} completed videos.`);
+          console.log(`Job terminated: ${terminationReason}. Saved ${completedCount} completed videos.`);
         } else if (httpForbiddenDetected) {
           await this.cleanupPartialFiles(Array.from(partialDestinations));
           partialCleanupPerformed = true;
@@ -448,10 +469,11 @@ class DownloadExecutor {
         // Create a more informative final message
         let finalText;
         let finalErrorCode = jobErrorCode;
-        if (gracefulShutdownInProgress || shutdownReason) {
+        if (gracefulShutdownInProgress || shutdownReason || wasManuallyTerminated) {
           finalState = 'terminated';
           const completedCount = videoData.length;
-          finalText = `Download terminated: ${shutdownReason}. ${completedCount} video${completedCount !== 1 ? 's' : ''} completed successfully.`;
+          const reason = wasManuallyTerminated ? manualReason : shutdownReason;
+          finalText = `Download terminated: ${reason}. ${completedCount} video${completedCount !== 1 ? 's' : ''} completed successfully.`;
         } else if (botDetected) {
           finalState = 'failed';
           finalErrorCode = 'COOKIES_REQUIRED';
@@ -500,7 +522,7 @@ class DownloadExecutor {
         if (finalState === 'terminated') {
           // Terminated jobs are warnings, not full errors
           finalPayload.warning = true;
-          finalPayload.terminationReason = shutdownReason;
+          finalPayload.terminationReason = wasManuallyTerminated ? manualReason : shutdownReason;
         } else if (isFinalError) {
           finalPayload.error = true;
           if (finalErrorCode) {
@@ -559,6 +581,11 @@ class DownloadExecutor {
           clearInterval(timeoutChecker);
           timeoutChecker = null;
         }
+
+        // Clear current process references
+        this.currentProcess = null;
+        this.currentJobId = null;
+
         await this.cleanupPartialFiles(Array.from(partialDestinations));
         partialCleanupPerformed = true;
         reject(err);
@@ -583,6 +610,49 @@ class DownloadExecutor {
         output: 'Download process error: ' + error.message,
       });
     });
+  }
+
+  /**
+   * Terminate the currently running download job
+   * @param {string} reason - Reason for termination
+   * @returns {string|null} - Job ID that was terminated, or null if no job running
+   */
+  terminateCurrentJob(reason = 'User requested termination') {
+    if (!this.currentProcess || !this.currentJobId) {
+      console.log('No job currently running to terminate');
+      return null;
+    }
+
+    const jobId = this.currentJobId;
+    console.log(`Terminating job ${jobId}: ${reason}`);
+
+    // Set the manual termination reason so the exit handler knows this was manual
+    this.manualTerminationReason = reason;
+
+    // Send SIGTERM to allow process to finish current video gracefully
+    try {
+      this.currentProcess.kill('SIGTERM');
+      console.log(`Sent SIGTERM to job ${jobId}`);
+
+      // Wait up to 60 seconds for graceful exit, then force kill
+      setTimeout(() => {
+        if (this.currentProcess && this.currentJobId === jobId) {
+          console.log(`Grace period expired for job ${jobId}, forcing kill with SIGKILL`);
+          try {
+            this.currentProcess.kill('SIGKILL');
+          } catch (err) {
+            console.log('Error sending SIGKILL:', err.message);
+          }
+        }
+      }, 60 * 1000);
+
+      return jobId;
+    } catch (err) {
+      console.error('Error terminating job:', err.message);
+      // Clear the manual termination reason on error
+      this.manualTerminationReason = null;
+      return null;
+    }
   }
 }
 

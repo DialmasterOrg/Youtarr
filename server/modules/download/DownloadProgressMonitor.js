@@ -452,6 +452,13 @@ class DownloadProgressMonitor {
       this.currentState = newState;
     }
 
+    // Fix race condition: If we're receiving actual download progress while in 'initiating' state,
+    // automatically transition to downloading state. This handles cases where JSON progress
+    // appears before the [download] Destination line.
+    if (!newState && this.currentState === 'initiating' && parsed && parsed.percent > 0) {
+      this.currentState = 'downloading_video';
+    }
+
     // Parse video count information and update counts.
     this.parseAndUpdateVideoCounts(rawLine);
 

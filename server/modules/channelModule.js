@@ -759,13 +759,8 @@ class ChannelModule {
           availability: video.availability || null,
           media_type: mediaType,
           live_status: video.live_status || null,
+          publishedAt: video.publishedAt || syntheticPublishedAt,
         };
-
-        if (video.publishedAt) {
-          updates.publishedAt = video.publishedAt;
-        } else if (!videoRecord.publishedAt) {
-          updates.publishedAt = syntheticPublishedAt;
-        }
 
         await videoRecord.update(updates);
       }

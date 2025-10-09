@@ -8,16 +8,26 @@ import React, {
 import {
   Grid,
   Card,
-  CardHeader,
   Typography,
   LinearProgress,
   Box,
   Alert,
   AlertTitle,
   Button,
+  Chip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Tooltip,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import QueueIcon from '@mui/icons-material/Queue';
+import PlaylistPlayIcon from '@mui/icons-material/PlaylistPlay';
+import StopIcon from '@mui/icons-material/Stop';
 import { useNavigate } from 'react-router-dom';
 import WebSocketContext from '../../contexts/WebSocketContext';
+import { Job } from '../../types/Job';
+import TerminateJobDialog from './TerminateJobDialog';
 
 interface DownloadProgressProps {
   downloadProgressRef: React.MutableRefObject<{
@@ -25,6 +35,8 @@ interface DownloadProgressProps {
     message: string;
   }>;
   downloadInitiatedRef: React.MutableRefObject<boolean>;
+  pendingJobs: Job[];
+  token: string | null;
 }
 
 interface ErrorDetails {
@@ -83,6 +95,8 @@ export const formatEta = (seconds: number): string => {
 const DownloadProgress: React.FC<DownloadProgressProps> = ({
   downloadProgressRef,
   downloadInitiatedRef,
+  pendingJobs,
+  token,
 }) => {
   const [currentProgress, setCurrentProgress] = useState<StructuredProgress | null>(null);
   const [videoCount, setVideoCount] = useState<{ current: number; total: number; completed: number; skipped: number, skippedThisChannel: number }>({
@@ -96,6 +110,8 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
   const [showProgress, setShowProgress] = useState(false);
   const [errorDetails, setErrorDetails] = useState<ErrorDetails | null>(null);
   const [warningDetails, setWarningDetails] = useState<{ message: string; reason?: string } | null>(null);
+  const [showTerminateDialog, setShowTerminateDialog] = useState(false);
+  const [isTerminating, setIsTerminating] = useState(false);
   const navigate = useNavigate();
   const wsContext = useContext(WebSocketContext);
   if (!wsContext) {
@@ -118,25 +134,22 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     }
   }, [currentProgress]);
 
-  const overlayTitle = useMemo(() => {
+  const overlayContent = useMemo(() => {
     if (!currentProgress) {
-      return '';
+      return { title: '', eta: '' };
     }
     // Don't show "Unknown title" - just show empty if no title
     const title = currentProgress.videoInfo?.displayTitle || '';
-    if (title === 'Unknown title' || title === 'Unknown Title') {
-      return '';
-    }
+    const displayTitle = (title === 'Unknown title' || title === 'Unknown Title') ? '' : title;
 
-    // Append ETA if available
+    // Get ETA if available
     const eta = currentProgress.progress?.etaSeconds;
     const formattedEta = formatEta(eta || 0);
 
-    if (formattedEta && title) {
-      return `${title} · ETA ${formattedEta}`;
-    }
-
-    return title;
+    return {
+      title: displayTitle,
+      eta: formattedEta
+    };
   }, [currentProgress]);
 
   // Derive status message from state
@@ -181,6 +194,32 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
       hour12: true
     };
     return date.toLocaleString('en-US', options);
+  };
+
+  const handleTerminate = async () => {
+    setIsTerminating(true);
+    try {
+      const response = await fetch('/api/jobs/terminate', {
+        method: 'POST',
+        headers: {
+          'x-access-token': token || '',
+        },
+      });
+
+      if (response.ok) {
+        // Success - job will update via WebSocket
+        console.log('Job termination initiated successfully');
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to terminate job');
+      }
+    } catch (error) {
+      console.error('Error terminating job:', error);
+      alert('Error terminating job');
+    } finally {
+      setIsTerminating(false);
+      setShowTerminateDialog(false);
+    }
   };
 
   const filter = useCallback((message: any) => {
@@ -307,10 +346,114 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     };
   }, [subscribe, unsubscribe, filter, processMessagesCallback]);
 
+  // Determine if terminate button should be shown
+  const showTerminateButton = currentProgress &&
+                               showProgress &&
+                               currentProgress.state !== 'complete' &&
+                               currentProgress.state !== 'terminated' &&
+                               currentProgress.state !== 'error' &&
+                               currentProgress.state !== 'failed';
+
   return (
     <Grid item xs={12} md={12} paddingBottom={'8px'}>
       <Card elevation={8}>
-        <CardHeader title='Download Progress' align='center' />
+        <Box sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative',
+          py: 2,
+          px: 2,
+          borderBottom: '1px solid',
+          borderColor: 'divider'
+        }}>
+          <Typography variant="h6" component="h2" sx={{ textAlign: 'center' }}>
+            Download Progress
+          </Typography>
+          {showTerminateButton && (
+            <Box sx={{ position: 'absolute', right: 16 }}>
+              <Tooltip title="Stop the current download job">
+                <Button
+                  onClick={() => setShowTerminateDialog(true)}
+                  disabled={isTerminating}
+                  variant="contained"
+                  color="error"
+                  size="small"
+                  startIcon={<StopIcon />}
+                  sx={{
+                    minWidth: { xs: 'auto', sm: '120px' },
+                    px: { xs: 1, sm: 2 },
+                    '& .MuiButton-startIcon': {
+                      margin: { xs: 0, sm: '0 8px 0 -4px' }
+                    }
+                  }}
+                >
+                  <Box
+                    component="span"
+                    sx={{
+                      display: { xs: 'none', sm: 'inline' }
+                    }}
+                  >
+                    Stop Job
+                  </Box>
+                </Button>
+              </Tooltip>
+            </Box>
+          )}
+        </Box>
+
+        {/* Show queued jobs if any */}
+        {pendingJobs.length > 0 && (
+          <Box sx={{ px: 2, pb: 1 }}>
+            <Accordion
+              elevation={0}
+              sx={{
+                backgroundColor: 'rgba(0, 0, 0, 0.02)',
+                '&:before': { display: 'none' },
+                borderRadius: 1,
+              }}
+            >
+              <AccordionSummary
+                expandIcon={<ExpandMoreIcon />}
+                sx={{
+                  minHeight: '42px',
+                  '& .MuiAccordionSummary-content': {
+                    alignItems: 'center',
+                    gap: 1,
+                    my: 0.5
+                  }
+                }}
+              >
+                <QueueIcon fontSize="small" color="action" />
+                <Typography variant="body2" color="text.secondary">
+                  {pendingJobs.length} {pendingJobs.length === 1 ? 'job' : 'jobs'} queued
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ pt: 0, pb: 1.5 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  {pendingJobs.map((job, index) => {
+                    const isChannelDownload = job.jobType === 'Channel Downloads';
+                    const label = isChannelDownload ? 'Channel Update' : 'Manual Download';
+                    const icon = isChannelDownload ?
+                      <PlaylistPlayIcon fontSize="small" /> :
+                      <QueueIcon fontSize="small" />;
+
+                    return (
+                      <Chip
+                        key={job.id}
+                        icon={icon}
+                        label={`${index + 1}. ${label}`}
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                      />
+                    );
+                  })}
+                </Box>
+              </AccordionDetails>
+            </Accordion>
+          </Box>
+        )}
 
         {/* Show error if available */}
         {errorDetails && !currentProgress && (
@@ -428,19 +571,47 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                 justifyContent: 'center',
                 px: 1
               }}>
-                <Typography
-                  variant="body2"
-                  noWrap
-                  sx={{
-                    color: currentProgress.progress.percent > 50 ? 'white' : 'black',
-                    fontWeight: 'bold',
-                    textShadow: currentProgress.progress.percent > 50 ?
-                      '1px 1px 2px rgba(0,0,0,0.7)' :
-                      '1px 1px 2px rgba(255,255,255,0.7)'
-                  }}
-                >
-                  {overlayTitle}
-                </Typography>
+                <Box sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  maxWidth: '100%',
+                  overflow: 'hidden'
+                }}>
+                  {overlayContent.title && (
+                    <Typography
+                      variant="body2"
+                      noWrap
+                      sx={{
+                        flex: 1,
+                        minWidth: 0,
+                        color: currentProgress.progress.percent > 50 ? 'white' : 'black',
+                        fontWeight: 'bold',
+                        textShadow: currentProgress.progress.percent > 50 ?
+                          '1px 1px 2px rgba(0,0,0,0.7)' :
+                          '1px 1px 2px rgba(255,255,255,0.7)'
+                      }}
+                    >
+                      {overlayContent.title}
+                    </Typography>
+                  )}
+                  {overlayContent.eta && (
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        flexShrink: 0,
+                        whiteSpace: 'nowrap',
+                        color: currentProgress.progress.percent > 50 ? 'white' : 'black',
+                        fontWeight: 'bold',
+                        textShadow: currentProgress.progress.percent > 50 ?
+                          '1px 1px 2px rgba(0,0,0,0.7)' :
+                          '1px 1px 2px rgba(255,255,255,0.7)'
+                      }}
+                    >
+                      {overlayContent.title ? `· ETA ${overlayContent.eta}` : `ETA ${overlayContent.eta}`}
+                    </Typography>
+                  )}
+                </Box>
               </Box>
             </Box>
 
@@ -512,6 +683,13 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             </Box>
           </Box>
         )}
+
+        {/* Terminate Job Dialog */}
+        <TerminateJobDialog
+          open={showTerminateDialog}
+          onClose={() => setShowTerminateDialog(false)}
+          onConfirm={handleTerminate}
+        />
       </Card>
     </Grid>
   );
