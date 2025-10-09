@@ -31,6 +31,10 @@ jest.mock('../fileCheckModule', () => ({
   applyVideoUpdates: jest.fn()
 }));
 
+jest.mock('../jobModule', () => ({
+  getAllJobs: jest.fn().mockReturnValue({})
+}));
+
 describe('ChannelModule', () => {
   let ChannelModule;
   let fs;
@@ -1488,11 +1492,53 @@ describe('ChannelModule', () => {
     });
 
     describe('channelAutoDownload', () => {
-      test('should trigger channel downloads', () => {
+      let jobModule;
+
+      beforeEach(() => {
+        jobModule = require('../jobModule');
+        jobModule.getAllJobs.mockReturnValue({});
+        downloadModule.doChannelDownloads.mockClear();
+      });
+
+      test('should trigger channel downloads when no job is running', () => {
+        jobModule.getAllJobs.mockReturnValue({});
+
         ChannelModule.channelAutoDownload();
 
         expect(downloadModule.doChannelDownloads).toHaveBeenCalled();
         expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Running new Channel Downloads'));
+      });
+
+      test('should skip channel downloads when job is in progress', () => {
+        jobModule.getAllJobs.mockReturnValue({
+          'job-123': { jobType: 'Channel Downloads', status: 'In Progress' }
+        });
+
+        ChannelModule.channelAutoDownload();
+
+        expect(downloadModule.doChannelDownloads).not.toHaveBeenCalled();
+        expect(consoleLogSpy).toHaveBeenCalledWith('Skipping scheduled channel download - previous download still in progress');
+      });
+
+      test('should skip channel downloads when job is pending', () => {
+        jobModule.getAllJobs.mockReturnValue({
+          'job-456': { jobType: 'Channel Downloads', status: 'Pending' }
+        });
+
+        ChannelModule.channelAutoDownload();
+
+        expect(downloadModule.doChannelDownloads).not.toHaveBeenCalled();
+        expect(consoleLogSpy).toHaveBeenCalledWith('Skipping scheduled channel download - previous download still in progress');
+      });
+
+      test('should trigger downloads when other job types are running', () => {
+        jobModule.getAllJobs.mockReturnValue({
+          'job-789': { jobType: 'Manually Added Urls', status: 'In Progress' }
+        });
+
+        ChannelModule.channelAutoDownload();
+
+        expect(downloadModule.doChannelDownloads).toHaveBeenCalled();
       });
     });
   });

@@ -10,6 +10,9 @@ const VideoMetadataProcessor = require('./videoMetadataProcessor');
 class DownloadExecutor {
   constructor() {
     this.tempChannelsFile = null;
+    // Timeout configuration
+    this.activityTimeoutMs = 30 * 60 * 1000; // 30 minutes of no activity
+    this.maxAbsoluteTimeoutMs = 4 * 60 * 60 * 1000; // 4 hours maximum runtime
   }
 
   getCountOfDownloadedVideos() {
@@ -64,22 +67,83 @@ class DownloadExecutor {
       monitor.videoCount.total = urlCount;
     }
 
-    // Calculate process timeout based on configuration
-    const processTimeoutMs = Math.max(
-      config.downloadSocketTimeoutSeconds * 1000 * (config.downloadRetryCount + 1),
-      20 * 60 * 1000
-    );
-
     return new Promise((resolve, reject) => {
-      console.log('Setting timeout for ending job');
-      const timer = setTimeout(() => {
-        proc.kill('SIGKILL');
-        reject(new Error('Download timeout exceeded'));
-      }, processTimeoutMs);
-
       console.log(`Running yt-dlp for ${jobType}`);
       console.log('Command args:', args);
       const proc = spawn('yt-dlp', args);
+
+      // Activity-based timeout tracking
+      let lastActivityTime = Date.now();
+      const jobStartTime = Date.now();
+      let timeoutChecker = null;
+      let gracefulShutdownInProgress = false;
+      let shutdownReason = null;
+
+      const resetActivityTimer = () => {
+        lastActivityTime = Date.now();
+      };
+
+      const checkTimeout = () => {
+        const now = Date.now();
+        const timeSinceActivity = now - lastActivityTime;
+        const totalRuntime = now - jobStartTime;
+
+        if (timeSinceActivity > this.activityTimeoutMs) {
+          return {
+            timeout: true,
+            reason: `No download activity for ${Math.round(timeSinceActivity / 60000)} minutes`
+          };
+        }
+
+        if (totalRuntime > this.maxAbsoluteTimeoutMs) {
+          return {
+            timeout: true,
+            reason: `Maximum runtime limit of ${Math.round(this.maxAbsoluteTimeoutMs / 3600000)} hours reached`
+          };
+        }
+
+        return { timeout: false };
+      };
+
+      const initiateGracefulShutdown = (reason) => {
+        if (gracefulShutdownInProgress) return;
+        gracefulShutdownInProgress = true;
+        shutdownReason = reason;
+
+        console.log(`Initiating graceful shutdown: ${reason}`);
+
+        // Send SIGTERM to allow process to finish current video
+        try {
+          proc.kill('SIGTERM');
+        } catch (err) {
+          console.log('Error sending SIGTERM:', err.message);
+        }
+
+        // Wait up to 60 seconds for graceful exit, then force kill
+        setTimeout(() => {
+          if (proc.exitCode === null && proc.signalCode === null) {
+            console.log('Grace period expired, forcing kill with SIGKILL');
+            try {
+              proc.kill('SIGKILL');
+            } catch (err) {
+              console.log('Error sending SIGKILL:', err.message);
+            }
+          }
+        }, 60 * 1000);
+      };
+
+      // Check timeout periodically (every minute)
+      timeoutChecker = setInterval(() => {
+        const check = checkTimeout();
+        if (check.timeout) {
+          clearInterval(timeoutChecker);
+          timeoutChecker = null;
+          initiateGracefulShutdown(check.reason);
+        }
+      }, 60 * 1000); // Check every minute
+
+      // Initial activity
+      resetActivityTimer();
 
       const partialDestinations = new Set();
       let partialCleanupPerformed = false;
@@ -129,6 +193,16 @@ class DownloadExecutor {
           .forEach((line) => {
             console.log(line); // log the data in real-time
 
+            // Track activity indicators and reset timeout
+            // Reset on any download progress output
+            if (line.includes('[download]') ||
+                line.includes('[Merger]') ||
+                line.includes('[MoveFiles]') ||
+                line.includes('[Metadata]') ||
+                line.includes('Downloading item')) {
+              resetActivityTimer();
+            }
+
             // Track destination files for cleanup
             if (line.startsWith('[download] Destination:')) {
               const destPath = line.replace('[download] Destination:', '').trim();
@@ -147,6 +221,8 @@ class DownloadExecutor {
               const jsonProgress = monitor.processProgress(jsonPortion, line, config);
               if (jsonProgress) {
                 structuredProgress = jsonProgress;
+                // Reset timer on actual progress updates
+                resetActivityTimer();
               }
             }
 
@@ -200,7 +276,11 @@ class DownloadExecutor {
       });
 
       proc.on('exit', async (code, signal) => {
-        clearTimeout(timer);
+        // Clean up timeout checker
+        if (timeoutChecker) {
+          clearInterval(timeoutChecker);
+          timeoutChecker = null;
+        }
 
         // Also check the complete stderr buffer for bot detection
         if (!botDetected && stderrBuffer &&
@@ -277,6 +357,24 @@ class DownloadExecutor {
             error: 'COOKIES_REQUIRED'
           });
           jobErrorCode = 'COOKIES_REQUIRED';
+        } else if (gracefulShutdownInProgress || shutdownReason) {
+          // Handle timeout/graceful shutdown
+          await this.cleanupPartialFiles(Array.from(partialDestinations));
+          partialCleanupPerformed = true;
+
+          const completedCount = videoData.length;
+          status = 'Terminated';
+          output = `${completedCount} video${completedCount !== 1 ? 's' : ''} completed before termination`;
+
+          await jobModule.updateJob(jobId, {
+            status: status,
+            endDate: Date.now(),
+            output: output,
+            data: { videos: videoData || [] },
+            notes: shutdownReason || 'Download terminated due to timeout',
+          });
+
+          console.log(`Job terminated: ${shutdownReason}. Saved ${completedCount} completed videos.`);
         } else if (httpForbiddenDetected) {
           await this.cleanupPartialFiles(Array.from(partialDestinations));
           partialCleanupPerformed = true;
@@ -350,7 +448,11 @@ class DownloadExecutor {
         // Create a more informative final message
         let finalText;
         let finalErrorCode = jobErrorCode;
-        if (botDetected) {
+        if (gracefulShutdownInProgress || shutdownReason) {
+          finalState = 'terminated';
+          const completedCount = videoData.length;
+          finalText = `Download terminated: ${shutdownReason}. ${completedCount} video${completedCount !== 1 ? 's' : ''} completed successfully.`;
+        } else if (botDetected) {
           finalState = 'failed';
           finalErrorCode = 'COOKIES_REQUIRED';
           finalText = 'Download failed: Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.';
@@ -395,7 +497,11 @@ class DownloadExecutor {
           }
         };
 
-        if (isFinalError) {
+        if (finalState === 'terminated') {
+          // Terminated jobs are warnings, not full errors
+          finalPayload.warning = true;
+          finalPayload.terminationReason = shutdownReason;
+        } else if (isFinalError) {
           finalPayload.error = true;
           if (finalErrorCode) {
             finalPayload.errorCode = finalErrorCode;
@@ -449,13 +555,16 @@ class DownloadExecutor {
       });
 
       proc.on('error', async (err) => {
-        clearTimeout(timer);
+        if (timeoutChecker) {
+          clearInterval(timeoutChecker);
+          timeoutChecker = null;
+        }
         await this.cleanupPartialFiles(Array.from(partialDestinations));
         partialCleanupPerformed = true;
         reject(err);
       });
     }).catch((error) => {
-      console.log(error.message);
+      console.log('Download process error:', error.message);
 
       // Clean up temporary channels file on error
       if (this.tempChannelsFile) {
@@ -467,9 +576,11 @@ class DownloadExecutor {
         this.tempChannelsFile = null;
       }
 
+      // This catch block is now only for unexpected errors, not timeouts
+      // Timeouts are handled gracefully in the exit handler
       jobModule.updateJob(jobId, {
-        status: 'Killed',
-        output: 'Job time exceeded timeout',
+        status: 'Error',
+        output: 'Download process error: ' + error.message,
       });
     });
   }

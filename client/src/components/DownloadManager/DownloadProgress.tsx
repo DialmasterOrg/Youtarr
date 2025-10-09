@@ -64,6 +64,22 @@ interface FinalSummary {
   completedAt?: string;
 }
 
+// Format ETA seconds to human readable format (e.g., "2m5s", "1h5m", "45s")
+export const formatEta = (seconds: number): string => {
+  if (!seconds || seconds <= 0) return '';
+
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+
+  const parts: string[] = [];
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (secs > 0 && hours === 0) parts.push(`${secs}s`); // Only show seconds if no hours
+
+  return parts.join('');
+};
+
 const DownloadProgress: React.FC<DownloadProgressProps> = ({
   downloadProgressRef,
   downloadInitiatedRef,
@@ -79,6 +95,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
   const [finalSummary, setFinalSummary] = useState<FinalSummary | null>(null);
   const [showProgress, setShowProgress] = useState(false);
   const [errorDetails, setErrorDetails] = useState<ErrorDetails | null>(null);
+  const [warningDetails, setWarningDetails] = useState<{ message: string; reason?: string } | null>(null);
   const navigate = useNavigate();
   const wsContext = useContext(WebSocketContext);
   if (!wsContext) {
@@ -95,6 +112,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     switch(currentProgress.state) {
       case 'initiating': return '#9e9e9e'; // Grey
       case 'complete': return '#66bb6a'; // Green
+      case 'terminated': return '#ff9800'; // Orange (warning)
       case 'error': return '#ef5350'; // Red
       default: return '#42a5f5'; // Blue
     }
@@ -109,6 +127,15 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     if (title === 'Unknown title' || title === 'Unknown Title') {
       return '';
     }
+
+    // Append ETA if available
+    const eta = currentProgress.progress?.etaSeconds;
+    const formattedEta = formatEta(eta || 0);
+
+    if (formattedEta && title) {
+      return `${title} · ETA ${formattedEta}`;
+    }
+
     return title;
   }, [currentProgress]);
 
@@ -127,6 +154,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
       case 'metadata': return 'Adding metadata...';
       case 'processing': return 'Processing file...';
       case 'complete': return 'Download completed';
+      case 'terminated': return 'Download terminated';
       case 'error': return 'Download failed';
       default: return 'Processing...';
     }
@@ -167,6 +195,15 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
       if (payload.clearPreviousSummary) {
         setFinalSummary(null);
         setErrorDetails(null);
+        setWarningDetails(null);
+      }
+
+      // Check for warning messages (terminated downloads)
+      if (payload.warning && payload.terminationReason) {
+        setWarningDetails({
+          message: payload.text || 'Download terminated',
+          reason: payload.terminationReason
+        });
       }
 
       // Check for error messages, especially cookie-related
@@ -199,11 +236,19 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
         if (progress.state === 'initiating' || progress.state === 'downloading_video') {
           setFinalSummary(null);
           setErrorDetails(null);
+          setWarningDetails(null);
         }
 
         // Handle completion or failure
         if (progress.state === 'complete') {
           // Clear progress after a delay to show final summary
+          setTimeout(() => {
+            setShowProgress(false);
+            setCurrentProgress(null);
+            setVideoCount({ current: 0, total: 0, completed: 0, skipped: 0, skippedThisChannel: 0 });
+          }, 2000);
+        } else if (progress.state === 'terminated') {
+          // Clear progress after a delay to show final state and allow summary to display
           setTimeout(() => {
             setShowProgress(false);
             setCurrentProgress(null);
@@ -290,6 +335,18 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
               <AlertTitle>Download Failed</AlertTitle>
               <Typography variant="body2">
                 {errorDetails.message}
+              </Typography>
+            </Alert>
+          </Box>
+        )}
+
+        {/* Show warning if available (terminated downloads) */}
+        {warningDetails && !currentProgress && !errorDetails && (
+          <Box sx={{ px: 2, pb: 2 }}>
+            <Alert severity="warning">
+              <AlertTitle>Download Terminated</AlertTitle>
+              <Typography variant="body2">
+                {warningDetails.reason || warningDetails.message}
               </Typography>
             </Alert>
           </Box>

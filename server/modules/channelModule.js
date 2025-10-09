@@ -345,6 +345,7 @@ class ChannelModule {
   /**
    * Trigger automatic channel video downloads.
    * Called by cron scheduler based on configured frequency.
+   * Skips execution if a Channel Downloads job is already running to prevent queue backup.
    * @returns {void}
    */
   channelAutoDownload() {
@@ -353,6 +354,20 @@ class ChannelModule {
       'Running new Channel Downloads at interval: ' +
         configModule.getConfig().channelDownloadFrequency
     );
+
+    // Check if a Channel Downloads job is already running
+    const jobModule = require('./jobModule');
+    const jobs = jobModule.getAllJobs();
+    const hasRunningChannelDownload = Object.values(jobs).some(
+      job => job.jobType === 'Channel Downloads' &&
+             (job.status === 'In Progress' || job.status === 'Pending')
+    );
+
+    if (hasRunningChannelDownload) {
+      console.log('Skipping scheduled channel download - previous download still in progress');
+      return;
+    }
+
     downloadModule.doChannelDownloads();
   }
 
