@@ -140,6 +140,8 @@ function Configuration({ token }: ConfigurationProps) {
     autoRemovalEnabled: false,
     autoRemovalFreeSpaceThreshold: '',
     autoRemovalVideoAgeThreshold: '',
+    useTmpForDownloads: false,
+    tmpFilePath: '/tmp/youtarr-downloads',
   });
   const [openPlexLibrarySelector, setOpenPlexLibrarySelector] = useState(false);
   const [openPlexAuthDialog, setOpenPlexAuthDialog] = useState(false);
@@ -148,7 +150,8 @@ function Configuration({ token }: ConfigurationProps) {
   const [isPlatformManaged, setIsPlatformManaged] = useState({
     youtubeOutputDirectory: false,
     plexUrl: false,
-    authEnabled: true
+    authEnabled: true,
+    useTmpForDownloads: false
   });
   const [deploymentEnvironment, setDeploymentEnvironment] = useState<{
     inDocker: boolean;
@@ -961,6 +964,7 @@ function Configuration({ token }: ConfigurationProps) {
       'autoRemovalEnabled',
       'autoRemovalFreeSpaceThreshold',
       'autoRemovalVideoAgeThreshold',
+      'useTmpForDownloads',
     ];
     const changed = keysToCompare.some((k) => {
       return (config as any)[k] !== (initialConfig as any)[k];
@@ -1297,6 +1301,37 @@ function Configuration({ token }: ConfigurationProps) {
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
                   Note: H.264 produces larger file sizes but offers maximum compatibility. This is a preference and will fall back to available codecs.
                 </Typography>
+              </Box>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      name="useTmpForDownloads"
+                      checked={config.useTmpForDownloads}
+                      onChange={handleCheckboxChange}
+                      disabled={isPlatformManaged.useTmpForDownloads}
+                    />
+                  }
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      Use tmp dir for download processing
+                      {isPlatformManaged.useTmpForDownloads && (
+                        <Chip
+                          label={deploymentEnvironment.platform?.toLowerCase() === "elfhosted" ? "Managed by Elfhosted" : "Platform Managed"}
+                          size="small"
+                        />
+                      )}
+                    </Box>
+                  }
+                />
+                {getInfoIcon(
+                  isPlatformManaged.useTmpForDownloads
+                    ? 'This setting is managed by your platform deployment and cannot be changed.'
+                    : 'Downloads to local /tmp first, then moves to final location when complete. Recommended for network-mounted storage (NFS, SMB, cloud mounts) to improve performance and avoid file locking issues with Plex or other processes reading from the same location. Not needed for local drives or SSDs.'
+                )}
               </Box>
             </Grid>
 

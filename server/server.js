@@ -321,7 +321,8 @@ const initialize = async () => {
       safeConfig.isPlatformManaged = {
         youtubeOutputDirectory: !!process.env.DATA_PATH,
         plexUrl: !!process.env.PLEX_URL,
-        authEnabled: process.env.AUTH_ENABLED === 'false' ? false : true
+        authEnabled: process.env.AUTH_ENABLED === 'false' ? false : true,
+        useTmpForDownloads: configModule.isElfhostedPlatform()
       };
 
       // Add deployment environment information

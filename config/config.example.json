@@ -16,6 +16,8 @@
   "enableStallDetection": true,
   "stallDetectionWindowSeconds": 30,
   "stallDetectionRateThreshold": "100K",
+  "useTmpForDownloads": false,
+  "tmpFilePath": "/tmp/youtarr-downloads",
   "cookiesEnabled": false,
   "customCookiesUploaded": false,
   "writeChannelPosters": true,

@@ -1106,6 +1106,256 @@ describe('ConfigModule', () => {
     });
   });
 
+  describe('temp download settings', () => {
+    beforeEach(() => {
+      delete process.env.PLATFORM;
+    });
+
+    test('should initialize useTmpForDownloads to false when missing', () => {
+      const configWithoutTmp = { ...mockConfig };
+      delete configWithoutTmp.useTmpForDownloads;
+      delete configWithoutTmp.tmpFilePath;
+
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithoutTmp));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithoutTmp)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.useTmpForDownloads).toBe(false);
+      expect(FreshConfigModule.config.tmpFilePath).toBe('/tmp/youtarr-downloads');
+    });
+
+    test('should preserve existing temp download settings', () => {
+      const configWithTmp = {
+        ...mockConfig,
+        useTmpForDownloads: true,
+        tmpFilePath: '/custom/tmp/path'
+      };
+
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithTmp));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithTmp)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.useTmpForDownloads).toBe(true);
+      expect(FreshConfigModule.config.tmpFilePath).toBe('/custom/tmp/path');
+    });
+
+    test('migration 1.42.0 should add temp download settings', () => {
+      ConfigModule = require('../configModule');
+
+      const configWithoutTmp = {
+        plexApiKey: 'test',
+        youtubeOutputDirectory: '/test'
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithoutTmp);
+
+      expect(migrated.useTmpForDownloads).toBe(false);
+      expect(migrated.tmpFilePath).toBe('/tmp/youtarr-downloads');
+    });
+
+    test('migration 1.42.0 should preserve existing temp download settings', () => {
+      ConfigModule = require('../configModule');
+
+      const configWithTmp = {
+        plexApiKey: 'test',
+        youtubeOutputDirectory: '/test',
+        useTmpForDownloads: true,
+        tmpFilePath: '/custom/temp'
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithTmp);
+
+      expect(migrated.useTmpForDownloads).toBe(true);
+      expect(migrated.tmpFilePath).toBe('/custom/temp');
+    });
+
+    test('should override temp download settings for Elfhosted platform', () => {
+      process.env.PLATFORM = 'elfhosted';
+      process.env.IN_DOCKER_CONTAINER = '1';
+
+      const mockFs = {
+        existsSync: jest.fn().mockReturnValue(true),
+        writeFileSync: jest.fn(),
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify({
+          ...mockConfig,
+          useTmpForDownloads: false,
+          tmpFilePath: '/tmp/youtarr-downloads'
+        })),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        mkdirSync: jest.fn()
+      };
+
+      jest.resetModules();
+      jest.doMock('fs', () => mockFs);
+      jest.doMock('uuid', () => ({ v4: jest.fn(() => 'test-uuid-1234') }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.useTmpForDownloads).toBe(true);
+      expect(FreshConfigModule.config.tmpFilePath).toBe('/app/config/temp_downloads');
+
+      delete process.env.PLATFORM;
+      delete process.env.IN_DOCKER_CONTAINER;
+    });
+
+    test('should create temp download directory for Elfhosted', () => {
+      process.env.PLATFORM = 'elfhosted';
+      process.env.DATA_PATH = '/storage/youtube';
+
+      const mockFs = {
+        existsSync: jest.fn()
+          .mockReturnValueOnce(false)  // config.json doesn't exist
+          .mockReturnValueOnce(true)   // config dir exists check
+          .mockReturnValueOnce(true)   // image path check
+          .mockReturnValueOnce(true)   // jobs path check
+          .mockReturnValueOnce(false)  // temp download dir doesn't exist
+          .mockReturnValue(true),
+        mkdirSync: jest.fn(),
+        writeFileSync: jest.fn(),
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify({
+          youtubeOutputDirectory: '/storage/youtube',
+          uuid: 'test-uuid',
+          useTmpForDownloads: false
+        })),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() })
+      };
+
+      jest.resetModules();
+      jest.doMock('fs', () => mockFs);
+      jest.doMock('uuid', () => ({ v4: jest.fn(() => 'test-uuid-1234') }));
+
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      require('../configModule');
+
+      // Find the mkdirSync call for temp_downloads
+      const tempDownloadCall = mockFs.mkdirSync.mock.calls.find(call =>
+        call[0] === '/app/config/temp_downloads'
+      );
+      expect(tempDownloadCall).toBeDefined();
+      expect(tempDownloadCall[1]).toEqual({ recursive: true });
+
+      expect(consoleSpy).toHaveBeenCalledWith('Created Elfhosted temp downloads directory: /app/config/temp_downloads');
+
+      consoleSpy.mockRestore();
+      delete process.env.PLATFORM;
+      delete process.env.DATA_PATH;
+    });
+
+    test('should not save Elfhosted temp download overrides to config file', () => {
+      process.env.PLATFORM = 'ELFHOSTED';
+
+      const mockFs = {
+        existsSync: jest.fn().mockReturnValue(true),
+        writeFileSync: jest.fn(),
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify({
+          ...mockConfig,
+          useTmpForDownloads: false,
+          tmpFilePath: '/tmp/youtarr-downloads'
+        })),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        mkdirSync: jest.fn()
+      };
+
+      jest.resetModules();
+      jest.doMock('fs', () => mockFs);
+      jest.doMock('uuid', () => ({ v4: jest.fn(() => 'test-uuid-1234') }));
+
+      const FreshConfigModule = require('../configModule');
+
+      FreshConfigModule.saveConfig();
+
+      const savedData = mockFs.writeFileSync.mock.calls[mockFs.writeFileSync.mock.calls.length - 1][1];
+      const parsed = JSON.parse(savedData);
+
+      expect(parsed.useTmpForDownloads).toBeUndefined();
+      expect(parsed.tmpFilePath).toBeUndefined();
+
+      delete process.env.PLATFORM;
+    });
+
+    test('should maintain Elfhosted override after config update', () => {
+      process.env.PLATFORM = 'elfhosted';
+
+      const mockFs = {
+        existsSync: jest.fn().mockReturnValue(true),
+        writeFileSync: jest.fn(),
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(mockConfig)),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        mkdirSync: jest.fn()
+      };
+
+      jest.resetModules();
+      jest.doMock('fs', () => mockFs);
+      jest.doMock('uuid', () => ({ v4: jest.fn(() => 'test-uuid-1234') }));
+
+      const FreshConfigModule = require('../configModule');
+
+      const newConfig = {
+        ...mockConfig,
+        useTmpForDownloads: false,
+        tmpFilePath: '/should/be/overridden'
+      };
+
+      FreshConfigModule.updateConfig(newConfig);
+
+      expect(FreshConfigModule.config.useTmpForDownloads).toBe(true);
+      expect(FreshConfigModule.config.tmpFilePath).toBe('/app/config/temp_downloads');
+
+      delete process.env.PLATFORM;
+    });
+
+    test('isElfhostedPlatform should return true when PLATFORM=elfhosted', () => {
+      process.env.PLATFORM = 'elfhosted';
+      ConfigModule = require('../configModule');
+      expect(ConfigModule.isElfhostedPlatform()).toBe(true);
+      delete process.env.PLATFORM;
+    });
+
+    test('isElfhostedPlatform should be case-insensitive', () => {
+      process.env.PLATFORM = 'ELFHOSTED';
+      ConfigModule = require('../configModule');
+      expect(ConfigModule.isElfhostedPlatform()).toBe(true);
+      delete process.env.PLATFORM;
+    });
+
+    test('isElfhostedPlatform should return falsy when PLATFORM is not set', () => {
+      delete process.env.PLATFORM;
+      ConfigModule = require('../configModule');
+      expect(ConfigModule.isElfhostedPlatform()).toBeFalsy();
+    });
+
+    test('isElfhostedPlatform should return false for other platforms', () => {
+      process.env.PLATFORM = 'other-platform';
+      ConfigModule = require('../configModule');
+      expect(ConfigModule.isElfhostedPlatform()).toBe(false);
+      delete process.env.PLATFORM;
+    });
+  });
+
   describe('cookie functionality', () => {
     beforeEach(() => {
       jest.resetModules();

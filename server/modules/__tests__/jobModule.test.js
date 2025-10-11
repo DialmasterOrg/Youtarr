@@ -12,7 +12,11 @@ jest.mock('../../models/video');
 jest.mock('../../models/jobvideo');
 jest.mock('../../models/jobvideodownload');
 jest.mock('../../models/channelvideo');
-jest.mock('../download/downloadExecutor');
+jest.mock('../download/downloadExecutor', () => {
+  return jest.fn().mockImplementation(() => ({
+    cleanupInProgressVideos: jest.fn().mockResolvedValue()
+  }));
+});
 
 const { v4: uuidv4 } = require('uuid');
 
@@ -118,12 +122,6 @@ describe('JobModule', () => {
     JobVideoDownload.destroy = jest.fn().mockResolvedValue(0);
 
     ChannelVideo.findOrCreate = jest.fn().mockResolvedValue([{}, true]);
-
-    // Mock downloadExecutor
-    const DownloadExecutor = require('../download/downloadExecutor');
-    DownloadExecutor.mockImplementation(() => ({
-      cleanupInProgressVideos: jest.fn().mockResolvedValue()
-    }));
   });
 
   afterEach(() => {
@@ -331,11 +329,14 @@ describe('JobModule', () => {
       JobVideoDownload.findAll.mockResolvedValue([]);
       JobVideoDownload.destroy.mockResolvedValue(0);
 
+      // Reset and reconfigure the DownloadExecutor mock for this specific test
       const mockCleanup = jest.fn().mockResolvedValue();
-      const DownloadExecutor = require('../download/downloadExecutor');
-      DownloadExecutor.mockImplementation(() => ({
-        cleanupInProgressVideos: mockCleanup
-      }));
+      jest.resetModules();
+      jest.doMock('../download/downloadExecutor', () => {
+        return jest.fn().mockImplementation(() => ({
+          cleanupInProgressVideos: mockCleanup
+        }));
+      });
 
       JobModule = require('../jobModule');
 

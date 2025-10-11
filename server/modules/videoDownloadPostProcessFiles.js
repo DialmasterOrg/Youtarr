@@ -3,6 +3,7 @@ const path = require('path');
 const { execSync, spawnSync } = require('child_process');
 const configModule = require('./configModule');
 const nfoGenerator = require('./nfoGenerator');
+const tempPathManager = require('./download/tempPathManager');
 const { JobVideoDownload } = require('../models');
 
 const activeJobId = process.env.YOUTARR_JOB_ID;
@@ -172,8 +173,15 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     fs.ensureDirSync(directoryPath); // ensures that the directory exists, if it doesn't it will create it
     const newJsonPath = path.join(directoryPath, `${id}.info.json`); // define the new path
 
+    // Calculate the final path for _actual_filepath
+    // If temp downloads are enabled, we need to store the FINAL path, not the temp path
+    const finalVideoPathForJson = tempPathManager.isEnabled() && tempPathManager.isTempPath(videoPath)
+      ? tempPathManager.convertTempToFinal(videoPath)
+      : videoPath;
+
     // Add the actual video filepath to the JSON data before moving it
-    jsonData._actual_filepath = videoPath;
+    // IMPORTANT: This should always be the final path, never the temp path
+    jsonData._actual_filepath = finalVideoPathForJson;
     fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 2));
 
     fs.moveSync(jsonPath, newJsonPath, { overwrite: true }); // move the file
@@ -354,11 +362,56 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       }
     }
 
+    // If temp downloads are enabled, move files from temp to final location
+    let finalVideoPath = videoPath;
+
+    if (tempPathManager.isEnabled() && tempPathManager.isTempPath(videoPath)) {
+      console.log('[Post-Process] Temp downloads enabled, moving files to final location...');
+
+      // Calculate final paths
+      const finalPath = tempPathManager.convertTempToFinal(videoPath);
+      const finalDir = path.dirname(finalPath);
+
+      console.log('[Post-Process] Moving video directory:');
+      console.log(`  From (temp): ${videoDirectory}`);
+      console.log(`  To (final): ${finalDir}`);
+
+      try {
+        // Move the entire video directory from temp to final location
+        const moveResult = await tempPathManager.moveToFinal(videoDirectory);
+
+        if (!moveResult.success) {
+          console.error(`[Post-Process] ERROR: Failed to move files to final location: ${moveResult.error}`);
+          console.error(`[Post-Process] Files remain in temp location: ${videoDirectory}`);
+          console.error('[Post-Process] This video will be marked as failed.');
+          // Exit with error code to signal failure
+          process.exit(1);
+        }
+
+        // Update paths to final locations
+        finalVideoPath = finalPath;
+
+        console.log(`[Post-Process] Successfully moved to final location: ${finalDir}`);
+
+        // Verify the final file exists
+        if (!fs.existsSync(finalVideoPath)) {
+          console.error(`[Post-Process] ERROR: Final video file doesn't exist after move: ${finalVideoPath}`);
+          process.exit(1);
+        }
+
+      } catch (error) {
+        console.error('[Post-Process] ERROR during move operation:', error);
+        console.error(`[Post-Process] Files remain in temp location: ${videoDirectory}`);
+        process.exit(1);
+      }
+    }
+
     // Mark this video as completed in the JobVideoDownload tracking table
+    // IMPORTANT: Always use final path in database, never temp path
     if (activeJobId) {
       try {
         const [updatedCount] = await JobVideoDownload.update(
-          { status: 'completed', file_path: videoPath },
+          { status: 'completed', file_path: finalVideoPath },
           {
             where: {
               job_id: activeJobId,
@@ -368,6 +421,7 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         );
         if (updatedCount > 0) {
           console.log(`Marked video ${id} as completed in tracking for job ${activeJobId}`);
+          console.log(`  Stored path in DB: ${finalVideoPath}`);
         }
       } catch (err) {
         console.error(`Error updating JobVideoDownload status for ${id}:`, err.message);

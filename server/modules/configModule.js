@@ -30,6 +30,12 @@ class ConfigModule extends EventEmitter {
       if (process.env.DATA_PATH) {
         this.config.youtubeOutputDirectory = process.env.DATA_PATH;
       }
+
+      // Override temp download settings for Elfhosted platform
+      if (this.isElfhostedPlatform()) {
+        this.config.useTmpForDownloads = true;
+        this.config.tmpFilePath = '/app/config/temp_downloads';
+      }
     } else {
       this.ffmpegPath = this.config.devffmpegPath;
       this.directoryPath = this.config.devYoutubeOutputDirectory;
@@ -179,6 +185,17 @@ class ConfigModule extends EventEmitter {
       configModified = true;
     }
 
+    // Initialize temp download settings if not present
+    if (this.config.useTmpForDownloads === undefined) {
+      this.config.useTmpForDownloads = false;
+      configModified = true;
+    }
+
+    if (!this.config.tmpFilePath) {
+      this.config.tmpFilePath = '/tmp/youtarr-downloads';
+      configModified = true;
+    }
+
     // Check if a UUID exists in the config
     if (!this.config.uuid) {
       // Generate a new UUID
@@ -271,7 +288,9 @@ class ConfigModule extends EventEmitter {
         writeVideoNfoFiles: true,
         notificationsEnabled: false,
         notificationService: 'discord',
-        discordWebhookUrl: ''
+        discordWebhookUrl: '',
+        useTmpForDownloads: false,
+        tmpFilePath: '/tmp/youtarr-downloads'
       };
     }
 
@@ -298,6 +317,10 @@ class ConfigModule extends EventEmitter {
     return !!process.env.DATA_PATH;
   }
 
+  isElfhostedPlatform() {
+    return process.env.PLATFORM && process.env.PLATFORM.toLowerCase() === 'elfhosted';
+  }
+
   ensurePlatformDirectories() {
     const imagePath = this.getImagePath();
     if (!fs.existsSync(imagePath)) {
@@ -310,6 +333,15 @@ class ConfigModule extends EventEmitter {
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true });
       console.log(`Created platform config directory: ${configDir}`);
+    }
+
+    // Ensure temp download directory exists for Elfhosted
+    if (this.isElfhostedPlatform()) {
+      const tempDownloadPath = '/app/config/temp_downloads';
+      if (!fs.existsSync(tempDownloadPath)) {
+        fs.mkdirSync(tempDownloadPath, { recursive: true });
+        console.log(`Created Elfhosted temp downloads directory: ${tempDownloadPath}`);
+      }
     }
   }
 
@@ -335,6 +367,12 @@ class ConfigModule extends EventEmitter {
       this.config.youtubeOutputDirectory = process.env.DATA_PATH;
     }
 
+    // Override temp download settings for Elfhosted platform
+    if (this.isElfhostedPlatform()) {
+      this.config.useTmpForDownloads = true;
+      this.config.tmpFilePath = '/app/config/temp_downloads';
+    }
+
     this.saveConfig();
     // Emit a change event
     this.emit('change');
@@ -350,6 +388,12 @@ class ConfigModule extends EventEmitter {
     if (process.env.IN_DOCKER_CONTAINER && process.env.DATA_PATH) {
       // Remove the runtime override before saving
       delete configToSave.youtubeOutputDirectory;
+    }
+
+    // Don't save Elfhosted temp download overrides to config file
+    if (this.isElfhostedPlatform()) {
+      delete configToSave.useTmpForDownloads;
+      delete configToSave.tmpFilePath;
     }
 
     fs.writeFileSync(this.configPath, JSON.stringify(configToSave, null, 2));
@@ -425,6 +469,10 @@ class ConfigModule extends EventEmitter {
     defaultConfig.notificationService = 'discord';
     defaultConfig.discordWebhookUrl = '';
 
+    // Temp download settings - disabled by default
+    defaultConfig.useTmpForDownloads = false;
+    defaultConfig.tmpFilePath = '/tmp/youtarr-downloads';
+
     // Generate UUID for instance identification
     defaultConfig.uuid = uuidv4();
 
@@ -462,6 +510,12 @@ class ConfigModule extends EventEmitter {
         // IMPORTANT: If DATA_PATH is set, it ALWAYS overrides config.json
         if (process.env.IN_DOCKER_CONTAINER && process.env.DATA_PATH) {
           this.config.youtubeOutputDirectory = process.env.DATA_PATH;
+        }
+
+        // Override temp download settings for Elfhosted platform
+        if (this.isElfhostedPlatform()) {
+          this.config.useTmpForDownloads = true;
+          this.config.tmpFilePath = '/app/config/temp_downloads';
         }
 
         // Emit a change event
@@ -582,6 +636,19 @@ class ConfigModule extends EventEmitter {
         // Add video codec preference setting
         if (!migrated.videoCodec) {
           migrated.videoCodec = 'default';
+        }
+
+        return migrated;
+      },
+      '1.42.0': (cfg) => {
+        const migrated = { ...cfg };
+
+        // Add temp download settings
+        if (migrated.useTmpForDownloads === undefined) {
+          migrated.useTmpForDownloads = false;
+        }
+        if (!migrated.tmpFilePath) {
+          migrated.tmpFilePath = '/tmp/youtarr-downloads';
         }
 
         return migrated;

@@ -1,5 +1,6 @@
 const path = require('path');
 const configModule = require('../configModule');
+const tempPathManager = require('./tempPathManager');
 
 // Use proper yt-dlp fallback syntax with comma separator
 // Will use uploader, fall back to channel, then uploader_id
@@ -84,7 +85,11 @@ class YtdlpCommandBuilder {
     const config = configModule.getConfig();
     const res = resolution || config.preferredResolution || '1080';
     const videoCodec = config.videoCodec || 'default';
-    const baseOutputPath = configModule.directoryPath;
+
+    // Use temp path if temp downloads are enabled, otherwise use final path
+    const baseOutputPath = tempPathManager.isEnabled()
+      ? tempPathManager.getTempBasePath()
+      : configModule.directoryPath;
 
     // Add cookies args first if enabled
     const cookiesArgs = this.buildCookiesArgs();
@@ -139,7 +144,11 @@ class YtdlpCommandBuilder {
     const config = configModule.getConfig();
     const res = resolution || config.preferredResolution || '1080';
     const videoCodec = config.videoCodec || 'default';
-    const baseOutputPath = configModule.directoryPath;
+
+    // Use temp path if temp downloads are enabled, otherwise use final path
+    const baseOutputPath = tempPathManager.isEnabled()
+      ? tempPathManager.getTempBasePath()
+      : configModule.directoryPath;
 
     // Add cookies args first if enabled
     const cookiesArgs = this.buildCookiesArgs();
