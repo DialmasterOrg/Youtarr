@@ -44,6 +44,15 @@ jest.mock('../nfoGenerator', () => ({
   writeVideoNfoFile: jest.fn(),
 }));
 
+const mockTempPathManager = {
+  isEnabled: jest.fn(() => false),
+  isTempPath: jest.fn(() => false),
+  convertTempToFinal: jest.fn((path) => path),
+  moveToFinal: jest.fn(() => Promise.resolve({ success: true }))
+};
+
+jest.mock('../download/tempPathManager', () => mockTempPathManager);
+
 const mockJobVideoDownload = {
   update: jest.fn(() => Promise.resolve([0]))
 };
@@ -56,6 +65,7 @@ const fs = require('fs-extra');
 const childProcess = require('child_process');
 const configModule = require('../configModule');
 const nfoGenerator = require('../nfoGenerator');
+const tempPathManager = require('../download/tempPathManager');
 const { JobVideoDownload } = require('../../models');
 
 const flushPromises = () => new Promise((resolve) => queueMicrotask(resolve));
@@ -84,6 +94,12 @@ describe('videoDownloadPostProcessFiles', () => {
       writeVideoNfoFiles: true,
       ffmpegPath: '/usr/bin/ffmpeg'
     });
+
+    // Reset tempPathManager mocks to default behavior
+    tempPathManager.isEnabled.mockReturnValue(false);
+    tempPathManager.isTempPath.mockReturnValue(false);
+    tempPathManager.convertTempToFinal.mockImplementation((path) => path);
+    tempPathManager.moveToFinal.mockResolvedValue({ success: true });
 
     setTimeoutSpy = jest.spyOn(global, 'setTimeout').mockImplementation((cb) => {
       cb();
@@ -339,5 +355,185 @@ describe('videoDownloadPostProcessFiles', () => {
     expect(consoleSpy).toHaveBeenCalledWith('Error updating JobVideoDownload status for abc123:', 'Database connection failed');
     expect(process.exit).not.toHaveBeenCalled(); // Should not fail entire post-processing
     consoleSpy.mockRestore();
+  });
+
+  describe('tempPathManager integration', () => {
+    const tempVideoPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123].mp4';
+    const tempVideoDir = '/tmp/youtarr-downloads/Channel';
+    const finalVideoPath = '/library/Channel/Video Title [abc123].mp4';
+    const finalVideoDir = '/library/Channel';
+
+    it('writes final path to _actual_filepath when temp downloads enabled', async () => {
+      process.argv = ['node', 'script', tempVideoPath];
+
+      tempPathManager.isEnabled.mockReturnValue(true);
+      tempPathManager.isTempPath.mockReturnValue(true);
+      tempPathManager.convertTempToFinal.mockImplementation((path) => path.replace('/tmp/youtarr-downloads', '/library'));
+      tempPathManager.moveToFinal.mockResolvedValueOnce({ success: true, finalPath: finalVideoDir });
+
+      const tempJsonPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123].info.json';
+      fs.existsSync.mockImplementation((path) => path === tempJsonPath);
+
+      await loadModule();
+      await settleAsync();
+
+      // Verify that _actual_filepath is set to FINAL path, not temp path
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        tempJsonPath,
+        expect.stringContaining('"_actual_filepath": "/library/Channel/Video Title [abc123].mp4"')
+      );
+    });
+
+    it('successfully moves files from temp to final location', async () => {
+      process.argv = ['node', 'script', tempVideoPath];
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+      tempPathManager.isEnabled.mockReturnValue(true);
+      tempPathManager.isTempPath.mockReturnValue(true);
+      tempPathManager.convertTempToFinal.mockImplementation((path) => path.replace('/tmp/youtarr-downloads', '/library'));
+      tempPathManager.moveToFinal.mockResolvedValueOnce({ success: true, finalPath: finalVideoDir });
+
+      const tempJsonPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123].info.json';
+      fs.existsSync.mockImplementation((path) => path === tempJsonPath || path === finalVideoPath);
+
+      await loadModule();
+      await settleAsync();
+
+      // Verify moveToFinal was called with temp directory
+      expect(tempPathManager.moveToFinal).toHaveBeenCalledWith(tempVideoDir);
+
+      // Verify success log
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Successfully moved to final location'));
+
+      // Verify JobVideoDownload was updated with FINAL path
+      expect(JobVideoDownload.update).toHaveBeenCalledWith(
+        { status: 'completed', file_path: finalVideoPath },
+        expect.objectContaining({
+          where: {
+            job_id: 'test-job-id',
+            youtube_id: 'abc123'
+          }
+        })
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    it('exits with error when temp to final move fails', async () => {
+      process.argv = ['node', 'script', tempVideoPath];
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      tempPathManager.isEnabled.mockReturnValue(true);
+      tempPathManager.isTempPath.mockReturnValue(true);
+      tempPathManager.convertTempToFinal.mockImplementation((path) => path.replace('/tmp/youtarr-downloads', '/library'));
+      tempPathManager.moveToFinal.mockResolvedValueOnce({
+        success: false,
+        error: 'Disk full',
+        finalPath: finalVideoDir
+      });
+
+      const tempJsonPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123].info.json';
+      fs.existsSync.mockImplementation((path) => path === tempJsonPath);
+
+      await loadModule();
+      await settleAsync();
+
+      // Verify error was logged
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[Post-Process] ERROR: Failed to move files to final location: Disk full')
+      );
+
+      // Verify process.exit was called with error code
+      expect(process.exit).toHaveBeenCalledWith(1);
+
+      consoleSpy.mockRestore();
+    });
+
+    it('exits with error when final file does not exist after move', async () => {
+      process.argv = ['node', 'script', tempVideoPath];
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      tempPathManager.isEnabled.mockReturnValue(true);
+      tempPathManager.isTempPath.mockReturnValue(true);
+      tempPathManager.convertTempToFinal.mockImplementation((path) => path.replace('/tmp/youtarr-downloads', '/library'));
+      tempPathManager.moveToFinal.mockResolvedValueOnce({ success: true, finalPath: finalVideoDir });
+
+      const tempJsonPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123].info.json';
+      // Simulate final file NOT existing after move
+      fs.existsSync.mockImplementation((path) => path === tempJsonPath);
+
+      await loadModule();
+      await settleAsync();
+
+      // Verify error was logged
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[Post-Process] ERROR: Final video file doesn\'t exist after move')
+      );
+
+      // Verify process.exit was called with error code
+      expect(process.exit).toHaveBeenCalledWith(1);
+
+      consoleSpy.mockRestore();
+    });
+
+    it('exits with error when moveToFinal throws exception', async () => {
+      process.argv = ['node', 'script', tempVideoPath];
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      tempPathManager.isEnabled.mockReturnValue(true);
+      tempPathManager.isTempPath.mockReturnValue(true);
+      tempPathManager.convertTempToFinal.mockImplementation((path) => path.replace('/tmp/youtarr-downloads', '/library'));
+      tempPathManager.moveToFinal.mockRejectedValueOnce(new Error('Permission denied'));
+
+      const tempJsonPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123].info.json';
+      fs.existsSync.mockImplementation((path) => path === tempJsonPath);
+
+      await loadModule();
+      await settleAsync();
+
+      // Verify error was logged
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[Post-Process] ERROR during move operation:',
+        expect.any(Error)
+      );
+
+      // Verify process.exit was called with error code
+      expect(process.exit).toHaveBeenCalledWith(1);
+
+      consoleSpy.mockRestore();
+    });
+
+    it('stores final path in JobVideoDownload when temp downloads enabled', async () => {
+      process.argv = ['node', 'script', tempVideoPath];
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      JobVideoDownload.update.mockResolvedValueOnce([1]);
+
+      tempPathManager.isEnabled.mockReturnValue(true);
+      tempPathManager.isTempPath.mockReturnValue(true);
+      tempPathManager.convertTempToFinal.mockImplementation((path) => path.replace('/tmp/youtarr-downloads', '/library'));
+      tempPathManager.moveToFinal.mockResolvedValueOnce({ success: true, finalPath: finalVideoDir });
+
+      const tempJsonPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123].info.json';
+      fs.existsSync.mockImplementation((path) => path === tempJsonPath || path === finalVideoPath);
+
+      await loadModule();
+      await settleAsync();
+
+      // Verify final path is stored, not temp path
+      expect(JobVideoDownload.update).toHaveBeenCalledWith(
+        { status: 'completed', file_path: finalVideoPath },
+        expect.objectContaining({
+          where: {
+            job_id: 'test-job-id',
+            youtube_id: 'abc123'
+          }
+        })
+      );
+
+      // Verify log message shows final path
+      expect(consoleSpy).toHaveBeenCalledWith(`  Stored path in DB: ${finalVideoPath}`);
+
+      consoleSpy.mockRestore();
+    });
   });
 });

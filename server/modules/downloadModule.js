@@ -2,12 +2,25 @@ const configModule = require('./configModule');
 const jobModule = require('./jobModule');
 const DownloadExecutor = require('./download/downloadExecutor');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
+const tempPathManager = require('./download/tempPathManager');
 
 class DownloadModule {
   constructor() {
     this.config = configModule.getConfig(); // Get the initial configuration
     this.downloadExecutor = new DownloadExecutor();
     configModule.on('change', this.handleConfigChange.bind(this)); // Listen for configuration changes
+
+    // Clean temp directory on startup if temp downloads are enabled
+    this.initializeTempDirectory();
+  }
+
+  async initializeTempDirectory() {
+    try {
+      await tempPathManager.cleanTempDirectory();
+    } catch (error) {
+      console.error('[DownloadModule] Error cleaning temp directory on startup:', error.message);
+      // Don't fail initialization, just log the error
+    }
   }
 
   handleConfigChange(newConfig) {

@@ -5,8 +5,36 @@ jest.mock('child_process');
 jest.mock('node-cron');
 jest.mock('uuid');
 jest.mock('../messageEmitter.js');
-jest.mock('../../models/channel');
-jest.mock('../../models/channelvideo');
+jest.mock('../../models/channel', () => {
+  const { Model } = require('sequelize');
+  class MockChannel extends Model {}
+  MockChannel.findOne = jest.fn();
+  MockChannel.findOrCreate = jest.fn();
+  MockChannel.create = jest.fn();
+  MockChannel.findAll = jest.fn();
+  MockChannel.update = jest.fn();
+  MockChannel.init = jest.fn(() => MockChannel);
+  return MockChannel;
+});
+
+jest.mock('../../models/channelvideo', () => {
+  const { Model } = require('sequelize');
+  class MockChannelVideo extends Model {}
+  MockChannelVideo.findAll = jest.fn();
+  MockChannelVideo.findOrCreate = jest.fn();
+  MockChannelVideo.count = jest.fn();
+  MockChannelVideo.findOne = jest.fn();
+  MockChannelVideo.init = jest.fn(() => MockChannelVideo);
+  return MockChannelVideo;
+});
+
+jest.mock('../../models/video', () => {
+  const { Model } = require('sequelize');
+  class MockVideo extends Model {}
+  MockVideo.findAll = jest.fn();
+  MockVideo.init = jest.fn(() => MockVideo);
+  return MockVideo;
+});
 
 jest.mock('../configModule', () => {
   const EventEmitter = require('events');
@@ -35,6 +63,23 @@ jest.mock('../jobModule', () => ({
   getAllJobs: jest.fn().mockReturnValue({})
 }));
 
+jest.mock('../../db', () => {
+  const mockSequelize = {
+    query: jest.fn().mockResolvedValue([]),
+    define: jest.fn(() => {
+      return class MockModel {
+        static init() { return this; }
+      };
+    }),
+    models: {},
+    authenticate: jest.fn().mockResolvedValue(),
+  };
+  return {
+    sequelize: mockSequelize,
+    Sequelize: require('sequelize').Sequelize
+  };
+});
+
 describe('ChannelModule', () => {
   let ChannelModule;
   let fs;
@@ -58,7 +103,7 @@ describe('ChannelModule', () => {
     description: 'Test Description',
     uploader: 'Test Uploader',
     url: 'https://www.youtube.com/@testchannel',
-    lastFetched: new Date('2024-01-01')
+    lastFetchedByTab: JSON.stringify({ video: new Date('2024-01-01').toISOString() })
   };
 
   const mockVideoData = {
@@ -121,12 +166,9 @@ describe('ChannelModule', () => {
     MessageEmitter.emitMessage = jest.fn();
 
     Channel = require('../../models/channel');
-    Channel.findOne = jest.fn().mockResolvedValue(null);
-    Channel.findOrCreate = jest.fn();
+    Channel.findOne.mockResolvedValue(null);
 
     ChannelVideo = require('../../models/channelvideo');
-    ChannelVideo.findAll = jest.fn();
-    ChannelVideo.findOrCreate = jest.fn();
 
     ChannelModule = require('../channelModule');
   });
@@ -146,6 +188,139 @@ describe('ChannelModule', () => {
   });
 
   describe('Helper Methods', () => {
+    describe('getLastFetchedForTab', () => {
+      test('should return last fetched timestamp for a specific tab', () => {
+        const channel = {
+          ...mockChannelData,
+          lastFetchedByTab: JSON.stringify({
+            video: '2024-01-01T00:00:00.000Z',
+            short: '2024-01-02T00:00:00.000Z'
+          })
+        };
+
+        const result = ChannelModule.getLastFetchedForTab(channel, 'video');
+        expect(result).toEqual(new Date('2024-01-01T00:00:00.000Z'));
+      });
+
+      test('should return null when tab has never been fetched', () => {
+        const channel = {
+          ...mockChannelData,
+          lastFetchedByTab: JSON.stringify({
+            video: '2024-01-01T00:00:00.000Z'
+          })
+        };
+
+        const result = ChannelModule.getLastFetchedForTab(channel, 'short');
+        expect(result).toBeNull();
+      });
+
+      test('should return null when channel has no lastFetchedByTab', () => {
+        const channel = {
+          ...mockChannelData,
+          lastFetchedByTab: null
+        };
+
+        const result = ChannelModule.getLastFetchedForTab(channel, 'video');
+        expect(result).toBeNull();
+      });
+
+      test('should return null when channel is null', () => {
+        const result = ChannelModule.getLastFetchedForTab(null, 'video');
+        expect(result).toBeNull();
+      });
+
+      test('should handle invalid JSON gracefully', () => {
+        const channel = {
+          ...mockChannelData,
+          lastFetchedByTab: 'invalid json'
+        };
+
+        const result = ChannelModule.getLastFetchedForTab(channel, 'video');
+        expect(result).toBeNull();
+        expect(consoleErrorSpy).toHaveBeenCalledWith('Error parsing lastFetchedByTab:', expect.any(Error));
+      });
+    });
+
+    describe('setLastFetchedForTab', () => {
+      test('should update last fetched timestamp for a specific tab', async () => {
+        const { sequelize } = require('../../db');
+        const mockChannel = {
+          ...mockChannelData,
+          channel_id: 'UC123',
+          reload: jest.fn()
+        };
+        const timestamp = new Date('2024-01-15T12:00:00.000Z');
+
+        sequelize.query.mockResolvedValue([]);
+
+        await ChannelModule.setLastFetchedForTab(mockChannel, 'video', timestamp);
+
+        expect(sequelize.query).toHaveBeenCalledWith(
+          expect.stringContaining('UPDATE channels'),
+          {
+            replacements: {
+              jsonPath: '$.video',
+              timestamp: '2024-01-15T12:00:00.000Z',
+              channelId: 'UC123'
+            }
+          }
+        );
+        expect(mockChannel.reload).toHaveBeenCalled();
+      });
+
+      test('should handle null channel gracefully', async () => {
+        const { sequelize } = require('../../db');
+        const timestamp = new Date();
+
+        await ChannelModule.setLastFetchedForTab(null, 'video', timestamp);
+
+        expect(sequelize.query).not.toHaveBeenCalled();
+      });
+
+      test('should handle channel without channel_id', async () => {
+        const { sequelize } = require('../../db');
+        const mockChannel = {
+          ...mockChannelData,
+          channel_id: null,
+          reload: jest.fn()
+        };
+        const timestamp = new Date();
+
+        await ChannelModule.setLastFetchedForTab(mockChannel, 'video', timestamp);
+
+        expect(sequelize.query).not.toHaveBeenCalled();
+      });
+
+      test('should use atomic JSON_SET for concurrent updates', async () => {
+        const { sequelize } = require('../../db');
+        const mockChannel = {
+          ...mockChannelData,
+          channel_id: 'UC123',
+          reload: jest.fn()
+        };
+        const timestamp = new Date('2024-01-15T12:00:00.000Z');
+
+        sequelize.query.mockResolvedValue([]);
+
+        await ChannelModule.setLastFetchedForTab(mockChannel, 'short', timestamp);
+
+        // Verify it uses JSON_SET with COALESCE to handle NULL
+        const sqlQuery = sequelize.query.mock.calls[0][0];
+        expect(sqlQuery).toContain('JSON_SET');
+        expect(sqlQuery).toContain('COALESCE(lastFetchedByTab, \'{}\')');
+        expect(sequelize.query).toHaveBeenCalledWith(
+          expect.any(String),
+          {
+            replacements: {
+              jsonPath: '$.short',
+              timestamp: '2024-01-15T12:00:00.000Z',
+              channelId: 'UC123'
+            }
+          }
+        );
+      });
+    });
+
     describe('resolveChannelUrlFromId', () => {
       test('builds canonical URL from UC channel id', () => {
         const url = ChannelModule.resolveChannelUrlFromId('UCabc123');
@@ -1549,57 +1724,68 @@ describe('ChannelModule', () => {
   describe('Response Builders', () => {
     describe('shouldRefreshChannelVideos', () => {
       test('should refresh if no channel record', () => {
-        const result = ChannelModule.shouldRefreshChannelVideos(null, 10);
+        const result = ChannelModule.shouldRefreshChannelVideos(null, 10, 'video');
         expect(result).toBe(false);
       });
 
-      test('should refresh if no lastFetched', () => {
-        const channel = { ...mockChannelData, lastFetched: null };
-        const result = ChannelModule.shouldRefreshChannelVideos(channel, 10);
+      test('should refresh if no lastFetchedByTab for this tab', () => {
+        const channel = { ...mockChannelData, lastFetchedByTab: null };
+        const result = ChannelModule.shouldRefreshChannelVideos(channel, 10, 'video');
         expect(result).toBe(true);
       });
 
-      test('should refresh if lastFetched is old', () => {
+      test('should refresh if lastFetchedByTab is old for this tab', () => {
         const channel = {
           ...mockChannelData,
-          lastFetched: new Date(Date.now() - 2 * 60 * 60 * 1000)
+          lastFetchedByTab: JSON.stringify({ video: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() })
         };
-        const result = ChannelModule.shouldRefreshChannelVideos(channel, 10);
+        const result = ChannelModule.shouldRefreshChannelVideos(channel, 10, 'video');
         expect(result).toBe(true);
       });
 
-      test('should refresh if no videos', () => {
+      test('should refresh if no videos for this tab', () => {
         const channel = {
           ...mockChannelData,
-          lastFetched: new Date()
+          lastFetchedByTab: JSON.stringify({ video: new Date().toISOString() })
         };
-        const result = ChannelModule.shouldRefreshChannelVideos(channel, 0);
+        const result = ChannelModule.shouldRefreshChannelVideos(channel, 0, 'video');
         expect(result).toBe(true);
       });
 
-      test('should not refresh if recently fetched with videos', () => {
+      test('should not refresh if recently fetched with videos for this tab', () => {
         const channel = {
           ...mockChannelData,
-          lastFetched: new Date()
+          lastFetchedByTab: JSON.stringify({ video: new Date().toISOString() })
         };
-        const result = ChannelModule.shouldRefreshChannelVideos(channel, 10);
+        const result = ChannelModule.shouldRefreshChannelVideos(channel, 10, 'video');
         expect(result).toBe(false);
+      });
+
+      test('should refresh different tab independently', () => {
+        const channel = {
+          ...mockChannelData,
+          lastFetchedByTab: JSON.stringify({ video: new Date().toISOString(), short: null })
+        };
+        // Video tab was just fetched, should not refresh
+        expect(ChannelModule.shouldRefreshChannelVideos(channel, 10, 'video')).toBe(false);
+        // Short tab has never been fetched, should refresh
+        expect(ChannelModule.shouldRefreshChannelVideos(channel, 10, 'short')).toBe(true);
       });
     });
 
     describe('buildChannelVideosResponse', () => {
-      test('should build successful response', () => {
+      test('should build successful response with tab-specific lastFetched', () => {
         const videos = [mockVideoData];
         const channel = mockChannelData;
 
-        const result = ChannelModule.buildChannelVideosResponse(videos, channel, 'yt_dlp');
+        const result = ChannelModule.buildChannelVideosResponse(videos, channel, 'yt_dlp', null, false, 'video');
 
         expect(result).toEqual({
           videos: videos,
           videoFail: false,
           failureReason: null,
           dataSource: 'yt_dlp',
-          lastFetched: channel.lastFetched,
+          lastFetched: new Date('2024-01-01'),
           totalCount: videos.length,
           oldestVideoDate: null,
           autoDownloadsEnabled: false,
@@ -1608,19 +1794,24 @@ describe('ChannelModule', () => {
       });
 
       test('should build failure response when no videos', () => {
-        const result = ChannelModule.buildChannelVideosResponse([], mockChannelData, 'cache');
+        const result = ChannelModule.buildChannelVideosResponse([], mockChannelData, 'cache', null, false, 'video');
 
         expect(result).toEqual({
           videos: [],
           videoFail: true,
           failureReason: 'fetch_error',
           dataSource: 'cache',
-          lastFetched: mockChannelData.lastFetched,
+          lastFetched: new Date('2024-01-01'),
           totalCount: 0,
           oldestVideoDate: null,
           autoDownloadsEnabled: false,
           availableTabs: []
         });
+      });
+
+      test('should return null lastFetched for unfetched tab', () => {
+        const result = ChannelModule.buildChannelVideosResponse([mockVideoData], mockChannelData, 'cache', null, false, 'short');
+        expect(result.lastFetched).toBeNull();
       });
 
       test('should handle null channel', () => {
@@ -1667,7 +1858,11 @@ describe('ChannelModule', () => {
     describe('getChannelVideos', () => {
       test('should return paginated videos with stats', async () => {
         const Video = require('../../models/video');
-        const mockChannel = { ...mockChannelData, lastFetched: new Date(), auto_download_enabled_tabs: 'video' };
+        const mockChannel = {
+          ...mockChannelData,
+          lastFetchedByTab: JSON.stringify({ video: new Date().toISOString() }),
+          auto_download_enabled_tabs: 'video'
+        };
         const mockVideos = [
           { youtube_id: 'video1', publishedAt: new Date().toISOString(), toJSON() { return this; } }
         ];
@@ -1687,7 +1882,7 @@ describe('ChannelModule', () => {
 
       test('should skip auto-refresh when fetch already in progress', async () => {
         const Video = require('../../models/video');
-        const mockChannel = { ...mockChannelData, lastFetched: null, auto_download_enabled_tabs: 'video' };
+        const mockChannel = { ...mockChannelData, lastFetchedByTab: null, auto_download_enabled_tabs: 'video' };
 
         Channel.findOne.mockResolvedValue(mockChannel);
         ChannelVideo.findAll.mockResolvedValue([]);
@@ -1735,7 +1930,7 @@ describe('ChannelModule', () => {
     describe('fetchAllChannelVideos', () => {
       test('should fetch all videos and return paginated results', async () => {
         const Video = require('../../models/video');
-        const mockChannel = { ...mockChannelData, save: jest.fn(), url: 'https://youtube.com/@test' };
+        const mockChannel = { ...mockChannelData, save: jest.fn(), reload: jest.fn(), url: 'https://youtube.com/@test' };
 
         Channel.findOne.mockResolvedValue(mockChannel);
 
@@ -1762,7 +1957,7 @@ describe('ChannelModule', () => {
         expect(result.success).toBe(true);
         expect(result.videosFound).toBe(2);
         expect(result.videos).toBeDefined();
-        expect(mockChannel.save).toHaveBeenCalled();
+        expect(mockChannel.reload).toHaveBeenCalled();
       });
 
       test('should throw error when fetch already in progress', async () => {
@@ -1801,7 +1996,8 @@ describe('ChannelModule', () => {
         const mockChannel = {
           ...mockChannelData,
           url: 'https://youtube.com/@oldhandle',
-          save: jest.fn()
+          save: jest.fn(),
+          reload: jest.fn()
         };
 
         Channel.findOne.mockResolvedValue(mockChannel);

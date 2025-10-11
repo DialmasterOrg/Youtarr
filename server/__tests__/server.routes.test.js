@@ -159,6 +159,7 @@ const createServerModule = ({
             used: 50000000000,
             percentUsed: 50
           }),
+          isElfhostedPlatform: jest.fn(() => false),
           config: configState,
           stopWatchingConfig: jest.fn()
         };
@@ -504,6 +505,44 @@ describe('server routes - configuration', () => {
       expect(res.body.username).toBeUndefined();
       expect(res.body.isPlatformManaged).toBeDefined();
       expect(res.body.deploymentEnvironment).toBeDefined();
+    });
+
+    test('includes useTmpForDownloads in isPlatformManaged when not elfhosted', async () => {
+      const { app, configModuleMock } = await createServerModule();
+      configModuleMock.isElfhostedPlatform.mockReturnValue(false);
+
+      const handlers = findRouteHandlers(app, 'get', '/getconfig');
+      const getConfigHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        username: 'tester'
+      });
+      const res = createMockResponse();
+
+      await getConfigHandler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.isPlatformManaged).toBeDefined();
+      expect(res.body.isPlatformManaged.useTmpForDownloads).toBe(false);
+    });
+
+    test('includes useTmpForDownloads in isPlatformManaged when elfhosted', async () => {
+      const { app, configModuleMock } = await createServerModule();
+      configModuleMock.isElfhostedPlatform.mockReturnValue(true);
+
+      const handlers = findRouteHandlers(app, 'get', '/getconfig');
+      const getConfigHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        username: 'tester'
+      });
+      const res = createMockResponse();
+
+      await getConfigHandler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.isPlatformManaged).toBeDefined();
+      expect(res.body.isPlatformManaged.useTmpForDownloads).toBe(true);
     });
   });
 

@@ -9,7 +9,15 @@ module.exports = {
     es2021: true,
   },
   extends: "plugin:react/recommended",
-  overrides: [],
+  overrides: [
+    {
+      files: ["server/**/__tests__/**/*.js", "server/**/*.test.js"],
+      env: {
+        jest: true,
+        node: true,
+      },
+    },
+  ],
   parser: "@typescript-eslint/parser",
   parserOptions: {
     ecmaVersion: "latest",

@@ -6,6 +6,7 @@ const jobModule = require('../jobModule');
 const MessageEmitter = require('../messageEmitter');
 const DownloadProgressMonitor = require('./DownloadProgressMonitor');
 const VideoMetadataProcessor = require('./videoMetadataProcessor');
+const tempPathManager = require('./tempPathManager');
 const { JobVideoDownload } = require('../../models');
 
 class DownloadExecutor {
@@ -18,6 +19,7 @@ class DownloadExecutor {
     this.currentProcess = null;
     this.currentJobId = null;
     this.manualTerminationReason = null;
+    this.forceKillTimeout = null;
   }
 
   getCountOfDownloadedVideos() {
@@ -117,45 +119,67 @@ class DownloadExecutor {
         const videoDir = videoDownload.file_path;
 
         try {
-          // Verify directory exists and is a video-specific directory
-          const dirExists = await fsPromises.access(videoDir).then(() => true).catch(() => false);
-          if (!dirExists) {
-            console.log(`Directory already removed: ${videoDir}`);
+          // If temp downloads are enabled, also check temp location
+          const pathsToCheck = [videoDir];
+          if (tempPathManager.isEnabled()) {
+            const tempDir = tempPathManager.convertFinalToTemp(videoDir);
+            pathsToCheck.push(tempDir);
+          }
+
+          let cleanedAny = false;
+          let foundExistingPath = false;
+
+          for (const dirPath of pathsToCheck) {
+            // Verify directory exists and is a video-specific directory
+            const dirExists = await fsPromises.access(dirPath).then(() => true).catch(() => false);
+            if (!dirExists) {
+              console.log(`Directory doesn't exist: ${dirPath}`);
+              continue;
+            }
+
+            foundExistingPath = true;
+
+            if (!this.isVideoSpecificDirectory(dirPath)) {
+              console.log(`Skipping non-video directory: ${dirPath}`);
+              continue;
+            }
+
+            console.log(`Cleaning up in-progress video: ${videoDownload.youtube_id} at ${dirPath}`);
+
+            // Remove all files in the directory
+            const dirFiles = await fsPromises.readdir(dirPath);
+            for (const fileName of dirFiles) {
+              const fullPath = path.join(dirPath, fileName);
+              try {
+                const stats = await fsPromises.stat(fullPath);
+                if (stats.isFile()) {
+                  await fsPromises.unlink(fullPath);
+                  console.log(`  Removed file: ${fileName}`);
+                } else if (stats.isDirectory()) {
+                  await fsPromises.rm(fullPath, { recursive: true, force: true });
+                  console.log(`  Removed subdirectory: ${fileName}`);
+                }
+              } catch (fileError) {
+                console.error(`  Error removing ${fileName}:`, fileError.message);
+              }
+            }
+
+            // Remove the now-empty video directory
+            await fsPromises.rmdir(dirPath);
+            console.log(`Successfully removed video directory: ${dirPath}`);
+            cleanedAny = true;
+          }
+
+          if (!foundExistingPath) {
+            console.log(`All candidate directories already removed for ${videoDownload.youtube_id}`);
             await videoDownload.destroy();
             continue;
           }
 
-          if (!this.isVideoSpecificDirectory(videoDir)) {
-            console.log(`Skipping non-video directory: ${videoDir}`);
-            continue;
+          // Remove the tracking entry from database if we cleaned any paths
+          if (cleanedAny) {
+            await videoDownload.destroy();
           }
-
-          console.log(`Cleaning up in-progress video: ${videoDownload.youtube_id} at ${videoDir}`);
-
-          // Remove all files in the directory
-          const dirFiles = await fsPromises.readdir(videoDir);
-          for (const fileName of dirFiles) {
-            const fullPath = path.join(videoDir, fileName);
-            try {
-              const stats = await fsPromises.stat(fullPath);
-              if (stats.isFile()) {
-                await fsPromises.unlink(fullPath);
-                console.log(`  Removed file: ${fileName}`);
-              } else if (stats.isDirectory()) {
-                await fsPromises.rm(fullPath, { recursive: true, force: true });
-                console.log(`  Removed subdirectory: ${fileName}`);
-              }
-            } catch (fileError) {
-              console.error(`  Error removing ${fileName}:`, fileError.message);
-            }
-          }
-
-          // Remove the now-empty video directory
-          await fsPromises.rmdir(videoDir);
-          console.log(`Successfully removed video directory: ${videoDir}`);
-
-          // Remove the tracking entry from database
-          await videoDownload.destroy();
         } catch (error) {
           console.error(`Error cleaning up video ${videoDownload.youtube_id}:`, error.message);
         }
@@ -210,6 +234,14 @@ class DownloadExecutor {
     // For manual URL downloads, set the total count upfront
     if (jobType === 'Manually Added Urls' && urlCount > 0) {
       monitor.videoCount.total = urlCount;
+    }
+
+    // Clean temp directory before starting download if temp downloads are enabled
+    try {
+      await tempPathManager.cleanTempDirectory();
+    } catch (error) {
+      console.error('[DownloadExecutor] Error cleaning temp directory before job start:', error.message);
+      // Continue anyway - don't fail the job just because cleanup failed
     }
 
     return new Promise((resolve, reject) => {
@@ -454,6 +486,12 @@ class DownloadExecutor {
         if (timeoutChecker) {
           clearInterval(timeoutChecker);
           timeoutChecker = null;
+        }
+
+        // Clear force kill timeout if it exists
+        if (this.forceKillTimeout) {
+          clearTimeout(this.forceKillTimeout);
+          this.forceKillTimeout = null;
         }
 
         // Check for manual termination before clearing references
@@ -761,6 +799,12 @@ class DownloadExecutor {
           timeoutChecker = null;
         }
 
+        // Clear force kill timeout if it exists
+        if (this.forceKillTimeout) {
+          clearTimeout(this.forceKillTimeout);
+          this.forceKillTimeout = null;
+        }
+
         // Clear current process references
         this.currentProcess = null;
         this.currentJobId = null;
@@ -813,8 +857,14 @@ class DownloadExecutor {
       this.currentProcess.kill('SIGTERM');
       console.log(`Sent SIGTERM to job ${jobId}`);
 
+      // Clear any existing force kill timeout
+      if (this.forceKillTimeout) {
+        clearTimeout(this.forceKillTimeout);
+        this.forceKillTimeout = null;
+      }
+
       // Wait up to 60 seconds for graceful exit, then force kill
-      setTimeout(() => {
+      this.forceKillTimeout = setTimeout(() => {
         if (this.currentProcess && this.currentJobId === jobId) {
           console.log(`Grace period expired for job ${jobId}, forcing kill with SIGKILL`);
           try {
@@ -823,6 +873,7 @@ class DownloadExecutor {
             console.log('Error sending SIGKILL:', err.message);
           }
         }
+        this.forceKillTimeout = null;
       }, 60 * 1000);
 
       return jobId;

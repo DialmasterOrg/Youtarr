@@ -157,6 +157,7 @@ const createServerModule = ({
           writeCustomCookiesFile: jest.fn().mockResolvedValue(),
           deleteCustomCookiesFile: jest.fn().mockResolvedValue(),
           getStorageStatus: jest.fn().mockResolvedValue({ total: 1, free: 1 }),
+          isElfhostedPlatform: jest.fn(() => false),
           config: configState,
           stopWatchingConfig: jest.fn()
         };

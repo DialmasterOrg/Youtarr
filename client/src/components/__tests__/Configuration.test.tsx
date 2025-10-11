@@ -48,6 +48,7 @@ type ConfigOverrides = Partial<typeof mockConfig> & {
     youtubeOutputDirectory: boolean;
     plexUrl: boolean;
     authEnabled: boolean;
+    useTmpForDownloads: boolean;
   };
 };
 
@@ -148,6 +149,11 @@ const mockConfig = {
   notificationsEnabled: false,
   notificationService: 'discord',
   discordWebhookUrl: '',
+  autoRemovalEnabled: false,
+  autoRemovalFreeSpaceThreshold: '',
+  autoRemovalVideoAgeThreshold: '',
+  useTmpForDownloads: false,
+  tmpFilePath: '/tmp/youtarr-downloads',
 };
 
 describe('Configuration Component', () => {
@@ -236,6 +242,73 @@ const renderConfiguration = async ({
       await user.type(input, '/new/path');
 
       expect(input).toHaveValue('/new/path');
+    });
+
+    test('toggles useTmpForDownloads checkbox', async () => {
+      await setupComponent();
+      const user = createUser();
+      const checkbox = screen.getByRole('checkbox', { name: /Use tmp dir for download processing/i });
+
+      expect(checkbox).not.toBeChecked();
+
+      await user.click(checkbox);
+      expect(checkbox).toBeChecked();
+
+      await user.click(checkbox);
+      expect(checkbox).not.toBeChecked();
+    });
+
+    test('disables useTmpForDownloads when platform managed', async () => {
+      await renderConfiguration({
+        configOverrides: {
+          useTmpForDownloads: true,
+          isPlatformManaged: {
+            youtubeOutputDirectory: false,
+            plexUrl: false,
+            authEnabled: true,
+            useTmpForDownloads: true
+          },
+          deploymentEnvironment: {
+            inDocker: true,
+            dockerAutoCreated: false,
+            platform: 'elfhosted',
+            isWsl: false
+          }
+        }
+      });
+
+      const checkbox = screen.getByRole('checkbox', { name: /Use tmp dir for download processing/i });
+      expect(checkbox).toBeDisabled();
+      expect(checkbox).toBeChecked();
+
+      const managedLabel = screen.getByText('Managed by Elfhosted');
+      expect(managedLabel).toBeInTheDocument();
+    });
+
+    test('shows platform managed chip for generic platform', async () => {
+      await renderConfiguration({
+        configOverrides: {
+          useTmpForDownloads: false,
+          isPlatformManaged: {
+            youtubeOutputDirectory: false,
+            plexUrl: false,
+            authEnabled: true,
+            useTmpForDownloads: true
+          },
+          deploymentEnvironment: {
+            inDocker: true,
+            dockerAutoCreated: false,
+            platform: 'other-platform',
+            isWsl: false
+          }
+        }
+      });
+
+      const checkbox = screen.getByRole('checkbox', { name: /Use tmp dir for download processing/i });
+      expect(checkbox).toBeDisabled();
+
+      const managedLabel = screen.getByText('Platform Managed');
+      expect(managedLabel).toBeInTheDocument();
     });
 
     test('toggles automatic downloads', async () => {
@@ -356,6 +429,7 @@ const renderConfiguration = async ({
           youtubeOutputDirectory: false,
           plexUrl: true,
           authEnabled: true,
+          useTmpForDownloads: false,
         },
       };
 
@@ -1069,6 +1143,41 @@ const renderConfiguration = async ({
       await screen.findByRole('button', { name: /Save Configuration \(Unsaved Changes\)/i });
     });
 
+    test('tracks useTmpForDownloads in unsaved changes', async () => {
+      await setupComponent();
+      const user = createUser();
+
+      const checkbox = screen.getByRole('checkbox', { name: /Use tmp dir for download processing/i });
+      await user.click(checkbox);
+
+      await screen.findByRole('button', { name: /Save Configuration \(Unsaved Changes\)/i });
+    });
+
+    test('saves useTmpForDownloads setting', async () => {
+      await setupComponent();
+      const user = createUser();
+
+      const checkbox = screen.getByRole('checkbox', { name: /Use tmp dir for download processing/i });
+      await user.click(checkbox);
+
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ status: 'success' }),
+      } as Response);
+
+      const saveButton = screen.getByRole('button', { name: /Save Configuration/i });
+      await user.click(saveButton);
+
+      await screen.findByText('Configuration saved successfully');
+
+      const calls = (global.fetch as jest.Mock).mock.calls;
+      const saveCall = calls.find(call => call[0] === '/updateconfig');
+      expect(saveCall).toBeDefined();
+
+      const requestBody = JSON.parse(saveCall[1].body);
+      expect(requestBody.useTmpForDownloads).toBe(true);
+    });
+
     test('shows restart warning when YouTube directory changes', async () => {
       await setupComponent();
       const user = createUser();
@@ -1155,6 +1264,7 @@ const renderConfiguration = async ({
           youtubeOutputDirectory: true,
           plexUrl: true,
           authEnabled: true,
+          useTmpForDownloads: false,
         },
         deploymentEnvironment: {
           inDocker: true,
@@ -1200,6 +1310,7 @@ const renderConfiguration = async ({
           youtubeOutputDirectory: false,
           plexUrl: false,
           authEnabled: false,
+          useTmpForDownloads: false,
         },
         deploymentEnvironment: {
           inDocker: false,
