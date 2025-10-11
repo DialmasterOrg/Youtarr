@@ -31,9 +31,10 @@ Channel.init(
       type: DataTypes.STRING,
       allowNull: true,
     },
-    lastFetched: {
-      type: DataTypes.DATE,
+    lastFetchedByTab: {
+      type: DataTypes.TEXT,
       allowNull: true,
+      defaultValue: null,
     },
     enabled: {
       type: DataTypes.BOOLEAN,

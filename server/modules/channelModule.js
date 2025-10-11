@@ -37,6 +37,62 @@ class ChannelModule {
     this.activeFetches = new Map();
   }
 
+  /**
+   * Get the last fetched timestamp for a specific tab type
+   * @param {Object} channel - Channel database record
+   * @param {string} mediaType - Media type: 'video', 'short', or 'livestream'
+   * @returns {Date|null} - Last fetched timestamp for the tab, or null if never fetched
+   */
+  getLastFetchedForTab(channel, mediaType) {
+    if (!channel || !channel.lastFetchedByTab) {
+      return null;
+    }
+
+    try {
+      const lastFetchedByTab = JSON.parse(channel.lastFetchedByTab);
+      const timestamp = lastFetchedByTab[mediaType];
+      return timestamp ? new Date(timestamp) : null;
+    } catch (error) {
+      console.error('Error parsing lastFetchedByTab:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Set the last fetched timestamp for a specific tab type
+   * Uses atomic SQL UPDATE to prevent race conditions when multiple tabs fetch concurrently
+   * @param {Object} channel - Channel database record
+   * @param {string} mediaType - Media type: 'video', 'short', or 'livestream'
+   * @param {Date} timestamp - Timestamp to set
+   * @returns {Promise<void>}
+   */
+  async setLastFetchedForTab(channel, mediaType, timestamp) {
+    if (!channel || !channel.channel_id) return;
+
+    const { sequelize } = require('../db');
+
+    // Use atomic JSON_SET to update just this one key without read-modify-write race
+    // COALESCE handles the case where lastFetchedByTab is NULL
+    await sequelize.query(`
+      UPDATE channels
+      SET lastFetchedByTab = JSON_SET(
+        COALESCE(lastFetchedByTab, '{}'),
+        :jsonPath,
+        :timestamp
+      )
+      WHERE channel_id = :channelId
+    `, {
+      replacements: {
+        jsonPath: `$.${mediaType}`,
+        timestamp: timestamp.toISOString(),
+        channelId: channel.channel_id
+      }
+    });
+
+    // Reload channel to sync in-memory state with database
+    await channel.reload();
+  }
+
 
   /**
    * Execute yt-dlp command with promise-based handling
@@ -313,7 +369,7 @@ class ChannelModule {
           enabled: true,
           channel_id: { [Op.ne]: null }
         },
-        attributes: ['id', 'channel_id', 'url', 'title', 'lastFetched']
+        attributes: ['id', 'channel_id', 'url', 'title', 'lastFetchedByTab']
       });
 
       let handleUrlCount = 0;
@@ -321,8 +377,21 @@ class ChannelModule {
         // Check if URL looks like a handle URL
         if (channel.url && channel.url.includes('@')) {
           handleUrlCount++;
-          const daysSinceUpdate = channel.lastFetched
-            ? Math.floor((Date.now() - new Date(channel.lastFetched).getTime()) / (1000 * 60 * 60 * 24))
+          // Get the most recent fetch across all tabs
+          let mostRecentFetch = null;
+          if (channel.lastFetchedByTab) {
+            try {
+              const lastFetchedByTab = JSON.parse(channel.lastFetchedByTab);
+              const timestamps = Object.values(lastFetchedByTab).filter(t => t !== null);
+              if (timestamps.length > 0) {
+                mostRecentFetch = new Date(Math.max(...timestamps.map(t => new Date(t).getTime())));
+              }
+            } catch (error) {
+              // Ignore parse errors
+            }
+          }
+          const daysSinceUpdate = mostRecentFetch
+            ? Math.floor((Date.now() - mostRecentFetch.getTime()) / (1000 * 60 * 60 * 24))
             : 'never';
           console.log(`Channel "${channel.title}" uses handle URL: ${channel.url} (last updated: ${daysSinceUpdate === 'never' ? 'never' : `${daysSinceUpdate} days ago`})`);
         }
@@ -1195,16 +1264,19 @@ class ChannelModule {
   }
 
   /**
-   * Check if channel videos need refreshing
+   * Check if channel videos need refreshing for a specific tab
    * @param {Object} channel - Channel database record
-   * @param {number} videoCount - Current video count
+   * @param {number} videoCount - Current video count for this tab
+   * @param {string} mediaType - Media type: 'video', 'short', or 'livestream'
    * @returns {boolean} - True if refresh needed
    */
-  shouldRefreshChannelVideos(channel, videoCount) {
+  shouldRefreshChannelVideos(channel, videoCount, mediaType) {
     if (!channel) return false;
 
-    return !channel.lastFetched ||
-           new Date() - new Date(channel.lastFetched) > 1 * 60 * 60 * 1000 ||
+    const lastFetched = this.getLastFetchedForTab(channel, mediaType);
+
+    return !lastFetched ||
+           new Date() - lastFetched > 1 * 60 * 60 * 1000 ||
            videoCount === 0;
   }
 
@@ -1213,18 +1285,24 @@ class ChannelModule {
    * @param {Array} videos - Array of videos
    * @param {Object} channel - Channel database record
    * @param {string} dataSource - Data source ('cache' or 'yt_dlp')
+   * @param {Object} stats - Stats object with totalCount and oldestVideoDate
+   * @param {boolean} autoDownloadsEnabled - Whether auto downloads are enabled
+   * @param {string} mediaType - Media type to get last fetched timestamp for
    * @returns {Object} - Formatted response
    */
-  buildChannelVideosResponse(videos, channel, dataSource = 'cache', stats = null, autoDownloadsEnabled = false) {
+  buildChannelVideosResponse(videos, channel, dataSource = 'cache', stats = null, autoDownloadsEnabled = false, mediaType = 'video') {
     // Parse available tabs if present
     const availableTabs = channel && channel.available_tabs ? channel.available_tabs.split(',') : [];
+
+    // Get the last fetched timestamp for this specific tab
+    const lastFetched = channel ? this.getLastFetchedForTab(channel, mediaType) : null;
 
     return {
       videos: videos,
       videoFail: videos.length === 0 && (!stats || stats.totalCount === 0),
       failureReason: videos.length === 0 && (!stats || stats.totalCount === 0) ? 'fetch_error' : null,
       dataSource: dataSource,
-      lastFetched: channel ? channel.lastFetched : null,
+      lastFetched: lastFetched,
       totalCount: stats ? stats.totalCount : videos.length,
       oldestVideoDate: stats ? stats.oldestVideoDate : null,
       autoDownloadsEnabled: autoDownloadsEnabled,
@@ -1380,7 +1458,7 @@ class ChannelModule {
       const allVideos = await this.fetchNewestVideosFromDb(channelId, 1, 0, false, '', 'date', 'desc', false, mediaType);
       const mostRecentVideoDate = allVideos.length > 0 ? allVideos[0].publishedAt : null;
 
-      if (shouldFetchFromYoutube && this.shouldRefreshChannelVideos(channel, allVideos.length)) {
+      if (shouldFetchFromYoutube && this.shouldRefreshChannelVideos(channel, allVideos.length, mediaType)) {
         // Check if there's already an active fetch for this channel
         if (this.activeFetches.has(channelId)) {
           console.log(`Skipping auto-refresh for channel ${channelId} - fetch already in progress`);
@@ -1475,20 +1553,20 @@ class ChannelModule {
       // Get stats for the response
       const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType);
 
-      return this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled);
+      return this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
 
     } catch (error) {
       console.error('Error fetching channel videos:', error.message);
       const offset = (page - 1) * pageSize;
       const cachedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType);
       const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType);
-      return this.buildChannelVideosResponse(cachedVideos, channel, 'cache', stats, autoDownloadsEnabled);
+      return this.buildChannelVideosResponse(cachedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
     }
   }
 
   /**
    * Fetch videos from YouTube and save to database.
-   * Updates channel's lastFetched timestamp on success.
+   * Updates channel's lastFetchedByTab timestamp for the specific tab on success.
    * Also updates the channel URL if it has changed (e.g., handle renamed).
    * @param {Object} channel - Channel database record
    * @param {string} channelId - Channel ID
@@ -1502,8 +1580,10 @@ class ChannelModule {
       const result = await this.fetchChannelVideosViaYtDlp(channelId, mostRecentVideoDate, tabType);
       const { videos, currentChannelUrl } = result;
 
+      const mediaType = MEDIA_TAB_TYPE_MAP[tabType];
+
       if (videos.length > 0) {
-        await this.insertVideosIntoDb(videos, channelId, MEDIA_TAB_TYPE_MAP[tabType]);
+        await this.insertVideosIntoDb(videos, channelId, mediaType);
       }
 
       if (channel) {
@@ -1511,10 +1591,11 @@ class ChannelModule {
         if (currentChannelUrl && currentChannelUrl !== channel.url) {
           console.log(`Channel URL updated for ${channel.title}: ${currentChannelUrl}`);
           channel.url = currentChannelUrl;
+          await channel.save(); // Save URL change before atomic timestamp update
         }
 
-        channel.lastFetched = new Date();
-        await channel.save();
+        // Update the last fetched timestamp for this specific tab (atomic SQL update)
+        await this.setLastFetchedForTab(channel, mediaType, new Date());
       }
     } catch (ytdlpError) {
       console.error('Error fetching channel videos:', ytdlpError.message);
@@ -1588,9 +1669,10 @@ class ChannelModule {
         if (result.currentChannelUrl && result.currentChannelUrl !== channel.url) {
           console.log(`Channel URL updated for ${channel.title}: ${result.currentChannelUrl}`);
           channel.url = result.currentChannelUrl;
+          await channel.save(); // Save URL change before atomic timestamp update
         }
-        channel.lastFetched = new Date();
-        await channel.save();
+        // Update the last fetched timestamp for this specific tab (atomic SQL update)
+        await this.setLastFetchedForTab(channel, mediaType, new Date());
 
         // Get the requested page of videos after the full fetch
         const offset = (requestedPage - 1) * requestedPageSize;
@@ -1604,7 +1686,7 @@ class ChannelModule {
           success: true,
           videosFound: result.videos.length,
           elapsedSeconds: elapsedSeconds,
-          ...this.buildChannelVideosResponse(paginatedVideos, channel, 'yt_dlp_full', stats)
+          ...this.buildChannelVideosResponse(paginatedVideos, channel, 'yt_dlp_full', stats, false, mediaType)
         };
 
       } catch (error) {
