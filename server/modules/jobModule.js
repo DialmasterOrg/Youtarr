@@ -686,7 +686,7 @@ class JobModule {
       defaults: { title, thumbnail, duration, publishedAt, availability, media_type },
     });
     if (!created && !skipUpdateIfExists) {
-      await record.update({ title, thumbnail, duration, publishedAt, availability, media_type });
+      await record.update({ title, thumbnail, duration, availability, media_type });
     }
   }
 

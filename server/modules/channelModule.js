@@ -202,13 +202,29 @@ class ChannelModule {
    * Insert or update channel in database
    * @param {Object} channelData - Channel data to save
    * @param {boolean} enabled - Whether the channel should be enabled (default: false)
+   * @param {string|null} autoDownloadEnabledTabs - Comma-separated list of enabled tabs (default: null, uses model default)
    * @returns {Promise<Object>} - Saved channel record
    */
-  async upsertChannel(channelData, enabled = false) {
+  async upsertChannel(channelData, enabled = false, autoDownloadEnabledTabs = null) {
     // First, try to find by channel_id (preferred)
     let channel = await Channel.findOne({
       where: { channel_id: channelData.id }
     });
+
+    // Prepare update data
+    const updateData = {
+      channel_id: channelData.id,
+      title: channelData.title,
+      description: channelData.description,
+      uploader: channelData.uploader,
+      url: channelData.url,
+      enabled: enabled,
+    };
+
+    // Only set auto_download_enabled_tabs if explicitly provided
+    if (autoDownloadEnabledTabs !== null) {
+      updateData.auto_download_enabled_tabs = autoDownloadEnabledTabs;
+    }
 
     if (!channel) {
       // Fallback: try to find by URL (for legacy data without channel_id)
@@ -219,36 +235,16 @@ class ChannelModule {
       if (channel) {
         // Found by URL - update with channel_id and other fields
         // This backfills legacy data with the channel_id
-        await channel.update({
-          channel_id: channelData.id,
-          title: channelData.title,
-          description: channelData.description,
-          uploader: channelData.uploader,
-          url: channelData.url,
-          enabled: enabled,
-        });
+        await channel.update(updateData);
       }
     } else {
       // Found by channel_id - just update metadata
-      await channel.update({
-        title: channelData.title,
-        description: channelData.description,
-        uploader: channelData.uploader,
-        url: channelData.url,
-        enabled: enabled,
-      });
+      await channel.update(updateData);
     }
 
     // Only create if not found by either method
     if (!channel) {
-      channel = await Channel.create({
-        channel_id: channelData.id,
-        title: channelData.title,
-        description: channelData.description,
-        uploader: channelData.uploader,
-        url: channelData.url,
-        enabled: enabled,
-      });
+      channel = await Channel.create(updateData);
     }
 
     return channel;
@@ -460,27 +456,65 @@ class ChannelModule {
 
     // Extract the actual current handle URL from the response
     const actualChannelUrl = channelData.channel_url || channelData.url || channelUrl;
-    console.log(`Storing handle URL for channel ${channelData.id}: ${actualChannelUrl}`);
 
-    await Promise.all([
-      this.upsertChannel({
-        id: channelData.id,
+    // Get the proper channel ID - prefer channel_id, then uploader_id, fallback to id
+    // yt-dlp sometimes returns the handle as 'id', but channel_id or uploader_id should have the UCxxx format
+    const properChannelId = channelData.channel_id || channelData.uploader_id || channelData.id;
+
+    console.log(`Storing handle URL for channel ${properChannelId}: ${actualChannelUrl}`);
+
+    // First, upsert the channel so it exists in the database
+    // We'll update auto_download_enabled_tabs after detecting available tabs
+    await this.upsertChannel({
+      id: properChannelId,
+      title: channelData.title,
+      description: channelData.description,
+      uploader: channelData.uploader,
+      url: actualChannelUrl,  // Store the actual handle URL for display
+    }, enableChannel);
+
+    // Now process thumbnail using the proper channel ID
+    await this.processChannelThumbnail(channelUrl, properChannelId);
+
+    // Detect available tabs to set smart default for auto_download_enabled_tabs
+    // This ensures we don't default to 'video' for channels that only have shorts/streams
+    let availableTabs = [];
+    let autoDownloadEnabledTabs = 'video'; // Default fallback
+
+    try {
+      availableTabs = await this.getChannelAvailableTabs(properChannelId);
+
+      // Determine smart default: prefer 'video' if it exists, otherwise use first available tab
+      const TAB_TO_MEDIA_TYPE = {
+        'videos': 'video',
+        'shorts': 'short',
+        'streams': 'livestream'
+      };
+
+      if (availableTabs.includes('videos')) {
+        autoDownloadEnabledTabs = 'video';
+      } else if (availableTabs.length > 0) {
+        // Use first available tab as default
+        const firstTab = availableTabs[0];
+        autoDownloadEnabledTabs = TAB_TO_MEDIA_TYPE[firstTab] || 'video';
+        console.log(`Channel ${properChannelId} has no 'videos' tab, defaulting to '${autoDownloadEnabledTabs}'`);
+      } else {
+        console.warn(`Channel ${properChannelId} has no detectable tabs, using default 'video'`);
+      }
+
+      // Update the channel with the determined auto_download_enabled_tabs
+      await this.upsertChannel({
+        id: properChannelId,
         title: channelData.title,
         description: channelData.description,
         uploader: channelData.uploader,
-        url: actualChannelUrl,  // Store the actual handle URL for display
-      }, enableChannel),
-      this.processChannelThumbnail(channelUrl, channelData.id)
-    ]);
+        url: actualChannelUrl,
+      }, enableChannel, autoDownloadEnabledTabs);
 
-    // Asynchronously fetch available tabs in the background (fire-and-forget)
-    // This detects which tab types (videos, shorts, streams) the channel has
-    // and caches the result in the database for future use
-    setImmediate(() => {
-      this.getChannelAvailableTabs(channelData.id).catch(err => {
-        console.error(`Error fetching tabs for channel ${channelData.id}:`, err.message);
-      });
-    });
+    } catch (err) {
+      console.error(`Error fetching tabs for channel ${properChannelId}:`, err.message);
+      // Keep default 'video' on error
+    }
 
     if (emitMessage) {
       console.log('Channel data fetched -- emitting message!');
@@ -494,13 +528,13 @@ class ChannelModule {
     }
 
     return {
-      id: channelData.id,
+      id: properChannelId,
       uploader: channelData.uploader,
-      uploader_id: channelData.uploader_id,
+      uploader_id: channelData.uploader_id || properChannelId,
       title: channelData.title,
       description: channelData.description,
       url: channelUrl,
-      auto_download_enabled_tabs: 'video',
+      auto_download_enabled_tabs: autoDownloadEnabledTabs,
     };
   }
 
@@ -1182,6 +1216,9 @@ class ChannelModule {
    * @returns {Object} - Formatted response
    */
   buildChannelVideosResponse(videos, channel, dataSource = 'cache', stats = null, autoDownloadsEnabled = false) {
+    // Parse available tabs if present
+    const availableTabs = channel && channel.available_tabs ? channel.available_tabs.split(',') : [];
+
     return {
       videos: videos,
       videoFail: videos.length === 0 && (!stats || stats.totalCount === 0),
@@ -1191,6 +1228,7 @@ class ChannelModule {
       totalCount: stats ? stats.totalCount : videos.length,
       oldestVideoDate: stats ? stats.oldestVideoDate : null,
       autoDownloadsEnabled: autoDownloadsEnabled,
+      availableTabs: availableTabs,
     };
   }
 
@@ -1318,16 +1356,31 @@ class ChannelModule {
       where: { channel_id: channelId },
     });
 
+    if (!channel) {
+      throw new Error('Channel not found');
+    }
+
     // Convert tabType to mediaType for database filtering
     const mediaType = MEDIA_TAB_TYPE_MAP[tabType] || 'video';
     const autoDownloadsEnabled = channel.auto_download_enabled_tabs.split(',').includes(mediaType);
+
+    // Check if the requested tab exists in available_tabs
+    // If available_tabs is populated and the requested tab doesn't exist, don't try to fetch from YouTube
+    let shouldFetchFromYoutube = true;
+    if (channel.available_tabs) {
+      const availableTabs = channel.available_tabs.split(',');
+      if (!availableTabs.includes(tabType)) {
+        console.log(`Tab '${tabType}' not available for channel ${channelId}. Available tabs: ${availableTabs.join(', ')}`);
+        shouldFetchFromYoutube = false;
+      }
+    }
 
     try {
       // First check if we need to refresh recent videos from YouTube
       const allVideos = await this.fetchNewestVideosFromDb(channelId, 1, 0, false, '', 'date', 'desc', false, mediaType);
       const mostRecentVideoDate = allVideos.length > 0 ? allVideos[0].publishedAt : null;
 
-      if (this.shouldRefreshChannelVideos(channel, allVideos.length)) {
+      if (shouldFetchFromYoutube && this.shouldRefreshChannelVideos(channel, allVideos.length)) {
         // Check if there's already an active fetch for this channel
         if (this.activeFetches.has(channelId)) {
           console.log(`Skipping auto-refresh for channel ${channelId} - fetch already in progress`);

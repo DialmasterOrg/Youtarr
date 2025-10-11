@@ -38,9 +38,9 @@ jest.mock('react-router-dom', () => ({
 const mockedAxios = axios as unknown as { get: jest.Mock; post: jest.Mock };
 
 const mockChannels: Channel[] = [
-  { url: 'https://www.youtube.com/@TechChannel/videos', uploader: 'Tech Channel', channel_id: 'UC123456' },
-  { url: 'https://www.youtube.com/@GamingChannel/videos', uploader: 'Gaming Channel', channel_id: 'UC789012' },
-  { url: 'https://www.youtube.com/@CookingChannel/videos', uploader: 'Cooking Channel', channel_id: 'UC345678' },
+  { url: 'https://www.youtube.com/@TechChannel', uploader: 'Tech Channel', channel_id: 'UC123456' },
+  { url: 'https://www.youtube.com/@GamingChannel', uploader: 'Gaming Channel', channel_id: 'UC789012' },
+  { url: 'https://www.youtube.com/@CookingChannel', uploader: 'Cooking Channel', channel_id: 'UC345678' },
 ];
 
 describe('ChannelManager Component', () => {
@@ -156,12 +156,12 @@ describe('ChannelManager Component', () => {
     test('adds a new channel with @ handle format', async () => {
       const user = userEvent.setup();
       mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel/videos', uploader: 'New Channel', channel_id: 'UCnew123' });
+      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel', uploader: 'New Channel', channel_id: 'UCnew123' });
       renderChannelManager();
       await addChannel(user, '@NewChannel');
       await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledWith(
         '/addchannelinfo',
-        { url: 'https://www.youtube.com/@NewChannel/videos' },
+        { url: 'https://www.youtube.com/@NewChannel' },
         { headers: { 'x-access-token': mockToken } }
       ));
     });
@@ -169,12 +169,12 @@ describe('ChannelManager Component', () => {
     test('adds a new channel without @ prefix', async () => {
       const user = userEvent.setup();
       mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel/videos', uploader: 'New Channel', channel_id: 'UCnew123' });
+      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel', uploader: 'New Channel', channel_id: 'UCnew123' });
       renderChannelManager();
       await addChannel(user, 'NewChannel');
       await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledWith(
         '/addchannelinfo',
-        { url: 'https://www.youtube.com/@NewChannel/videos' },
+        { url: 'https://www.youtube.com/@NewChannel' },
         expect.any(Object)
       ));
     });
@@ -182,12 +182,12 @@ describe('ChannelManager Component', () => {
     test('normalizes various YouTube URL formats', async () => {
       const user = userEvent.setup();
       mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@TestChannel/videos', uploader: 'Test Channel', channel_id: 'UCtest' });
+      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UCtest' });
       renderChannelManager();
       await addChannel(user, 'youtube.com/@TestChannel');
       await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledWith(
         '/addchannelinfo',
-        { url: 'https://www.youtube.com/@TestChannel/videos' },
+        { url: 'https://www.youtube.com/@TestChannel' },
         expect.any(Object)
       ));
     });
@@ -195,7 +195,7 @@ describe('ChannelManager Component', () => {
     test('adds channel using Enter key', async () => {
       const user = userEvent.setup();
       mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel/videos', uploader: 'New Channel', channel_id: 'UCnew123' });
+      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel', uploader: 'New Channel', channel_id: 'UCnew123' });
       renderChannelManager();
       const input = await screen.findByLabelText('Add a new channel');
       await user.type(input, '@NewChannel{Enter}');
@@ -227,7 +227,7 @@ describe('ChannelManager Component', () => {
     test('clears input after adding channel', async () => {
       const user = userEvent.setup();
       mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel/videos', uploader: 'New Channel', channel_id: 'UCnew123' });
+      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel', uploader: 'New Channel', channel_id: 'UCnew123' });
       renderChannelManager();
       const input = await screen.findByLabelText('Add a new channel');
       await user.type(input, '@NewChannel');
@@ -238,7 +238,7 @@ describe('ChannelManager Component', () => {
     test('highlights newly added channels', async () => {
       const user = userEvent.setup();
       mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel/videos', uploader: 'New Channel', channel_id: 'UCnew123' });
+      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel', uploader: 'New Channel', channel_id: 'UCnew123' });
       renderChannelManager();
       await addChannel(user, '@NewChannel');
       const listItems = screen.getAllByRole('listitem');
@@ -307,7 +307,7 @@ describe('ChannelManager Component', () => {
     test('immediately removes unsaved channels on delete', async () => {
       const user = userEvent.setup();
       mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel/videos', uploader: 'New Channel', channel_id: 'UCnew123' });
+      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel', uploader: 'New Channel', channel_id: 'UCnew123' });
       renderChannelManager();
       await addChannel(user, '@NewChannel');
       const deleteButtons = screen.getAllByTestId('delete-channel-button');
@@ -345,8 +345,8 @@ describe('ChannelManager Component', () => {
       await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledWith(
         '/updatechannels',
         expect.arrayContaining([
-          'https://www.youtube.com/@GamingChannel/videos',
-          'https://www.youtube.com/@CookingChannel/videos',
+          'https://www.youtube.com/@GamingChannel',
+          'https://www.youtube.com/@CookingChannel',
           // Deleted Tech Channel excluded
         ]),
         { headers: { 'x-access-token': mockToken } }
@@ -521,7 +521,7 @@ describe('ChannelManager Component', () => {
   describe('Auto Download Badges', () => {
     test('displays video badge for channels with video auto-download enabled', async () => {
       const channelWithVideoTab: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel/videos', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: 'video' }
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: 'video' }
       ];
       mockGetChannelsOnce(channelWithVideoTab);
       renderChannelManager();
@@ -531,7 +531,7 @@ describe('ChannelManager Component', () => {
 
     test('displays shorts badge for channels with shorts auto-download enabled', async () => {
       const channelWithShortsTab: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel/videos', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: 'short' }
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: 'short' }
       ];
       mockGetChannelsOnce(channelWithShortsTab);
       renderChannelManager();
@@ -541,7 +541,7 @@ describe('ChannelManager Component', () => {
 
     test('displays live badge for channels with livestream auto-download enabled', async () => {
       const channelWithLiveTab: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel/videos', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: 'livestream' }
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: 'livestream' }
       ];
       mockGetChannelsOnce(channelWithLiveTab);
       renderChannelManager();
@@ -551,7 +551,7 @@ describe('ChannelManager Component', () => {
 
     test('displays multiple badges for channels with multiple tabs enabled', async () => {
       const channelWithMultipleTabs: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel/videos', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: 'video,short,livestream' }
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: 'video,short,livestream' }
       ];
       mockGetChannelsOnce(channelWithMultipleTabs);
       renderChannelManager();
@@ -563,7 +563,7 @@ describe('ChannelManager Component', () => {
 
     test('handles tabs with whitespace in the comma-separated string', async () => {
       const channelWithSpaces: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel/videos', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: 'video , short , livestream' }
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: 'video , short , livestream' }
       ];
       mockGetChannelsOnce(channelWithSpaces);
       renderChannelManager();
@@ -575,7 +575,7 @@ describe('ChannelManager Component', () => {
 
     test('does not render badges when auto_download_enabled_tabs is undefined', async () => {
       const channelWithoutTabs: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel/videos', uploader: 'Test Channel', channel_id: 'UC123' }
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123' }
       ];
       mockGetChannelsOnce(channelWithoutTabs);
       renderChannelManager();
@@ -587,7 +587,7 @@ describe('ChannelManager Component', () => {
 
     test('does not render badges when auto_download_enabled_tabs is empty string', async () => {
       const channelWithEmptyTabs: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel/videos', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: '' }
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: '' }
       ];
       mockGetChannelsOnce(channelWithEmptyTabs);
       renderChannelManager();
@@ -599,7 +599,7 @@ describe('ChannelManager Component', () => {
 
     test('ignores unknown tab types in the string', async () => {
       const channelWithUnknownTab: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel/videos', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: 'video,unknown,short' }
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: 'video,unknown,short' }
       ];
       mockGetChannelsOnce(channelWithUnknownTab);
       renderChannelManager();
@@ -622,7 +622,7 @@ describe('ChannelManager Component', () => {
     test('displays URL when uploader name is not available', async () => {
       const channelsWithoutUploader = [
         {
-          url: 'https://www.youtube.com/@NoNameChannel/videos',
+          url: 'https://www.youtube.com/@NoNameChannel',
           uploader: '',
           channel_id: 'UCnoname'
         }
@@ -630,7 +630,7 @@ describe('ChannelManager Component', () => {
 
       mockGetChannelsOnce(channelsWithoutUploader as any);
       renderChannelManager();
-      expect(await screen.findByText('https://www.youtube.com/@NoNameChannel/videos')).toBeInTheDocument();
+      expect(await screen.findByText('https://www.youtube.com/@NoNameChannel')).toBeInTheDocument();
     });
 
     test('handles API error when adding channel', async () => {
@@ -661,13 +661,13 @@ describe('ChannelManager Component', () => {
     });
 
     test.each([
-      ['@New', 'https://www.youtube.com/@New/videos'],
-      ['New', 'https://www.youtube.com/@New/videos'],
-      ['youtube.com/@TestChannel', 'https://www.youtube.com/@TestChannel/videos'],
-      ['m.youtube.com/@MobileChannel', 'https://www.youtube.com/@MobileChannel/videos'],
-      ['https://www.youtube.com/@TestChannel/', 'https://www.youtube.com/@TestChannel/videos'],
-      ['https://www.youtube.com/c/TestChannel', 'https://www.youtube.com/c/TestChannel/videos'],
-      ['https://www.youtube.com/channel/UCtest123', 'https://www.youtube.com/channel/UCtest123/videos'],
+      ['@New', 'https://www.youtube.com/@New'],
+      ['New', 'https://www.youtube.com/@New'],
+      ['youtube.com/@TestChannel', 'https://www.youtube.com/@TestChannel'],
+      ['m.youtube.com/@MobileChannel', 'https://www.youtube.com/@MobileChannel'],
+      ['https://www.youtube.com/@TestChannel/', 'https://www.youtube.com/@TestChannel'],
+      ['https://www.youtube.com/c/TestChannel', 'https://www.youtube.com/c/TestChannel'],
+      ['https://www.youtube.com/channel/UCtest123', 'https://www.youtube.com/channel/UCtest123'],
     ])('normalizes %s to %s and posts', async (inputValue, normalized) => {
       const user = userEvent.setup();
       mockedAxios.get.mockResolvedValueOnce({ data: [] } as any);
