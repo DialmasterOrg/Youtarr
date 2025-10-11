@@ -44,10 +44,19 @@ jest.mock('../nfoGenerator', () => ({
   writeVideoNfoFile: jest.fn(),
 }));
 
+const mockJobVideoDownload = {
+  update: jest.fn(() => Promise.resolve([0]))
+};
+
+jest.mock('../../models', () => ({
+  JobVideoDownload: mockJobVideoDownload
+}));
+
 const fs = require('fs-extra');
 const childProcess = require('child_process');
 const configModule = require('../configModule');
 const nfoGenerator = require('../nfoGenerator');
+const { JobVideoDownload } = require('../../models');
 
 const flushPromises = () => new Promise((resolve) => queueMicrotask(resolve));
 
@@ -68,6 +77,8 @@ describe('videoDownloadPostProcessFiles', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    JobVideoDownload.update.mockResolvedValue([0]);
+    process.env.YOUTARR_JOB_ID = 'test-job-id';
     configModule.__setConfig({
       writeChannelPosters: false,
       writeVideoNfoFiles: true,
@@ -117,6 +128,7 @@ describe('videoDownloadPostProcessFiles', () => {
     process.argv = [...ORIGINAL_ARGV];
     process.exit = ORIGINAL_EXIT;
     setTimeoutSpy?.mockRestore();
+    delete process.env.YOUTARR_JOB_ID;
   });
 
   async function loadModule() {
@@ -133,6 +145,15 @@ describe('videoDownloadPostProcessFiles', () => {
 
     expect(fs.moveSync).toHaveBeenCalledWith(jsonPath, '/mock/jobs/info/abc123.info.json', { overwrite: true });
     expect(childProcess.spawnSync).toHaveBeenCalled();
+    expect(JobVideoDownload.update).toHaveBeenCalledWith(
+      { status: 'completed', file_path: videoPath },
+      {
+        where: {
+          job_id: 'test-job-id',
+          youtube_id: 'abc123'
+        }
+      }
+    );
     expect(fs.move).toHaveBeenCalledWith(tempPath, videoPath, { overwrite: true });
     expect(fs.remove).not.toHaveBeenCalledWith(tempPath);
     expect(nfoGenerator.writeVideoNfoFile).toHaveBeenCalledWith(videoPath, expect.any(Object));
@@ -272,5 +293,51 @@ describe('videoDownloadPostProcessFiles', () => {
       );
       expect(hasReleaseDate).toBe(false);
     }
+  });
+
+  it('marks video as completed in JobVideoDownload when job ID is available', async () => {
+    JobVideoDownload.update.mockResolvedValueOnce([1]);
+    const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    await loadModule();
+    await settleAsync();
+
+    expect(JobVideoDownload.update).toHaveBeenCalledWith(
+      { status: 'completed', file_path: videoPath },
+      {
+        where: {
+          job_id: 'test-job-id',
+          youtube_id: 'abc123'
+        }
+      }
+    );
+    expect(consoleSpy).toHaveBeenCalledWith('Marked video abc123 as completed in tracking for job test-job-id');
+    consoleSpy.mockRestore();
+  });
+
+  it('logs warning when job ID is not available', async () => {
+    delete process.env.YOUTARR_JOB_ID;
+    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await loadModule();
+    await settleAsync();
+
+    expect(JobVideoDownload.update).not.toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith('Job ID not available while marking abc123 as completed; skipping tracking update');
+    consoleSpy.mockRestore();
+  });
+
+  it('handles JobVideoDownload update errors gracefully', async () => {
+    const updateError = new Error('Database connection failed');
+    JobVideoDownload.update.mockRejectedValueOnce(updateError);
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await loadModule();
+    await settleAsync();
+
+    expect(JobVideoDownload.update).toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith('Error updating JobVideoDownload status for abc123:', 'Database connection failed');
+    expect(process.exit).not.toHaveBeenCalled(); // Should not fail entire post-processing
+    consoleSpy.mockRestore();
   });
 });

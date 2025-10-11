@@ -6,6 +6,7 @@ const jobModule = require('../jobModule');
 const MessageEmitter = require('../messageEmitter');
 const DownloadProgressMonitor = require('./DownloadProgressMonitor');
 const VideoMetadataProcessor = require('./videoMetadataProcessor');
+const { JobVideoDownload } = require('../../models');
 
 class DownloadExecutor {
   constructor() {
@@ -29,12 +30,149 @@ class DownloadExecutor {
     return archive.getNewVideoUrlsSince(initialCount);
   }
 
-  // Cleanup function for partial files
+  // Helper function to extract YouTube ID from file path
+  // Expects format: "...Channel - Title [VideoID].ext" or "...Channel - Title - VideoID/..."
+  extractYoutubeIdFromPath(filePath) {
+    try {
+      const filename = path.basename(filePath);
+      // Try to extract from [VideoID].ext pattern
+      const bracketMatch = filename.match(/\[([a-zA-Z0-9_-]{10,12})\]/);
+      if (bracketMatch) {
+        return bracketMatch[1];
+      }
+
+      // Try to extract from directory name ending with " - VideoID"
+      const dirname = path.basename(path.dirname(filePath));
+      const dashMatch = dirname.match(/ - ([a-zA-Z0-9_-]{10,12})$/);
+      if (dashMatch) {
+        return dashMatch[1];
+      }
+
+      return null;
+    } catch (error) {
+      console.error(`Error extracting youtube ID from path ${filePath}:`, error.message);
+      return null;
+    }
+  }
+
+  // Helper function to check if a file path is a main video file (not fragments or thumbnails)
+  isMainVideoFile(filePath) {
+    const filename = path.basename(filePath);
+    // Main video files end with [VideoID].mp4 or [VideoID].mkv (not .fXXX.mp4)
+    return /\[[a-zA-Z0-9_-]{10,12}\]\.(mp4|mkv|webm)$/.test(filename) &&
+           !/\.f\d+\.(mp4|m4a|webm)$/.test(filename);
+  }
+
+  // Helper function to check if a directory is a video-specific directory
+  // Video directories follow the pattern: "ChannelName - VideoTitle - VideoID"
+  // where VideoID is the last segment after the final " - " separator
+  isVideoSpecificDirectory(dirPath) {
+    try {
+      const dirName = path.basename(dirPath);
+
+      // Video directories end with " - <VideoID>" where VideoID is typically 11 chars
+      // Pattern: something - something - videoId
+      const parts = dirName.split(' - ');
+      if (parts.length < 3) {
+        return false; // Not enough segments to be a video directory
+      }
+
+      const potentialVideoId = parts[parts.length - 1];
+
+      // YouTube video IDs are 11 characters, alphanumeric plus - and _
+      // Allow 10-12 chars to be flexible with other platforms
+      if (potentialVideoId.length >= 10 && potentialVideoId.length <= 12 &&
+          /^[a-zA-Z0-9_-]+$/.test(potentialVideoId)) {
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error(`Error checking if directory is video-specific: ${error.message}`);
+      return false;
+    }
+  }
+
+  // Cleanup function for in-progress videos based on database tracking
+  async cleanupInProgressVideos(jobId) {
+    const fsPromises = require('fs').promises;
+
+    try {
+      // Query database for in-progress videos for this job
+      const inProgressVideos = await JobVideoDownload.findAll({
+        where: {
+          job_id: jobId,
+          status: 'in_progress'
+        }
+      });
+
+      if (inProgressVideos.length === 0) {
+        console.log('No in-progress videos to clean up');
+        return;
+      }
+
+      console.log(`Cleaning up ${inProgressVideos.length} in-progress video(s)`);
+
+      for (const videoDownload of inProgressVideos) {
+        const videoDir = videoDownload.file_path;
+
+        try {
+          // Verify directory exists and is a video-specific directory
+          const dirExists = await fsPromises.access(videoDir).then(() => true).catch(() => false);
+          if (!dirExists) {
+            console.log(`Directory already removed: ${videoDir}`);
+            await videoDownload.destroy();
+            continue;
+          }
+
+          if (!this.isVideoSpecificDirectory(videoDir)) {
+            console.log(`Skipping non-video directory: ${videoDir}`);
+            continue;
+          }
+
+          console.log(`Cleaning up in-progress video: ${videoDownload.youtube_id} at ${videoDir}`);
+
+          // Remove all files in the directory
+          const dirFiles = await fsPromises.readdir(videoDir);
+          for (const fileName of dirFiles) {
+            const fullPath = path.join(videoDir, fileName);
+            try {
+              const stats = await fsPromises.stat(fullPath);
+              if (stats.isFile()) {
+                await fsPromises.unlink(fullPath);
+                console.log(`  Removed file: ${fileName}`);
+              } else if (stats.isDirectory()) {
+                await fsPromises.rm(fullPath, { recursive: true, force: true });
+                console.log(`  Removed subdirectory: ${fileName}`);
+              }
+            } catch (fileError) {
+              console.error(`  Error removing ${fileName}:`, fileError.message);
+            }
+          }
+
+          // Remove the now-empty video directory
+          await fsPromises.rmdir(videoDir);
+          console.log(`Successfully removed video directory: ${videoDir}`);
+
+          // Remove the tracking entry from database
+          await videoDownload.destroy();
+        } catch (error) {
+          console.error(`Error cleaning up video ${videoDownload.youtube_id}:`, error.message);
+        }
+      }
+    } catch (error) {
+      console.error('Error querying in-progress videos for cleanup:', error.message);
+    }
+  }
+
+  // Legacy cleanup function for .part and fragment files (still used for non-fatal errors)
   async cleanupPartialFiles(files) {
     const fsPromises = require('fs').promises;
 
     for (const file of files) {
       try {
+        const dir = path.dirname(file);
+
         // Check for partial files
         const partFile = file + '.part';
 
@@ -45,18 +183,21 @@ class DownloadExecutor {
         }
 
         // Remove fragment files
-        const dir = path.dirname(file);
-        const dirFiles = await fsPromises.readdir(dir);
-        const basename = path.basename(file).replace(/\.[^.]+$/, '');
+        try {
+          const dirFiles = await fsPromises.readdir(dir);
+          const basename = path.basename(file).replace(/\.[^.]+$/, '');
 
-        for (const f of dirFiles) {
-          if (f.startsWith(basename + '.f')) {
-            await fsPromises.unlink(path.join(dir, f));
-            console.log(`Cleaned up fragment: ${f}`);
+          for (const f of dirFiles) {
+            if (f.startsWith(basename + '.f')) {
+              await fsPromises.unlink(path.join(dir, f));
+              console.log(`Cleaned up fragment: ${f}`);
+            }
           }
+        } catch (readDirError) {
+          console.error(`Error reading directory ${dir}:`, readDirError.message);
         }
       } catch (error) {
-        console.error(`Error cleaning up ${file}:`, error);
+        console.error(`Error cleaning up partial files for ${file}:`, error);
       }
     }
   }
@@ -74,7 +215,12 @@ class DownloadExecutor {
     return new Promise((resolve, reject) => {
       console.log(`Running yt-dlp for ${jobType}`);
       console.log('Command args:', args);
-      const proc = spawn('yt-dlp', args);
+      const proc = spawn('yt-dlp', args, {
+        env: {
+          ...process.env,
+          YOUTARR_JOB_ID: jobId
+        }
+      });
 
       // Store process reference for manual termination
       this.currentProcess = proc;
@@ -216,6 +362,26 @@ class DownloadExecutor {
               const destPath = line.replace('[download] Destination:', '').trim();
               if (destPath) {
                 partialDestinations.add(destPath);
+
+                // Create tracking entry for any video download
+                const youtubeId = this.extractYoutubeIdFromPath(destPath);
+                if (youtubeId) {
+                  const videoDir = path.dirname(destPath);
+                  JobVideoDownload.findOrCreate({
+                    where: {
+                      job_id: jobId,
+                      youtube_id: youtubeId
+                    },
+                    defaults: {
+                      job_id: jobId,
+                      youtube_id: youtubeId,
+                      file_path: videoDir,
+                      status: 'in_progress'
+                    }
+                  }).catch(err => {
+                    console.error(`Error creating JobVideoDownload tracking entry: ${err.message}`);
+                  });
+                }
               }
             }
 
@@ -376,7 +542,7 @@ class DownloadExecutor {
           jobErrorCode = 'COOKIES_REQUIRED';
         } else if (gracefulShutdownInProgress || shutdownReason || wasManuallyTerminated) {
           // Handle timeout/graceful shutdown or manual termination
-          await this.cleanupPartialFiles(Array.from(partialDestinations));
+          await this.cleanupInProgressVideos(jobId);
           partialCleanupPerformed = true;
 
           const completedCount = videoData.length;
@@ -512,7 +678,9 @@ class DownloadExecutor {
           text: finalText,
           progress: finalProgress,
           finalSummary: {
-            totalDownloaded: monitor.videoCount.completed || videoCount,
+            // For terminated jobs, use videoData.length (actual completed videos)
+            // For other states, use monitor count or fall back to videoCount
+            totalDownloaded: finalState === 'terminated' ? videoData.length : (monitor.videoCount.completed || videoCount),
             totalSkipped: monitor.videoCount.skipped || 0,
             jobType: jobType,
             completedAt: new Date().toISOString()
@@ -568,6 +736,17 @@ class DownloadExecutor {
               console.log('Failed to clean up temp channels file:', err.message);
             });
         }
+
+        // Clean up all JobVideoDownload tracking entries for this job
+        JobVideoDownload.destroy({
+          where: { job_id: jobId }
+        }).then(count => {
+          if (count > 0) {
+            console.log(`Cleaned up ${count} JobVideoDownload tracking entries`);
+          }
+        }).catch(err => {
+          console.error('Error cleaning up JobVideoDownload entries:', err.message);
+        });
 
         plexModule.refreshLibrary().catch(err => {
           console.log('Failed to refresh Plex library:', err.message);

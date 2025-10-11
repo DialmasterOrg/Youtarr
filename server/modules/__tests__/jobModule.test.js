@@ -10,7 +10,9 @@ jest.mock('../configModule');
 jest.mock('../../models/job');
 jest.mock('../../models/video');
 jest.mock('../../models/jobvideo');
+jest.mock('../../models/jobvideodownload');
 jest.mock('../../models/channelvideo');
+jest.mock('../download/downloadExecutor');
 
 const { v4: uuidv4 } = require('uuid');
 
@@ -72,7 +74,8 @@ describe('JobModule', () => {
       promises: {
         readFile: jest.fn(),
         writeFile: jest.fn(),
-        stat: jest.fn()
+        stat: jest.fn(),
+        access: jest.fn()
       }
     }));
     fs = require('fs');
@@ -96,11 +99,13 @@ describe('JobModule', () => {
     Job = require('../../models/job');
     Video = require('../../models/video');
     JobVideo = require('../../models/jobvideo');
+    const JobVideoDownload = require('../../models/jobvideodownload');
     ChannelVideo = require('../../models/channelvideo');
 
     Job.findAll = jest.fn().mockResolvedValue([]);
     Job.findOne = jest.fn().mockResolvedValue(null);
     Job.create = jest.fn().mockImplementation(data => Promise.resolve({ id: data.id, ...data }));
+    Job.update = jest.fn().mockResolvedValue([1]);
 
     Video.findAll = jest.fn().mockResolvedValue([]);
     Video.findOne = jest.fn().mockResolvedValue(null);
@@ -109,7 +114,16 @@ describe('JobModule', () => {
     JobVideo.findAll = jest.fn().mockResolvedValue([]);
     JobVideo.create = jest.fn().mockResolvedValue({});
 
+    JobVideoDownload.findAll = jest.fn().mockResolvedValue([]);
+    JobVideoDownload.destroy = jest.fn().mockResolvedValue(0);
+
     ChannelVideo.findOrCreate = jest.fn().mockResolvedValue([{}, true]);
+
+    // Mock downloadExecutor
+    const DownloadExecutor = require('../download/downloadExecutor');
+    DownloadExecutor.mockImplementation(() => ({
+      cleanupInProgressVideos: jest.fn().mockResolvedValue()
+    }));
   });
 
   afterEach(() => {
@@ -236,19 +250,52 @@ describe('JobModule', () => {
   });
 
   describe('terminateInProgressJobs', () => {
-    test('should change In Progress jobs to Terminated', async () => {
+    let JobVideoDownload;
+
+    beforeEach(() => {
+      JobVideoDownload = require('../../models/jobvideodownload');
+    });
+
+    test('should change In Progress jobs to Terminated and recover completed videos', async () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
         youtubeOutputDirectory: '/test/output'
       }));
 
-      Job.update = jest.fn().mockResolvedValue([1]);
-
       JobModule = require('../jobModule');
 
       // Set jobs after requiring the module to avoid async initialization clearing them
       await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Mock completed video downloads - return different data based on job_id
+      JobVideoDownload.findAll.mockImplementation(async ({ where }) => {
+        if (where.job_id === 'job-1' && where.status === 'completed') {
+          return [{ job_id: 'job-1', youtube_id: 'video-1', status: 'completed' }];
+        }
+        if (where.job_id === 'job-1' && where.status === 'in_progress') {
+          return [];
+        }
+        return [];
+      });
+      JobVideoDownload.destroy.mockResolvedValue(1);
+
+      // Mock info.json file
+      fsPromises.readFile.mockResolvedValue(JSON.stringify({
+        id: 'video-1',
+        uploader: 'Test Channel',
+        title: 'Test Video',
+        duration: 100,
+        description: 'Test description',
+        upload_date: '20240101',
+        channel_id: 'channel-1'
+      }));
+      fsPromises.access.mockResolvedValue();
+      fsPromises.stat.mockResolvedValue({ size: 12345 });
+
+      Job.findOne.mockResolvedValue({ id: 'job-1' });
+      Job.update = jest.fn().mockResolvedValue([1]);
+      Video.findOne.mockResolvedValue(null);
 
       JobModule.jobs = {
         'job-1': { status: 'In Progress', id: 'job-1' },
@@ -260,10 +307,379 @@ describe('JobModule', () => {
       await JobModule.terminateInProgressJobs();
 
       expect(JobModule.jobs['job-1'].status).toBe('Terminated');
+      expect(JobModule.jobs['job-1'].output).toContain('1 video completed');
       expect(JobModule.jobs['job-2'].status).toBe('Pending');
       expect(JobModule.jobs['job-3'].status).toBe('Terminated');
       expect(JobModule.jobs['job-4'].status).toBe('Complete');
-      expect(Job.update).toHaveBeenCalledTimes(2);
+      expect(Job.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'Terminated',
+          output: expect.stringContaining('completed')
+        }),
+        expect.any(Object)
+      );
+      expect(JobVideoDownload.destroy).toHaveBeenCalled();
+    });
+
+    test('should cleanup in-progress videos from disk', async () => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        plexApiKey: 'test-key',
+        youtubeOutputDirectory: '/test/output'
+      }));
+
+      JobVideoDownload.findAll.mockResolvedValue([]);
+      JobVideoDownload.destroy.mockResolvedValue(0);
+
+      const mockCleanup = jest.fn().mockResolvedValue();
+      const DownloadExecutor = require('../download/downloadExecutor');
+      DownloadExecutor.mockImplementation(() => ({
+        cleanupInProgressVideos: mockCleanup
+      }));
+
+      JobModule = require('../jobModule');
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      JobModule.jobs = {
+        'job-1': { status: 'In Progress', id: 'job-1' }
+      };
+
+      await JobModule.terminateInProgressJobs();
+
+      expect(mockCleanup).toHaveBeenCalledWith('job-1');
+    });
+
+    test('should handle jobs with no completed videos', async () => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        plexApiKey: 'test-key',
+        youtubeOutputDirectory: '/test/output'
+      }));
+
+      JobVideoDownload.findAll.mockResolvedValue([]);
+      JobVideoDownload.destroy.mockResolvedValue(0);
+
+      JobModule = require('../jobModule');
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      JobModule.jobs = {
+        'job-1': { status: 'In Progress', id: 'job-1' }
+      };
+
+      await JobModule.terminateInProgressJobs();
+
+      expect(JobModule.jobs['job-1'].status).toBe('Terminated');
+      expect(JobModule.jobs['job-1'].output).toBe('Job terminated due to server restart');
+    });
+
+    test('should handle recovery errors gracefully', async () => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        plexApiKey: 'test-key',
+        youtubeOutputDirectory: '/test/output'
+      }));
+
+      JobVideoDownload.findAll.mockRejectedValue(new Error('DB Error'));
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+
+      JobModule = require('../jobModule');
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      JobModule.jobs = {
+        'job-1': { status: 'In Progress', id: 'job-1' }
+      };
+
+      await JobModule.terminateInProgressJobs();
+
+      expect(JobModule.jobs['job-1'].status).toBe('Terminated');
+      expect(consoleErrorSpy).toHaveBeenCalled();
+
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('recoverCompletedVideos', () => {
+    let JobVideoDownload;
+
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        plexApiKey: 'test-key',
+        youtubeOutputDirectory: '/test/output'
+      }));
+      JobModule = require('../jobModule');
+      JobVideoDownload = require('../../models/jobvideodownload');
+    });
+
+    test('should recover completed videos from info.json files', async () => {
+      const mockCompletedDownloads = [
+        { job_id: 'job-1', youtube_id: 'video-1', status: 'completed' },
+        { job_id: 'job-1', youtube_id: 'video-2', status: 'completed' }
+      ];
+
+      JobVideoDownload.findAll.mockResolvedValue(mockCompletedDownloads);
+
+      fsPromises.readFile.mockImplementation(async (filePath) => {
+        if (filePath.includes('video-1')) {
+          return JSON.stringify({
+            id: 'video-1',
+            uploader: 'Channel 1',
+            title: 'Video 1',
+            duration: 100,
+            description: 'Test',
+            upload_date: '20240101',
+            channel_id: 'channel-1',
+            _actual_filepath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].mp4'
+          });
+        }
+        if (filePath.includes('video-2')) {
+          return JSON.stringify({
+            id: 'video-2',
+            uploader: 'Channel 1',
+            title: 'Video 2',
+            duration: 200,
+            description: 'Test',
+            upload_date: '20240102',
+            channel_id: 'channel-1',
+            _actual_filepath: '/test/output/Channel 1/Channel 1 - Video 2 - video-2/Channel 1 - Video 2  [video-2].mp4'
+          });
+        }
+        throw new Error('File not found');
+      });
+
+      fsPromises.access.mockResolvedValue();
+      fsPromises.stat.mockResolvedValue({ size: 12345 });
+      Job.findOne.mockResolvedValue({ id: 'job-1' });
+      Video.findOne.mockResolvedValue(null);
+
+      const count = await JobModule.recoverCompletedVideos('job-1');
+
+      expect(count).toBe(2);
+      expect(Video.create).toHaveBeenCalledTimes(2);
+      expect(JobVideo.create).toHaveBeenCalledTimes(2);
+    });
+
+    test('uses _actual_filepath from info.json when available', async () => {
+      const actualPath = '/data/Channel/Test Channel - Actual Video - video-1/Test Channel - Actual Video  [video-1].mkv';
+      JobVideoDownload.findAll.mockResolvedValue([
+        { job_id: 'job-1', youtube_id: 'video-1', status: 'completed' }
+      ]);
+
+      fsPromises.readFile.mockResolvedValue(JSON.stringify({
+        id: 'video-1',
+        uploader: 'Test Channel',
+        title: 'Actual Video',
+        duration: 321,
+        description: 'Test description',
+        upload_date: '20240103',
+        channel_id: 'channel-1',
+        _actual_filepath: actualPath
+      }));
+
+      fsPromises.access.mockResolvedValue();
+      fsPromises.stat.mockImplementation(async (filePath) => {
+        expect(filePath).toBe(actualPath);
+        return { size: 98765 };
+      });
+
+      Job.findOne.mockResolvedValue({ id: 'job-1' });
+      Video.findOne.mockResolvedValue(null);
+
+      await JobModule.recoverCompletedVideos('job-1');
+
+      expect(Video.create).toHaveBeenCalledWith(expect.objectContaining({
+        youtubeId: 'video-1',
+        filePath: actualPath,
+        fileSize: '98765'
+      }));
+    });
+
+    test('should return 0 when no completed videos found', async () => {
+      JobVideoDownload.findAll.mockResolvedValue([]);
+
+      const count = await JobModule.recoverCompletedVideos('job-1');
+
+      expect(count).toBe(0);
+      expect(Video.create).not.toHaveBeenCalled();
+    });
+
+    test('should skip videos with missing info.json files', async () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      JobVideoDownload.findAll.mockResolvedValue([
+        { job_id: 'job-1', youtube_id: 'video-1', status: 'completed' }
+      ]);
+
+      fsPromises.access.mockRejectedValue(new Error('ENOENT'));
+
+      const count = await JobModule.recoverCompletedVideos('job-1');
+
+      expect(count).toBe(0);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Info file not found for video-1')
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    test('should handle videos that already exist in database and create JobVideo relationship', async () => {
+      JobVideoDownload.findAll.mockResolvedValue([
+        { job_id: 'job-1', youtube_id: 'video-1', status: 'completed' }
+      ]);
+
+      fsPromises.readFile.mockResolvedValue(JSON.stringify({
+        id: 'video-1',
+        uploader: 'Channel 1',
+        title: 'Video 1',
+        duration: 100,
+        upload_date: '20240101',
+        channel_id: 'channel-1',
+        _actual_filepath: '/test/output/Channel 1/Channel 1 - Video 1 - video-1/Channel 1 - Video 1  [video-1].mp4'
+      }));
+      fsPromises.access.mockResolvedValue();
+      fsPromises.stat.mockResolvedValue({ size: 12345 });
+
+      const mockVideoInstance = {
+        id: 'video-1',
+        youtubeId: 'video-1',
+        update: jest.fn().mockResolvedValue()
+      };
+      Job.findOne.mockResolvedValue({ id: 'job-1' });
+      Video.findOne.mockResolvedValue(mockVideoInstance);
+      JobVideo.findOne.mockResolvedValue(null); // No existing JobVideo relationship
+
+      const count = await JobModule.recoverCompletedVideos('job-1');
+
+      expect(count).toBe(1);
+      expect(Video.create).not.toHaveBeenCalled();
+      expect(mockVideoInstance.update).toHaveBeenCalled();
+      // Should create JobVideo relationship for existing video during recovery
+      expect(JobVideo.create).toHaveBeenCalledWith({
+        job_id: 'job-1',
+        video_id: 'video-1'
+      });
+    });
+
+    test('should not create duplicate JobVideo relationships', async () => {
+      JobVideoDownload.findAll.mockResolvedValue([
+        { job_id: 'job-1', youtube_id: 'video-1', status: 'completed' }
+      ]);
+
+      fsPromises.readFile.mockResolvedValue(JSON.stringify({
+        id: 'video-1',
+        uploader: 'Channel 1',
+        title: 'Video 1',
+        duration: 100,
+        upload_date: '20240101',
+        channel_id: 'channel-1'
+      }));
+      fsPromises.access.mockResolvedValue();
+      fsPromises.stat.mockResolvedValue({ size: 12345 });
+
+      const mockVideoInstance = {
+        id: 'video-1',
+        youtubeId: 'video-1',
+        update: jest.fn().mockResolvedValue()
+      };
+      const mockJobVideoInstance = { job_id: 'job-1', video_id: 'video-1' };
+
+      Job.findOne.mockResolvedValue({ id: 'job-1' });
+      Video.findOne.mockResolvedValue(mockVideoInstance);
+      JobVideo.findOne.mockResolvedValue(mockJobVideoInstance); // JobVideo already exists
+
+      const count = await JobModule.recoverCompletedVideos('job-1');
+
+      expect(count).toBe(1);
+      expect(Video.create).not.toHaveBeenCalled();
+      expect(mockVideoInstance.update).toHaveBeenCalled();
+      // Should NOT create duplicate JobVideo relationship
+      expect(JobVideo.create).not.toHaveBeenCalled();
+    });
+
+    test('should try alternative file extensions when video not found', async () => {
+      JobVideoDownload.findAll.mockResolvedValue([
+        { job_id: 'job-1', youtube_id: 'video-1', status: 'completed' }
+      ]);
+
+      fsPromises.readFile.mockResolvedValue(JSON.stringify({
+        id: 'video-1',
+        uploader: 'Channel 1',
+        title: 'Video 1',
+        duration: 100,
+        upload_date: '20240101',
+        channel_id: 'channel-1'
+      }));
+      fsPromises.access.mockResolvedValue();
+
+      // Fail for .mp4, succeed for .webm
+      fsPromises.stat.mockImplementation(async (path) => {
+        if (path.includes('.mp4')) {
+          throw new Error('ENOENT');
+        }
+        if (path.includes('.webm')) {
+          return { size: 67890 };
+        }
+        throw new Error('ENOENT');
+      });
+
+      Job.findOne.mockResolvedValue({ id: 'job-1' });
+      Video.findOne.mockResolvedValue(null);
+
+      const count = await JobModule.recoverCompletedVideos('job-1');
+
+      expect(count).toBe(1);
+      expect(Video.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filePath: expect.stringContaining('.webm'),
+          fileSize: '67890'
+        })
+      );
+    });
+
+    test('should handle errors for individual videos gracefully', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+
+      JobVideoDownload.findAll.mockResolvedValue([
+        { job_id: 'job-1', youtube_id: 'video-1', status: 'completed' },
+        { job_id: 'job-1', youtube_id: 'video-2', status: 'completed' }
+      ]);
+
+      fsPromises.access.mockResolvedValue();
+      fsPromises.readFile.mockImplementation(async (path) => {
+        if (path.includes('video-1')) {
+          throw new Error('Parse error');
+        }
+        if (path.includes('video-2')) {
+          return JSON.stringify({
+            id: 'video-2',
+            uploader: 'Channel 1',
+            title: 'Video 2',
+            duration: 200,
+            upload_date: '20240102',
+            channel_id: 'channel-1'
+          });
+        }
+        throw new Error('File not found');
+      });
+      fsPromises.stat.mockResolvedValue({ size: 12345 });
+
+      Job.findOne.mockResolvedValue({ id: 'job-1' });
+      Video.findOne.mockResolvedValue(null);
+
+      const count = await JobModule.recoverCompletedVideos('job-1');
+
+      // Should still recover video-2 even though video-1 failed
+      expect(count).toBe(1);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Error recovering video'),
+        expect.any(String)
+      );
+
+      consoleErrorSpy.mockRestore();
     });
   });
 
@@ -1680,6 +2096,228 @@ describe('JobModule', () => {
       // saveJobsAndStartNext now just starts the next job without saving
       expect(JobModule.saveJobs).not.toHaveBeenCalled();
       expect(JobModule.startNextJob).toHaveBeenCalled();
+    });
+  });
+
+  describe('upsertVideoForJob', () => {
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        plexApiKey: 'test-key',
+        youtubeOutputDirectory: '/test/output'
+      }));
+      JobModule = require('../jobModule');
+    });
+
+    test('should create new video and JobVideo relationship when video does not exist', async () => {
+      const videoData = {
+        youtubeId: 'new-video-1',
+        youTubeChannelName: 'Test Channel',
+        youTubeVideoName: 'New Video',
+        filePath: '/path/to/video.mp4',
+        fileSize: '12345',
+        removed: false
+      };
+      const jobInstance = { id: 'job-1' };
+
+      Video.findOne.mockResolvedValue(null);
+      const mockVideoInstance = { id: 'video-1', youtubeId: 'new-video-1' };
+      Video.create.mockResolvedValue(mockVideoInstance);
+      JobVideo.findOne.mockResolvedValue(null);
+
+      const result = await JobModule.upsertVideoForJob(videoData, jobInstance);
+
+      expect(Video.create).toHaveBeenCalled();
+      expect(JobVideo.create).toHaveBeenCalledWith({
+        job_id: 'job-1',
+        video_id: 'video-1'
+      });
+      expect(result).toBe(mockVideoInstance);
+    });
+
+    test('should update existing video and not create JobVideo when video exists and alwaysCreateJobVideo=false', async () => {
+      const videoData = {
+        youtubeId: 'existing-video',
+        youTubeChannelName: 'Test Channel',
+        youTubeVideoName: 'Existing Video',
+        filePath: '/path/to/video.mp4',
+        fileSize: '12345'
+      };
+      const jobInstance = { id: 'job-1' };
+
+      const mockVideoInstance = {
+        id: 'video-1',
+        youtubeId: 'existing-video',
+        update: jest.fn().mockResolvedValue()
+      };
+      Video.findOne.mockResolvedValue(mockVideoInstance);
+
+      const result = await JobModule.upsertVideoForJob(videoData, jobInstance, false);
+
+      expect(mockVideoInstance.update).toHaveBeenCalled();
+      expect(Video.create).not.toHaveBeenCalled();
+      expect(JobVideo.create).not.toHaveBeenCalled();
+      expect(result).toBe(mockVideoInstance);
+    });
+
+    test('should update existing video and create JobVideo when alwaysCreateJobVideo=true', async () => {
+      const videoData = {
+        youtubeId: 'existing-video',
+        youTubeChannelName: 'Test Channel',
+        youTubeVideoName: 'Existing Video',
+        filePath: '/path/to/video.mp4',
+        fileSize: '12345'
+      };
+      const jobInstance = { id: 'job-1' };
+
+      const mockVideoInstance = {
+        id: 'video-1',
+        youtubeId: 'existing-video',
+        update: jest.fn().mockResolvedValue()
+      };
+      Video.findOne.mockResolvedValue(mockVideoInstance);
+      JobVideo.findOne.mockResolvedValue(null);
+
+      const result = await JobModule.upsertVideoForJob(videoData, jobInstance, true);
+
+      expect(mockVideoInstance.update).toHaveBeenCalled();
+      expect(Video.create).not.toHaveBeenCalled();
+      expect(JobVideo.create).toHaveBeenCalledWith({
+        job_id: 'job-1',
+        video_id: 'video-1'
+      });
+      expect(result).toBe(mockVideoInstance);
+    });
+
+    test('should not create duplicate JobVideo when relationship already exists', async () => {
+      const videoData = {
+        youtubeId: 'existing-video',
+        youTubeChannelName: 'Test Channel',
+        youTubeVideoName: 'Existing Video',
+        filePath: '/path/to/video.mp4',
+        fileSize: '12345'
+      };
+      const jobInstance = { id: 'job-1' };
+
+      const mockVideoInstance = {
+        id: 'video-1',
+        youtubeId: 'existing-video',
+        update: jest.fn().mockResolvedValue()
+      };
+      const existingJobVideo = { job_id: 'job-1', video_id: 'video-1' };
+
+      Video.findOne.mockResolvedValue(mockVideoInstance);
+      JobVideo.findOne.mockResolvedValue(existingJobVideo);
+
+      const result = await JobModule.upsertVideoForJob(videoData, jobInstance, true);
+
+      expect(mockVideoInstance.update).toHaveBeenCalled();
+      expect(JobVideo.create).not.toHaveBeenCalled();
+      expect(result).toBe(mockVideoInstance);
+    });
+
+    test('should handle unique constraint error and fetch existing video', async () => {
+      const videoData = {
+        youtubeId: 'race-video',
+        youTubeChannelName: 'Test Channel',
+        youTubeVideoName: 'Race Condition Video',
+        filePath: '/path/to/video.mp4',
+        fileSize: '12345'
+      };
+      const jobInstance = { id: 'job-1' };
+
+      // First findOne returns null (video doesn't exist yet)
+      // Create fails with unique constraint error
+      // Second findOne returns the video (created by another process)
+      const mockVideoInstance = { id: 'video-1', youtubeId: 'race-video' };
+      Video.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(mockVideoInstance);
+
+      const uniqueError = new Error('Duplicate entry');
+      uniqueError.name = 'SequelizeUniqueConstraintError';
+      Video.create.mockRejectedValue(uniqueError);
+      JobVideo.findOne.mockResolvedValue(null);
+
+      const result = await JobModule.upsertVideoForJob(videoData, jobInstance, true);
+
+      expect(Video.create).toHaveBeenCalled();
+      expect(Video.findOne).toHaveBeenCalledTimes(2);
+      expect(JobVideo.create).toHaveBeenCalledWith({
+        job_id: 'job-1',
+        video_id: 'video-1'
+      });
+      expect(result).toBe(mockVideoInstance);
+    });
+
+    test('should handle ER_DUP_ENTRY error and fetch existing video', async () => {
+      const videoData = {
+        youtubeId: 'race-video-2',
+        youTubeChannelName: 'Test Channel',
+        youTubeVideoName: 'Race Condition Video 2',
+        filePath: '/path/to/video.mp4',
+        fileSize: '12345'
+      };
+      const jobInstance = { id: 'job-1' };
+
+      const mockVideoInstance = { id: 'video-2', youtubeId: 'race-video-2' };
+      Video.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(mockVideoInstance);
+
+      const dupError = new Error('ER_DUP_ENTRY');
+      dupError.original = { code: 'ER_DUP_ENTRY' };
+      Video.create.mockRejectedValue(dupError);
+      JobVideo.findOne.mockResolvedValue(null);
+
+      const result = await JobModule.upsertVideoForJob(videoData, jobInstance, true);
+
+      expect(Video.create).toHaveBeenCalled();
+      expect(Video.findOne).toHaveBeenCalledTimes(2);
+      expect(JobVideo.create).toHaveBeenCalledWith({
+        job_id: 'job-1',
+        video_id: 'video-2'
+      });
+      expect(result).toBe(mockVideoInstance);
+    });
+
+    test('should throw error if video not found after unique constraint error', async () => {
+      const videoData = {
+        youtubeId: 'missing-video',
+        youTubeChannelName: 'Test Channel',
+        youTubeVideoName: 'Missing Video'
+      };
+      const jobInstance = { id: 'job-1' };
+
+      Video.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
+
+      const uniqueError = new Error('Duplicate entry');
+      uniqueError.name = 'SequelizeUniqueConstraintError';
+      Video.create.mockRejectedValue(uniqueError);
+
+      await expect(
+        JobModule.upsertVideoForJob(videoData, jobInstance)
+      ).rejects.toThrow('Failed to find video missing-video after unique constraint error');
+    });
+
+    test('should re-throw non-unique constraint errors', async () => {
+      const videoData = {
+        youtubeId: 'error-video',
+        youTubeChannelName: 'Test Channel',
+        youTubeVideoName: 'Error Video'
+      };
+      const jobInstance = { id: 'job-1' };
+
+      Video.findOne.mockResolvedValue(null);
+
+      const otherError = new Error('Database connection failed');
+      Video.create.mockRejectedValue(otherError);
+
+      await expect(
+        JobModule.upsertVideoForJob(videoData, jobInstance)
+      ).rejects.toThrow('Database connection failed');
     });
   });
 });

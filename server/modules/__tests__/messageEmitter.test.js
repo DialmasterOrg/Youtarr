@@ -93,4 +93,19 @@ describe('messageEmitter', () => {
     expect(otherClient.send).not.toHaveBeenCalled();
     expect(closedClient.send).not.toHaveBeenCalled();
   });
+
+  test('handles undefined payload by creating empty object with timestamp', () => {
+    MessageEmitter.emitMessage('broadcast', null, 'server', 'ping');
+
+    broadcastClients.forEach((client) => {
+      expect(client.send).toHaveBeenCalledTimes(1);
+      const sent = JSON.parse(client.send.mock.calls[0][0]);
+      expect(sent).toMatchObject({
+        destination: 'broadcast',
+        source: 'server',
+        type: 'ping',
+        payload: { dateTimeStamp: expect.any(Number) }
+      });
+    });
+  });
 });

@@ -28,6 +28,14 @@ jest.mock('../../archiveModule', () => ({
 jest.mock('../../notificationModule', () => ({
   sendDownloadNotification: jest.fn().mockResolvedValue()
 }));
+jest.mock('../../../models', () => ({
+  JobVideoDownload: {
+    findOrCreate: jest.fn().mockResolvedValue([{}, true]),
+    findAll: jest.fn().mockResolvedValue([]),
+    update: jest.fn().mockResolvedValue([1]),
+    destroy: jest.fn().mockResolvedValue(0)
+  }
+}));
 
 const { spawn } = require('child_process');
 const { EventEmitter } = require('events');
@@ -39,6 +47,7 @@ const plexModule = require('../../plexModule');
 const jobModule = require('../../jobModule');
 const MessageEmitter = require('../../messageEmitter');
 const notificationModule = require('../../notificationModule');
+const { JobVideoDownload } = require('../../../models');
 
 describe('DownloadExecutor', () => {
   let executor;
@@ -71,7 +80,10 @@ describe('DownloadExecutor', () => {
     fsPromises = {
       access: jest.fn(),
       unlink: jest.fn(),
-      readdir: jest.fn()
+      readdir: jest.fn(),
+      stat: jest.fn(),
+      rmdir: jest.fn(),
+      rm: jest.fn()
     };
     fs.promises = fsPromises;
 
@@ -231,7 +243,15 @@ describe('DownloadExecutor', () => {
     it('should spawn yt-dlp process with correct arguments', async () => {
       const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
 
-      expect(spawn).toHaveBeenCalledWith('yt-dlp', mockArgs);
+      expect(spawn).toHaveBeenCalledWith(
+        'yt-dlp',
+        mockArgs,
+        expect.objectContaining({
+          env: expect.objectContaining({
+            YOUTARR_JOB_ID: mockJobId
+          })
+        })
+      );
 
       mockProcess.emit('exit', 0);
       await downloadPromise;
@@ -1146,22 +1166,348 @@ describe('DownloadExecutor', () => {
       expect(executor.manualTerminationReason).toBeNull();
     });
 
-    it('should cleanup partial files on manual termination', async () => {
+    it('should cleanup in-progress videos on manual termination', async () => {
+      const mockVideoDownload = {
+        job_id: mockJobId,
+        youtube_id: 'abc123def',
+        file_path: '/data/Channel/Channel - Title - abc123def',
+        status: 'in_progress',
+        destroy: jest.fn().mockResolvedValue()
+      };
+
+      JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
       fsPromises.access.mockResolvedValue();
+      fsPromises.readdir.mockResolvedValue(['file.mp4', 'poster.jpg']);
+      fsPromises.stat.mockResolvedValue({ isFile: () => true, isDirectory: () => false });
       fsPromises.unlink.mockResolvedValue();
-      fsPromises.readdir.mockResolvedValue([]);
+      fsPromises.rmdir.mockResolvedValue();
 
       const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
 
-      // Track a destination
-      mockProcess.stdout.emit('data', Buffer.from('[download] Destination: /path/to/video.mp4'));
+      // Track a video destination
+      mockProcess.stdout.emit('data', Buffer.from('[download] Destination: /data/Channel/Channel - Title - abc123def/file [abc123def].mp4'));
 
       executor.terminateCurrentJob('User requested');
 
       mockProcess.emit('exit', 1, 'SIGTERM');
       await downloadPromise;
 
-      expect(fsPromises.unlink).toHaveBeenCalledWith('/path/to/video.mp4.part');
+      // Should call cleanupInProgressVideos which queries the database
+      expect(JobVideoDownload.findAll).toHaveBeenCalledWith({
+        where: { job_id: mockJobId, status: 'in_progress' }
+      });
+    });
+  });
+
+  describe('JobVideoDownload tracking', () => {
+    const mockArgs = ['--output', '/path/to/video.mp4', 'https://youtube.com/watch?v=123'];
+    const mockJobId = 'job-123';
+    const mockJobType = 'Channel Downloads';
+
+    beforeEach(() => {
+      JobVideoDownload.findOrCreate.mockResolvedValue([
+        { id: 1, job_id: 'test-job', youtube_id: 'abc123', file_path: '/path/to/dir', status: 'in_progress' },
+        true
+      ]);
+      JobVideoDownload.findAll.mockResolvedValue([]);
+      JobVideoDownload.destroy.mockResolvedValue(1);
+    });
+
+    it('should create tracking entry on first destination line for fragment files', async () => {
+      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Emit fragment file destination (multi-format download)
+      mockProcess.stdout.emit('data', Buffer.from('[download] Destination: /data/Channel/Channel - Title - VNoVq41mEqQ/file.f398.mp4'));
+
+      // Process any pending timers/promises
+      await Promise.resolve();
+
+      mockProcess.emit('exit', 0);
+      await downloadPromise;
+
+      expect(JobVideoDownload.findOrCreate).toHaveBeenCalledWith({
+        where: { job_id: mockJobId, youtube_id: 'VNoVq41mEqQ' },
+        defaults: {
+          job_id: mockJobId,
+          youtube_id: 'VNoVq41mEqQ',
+          file_path: '/data/Channel/Channel - Title - VNoVq41mEqQ',
+          status: 'in_progress'
+        }
+      });
+    });
+
+    it('should create tracking entry on destination line for direct downloads', async () => {
+      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Emit direct file destination (single-format download)
+      // Use proper YouTube ID format in brackets
+      mockProcess.stdout.emit('data', Buffer.from('[download] Destination: /data/Channel/Title [abc123defgh].mp4'));
+
+      // Process any pending timers/promises
+      await Promise.resolve();
+
+      mockProcess.emit('exit', 0);
+      await downloadPromise;
+
+      expect(JobVideoDownload.findOrCreate).toHaveBeenCalledWith({
+        where: { job_id: mockJobId, youtube_id: 'abc123defgh' },
+        defaults: {
+          job_id: mockJobId,
+          youtube_id: 'abc123defgh',
+          file_path: '/data/Channel',
+          status: 'in_progress'
+        }
+      });
+    });
+
+    it('should not create duplicate tracking entries for multiple fragments', async () => {
+      JobVideoDownload.findOrCreate
+        .mockResolvedValueOnce([{ id: 1 }, true])  // First fragment - created
+        .mockResolvedValueOnce([{ id: 1 }, false]); // Second fragment - already exists
+
+      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Emit multiple fragment destinations for same video
+      mockProcess.stdout.emit('data', Buffer.from('[download] Destination: /data/Ch/Ch - Title - VNoVq41mEqQ/file.f398.mp4'));
+      mockProcess.stdout.emit('data', Buffer.from('[download] Destination: /data/Ch/Ch - Title - VNoVq41mEqQ/file.f251.m4a'));
+
+      // Process any pending timers/promises
+      await Promise.resolve();
+
+      mockProcess.emit('exit', 0);
+      await downloadPromise;
+
+      // Should be called twice but findOrCreate prevents duplicates
+      expect(JobVideoDownload.findOrCreate).toHaveBeenCalledTimes(2);
+      expect(JobVideoDownload.findOrCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { job_id: mockJobId, youtube_id: 'VNoVq41mEqQ' }
+        })
+      );
+    });
+  });
+
+  describe('extractYoutubeIdFromPath', () => {
+    it('should extract YouTube ID from bracket format', () => {
+      const path = '/data/Channel/Video Title [abc123defgh].mp4';
+      const result = executor.extractYoutubeIdFromPath(path);
+      expect(result).toBe('abc123defgh');
+    });
+
+    it('should extract YouTube ID from directory name format', () => {
+      const path = '/data/Channel/Title - VNoVq41mEqQ/file.f398.mp4';
+      const result = executor.extractYoutubeIdFromPath(path);
+      expect(result).toBe('VNoVq41mEqQ');
+    });
+
+    it('should return null if no YouTube ID found', () => {
+      const path = '/data/Channel/Video Title.mp4';
+      const result = executor.extractYoutubeIdFromPath(path);
+      expect(result).toBeNull();
+    });
+
+    it('should handle errors gracefully', () => {
+      const result = executor.extractYoutubeIdFromPath(null);
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('isMainVideoFile', () => {
+    it('should identify main video file with mp4 extension', () => {
+      const result = executor.isMainVideoFile('/path/Video [abc123defgh].mp4');
+      expect(result).toBe(true);
+    });
+
+    it('should identify main video file with mkv extension', () => {
+      const result = executor.isMainVideoFile('/path/Video [abc123defgh].mkv');
+      expect(result).toBe(true);
+    });
+
+    it('should identify main video file with webm extension', () => {
+      const result = executor.isMainVideoFile('/path/Video [abc123defgh].webm');
+      expect(result).toBe(true);
+    });
+
+    it('should reject fragment files', () => {
+      const result = executor.isMainVideoFile('/path/Video.f398.mp4');
+      expect(result).toBe(false);
+    });
+
+    it('should reject files without YouTube ID in brackets', () => {
+      const result = executor.isMainVideoFile('/path/Video.mp4');
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('isVideoSpecificDirectory', () => {
+    it('should identify video-specific directory with valid format', () => {
+      const result = executor.isVideoSpecificDirectory('/data/Channel - Title - abc123defgh');
+      expect(result).toBe(true);
+    });
+
+    it('should identify directory with 11-char YouTube ID', () => {
+      const result = executor.isVideoSpecificDirectory('/data/Ch - Video Title - VNoVq41mEqQ');
+      expect(result).toBe(true);
+    });
+
+    it('should reject directory with too few segments', () => {
+      const result = executor.isVideoSpecificDirectory('/data/Channel - Title');
+      expect(result).toBe(false);
+    });
+
+    it('should reject directory with invalid ID length', () => {
+      const result = executor.isVideoSpecificDirectory('/data/Channel - Title - abc');
+      expect(result).toBe(false);
+    });
+
+    it('should reject directory with non-alphanumeric ID', () => {
+      const result = executor.isVideoSpecificDirectory('/data/Channel - Title - abc@123defgh');
+      expect(result).toBe(false);
+    });
+
+    it('should handle errors gracefully', () => {
+      const result = executor.isVideoSpecificDirectory(null);
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('cleanupInProgressVideos', () => {
+    const mockJobId = 'job-123';
+
+    beforeEach(() => {
+      fsPromises.access = jest.fn().mockResolvedValue();
+      fsPromises.readdir = jest.fn().mockResolvedValue(['file1.mp4', 'file2.m4a', 'poster.jpg']);
+      fsPromises.stat = jest.fn().mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+      fsPromises.unlink = jest.fn().mockResolvedValue();
+      fsPromises.rmdir = jest.fn().mockResolvedValue();
+    });
+
+    it('should cleanup in-progress video directories on termination', async () => {
+      const mockVideoDownload = {
+        job_id: mockJobId,
+        youtube_id: 'VNoVq41mEqQ',
+        file_path: '/data/Channel/Channel - Title - VNoVq41mEqQ',
+        status: 'in_progress',
+        destroy: jest.fn().mockResolvedValue()
+      };
+
+      JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
+
+      await executor.cleanupInProgressVideos(mockJobId);
+
+      expect(JobVideoDownload.findAll).toHaveBeenCalledWith({
+        where: { job_id: mockJobId, status: 'in_progress' }
+      });
+      expect(fsPromises.readdir).toHaveBeenCalledWith('/data/Channel/Channel - Title - VNoVq41mEqQ');
+      expect(fsPromises.unlink).toHaveBeenCalledTimes(3);
+      expect(fsPromises.rmdir).toHaveBeenCalledWith('/data/Channel/Channel - Title - VNoVq41mEqQ');
+      expect(mockVideoDownload.destroy).toHaveBeenCalled();
+    });
+
+    it('should skip cleanup if no in-progress videos', async () => {
+      JobVideoDownload.findAll.mockResolvedValue([]);
+
+      await executor.cleanupInProgressVideos(mockJobId);
+
+      expect(fsPromises.readdir).not.toHaveBeenCalled();
+      expect(fsPromises.rmdir).not.toHaveBeenCalled();
+    });
+
+    it('should handle directory already removed', async () => {
+      const mockVideoDownload = {
+        job_id: mockJobId,
+        youtube_id: 'abc123',
+        file_path: '/data/Channel/Channel - Title - abc123',
+        status: 'in_progress',
+        destroy: jest.fn().mockResolvedValue()
+      };
+
+      JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
+      fsPromises.access.mockRejectedValue(new Error('ENOENT'));
+
+      await executor.cleanupInProgressVideos(mockJobId);
+
+      expect(mockVideoDownload.destroy).toHaveBeenCalled();
+      expect(fsPromises.readdir).not.toHaveBeenCalled();
+    });
+
+    it('should skip non-video directories', async () => {
+      const mockVideoDownload = {
+        job_id: mockJobId,
+        youtube_id: 'abc123',
+        file_path: '/data/Channel/Regular Folder',
+        status: 'in_progress',
+        destroy: jest.fn().mockResolvedValue()
+      };
+
+      JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
+      fsPromises.access.mockResolvedValue();
+
+      await executor.cleanupInProgressVideos(mockJobId);
+
+      expect(fsPromises.readdir).not.toHaveBeenCalled();
+      expect(mockVideoDownload.destroy).not.toHaveBeenCalled();
+    });
+
+    it('should handle file removal errors gracefully', async () => {
+      const mockVideoDownload = {
+        job_id: mockJobId,
+        youtube_id: 'VNoVq41mEqQ',
+        file_path: '/data/Channel/Channel - Title - VNoVq41mEqQ',
+        status: 'in_progress',
+        destroy: jest.fn().mockResolvedValue()
+      };
+
+      JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
+      fsPromises.access.mockResolvedValue();
+      fsPromises.readdir.mockResolvedValue(['file1.mp4', 'file2.m4a']);
+      fsPromises.stat.mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+      fsPromises.unlink.mockRejectedValue(new Error('Permission denied'));
+      fsPromises.rmdir.mockResolvedValue();
+
+      await executor.cleanupInProgressVideos(mockJobId);
+
+      // Should still attempt to remove directory and destroy DB entry
+      expect(fsPromises.rmdir).toHaveBeenCalled();
+      expect(mockVideoDownload.destroy).toHaveBeenCalled();
+    });
+
+    it('should handle subdirectories in video folder', async () => {
+      const mockVideoDownload = {
+        job_id: mockJobId,
+        youtube_id: 'VNoVq41mEqQ',
+        file_path: '/data/Channel/Channel - Title - VNoVq41mEqQ',
+        status: 'in_progress',
+        destroy: jest.fn().mockResolvedValue()
+      };
+
+      JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
+      fsPromises.access.mockResolvedValue();
+      fsPromises.readdir.mockResolvedValue(['file1.mp4', 'subtitles']);
+      fsPromises.stat
+        .mockResolvedValueOnce({ isFile: () => true, isDirectory: () => false })
+        .mockResolvedValueOnce({ isFile: () => false, isDirectory: () => true });
+      fsPromises.unlink.mockResolvedValue();
+      fsPromises.rm.mockResolvedValue();
+      fsPromises.rmdir.mockResolvedValue();
+
+      await executor.cleanupInProgressVideos(mockJobId);
+
+      expect(fsPromises.unlink).toHaveBeenCalledWith(expect.stringContaining('file1.mp4'));
+      expect(fsPromises.rm).toHaveBeenCalledWith(
+        expect.stringContaining('subtitles'),
+        { recursive: true, force: true }
+      );
+      expect(mockVideoDownload.destroy).toHaveBeenCalled();
+    });
+
+    it('should handle database query errors', async () => {
+      JobVideoDownload.findAll.mockRejectedValue(new Error('Database error'));
+
+      await executor.cleanupInProgressVideos(mockJobId);
+
+      // Should not throw error
+      expect(fsPromises.readdir).not.toHaveBeenCalled();
     });
   });
 });
