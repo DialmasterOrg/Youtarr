@@ -316,6 +316,7 @@ describe('ChannelModule', () => {
           where: { channel_id: channelData.id }
         });
         expect(mockChannel.update).toHaveBeenCalledWith({
+          channel_id: channelData.id,
           title: channelData.title,
           description: channelData.description,
           uploader: channelData.uploader,
@@ -1601,7 +1602,8 @@ describe('ChannelModule', () => {
           lastFetched: channel.lastFetched,
           totalCount: videos.length,
           oldestVideoDate: null,
-          autoDownloadsEnabled: false
+          autoDownloadsEnabled: false,
+          availableTabs: []
         });
       });
 
@@ -1616,7 +1618,8 @@ describe('ChannelModule', () => {
           lastFetched: mockChannelData.lastFetched,
           totalCount: 0,
           oldestVideoDate: null,
-          autoDownloadsEnabled: false
+          autoDownloadsEnabled: false,
+          availableTabs: []
         });
       });
 
