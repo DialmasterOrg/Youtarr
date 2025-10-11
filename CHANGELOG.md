@@ -1,5 +1,33 @@
 # Changelog
 
+## [v1.41.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.41.0) - 2025-10-11
+
+## [1.41.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.40.0...v1.41.0) (2025-10-11)
+
+
+### Features
+
+* implement job termination cleanup and video recovery ([f5e41cf](https://github.com/DialmasterOrg/Youtarr/commit/f5e41cf0f62e5031bdecd0c14dc9d922e57c39b2))
+
+
+### Bug Fixes
+
+* resolve channel addition failure when only shorts tab exists ([3c7f970](https://github.com/DialmasterOrg/Youtarr/commit/3c7f9704288d36afc71c0c23f376629af077915c))
+
+
+### Tests
+
+* update channelModule tests for recent API changes ([9844a97](https://github.com/DialmasterOrg/Youtarr/commit/9844a97b6570c7685b88b9f390016d765d46d02b))
+
+
+### Documentation
+
+* update CHANGELOG for v1.40.0 [skip ci] ([f8ff819](https://github.com/DialmasterOrg/Youtarr/commit/f8ff8198d5433000de782e6d7d7b78cd035cfe3b))
+
+
+
+
+
 ## [v1.40.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.40.0) - 2025-10-09
 
 ## [1.40.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.39.1...v1.40.0) (2025-10-09)
