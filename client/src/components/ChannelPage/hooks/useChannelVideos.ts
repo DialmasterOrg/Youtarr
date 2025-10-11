@@ -9,7 +9,7 @@ interface UseChannelVideosParams {
   searchQuery: string;
   sortBy: string;
   sortOrder: string;
-  tabType: string;
+  tabType: string | null;
   token: string | null;
 }
 
@@ -21,6 +21,7 @@ interface UseChannelVideosResult {
   loading: boolean;
   error: Error | null;
   autoDownloadsEnabled: boolean;
+  availableTabs: string[];
   refetch: () => Promise<void>;
 }
 
@@ -42,9 +43,10 @@ export function useChannelVideos({
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
   const [autoDownloadsEnabled, setAutoDownloadsEnabled] = useState<boolean>(false);
+  const [availableTabs, setAvailableTabs] = useState<string[]>([]);
 
   const fetchVideos = useCallback(async () => {
-    if (!channelId || !token) return;
+    if (!channelId || !token || !tabType) return;
 
     setLoading(true);
     setError(null);
@@ -79,6 +81,7 @@ export function useChannelVideos({
       setTotalCount(data.totalCount || 0);
       setOldestVideoDate(data.oldestVideoDate || null);
       setAutoDownloadsEnabled(data.autoDownloadsEnabled || false);
+      setAvailableTabs(data.availableTabs || []);
     } catch (err) {
       console.error('Error fetching channel videos:', err);
       setError(err instanceof Error ? err : new Error('Unknown error'));
@@ -99,6 +102,7 @@ export function useChannelVideos({
     loading,
     error,
     autoDownloadsEnabled,
+    availableTabs,
     refetch: fetchVideos,
   };
 }

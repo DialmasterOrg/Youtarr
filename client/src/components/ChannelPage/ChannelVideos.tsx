@@ -67,8 +67,8 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
   // Tab states
-  const [selectedTab, setSelectedTab] = useState<string>('videos');
-  const [availableTabs, setAvailableTabs] = useState<string[]>(['videos']);
+  const [selectedTab, setSelectedTab] = useState<string | null>(null);
+  const [availableTabs, setAvailableTabs] = useState<string[]>([]);
   const [tabsLoading, setTabsLoading] = useState<boolean>(true);
   const [tabAutoDownloadStatus, setTabAutoDownloadStatus] = useState<Record<string, boolean>>({});
 
@@ -107,10 +107,28 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
           const data = await response.json();
           if (data.availableTabs && data.availableTabs.length > 0) {
             setAvailableTabs(data.availableTabs);
+
+            // Set default tab: prefer 'videos' if it exists, otherwise use first available
+            const defaultTab = data.availableTabs.includes('videos')
+              ? 'videos'
+              : data.availableTabs[0];
+
+            setSelectedTab(defaultTab);
+          } else {
+            // Fallback to 'videos' if no tabs are detected
+            setAvailableTabs(['videos']);
+            setSelectedTab('videos');
           }
+        } else {
+          // Fallback on error
+          setAvailableTabs(['videos']);
+          setSelectedTab('videos');
         }
       } catch (err) {
         console.error('Error fetching available tabs:', err);
+        // Fallback on error
+        setAvailableTabs(['videos']);
+        setSelectedTab('videos');
       } finally {
         setTabsLoading(false);
       }
@@ -150,6 +168,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
     oldestVideoDate,
     videoFailed,
     autoDownloadsEnabled,
+    availableTabs: availableTabsFromVideos,
     loading: videosLoading,
     refetch: refetchVideos,
   } = useChannelVideos({
@@ -163,6 +182,13 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
     tabType: selectedTab,
     token,
   });
+
+  // Update available tabs from video fetch response if available
+  useEffect(() => {
+    if (availableTabsFromVideos && availableTabsFromVideos.length > 0) {
+      setAvailableTabs(availableTabsFromVideos);
+    }
+  }, [availableTabsFromVideos]);
 
   const { config } = useConfig(token);
   const defaultResolution = config.preferredResolution || '1080';
@@ -308,10 +334,13 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
   };
 
   const handleAutoDownloadChange = async (enabled: boolean) => {
-    if (!channel_id || !token) return;
+    if (!channel_id || !token || !selectedTab) return;
+
+    // Store selectedTab in a const so TypeScript knows it's not null
+    const currentTab = selectedTab;
 
     try {
-      const response = await fetch(`/api/channels/${channel_id}/tabs/${selectedTab}/auto-download`, {
+      const response = await fetch(`/api/channels/${channel_id}/tabs/${currentTab}/auto-download`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -327,7 +356,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
       // Update local state to reflect the change immediately
       setTabAutoDownloadStatus(prev => ({
         ...prev,
-        [selectedTab]: enabled,
+        [currentTab]: enabled,
       }));
     } catch (error) {
       console.error('Error updating auto download setting:', error);
@@ -539,8 +568,8 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
           selectedForDeletion={selectedForDeletion}
           deleteLoading={deleteLoading}
           paginatedVideos={paginatedVideos}
-          autoDownloadsEnabled={tabAutoDownloadStatus[selectedTab] ?? autoDownloadsEnabled}
-          selectedTab={selectedTab}
+          autoDownloadsEnabled={selectedTab ? (tabAutoDownloadStatus[selectedTab] ?? autoDownloadsEnabled) : autoDownloadsEnabled}
+          selectedTab={selectedTab || 'videos'}
           onViewModeChange={handleViewModeChange}
           onSearchChange={(query) => {
             setSearchQuery(query);
@@ -568,10 +597,10 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
               <Skeleton variant="rectangular" width={80} height={36} sx={{ borderRadius: 1 }} />
             </Box>
           </Box>
-        ) : availableTabs.length > 1 ? (
+        ) : availableTabs.length > 0 ? (
           <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
             <Tabs
-              value={selectedTab}
+              value={selectedTab || 'videos'}
               onChange={handleTabChange}
               variant={isMobile ? 'fullWidth' : 'standard'}
               centered={!isMobile}
@@ -712,8 +741,8 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
         missingVideoCount={getMissingVideoCount()}
         selectedForDeletion={selectedForDeletion.length}
         defaultResolution={defaultResolution}
-        selectedTab={selectedTab}
-        tabLabel={getTabLabel(selectedTab)}
+        selectedTab={selectedTab || 'videos'}
+        tabLabel={getTabLabel(selectedTab || 'videos')}
         onDownloadDialogClose={() => setDownloadDialogOpen(false)}
         onDownloadConfirm={handleDownloadConfirm}
         onRefreshCancel={handleRefreshCancel}

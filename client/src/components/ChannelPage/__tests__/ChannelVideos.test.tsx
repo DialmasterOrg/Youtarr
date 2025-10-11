@@ -481,8 +481,10 @@ describe('ChannelVideos Component', () => {
         expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
       });
 
-      // Should not display tabs
-      expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+      // Should display fallback 'Videos' tab when server returns empty array
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /Videos/i })).toBeInTheDocument();
+      });
     });
 
     test('handles undefined channelAutoDownloadTabs prop', () => {
@@ -511,6 +513,7 @@ describe('ChannelVideos Component', () => {
     test('calls useChannelVideos hook with correct parameters', () => {
       renderChannelVideos();
 
+      // Initially called with null tabType until tabs are loaded
       expect(useChannelVideos).toHaveBeenCalledWith({
         channelId: 'UC123456',
         page: 1,
@@ -519,7 +522,7 @@ describe('ChannelVideos Component', () => {
         searchQuery: '',
         sortBy: 'date',
         sortOrder: 'desc',
-        tabType: 'videos',
+        tabType: null,
         token: mockToken,
       });
     });
@@ -527,12 +530,13 @@ describe('ChannelVideos Component', () => {
     test('calls useRefreshChannelVideos hook with correct parameters', () => {
       renderChannelVideos();
 
+      // Initially called with null tabType until tabs are loaded
       expect(useRefreshChannelVideos).toHaveBeenCalledWith(
         'UC123456',
         1, // page
         16, // pageSize
         false, // hideDownloaded
-        'videos', // tabType
+        null, // tabType - null until tabs are loaded
         mockToken
       );
     });

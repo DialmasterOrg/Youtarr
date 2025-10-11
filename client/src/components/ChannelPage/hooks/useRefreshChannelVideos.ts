@@ -19,14 +19,14 @@ export function useRefreshChannelVideos(
   page: number,
   pageSize: number,
   hideDownloaded: boolean,
-  tabType: string,
+  tabType: string | null,
   token: string | null
 ): UseRefreshChannelVideosResult {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const refreshVideos = useCallback(async (): Promise<RefreshResult | null> => {
-    if (!channelId || !token) return null;
+    if (!channelId || !token || !tabType) return null;
 
     setLoading(true);
     setError(null);

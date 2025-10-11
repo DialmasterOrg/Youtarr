@@ -122,7 +122,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
         const channelName = url.startsWith('@') ? url : `@${url}`;
         // Validate it's a reasonable channel name (alphanumeric, underscores, hyphens, dots)
         if (/^@[\w.-]+$/.test(channelName)) {
-          return `https://www.youtube.com/${channelName}/videos`;
+          return `https://www.youtube.com/${channelName}`;
         }
         return null;
       }
@@ -148,15 +148,15 @@ function ChannelManager({ token }: ChannelManagerProps) {
       const channelMatch = pathname.match(/^\/@([^/]+)(\/.*)?$/);
       if (channelMatch) {
         const handle = channelMatch[1];
-        // Return normalized URL with /videos suffix
-        return `https://www.youtube.com/@${handle}/videos`;
+        // Return normalized URL without tab suffix
+        return `https://www.youtube.com/@${handle}`;
       }
 
       // Also support old-style /c/ or /channel/ URLs
       const oldStyleMatch = pathname.match(/^\/(c|channel)\/([^/]+)(\/.*)?$/);
       if (oldStyleMatch) {
         const channelId = oldStyleMatch[2];
-        return `https://www.youtube.com/${oldStyleMatch[1]}/${channelId}/videos`;
+        return `https://www.youtube.com/${oldStyleMatch[1]}/${channelId}`;
       }
 
       return null;

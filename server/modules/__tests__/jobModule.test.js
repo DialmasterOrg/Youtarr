@@ -1515,16 +1515,27 @@ describe('JobModule', () => {
       const info = {
         youtubeId: 'video-1',
         channelId: 'channel-1',
-        youTubeVideoName: 'Updated Video'
+        youTubeVideoName: 'Updated Video',
+        duration: 120,
+        upload_date: '20240115',
+        availability: 'public',
+        media_type: 'video'
       };
 
       await JobModule.upsertChannelVideoFromInfo(info);
 
-      expect(mockRecord.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: 'Updated Video'
-        })
-      );
+      // Verify that update is called with correct fields
+      expect(mockRecord.update).toHaveBeenCalledWith({
+        title: 'Updated Video',
+        thumbnail: 'https://i.ytimg.com/vi/video-1/mqdefault.jpg',
+        duration: 120,
+        availability: 'public',
+        media_type: 'video'
+      });
+
+      // Explicitly verify that publishedAt is NOT included in the update
+      const updateCall = mockRecord.update.mock.calls[0][0];
+      expect(updateCall).not.toHaveProperty('publishedAt');
     });
 
     test('should skip update when skipUpdateIfExists is true', async () => {
