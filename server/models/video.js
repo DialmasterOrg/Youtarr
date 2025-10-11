@@ -14,6 +14,7 @@ Video.init(
     youtubeId: {
       type: DataTypes.STRING,
       allowNull: false,
+      unique: true,
     },
     youTubeChannelName: {
       type: DataTypes.STRING,

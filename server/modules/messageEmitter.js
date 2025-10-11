@@ -22,7 +22,15 @@ module.exports = {
       // Only store the final summary or complete/error states, not progress updates
       if (payload.finalSummary ||
           (payload.progress && (payload.progress.state === 'complete' || payload.progress.state === 'error'))) {
-        lastDownloadState = message;
+        // Create a simplified message for replay without progress details
+        // This prevents the progress bar from "replaying" when clients reconnect
+        lastDownloadState = {
+          ...message,
+          payload: {
+            ...message.payload,
+            progress: undefined  // Remove progress object to show only final summary
+          }
+        };
       }
       // Clear the stored state when a new download starts
       if (payload.clearPreviousSummary ||

@@ -5,6 +5,7 @@ const path = require('path');
 const Job = require('../models/job');
 const Video = require('../models/video');
 const JobVideo = require('../models/jobvideo');
+const JobVideoDownload = require('../models/jobvideodownload');
 const ChannelVideo = require('../models/channelvideo');
 const cron = require('node-cron');
 const MessageEmitter = require('./messageEmitter.js'); // import the helper function
@@ -60,19 +61,229 @@ class JobModule {
     }
   }
 
+  /**
+   * Recover completed videos from JobVideoDownload tracking table
+   * Reads .info.json files and ensures videos are properly saved to DB
+   * @param {string} jobId - The job ID to recover videos for
+   * @returns {Promise<number>} Number of videos successfully recovered
+   */
+  async recoverCompletedVideos(jobId) {
+    let recoveredCount = 0;
+
+    try {
+      // Find all completed video downloads for this job
+      const completedDownloads = await JobVideoDownload.findAll({
+        where: {
+          job_id: jobId,
+          status: 'completed'
+        }
+      });
+
+      if (completedDownloads.length === 0) {
+        console.log(`No completed videos to recover for job ${jobId}`);
+        return 0;
+      }
+
+      console.log(`Found ${completedDownloads.length} completed video(s) to recover for job ${jobId}`);
+
+      // Try to get the job instance for creating JobVideo relationships
+      let jobInstance = await Job.findOne({ where: { id: jobId } });
+
+      for (const download of completedDownloads) {
+        try {
+          const youtubeId = download.youtube_id;
+          const infoJsonPath = path.join(this.jobsDir, 'info', `${youtubeId}.info.json`);
+
+          // Check if .info.json file exists
+          let infoExists = false;
+          try {
+            await fsPromises.access(infoJsonPath);
+            infoExists = true;
+          } catch (err) {
+            console.warn(`Info file not found for ${youtubeId}, skipping recovery`);
+            continue;
+          }
+
+          if (!infoExists) {
+            continue;
+          }
+
+          // Read and parse the info.json file
+          const infoContent = await fsPromises.readFile(infoJsonPath, 'utf-8');
+          const info = JSON.parse(infoContent);
+
+          // Build video data object from info.json
+          const preferredChannelName = info.uploader || info.channel || info.uploader_id || info.channel_id || 'Unknown Channel';
+
+          const videoData = {
+            youtubeId: info.id,
+            youTubeChannelName: preferredChannelName,
+            youTubeVideoName: info.title,
+            duration: info.duration,
+            description: info.description,
+            originalDate: info.upload_date,
+            channel_id: info.channel_id,
+            media_type: info.media_type || 'video',
+          };
+
+          // Determine candidate file paths, preferring yt-dlp's recorded actual location
+          const candidatePaths = [];
+          const pushCandidate = (candidatePath) => {
+            if (candidatePath && !candidatePaths.includes(candidatePath)) {
+              candidatePaths.push(candidatePath);
+            }
+          };
+
+          const actualFilePath = info._actual_filepath ? path.normalize(info._actual_filepath) : null;
+          pushCandidate(actualFilePath);
+
+          // If post-processing updated the tracking record with an exact path, use it
+          if (!actualFilePath && download.file_path && path.extname(download.file_path)) {
+            pushCandidate(path.normalize(download.file_path));
+          }
+
+          const fallbackBasePath = path.join(
+            configModule.directoryPath,
+            preferredChannelName,
+            `${preferredChannelName} - ${info.title} - ${info.id}`,
+            `${preferredChannelName} - ${info.title}  [${info.id}]`
+          );
+
+          const fallbackExtensions = ['.mp4', '.webm', '.mkv', '.m4v', '.avi'];
+          for (const ext of fallbackExtensions) {
+            pushCandidate(`${fallbackBasePath}${ext}`);
+          }
+
+          // Check candidates until we find an existing file
+          let resolvedPath = null;
+          let resolvedStats = null;
+          for (const candidate of candidatePaths) {
+            try {
+              const stats = await fsPromises.stat(candidate);
+              resolvedPath = candidate;
+              resolvedStats = stats;
+              break;
+            } catch (err) {
+              // Try next candidate
+            }
+          }
+
+          if (resolvedPath) {
+            videoData.filePath = resolvedPath;
+            videoData.fileSize = resolvedStats?.size !== undefined ? resolvedStats.size.toString() : null;
+            videoData.removed = false;
+          } else {
+            // File not found, but we still want to record the expected metadata location
+            const assumedPath = actualFilePath || `${fallbackBasePath}.mp4`;
+            videoData.filePath = assumedPath;
+            videoData.fileSize = null;
+            videoData.removed = false;
+          }
+
+          // Upsert video into Videos table and ensure JobVideo relationship exists
+          // Note: Video and ChannelVideo were already created during normal download processing
+          // We just need to ensure the JobVideo relationship exists for this terminated job
+          await this.upsertVideoForJob(videoData, jobInstance, true);
+
+          recoveredCount++;
+          console.log(`Recovered video ${youtubeId}: ${info.title}`);
+        } catch (err) {
+          console.error(`Error recovering video ${download.youtube_id}:`, err.message);
+        }
+      }
+
+      console.log(`Successfully recovered ${recoveredCount} video(s) for job ${jobId}`);
+      return recoveredCount;
+    } catch (err) {
+      console.error(`Error in recoverCompletedVideos for job ${jobId}:`, err.message);
+      return recoveredCount;
+    }
+  }
+
   async terminateInProgressJobs() {
-    // Change the status of "In Progress" jobs to "Terminated".
+    // Change the status of "In Progress" jobs to "Terminated" and recover/cleanup videos
     for (let jobId in this.jobs) {
       if (this.jobs[jobId].status === 'In Progress') {
+        console.log(`Recovering job ${jobId} after server restart...`);
+
+        let recoveredCount = 0;
+        let outputMessage = 'Job terminated due to server restart';
+
+        try {
+          // Step 1: Recover completed videos from JobVideoDownload table
+          recoveredCount = await this.recoverCompletedVideos(jobId);
+
+          // Step 2: Clean up in-progress videos from disk
+          try {
+            // Import downloadExecutor to access cleanup method
+            const DownloadExecutor = require('./download/downloadExecutor');
+            const downloadExecutor = new DownloadExecutor();
+            await downloadExecutor.cleanupInProgressVideos(jobId);
+          } catch (cleanupErr) {
+            console.error(`Error cleaning up in-progress videos for job ${jobId}:`, cleanupErr.message);
+          }
+
+          // Step 3: Set appropriate output message
+          if (recoveredCount > 0) {
+            outputMessage = `${recoveredCount} video${recoveredCount === 1 ? '' : 's'} completed (recovered after server restart)`;
+          }
+
+          // Step 4: Clean up all JobVideoDownload entries for this job
+          try {
+            const deletedCount = await JobVideoDownload.destroy({
+              where: { job_id: jobId }
+            });
+            if (deletedCount > 0) {
+              console.log(`Cleaned up ${deletedCount} JobVideoDownload tracking entries for job ${jobId}`);
+            }
+          } catch (deleteErr) {
+            console.error(`Error deleting JobVideoDownload entries for job ${jobId}:`, deleteErr.message);
+          }
+        } catch (err) {
+          console.error(`Error during recovery for job ${jobId}:`, err.message);
+          outputMessage = `Job terminated with errors: ${err.message}`;
+        }
+
+        // Step 5: Reload job videos from database into in-memory structure
+        // This ensures Download History shows the correct count
+        try {
+          const jobVideos = await JobVideo.findAll({
+            where: { job_id: jobId }
+          });
+
+          const videos = [];
+          for (const jobVideo of jobVideos) {
+            const video = await Video.findOne({ where: { id: jobVideo.video_id } });
+            if (video) {
+              videos.push(video.dataValues);
+            }
+          }
+
+          if (!this.jobs[jobId].data) {
+            this.jobs[jobId].data = {};
+          }
+          this.jobs[jobId].data.videos = videos;
+
+          console.log(`Loaded ${videos.length} video(s) into in-memory structure for job ${jobId}`);
+        } catch (loadErr) {
+          console.error(`Error loading videos into memory for job ${jobId}:`, loadErr.message);
+        }
+
+        // Step 6: Update job status and output
         this.jobs[jobId].status = 'Terminated';
-        // Only update the job status in DB, don't touch video data
+        this.jobs[jobId].output = outputMessage;
+
         try {
           await Job.update(
-            { status: 'Terminated' },
+            {
+              status: 'Terminated',
+              output: outputMessage
+            },
             { where: { id: jobId } }
           );
+          console.log(`Job ${jobId} marked as Terminated: ${outputMessage}`);
         } catch (err) {
-          console.error(`Failed to terminate job ${jobId}:`, err.message);
+          console.error(`Failed to update job ${jobId} in database:`, err.message);
         }
       }
     }
@@ -242,24 +453,69 @@ class JobModule {
 
   /**
    * Upserts a video and creates JobVideo relationship
+   * @param {Object} video - Video data
+   * @param {Object} jobInstance - Job instance
+   * @param {boolean} alwaysCreateJobVideo - Always create JobVideo relationship even if video exists (for recovery)
    */
-  async upsertVideoForJob(video, jobInstance) {
+  async upsertVideoForJob(video, jobInstance, alwaysCreateJobVideo = false) {
     let videoInstance = await Video.findOne({
       where: { youtubeId: video.youtubeId },
     });
 
+    let videoExisted = !!videoInstance;
+
     if (videoInstance) {
-      const updateData = this.prepareVideoDataForSave(video, false);
+      // During recovery (alwaysCreateJobVideo=true), treat updates like new videos
+      // to ensure file metadata and last_downloaded_at are set
+      const updateData = this.prepareVideoDataForSave(video, alwaysCreateJobVideo);
       await videoInstance.update(updateData);
     } else {
-      const createData = this.prepareVideoDataForSave(video, true);
-      videoInstance = await Video.create(createData);
+      // Try to create the video
+      try {
+        const createData = this.prepareVideoDataForSave(video, true);
+        videoInstance = await Video.create(createData);
+      } catch (err) {
+        // If unique constraint error, the video was created by another process (like backfill)
+        // Query for it again
+        if (err.name === 'SequelizeUniqueConstraintError' || err.original?.code === 'ER_DUP_ENTRY') {
+          console.log(`Video ${video.youtubeId} already exists (created by another process), fetching it...`);
+          videoInstance = await Video.findOne({
+            where: { youtubeId: video.youtubeId },
+          });
+          videoExisted = true;
 
-      // Create JobVideo relationship for new videos
-      await JobVideo.create({
-        job_id: jobInstance.id,
-        video_id: videoInstance.id,
+          if (!videoInstance) {
+            // This shouldn't happen, but if it does, re-throw the error
+            throw new Error(`Failed to find video ${video.youtubeId} after unique constraint error`);
+          }
+        } else {
+          // Some other error, re-throw it
+          throw err;
+        }
+      }
+    }
+
+    // Create JobVideo relationship if needed
+    const shouldCreateJobVideo = alwaysCreateJobVideo || !videoExisted;
+
+    if (shouldCreateJobVideo) {
+      // Check if JobVideo relationship already exists
+      const existingJobVideo = await JobVideo.findOne({
+        where: {
+          job_id: jobInstance.id,
+          video_id: videoInstance.id
+        }
       });
+
+      if (!existingJobVideo) {
+        await JobVideo.create({
+          job_id: jobInstance.id,
+          video_id: videoInstance.id,
+        });
+        console.log(`Created JobVideo relationship for video ${video.youtubeId} (job_id: ${jobInstance.id}, video_id: ${videoInstance.id})`);
+      } else {
+        console.log(`JobVideo relationship already exists for video ${video.youtubeId}`);
+      }
     }
 
     return videoInstance;

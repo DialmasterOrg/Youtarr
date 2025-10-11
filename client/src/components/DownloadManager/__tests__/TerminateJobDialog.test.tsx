@@ -69,9 +69,9 @@ describe('TerminateJobDialog', () => {
       />
     );
 
-    expect(screen.getByText('Stop the current download after completing the current video')).toBeInTheDocument();
+    expect(screen.getByText('Stop the current download, terminating the download currently in progress.')).toBeInTheDocument();
     expect(screen.getByText('Save all videos that have already been downloaded')).toBeInTheDocument();
-    expect(screen.getByText('Clean up any partial downloads in progress')).toBeInTheDocument();
+    expect(screen.getByText('Clean up the partial video download in progress')).toBeInTheDocument();
     expect(screen.getByText('NOT affect any queued jobs (they will continue after this one)')).toBeInTheDocument();
   });
 

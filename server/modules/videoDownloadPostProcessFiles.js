@@ -3,6 +3,9 @@ const path = require('path');
 const { execSync, spawnSync } = require('child_process');
 const configModule = require('./configModule');
 const nfoGenerator = require('./nfoGenerator');
+const { JobVideoDownload } = require('../models');
+
+const activeJobId = process.env.YOUTARR_JOB_ID;
 
 const videoPath = process.argv[2]; // get the video file path
 const parsedPath = path.parse(videoPath);
@@ -349,6 +352,29 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
           console.log(`Error setting directory timestamp: ${err.message}`);
         }
       }
+    }
+
+    // Mark this video as completed in the JobVideoDownload tracking table
+    if (activeJobId) {
+      try {
+        const [updatedCount] = await JobVideoDownload.update(
+          { status: 'completed', file_path: videoPath },
+          {
+            where: {
+              job_id: activeJobId,
+              youtube_id: id
+            }
+          }
+        );
+        if (updatedCount > 0) {
+          console.log(`Marked video ${id} as completed in tracking for job ${activeJobId}`);
+        }
+      } catch (err) {
+        console.error(`Error updating JobVideoDownload status for ${id}:`, err.message);
+        // Don't fail the entire post-processing if this fails
+      }
+    } else {
+      console.warn(`Job ID not available while marking ${id} as completed; skipping tracking update`);
     }
   }
 })().catch(err => {

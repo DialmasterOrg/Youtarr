@@ -50,13 +50,13 @@ const TerminateJobDialog: React.FC<TerminateJobDialogProps> = ({
           </Typography>
           <Box component="ul" sx={{ ml: 2, mb: 2 }}>
             <Typography component="li" variant="body2" color="text.secondary">
-              Stop the current download after completing the current video
+              Stop the current download, terminating the download currently in progress.
             </Typography>
             <Typography component="li" variant="body2" color="text.secondary">
               Save all videos that have already been downloaded
             </Typography>
             <Typography component="li" variant="body2" color="text.secondary">
-              Clean up any partial downloads in progress
+              Clean up the partial video download in progress
             </Typography>
             <Typography component="li" variant="body2" color="text.secondary">
               NOT affect any queued jobs (they will continue after this one)
