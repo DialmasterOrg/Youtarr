@@ -44,12 +44,13 @@ Starting with version 1.23.0, Youtarr now **automatically creates** a `config/co
 
 2. **Manual Docker Configuration (docker-compose directly)**
    - Skip setup.sh entirely
-   - Edit `docker-compose.yml` to hardcode your volume mount:
+   - **IMPORTANT**: You **must** edit `docker-compose.yml` first to hardcode your volume mount:
      ```yaml
      volumes:
        - /your/host/path:/usr/src/app/data  # Replace ${YOUTUBE_OUTPUT_DIR} with your path
      ```
-   - Start containers with `docker compose up -d`
+   - Running `docker compose up` without this edit will fail with: `invalid spec: :/usr/src/app/data: empty section between colons`
+   - After editing the compose file, start containers with `docker compose up -d`
    - Container auto-creates `config.json` with `/usr/src/app/data` (container's internal path)
    - **UI Behavior**: YouTube Output Directory field is **read-only** - shows "Docker Volume" chip
 

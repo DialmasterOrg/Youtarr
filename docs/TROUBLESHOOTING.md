@@ -133,6 +133,25 @@ This creates a secure tunnel between your local machine's port 3087 and the serv
 
 ## Docker Issues
 
+### "Empty section between colons" Error
+
+**Problem**: Getting error `invalid spec: :/usr/src/app/data: empty section between colons` when trying to start with Docker Compose.
+
+**Cause**: You ran `docker compose up` directly instead of using `./start.sh`. The docker-compose.yml file requires the `YOUTUBE_OUTPUT_DIR` environment variable to be set, which `./start.sh` reads from your config.json.
+
+**Solution**:
+Always use the start script instead of running docker-compose commands directly:
+```bash
+./start.sh
+```
+
+The start script:
+- Reads your configured YouTube output directory from `config/config.json`
+- Exports it as `YOUTUBE_OUTPUT_DIR` environment variable
+- Then runs docker-compose with the correct configuration
+
+**Note**: This is by design to ensure your configured directory in config.json matches the Docker volume mount. Using docker-compose directly would bypass this validation and could result in mismatched storage locations.
+
 ### Docker Desktop Mount Path Error (Windows)
 
 **Problem**: Error message: `Error response from daemon: error while creating mount source path '/run/desktop/mnt/host/...': mkdir /run/desktop/mnt/host/...: file exists`
