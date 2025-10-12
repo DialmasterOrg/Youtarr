@@ -233,9 +233,9 @@ describe('YtdlpCommandBuilder', () => {
       expect(result).toContain('--embed-metadata');
       expect(result).toContain('--write-info-json');
 
-      // Check filter for duration
+      // Check filter for availability and live videos
       const filterIndex = result.indexOf('--match-filter');
-      expect(result[filterIndex + 1]).toContain('availability!=subscriber_only');
+      expect(result[filterIndex + 1]).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');
 
       // Check output paths
       expect(result).toContain('-o');
@@ -382,9 +382,9 @@ describe('YtdlpCommandBuilder', () => {
     it('should build command args without duration filter', () => {
       const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload();
 
-      // Check that duration filter is NOT included
+      // Check that duration filter is NOT included, but live video filtering is
       const filterIndex = result.indexOf('--match-filter');
-      expect(result[filterIndex + 1]).toBe('availability!=subscriber_only');
+      expect(result[filterIndex + 1]).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');
     });
 
     it('should otherwise be identical to regular command args', () => {
