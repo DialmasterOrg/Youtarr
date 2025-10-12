@@ -234,10 +234,19 @@ describe('ConfigModule', () => {
 
   describe('file watching', () => {
     beforeEach(() => {
+      jest.useFakeTimers();
       ConfigModule = require('../configModule');
     });
 
+    afterEach(() => {
+      jest.useRealTimers();
+      delete process.env.DATA_PATH;
+    });
+
     test('should reload config on file change', () => {
+      // Clear any pending timers from initialization
+      jest.runOnlyPendingTimers();
+
       const changeListener = jest.fn();
       ConfigModule.on('change', changeListener);
 
@@ -247,6 +256,9 @@ describe('ConfigModule', () => {
       fs.readFileSync.mockReturnValue(JSON.stringify(updatedConfig));
 
       watchCallback('change');
+
+      // Advance timers to trigger the debounced callback
+      jest.advanceTimersByTime(100);
 
       expect(ConfigModule.config.plexApiKey).toBe('updated-key');
       expect(changeListener).toHaveBeenCalled();
@@ -269,6 +281,9 @@ describe('ConfigModule', () => {
       fs = require('fs');
       ConfigModule = require('../configModule');
 
+      // Clear any pending timers from initialization
+      jest.runOnlyPendingTimers();
+
       const changeListener = jest.fn();
       ConfigModule.on('change', changeListener);
 
@@ -280,11 +295,12 @@ describe('ConfigModule', () => {
 
       watchCallback('change');
 
+      // Advance timers to trigger the debounced callback
+      jest.advanceTimersByTime(100);
+
       // Verify DATA_PATH still overrides even after file change
       expect(ConfigModule.config.youtubeOutputDirectory).toBe('/platform/override');
       expect(changeListener).toHaveBeenCalled();
-
-      delete process.env.DATA_PATH;
     });
 
     test('should ignore non-change events', () => {
@@ -1465,6 +1481,7 @@ describe('ConfigModule', () => {
     describe('writeCustomCookiesFile', () => {
       test('should write file with correct permissions and update config', () => {
         const testBuffer = Buffer.from('# Netscape HTTP Cookie File\ntest cookie data');
+        const emitSpy = jest.spyOn(ConfigModule, 'emit');
 
         const filePath = ConfigModule.writeCustomCookiesFile(testBuffer);
 
@@ -1480,6 +1497,7 @@ describe('ConfigModule', () => {
 
         expect(ConfigModule.config.customCookiesUploaded).toBe(true);
         expect(ConfigModule.config.cookiesEnabled).toBe(true);
+        expect(emitSpy).toHaveBeenCalledWith('change');
 
         expect(fs.writeFileSync).toHaveBeenCalledWith(
           mockConfigPath,
@@ -1487,6 +1505,7 @@ describe('ConfigModule', () => {
         );
 
         expect(filePath).toContain('cookies.user.txt');
+        emitSpy.mockRestore();
       });
 
       test('should overwrite existing file', () => {
@@ -1507,6 +1526,7 @@ describe('ConfigModule', () => {
         ConfigModule.config.cookiesEnabled = true;
         ConfigModule.config.customCookiesUploaded = true;
         fs.existsSync.mockReturnValue(true);
+        const emitSpy = jest.spyOn(ConfigModule, 'emit');
 
         const result = ConfigModule.deleteCustomCookiesFile();
 
@@ -1516,6 +1536,7 @@ describe('ConfigModule', () => {
 
         expect(ConfigModule.config.customCookiesUploaded).toBe(false);
         expect(ConfigModule.config.cookiesEnabled).toBe(true);
+        expect(emitSpy).toHaveBeenCalledWith('change');
 
         expect(fs.writeFileSync).toHaveBeenCalledWith(
           mockConfigPath,
@@ -1523,6 +1544,7 @@ describe('ConfigModule', () => {
         );
 
         expect(result).toBe(true);
+        emitSpy.mockRestore();
       });
 
       test('should handle case when file does not exist', () => {

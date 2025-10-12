@@ -18,6 +18,9 @@ class ConfigModule extends EventEmitter {
     }
     this.task = null;
     this.configWatcher = null;
+    this.debounceTimer = null;
+    this.isSaving = false;
+    this.lastConfigContent = null;
 
     this.directoryPath = '';
     if (process.env.IN_DOCKER_CONTAINER) {
@@ -396,7 +399,16 @@ class ConfigModule extends EventEmitter {
       delete configToSave.tmpFilePath;
     }
 
-    fs.writeFileSync(this.configPath, JSON.stringify(configToSave, null, 2));
+    // Set flag to ignore file watcher events triggered by this save
+    this.isSaving = true;
+    const configContent = JSON.stringify(configToSave, null, 2);
+    this.lastConfigContent = configContent;
+    fs.writeFileSync(this.configPath, configContent);
+
+    // Clear the flag after a short delay to account for fs.watch() firing
+    setTimeout(() => {
+      this.isSaving = false;
+    }, 200);
   }
 
   createDefaultConfig() {
@@ -487,44 +499,79 @@ class ConfigModule extends EventEmitter {
     // Watch the config file for changes
     this.configWatcher = fs.watch(this.configPath, (event) => {
       if (event === 'change') {
-        // Load the new config file
-        this.config = JSON.parse(fs.readFileSync(this.configPath));
-
-        // Migrate cronSchedule to channelDownloadFrequency if needed
-        if (!this.config.channelDownloadFrequency && this.config.cronSchedule) {
-          this.config.channelDownloadFrequency = this.config.cronSchedule;
-          delete this.config.cronSchedule;
-          // Save the corrected config
-          this.saveConfig();
+        // Clear any existing debounce timer
+        if (this.debounceTimer) {
+          clearTimeout(this.debounceTimer);
         }
 
-        // Apply configuration migrations to ensure new defaults exist
-        const migratedConfig = this.migrateConfig(this.config);
-        const needsMigrationSave = JSON.stringify(migratedConfig) !== JSON.stringify(this.config);
-        this.config = migratedConfig;
+        // Debounce file change events to prevent rapid-fire triggers
+        this.debounceTimer = setTimeout(() => {
+          // Ignore changes triggered by our own saves
+          if (this.isSaving) {
+            return;
+          }
 
-        if (needsMigrationSave) {
-          this.saveConfig();
-        }
+          try {
+            // Read the current file content
+            const fileContent = fs.readFileSync(this.configPath, 'utf8');
 
-        // IMPORTANT: If DATA_PATH is set, it ALWAYS overrides config.json
-        if (process.env.IN_DOCKER_CONTAINER && process.env.DATA_PATH) {
-          this.config.youtubeOutputDirectory = process.env.DATA_PATH;
-        }
+            // Skip processing if content hasn't actually changed
+            if (this.lastConfigContent && fileContent === this.lastConfigContent) {
+              return;
+            }
 
-        // Override temp download settings for Elfhosted platform
-        if (this.isElfhostedPlatform()) {
-          this.config.useTmpForDownloads = true;
-          this.config.tmpFilePath = '/app/config/temp_downloads';
-        }
+            // Store whether this is a new config change (for emitting event later)
+            const contentChanged = !this.lastConfigContent || fileContent !== this.lastConfigContent;
+            this.lastConfigContent = fileContent;
 
-        // Emit a change event
-        this.emit('change');
+            // Load the new config file
+            this.config = JSON.parse(fileContent);
+
+            // Migrate cronSchedule to channelDownloadFrequency if needed
+            if (!this.config.channelDownloadFrequency && this.config.cronSchedule) {
+              this.config.channelDownloadFrequency = this.config.cronSchedule;
+              delete this.config.cronSchedule;
+              // Save the corrected config
+              this.saveConfig();
+            }
+
+            // Apply configuration migrations to ensure new defaults exist
+            const migratedConfig = this.migrateConfig(this.config);
+            const needsMigrationSave = JSON.stringify(migratedConfig) !== JSON.stringify(this.config);
+            this.config = migratedConfig;
+
+            if (needsMigrationSave) {
+              this.saveConfig();
+            }
+
+            // IMPORTANT: If DATA_PATH is set, it ALWAYS overrides config.json
+            if (process.env.IN_DOCKER_CONTAINER && process.env.DATA_PATH) {
+              this.config.youtubeOutputDirectory = process.env.DATA_PATH;
+            }
+
+            // Override temp download settings for Elfhosted platform
+            if (this.isElfhostedPlatform()) {
+              this.config.useTmpForDownloads = true;
+              this.config.tmpFilePath = '/app/config/temp_downloads';
+            }
+
+            // Emit change event if the file content actually changed
+            if (contentChanged) {
+              this.emit('change');
+            }
+          } catch (error) {
+            console.error('Error processing config file change:', error.message);
+          }
+        }, 100); // 100ms debounce delay
       }
     });
   }
 
   stopWatchingConfig() {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
     if (this.configWatcher) {
       this.configWatcher.close();
     }
@@ -708,6 +755,7 @@ class ConfigModule extends EventEmitter {
     this.config.customCookiesUploaded = true;
     this.config.cookiesEnabled = true;
     this.saveConfig();
+    this.emit('change');
 
     return customPath;
   }
@@ -724,6 +772,7 @@ class ConfigModule extends EventEmitter {
     this.config.customCookiesUploaded = false;
     // Keep cookiesEnabled state unchanged
     this.saveConfig();
+    this.emit('change');
 
     return true;
   }
