@@ -58,6 +58,8 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 
 ### Installation
 
+> ⚠️ **IMPORTANT**: Always use `./start.sh` to start Youtarr (not `docker compose up` directly). The start script configures required environment variables from your config.json.
+
 1. **Clone the repository**:
    ```bash
    git clone https://github.com/dialmaster/Youtarr.git

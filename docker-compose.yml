@@ -27,6 +27,11 @@ services:
       start_period: 30s
 
   youtarr:
+    # IMPORTANT: YOUTUBE_OUTPUT_DIR must be set before running 'docker compose up'
+    # Option 1 (recommended): Use ./start.sh which reads config.json and sets the env var
+    # Option 2 (manual): Export YOUTUBE_OUTPUT_DIR=/your/path before running docker compose
+    # Option 3 (manual): Edit this file to hardcode your path instead of ${YOUTUBE_OUTPUT_DIR}
+    # Without one of these, you'll get: "empty section between colons" error
     image: dialmaster/youtarr:latest
     container_name: youtarr
     restart: unless-stopped
@@ -50,6 +55,7 @@ services:
     ports:
       - "3087:3011"
     volumes:
+      # YOUTUBE_OUTPUT_DIR must be set before running compose
       - ${YOUTUBE_OUTPUT_DIR}:/usr/src/app/data
       - ./server/images:/app/server/images
       - ./config:/app/config
