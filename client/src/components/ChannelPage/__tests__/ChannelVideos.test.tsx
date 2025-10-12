@@ -225,7 +225,7 @@ describe('ChannelVideos Component', () => {
       });
 
       renderChannelVideos();
-      expect(screen.getByText('Loading channel videos...')).toBeInTheDocument();
+      expect(screen.getByText('Loading and fetching/indexing new videos for this channel tab...')).toBeInTheDocument();
     });
 
     test('renders videos in grid view by default on desktop', () => {
@@ -556,7 +556,7 @@ describe('ChannelVideos Component', () => {
 
       renderChannelVideos();
 
-      expect(screen.getByText('Loading channel videos...')).toBeInTheDocument();
+      expect(screen.getByText('Loading and fetching/indexing new videos for this channel tab...')).toBeInTheDocument();
       // Skeletons are MUI components, hard to test directly
     });
   });

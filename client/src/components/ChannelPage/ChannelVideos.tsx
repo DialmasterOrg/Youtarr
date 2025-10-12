@@ -636,7 +636,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
           ) : videosLoading ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <Typography variant="body1" color="text.secondary" gutterBottom>
-                Loading channel videos...
+                Loading and fetching/indexing new videos for this channel tab...
               </Typography>
               <Grid container spacing={2} sx={{ mt: 2 }}>
                 {[...Array(pageSize)].map((_, index) => (
