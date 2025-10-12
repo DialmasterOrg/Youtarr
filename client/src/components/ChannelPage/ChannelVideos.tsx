@@ -445,7 +445,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
   });
 
   // Mobile drawer render
-  const renderMobileDrawer = () => (
+  const renderDrawer = () => (
     <Drawer
       anchor="bottom"
       open={mobileDrawerOpen}
@@ -500,8 +500,8 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
   );
 
   // Mobile floating action buttons
-  const renderMobileFAB = () => {
-    if (!isMobile) return null;
+  const renderFAB = () => {
+    // if (!isMobile) return null;
 
     const hasDownloadSelection = checkedBoxes.length > 0;
     const hasDeletionSelection = selectedForDeletion.length > 0;
@@ -725,8 +725,8 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
       </Card>
 
       {/* Mobile components */}
-      {renderMobileFAB()}
-      {renderMobileDrawer()}
+      {renderFAB()}
+      {renderDrawer()}
 
       {/* Dialogs and Snackbars */}
       <ChannelVideosDialogs
