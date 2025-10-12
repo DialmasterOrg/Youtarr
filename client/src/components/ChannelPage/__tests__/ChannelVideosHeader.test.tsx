@@ -79,7 +79,7 @@ describe('ChannelVideosHeader Component', () => {
   describe('Component Rendering', () => {
     test('renders without crashing', () => {
       renderWithProviders(<ChannelVideosHeader {...defaultProps} />);
-      expect(screen.getByText('Channel Videos')).toBeInTheDocument();
+      expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
     });
   });
 
@@ -88,7 +88,7 @@ describe('ChannelVideosHeader Component', () => {
       renderWithProviders(
         <ChannelVideosHeader {...defaultProps} totalCount={42} />
       );
-      expect(screen.getByText('42')).toBeInTheDocument();
+      expect(screen.getByText('42 items')).toBeInTheDocument();
     });
 
     test('does not display count chip when totalCount is 0', () => {
@@ -662,7 +662,7 @@ describe('ChannelVideosHeader Component', () => {
         <ChannelVideosHeader {...defaultProps} paginatedVideos={[]} />
       );
 
-      expect(screen.getByText('Channel Videos')).toBeInTheDocument();
+      expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
     });
 
     test('handles large video counts', () => {
@@ -670,7 +670,7 @@ describe('ChannelVideosHeader Component', () => {
         <ChannelVideosHeader {...defaultProps} totalCount={9999} />
       );
 
-      expect(screen.getByText('9999')).toBeInTheDocument();
+      expect(screen.getByText('9999 items')).toBeInTheDocument();
     });
 
     test('handles large selection counts', () => {
@@ -739,7 +739,7 @@ describe('ChannelVideosHeader Component', () => {
         <ChannelVideosHeader {...defaultProps} selectedTab="videos" />
       );
 
-      expect(screen.getByText('Channel Videos')).toBeInTheDocument();
+      expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
     });
 
     test('handles shorts tab', () => {
@@ -747,7 +747,7 @@ describe('ChannelVideosHeader Component', () => {
         <ChannelVideosHeader {...defaultProps} selectedTab="shorts" />
       );
 
-      expect(screen.getByText('Channel Videos')).toBeInTheDocument();
+      expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
     });
 
     test('handles streams tab', () => {
@@ -755,7 +755,7 @@ describe('ChannelVideosHeader Component', () => {
         <ChannelVideosHeader {...defaultProps} selectedTab="streams" />
       );
 
-      expect(screen.getByText('Channel Videos')).toBeInTheDocument();
+      expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
     });
 
     test('hides oldest video date for shorts tab', () => {

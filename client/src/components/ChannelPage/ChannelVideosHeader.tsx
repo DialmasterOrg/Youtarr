@@ -127,11 +127,10 @@ function ChannelVideosHeader({
       }}
     >
       <Box sx={{ p: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }} data-testid="channel-videos-header">
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-            <Typography variant="h6">Channel Videos</Typography>
             {totalCount > 0 && (
-              <Chip label={totalCount} size="small" color="primary" />
+              <Chip label={totalCount + ' ' + (totalCount === 1 ? 'item' : 'items')} size="small" color="primary" />
             )}
             {oldestVideoDate && selectedTab !== 'shorts' && !isMobile && (
               <Typography variant="caption" color="text.secondary">
@@ -163,6 +162,12 @@ function ChannelVideosHeader({
               />
             }
             label="Enable Channel Downloads for this tab"
+            sx={{
+              '& .MuiFormControlLabel-label': {
+                fontSize: isMobile ? '0.75rem' : '1rem',
+                marginRight: -1,
+              }
+            }}
           />
           {renderInfoIcon(autoDownloadTooltip)}
         </Box>
@@ -181,7 +186,7 @@ function ChannelVideosHeader({
                 </InputAdornment>
               ),
             }}
-            sx={{ flexGrow: 1, minWidth: 200 }}
+            sx={{ flexGrow: 1, minWidth: 200, width: isMobile ? '50%' : 'auto' }}
           />
 
           {/* View mode toggle - mobile shows list/grid, desktop shows table/grid */}
