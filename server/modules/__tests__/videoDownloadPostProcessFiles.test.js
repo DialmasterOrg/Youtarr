@@ -61,7 +61,10 @@ jest.mock('../../models', () => ({
   JobVideoDownload: mockJobVideoDownload
 }));
 
+jest.mock('../../logger');
+
 const fs = require('fs-extra');
+const logger = require('../../logger');
 const childProcess = require('child_process');
 const configModule = require('../configModule');
 const nfoGenerator = require('../nfoGenerator');
@@ -87,6 +90,9 @@ describe('videoDownloadPostProcessFiles', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    logger.info.mockClear();
+    logger.warn.mockClear();
+    logger.error.mockClear();
     JobVideoDownload.update.mockResolvedValue([0]);
     process.env.YOUTARR_JOB_ID = 'test-job-id';
     configModule.__setConfig({
@@ -234,7 +240,6 @@ describe('videoDownloadPostProcessFiles', () => {
   it('logs and ignores removal errors that are not ENOENT', async () => {
     const removeError = new Error('permission denied');
     fs.remove.mockRejectedValueOnce(removeError).mockResolvedValueOnce();
-    const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
     fs.stat.mockImplementation(async (path) => {
       if (path === tempPath) {
         return { size: 100 };
@@ -248,10 +253,10 @@ describe('videoDownloadPostProcessFiles', () => {
     await loadModule();
     await settleAsync();
 
-    const loggedError = consoleSpy.mock.calls.some(([msg]) => msg.includes('Error deleting temp file'));
-    expect(loggedError).toBe(true);
-
-    consoleSpy.mockRestore();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: tempPath }),
+      'Error deleting temp file'
+    );
   });
 
   it('writes actual filepath to JSON before moving', async () => {
@@ -313,7 +318,6 @@ describe('videoDownloadPostProcessFiles', () => {
 
   it('marks video as completed in JobVideoDownload when job ID is available', async () => {
     JobVideoDownload.update.mockResolvedValueOnce([1]);
-    const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
     await loadModule();
     await settleAsync();
@@ -327,34 +331,38 @@ describe('videoDownloadPostProcessFiles', () => {
         }
       }
     );
-    expect(consoleSpy).toHaveBeenCalledWith('Marked video abc123 as completed in tracking for job test-job-id');
-    consoleSpy.mockRestore();
+    expect(logger.info).toHaveBeenCalledWith(
+      { id: 'abc123', activeJobId: 'test-job-id', finalVideoPath: videoPath },
+      'Marked video as completed in tracking'
+    );
   });
 
   it('logs warning when job ID is not available', async () => {
     delete process.env.YOUTARR_JOB_ID;
-    const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     await loadModule();
     await settleAsync();
 
     expect(JobVideoDownload.update).not.toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledWith('Job ID not available while marking abc123 as completed; skipping tracking update');
-    consoleSpy.mockRestore();
+    expect(logger.warn).toHaveBeenCalledWith(
+      { id: 'abc123' },
+      'Job ID not available while marking video as completed; skipping tracking update'
+    );
   });
 
   it('handles JobVideoDownload update errors gracefully', async () => {
     const updateError = new Error('Database connection failed');
     JobVideoDownload.update.mockRejectedValueOnce(updateError);
-    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     await loadModule();
     await settleAsync();
 
     expect(JobVideoDownload.update).toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledWith('Error updating JobVideoDownload status for abc123:', 'Database connection failed');
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'abc123' }),
+      'Error updating JobVideoDownload status'
+    );
     expect(process.exit).not.toHaveBeenCalled(); // Should not fail entire post-processing
-    consoleSpy.mockRestore();
   });
 
   describe('tempPathManager integration', () => {
@@ -386,7 +394,6 @@ describe('videoDownloadPostProcessFiles', () => {
 
     it('successfully moves files from temp to final location', async () => {
       process.argv = ['node', 'script', tempVideoPath];
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
       tempPathManager.isEnabled.mockReturnValue(true);
       tempPathManager.isTempPath.mockReturnValue(true);
@@ -403,7 +410,10 @@ describe('videoDownloadPostProcessFiles', () => {
       expect(tempPathManager.moveToFinal).toHaveBeenCalledWith(tempVideoDir);
 
       // Verify success log
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Successfully moved to final location'));
+      expect(logger.info).toHaveBeenCalledWith(
+        { finalDir: finalVideoDir },
+        '[Post-Process] Successfully moved to final location'
+      );
 
       // Verify JobVideoDownload was updated with FINAL path
       expect(JobVideoDownload.update).toHaveBeenCalledWith(
@@ -415,13 +425,10 @@ describe('videoDownloadPostProcessFiles', () => {
           }
         })
       );
-
-      consoleSpy.mockRestore();
     });
 
     it('exits with error when temp to final move fails', async () => {
       process.argv = ['node', 'script', tempVideoPath];
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
       tempPathManager.isEnabled.mockReturnValue(true);
       tempPathManager.isTempPath.mockReturnValue(true);
@@ -439,19 +446,17 @@ describe('videoDownloadPostProcessFiles', () => {
       await settleAsync();
 
       // Verify error was logged
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[Post-Process] ERROR: Failed to move files to final location: Disk full')
+      expect(logger.error).toHaveBeenCalledWith(
+        { error: 'Disk full', videoDirectory: tempVideoDir },
+        '[Post-Process] Failed to move files to final location'
       );
 
       // Verify process.exit was called with error code
       expect(process.exit).toHaveBeenCalledWith(1);
-
-      consoleSpy.mockRestore();
     });
 
     it('exits with error when final file does not exist after move', async () => {
       process.argv = ['node', 'script', tempVideoPath];
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
       tempPathManager.isEnabled.mockReturnValue(true);
       tempPathManager.isTempPath.mockReturnValue(true);
@@ -466,19 +471,17 @@ describe('videoDownloadPostProcessFiles', () => {
       await settleAsync();
 
       // Verify error was logged
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[Post-Process] ERROR: Final video file doesn\'t exist after move')
+      expect(logger.error).toHaveBeenCalledWith(
+        { finalVideoPath },
+        '[Post-Process] Final video file doesn\'t exist after move'
       );
 
       // Verify process.exit was called with error code
       expect(process.exit).toHaveBeenCalledWith(1);
-
-      consoleSpy.mockRestore();
     });
 
     it('exits with error when moveToFinal throws exception', async () => {
       process.argv = ['node', 'script', tempVideoPath];
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
       tempPathManager.isEnabled.mockReturnValue(true);
       tempPathManager.isTempPath.mockReturnValue(true);
@@ -492,20 +495,17 @@ describe('videoDownloadPostProcessFiles', () => {
       await settleAsync();
 
       // Verify error was logged
-      expect(consoleSpy).toHaveBeenCalledWith(
-        '[Post-Process] ERROR during move operation:',
-        expect.any(Error)
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ videoDirectory: tempVideoDir }),
+        '[Post-Process] ERROR during move operation'
       );
 
       // Verify process.exit was called with error code
       expect(process.exit).toHaveBeenCalledWith(1);
-
-      consoleSpy.mockRestore();
     });
 
     it('stores final path in JobVideoDownload when temp downloads enabled', async () => {
       process.argv = ['node', 'script', tempVideoPath];
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
       JobVideoDownload.update.mockResolvedValueOnce([1]);
 
       tempPathManager.isEnabled.mockReturnValue(true);
@@ -531,9 +531,10 @@ describe('videoDownloadPostProcessFiles', () => {
       );
 
       // Verify log message shows final path
-      expect(consoleSpy).toHaveBeenCalledWith(`  Stored path in DB: ${finalVideoPath}`);
-
-      consoleSpy.mockRestore();
+      expect(logger.info).toHaveBeenCalledWith(
+        { id: 'abc123', activeJobId: 'test-job-id', finalVideoPath },
+        'Marked video as completed in tracking'
+      );
     });
   });
 });

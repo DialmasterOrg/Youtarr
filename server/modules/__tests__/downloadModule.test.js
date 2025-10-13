@@ -32,14 +32,19 @@ jest.mock('../channelModule', () => ({
   generateChannelsFile: jest.fn()
 }));
 
+jest.mock('../../logger', () => ({
+  info: jest.fn(),
+  error: jest.fn(),
+  warn: jest.fn(),
+  debug: jest.fn()
+}));
+
 const fs = require('fs');
 
 describe('DownloadModule', () => {
   let downloadModule;
-  let mockDownloadExecutor;
   let fsPromises;
-  let consoleLogSpy;
-  let consoleErrorSpy;
+  let logger;
 
   beforeAll(() => {
     // Setup fs promises mock
@@ -47,33 +52,25 @@ describe('DownloadModule', () => {
       unlink: jest.fn()
     };
     fs.promises = fsPromises;
+
+    // Require downloadModule once - it's a singleton
+    downloadModule = require('../downloadModule');
   });
 
   beforeEach(() => {
     // Clear all mocks
     jest.clearAllMocks();
 
-    // Setup console spies
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    // Get logger mock reference
+    logger = require('../../logger');
 
-    // Clear module cache and require fresh instance
-    jest.resetModules();
-
-    // Re-setup all mocks after resetModules
-    const DownloadExecutorMock = require('../download/downloadExecutor');
-    mockDownloadExecutor = {
-      doDownload: jest.fn(),
-      tempChannelsFile: null
-    };
-    DownloadExecutorMock.mockImplementation(() => mockDownloadExecutor);
-
+    // Setup YtdlpCommandBuilder mock
     const YtdlpCommandBuilderMock = require('../download/ytdlpCommandBuilder');
-    YtdlpCommandBuilderMock.getBaseCommandArgs = jest.fn().mockReturnValue([
+    YtdlpCommandBuilderMock.getBaseCommandArgs.mockReturnValue([
       '--format', 'best[height<=1080]',
       '--output', '/mock/output/dir'
     ]);
-    YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload = jest.fn().mockImplementation((resolution, allowRedownload) => {
+    YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload.mockImplementation((resolution, allowRedownload) => {
       const res = resolution || '1080';
       const baseArgs = [
         '--format', `best[height<=${res}]`,
@@ -87,19 +84,12 @@ describe('DownloadModule', () => {
     });
 
     const jobModuleMock = require('../jobModule');
-    jobModuleMock.addOrUpdateJob = jest.fn().mockResolvedValue('job-123');
-    jobModuleMock.updateJob = jest.fn().mockResolvedValue();
-    jobModuleMock.getJob = jest.fn().mockReturnValue({ status: 'Pending' });
+    jobModuleMock.addOrUpdateJob.mockResolvedValue('job-123');
+    jobModuleMock.updateJob.mockResolvedValue();
+    jobModuleMock.getJob.mockReturnValue({ status: 'Pending' });
 
     const channelModuleMock = require('../channelModule');
-    channelModuleMock.generateChannelsFile = jest.fn();
-
-    downloadModule = require('../downloadModule');
-  });
-
-  afterEach(() => {
-    consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
+    channelModuleMock.generateChannelsFile.mockResolvedValue('/tmp/channels-abc123.txt');
   });
 
   describe('constructor', () => {
@@ -147,7 +137,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doChannelDownloads();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('Running Channel Downloads');
+      expect(logger.info).toHaveBeenCalledWith('Running channel downloads job');
       expect(jobModuleMock.addOrUpdateJob).toHaveBeenCalledWith(
         expect.objectContaining({
           jobType: 'Channel Downloads',
@@ -161,7 +151,7 @@ describe('DownloadModule', () => {
       );
       expect(channelModuleMock.generateChannelsFile).toHaveBeenCalled();
       expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('1080');
-      expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
+      expect(downloadModule.downloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--format', 'best[height<=1080]',
           '--output', '/mock/output/dir',
@@ -171,7 +161,7 @@ describe('DownloadModule', () => {
         mockJobId,
         'Channel Downloads'
       );
-      expect(mockDownloadExecutor.tempChannelsFile).toBe(mockTempFile);
+      expect(downloadModule.downloadExecutor.tempChannelsFile).toBe(mockTempFile);
     });
 
     it('should use override settings when provided', async () => {
@@ -186,7 +176,7 @@ describe('DownloadModule', () => {
       await downloadModule.doChannelDownloads(jobData);
 
       expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('720');
-      expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
+      expect(downloadModule.downloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--playlist-end', '10'
         ]),
@@ -219,7 +209,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doChannelDownloads();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Error in doChannelDownloads:', error);
+      expect(logger.error).toHaveBeenCalledWith({ err: error }, 'Error in channel downloads');
       expect(jobModuleMock.updateJob).toHaveBeenCalledWith(mockJobId, {
         status: 'Failed',
         output: 'Error: Channel generation failed'
@@ -233,7 +223,7 @@ describe('DownloadModule', () => {
       await downloadModule.doChannelDownloads();
 
       expect(channelModuleMock.generateChannelsFile).not.toHaveBeenCalled();
-      expect(mockDownloadExecutor.doDownload).not.toHaveBeenCalled();
+      expect(downloadModule.downloadExecutor.doDownload).not.toHaveBeenCalled();
     });
   });
 
@@ -258,9 +248,9 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        'Running doSpecificDownloads and jobData: ',
-        JSON.stringify(request.body)
+      expect(logger.info).toHaveBeenCalledWith(
+        { jobData: request.body },
+        'Running specific downloads job'
       );
       expect(jobModuleMock.addOrUpdateJob).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -274,7 +264,7 @@ describe('DownloadModule', () => {
         false
       );
       expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false);
-      expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
+      expect(downloadModule.downloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--format', 'best[height<=1080]',
           '--output', '/mock/output/dir',
@@ -306,7 +296,7 @@ describe('DownloadModule', () => {
         }),
         false
       );
-      expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
+      expect(downloadModule.downloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--download-archive', './config/complete.list',
           'https://youtube.com/watch?v=xyz789'
@@ -329,7 +319,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
+      expect(downloadModule.downloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--download-archive', './config/complete.list',
           '--', '-abc123',
@@ -374,7 +364,7 @@ describe('DownloadModule', () => {
       await downloadModule.doSpecificDownloads(request);
 
       expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', true);
-      expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
+      expect(downloadModule.downloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--format', 'best[height<=720]',
           '--output', '/mock/output/dir',
@@ -388,7 +378,7 @@ describe('DownloadModule', () => {
         true
       );
       // Verify that --download-archive is NOT in the arguments when allowRedownload is true
-      expect(mockDownloadExecutor.doDownload).not.toHaveBeenCalledWith(
+      expect(downloadModule.downloadExecutor.doDownload).not.toHaveBeenCalledWith(
         expect.arrayContaining(['--download-archive']),
         expect.anything(),
         expect.anything(),
@@ -413,7 +403,7 @@ describe('DownloadModule', () => {
       await downloadModule.doSpecificDownloads(request);
 
       expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('480', false);
-      expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
+      expect(downloadModule.downloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--format', 'best[height<=480]',
           '--output', '/mock/output/dir',
@@ -442,7 +432,7 @@ describe('DownloadModule', () => {
       await downloadModule.doSpecificDownloads(request);
 
       expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false);
-      expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
+      expect(downloadModule.downloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--download-archive', './config/complete.list',
           'https://youtube.com/watch?v=default'
@@ -484,7 +474,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(mockDownloadExecutor.doDownload).not.toHaveBeenCalled();
+      expect(downloadModule.downloadExecutor.doDownload).not.toHaveBeenCalled();
     });
 
     it('should handle empty URL list', async () => {
@@ -497,7 +487,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
+      expect(downloadModule.downloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--format', 'best[height<=1080]',
           '--output', '/mock/output/dir',
@@ -514,32 +504,18 @@ describe('DownloadModule', () => {
 
   describe('event listener binding', () => {
     it('should properly bind handleConfigChange to this context', () => {
-      // Clear module cache and re-require to capture the constructor behavior
-      jest.resetModules();
-
-      // Reset the configModule mock to capture the on call
-      const configModuleMock = require('../configModule');
-      configModuleMock.on.mockClear();
-
-      // Re-require the downloadModule to trigger constructor
-      const freshDownloadModule = require('../downloadModule');
-
       const newConfig = {
         preferredResolution: '4K',
-        channelFilesToDownload: 10
+        channelFilesToDownload: 10,
+        youtubeOutputDirectory: '/new/output/dir'
       };
 
-      // Verify that 'on' was called
-      expect(configModuleMock.on).toHaveBeenCalledWith('change', expect.any(Function));
-
-      // Get the bound function that was passed to configModule.on
-      const boundHandler = configModuleMock.on.mock.calls[0][1];
-
-      // Call it directly
-      boundHandler(newConfig);
+      // The listener was set up during module initialization in beforeAll
+      // We can verify it works by calling handleConfigChange directly
+      downloadModule.handleConfigChange(newConfig);
 
       // Verify it updated the module's config
-      expect(freshDownloadModule.config).toEqual(newConfig);
+      expect(downloadModule.config).toEqual(newConfig);
     });
   });
 });

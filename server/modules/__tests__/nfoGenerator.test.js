@@ -1,11 +1,13 @@
 /* eslint-env jest */
 
-// Mock fs module before any imports
+// Mock fs and logger modules before any imports
 jest.mock('fs');
+jest.mock('../../logger');
 
 describe('NfoGenerator', () => {
   let nfoGenerator;
   let fs;
+  let logger;
 
   beforeEach(() => {
     jest.resetModules();
@@ -18,8 +20,9 @@ describe('NfoGenerator', () => {
       existsSync: jest.fn()
     }));
 
-    // Re-import both fs and nfoGenerator after mocking
+    // Re-import fs, logger, and nfoGenerator after mocking
     fs = require('fs');
+    logger = require('../../logger');
     nfoGenerator = require('../nfoGenerator');
   });
 
@@ -126,8 +129,8 @@ describe('NfoGenerator', () => {
 
     beforeEach(() => {
       fs.writeFileSync.mockClear();
-      console.log = jest.fn();
-      console.error = jest.fn();
+      logger.info.mockClear();
+      logger.error.mockClear();
     });
 
     it('should create NFO file with complete metadata', () => {
@@ -147,6 +150,14 @@ describe('NfoGenerator', () => {
       const result = nfoGenerator.writeVideoNfoFile(mockVideoPath, jsonData);
 
       expect(result).toBe(true);
+      expect(logger.info).toHaveBeenCalledWith(
+        { videoPath: mockVideoPath },
+        'Writing NFO file for video'
+      );
+      expect(logger.info).toHaveBeenCalledWith(
+        { nfoPath: mockNfoPath },
+        'NFO file created successfully'
+      );
       expect(fs.writeFileSync).toHaveBeenCalledWith(
         mockNfoPath,
         expect.any(String),
@@ -278,13 +289,16 @@ describe('NfoGenerator', () => {
       const result = nfoGenerator.writeVideoNfoFile(mockVideoPath, { title: 'Test' });
 
       expect(result).toBe(false);
-      expect(console.error).toHaveBeenCalledWith('Error creating NFO file: Permission denied');
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          err: expect.any(Error),
+          videoPath: mockVideoPath
+        }),
+        'Error creating NFO file'
+      );
     });
 
     it('should handle invalid upload date gracefully', () => {
-      console.log = jest.fn();
-      console.error = jest.fn();
-
       const jsonData = {
         title: 'Test Video',
         upload_date: 'invalid-date'
@@ -292,18 +306,11 @@ describe('NfoGenerator', () => {
 
       const result = nfoGenerator.writeVideoNfoFile(mockVideoPath, jsonData);
 
-      // If there was an error, log it for debugging
-      if (!result && console.error.mock.calls.length > 0) {
-        console.log('Error:', console.error.mock.calls[0][0]);
-      }
-
       expect(result).toBe(true);
       expect(fs.writeFileSync).toHaveBeenCalled();
 
-      if (fs.writeFileSync.mock.calls.length > 0) {
-        const nfoContent = fs.writeFileSync.mock.calls[0][1];
-        expect(nfoContent).not.toContain('<premiered>');
-      }
+      const nfoContent = fs.writeFileSync.mock.calls[0][1];
+      expect(nfoContent).not.toContain('<premiered>');
     });
 
     it('should use fulltitle over title when both are present', () => {
@@ -320,9 +327,6 @@ describe('NfoGenerator', () => {
     });
 
     it('should handle empty arrays for categories and tags', () => {
-      console.log = jest.fn();
-      console.error = jest.fn();
-
       const jsonData = {
         title: 'Test Video',
         categories: [],
@@ -331,20 +335,13 @@ describe('NfoGenerator', () => {
 
       const result = nfoGenerator.writeVideoNfoFile(mockVideoPath, jsonData);
 
-      // If there was an error, log it for debugging
-      if (!result && console.error.mock.calls.length > 0) {
-        console.log('Error:', console.error.mock.calls[0][0]);
-      }
-
       expect(result).toBe(true);
       expect(fs.writeFileSync).toHaveBeenCalled();
 
-      if (fs.writeFileSync.mock.calls.length > 0) {
-        const nfoContent = fs.writeFileSync.mock.calls[0][1];
-        expect(nfoContent).not.toContain('<genre>');
-        expect(nfoContent).not.toContain('<tag>');
-        expect(nfoContent).not.toContain('<!-- Classification -->');
-      }
+      const nfoContent = fs.writeFileSync.mock.calls[0][1];
+      expect(nfoContent).not.toContain('<genre>');
+      expect(nfoContent).not.toContain('<tag>');
+      expect(nfoContent).not.toContain('<!-- Classification -->');
     });
 
     it('should include proper XML sections with comments', () => {

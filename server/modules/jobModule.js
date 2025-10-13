@@ -10,6 +10,7 @@ const ChannelVideo = require('../models/channelvideo');
 const cron = require('node-cron');
 const MessageEmitter = require('./messageEmitter.js'); // import the helper function
 const configModule = require('./configModule');
+const logger = require('../logger');
 
 const MAX_SAVE_RETRIES = 3;
 
@@ -55,7 +56,7 @@ class JobModule {
     if (!disableInitialBackfill) {
       setTimeout(() => {
         this.backfillFromCompleteList().catch((err) => {
-          console.error('Initial backfill failed:', err.message);
+          logger.error({ err }, 'Initial backfill failed');
         });
       }, 0);
     }
@@ -80,11 +81,11 @@ class JobModule {
       });
 
       if (completedDownloads.length === 0) {
-        console.log(`No completed videos to recover for job ${jobId}`);
+        logger.info({ jobId }, 'No completed videos to recover for job');
         return 0;
       }
 
-      console.log(`Found ${completedDownloads.length} completed video(s) to recover for job ${jobId}`);
+      logger.info({ jobId, count: completedDownloads.length }, 'Found completed videos to recover for job');
 
       // Try to get the job instance for creating JobVideo relationships
       let jobInstance = await Job.findOne({ where: { id: jobId } });
@@ -100,7 +101,7 @@ class JobModule {
             await fsPromises.access(infoJsonPath);
             infoExists = true;
           } catch (err) {
-            console.warn(`Info file not found for ${youtubeId}, skipping recovery`);
+            logger.warn({ youtubeId }, 'Info file not found for video, skipping recovery');
             continue;
           }
 
@@ -186,16 +187,16 @@ class JobModule {
           await this.upsertVideoForJob(videoData, jobInstance, true);
 
           recoveredCount++;
-          console.log(`Recovered video ${youtubeId}: ${info.title}`);
+          logger.info({ youtubeId, title: info.title }, 'Recovered video');
         } catch (err) {
-          console.error(`Error recovering video ${download.youtube_id}:`, err.message);
+          logger.error({ err, youtubeId: download.youtube_id }, 'Error recovering video');
         }
       }
 
-      console.log(`Successfully recovered ${recoveredCount} video(s) for job ${jobId}`);
+      logger.info({ jobId, recoveredCount }, 'Successfully recovered videos for job');
       return recoveredCount;
     } catch (err) {
-      console.error(`Error in recoverCompletedVideos for job ${jobId}:`, err.message);
+      logger.error({ err, jobId }, 'Error in recoverCompletedVideos for job');
       return recoveredCount;
     }
   }
@@ -204,7 +205,7 @@ class JobModule {
     // Change the status of "In Progress" jobs to "Terminated" and recover/cleanup videos
     for (let jobId in this.jobs) {
       if (this.jobs[jobId].status === 'In Progress') {
-        console.log(`Recovering job ${jobId} after server restart...`);
+        logger.info({ jobId }, 'Recovering job after server restart');
 
         let recoveredCount = 0;
         let outputMessage = 'Job terminated due to server restart';
@@ -220,7 +221,7 @@ class JobModule {
             const downloadExecutor = new DownloadExecutor();
             await downloadExecutor.cleanupInProgressVideos(jobId);
           } catch (cleanupErr) {
-            console.error(`Error cleaning up in-progress videos for job ${jobId}:`, cleanupErr.message);
+            logger.error({ err: cleanupErr, jobId }, 'Error cleaning up in-progress videos for job');
           }
 
           // Step 3: Set appropriate output message
@@ -234,13 +235,13 @@ class JobModule {
               where: { job_id: jobId }
             });
             if (deletedCount > 0) {
-              console.log(`Cleaned up ${deletedCount} JobVideoDownload tracking entries for job ${jobId}`);
+              logger.info({ jobId, deletedCount }, 'Cleaned up JobVideoDownload tracking entries for job');
             }
           } catch (deleteErr) {
-            console.error(`Error deleting JobVideoDownload entries for job ${jobId}:`, deleteErr.message);
+            logger.error({ err: deleteErr, jobId }, 'Error deleting JobVideoDownload entries for job');
           }
         } catch (err) {
-          console.error(`Error during recovery for job ${jobId}:`, err.message);
+          logger.error({ err, jobId }, 'Error during recovery for job');
           outputMessage = `Job terminated with errors: ${err.message}`;
         }
 
@@ -264,9 +265,9 @@ class JobModule {
           }
           this.jobs[jobId].data.videos = videos;
 
-          console.log(`Loaded ${videos.length} video(s) into in-memory structure for job ${jobId}`);
+          logger.info({ jobId, videoCount: videos.length }, 'Loaded videos into in-memory structure for job');
         } catch (loadErr) {
-          console.error(`Error loading videos into memory for job ${jobId}:`, loadErr.message);
+          logger.error({ err: loadErr, jobId }, 'Error loading videos into memory for job');
         }
 
         // Step 6: Update job status and output
@@ -281,9 +282,9 @@ class JobModule {
             },
             { where: { id: jobId } }
           );
-          console.log(`Job ${jobId} marked as Terminated: ${outputMessage}`);
+          logger.info({ jobId, outputMessage }, 'Job marked as Terminated');
         } catch (err) {
-          console.error(`Failed to update job ${jobId} in database:`, err.message);
+          logger.error({ err, jobId }, 'Failed to update job in database');
         }
       }
     }
@@ -317,7 +318,7 @@ class JobModule {
         }
       }
     } catch (error) {
-      console.error('Error loading jobs from DB:', error);
+      logger.error({ err: error }, 'Error loading jobs from DB');
     }
   }
 
@@ -343,7 +344,7 @@ class JobModule {
           try {
             videoInstance = await Video.create(video); // Create video entry
           } catch (error) {
-            console.error('Error migrating video: ' + error.message);
+            logger.error({ err: error }, 'Error migrating video');
           }
 
           // Create jobVideo relationship
@@ -353,11 +354,11 @@ class JobModule {
               video_id: videoInstance.id,
             });
           } catch (error) {
-            console.error('Error migrating jobVideo: ' + error.message);
+            logger.error({ err: error }, 'Error migrating jobVideo');
           }
         }
       } catch (error) {
-        console.error('Error migrating job: ' + error.message);
+        logger.error({ err: error }, 'Error migrating job');
       }
     }
   }
@@ -372,7 +373,7 @@ class JobModule {
   }
 
   startNextJob() {
-    console.log('Looking for next job to start');
+    logger.info('Looking for next job to start');
     const jobs = this.getAllJobs();
     for (let id in jobs) {
       if (jobs[id].status === 'Pending') {
@@ -391,29 +392,25 @@ class JobModule {
     if (!isNextJob) {
       if (inProgressJobId) {
         // If there is a job in progress, create a new job with status Pending
-        console.log(
-          `A job is already in progress. Adding this ${jobData.jobType} job to the queue.`
-        );
+        logger.info({ jobType: jobData.jobType }, 'A job is already in progress. Adding job to the queue');
         jobData.status = 'Pending';
         jobId = await this.addJob(jobData);
       } else {
         // Otherwise, add a job with status In Progress
-        console.log(
-          `Adding job to jobs list as In Progress for ${jobData.jobType} job.`
-        );
+        logger.info({ jobType: jobData.jobType }, 'Adding job to jobs list as In Progress');
         jobData.status = 'In Progress';
         jobId = await this.addJob(jobData);
       }
     } else if (isNextJob && !inProgressJobId) {
       // If this is a next job and there's no job in progress, update its status to In Progress
-      console.log('This is a "next job", flipping from Pending to In Progress');
+      logger.info('This is a "next job", flipping from Pending to In Progress');
       this.updateJob(jobData.id, {
         status: 'In Progress',
         timeInitiated: Date.now(),
       });
       jobId = jobData.id;
     } else {
-      console.log('Cannot start next job as a job is already in progress');
+      logger.warn('Cannot start next job as a job is already in progress');
     }
     return jobId;
   }
@@ -433,7 +430,7 @@ class JobModule {
       data.fileSize = video.fileSize;
       data.removed = false;
       data.last_downloaded_at = new Date();
-      console.log(`[DEBUG] Setting last_downloaded_at for ${isNewVideo ? 'NEW' : ''} video ${video.youtubeId} - file verified with size ${video.fileSize}`);
+      logger.debug({ youtubeId: video.youtubeId, fileSize: video.fileSize, isNewVideo }, 'Setting last_downloaded_at - file verified');
     } else {
       if (!isNewVideo) {
         // For updates, delete fields to leave them untouched
@@ -441,7 +438,7 @@ class JobModule {
         delete data.fileSize;
         delete data.removed;
       }
-      console.log(`[DEBUG] NOT setting last_downloaded_at for ${isNewVideo ? 'NEW' : ''} video ${video.youtubeId} - hasVerifiedFile is false (filePath: ${video.filePath}, fileSize: ${video.fileSize})`);
+      logger.debug({ youtubeId: video.youtubeId, filePath: video.filePath, fileSize: video.fileSize, isNewVideo }, 'NOT setting last_downloaded_at - hasVerifiedFile is false');
     }
 
     if (!video.media_type) {
@@ -478,7 +475,7 @@ class JobModule {
         // If unique constraint error, the video was created by another process (like backfill)
         // Query for it again
         if (err.name === 'SequelizeUniqueConstraintError' || err.original?.code === 'ER_DUP_ENTRY') {
-          console.log(`Video ${video.youtubeId} already exists (created by another process), fetching it...`);
+          logger.info({ youtubeId: video.youtubeId }, 'Video already exists (created by another process), fetching it');
           videoInstance = await Video.findOne({
             where: { youtubeId: video.youtubeId },
           });
@@ -512,9 +509,9 @@ class JobModule {
           job_id: jobInstance.id,
           video_id: videoInstance.id,
         });
-        console.log(`Created JobVideo relationship for video ${video.youtubeId} (job_id: ${jobInstance.id}, video_id: ${videoInstance.id})`);
+        logger.debug({ youtubeId: video.youtubeId, job_id: jobInstance.id, video_id: videoInstance.id }, 'Created JobVideo relationship');
       } else {
-        console.log(`JobVideo relationship already exists for video ${video.youtubeId}`);
+        logger.debug({ youtubeId: video.youtubeId }, 'JobVideo relationship already exists');
       }
     }
 
@@ -556,33 +553,33 @@ class JobModule {
             media_type: video.media_type || 'video',
           });
         } catch (cvErr) {
-          console.error('Error upserting channel video:', cvErr.message);
+          logger.error({ err: cvErr }, 'Error upserting channel video');
         }
       }
     } catch (error) {
-      console.error('Error saving job: ' + error.message);
+      logger.error({ err: error }, 'Error saving job');
     }
   }
 
   async saveJobs() {
     if (this.isSaving) {
       // If a save operation is already in progress, skip this one
-      console.log('Save operation already in progress, skipping...');
+      logger.debug('Save operation already in progress, skipping');
       return;
     }
     this.isSaving = true; // Set the locking variable
-    console.log(`[DEBUG] saveJobs() called - processing ${Object.keys(this.jobs).length} jobs`);
+    logger.debug({ jobCount: Object.keys(this.jobs).length }, 'saveJobs() called - processing jobs');
 
     for (let jobId in this.jobs) {
       let jobDataOriginal = this.jobs[jobId];
       const jobData = { ...jobDataOriginal };
 
       if (!jobData.data) {
-        console.log(`[DEBUG] Job ${jobId} has no data field, skipping`);
+        logger.debug({ jobId }, 'Job has no data field, skipping');
         continue;
       }
       let videos = jobData.data.videos ? jobData.data.videos : [];
-      console.log(`[DEBUG] Job ${jobId} has ${videos.length} videos to save`);
+      logger.debug({ jobId, videoCount: videos.length }, 'Job has videos to save');
       delete jobData.data; // Remove videos from job data
 
       try {
@@ -605,19 +602,19 @@ class JobModule {
                                jobData.status === 'Killed';
 
         if (isCompletedJob && !jobDataOriginal._needsSave) {
-          console.log(`[DEBUG] Skipping video updates for completed job ${jobId}`);
+          logger.debug({ jobId }, 'Skipping video updates for completed job');
           continue;
         }
 
         if (jobDataOriginal._needsSave) {
-          console.log(`[DEBUG] Processing job ${jobId} due to previous save failure (retry ${jobDataOriginal._saveRetries || 1})`);
+          logger.debug({ jobId, retryAttempt: jobDataOriginal._saveRetries || 1 }, 'Processing job due to previous save failure');
           // Don't clear flags yet - only clear after successful video processing
         }
 
         // For each video, find it in the database. If it exists, update it. Otherwise, create it.
         try {
           for (let video of videos) {
-            console.log(`[DEBUG] Processing video: ${video.youtubeId} - ${video.youTubeVideoName}`);
+            logger.debug({ youtubeId: video.youtubeId, title: video.youTubeVideoName }, 'Processing video');
             await this.upsertVideoForJob(video, jobInstance);
 
             // Also upsert into channelvideos so Channel page reflects downloaded items
@@ -631,26 +628,26 @@ class JobModule {
                 media_type: video.media_type || 'video',
               });
             } catch (cvErr) {
-              console.error('Error upserting channel video:', cvErr.message);
+              logger.error({ err: cvErr }, 'Error upserting channel video');
             }
           }
 
           // Only clear retry flags if video processing succeeded
           if (jobDataOriginal._needsSave) {
-            console.log(`[DEBUG] Successfully saved job ${jobId} on retry, clearing flags`);
+            logger.debug({ jobId }, 'Successfully saved job on retry, clearing flags');
             delete jobDataOriginal._needsSave;
             delete jobDataOriginal._saveRetries;
           }
         } catch (error) {
-          console.error(`Error saving videos for job ${jobId}:`, error.message);
+          logger.error({ err: error, jobId }, 'Error saving videos for job');
           // Don't clear flags - let retry logic handle it
           if (jobDataOriginal._needsSave) {
-            console.error(`Retry failed for job ${jobId}, flags preserved for next attempt`);
+            logger.error({ jobId }, 'Retry failed for job, flags preserved for next attempt');
           }
           throw error; // Re-throw to be caught by outer catch
         }
       } catch (error) {
-        console.error('Error saving job: ' + error.message);
+        logger.error({ err: error }, 'Error saving job');
       }
     }
     this.isSaving = false; // Reset the locking variable when done
@@ -699,7 +696,7 @@ class JobModule {
         archiveContent = await fsPromises.readFile(archivePath, 'utf-8');
       } catch (e) {
         if (e && e.code === 'ENOENT') {
-          console.log('No complete.list found for backfill. Skipping.');
+          logger.info('No complete.list found for backfill. Skipping.');
           return;
         }
         throw e;
@@ -758,7 +755,7 @@ class JobModule {
             }
             continue;
           }
-          console.error('Failed parsing info.json for', id, e.message);
+          logger.error({ err: e, id }, 'Failed parsing info.json');
           processed++;
           if (processed % 20 === 0) {
             await new Promise((resolve) => setImmediate(resolve));
@@ -844,7 +841,7 @@ class JobModule {
             }
           }
         } catch (vidErr) {
-          console.error('Error upserting Videos for', id, vidErr.message);
+          logger.error({ err: vidErr, id }, 'Error upserting Videos');
         }
 
         // Upsert into channelvideos table only if missing
@@ -862,7 +859,7 @@ class JobModule {
             }
           }
         } catch (cvErr) {
-          console.error('Error upserting channelvideos for', id, cvErr.message);
+          logger.error({ err: cvErr, id }, 'Error upserting channelvideos');
         }
 
         // Yield to event loop every 20 items to keep server responsive
@@ -872,17 +869,12 @@ class JobModule {
         }
       }
 
-      console.log(
-        `Backfill complete. Videos upserted: ${videosUpserts}. ChannelVideos upserted: ${channelVideosUpserts}.`
-      );
+      logger.info({ videosUpserts, channelVideosUpserts }, 'Backfill complete');
       if (missingInfoIds.length > 0) {
-        console.warn(
-          'Backfill skipped due to missing info.json for youtube ids:',
-          missingInfoIds.join(', ')
-        );
+        logger.warn({ missingCount: missingInfoIds.length, missingIds: missingInfoIds.join(', ') }, 'Backfill skipped due to missing info.json');
       }
     } catch (err) {
-      console.error('Backfill error:', err.message);
+      logger.error({ err }, 'Backfill error');
     }
   }
 
@@ -891,12 +883,12 @@ class JobModule {
     try {
       cron.schedule('20 2 * * *', () => {
         this.backfillFromCompleteList().catch((err) => {
-          console.error('Scheduled backfill failed:', err.message);
+          logger.error({ err }, 'Scheduled backfill failed');
         });
       });
-      console.log('Scheduled daily backfill from complete.list at 2:20am');
+      logger.info('Scheduled daily backfill from complete.list at 2:20am');
     } catch (err) {
-      console.error('Failed to schedule daily backfill:', err.message);
+      logger.error({ err }, 'Failed to schedule daily backfill');
     }
   }
 
@@ -907,7 +899,7 @@ class JobModule {
   getRunningJobs() {
     // If this.jobs is undefined or null, return an empty array
     if (!this.jobs) {
-      console.log('No jobs found. Returning empty array.');
+      logger.debug('No jobs found. Returning empty array.');
       return [];
     }
 
@@ -956,15 +948,15 @@ class JobModule {
       });
       return jobId;
     } catch (error) {
-      console.error('Error saving job: ' + error.message);
+      logger.error({ err: error }, 'Error saving job');
       throw error;
     }
   }
 
   updateJob(jobId, updatedFields) {
-    console.log(`[DEBUG] updateJob called for ${jobId} with status: ${updatedFields.status}`);
+    logger.debug({ jobId, status: updatedFields.status }, 'updateJob called');
     if (updatedFields.data && updatedFields.data.videos) {
-      console.log(`[DEBUG] updateJob data contains ${updatedFields.data.videos.length} videos`);
+      logger.debug({ jobId, videoCount: updatedFields.data.videos.length }, 'updateJob data contains videos');
     }
 
     if (
@@ -992,7 +984,7 @@ class JobModule {
     }
     const job = this.jobs[jobId];
     if (!job) {
-      console.log('Job to update did not exist!');
+      logger.warn('Job to update did not exist!');
       return;
     }
 
@@ -1011,7 +1003,7 @@ class JobModule {
     if (isCompletedJob) {
       // For completed jobs, save the job and its video data with retry on failure
       this.saveJobOnly(jobId, job).catch(err => {
-        console.error(`Failed to save completed job ${jobId}, marking for retry:`, err.message);
+        logger.error({ err, jobId }, 'Failed to save completed job, marking for retry');
         // Track retry attempts to avoid infinite loops
         if (this.jobs[jobId]) {
           this.jobs[jobId]._needsSave = true;
@@ -1021,7 +1013,7 @@ class JobModule {
           if (this.jobs[jobId]._saveRetries <= MAX_SAVE_RETRIES) {
             this.scheduleSaveRetry(jobId, this.jobs[jobId]._saveRetries);
           } else {
-            console.error(`Max retries (${MAX_SAVE_RETRIES}) exceeded for job ${jobId}. Video data may be lost. Check database connectivity.`);
+            logger.error({ jobId, maxRetries: MAX_SAVE_RETRIES }, 'Max retries exceeded for job. Video data may be lost. Check database connectivity.');
             // Clear flags so we don't keep trying
             delete this.jobs[jobId]._needsSave;
             delete this.jobs[jobId]._saveRetries;
@@ -1031,7 +1023,7 @@ class JobModule {
     } else {
       // For in-progress jobs, call saveJobs to handle updates
       this.saveJobs().catch(err => {
-        console.error(`Failed to save in-progress job ${jobId}:`, err.message);
+        logger.error({ err, jobId }, 'Failed to save in-progress job');
       });
     }
   }
@@ -1047,12 +1039,12 @@ class JobModule {
   scheduleSaveRetry(jobId, attempt) {
     const job = this.jobs[jobId];
     if (!job) {
-      console.warn(`Cannot schedule retry for missing job ${jobId}`);
+      logger.warn({ jobId }, 'Cannot schedule retry for missing job');
       return;
     }
 
     const retryDelay = 1000 * attempt; // Exponential backoff: 1s, 2s, 3s
-    console.log(`Will retry save for job ${jobId} (attempt ${attempt}/${MAX_SAVE_RETRIES}) in ${retryDelay}ms`);
+    logger.info({ jobId, attempt, maxRetries: MAX_SAVE_RETRIES, retryDelay }, 'Will retry save for job');
 
     setTimeout(() => {
       this.runSaveRetry(jobId, attempt);
@@ -1062,33 +1054,33 @@ class JobModule {
   async runSaveRetry(jobId, attempt) {
     const jobBeforeRetry = this.jobs[jobId];
     if (!jobBeforeRetry) {
-      console.warn(`Retry attempt ${attempt} skipped - job ${jobId} no longer exists in memory.`);
+      logger.warn({ jobId, attempt }, 'Retry attempt skipped - job no longer exists in memory');
       return;
     }
 
     try {
       await this.saveJobs();
     } catch (err) {
-      console.error(`Retry attempt ${attempt} for job ${jobId} failed while saving jobs: ${err.message}`);
+      logger.error({ err, jobId, attempt }, 'Retry attempt for job failed while saving jobs');
     }
 
     const jobAfterRetry = this.jobs[jobId];
     if (!jobAfterRetry) {
-      console.warn(`Retry attempt ${attempt} for job ${jobId} completed but job is no longer tracked.`);
+      logger.warn({ jobId, attempt }, 'Retry attempt completed but job is no longer tracked');
       return;
     }
 
     if (!jobAfterRetry._needsSave) {
       // Retry succeeded - clear counters if present
       if (jobAfterRetry._saveRetries) {
-        console.log(`[DEBUG] Successfully saved job ${jobId} after retry attempt ${attempt}, clearing retry flags`);
+        logger.debug({ jobId, attempt }, 'Successfully saved job after retry attempt, clearing retry flags');
         delete jobAfterRetry._saveRetries;
       }
       return;
     }
 
     if (attempt >= MAX_SAVE_RETRIES) {
-      console.error(`Max retries (${MAX_SAVE_RETRIES}) exhausted for job ${jobId}. Video data may be lost. Giving up.`);
+      logger.error({ jobId, maxRetries: MAX_SAVE_RETRIES }, 'Max retries exhausted for job. Video data may be lost. Giving up.');
       delete jobAfterRetry._needsSave;
       delete jobAfterRetry._saveRetries;
       return;
@@ -1096,7 +1088,7 @@ class JobModule {
 
     const nextAttempt = attempt + 1;
     jobAfterRetry._saveRetries = nextAttempt;
-    console.error(`Retry attempt ${attempt} for job ${jobId} did not clear the pending save. Scheduling attempt ${nextAttempt}/${MAX_SAVE_RETRIES}.`);
+    logger.error({ jobId, attempt, nextAttempt, maxRetries: MAX_SAVE_RETRIES }, 'Retry attempt did not clear the pending save. Scheduling next attempt');
     this.scheduleSaveRetry(jobId, nextAttempt);
   }
 }

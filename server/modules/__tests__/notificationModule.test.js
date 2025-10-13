@@ -1,30 +1,20 @@
 /* eslint-env jest */
 
-// Mock https and configModule before requiring notificationModule
+// Mock https, logger, and configModule before requiring notificationModule
 jest.mock('https');
+jest.mock('../../logger');
 jest.mock('../configModule', () => ({
   getConfig: jest.fn()
 }));
 
 const https = require('https');
 const { EventEmitter } = require('events');
+const logger = require('../../logger');
 
 describe('NotificationModule', () => {
   let notificationModule;
   let configModule;
   let mockConfig;
-  let consoleLogSpy;
-  let consoleErrorSpy;
-
-  beforeAll(() => {
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-  });
-
-  afterAll(() => {
-    consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
-  });
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -508,7 +498,10 @@ describe('NotificationModule', () => {
       await sendPromise;
 
       expect(https.request).toHaveBeenCalled();
-      expect(consoleLogSpy).toHaveBeenCalledWith('Download notification sent successfully');
+      expect(logger.info).toHaveBeenCalledWith(
+        { downloadCount: 2 },
+        'Download notification sent successfully'
+      );
     });
 
     it('should skip notification when not configured', async () => {
@@ -518,7 +511,7 @@ describe('NotificationModule', () => {
       await notificationModule.sendDownloadNotification(baseNotificationData);
 
       expect(https.request).not.toHaveBeenCalled();
-      expect(consoleLogSpy).toHaveBeenCalledWith('Notifications not configured, skipping notification');
+      expect(logger.debug).toHaveBeenCalledWith('Notifications not configured, skipping notification');
     });
 
     it('should skip notification when no videos downloaded', async () => {
@@ -530,7 +523,7 @@ describe('NotificationModule', () => {
       await notificationModule.sendDownloadNotification(notificationData);
 
       expect(https.request).not.toHaveBeenCalled();
-      expect(consoleLogSpy).toHaveBeenCalledWith('No new videos downloaded, skipping notification');
+      expect(logger.debug).toHaveBeenCalledWith('No new videos downloaded, skipping notification');
     });
 
     it('should handle errors gracefully without throwing', async () => {
@@ -542,9 +535,9 @@ describe('NotificationModule', () => {
 
       // Should not throw
       await expect(sendPromise).resolves.toBeUndefined();
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Failed to send download notification:',
-        'Failed to send Discord webhook: Network failure'
+      expect(logger.error).toHaveBeenCalledWith(
+        { err: expect.any(Error) },
+        'Failed to send download notification'
       );
     });
 

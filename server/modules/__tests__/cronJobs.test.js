@@ -6,9 +6,7 @@ describe('CronJobs', () => {
   let mockDb;
   let mockVideosModule;
   let mockVideoDeletionModule;
-  let consoleLogSpy;
-  let consoleErrorSpy;
-  let consoleWarnSpy;
+  let mockLogger;
 
   beforeEach(() => {
     jest.resetModules();
@@ -20,6 +18,15 @@ describe('CronJobs', () => {
     };
 
     jest.doMock('node-cron', () => mockSchedule);
+
+    // Mock logger
+    mockLogger = {
+      info: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn()
+    };
+
+    jest.doMock('../../logger', () => mockLogger);
 
     // Mock database
     mockDb = {
@@ -50,19 +57,8 @@ describe('CronJobs', () => {
 
     jest.doMock('../videoDeletionModule', () => mockVideoDeletionModule);
 
-    // Spy on console methods
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
-
     // Require the module after mocks are in place
     cronJobs = require('../cronJobs');
-  });
-
-  afterEach(() => {
-    consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
-    consoleWarnSpy.mockRestore();
   });
 
   describe('module export', () => {
@@ -86,11 +82,11 @@ describe('CronJobs', () => {
     test('should log initialization messages', () => {
       cronJobs.initialize();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('[CronJobs] Initializing scheduled tasks...');
-      expect(consoleLogSpy).toHaveBeenCalledWith('[CronJobs] Scheduled tasks initialized:');
-      expect(consoleLogSpy).toHaveBeenCalledWith('  - Automatic video cleanup: 2:00 AM daily');
-      expect(consoleLogSpy).toHaveBeenCalledWith('  - Session cleanup: 3:00 AM daily');
-      expect(consoleLogSpy).toHaveBeenCalledWith('  - Video metadata backfill: 3:30 AM daily');
+      expect(mockLogger.info).toHaveBeenCalledWith('Initializing scheduled cron jobs');
+      expect(mockLogger.info).toHaveBeenCalledWith('Scheduled cron jobs initialized successfully');
+      expect(mockLogger.info).toHaveBeenCalledWith('  - Automatic video cleanup: 2:00 AM daily');
+      expect(mockLogger.info).toHaveBeenCalledWith('  - Session cleanup: 3:00 AM daily');
+      expect(mockLogger.info).toHaveBeenCalledWith('  - Video metadata backfill: 3:30 AM daily');
     });
   });
 
@@ -112,7 +108,7 @@ describe('CronJobs', () => {
       await cleanupCallback();
 
       expect(mockVideoDeletionModule.performAutomaticCleanup).toHaveBeenCalled();
-      expect(consoleLogSpy).toHaveBeenCalledWith('[CRON] Running automatic video cleanup at 2:00 AM...');
+      expect(mockLogger.info).toHaveBeenCalledWith('Running automatic video cleanup cron job');
     });
 
     test('should log success when videos are deleted', async () => {
@@ -124,8 +120,12 @@ describe('CronJobs', () => {
 
       await cleanupCallback();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[CRON] Automatic cleanup completed: 5 videos deleted, 1.00 GB freed')
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        {
+          totalDeleted: 5,
+          freedGB: '1.00'
+        },
+        'Automatic cleanup completed successfully'
       );
     });
 
@@ -138,7 +138,7 @@ describe('CronJobs', () => {
 
       await cleanupCallback();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('[CRON] Automatic cleanup completed: no videos deleted');
+      expect(mockLogger.info).toHaveBeenCalledWith('Automatic cleanup completed: no videos deleted');
     });
 
     test('should log warning when errors occur during cleanup', async () => {
@@ -150,7 +150,10 @@ describe('CronJobs', () => {
 
       await cleanupCallback();
 
-      expect(consoleWarnSpy).toHaveBeenCalledWith('[CRON] Automatic cleanup completed with 2 errors');
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        { errorCount: 2 },
+        'Automatic cleanup completed with errors'
+      );
     });
 
     test('should handle errors thrown by performAutomaticCleanup', async () => {
@@ -159,7 +162,7 @@ describe('CronJobs', () => {
 
       await cleanupCallback();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('[CRON] Error during automatic video cleanup:', testError);
+      expect(mockLogger.error).toHaveBeenCalledWith({ err: testError }, 'Error during automatic video cleanup');
     });
 
     test('should format GB correctly with multiple decimal places', async () => {
@@ -171,8 +174,12 @@ describe('CronJobs', () => {
 
       await cleanupCallback();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('5.00 GB freed')
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        {
+          totalDeleted: 10,
+          freedGB: '5.00'
+        },
+        'Automatic cleanup completed successfully'
       );
     });
   });
@@ -208,7 +215,7 @@ describe('CronJobs', () => {
         }
       });
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('[CLEANUP] Removed 5 expired sessions');
+      expect(mockLogger.info).toHaveBeenCalledWith({ removed: 5 }, 'Removed expired sessions');
     });
 
     test('should log when no sessions are removed', async () => {
@@ -216,7 +223,7 @@ describe('CronJobs', () => {
 
       await sessionCleanupCallback();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('[CLEANUP] Removed 0 expired sessions');
+      expect(mockLogger.info).toHaveBeenCalledWith({ removed: 0 }, 'Removed expired sessions');
     });
 
     test('should handle errors during session cleanup', async () => {
@@ -225,7 +232,7 @@ describe('CronJobs', () => {
 
       await sessionCleanupCallback();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('[CLEANUP] Error cleaning sessions:', testError);
+      expect(mockLogger.error).toHaveBeenCalledWith({ err: testError }, 'Error cleaning sessions');
     });
 
     test('should use correct date for inactive session threshold (30 days)', async () => {
@@ -262,7 +269,7 @@ describe('CronJobs', () => {
       await resolvedPromise;
 
       expect(mockVideosModule.backfillVideoMetadata).toHaveBeenCalled();
-      expect(consoleLogSpy).toHaveBeenCalledWith('[CRON] Starting scheduled video metadata backfill at 3:30 AM...');
+      expect(mockLogger.info).toHaveBeenCalledWith('Starting scheduled video metadata backfill');
     });
 
     test('should log success when backfill completes without timeout', async () => {
@@ -273,7 +280,7 @@ describe('CronJobs', () => {
 
       await resolvedPromise;
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('[CRON] Video metadata backfill completed successfully');
+      expect(mockLogger.info).toHaveBeenCalledWith('Video metadata backfill completed successfully');
     });
 
     test('should log message when backfill times out', async () => {
@@ -284,7 +291,7 @@ describe('CronJobs', () => {
 
       await resolvedPromise;
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('[CRON] Video metadata backfill reached time limit, will continue tomorrow');
+      expect(mockLogger.info).toHaveBeenCalledWith('Video metadata backfill reached time limit, will continue tomorrow');
     });
 
     test('should handle errors during backfill', async () => {
@@ -296,7 +303,7 @@ describe('CronJobs', () => {
 
       await new Promise(resolve => setImmediate(resolve));
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('[CRON] Video metadata backfill failed:', testError);
+      expect(mockLogger.error).toHaveBeenCalledWith({ err: testError }, 'Video metadata backfill failed');
     });
 
     test('should handle synchronous errors in backfillVideoMetadata', async () => {
@@ -307,7 +314,7 @@ describe('CronJobs', () => {
 
       await backfillCallback();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('[CRON] Error starting video metadata backfill:', testError);
+      expect(mockLogger.error).toHaveBeenCalledWith({ err: testError }, 'Error starting video metadata backfill');
     });
 
     test('should handle null result from backfill', async () => {
@@ -318,7 +325,7 @@ describe('CronJobs', () => {
 
       await resolvedPromise;
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('[CRON] Video metadata backfill completed successfully');
+      expect(mockLogger.info).toHaveBeenCalledWith('Video metadata backfill completed successfully');
     });
 
     test('should handle result without timedOut property', async () => {
@@ -329,7 +336,7 @@ describe('CronJobs', () => {
 
       await resolvedPromise;
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('[CRON] Video metadata backfill completed successfully');
+      expect(mockLogger.info).toHaveBeenCalledWith('Video metadata backfill completed successfully');
     });
   });
 
@@ -391,7 +398,7 @@ describe('CronJobs', () => {
       expect(mockDb.Session.destroy).toHaveBeenCalled();
       expect(mockVideosModule.backfillVideoMetadata).toHaveBeenCalled();
 
-      expect(consoleErrorSpy).not.toHaveBeenCalled();
+      expect(mockLogger.error).not.toHaveBeenCalled();
     });
 
     test('should handle partial failures across cron jobs', async () => {
@@ -409,10 +416,10 @@ describe('CronJobs', () => {
       await sessionCleanupCallback();
       await backfillCallback();
 
-      expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '[CRON] Error during automatic video cleanup:',
-        expect.any(Error)
+      expect(mockLogger.error).toHaveBeenCalledTimes(1);
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        { err: expect.any(Error) },
+        'Error during automatic video cleanup'
       );
     });
 
@@ -433,7 +440,7 @@ describe('CronJobs', () => {
 
       await new Promise(resolve => setImmediate(resolve));
 
-      expect(consoleErrorSpy).toHaveBeenCalledTimes(3);
+      expect(mockLogger.error).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -446,9 +453,9 @@ describe('CronJobs', () => {
 
       await cleanupCallback();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '[CRON] Error during automatic video cleanup:',
-        expect.any(TypeError)
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        { err: expect.any(TypeError) },
+        'Error during automatic video cleanup'
       );
     });
 
@@ -462,9 +469,9 @@ describe('CronJobs', () => {
 
       await cleanupCallback();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '[CRON] Error during automatic video cleanup:',
-        expect.any(TypeError)
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        { err: expect.any(TypeError) },
+        'Error during automatic video cleanup'
       );
     });
 
@@ -476,7 +483,7 @@ describe('CronJobs', () => {
 
       await sessionCleanupCallback();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('[CLEANUP] Removed invalid expired sessions');
+      expect(mockLogger.info).toHaveBeenCalledWith({ removed: 'invalid' }, 'Removed expired sessions');
     });
   });
 });

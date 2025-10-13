@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const logger = require('../logger');
 
 // Centralized helpers for reading the yt-dlp download archive (complete.list)
 
@@ -48,14 +49,14 @@ async function isVideoInArchive(videoId) {
 // Add a video to the archive if it doesn't already exist
 async function addVideoToArchive(videoId) {
   if (!videoId) {
-    console.log('[DEBUG] addVideoToArchive called with empty videoId, skipping');
+    logger.debug('addVideoToArchive called with empty videoId, skipping');
     return false;
   }
 
   // Check if video already exists in archive
   const alreadyInArchive = await isVideoInArchive(videoId);
   if (alreadyInArchive) {
-    console.log(`[DEBUG] Video ${videoId} already in archive, skipping`);
+    logger.debug({ videoId }, 'Video already in archive, skipping');
     return false;
   }
 
@@ -66,10 +67,10 @@ async function addVideoToArchive(videoId) {
   try {
     // Append to the file (create if doesn't exist)
     fs.appendFileSync(archivePath, archiveLine);
-    console.log(`[DEBUG] Added video ${videoId} to archive`);
+    logger.debug({ videoId }, 'Added video to archive');
     return true;
   } catch (err) {
-    console.error(`[ERROR] Failed to add video ${videoId} to archive:`, err.message);
+    logger.error({ videoId, err: err.message }, 'Failed to add video to archive');
     return false;
   }
 }

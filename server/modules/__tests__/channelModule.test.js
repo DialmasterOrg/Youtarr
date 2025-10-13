@@ -5,6 +5,7 @@ jest.mock('child_process');
 jest.mock('node-cron');
 jest.mock('uuid');
 jest.mock('../messageEmitter.js');
+jest.mock('../../logger');
 jest.mock('../../models/channel', () => {
   const { Model } = require('sequelize');
   class MockChannel extends Model {}
@@ -43,10 +44,14 @@ jest.mock('../configModule', () => {
     channelDownloadFrequency: '0 */6 * * *',
     channelAutoDownload: true,
     channelFilesToDownload: 3,
-    preferredResolution: '1080'
+    preferredResolution: '1080',
+    writeChannelPosters: true
   });
   mockConfigModule.onConfigChange = jest.fn();
   mockConfigModule.ffmpegPath = '/usr/bin/ffmpeg';
+  mockConfigModule.getImagePath = jest.fn().mockReturnValue('/path/to/images');
+  mockConfigModule.directoryPath = '/path/to/videos';
+  mockConfigModule.getCookiesPath = jest.fn().mockReturnValue(null);
   return mockConfigModule;
 });
 
@@ -93,9 +98,7 @@ describe('ChannelModule', () => {
   let Channel;
   let ChannelVideo;
   let uuid;
-  let consoleLogSpy;
-  let consoleErrorSpy;
-  let consoleWarnSpy;
+  let logger;
 
   const mockChannelData = {
     channel_id: 'UC123456',
@@ -116,15 +119,11 @@ describe('ChannelModule', () => {
   };
 
   beforeAll(() => {
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    // No console spies needed anymore - using logger
   });
 
   afterAll(() => {
-    consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
-    consoleWarnSpy.mockRestore();
+    // No console spies to restore
   });
 
   beforeEach(() => {
@@ -137,6 +136,8 @@ describe('ChannelModule', () => {
     fs = require('fs');
     fs.readFileSync = jest.fn().mockReturnValue('');
     fs.writeFileSync = jest.fn();
+    fs.existsSync = jest.fn().mockReturnValue(false);
+    fs.copySync = jest.fn();
     fs.createWriteStream = jest.fn().mockReturnValue({
       on: jest.fn(),
       write: jest.fn(),
@@ -169,6 +170,8 @@ describe('ChannelModule', () => {
     Channel.findOne.mockResolvedValue(null);
 
     ChannelVideo = require('../../models/channelvideo');
+
+    logger = require('../../logger');
 
     ChannelModule = require('../channelModule');
   });
@@ -237,7 +240,14 @@ describe('ChannelModule', () => {
 
         const result = ChannelModule.getLastFetchedForTab(channel, 'video');
         expect(result).toBeNull();
-        expect(consoleErrorSpy).toHaveBeenCalledWith('Error parsing lastFetchedByTab:', expect.any(Error));
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            err: expect.any(Error),
+            channelId: mockChannelData.channel_id,
+            mediaType: 'video'
+          }),
+          'Error parsing lastFetchedByTab'
+        );
       });
     });
 
@@ -1581,9 +1591,11 @@ describe('ChannelModule', () => {
 
         await ChannelModule.writeChannels(['https://youtube.com/@new']);
 
-        expect(consoleErrorSpy).toHaveBeenCalledWith(
-          'Error updating channels in database:',
-          expect.any(Error)
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            err: expect.any(Error)
+          }),
+          'Error updating channels in database'
         );
       });
     });
@@ -1684,7 +1696,13 @@ describe('ChannelModule', () => {
         ChannelModule.channelAutoDownload();
 
         expect(downloadModule.doChannelDownloads).toHaveBeenCalled();
-        expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Running new Channel Downloads'));
+        expect(logger.info).toHaveBeenCalledWith(
+          expect.objectContaining({
+            currentTime: expect.any(Date),
+            interval: expect.any(String)
+          }),
+          'Running scheduled channel downloads'
+        );
       });
 
       test('should skip channel downloads when job is in progress', () => {
@@ -1695,7 +1713,7 @@ describe('ChannelModule', () => {
         ChannelModule.channelAutoDownload();
 
         expect(downloadModule.doChannelDownloads).not.toHaveBeenCalled();
-        expect(consoleLogSpy).toHaveBeenCalledWith('Skipping scheduled channel download - previous download still in progress');
+        expect(logger.warn).toHaveBeenCalledWith('Skipping scheduled channel download - previous download still in progress');
       });
 
       test('should skip channel downloads when job is pending', () => {
@@ -1706,7 +1724,7 @@ describe('ChannelModule', () => {
         ChannelModule.channelAutoDownload();
 
         expect(downloadModule.doChannelDownloads).not.toHaveBeenCalled();
-        expect(consoleLogSpy).toHaveBeenCalledWith('Skipping scheduled channel download - previous download still in progress');
+        expect(logger.warn).toHaveBeenCalledWith('Skipping scheduled channel download - previous download still in progress');
       });
 
       test('should trigger downloads when other job types are running', () => {
@@ -1899,7 +1917,10 @@ describe('ChannelModule', () => {
 
         // Should not throw, should return cached data
         expect(result.videos).toBeDefined();
-        expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Skipping auto-refresh'));
+        expect(logger.info).toHaveBeenCalledWith(
+          expect.objectContaining({ channelId: 'UC123' }),
+          'Skipping auto-refresh - fetch already in progress'
+        );
 
         // Clean up
         ChannelModule.activeFetches.delete('UC123');
@@ -1923,7 +1944,13 @@ describe('ChannelModule', () => {
         const result = await ChannelModule.getChannelVideos('UC123');
 
         expect(result.videos).toBeDefined();
-        expect(consoleErrorSpy).toHaveBeenCalledWith('Error fetching channel videos:', 'Network error');
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            err: expect.any(Error),
+            channelId: 'UC123'
+          }),
+          'Error fetching channel videos'
+        );
       });
     });
 
@@ -2017,7 +2044,14 @@ describe('ChannelModule', () => {
         await ChannelModule.fetchAllChannelVideos('UC123');
 
         expect(mockChannel.url).toBe(newUrl);
-        expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Channel URL updated'));
+        expect(logger.info).toHaveBeenCalledWith(
+          expect.objectContaining({
+            channelTitle: expect.any(String),
+            oldUrl: expect.any(String),
+            newUrl: newUrl
+          }),
+          'Channel URL updated'
+        );
       });
     });
 

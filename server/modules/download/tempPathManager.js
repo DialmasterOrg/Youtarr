@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs-extra');
 const configModule = require('../configModule');
+const logger = require('../../logger');
 
 /**
  * Manages temporary download paths and conversions between temp and final locations.
@@ -107,9 +108,9 @@ class TempPathManager {
 
     try {
       await fs.ensureDir(tempBase);
-      console.log(`[TempPathManager] Ensured temp directory exists: ${tempBase}`);
+      logger.info({ tempBasePath: tempBase }, 'Ensured temp directory exists');
     } catch (error) {
-      console.error(`[TempPathManager] Failed to create temp directory ${tempBase}:`, error.message);
+      logger.error({ tempBasePath: tempBase, err: error }, 'Failed to create temp directory');
       throw new Error(`Cannot create temp directory: ${error.message}`);
     }
   }
@@ -121,7 +122,7 @@ class TempPathManager {
    */
   async cleanTempDirectory() {
     if (!this.isEnabled()) {
-      console.log('[TempPathManager] Temp downloads disabled, skipping cleanup');
+      logger.debug('Temp downloads disabled, skipping cleanup');
       return;
     }
 
@@ -132,21 +133,21 @@ class TempPathManager {
       const exists = await fs.pathExists(tempBase);
 
       if (exists) {
-        console.log(`[TempPathManager] Cleaning temp directory: ${tempBase}`);
+        logger.info({ tempBasePath: tempBase }, 'Cleaning temp directory');
 
         // Remove entire directory
         await fs.remove(tempBase);
-        console.log('[TempPathManager] Removed temp directory');
+        logger.info('Removed temp directory');
       } else {
-        console.log('[TempPathManager] Temp directory doesn\'t exist, nothing to clean');
+        logger.debug('Temp directory doesn\'t exist, nothing to clean');
       }
 
       // Recreate empty directory
       await fs.ensureDir(tempBase);
-      console.log(`[TempPathManager] Recreated temp directory: ${tempBase}`);
+      logger.info({ tempBasePath: tempBase }, 'Recreated temp directory');
 
     } catch (error) {
-      console.error('[TempPathManager] Error cleaning temp directory:', error.message);
+      logger.error({ tempBasePath: tempBase, err: error }, 'Error cleaning temp directory');
       throw new Error(`Failed to clean temp directory: ${error.message}`);
     }
   }
@@ -170,9 +171,7 @@ class TempPathManager {
       const sourcePath = isDirectory ? tempPath : path.dirname(tempPath);
       const destinationPath = isDirectory ? targetPath : path.dirname(targetPath);
 
-      console.log('[TempPathManager] Moving from temp to final:');
-      console.log(`  Source: ${sourcePath}`);
-      console.log(`  Destination: ${destinationPath}`);
+      logger.debug({ sourcePath, destinationPath }, 'Moving from temp to final');
 
       // Pre-verification: Check source exists
       const sourceExists = await fs.pathExists(sourcePath);
@@ -193,7 +192,7 @@ class TempPathManager {
         throw new Error(`Move completed but destination doesn't exist: ${destinationPath}`);
       }
 
-      console.log('[TempPathManager] Successfully moved to final location');
+      logger.info({ sourcePath, destinationPath }, 'Successfully moved to final location');
 
       return {
         success: true,
@@ -201,7 +200,7 @@ class TempPathManager {
       };
 
     } catch (error) {
-      console.error('[TempPathManager] Error moving to final location:', error);
+      logger.error({ tempPath, finalPath, err: error }, 'Error moving to final location');
       return {
         success: false,
         finalPath: finalPath || this.convertTempToFinal(tempPath),

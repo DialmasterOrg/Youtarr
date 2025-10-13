@@ -1,11 +1,12 @@
 const WebSocket = require('ws');
 const messageEmitter = require('./messageEmitter.js');
+const logger = require('../logger');
 
 module.exports = (server) => {
   const wss = new WebSocket.Server({ server });
 
   wss.on('connection', (ws) => {
-    console.log('New client connected');
+    logger.info('WebSocket client connected');
     // Send last downloadProgress messages to new client
     messageEmitter.getLastMessages().forEach(message => {
       if (ws.readyState === WebSocket.OPEN) {
@@ -14,7 +15,7 @@ module.exports = (server) => {
     });
 
     ws.on('close', () => {
-      console.log('Client disconnected');
+      logger.info('WebSocket client disconnected');
     });
   });
 

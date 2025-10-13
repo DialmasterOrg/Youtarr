@@ -2,6 +2,7 @@ const fs = require('fs');
 const fsPromises = fs.promises;
 const path = require('path');
 const configModule = require('../configModule');
+const logger = require('../../logger');
 
 class VideoMetadataProcessor {
   static normalizeChannelName(value) {
@@ -47,10 +48,10 @@ class VideoMetadataProcessor {
         if (stats.size > 0) {
           return stats;
         }
-        console.log(`File found but size is 0, waiting ${delayMs}ms... (attempt ${i + 1}/${maxRetries})`);
+        logger.debug({ filePath, delayMs, attempt: i + 1, maxRetries }, 'File found but size is 0, waiting for file to be written');
       } catch (err) {
         if (i < maxRetries - 1) {
-          console.log(`Waiting ${delayMs}ms for file to be available... (attempt ${i + 1}/${maxRetries})`);
+          logger.debug({ filePath, delayMs, attempt: i + 1, maxRetries }, 'Waiting for file to be available');
         }
       }
 
@@ -72,10 +73,10 @@ class VideoMetadataProcessor {
         configModule.getJobsPath(),
         `info/${id}.info.json`
       );
-      console.log('Looking for info.json file at', dataPath);
+      logger.debug({ dataPath, videoId: id }, 'Looking for info.json file');
 
       if (fs.existsSync(dataPath)) {
-        console.log('Found info.json file at', dataPath);
+        logger.debug({ dataPath, videoId: id }, 'Found info.json file');
         const data = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
 
         const preferredChannelName =
@@ -100,7 +101,7 @@ class VideoMetadataProcessor {
         let fullPath;
         if (data._actual_filepath) {
           // Use the actual filepath that yt-dlp provided
-          console.log(`Using actual filepath from yt-dlp: ${data._actual_filepath}`); // DEBUG TO REMOVE LATER
+          logger.debug({ filepath: data._actual_filepath, videoId: id }, 'Using actual filepath from yt-dlp');
           fullPath = data._actual_filepath;
         } else {
           // Fallback: Calculate the file path based on the yt-dlp output template
@@ -111,7 +112,7 @@ class VideoMetadataProcessor {
           const videoFolder = `${sanitizedChannelName} - ${sanitizedTitle} - ${id}`;
           const videoFileName = `${sanitizedChannelName} - ${sanitizedTitle}  [${id}].mp4`;
           fullPath = path.join(baseOutputPath, sanitizedChannelName, videoFolder, videoFileName);
-          console.log(`Using fallback filepath: ${fullPath}`); // DEBUG TO REMOVE LATER
+          logger.debug({ filepath: fullPath, videoId: id }, 'Using fallback filepath');
         }
 
         // Check if file exists and get file size - with retry logic for production environments
@@ -121,10 +122,10 @@ class VideoMetadataProcessor {
           videoMetadata.filePath = fullPath;
           videoMetadata.fileSize = stats.size.toString(); // Convert to string as DB expects BIGINT as string
           videoMetadata.removed = false;
-          console.log(`Found video file at ${fullPath}, size: ${stats.size} bytes`);
+          logger.info({ filepath: fullPath, fileSize: stats.size, videoId: id }, 'Found video file');
         } else {
           // File doesn't exist after retries
-          console.log(`WARNING: Video file not found after all retries for ${id}`);
+          logger.warn({ videoId: id, expectedPath: fullPath }, 'Video file not found after all retries');
           videoMetadata.filePath = fullPath; // Store expected path anyway
           videoMetadata.fileSize = null;
           videoMetadata.removed = false; // Assume it's not removed, just not found yet
@@ -132,7 +133,7 @@ class VideoMetadataProcessor {
 
         processedVideos.push(videoMetadata);
       } else {
-        console.log('No info.json file at', dataPath);
+        logger.debug({ dataPath, videoId: id }, 'No info.json file found');
       }
     }
 
