@@ -6,6 +6,8 @@
 
 Youtarr is a self-hosted YouTube downloader that automatically downloads videos from your favorite channels or specific URLs. With optional Plex integration, it can refresh your media library for a seamless, ad-free viewing experience.
 
+https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
+
 ## 🤔 Why Youtarr?
 
 - **No Ads or Tracking**: Watch YouTube content without interruptions
