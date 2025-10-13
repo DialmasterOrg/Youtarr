@@ -1,224 +1,469 @@
 /* eslint-env jest */
 
-// Mock fs first to prevent configModule from reading files
-jest.mock('fs');
+const { EventEmitter } = require('events');
 
-// Mock all modules before requiring them
-jest.mock('child_process');
-jest.mock('../DownloadProgressMonitor');
-jest.mock('../videoMetadataProcessor');
+// Mock child_process spawn
+const mockSpawn = jest.fn();
+jest.mock('child_process', () => ({
+  spawn: mockSpawn
+}));
+
+// Mock fs module - must define mockFsPromises before jest.mock
+const mockFsPromises = {
+  access: jest.fn(),
+  readdir: jest.fn(),
+  stat: jest.fn(),
+  unlink: jest.fn(),
+  rm: jest.fn(),
+  rmdir: jest.fn()
+};
+jest.mock('fs', () => {
+  const mockActualFs = jest.requireActual('fs');
+  return {
+    ...mockActualFs,
+    promises: mockFsPromises,
+    existsSync: jest.fn()
+  };
+});
+
+// Mock dependencies
 jest.mock('../../configModule', () => ({
-  getConfig: jest.fn(),
-  getJobsPath: jest.fn(() => '/mock/jobs/path')
+  getConfig: jest.fn()
 }));
+
 jest.mock('../../plexModule', () => ({
-  refreshLibrary: jest.fn()
+  refreshLibrary: jest.fn().mockResolvedValue()
 }));
+
 jest.mock('../../jobModule', () => ({
-  updateJob: jest.fn(),
+  updateJob: jest.fn().mockResolvedValue(),
   startNextJob: jest.fn()
 }));
+
 jest.mock('../../messageEmitter', () => ({
   emitMessage: jest.fn()
 }));
+
 jest.mock('../../archiveModule', () => ({
-  readCompleteListLines: jest.fn(),
-  getNewVideoUrlsSince: jest.fn()
+  readCompleteListLines: jest.fn().mockReturnValue([]),
+  getNewVideoUrlsSince: jest.fn().mockReturnValue([]),
+  addVideoToArchive: jest.fn().mockResolvedValue()
 }));
 
-const { spawn } = require('child_process');
-const { EventEmitter } = require('events');
+jest.mock('../../notificationModule', () => ({
+  sendDownloadNotification: jest.fn().mockResolvedValue()
+}));
+
+jest.mock('../DownloadProgressMonitor');
+jest.mock('../videoMetadataProcessor');
+jest.mock('../tempPathManager');
+jest.mock('../../../models', () => ({
+  JobVideoDownload: {
+    findOrCreate: jest.fn().mockResolvedValue([{}, true]),
+    findAll: jest.fn().mockResolvedValue([]),
+    destroy: jest.fn().mockResolvedValue(0)
+  }
+}));
+
 const DownloadExecutor = require('../downloadExecutor');
-const DownloadProgressMonitor = require('../DownloadProgressMonitor');
-const VideoMetadataProcessor = require('../videoMetadataProcessor');
 const configModule = require('../../configModule');
 const plexModule = require('../../plexModule');
 const jobModule = require('../../jobModule');
 const MessageEmitter = require('../../messageEmitter');
+const archiveModule = require('../../archiveModule');
+const notificationModule = require('../../notificationModule');
+const DownloadProgressMonitor = require('../DownloadProgressMonitor');
+const VideoMetadataProcessor = require('../videoMetadataProcessor');
+const tempPathManager = require('../tempPathManager');
+const { JobVideoDownload } = require('../../../models');
 
 describe('DownloadExecutor', () => {
   let executor;
   let mockProcess;
-  let mockMonitor;
-  let mockConfig;
-  let archiveModule;
-  let fs;
-  let fsPromises;
   let consoleLogSpy;
   let consoleErrorSpy;
 
-  beforeAll(() => {
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-  });
-
-  afterAll(() => {
-    consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
-  });
-
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.resetModules();
-    jest.useFakeTimers();
 
-    // Setup fs mocks
-    fs = require('fs');
-    fsPromises = {
-      access: jest.fn(),
-      unlink: jest.fn(),
-      readdir: jest.fn()
-    };
-    fs.promises = fsPromises;
+    // Setup console spies
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-    // Setup archive module mock
-    archiveModule = require('../../archiveModule');
-    archiveModule.readCompleteListLines = jest.fn().mockReturnValue(['video1', 'video2', 'video3']);
-    archiveModule.getNewVideoUrlsSince = jest.fn().mockReturnValue([
-      'https://youtube.com/watch?v=abc123',
-      'https://youtube.com/watch?v=def456'
-    ]);
+    // Setup default mocks
+    configModule.getConfig.mockReturnValue({
+      enableStallDetection: false,
+      youtubeOutputDirectory: '/mock/output'
+    });
 
-    // Setup mock process
+    // Create mock process
     mockProcess = new EventEmitter();
+    mockProcess.kill = jest.fn();
+    mockProcess.exitCode = null;
+    mockProcess.signalCode = null;
     mockProcess.stdout = new EventEmitter();
     mockProcess.stderr = new EventEmitter();
-    mockProcess.kill = jest.fn();
-    spawn.mockReturnValue(mockProcess);
 
-    // Setup mock monitor
-    mockMonitor = {
+    mockSpawn.mockReturnValue(mockProcess);
+
+    // Setup DownloadProgressMonitor mock
+    const mockMonitor = {
       videoCount: {
-        total: 0,
         current: 1,
+        total: 0,
         completed: 0,
-        skipped: 0
+        skipped: 0,
+        skippedThisChannel: 0
       },
+      hasError: false,
+      lastParsed: null,
+      currentChannelName: '',
+      processProgress: jest.fn().mockReturnValue({ state: 'downloading_video' }),
       snapshot: jest.fn().mockReturnValue({
         state: 'initiating',
-        progress: { percent: 0 }
-      }),
-      processProgress: jest.fn().mockReturnValue({
-        state: 'downloading',
-        progress: { percent: 50 }
-      }),
-      lastParsed: null
+        videoCount: { current: 1, total: 0, completed: 0, skipped: 0 }
+      })
     };
     DownloadProgressMonitor.mockImplementation(() => mockMonitor);
 
-    // Setup mock config
-    mockConfig = {
-      downloadSocketTimeoutSeconds: 300,
-      downloadRetryCount: 3,
-      youtubeOutputDirectory: '/path/to/videos'
-    };
-    configModule.getConfig.mockReturnValue(mockConfig);
+    // Setup VideoMetadataProcessor mock
+    VideoMetadataProcessor.processVideoMetadata = jest.fn().mockResolvedValue([]);
 
-    // Setup other mocks
-    VideoMetadataProcessor.processVideoMetadata = jest.fn().mockReturnValue([
-      { title: 'Video 1', url: 'https://youtube.com/watch?v=abc123' },
-      { title: 'Video 2', url: 'https://youtube.com/watch?v=def456' }
-    ]);
-
-    plexModule.refreshLibrary = jest.fn().mockResolvedValue();
-    jobModule.updateJob = jest.fn().mockResolvedValue();
-    jobModule.startNextJob = jest.fn();
-    MessageEmitter.emitMessage = jest.fn();
+    // Setup tempPathManager mock
+    tempPathManager.cleanTempDirectory = jest.fn().mockResolvedValue();
+    tempPathManager.isEnabled = jest.fn().mockReturnValue(false);
+    tempPathManager.convertFinalToTemp = jest.fn(path => path);
 
     executor = new DownloadExecutor();
   });
 
   afterEach(() => {
+    consoleLogSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+    // Clear any force kill timeouts from the executor
+    if (executor.forceKillTimeout) {
+      clearTimeout(executor.forceKillTimeout);
+      executor.forceKillTimeout = null;
+    }
+    // Clean up any pending timers to prevent Jest hanging
+    jest.clearAllTimers();
+    // Ensure we're using real timers
     jest.useRealTimers();
   });
 
   describe('constructor', () => {
-    it('should initialize with null tempChannelsFile', () => {
+    it('should initialize with correct default values', () => {
       expect(executor.tempChannelsFile).toBeNull();
+      expect(executor.activityTimeoutMs).toBe(30 * 60 * 1000);
+      expect(executor.maxAbsoluteTimeoutMs).toBe(4 * 60 * 60 * 1000);
+      expect(executor.currentProcess).toBeNull();
+      expect(executor.currentJobId).toBeNull();
+      expect(executor.manualTerminationReason).toBeNull();
+      expect(executor.forceKillTimeout).toBeNull();
     });
   });
 
   describe('getCountOfDownloadedVideos', () => {
-    it('should return the count of lines in archive', () => {
-      const count = executor.getCountOfDownloadedVideos();
-      expect(count).toBe(3);
-      expect(archiveModule.readCompleteListLines).toHaveBeenCalled();
+    it('should return count from archive module', () => {
+      archiveModule.readCompleteListLines.mockReturnValue(['video1', 'video2', 'video3']);
+      expect(executor.getCountOfDownloadedVideos()).toBe(3);
+    });
+
+    it('should return 0 for empty archive', () => {
+      archiveModule.readCompleteListLines.mockReturnValue([]);
+      expect(executor.getCountOfDownloadedVideos()).toBe(0);
     });
   });
 
   describe('getNewVideoUrls', () => {
-    it('should return new video URLs since initial count', () => {
-      const urls = executor.getNewVideoUrls(3);
-      expect(urls).toHaveLength(2);
-      expect(archiveModule.getNewVideoUrlsSince).toHaveBeenCalledWith(3);
+    it('should return new video URLs from archive module', () => {
+      const mockUrls = ['https://youtu.be/abc123', 'https://youtu.be/def456'];
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(mockUrls);
+
+      const result = executor.getNewVideoUrls(5);
+
+      expect(archiveModule.getNewVideoUrlsSince).toHaveBeenCalledWith(5);
+      expect(result).toEqual(mockUrls);
+    });
+  });
+
+  describe('extractYoutubeIdFromPath', () => {
+    it('should extract ID from bracket notation', () => {
+      const path = '/path/to/Channel - Video Title [abc123XYZ_d].mp4';
+      expect(executor.extractYoutubeIdFromPath(path)).toBe('abc123XYZ_d');
+    });
+
+    it('should extract ID from directory name with dash', () => {
+      const path = '/path/to/Channel - Video Title - abc123XYZ_d/video.mp4';
+      expect(executor.extractYoutubeIdFromPath(path)).toBe('abc123XYZ_d');
+    });
+
+    it('should return null for invalid paths', () => {
+      expect(executor.extractYoutubeIdFromPath('/path/without/id.mp4')).toBeNull();
+    });
+
+    it('should handle extraction errors gracefully', () => {
+      expect(executor.extractYoutubeIdFromPath('')).toBeNull();
+    });
+
+    it('should require 10-12 character IDs', () => {
+      // Too short
+      expect(executor.extractYoutubeIdFromPath('/path/[abc].mp4')).toBeNull();
+      // Valid length
+      expect(executor.extractYoutubeIdFromPath('/path/[abc1234567].mp4')).toBe('abc1234567');
+    });
+  });
+
+  describe('isMainVideoFile', () => {
+    it('should identify main video files with mp4 extension', () => {
+      expect(executor.isMainVideoFile('/path/Channel - Title [abc123XYZ_].mp4')).toBe(true);
+    });
+
+    it('should identify main video files with mkv extension', () => {
+      expect(executor.isMainVideoFile('/path/Channel - Title [abc123XYZ_].mkv')).toBe(true);
+    });
+
+    it('should identify main video files with webm extension', () => {
+      expect(executor.isMainVideoFile('/path/Channel - Title [abc123XYZ_].webm')).toBe(true);
+    });
+
+    it('should reject fragment files', () => {
+      expect(executor.isMainVideoFile('/path/Channel - Title.f137.mp4')).toBe(false);
+    });
+
+    it('should reject audio fragment files', () => {
+      expect(executor.isMainVideoFile('/path/Channel - Title.f140.m4a')).toBe(false);
+    });
+
+    it('should reject files without video ID', () => {
+      expect(executor.isMainVideoFile('/path/video.mp4')).toBe(false);
+    });
+
+    it('should reject files with too short video IDs', () => {
+      expect(executor.isMainVideoFile('/path/Channel - Title [abc].mp4')).toBe(false);
+    });
+  });
+
+  describe('isVideoSpecificDirectory', () => {
+    it('should identify valid video directory', () => {
+      expect(executor.isVideoSpecificDirectory('/path/Channel - Video Title - abc123XYZ_d')).toBe(true);
+    });
+
+    it('should reject directory with insufficient segments', () => {
+      expect(executor.isVideoSpecificDirectory('/path/Channel - Title')).toBe(false);
+    });
+
+    it('should reject directory with invalid video ID', () => {
+      expect(executor.isVideoSpecificDirectory('/path/Channel - Title - abc')).toBe(false);
+    });
+
+    it('should accept video IDs between 10-12 characters', () => {
+      expect(executor.isVideoSpecificDirectory('/path/Ch - Title - 1234567890')).toBe(true);
+      expect(executor.isVideoSpecificDirectory('/path/Ch - Title - 12345678901')).toBe(true);
+      expect(executor.isVideoSpecificDirectory('/path/Ch - Title - 123456789012')).toBe(true);
+    });
+
+    it('should reject video IDs with too few characters', () => {
+      expect(executor.isVideoSpecificDirectory('/path/Ch - Title - 123456789')).toBe(false);
+    });
+
+    it('should handle errors gracefully', () => {
+      const originalBasename = require('path').basename;
+      require('path').basename = jest.fn(() => {
+        throw new Error('Path error');
+      });
+
+      expect(executor.isVideoSpecificDirectory('/invalid')).toBe(false);
+
+      require('path').basename = originalBasename;
+    });
+  });
+
+  describe('cleanupInProgressVideos', () => {
+    beforeEach(() => {
+      // Reset all fs.promises mocks to default resolved values
+      mockFsPromises.access.mockResolvedValue();
+      mockFsPromises.readdir.mockResolvedValue([]);
+      mockFsPromises.stat.mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+      mockFsPromises.unlink.mockResolvedValue();
+      mockFsPromises.rm.mockResolvedValue();
+      mockFsPromises.rmdir.mockResolvedValue();
+    });
+
+    it('should handle no in-progress videos', async () => {
+      JobVideoDownload.findAll.mockResolvedValue([]);
+
+      await executor.cleanupInProgressVideos('job-123');
+
+      expect(consoleLogSpy).toHaveBeenCalledWith('No in-progress videos to clean up');
+    });
+
+    it('should cleanup video directory and database entry', async () => {
+      const mockVideoDownload = {
+        youtube_id: 'abc123XYZ_d',
+        file_path: '/output/Channel - Title - abc123XYZ_d',
+        destroy: jest.fn().mockResolvedValue()
+      };
+
+      JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
+      mockFsPromises.access.mockResolvedValue(); // Directory exists
+      mockFsPromises.readdir.mockResolvedValue(['video.mp4', 'poster.jpg']);
+
+      await executor.cleanupInProgressVideos('job-123');
+
+      expect(mockFsPromises.readdir).toHaveBeenCalledWith('/output/Channel - Title - abc123XYZ_d');
+      expect(mockFsPromises.unlink).toHaveBeenCalledTimes(2);
+      expect(mockFsPromises.rmdir).toHaveBeenCalledWith('/output/Channel - Title - abc123XYZ_d');
+      expect(mockVideoDownload.destroy).toHaveBeenCalled();
+    });
+
+    it('should skip non-video directories', async () => {
+      const mockVideoDownload = {
+        youtube_id: 'abc123XYZ_d',
+        file_path: '/output/Channel',
+        destroy: jest.fn().mockResolvedValue()
+      };
+
+      JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
+      mockFsPromises.access.mockResolvedValue(); // Directory exists
+
+      await executor.cleanupInProgressVideos('job-123');
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Skipping non-video directory'));
+      expect(mockFsPromises.rmdir).not.toHaveBeenCalled();
+      // Should still destroy the entry since cleanup was attempted
+      expect(mockVideoDownload.destroy).not.toHaveBeenCalled();
+    });
+
+    it('should check temp location when temp downloads enabled', async () => {
+      tempPathManager.isEnabled.mockReturnValue(true);
+      tempPathManager.convertFinalToTemp.mockReturnValue('/tmp/Channel - Title - abc123XYZ_d');
+
+      const mockVideoDownload = {
+        youtube_id: 'abc123XYZ_d',
+        file_path: '/output/Channel - Title - abc123XYZ_d',
+        destroy: jest.fn().mockResolvedValue()
+      };
+
+      JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
+      mockFsPromises.access.mockResolvedValue(); // Both paths exist
+      mockFsPromises.readdir.mockResolvedValue([]);
+
+      await executor.cleanupInProgressVideos('job-123');
+
+      expect(mockFsPromises.access).toHaveBeenCalledWith('/output/Channel - Title - abc123XYZ_d');
+      expect(mockFsPromises.access).toHaveBeenCalledWith('/tmp/Channel - Title - abc123XYZ_d');
+    });
+
+    it('should handle file removal errors gracefully', async () => {
+      const mockVideoDownload = {
+        youtube_id: 'abc123XYZ_d',
+        file_path: '/output/Channel - Title - abc123XYZ_d',
+        destroy: jest.fn().mockResolvedValue()
+      };
+
+      JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
+      mockFsPromises.access.mockResolvedValue(); // Directory exists
+      mockFsPromises.readdir.mockResolvedValue(['video.mp4']);
+      mockFsPromises.stat.mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+      mockFsPromises.unlink.mockRejectedValue(new Error('Permission denied'));
+
+      await executor.cleanupInProgressVideos('job-123');
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Error removing'), 'Permission denied');
     });
   });
 
   describe('cleanupPartialFiles', () => {
     beforeEach(() => {
-      fsPromises.access.mockImplementation((path) => {
-        if (path.endsWith('.part')) {
-          return Promise.resolve();
-        }
-        return Promise.reject(new Error('File not found'));
-      });
-      fsPromises.readdir.mockResolvedValue([
-        'video.f137.mp4',
-        'video.f140.m4a',
-        'other.mp4'
-      ]);
-      fsPromises.unlink.mockResolvedValue();
+      // Reset fs.promises mocks for this test suite
+      mockFsPromises.access.mockResolvedValue();
+      mockFsPromises.unlink.mockResolvedValue();
+      mockFsPromises.readdir.mockResolvedValue([]);
     });
 
     it('should remove .part files', async () => {
-      await executor.cleanupPartialFiles(['/path/to/video.mp4']);
+      const files = ['/output/video.mp4'];
+      // access() resolves to indicate file exists
+      mockFsPromises.access
+        .mockResolvedValueOnce() // .part file exists
+        .mockRejectedValueOnce(); // For subsequent call in readdir error catch
 
-      expect(fsPromises.unlink).toHaveBeenCalledWith('/path/to/video.mp4.part');
+      await executor.cleanupPartialFiles(files);
+
+      expect(mockFsPromises.access).toHaveBeenCalledWith('/output/video.mp4.part');
+      expect(mockFsPromises.unlink).toHaveBeenCalledWith('/output/video.mp4.part');
     });
 
     it('should remove fragment files', async () => {
-      await executor.cleanupPartialFiles(['/path/to/video.mp4']);
+      const path = require('path');
+      const files = ['/output/Channel - Title [abc123XYZ_d].mp4'];
+      mockFsPromises.access
+        .mockRejectedValueOnce(new Error('Not found')); // .part doesn't exist
+      mockFsPromises.readdir.mockResolvedValue([
+        'Channel - Title [abc123XYZ_d].f137.mp4',
+        'Channel - Title [abc123XYZ_d].f140.m4a',
+        'other-file.txt'
+      ]);
 
-      expect(fsPromises.unlink).toHaveBeenCalledWith('/path/to/video.f137.mp4');
-      expect(fsPromises.unlink).toHaveBeenCalledWith('/path/to/video.f140.m4a');
+      await executor.cleanupPartialFiles(files);
+
+      const dir = path.dirname(files[0]);
+      expect(mockFsPromises.readdir).toHaveBeenCalledWith(dir);
+      // Check that fragment files were removed
+      const unlinkCalls = mockFsPromises.unlink.mock.calls;
+      expect(unlinkCalls.some(call => call[0].includes('.f137.mp4'))).toBe(true);
+      expect(unlinkCalls.some(call => call[0].includes('.f140.m4a'))).toBe(true);
+      expect(unlinkCalls.some(call => call[0].includes('other-file.txt'))).toBe(false);
     });
 
     it('should handle errors gracefully', async () => {
-      fsPromises.unlink.mockRejectedValue(new Error('Permission denied'));
+      const files = ['/output/video.mp4'];
+      mockFsPromises.access.mockRejectedValue(new Error('Access error'));
+      mockFsPromises.readdir.mockRejectedValue(new Error('Read error'));
 
-      await executor.cleanupPartialFiles(['/path/to/video.mp4']);
+      await executor.cleanupPartialFiles(files);
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Error cleaning up'),
-        expect.any(Error)
-      );
-    });
-
-    it('should handle non-existent files', async () => {
-      fsPromises.access.mockRejectedValue(new Error('File not found'));
-
-      await executor.cleanupPartialFiles(['/path/to/nonexistent.mp4']);
-
-      expect(fsPromises.unlink).not.toHaveBeenCalled();
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Error reading directory'), expect.any(String));
     });
   });
 
   describe('doDownload', () => {
-    const mockArgs = ['--output', '/path/to/video.mp4', 'https://youtube.com/watch?v=123'];
+    const mockArgs = ['--format', 'best', 'https://youtube.com/watch?v=test'];
     const mockJobId = 'job-123';
     const mockJobType = 'Channel Downloads';
 
     it('should spawn yt-dlp process with correct arguments', async () => {
-      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+      // Trigger immediate exit with code 0
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
 
-      expect(spawn).toHaveBeenCalledWith('yt-dlp', mockArgs);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
 
-      mockProcess.emit('exit', 0);
-      await downloadPromise;
+      expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
+        env: expect.objectContaining({
+          YOUTARR_JOB_ID: mockJobId
+        })
+      });
     });
 
-    it('should emit initial download progress message', async () => {
-      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+    it('should clean temp directory before starting', async () => {
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(tempPathManager.cleanTempDirectory).toHaveBeenCalled();
+    });
+
+    it('should emit initial progress message', async () => {
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
 
       expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
         'broadcast',
@@ -230,499 +475,338 @@ describe('DownloadExecutor', () => {
           clearPreviousSummary: true
         })
       );
-
-      mockProcess.emit('exit', 0);
-      await downloadPromise;
     });
 
-    it('should set manual URL count for manually added URLs', async () => {
-      const downloadPromise = executor.doDownload(mockArgs, mockJobId, 'Manually Added Urls', 5);
+    it('should handle successful completion', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        { youtubeId: 'abc123', filePath: '/output/video.mp4' }
+      ]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/abc123']);
 
-      expect(mockMonitor.videoCount.total).toBe(5);
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
 
-      mockProcess.emit('exit', 0);
-      await downloadPromise;
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          status: 'Complete',
+          output: '1 videos.'
+        })
+      );
     });
 
-    it('should set timeout based on configuration', () => {
-      const expectedTimeout = Math.max(
-        mockConfig.downloadSocketTimeoutSeconds * 1000 * (mockConfig.downloadRetryCount + 1),
-        20 * 60 * 1000
+    it('should handle exit with error code', async () => {
+      setTimeout(() => {
+        mockProcess.emit('exit', 1, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          status: 'Error'
+        })
+      );
+    });
+
+    it('should handle bot detection', async () => {
+      setTimeout(() => {
+        mockProcess.stderr.emit('data', 'Sign in to confirm you\'re not a bot');
+        mockProcess.emit('exit', 1, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          status: 'Error',
+          notes: expect.stringContaining('cookies'),
+          error: 'COOKIES_REQUIRED'
+        })
+      );
+    });
+
+    it('should handle HTTP 403 errors', async () => {
+      setTimeout(() => {
+        mockProcess.stdout.emit('data', 'HTTP Error 403: Forbidden');
+        mockProcess.emit('exit', 1, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'downloadProgress',
+        expect.objectContaining({
+          error: true,
+          errorCode: 'COOKIES_RECOMMENDED'
+        })
+      );
+    });
+
+    it('should process stdout progress data', async () => {
+      setTimeout(() => {
+        mockProcess.stdout.emit('data', '[download] 50.0% of 10.00MiB at 1.00MiB/s ETA 00:05\n');
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'downloadProgress',
+        expect.objectContaining({
+          text: expect.stringContaining('[download]')
+        })
+      );
+    });
+
+    it('should track destination files for cleanup', async () => {
+      setTimeout(() => {
+        mockProcess.stdout.emit('data', '[download] Destination: /output/Channel - Title [abc123XYZ_d].mp4\n');
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(JobVideoDownload.findOrCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            job_id: mockJobId,
+            youtube_id: 'abc123XYZ_d'
+          }
+        })
+      );
+    });
+
+    it('should handle manual URL downloads with URL count', async () => {
+      const originalUrls = ['https://youtube.com/watch?v=abc123', 'https://youtube.com/watch?v=def456'];
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, 'Manually Added Urls', 2, originalUrls);
+
+      expect(DownloadProgressMonitor).toHaveBeenCalledWith(mockJobId, 'Manually Added Urls');
+    });
+
+    it('should convert YouTube URLs to youtu.be format for manual downloads', async () => {
+      const originalUrls = ['https://youtube.com/watch?v=abc123XYZ_d&feature=share'];
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, 'Manually Added Urls', 1, originalUrls);
+
+      expect(VideoMetadataProcessor.processVideoMetadata).toHaveBeenCalledWith(
+        expect.arrayContaining(['https://youtu.be/abc123XYZ_d'])
+      );
+    });
+
+    it('should update archive when allowRedownload is true', async () => {
+      const fs = require('fs');
+      fs.existsSync.mockReturnValue(true);
+
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        { youtubeId: 'abc123XYZ_d', filePath: '/output/video.mp4' }
+      ]);
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, true);
+
+      expect(archiveModule.addVideoToArchive).toHaveBeenCalledWith('abc123XYZ_d');
+    });
+
+    it('should trigger Plex library refresh on completion', async () => {
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(plexModule.refreshLibrary).toHaveBeenCalled();
+    });
+
+    it('should start next job after completion', async () => {
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(jobModule.startNextJob).toHaveBeenCalled();
+    });
+
+    it('should cleanup partial files on process error', async () => {
+      const error = new Error('Spawn error');
+
+      // Track destination file
+      setTimeout(() => {
+        mockProcess.stdout.emit('data', '[download] Destination: /output/video.mp4\n');
+        mockProcess.emit('error', error);
+      }, 5);
+
+      // The promise should resolve (error handling is done internally)
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Job should be updated with error status
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          status: 'Error',
+          output: expect.stringContaining('Download process error')
+        })
       );
 
-      executor.doDownload(mockArgs, mockJobId, mockJobType);
+      // Cleanup should have been attempted for partial files
+      expect(mockFsPromises.access).toHaveBeenCalled();
+    });
 
-      // Check that setTimeout was called by checking timer count
-      expect(jest.getTimerCount()).toBe(1);
+    it('should send notification on successful download', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        { youtubeId: 'abc123XYZ_d', filePath: '/output/video.mp4' }
+      ]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/abc123XYZ_d']);
 
-      // Advance timers to just before timeout
-      jest.advanceTimersByTime(expectedTimeout - 1);
-      expect(mockProcess.kill).not.toHaveBeenCalled();
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
 
-      // Advance to timeout
-      jest.advanceTimersByTime(1);
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(notificationModule.sendDownloadNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          finalSummary: expect.any(Object),
+          videoData: expect.any(Array)
+        })
+      );
+    });
+
+    it('should cleanup JobVideoDownload entries after completion', async () => {
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(JobVideoDownload.destroy).toHaveBeenCalledWith({
+        where: { job_id: mockJobId }
+      });
+    });
+  });
+
+  describe('terminateCurrentJob', () => {
+    it('should return null when no job is running', () => {
+      expect(executor.terminateCurrentJob()).toBeNull();
+      expect(consoleLogSpy).toHaveBeenCalledWith('No job currently running to terminate');
+    });
+
+    it('should send SIGTERM to current process', () => {
+      executor.currentProcess = mockProcess;
+      executor.currentJobId = 'job-123';
+
+      const jobId = executor.terminateCurrentJob('User requested');
+
+      expect(jobId).toBe('job-123');
+      expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(executor.manualTerminationReason).toBe('User requested');
+    });
+
+    it('should force kill after grace period', () => {
+      jest.useFakeTimers();
+
+      executor.currentProcess = mockProcess;
+      executor.currentJobId = 'job-123';
+
+      executor.terminateCurrentJob('Timeout');
+
+      // Fast-forward 60 seconds
+      jest.advanceTimersByTime(60 * 1000);
+
       expect(mockProcess.kill).toHaveBeenCalledWith('SIGKILL');
+
+      jest.useRealTimers();
     });
 
-    describe('stdout handling', () => {
-      it('should process stdout data and emit progress messages', async () => {
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+    it('should not force kill if process already exited', () => {
+      jest.useFakeTimers();
 
-        const testLine = '[download] Downloading video 1 of 10';
-        mockProcess.stdout.emit('data', Buffer.from(testLine));
+      executor.currentProcess = mockProcess;
+      executor.currentJobId = 'job-123';
 
-        expect(mockMonitor.processProgress).toHaveBeenCalledWith(
-          '{}',
-          testLine,
-          mockConfig
-        );
-        expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
-          'broadcast',
-          null,
-          'download',
-          'downloadProgress',
-          expect.objectContaining({
-            text: testLine
-          })
-        );
+      executor.terminateCurrentJob('Test');
 
-        mockProcess.emit('exit', 0);
-        await downloadPromise;
-      });
+      // Simulate process exit
+      executor.currentProcess = null;
+      executor.currentJobId = null;
 
-      it('should track destination files for cleanup', async () => {
-        // Setup fs mocks for cleanup
-        fsPromises.access.mockResolvedValue();
-        fsPromises.unlink.mockResolvedValue();
-        fsPromises.readdir.mockResolvedValue([]);
+      // Fast-forward
+      jest.advanceTimersByTime(60 * 1000);
 
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+      expect(mockProcess.kill).toHaveBeenCalledTimes(1); // Only SIGTERM, not SIGKILL
 
-        const destLine = '[download] Destination: /path/to/video.mp4';
-        mockProcess.stdout.emit('data', Buffer.from(destLine));
-
-        mockProcess.emit('exit', 1);
-        await downloadPromise;
-
-        expect(fsPromises.unlink).toHaveBeenCalledWith('/path/to/video.mp4.part');
-      });
-
-      it('should parse JSON progress when available', async () => {
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        const jsonProgress = { percent: 50, downloaded: 1000000 };
-        mockMonitor.processProgress.mockReturnValueOnce(jsonProgress);
-
-        const jsonLine = `Some text ${JSON.stringify(jsonProgress)}`;
-        mockProcess.stdout.emit('data', Buffer.from(jsonLine));
-
-        expect(mockMonitor.processProgress).toHaveBeenCalledWith(
-          JSON.stringify(jsonProgress),
-          jsonLine,
-          mockConfig
-        );
-
-        mockProcess.emit('exit', 0);
-        await downloadPromise;
-      });
-
-      it('should handle multiline stdout data', async () => {
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        const multilineData = 'Line 1\nLine 2\n\nLine 3\n';
-        mockProcess.stdout.emit('data', Buffer.from(multilineData));
-
-        // Should process non-empty lines
-        expect(mockMonitor.processProgress).toHaveBeenCalledTimes(3);
-        expect(MessageEmitter.emitMessage).toHaveBeenCalledTimes(4); // 1 initial + 3 lines
-
-        mockProcess.emit('exit', 0);
-        await downloadPromise;
-      });
+      jest.useRealTimers();
     });
 
-    describe('stderr handling', () => {
-      it('should detect bot detection message', async () => {
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        const botMessage = 'Sign in to confirm you are not a bot';
-        mockProcess.stderr.emit('data', Buffer.from(botMessage));
-
-        expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
-          'broadcast',
-          null,
-          'download',
-          'downloadProgress',
-          expect.objectContaining({
-            text: expect.stringContaining('Bot detection encountered'),
-            error: true
-          })
-        );
-
-        mockProcess.emit('exit', 1);
-        await downloadPromise;
-
-        expect(jobModule.updateJob).toHaveBeenCalledWith(
-          mockJobId,
-          expect.objectContaining({
-            status: 'Error',
-            output: expect.stringContaining('Bot detection'),
-            error: 'COOKIES_REQUIRED'
-          })
-        );
+    it('should handle kill errors gracefully', () => {
+      executor.currentProcess = mockProcess;
+      executor.currentJobId = 'job-123';
+      mockProcess.kill.mockImplementation(() => {
+        throw new Error('Process not found');
       });
 
-      it('should accumulate stderr buffer', async () => {
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+      const jobId = executor.terminateCurrentJob();
 
-        mockProcess.stderr.emit('data', Buffer.from('Error part 1 '));
-        mockProcess.stderr.emit('data', Buffer.from('Error part 2'));
+      expect(jobId).toBeNull();
+      expect(executor.manualTerminationReason).toBeNull();
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Error terminating job:', expect.any(String));
+    });
+  });
 
-        mockProcess.emit('exit', 1);
-        await downloadPromise;
+  describe('timeout and activity monitoring', () => {
+    const mockArgs = ['--format', 'best', 'https://youtube.com/watch?v=test'];
 
-        expect(jobModule.updateJob).toHaveBeenCalledWith(
-          mockJobId,
-          expect.objectContaining({
-            status: 'Error'
-          })
-        );
-      });
+    it('should have configurable timeout values', () => {
+      expect(executor.activityTimeoutMs).toBe(30 * 60 * 1000); // 30 minutes
+      expect(executor.maxAbsoluteTimeoutMs).toBe(4 * 60 * 60 * 1000); // 4 hours
     });
 
-    describe('exit handling', () => {
-      it('should handle successful exit (code 0)', async () => {
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        mockProcess.emit('exit', 0);
-        await downloadPromise;
-
-        expect(jobModule.updateJob).toHaveBeenCalledWith(
-          mockJobId,
-          expect.objectContaining({
-            status: 'Complete',
-            output: '2 videos.'
-          })
-        );
-        expect(plexModule.refreshLibrary).toHaveBeenCalled();
-        expect(jobModule.startNextJob).toHaveBeenCalled();
-      });
-
-      it('should handle exit with warnings (code 0 with stderr)', async () => {
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        mockProcess.stderr.emit('data', Buffer.from('WARNING: Some warning'));
-        mockProcess.emit('exit', 0);
-        await downloadPromise;
-
-        expect(jobModule.updateJob).toHaveBeenCalledWith(
-          mockJobId,
-          expect.objectContaining({
-            status: 'Complete with Warnings',
-            output: '2 videos.'
-          })
-        );
-      });
-
-      it('should handle failed exit (non-zero code)', async () => {
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        mockProcess.emit('exit', 1);
-        await downloadPromise;
-
-        expect(jobModule.updateJob).toHaveBeenCalledWith(
-          mockJobId,
-          expect.objectContaining({
-            status: 'Error',
-            output: expect.stringContaining('Error: Command exited with code 1')
-          })
-        );
-      });
-
-      it('should handle killed process (SIGKILL)', async () => {
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        mockProcess.emit('exit', null, 'SIGKILL');
-        await downloadPromise;
-
-        expect(jobModule.updateJob).toHaveBeenCalledWith(
-          mockJobId,
-          expect.objectContaining({
-            status: 'Killed'
-          })
-        );
-      });
-
-      it('should cleanup partial files on failure', async () => {
-        fsPromises.access.mockResolvedValue();
-        fsPromises.unlink.mockResolvedValue();
-
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        mockProcess.stdout.emit('data', Buffer.from('[download] Destination: /path/to/video.mp4'));
-        mockProcess.emit('exit', 1);
-        await downloadPromise;
-
-        expect(fsPromises.unlink).toHaveBeenCalledWith('/path/to/video.mp4.part');
-      });
-
-      it('should emit final summary message', async () => {
-        mockMonitor.videoCount.completed = 2;
-        mockMonitor.videoCount.skipped = 3;
-
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        mockProcess.emit('exit', 0);
-        await downloadPromise;
-
-        expect(MessageEmitter.emitMessage).toHaveBeenLastCalledWith(
-          'broadcast',
-          null,
-          'download',
-          'downloadProgress',
-          expect.objectContaining({
-            text: expect.stringContaining('Download completed'),
-            finalSummary: expect.objectContaining({
-              totalDownloaded: 2,
-              totalSkipped: 3,
-              jobType: mockJobType
-            })
-          })
-        );
-      });
-
-      it('should cleanup temp channels file if exists', async () => {
-        executor.tempChannelsFile = '/tmp/channels.txt';
-        fsPromises.unlink.mockResolvedValue();
-
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        mockProcess.emit('exit', 0);
-        await downloadPromise;
-
-        expect(fsPromises.unlink).toHaveBeenCalledWith('/tmp/channels.txt');
-        expect(executor.tempChannelsFile).toBeNull();
-      });
-
-      it('should handle warnings as successful when videos are processed', async () => {
-        mockMonitor.videoCount.completed = 5;
-        mockMonitor.snapshot.mockReturnValue({
-          state: 'complete',
-          progress: { percent: 100 }
-        });
-
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        mockProcess.emit('exit', 1); // Exit code 1 usually means warnings
-        await downloadPromise;
-
-        // The final message should show completion
-        const calls = MessageEmitter.emitMessage.mock.calls;
-        const lastCall = calls[calls.length - 1];
-        expect(lastCall[3]).toBe('downloadProgress');
-        expect(lastCall[4].text).toContain('Download completed');
-        expect(lastCall[4].progress.state).toBe('complete');
-      });
-
-      it('should add stall detection note when applicable', async () => {
-        mockMonitor.lastParsed = {
-          stalled: true,
-          progress: {
-            percent: 45.5,
-            speedBytesPerSecond: 10240
-          }
-        };
-
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        mockProcess.emit('exit', 1);
-        await downloadPromise;
-
-        expect(jobModule.updateJob).toHaveBeenCalledWith(
-          mockJobId,
-          expect.objectContaining({
-            notes: expect.stringContaining('Stall detected at 45.5%')
-          })
-        );
-      });
-    });
-
-    describe('error handling', () => {
-      it('should handle process spawn error', async () => {
-        // Setup fs mocks for cleanup
-        fsPromises.access.mockRejectedValue(new Error('Not found'));
-        fsPromises.unlink.mockResolvedValue();
-        fsPromises.readdir.mockResolvedValue([]);
-
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        // Need to clear the timer first to prevent it from interfering
-        jest.clearAllTimers();
-
-        const spawnError = new Error('Spawn failed');
-        mockProcess.emit('error', spawnError);
-
-        // The error is caught but not rethrown in the implementation
-        await downloadPromise;
-
-        // The process cleanup should happen
-        expect(consoleLogSpy).toHaveBeenCalledWith('Spawn failed');
-      });
-
-      it('should kill process on timeout', async () => {
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        jest.advanceTimersByTime(mockConfig.downloadSocketTimeoutSeconds * 1000 * (mockConfig.downloadRetryCount + 1));
-
-        await downloadPromise;
-
-        expect(mockProcess.kill).toHaveBeenCalledWith('SIGKILL');
-        expect(jobModule.updateJob).toHaveBeenCalledWith(
-          mockJobId,
-          expect.objectContaining({
-            status: 'Killed',
-            output: 'Job time exceeded timeout'
-          })
-        );
-      });
-
-      it('should cleanup temp channels file on timeout', async () => {
-        executor.tempChannelsFile = '/tmp/channels.txt';
-        fsPromises.unlink.mockResolvedValue();
-
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        // Trigger timeout
-        jest.advanceTimersByTime(mockConfig.downloadSocketTimeoutSeconds * 1000 * (mockConfig.downloadRetryCount + 1));
-
-        await downloadPromise;
-
-        // Should still cleanup temp file
-        expect(fsPromises.unlink).toHaveBeenCalledWith('/tmp/channels.txt');
-      });
-    });
-
-    describe('video counting', () => {
-      it('should handle no new videos downloaded', async () => {
-        archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
-        VideoMetadataProcessor.processVideoMetadata.mockReturnValue([]);
-
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        mockProcess.emit('exit', 0);
-        await downloadPromise;
-
-        expect(MessageEmitter.emitMessage).toHaveBeenLastCalledWith(
-          'broadcast',
-          null,
-          'download',
-          'downloadProgress',
-          expect.objectContaining({
-            text: 'Download completed: No new videos to download'
-          })
-        );
-      });
-
-      it('should report correct counts for mixed downloads and skips', async () => {
-        mockMonitor.videoCount.completed = 3;
-        mockMonitor.videoCount.skipped = 2;
-
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        mockProcess.emit('exit', 0);
-        await downloadPromise;
-
-        expect(MessageEmitter.emitMessage).toHaveBeenLastCalledWith(
-          'broadcast',
-          null,
-          'download',
-          'downloadProgress',
-          expect.objectContaining({
-            text: 'Download completed: 3 new videos downloaded, 2 already existed'
-          })
-        );
-      });
-
-      it('should report only skipped videos when all exist', async () => {
-        archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
-        mockMonitor.videoCount.completed = 0;
-        mockMonitor.videoCount.skipped = 5;
-
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        mockProcess.emit('exit', 0);
-        await downloadPromise;
-
-        expect(MessageEmitter.emitMessage).toHaveBeenLastCalledWith(
-          'broadcast',
-          null,
-          'download',
-          'downloadProgress',
-          expect.objectContaining({
-            text: 'Download completed: All 5 videos already existed'
-          })
-        );
-      });
-
-      it('should use video count as fallback for completed count', async () => {
-        mockMonitor.videoCount.completed = 0;
-        archiveModule.getNewVideoUrlsSince.mockReturnValue([
-          'url1', 'url2', 'url3'
-        ]);
-
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        mockProcess.emit('exit', 0);
-        await downloadPromise;
-
-        expect(mockMonitor.videoCount.completed).toBe(3);
-      });
-    });
-
-    describe('bot detection variations', () => {
-      const botDetectionVariants = [
-        'Sign in to confirm you are not a bot',
-        'Sign in to confirm you\'re not a bot',
-        'Sign in to confirm that you are not a bot',
-        'Please Sign in to confirm you are not a bot'
-      ];
-
-      botDetectionVariants.forEach(variant => {
-        it(`should detect bot message: "${variant}"`, async () => {
-          const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-          mockProcess.stderr.emit('data', Buffer.from(variant));
-          mockProcess.emit('exit', 1);
-          await downloadPromise;
-
-          expect(jobModule.updateJob).toHaveBeenCalledWith(
-            mockJobId,
-            expect.objectContaining({
-              status: 'Error',
-              error: 'COOKIES_REQUIRED'
-            })
-          );
-        });
-      });
-
-      it('should detect bot message in complete stderr buffer on exit', async () => {
-        const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
-
-        // Send message in parts that don't individually trigger detection
-        mockProcess.stderr.emit('data', Buffer.from('Sign in to confirm '));
-        mockProcess.stderr.emit('data', Buffer.from('you are not a bot'));
-
-        mockProcess.emit('exit', 1);
-        await downloadPromise;
-
-        expect(jobModule.updateJob).toHaveBeenCalledWith(
-          mockJobId,
-          expect.objectContaining({
-            status: 'Error',
-            error: 'COOKIES_REQUIRED'
-          })
-        );
-      });
+    it('should track current process for manual termination', async () => {
+      let processReference = null;
+      let jobIdReference = null;
+
+      setTimeout(() => {
+        // Capture references before they're cleared
+        processReference = executor.currentProcess;
+        jobIdReference = executor.currentJobId;
+
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, 'job-123', 'Channel Downloads');
+
+      // Verify process was tracked during execution
+      expect(processReference).not.toBeNull();
+      expect(jobIdReference).toBe('job-123');
+
+      // After exit, references should be cleared
+      expect(executor.currentProcess).toBeNull();
+      expect(executor.currentJobId).toBeNull();
     });
   });
 });

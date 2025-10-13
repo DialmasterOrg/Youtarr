@@ -1,0 +1,35 @@
+services:
+  youtarr:
+    image: dialmaster/youtarr:latest
+    container_name: youtarr
+    restart: unless-stopped
+    environment:
+      IN_DOCKER_CONTAINER: 1
+      DB_HOST: ${DB_HOST:?Set DB_HOST in config/external-db.env}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USER: ${DB_USER:?Set DB_USER in config/external-db.env}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in config/external-db.env}
+      DB_NAME: ${DB_NAME:-youtarr}
+      AUTH_ENABLED: ${AUTH_ENABLED:-}
+      AUTH_PRESET_USERNAME: ${AUTH_PRESET_USERNAME:-}
+      AUTH_PRESET_PASSWORD: ${AUTH_PRESET_PASSWORD:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "3087:3011"
+    volumes:
+      - ${YOUTUBE_OUTPUT_DIR}:/usr/src/app/data
+      - ./server/images:/app/server/images
+      - ./config:/app/config
+      - ./jobs:/app/jobs
+      - ./migrations:/app/migrations
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--output", "/dev/null", "http://localhost:3011/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  default:
+    name: youtarr-network

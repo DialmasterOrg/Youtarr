@@ -13,6 +13,7 @@ describe('ConfigModule', () => {
   const mockConfigPath = path.join(__dirname, '../../../config/config.json');
   const mockConfig = {
     plexApiKey: 'test-plex-key',
+    plexPort: '32400',
     youtubeOutputDirectory: '/test/output',
     plexLibrarySection: 1,
     channelAutoDownload: false,
@@ -233,10 +234,19 @@ describe('ConfigModule', () => {
 
   describe('file watching', () => {
     beforeEach(() => {
+      jest.useFakeTimers();
       ConfigModule = require('../configModule');
     });
 
+    afterEach(() => {
+      jest.useRealTimers();
+      delete process.env.DATA_PATH;
+    });
+
     test('should reload config on file change', () => {
+      // Clear any pending timers from initialization
+      jest.runOnlyPendingTimers();
+
       const changeListener = jest.fn();
       ConfigModule.on('change', changeListener);
 
@@ -246,6 +256,9 @@ describe('ConfigModule', () => {
       fs.readFileSync.mockReturnValue(JSON.stringify(updatedConfig));
 
       watchCallback('change');
+
+      // Advance timers to trigger the debounced callback
+      jest.advanceTimersByTime(100);
 
       expect(ConfigModule.config.plexApiKey).toBe('updated-key');
       expect(changeListener).toHaveBeenCalled();
@@ -268,6 +281,9 @@ describe('ConfigModule', () => {
       fs = require('fs');
       ConfigModule = require('../configModule');
 
+      // Clear any pending timers from initialization
+      jest.runOnlyPendingTimers();
+
       const changeListener = jest.fn();
       ConfigModule.on('change', changeListener);
 
@@ -279,11 +295,12 @@ describe('ConfigModule', () => {
 
       watchCallback('change');
 
+      // Advance timers to trigger the debounced callback
+      jest.advanceTimersByTime(100);
+
       // Verify DATA_PATH still overrides even after file change
       expect(ConfigModule.config.youtubeOutputDirectory).toBe('/platform/override');
       expect(changeListener).toHaveBeenCalled();
-
-      delete process.env.DATA_PATH;
     });
 
     test('should ignore non-change events', () => {
@@ -427,6 +444,7 @@ describe('ConfigModule', () => {
 
       expect(ConfigModule.config.channelFilesToDownload).toBe(3);
       expect(ConfigModule.config.preferredResolution).toBe('1080');
+      expect(ConfigModule.config.videoCodec).toBe('default');
       expect(ConfigModule.ffmpegPath).toBeUndefined();
       expect(ConfigModule.directoryPath).toBeUndefined();
     });
@@ -486,6 +504,7 @@ describe('ConfigModule', () => {
       expect(writtenConfig.channelAutoDownload).toBe(false);
       expect(writtenConfig.channelDownloadFrequency).toBe('0 */6 * * *');
       expect(writtenConfig.plexApiKey).toBe('');
+      expect(writtenConfig.plexPort).toBe('32400');
       expect(consoleSpy).toHaveBeenCalledWith('Platform deployment detected (DATA_PATH is set). Auto-creating config.json...');
 
       consoleSpy.mockRestore();
@@ -521,6 +540,7 @@ describe('ConfigModule', () => {
         preferredResolution: '1080',
         '//comment': 'This should be stripped',
         plexApiKey: '',
+        plexPort: '32400',
         youtubeOutputDirectory: '/some/path'
       };
 
@@ -539,6 +559,7 @@ describe('ConfigModule', () => {
             channelFilesToDownload: 5,
             preferredResolution: '1080',
             plexApiKey: '',
+            plexPort: '32400',
             youtubeOutputDirectory: '/usr/src/app/data',
             uuid: 'auto-generated-uuid'
           });
@@ -559,6 +580,7 @@ describe('ConfigModule', () => {
       expect(writtenConfig.youtubeOutputDirectory).toBe('/usr/src/app/data');
       expect(writtenConfig.uuid).toBe('auto-generated-uuid');
       expect(writtenConfig.dockerAutoCreated).toBe(true);
+      expect(writtenConfig.plexPort).toBe('32400');
 
       // Should not have the comment field
       expect(writtenConfig['//comment']).toBeUndefined();
@@ -586,6 +608,7 @@ describe('ConfigModule', () => {
           return JSON.stringify({
             channelFilesToDownload: 3,
             preferredResolution: '1080',
+            plexPort: '32400',
             youtubeOutputDirectory: '/usr/src/app/data',
             uuid: 'auto-generated-uuid'
           });
@@ -605,6 +628,7 @@ describe('ConfigModule', () => {
       expect(writtenConfig.channelFilesToDownload).toBe(3);
       expect(writtenConfig.uuid).toBe('auto-generated-uuid');
       expect(writtenConfig.dockerAutoCreated).toBe(true);
+      expect(writtenConfig.plexPort).toBe('32400');
 
       expect(consoleSpy).toHaveBeenCalledWith('Could not load config.example.json, using inline defaults');
 
@@ -685,6 +709,7 @@ describe('ConfigModule', () => {
 
       const writtenConfig = JSON.parse(mockFs.writeFileSync.mock.calls[0][1]);
       expect(writtenConfig.plexUrl).toBe('http://plex:32400');
+      expect(writtenConfig.plexPort).toBe('32400');
 
       delete process.env.DATA_PATH;
       delete process.env.PLEX_URL;
@@ -729,6 +754,621 @@ describe('ConfigModule', () => {
       delete process.env.DATA_PATH;
       const jobsPath = ConfigModule.getJobsPath();
       expect(jobsPath).toContain('/jobs');
+    });
+  });
+
+  describe('notification settings', () => {
+    test('should initialize notification settings when missing', () => {
+      const configWithoutNotifications = { ...mockConfig };
+      delete configWithoutNotifications.notificationsEnabled;
+      delete configWithoutNotifications.notificationService;
+      delete configWithoutNotifications.discordWebhookUrl;
+
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithoutNotifications));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithoutNotifications)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.notificationsEnabled).toBe(false);
+      expect(FreshConfigModule.config.notificationService).toBe('discord');
+      expect(FreshConfigModule.config.discordWebhookUrl).toBe('');
+    });
+
+    test('should preserve existing notification settings', () => {
+      const configWithNotifications = {
+        ...mockConfig,
+        notificationsEnabled: true,
+        notificationService: 'discord',
+        discordWebhookUrl: 'https://discord.com/api/webhooks/test'
+      };
+
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithNotifications));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithNotifications)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.notificationsEnabled).toBe(true);
+      expect(FreshConfigModule.config.notificationService).toBe('discord');
+      expect(FreshConfigModule.config.discordWebhookUrl).toBe('https://discord.com/api/webhooks/test');
+    });
+
+    test('migration 1.35.0 should add notification settings', () => {
+      ConfigModule = require('../configModule');
+
+      const configWithoutNotifications = {
+        plexApiKey: 'test',
+        youtubeOutputDirectory: '/test'
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithoutNotifications);
+
+      expect(migrated.notificationsEnabled).toBe(false);
+      expect(migrated.notificationService).toBe('discord');
+      expect(migrated.discordWebhookUrl).toBe('');
+    });
+
+    test('migration 1.35.0 should preserve existing notification settings', () => {
+      ConfigModule = require('../configModule');
+
+      const configWithNotifications = {
+        plexApiKey: 'test',
+        youtubeOutputDirectory: '/test',
+        notificationsEnabled: true,
+        notificationService: 'discord',
+        discordWebhookUrl: 'https://discord.com/api/webhooks/existing'
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithNotifications);
+
+      expect(migrated.notificationsEnabled).toBe(true);
+      expect(migrated.notificationService).toBe('discord');
+      expect(migrated.discordWebhookUrl).toBe('https://discord.com/api/webhooks/existing');
+    });
+  });
+
+  describe('automatic video removal settings', () => {
+    beforeEach(() => {
+      ConfigModule = require('../configModule');
+    });
+
+    test('should initialize auto removal settings when missing', () => {
+      const configWithoutAutoRemoval = { ...mockConfig };
+      delete configWithoutAutoRemoval.autoRemovalEnabled;
+      delete configWithoutAutoRemoval.autoRemovalFreeSpaceThreshold;
+      delete configWithoutAutoRemoval.autoRemovalVideoAgeThreshold;
+
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithoutAutoRemoval));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithoutAutoRemoval)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.autoRemovalEnabled).toBe(false);
+      expect(FreshConfigModule.config.autoRemovalFreeSpaceThreshold).toBeNull();
+      expect(FreshConfigModule.config.autoRemovalVideoAgeThreshold).toBeNull();
+    });
+
+    test('should preserve existing auto removal settings', () => {
+      const configWithAutoRemoval = {
+        ...mockConfig,
+        autoRemovalEnabled: true,
+        autoRemovalFreeSpaceThreshold: '1GB',
+        autoRemovalVideoAgeThreshold: 30
+      };
+
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithAutoRemoval));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithAutoRemoval)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.autoRemovalEnabled).toBe(true);
+      expect(FreshConfigModule.config.autoRemovalFreeSpaceThreshold).toBe('1GB');
+      expect(FreshConfigModule.config.autoRemovalVideoAgeThreshold).toBe(30);
+    });
+
+    test('migration 1.36.0 should add auto removal settings', () => {
+      const configWithoutAutoRemoval = {
+        plexApiKey: 'test',
+        youtubeOutputDirectory: '/test'
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithoutAutoRemoval);
+
+      expect(migrated.autoRemovalEnabled).toBe(false);
+      expect(migrated.autoRemovalFreeSpaceThreshold).toBeNull();
+      expect(migrated.autoRemovalVideoAgeThreshold).toBeNull();
+    });
+
+    test('migration 1.36.0 should preserve existing auto removal settings', () => {
+      const configWithAutoRemoval = {
+        plexApiKey: 'test',
+        youtubeOutputDirectory: '/test',
+        autoRemovalEnabled: true,
+        autoRemovalFreeSpaceThreshold: '500MB',
+        autoRemovalVideoAgeThreshold: 60
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithAutoRemoval);
+
+      expect(migrated.autoRemovalEnabled).toBe(true);
+      expect(migrated.autoRemovalFreeSpaceThreshold).toBe('500MB');
+      expect(migrated.autoRemovalVideoAgeThreshold).toBe(60);
+    });
+  });
+
+  describe('convertStorageThresholdToBytes', () => {
+    beforeEach(() => {
+      ConfigModule = require('../configModule');
+    });
+
+    test('should convert MB to bytes correctly', () => {
+      expect(ConfigModule.convertStorageThresholdToBytes('500MB')).toBe(500 * 1024 * 1024);
+      expect(ConfigModule.convertStorageThresholdToBytes('100MB')).toBe(100 * 1024 * 1024);
+    });
+
+    test('should convert GB to bytes correctly', () => {
+      expect(ConfigModule.convertStorageThresholdToBytes('1GB')).toBe(1 * 1024 * 1024 * 1024);
+      expect(ConfigModule.convertStorageThresholdToBytes('5GB')).toBe(5 * 1024 * 1024 * 1024);
+    });
+
+    test('should return null for invalid formats', () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      expect(ConfigModule.convertStorageThresholdToBytes('invalid')).toBeNull();
+      expect(ConfigModule.convertStorageThresholdToBytes('100')).toBeNull();
+      expect(ConfigModule.convertStorageThresholdToBytes('100TB')).toBeNull();
+      expect(ConfigModule.convertStorageThresholdToBytes('GB100')).toBeNull();
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid storage threshold format'));
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    test('should return null for null or undefined input', () => {
+      expect(ConfigModule.convertStorageThresholdToBytes(null)).toBeNull();
+      expect(ConfigModule.convertStorageThresholdToBytes(undefined)).toBeNull();
+      expect(ConfigModule.convertStorageThresholdToBytes('')).toBeNull();
+    });
+
+    test('should handle numeric string inputs', () => {
+      expect(ConfigModule.convertStorageThresholdToBytes('250MB')).toBe(250 * 1024 * 1024);
+      expect(ConfigModule.convertStorageThresholdToBytes('10GB')).toBe(10 * 1024 * 1024 * 1024);
+    });
+  });
+
+  describe('isStorageBelowThreshold', () => {
+    beforeEach(() => {
+      ConfigModule = require('../configModule');
+    });
+
+    test('should return true when storage is below threshold (string format)', () => {
+      const available = 500 * 1024 * 1024; // 500MB
+      expect(ConfigModule.isStorageBelowThreshold(available, '1GB')).toBe(true);
+      expect(ConfigModule.isStorageBelowThreshold(available, '600MB')).toBe(true);
+    });
+
+    test('should return false when storage is above threshold (string format)', () => {
+      const available = 2 * 1024 * 1024 * 1024; // 2GB
+      expect(ConfigModule.isStorageBelowThreshold(available, '1GB')).toBe(false);
+      expect(ConfigModule.isStorageBelowThreshold(available, '500MB')).toBe(false);
+    });
+
+    test('should return true when storage equals threshold', () => {
+      const available = 1 * 1024 * 1024 * 1024; // 1GB
+      expect(ConfigModule.isStorageBelowThreshold(available, '1GB')).toBe(false);
+    });
+
+    test('should handle numeric threshold (bytes)', () => {
+      const available = 500 * 1024 * 1024; // 500MB
+      const threshold = 1024 * 1024 * 1024; // 1GB
+      expect(ConfigModule.isStorageBelowThreshold(available, threshold)).toBe(true);
+    });
+
+    test('should return false for null/undefined threshold', () => {
+      const available = 500 * 1024 * 1024;
+      expect(ConfigModule.isStorageBelowThreshold(available, null)).toBe(false);
+      expect(ConfigModule.isStorageBelowThreshold(available, undefined)).toBe(false);
+    });
+
+    test('should return false and log warning for null/undefined currentAvailable', () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
+      expect(ConfigModule.isStorageBelowThreshold(null, '1GB')).toBe(false);
+      expect(ConfigModule.isStorageBelowThreshold(undefined, '1GB')).toBe(false);
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Cannot check storage threshold')
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    test('should handle invalid threshold format gracefully', () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const available = 500 * 1024 * 1024;
+
+      expect(ConfigModule.isStorageBelowThreshold(available, 'invalid')).toBe(false);
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    test('should correctly compare edge cases', () => {
+      const available = 1 * 1024 * 1024; // 1MB
+      expect(ConfigModule.isStorageBelowThreshold(available, '1MB')).toBe(false);
+      expect(ConfigModule.isStorageBelowThreshold(available - 1, '1MB')).toBe(true);
+    });
+  });
+
+  describe('video codec configuration', () => {
+    beforeEach(() => {
+      ConfigModule = require('../configModule');
+    });
+
+    test('should initialize videoCodec to default when missing', () => {
+      const configWithoutCodec = { ...mockConfig };
+      delete configWithoutCodec.videoCodec;
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithoutCodec));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithoutCodec)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.videoCodec).toBe('default');
+    });
+
+    test('should preserve existing videoCodec setting', () => {
+      const configWithCodec = {
+        ...mockConfig,
+        videoCodec: 'h264'
+      };
+
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithCodec));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithCodec)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.videoCodec).toBe('h264');
+    });
+
+    test('migration 1.38.0 should add videoCodec setting', () => {
+      ConfigModule = require('../configModule');
+
+      const configWithoutCodec = {
+        plexApiKey: 'test',
+        youtubeOutputDirectory: '/test'
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithoutCodec);
+
+      expect(migrated.videoCodec).toBe('default');
+    });
+
+    test('migration 1.38.0 should preserve existing videoCodec setting', () => {
+      ConfigModule = require('../configModule');
+
+      const configWithCodec = {
+        plexApiKey: 'test',
+        youtubeOutputDirectory: '/test',
+        videoCodec: 'h265'
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithCodec);
+
+      expect(migrated.videoCodec).toBe('h265');
+    });
+  });
+
+  describe('temp download settings', () => {
+    beforeEach(() => {
+      delete process.env.PLATFORM;
+    });
+
+    test('should initialize useTmpForDownloads to false when missing', () => {
+      const configWithoutTmp = { ...mockConfig };
+      delete configWithoutTmp.useTmpForDownloads;
+      delete configWithoutTmp.tmpFilePath;
+
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithoutTmp));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithoutTmp)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.useTmpForDownloads).toBe(false);
+      expect(FreshConfigModule.config.tmpFilePath).toBe('/tmp/youtarr-downloads');
+    });
+
+    test('should preserve existing temp download settings', () => {
+      const configWithTmp = {
+        ...mockConfig,
+        useTmpForDownloads: true,
+        tmpFilePath: '/custom/tmp/path'
+      };
+
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithTmp));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithTmp)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.useTmpForDownloads).toBe(true);
+      expect(FreshConfigModule.config.tmpFilePath).toBe('/custom/tmp/path');
+    });
+
+    test('migration 1.42.0 should add temp download settings', () => {
+      ConfigModule = require('../configModule');
+
+      const configWithoutTmp = {
+        plexApiKey: 'test',
+        youtubeOutputDirectory: '/test'
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithoutTmp);
+
+      expect(migrated.useTmpForDownloads).toBe(false);
+      expect(migrated.tmpFilePath).toBe('/tmp/youtarr-downloads');
+    });
+
+    test('migration 1.42.0 should preserve existing temp download settings', () => {
+      ConfigModule = require('../configModule');
+
+      const configWithTmp = {
+        plexApiKey: 'test',
+        youtubeOutputDirectory: '/test',
+        useTmpForDownloads: true,
+        tmpFilePath: '/custom/temp'
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithTmp);
+
+      expect(migrated.useTmpForDownloads).toBe(true);
+      expect(migrated.tmpFilePath).toBe('/custom/temp');
+    });
+
+    test('should override temp download settings for Elfhosted platform', () => {
+      process.env.PLATFORM = 'elfhosted';
+      process.env.IN_DOCKER_CONTAINER = '1';
+
+      const mockFs = {
+        existsSync: jest.fn().mockReturnValue(true),
+        writeFileSync: jest.fn(),
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify({
+          ...mockConfig,
+          useTmpForDownloads: false,
+          tmpFilePath: '/tmp/youtarr-downloads'
+        })),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        mkdirSync: jest.fn()
+      };
+
+      jest.resetModules();
+      jest.doMock('fs', () => mockFs);
+      jest.doMock('uuid', () => ({ v4: jest.fn(() => 'test-uuid-1234') }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.useTmpForDownloads).toBe(true);
+      expect(FreshConfigModule.config.tmpFilePath).toBe('/app/config/temp_downloads');
+
+      delete process.env.PLATFORM;
+      delete process.env.IN_DOCKER_CONTAINER;
+    });
+
+    test('should create temp download directory for Elfhosted', () => {
+      process.env.PLATFORM = 'elfhosted';
+      process.env.DATA_PATH = '/storage/youtube';
+
+      const mockFs = {
+        existsSync: jest.fn()
+          .mockReturnValueOnce(false)  // config.json doesn't exist
+          .mockReturnValueOnce(true)   // config dir exists check
+          .mockReturnValueOnce(true)   // image path check
+          .mockReturnValueOnce(true)   // jobs path check
+          .mockReturnValueOnce(false)  // temp download dir doesn't exist
+          .mockReturnValue(true),
+        mkdirSync: jest.fn(),
+        writeFileSync: jest.fn(),
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify({
+          youtubeOutputDirectory: '/storage/youtube',
+          uuid: 'test-uuid',
+          useTmpForDownloads: false
+        })),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() })
+      };
+
+      jest.resetModules();
+      jest.doMock('fs', () => mockFs);
+      jest.doMock('uuid', () => ({ v4: jest.fn(() => 'test-uuid-1234') }));
+
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      require('../configModule');
+
+      // Find the mkdirSync call for temp_downloads
+      const tempDownloadCall = mockFs.mkdirSync.mock.calls.find(call =>
+        call[0] === '/app/config/temp_downloads'
+      );
+      expect(tempDownloadCall).toBeDefined();
+      expect(tempDownloadCall[1]).toEqual({ recursive: true });
+
+      expect(consoleSpy).toHaveBeenCalledWith('Created Elfhosted temp downloads directory: /app/config/temp_downloads');
+
+      consoleSpy.mockRestore();
+      delete process.env.PLATFORM;
+      delete process.env.DATA_PATH;
+    });
+
+    test('should not save Elfhosted temp download overrides to config file', () => {
+      process.env.PLATFORM = 'ELFHOSTED';
+
+      const mockFs = {
+        existsSync: jest.fn().mockReturnValue(true),
+        writeFileSync: jest.fn(),
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify({
+          ...mockConfig,
+          useTmpForDownloads: false,
+          tmpFilePath: '/tmp/youtarr-downloads'
+        })),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        mkdirSync: jest.fn()
+      };
+
+      jest.resetModules();
+      jest.doMock('fs', () => mockFs);
+      jest.doMock('uuid', () => ({ v4: jest.fn(() => 'test-uuid-1234') }));
+
+      const FreshConfigModule = require('../configModule');
+
+      FreshConfigModule.saveConfig();
+
+      const savedData = mockFs.writeFileSync.mock.calls[mockFs.writeFileSync.mock.calls.length - 1][1];
+      const parsed = JSON.parse(savedData);
+
+      expect(parsed.useTmpForDownloads).toBeUndefined();
+      expect(parsed.tmpFilePath).toBeUndefined();
+
+      delete process.env.PLATFORM;
+    });
+
+    test('should maintain Elfhosted override after config update', () => {
+      process.env.PLATFORM = 'elfhosted';
+
+      const mockFs = {
+        existsSync: jest.fn().mockReturnValue(true),
+        writeFileSync: jest.fn(),
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(mockConfig)),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        mkdirSync: jest.fn()
+      };
+
+      jest.resetModules();
+      jest.doMock('fs', () => mockFs);
+      jest.doMock('uuid', () => ({ v4: jest.fn(() => 'test-uuid-1234') }));
+
+      const FreshConfigModule = require('../configModule');
+
+      const newConfig = {
+        ...mockConfig,
+        useTmpForDownloads: false,
+        tmpFilePath: '/should/be/overridden'
+      };
+
+      FreshConfigModule.updateConfig(newConfig);
+
+      expect(FreshConfigModule.config.useTmpForDownloads).toBe(true);
+      expect(FreshConfigModule.config.tmpFilePath).toBe('/app/config/temp_downloads');
+
+      delete process.env.PLATFORM;
+    });
+
+    test('isElfhostedPlatform should return true when PLATFORM=elfhosted', () => {
+      process.env.PLATFORM = 'elfhosted';
+      ConfigModule = require('../configModule');
+      expect(ConfigModule.isElfhostedPlatform()).toBe(true);
+      delete process.env.PLATFORM;
+    });
+
+    test('isElfhostedPlatform should be case-insensitive', () => {
+      process.env.PLATFORM = 'ELFHOSTED';
+      ConfigModule = require('../configModule');
+      expect(ConfigModule.isElfhostedPlatform()).toBe(true);
+      delete process.env.PLATFORM;
+    });
+
+    test('isElfhostedPlatform should return falsy when PLATFORM is not set', () => {
+      delete process.env.PLATFORM;
+      ConfigModule = require('../configModule');
+      expect(ConfigModule.isElfhostedPlatform()).toBeFalsy();
+    });
+
+    test('isElfhostedPlatform should return false for other platforms', () => {
+      process.env.PLATFORM = 'other-platform';
+      ConfigModule = require('../configModule');
+      expect(ConfigModule.isElfhostedPlatform()).toBe(false);
+      delete process.env.PLATFORM;
     });
   });
 
@@ -841,6 +1481,7 @@ describe('ConfigModule', () => {
     describe('writeCustomCookiesFile', () => {
       test('should write file with correct permissions and update config', () => {
         const testBuffer = Buffer.from('# Netscape HTTP Cookie File\ntest cookie data');
+        const emitSpy = jest.spyOn(ConfigModule, 'emit');
 
         const filePath = ConfigModule.writeCustomCookiesFile(testBuffer);
 
@@ -856,6 +1497,7 @@ describe('ConfigModule', () => {
 
         expect(ConfigModule.config.customCookiesUploaded).toBe(true);
         expect(ConfigModule.config.cookiesEnabled).toBe(true);
+        expect(emitSpy).toHaveBeenCalledWith('change');
 
         expect(fs.writeFileSync).toHaveBeenCalledWith(
           mockConfigPath,
@@ -863,6 +1505,7 @@ describe('ConfigModule', () => {
         );
 
         expect(filePath).toContain('cookies.user.txt');
+        emitSpy.mockRestore();
       });
 
       test('should overwrite existing file', () => {
@@ -883,6 +1526,7 @@ describe('ConfigModule', () => {
         ConfigModule.config.cookiesEnabled = true;
         ConfigModule.config.customCookiesUploaded = true;
         fs.existsSync.mockReturnValue(true);
+        const emitSpy = jest.spyOn(ConfigModule, 'emit');
 
         const result = ConfigModule.deleteCustomCookiesFile();
 
@@ -892,6 +1536,7 @@ describe('ConfigModule', () => {
 
         expect(ConfigModule.config.customCookiesUploaded).toBe(false);
         expect(ConfigModule.config.cookiesEnabled).toBe(true);
+        expect(emitSpy).toHaveBeenCalledWith('change');
 
         expect(fs.writeFileSync).toHaveBeenCalledWith(
           mockConfigPath,
@@ -899,6 +1544,7 @@ describe('ConfigModule', () => {
         );
 
         expect(result).toBe(true);
+        emitSpy.mockRestore();
       });
 
       test('should handle case when file does not exist', () => {

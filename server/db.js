@@ -9,6 +9,15 @@ const sequelize = new Sequelize(
     dialect: 'mysql',
     port: process.env.DB_PORT || 3321,
     logging: false,
+    pool: {
+      max: 10, // Maximum number of connection in pool
+      min: 0,  // Minimum number of connection in pool
+      acquire: 30000, // Maximum time, in milliseconds, that pool will try to get connection before throwing error
+      idle: 10000 // Maximum time, in milliseconds, that a connection can be idle before being released
+    },
+    retry: {
+      max: 3 // Maximum number of retries for a query
+    },
     // Ensure utf8mb4 for new connections
     dialectOptions: {
       charset: 'utf8mb4',

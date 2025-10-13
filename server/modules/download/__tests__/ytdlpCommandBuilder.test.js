@@ -127,6 +127,65 @@ describe('YtdlpCommandBuilder', () => {
     });
   });
 
+  describe('buildFormatString', () => {
+    it('should build default format string with no codec preference', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('1080', 'default');
+      expect(result).toBe('bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should build default format string when codec is undefined', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('1080');
+      expect(result).toBe('bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should build H.264 format string with avc codec preference', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('1080', 'h264');
+      expect(result).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should build H.265 format string with hevc codec preference', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('1080', 'h265');
+      expect(result).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should handle 720p resolution with h264', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('720', 'h264');
+      expect(result).toBe('bestvideo[height<=720][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should handle 720p resolution with h265', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('720', 'h265');
+      expect(result).toBe('bestvideo[height<=720][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should handle 4K resolution with default codec', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('2160', 'default');
+      expect(result).toBe('bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should use default resolution (1080) when resolution is null', () => {
+      const result = YtdlpCommandBuilder.buildFormatString(null, 'h264');
+      expect(result).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should use default resolution (1080) when resolution is undefined', () => {
+      const result = YtdlpCommandBuilder.buildFormatString(undefined, 'h265');
+      expect(result).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should handle unknown codec as default', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('1080', 'unknown-codec');
+      expect(result).toBe('bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should include fallback to best mp4 and ultimate fallback', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('1080', 'h264');
+      // Should have multiple fallback options separated by /
+      expect(result).toContain('best[ext=mp4]');
+      expect(result).toMatch(/\/best$/); // Should end with ultimate fallback
+    });
+  });
+
   describe('buildCookiesArgs', () => {
     it('should return empty array when no cookies path exists', () => {
       configModule.getCookiesPath.mockReturnValue(null);
@@ -174,10 +233,9 @@ describe('YtdlpCommandBuilder', () => {
       expect(result).toContain('--embed-metadata');
       expect(result).toContain('--write-info-json');
 
-      // Check filter for duration
+      // Check filter for availability and live videos
       const filterIndex = result.indexOf('--match-filter');
-      expect(result[filterIndex + 1]).toContain('duration>70');
-      expect(result[filterIndex + 1]).toContain('availability!=subscriber_only');
+      expect(result[filterIndex + 1]).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');
 
       // Check output paths
       expect(result).toContain('-o');
@@ -276,16 +334,57 @@ describe('YtdlpCommandBuilder', () => {
       expect(result).toContain('--fragment-retries');
       expect(result).toContain('5');
     });
+
+    it('should use default videoCodec when not configured', () => {
+      const result = YtdlpCommandBuilder.getBaseCommandArgs();
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      // Default codec should not include vcodec filters
+      expect(formatString).toBe('bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should use h264 videoCodec when configured', () => {
+      mockConfig.videoCodec = 'h264';
+      const result = YtdlpCommandBuilder.getBaseCommandArgs();
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      expect(formatString).toContain('[vcodec^=avc]');
+      expect(formatString).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should use h265 videoCodec when configured', () => {
+      mockConfig.videoCodec = 'h265';
+      const result = YtdlpCommandBuilder.getBaseCommandArgs();
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      expect(formatString).toContain('[vcodec^=hev]');
+      expect(formatString).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should combine custom resolution with h264 codec', () => {
+      mockConfig.videoCodec = 'h264';
+      const result = YtdlpCommandBuilder.getBaseCommandArgs('720');
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      expect(formatString).toBe('bestvideo[height<=720][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should combine custom resolution with h265 codec', () => {
+      mockConfig.videoCodec = 'h265';
+      const result = YtdlpCommandBuilder.getBaseCommandArgs('2160');
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      expect(formatString).toBe('bestvideo[height<=2160][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
   });
 
   describe('getBaseCommandArgsForManualDownload', () => {
     it('should build command args without duration filter', () => {
       const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload();
 
-      // Check that duration filter is NOT included
+      // Check that duration filter is NOT included, but live video filtering is
       const filterIndex = result.indexOf('--match-filter');
-      expect(result[filterIndex + 1]).toBe('availability!=subscriber_only');
-      expect(result[filterIndex + 1]).not.toContain('duration>70');
+      expect(result[filterIndex + 1]).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');
     });
 
     it('should otherwise be identical to regular command args', () => {
@@ -351,6 +450,47 @@ describe('YtdlpCommandBuilder', () => {
 
       const formatIndex = result.indexOf('-f');
       expect(result[formatIndex + 1]).toMatch(/bestvideo\[height<=360\]/);
+    });
+
+    it('should use default videoCodec when not configured', () => {
+      const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload();
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      expect(formatString).toBe('bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should use h264 videoCodec when configured', () => {
+      mockConfig.videoCodec = 'h264';
+      const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload();
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      expect(formatString).toContain('[vcodec^=avc]');
+      expect(formatString).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should use h265 videoCodec when configured', () => {
+      mockConfig.videoCodec = 'h265';
+      const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload();
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      expect(formatString).toContain('[vcodec^=hev]');
+      expect(formatString).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should combine custom resolution with h264 codec', () => {
+      mockConfig.videoCodec = 'h264';
+      const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload('480');
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      expect(formatString).toBe('bestvideo[height<=480][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should combine custom resolution with h265 codec', () => {
+      mockConfig.videoCodec = 'h265';
+      const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload('1440');
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      expect(formatString).toBe('bestvideo[height<=1440][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=1440][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
     });
   });
 

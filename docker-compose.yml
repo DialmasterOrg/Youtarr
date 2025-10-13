@@ -27,6 +27,11 @@ services:
       start_period: 30s
 
   youtarr:
+    # IMPORTANT: YOUTUBE_OUTPUT_DIR must be set before running 'docker compose up'
+    # Option 1 (recommended): Use ./start.sh which reads config.json and sets the env var
+    # Option 2 (manual): Export YOUTUBE_OUTPUT_DIR=/your/path before running docker compose
+    # Option 3 (manual): Edit this file to hardcode your path instead of ${YOUTUBE_OUTPUT_DIR}
+    # Without one of these, you'll get: "empty section between colons" error
     image: dialmaster/youtarr:latest
     container_name: youtarr
     restart: unless-stopped
@@ -40,16 +45,28 @@ services:
       DB_USER: root
       DB_PASSWORD: 123qweasd
       DB_NAME: youtarr
+      # Optional: Disable authentication (for platforms with external auth like Elfhosted)
+      AUTH_ENABLED: ${AUTH_ENABLED:-}
+      # Optional: Seed initial admin credentials for headless deployments
+      AUTH_PRESET_USERNAME: ${AUTH_PRESET_USERNAME:-}
+      AUTH_PRESET_PASSWORD: ${AUTH_PRESET_PASSWORD:-}
       # Optional: Custom data path for platforms like Elfhosted (defaults to /usr/src/app/data)
       # DATA_PATH: /storage/rclone/storagebox/youtube
     ports:
       - "3087:3011"
     volumes:
+      # YOUTUBE_OUTPUT_DIR must be set before running compose
       - ${YOUTUBE_OUTPUT_DIR}:/usr/src/app/data
       - ./server/images:/app/server/images
       - ./config:/app/config
       - ./jobs:/app/jobs
       - ./migrations:/app/migrations
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--output", "/dev/null", "http://localhost:3011/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 networks:
   default:

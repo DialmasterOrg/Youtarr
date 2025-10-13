@@ -38,17 +38,19 @@ Starting with version 1.23.0, Youtarr now **automatically creates** a `config/co
    - Run `./setup.sh` to configure your YouTube video directory
    - Script creates `config.json` with your chosen host path
    - Use `./start.sh` to start containers (reads path from config and sets volume mount)
+   - If no admin credentials exist, `./start.sh` prompts for an initial username/password and exports them as `AUTH_PRESET_USERNAME` / `AUTH_PRESET_PASSWORD` for the upcoming container boot
    - Use `./stop.sh` to stop containers
    - **UI Behavior**: YouTube Output Directory field is **editable** - changes require restart via `./start.sh`
 
 2. **Manual Docker Configuration (docker-compose directly)**
    - Skip setup.sh entirely
-   - Edit `docker-compose.yml` to hardcode your volume mount:
+   - **IMPORTANT**: You **must** edit `docker-compose.yml` first to hardcode your volume mount:
      ```yaml
      volumes:
        - /your/host/path:/usr/src/app/data  # Replace ${YOUTUBE_OUTPUT_DIR} with your path
      ```
-   - Start containers with `docker compose up -d`
+   - Running `docker compose up` without this edit will fail with: `invalid spec: :/usr/src/app/data: empty section between colons`
+   - After editing the compose file, start containers with `docker compose up -d`
    - Container auto-creates `config.json` with `/usr/src/app/data` (container's internal path)
    - **UI Behavior**: YouTube Output Directory field is **read-only** - shows "Docker Volume" chip
 
@@ -95,6 +97,28 @@ If you need to change the directory later:
 # Or manually edit config/config.json
 # Update "youtubeOutputDirectory" value
 ```
+
+## Using an External Database
+
+Some users prefer to supply their own MariaDB/MySQL instance instead of the bundled `youtarr-db` container. You now have two helper scripts:
+
+- Copy `config/external-db.env.example` to `config/external-db.env` and enter your credentials
+- Run `./start.sh --external-db` to launch only the application container via Docker Compose (uses `docker-compose.external-db.yml`)
+- Run `./start-with-external-db.sh` to launch a single container (should work for UNRAID or plain `docker run` workflows)
+- Follow the full walkthrough (including a local test harness) in [docs/EXTERNAL_DB.md](EXTERNAL_DB.md)
+
+Both helpers automatically run migrations against the external database on boot, so no manual schema management is required once connectivity is in place.
+
+## Unraid Community Applications Template
+
+Youtarr provides a community Unraid Community Applications template that mirrors the `start-with-external-db.sh` flow.
+
+- Add the template repository URL `https://github.com/DialmasterOrg/unraid-templates` under **Apps → Settings → Manage Template Repositories** on your Unraid server.
+- Search for **Youtarr** in the Apps tab and install it. The XML source lives at [DialmasterOrg/unraid-templates/Youtarr.xml](https://github.com/DialmasterOrg/unraid-templates/blob/main/Youtarr/Youtarr.xml) if you want to review or fork it.
+- The template is currently distributed from this repository while it awaits inclusion in the main Community Applications feed.
+- The template expects an external MariaDB instance. Supply the connection details and map your persistent host paths before clicking **Apply**.
+- Provide both `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` so the container initializes with working credentials. If you intentionally leave them blank, be ready to complete the setup wizard from the Unraid host's localhost (for example, by SSH tunneling) because remote access is blocked until auth is configured.
+- After installation you can access the UI from the Apps page using the WebUI button (maps to `http://[IP]:[PORT:3011]/` by default).
 
 ## Docker Commands
 
@@ -182,6 +206,17 @@ Youtarr supports platform-managed deployments (Elfhosted, Kubernetes, etc.) with
 | `DATA_PATH` | Video storage path inside container | `/storage/rclone/storagebox/youtube` |
 | `AUTH_ENABLED` | Set to `false` to bypass internal authentication | `false` |
 | `PLEX_URL` | Pre-configured Plex server URL | `http://plex:32400` |
+
+### Preset Credentials for Headless Deployments
+
+For platforms where you cannot access `http://localhost:3087` (Unraid, Kubernetes, etc.), you can seed the initial login without touching the UI by setting both environment variables below. They are only applied when the config file does not already contain credentials.
+
+| Variable | Description |
+|----------|-------------|
+| `AUTH_PRESET_USERNAME` | Initial admin username. Trimmed and must be ≤ 32 characters. |
+| `AUTH_PRESET_PASSWORD` | Initial admin password (8–64 characters). Stored as a hash on first boot. |
+
+If only one variable is present, or the values fall outside the validation rules, the preset is ignored and the localhost-only setup wizard remains active. Once the credentials are saved to `config/config.json`, subsequent restarts ignore the preset variables so they can safely remain in your container template.
 
 #### What Happens in Platform Mode
 
@@ -412,9 +447,11 @@ The application container includes health checks:
 
 #### Same Machine Setup
 When Youtarr and Plex run on the same machine:
-- `host.docker.internal` - Recommended for Docker Desktop
-- `172.17.0.1` - Default Docker bridge IP on Linux
-- Host machine's IP address - Works for any setup
+- Docker Desktop (Windows/macOS): `host.docker.internal`
+- Docker on macOS without Docker Desktop (e.g., Colima): host LAN IP (e.g., `192.168.x.x`) or `host.lima.internal`
+- Docker on Linux: host LAN IP (e.g., `192.168.x.x`). The default bridge IP (`172.17.0.1`) usually won't work unless Plex is bound to the Docker bridge.
+- Explicit host mapping: add `--add-host host.docker.internal:<host-ip>` when starting the container if you prefer that hostname on Linux.
+- Plex defaults to port `32400`. If you use a custom Plex port, update the Plex Port field or include the port in `PLEX_URL`.
 
 #### Separate Machine Setup
 When Youtarr and Plex run on different machines:

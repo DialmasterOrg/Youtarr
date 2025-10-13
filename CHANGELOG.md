@@ -1,5 +1,435 @@
 # Changelog
 
+## [v1.42.2](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.42.2) - 2025-10-12
+
+### [1.42.2](https://github.com/DialmasterOrg/Youtarr/compare/vv1.42.1...v1.42.2) (2025-10-12)
+
+
+### Bug Fixes
+
+* improve loading message clarity during video fetching ([d4a4e62](https://github.com/DialmasterOrg/Youtarr/commit/d4a4e62f0e0220bc9c2d22a1b9a30ae51fa70e12))
+* prevent downloads of live streaming videos ([42b79d5](https://github.com/DialmasterOrg/Youtarr/commit/42b79d5d05d8606f0605758af8bb272950ddfc68))
+
+
+### Documentation
+
+* clarify docker compose environment variable requirements ([c42512d](https://github.com/DialmasterOrg/Youtarr/commit/c42512d9b482e8b7f9cd9d249cfc081501178199))
+* update CHANGELOG for v1.42.1 [skip ci] ([f5f75d4](https://github.com/DialmasterOrg/Youtarr/commit/f5f75d47527f5e7de8cb7949c17b3e9b67380f33))
+
+
+
+
+
+## [v1.42.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.42.1) - 2025-10-12
+
+### [1.42.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.42.0...v1.42.1) (2025-10-12)
+
+
+### Bug Fixes
+
+* prevent infinite loop in config file watcher ([edbc1ba](https://github.com/DialmasterOrg/Youtarr/commit/edbc1ba8d7b05b203a765da318cc7711cff192c2))
+* refine ChannelVideos UI for better desktop/mobile experience ([011517f](https://github.com/DialmasterOrg/Youtarr/commit/011517f58c8770d4f0fcdf6ac054be4468c36fdf))
+
+
+### Documentation
+
+* update CHANGELOG for v1.42.0 [skip ci] ([dfbfbbd](https://github.com/DialmasterOrg/Youtarr/commit/dfbfbbdde6db7c4a2bb691b6a2346a1fdd7270cb))
+
+
+
+
+
+## [v1.42.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.42.0) - 2025-10-11
+
+## [1.42.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.41.0...v1.42.0) (2025-10-11)
+
+
+### Features
+
+* add temp directory download processing with Elfhosted platform support ([f000dbe](https://github.com/DialmasterOrg/Youtarr/commit/f000dbea602c8bb764466d1d538ab1e0c65f05a9))
+
+
+### Bug Fixes
+
+* replace lastFetched with per-tab lastFetchedByTab tracking ([e0485fe](https://github.com/DialmasterOrg/Youtarr/commit/e0485fe43ebd0b3e9ebab555228a15ef7e1f172f))
+
+
+### Documentation
+
+* update CHANGELOG for v1.41.0 [skip ci] ([a21d892](https://github.com/DialmasterOrg/Youtarr/commit/a21d892c335fbdc53bb5eba47c1c8f2cfa0bac0c))
+
+
+
+
+
+## [v1.41.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.41.0) - 2025-10-11
+
+## [1.41.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.40.0...v1.41.0) (2025-10-11)
+
+
+### Features
+
+* implement job termination cleanup and video recovery ([f5e41cf](https://github.com/DialmasterOrg/Youtarr/commit/f5e41cf0f62e5031bdecd0c14dc9d922e57c39b2))
+
+
+### Bug Fixes
+
+* resolve channel addition failure when only shorts tab exists ([3c7f970](https://github.com/DialmasterOrg/Youtarr/commit/3c7f9704288d36afc71c0c23f376629af077915c))
+
+
+### Tests
+
+* update channelModule tests for recent API changes ([9844a97](https://github.com/DialmasterOrg/Youtarr/commit/9844a97b6570c7685b88b9f390016d765d46d02b))
+
+
+### Documentation
+
+* update CHANGELOG for v1.40.0 [skip ci] ([f8ff819](https://github.com/DialmasterOrg/Youtarr/commit/f8ff8198d5433000de782e6d7d7b78cd035cfe3b))
+
+
+
+
+
+## [v1.40.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.40.0) - 2025-10-09
+
+## [1.40.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.39.1...v1.40.0) (2025-10-09)
+
+
+### Features
+
+* add job termination and improve channel page loading states ([c0a0dd4](https://github.com/DialmasterOrg/Youtarr/commit/c0a0dd41938145db0ac8b199d0ccc53cd53d22a5))
+* add queued jobs visibility to download progress ([4633894](https://github.com/DialmasterOrg/Youtarr/commit/46338947d36afbc8b5e846a7965a95d2ff64d67c))
+
+
+### Bug Fixes
+
+* ensure channelvideos publishedAt always reflects YouTube sort order ([6862900](https://github.com/DialmasterOrg/Youtarr/commit/6862900613b00020cad98d0a6b3c8a0bed154999))
+* ensure ETA remains visible on mobile in download progress ([f8e8358](https://github.com/DialmasterOrg/Youtarr/commit/f8e83589e77d447bdb03c04aebc0d4ae96fb3139))
+
+
+### Documentation
+
+* update CHANGELOG for v1.39.1 [skip ci] ([69259de](https://github.com/DialmasterOrg/Youtarr/commit/69259debae98736f38ee84a69ffb7b9a9d71ddba))
+
+
+
+
+
+## [v1.39.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.39.1) - 2025-10-09
+
+### [1.39.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.39.0...v1.39.1) (2025-10-09)
+
+
+### Bug Fixes
+
+* prevent overlapping channel downloads and improve ETA display ([2f53786](https://github.com/DialmasterOrg/Youtarr/commit/2f5378694d8b470290805704ca43d594e8ca7794))
+
+
+### Documentation
+
+* update CHANGELOG for v1.39.0 [skip ci] ([05605fd](https://github.com/DialmasterOrg/Youtarr/commit/05605fdbd54633bfa5fb87cb591e99fe8e45a48e))
+
+
+
+
+
+## [v1.39.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.39.0) - 2025-10-08
+
+## [1.39.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.38.0...v1.39.0) (2025-10-08)
+
+
+### Features
+
+* add support for downloading shorts and live streams from YouTube channels ([c020e0b](https://github.com/DialmasterOrg/Youtarr/commit/c020e0b4533459ed143119e1f59a1dc0a5a2b26e))
+* handle missing and approximate publish dates ([a0b4708](https://github.com/DialmasterOrg/Youtarr/commit/a0b4708d2ba6cc73560c88389de30c2002b0672b))
+
+
+### Code Refactoring
+
+* Break up ChannelVideos into more maintainable structure ([6de14a7](https://github.com/DialmasterOrg/Youtarr/commit/6de14a7d7d323eddbcaeaa1015939ad8407c49de))
+
+
+### Documentation
+
+* update CHANGELOG for v1.38.0 [skip ci] ([695dc98](https://github.com/DialmasterOrg/Youtarr/commit/695dc98e97c26e394981e511bbbea6d3b3ad341b))
+* Update Readme for live/shorts support ([9a409f5](https://github.com/DialmasterOrg/Youtarr/commit/9a409f51d9a6b1cd4d9fc05440153c4630bca560))
+
+
+
+
+
+## [v1.38.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.38.0) - 2025-10-06
+
+## [1.38.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.37.0...v1.38.0) (2025-10-06)
+
+
+### Features
+
+* add automatic video removal with dry-run preview ([fb16aea](https://github.com/DialmasterOrg/Youtarr/commit/fb16aeab59dcec73e04885212c8bb2434ea43535))
+* add video codec preference configuration ([08661fb](https://github.com/DialmasterOrg/Youtarr/commit/08661fbb0d7bdbb81c77c0d89ab3436e4a11fe88))
+* add video deletion functionality to channel page ([2300f1c](https://github.com/DialmasterOrg/Youtarr/commit/2300f1cadebc0b9805d8e311ee304f4118807756))
+* standardize health checks with curl and update endpoint path ([e5b243d](https://github.com/DialmasterOrg/Youtarr/commit/e5b243d102d36e4392367c68e1d5d30ce1eef1e7))
+
+
+### Bug Fixes
+
+* newly uploaded videos get last_downloaded_at ([5cb5fb8](https://github.com/DialmasterOrg/Youtarr/commit/5cb5fb8a19035e92ba2ec2e224735dd6a1096f76))
+
+
+### Tests
+
+* speed up Configuration component tests ([77be651](https://github.com/DialmasterOrg/Youtarr/commit/77be65154f6381540ca4b298a7377bd917e2b375))
+
+
+### Documentation
+
+* update CHANGELOG for v1.37.0 [skip ci] ([e87427c](https://github.com/DialmasterOrg/Youtarr/commit/e87427cbccd2a19e9419c37c80e23f3796d2a5ad))
+* Update documentation for Unraid ([e0eeb67](https://github.com/DialmasterOrg/Youtarr/commit/e0eeb67dac121f68170c8987d6dce914bd48edb4))
+* Update documentation for video removal ([d540ac2](https://github.com/DialmasterOrg/Youtarr/commit/d540ac2a4dd50336b13dd8730bc3489aabfc6aa9))
+
+
+
+
+
+## [v1.37.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.37.0) - 2025-10-04
+
+## [1.37.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.36.0...v1.37.0) (2025-10-04)
+
+
+### Features
+
+* bootstrap admin credentials from AUTH_PRESET env vars ([3ff5988](https://github.com/DialmasterOrg/Youtarr/commit/3ff598819ddbb0b86f78fd69842b00cc0199287b))
+
+
+### Documentation
+
+* update CHANGELOG for v1.36.0 [skip ci] ([37581eb](https://github.com/DialmasterOrg/Youtarr/commit/37581eb26abac8ae2eb198d3cf3c3414f0472d4d))
+
+
+
+
+
+## [v1.36.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.36.0) - 2025-10-04
+
+## [1.36.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.35.0...v1.36.0) (2025-10-04)
+
+
+### Features
+
+* add external database support with helper scripts and documentation ([4173099](https://github.com/DialmasterOrg/Youtarr/commit/41730995f3f097cb9a38851dec73f26cf6de66e2))
+* include migrations in Docker image for UNRAID support ([ae6abaf](https://github.com/DialmasterOrg/Youtarr/commit/ae6abaff08ad597e9c56c2d7fe4dec4326e7e76b))
+
+
+### Documentation
+
+* update CHANGELOG for v1.35.0 [skip ci] ([6643127](https://github.com/DialmasterOrg/Youtarr/commit/6643127f00a1b7e95fc9b40bda10593369fd7d35))
+
+
+
+
+
+## [v1.35.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.35.0) - 2025-10-04
+
+## [1.35.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.34.0...v1.35.0) (2025-10-04)
+
+
+### Features
+
+* add --no-auth flag ([5e12a17](https://github.com/DialmasterOrg/Youtarr/commit/5e12a17ee70be331967854fec309bed4fd12cb75))
+* add Discord notifications for new video downloads ([974202e](https://github.com/DialmasterOrg/Youtarr/commit/974202e68e996232a5b86a335bee3868e0823157))
+* support YouTube live stream URL format ([5a70eaf](https://github.com/DialmasterOrg/Youtarr/commit/5a70eaf4def1c8da8bb9e67513b83abdcb525243))
+* track video download timestamps and improve metadata ([a409879](https://github.com/DialmasterOrg/Youtarr/commit/a409879dcde88f57ce7b2d6be2dad30705af2847))
+
+
+### Documentation
+
+* update CHANGELOG for v1.34.0 [skip ci] ([45b3507](https://github.com/DialmasterOrg/Youtarr/commit/45b35079bc543fd397b81a90598435af8865a716))
+
+
+
+
+
+## [v1.34.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.34.0) - 2025-10-03
+
+## [1.34.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.33.0...v1.34.0) (2025-10-03)
+
+
+### Features
+
+* add media_type and youtube_removed fields to video tracking ([516809f](https://github.com/DialmasterOrg/Youtarr/commit/516809fd7e8eb6047d0809ad3c1a0307e226c042))
+* display media type badges on channelvideos ([2cfaf7c](https://github.com/DialmasterOrg/Youtarr/commit/2cfaf7cdd15a83e2ab96a183a8db1bda4fbaeeab))
+* surface removed YouTube status and media types ([c8d003a](https://github.com/DialmasterOrg/Youtarr/commit/c8d003ac2dd850d8e259e7a23cc2cc4f268e0d82))
+
+
+### Bug Fixes
+
+* apply local thumbnail fallback to all YouTube-removed videos ([fe48162](https://github.com/DialmasterOrg/Youtarr/commit/fe48162810d0cc006ba6ef197c6f82e9c6852d2d))
+* private videos and small UI issue ([fbb8fb6](https://github.com/DialmasterOrg/Youtarr/commit/fbb8fb6112edefd1c13ad194388af7779da770c6))
+* remove auto-scroll when changing pagination pages ([e2bca11](https://github.com/DialmasterOrg/Youtarr/commit/e2bca11891b007bedcf8032a7d84ae5b5d0cdd65))
+* upgrade axios to 1.12.0 to resolve security vulnerabilities ([dbc3f40](https://github.com/DialmasterOrg/Youtarr/commit/dbc3f4080d95125afa5b1311f00e65d52cbb261c)), closes [#85](https://github.com/DialmasterOrg/Youtarr/issues/85) [#69](https://github.com/DialmasterOrg/Youtarr/issues/69)
+
+
+### Tests
+
+* fix password mismatch test timeout in CI ([f4352c6](https://github.com/DialmasterOrg/Youtarr/commit/f4352c6e034e1e13438eff88a4077f4f24bef442))
+* Fix tests failing only in CICD ([3f80332](https://github.com/DialmasterOrg/Youtarr/commit/3f80332b82bd2d6096becc647cdf20307567dc6c))
+
+
+### Documentation
+
+* update CHANGELOG for v1.33.0 [skip ci] ([dc6884b](https://github.com/DialmasterOrg/Youtarr/commit/dc6884bf3192ad6dd1a588dff0f9e215fcfb8d68))
+
+
+
+
+
+## [v1.33.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.33.0) - 2025-10-01
+
+## [1.33.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.32.0...v1.33.0) (2025-10-01)
+
+
+### Features
+
+* add compact list view and always-visible pagination for mobile ([f7bd856](https://github.com/DialmasterOrg/Youtarr/commit/f7bd85602f7b04019a5ac145ac08abad33bd143a))
+* enchanced videos page with grid view and server-side pagination ([4d89541](https://github.com/DialmasterOrg/Youtarr/commit/4d8954115800f7b99e1fa2c23943311fe47ee43a))
+
+
+### Bug Fixes
+
+* remove duration filter from yt-dlp command ([555fbb3](https://github.com/DialmasterOrg/Youtarr/commit/555fbb3f6cf4c90e3c33f3beef3132541f37f119))
+
+
+### Tests
+
+* fix timing issue in password mismatch validation test ([7e40fba](https://github.com/DialmasterOrg/Youtarr/commit/7e40fbafcc41388e9c9f52e644bd9b37fbc2f71a))
+
+
+### Documentation
+
+* update CHANGELOG for v1.32.0 [skip ci] ([3732f89](https://github.com/DialmasterOrg/Youtarr/commit/3732f89463baaa57b2393238ca7150193c68ecc1))
+* Update README [skip ci] ([40fe088](https://github.com/DialmasterOrg/Youtarr/commit/40fe088e1c82b55424efd8272119359fa15e7566))
+
+
+
+
+
+## [v1.32.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.32.0) - 2025-09-28
+
+## [1.32.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.31.0...v1.32.0) (2025-09-28)
+
+
+### Features
+
+* add channel search functionality to videos page filter menu ([1c9a385](https://github.com/DialmasterOrg/Youtarr/commit/1c9a385dd3726153a6346aa02fb8370dbf9569e4))
+* add default resolution fetching to channel videos page ([81a118e](https://github.com/DialmasterOrg/Youtarr/commit/81a118e41c0d4d9d29903810eb6fcfa5cdd63187))
+* improve manual download UX with better previously-downloaded video handling ([eee2964](https://github.com/DialmasterOrg/Youtarr/commit/eee29646b0c0bafd043e0a53ff3aac8f2bb6604e))
+* video related enhancements ([e3cc418](https://github.com/DialmasterOrg/Youtarr/commit/e3cc41889fabdf3900842f60ddc58d9fdfb256ce))
+
+
+### Bug Fixes
+
+* improve database connection pooling and file metadata backfill reliability ([ead286e](https://github.com/DialmasterOrg/Youtarr/commit/ead286eb7cd852662a6bc666afa25556696cc6d0))
+* improve video file detection with recursive subdirectory scanning ([fcef079](https://github.com/DialmasterOrg/Youtarr/commit/fcef0795c708393fee5aac53901d5e3e03d50493))
+* remove spurious 0 rendering in video thumbnails ([49ce770](https://github.com/DialmasterOrg/Youtarr/commit/49ce7709d6ea8f1f04e11be893f46f140c2398c2))
+* resolve video file path mismatches for special characters and timing issues ([e03e9b2](https://github.com/DialmasterOrg/Youtarr/commit/e03e9b26b778cf4bfdb0ce1a055871a872a72c59))
+* use parameterized queries for video metadata updates to handle Unicode paths ([ef5f442](https://github.com/DialmasterOrg/Youtarr/commit/ef5f4429069f20d58638816d58b14aec669a22a4))
+
+
+### Tests
+
+* add unit tests for videoFileLocator module ([612ace1](https://github.com/DialmasterOrg/Youtarr/commit/612ace19ec8f69805e949a35d6ba2613417af173))
+
+
+### Documentation
+
+* update CHANGELOG for v1.31.0 [skip ci] ([89f5708](https://github.com/DialmasterOrg/Youtarr/commit/89f5708b66af3a6e628b984733272282251ac700))
+* Update README.md [skip ci] ([7915689](https://github.com/DialmasterOrg/Youtarr/commit/791568965ac6e2ff563c10441d3d37e320568c5b))
+
+
+
+
+
+## [v1.31.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.31.0) - 2025-09-27
+
+## [1.31.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.30.0...v1.31.0) (2025-09-27)
+
+
+### Features
+
+* add Deno runtime to Docker image for future yt-dlp YouTube support ([6977506](https://github.com/DialmasterOrg/Youtarr/commit/6977506e3e61958b82475e111d865b190308c3e3)), closes [yt-dlp/yt-dlp#14404](https://github.com/yt-dlp/yt-dlp/issues/14404)
+
+
+### Bug Fixes
+
+* clean up yt-dlp temporary files on successful downloads ([e8cefd7](https://github.com/DialmasterOrg/Youtarr/commit/e8cefd709d3b75c685d92db43a34890600050fb4))
+* correct coverage file paths and YAML syntax in CI workflows ([68a29af](https://github.com/DialmasterOrg/Youtarr/commit/68a29afd0e97c12fa6c29cd452ef5fe496994c31))
+* prevent workflow loops and fix badge updates [skip ci] ([d65fc28](https://github.com/DialmasterOrg/Youtarr/commit/d65fc286ffaf987bc031699cfa4c747893d05c40))
+* use ACTION_RUNNER_TOKEN for coverage badge updates to bypass branch protection ([d3172a2](https://github.com/DialmasterOrg/Youtarr/commit/d3172a2ea54f0556abf8f0a7cf26cea99e4b7899))
+
+
+### Tests
+
+* add more test coverage ([05627d9](https://github.com/DialmasterOrg/Youtarr/commit/05627d966d329b0ed20a98f777347bc14ba3d7ef))
+* add more test coverage & CI ([b251448](https://github.com/DialmasterOrg/Youtarr/commit/b251448566d127e57116f99c59322fab97d965cb))
+* more test coverage ([5cff61b](https://github.com/DialmasterOrg/Youtarr/commit/5cff61bd20f1896cf188930da05cf226fe7b9739))
+* more test coverage and CI coverage checks ([e033507](https://github.com/DialmasterOrg/Youtarr/commit/e033507d45f0f1e38df39d073ba485bcbc3b0aaa))
+
+
+### Documentation
+
+* update CHANGELOG for v1.30.0 ([e468186](https://github.com/DialmasterOrg/Youtarr/commit/e4681867d183a1388ee06b0c1abf08081cd7bc3d))
+
+
+
+
+
+## [v1.30.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.30.0) - 2025-09-27
+
+## [1.30.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.29.3...v1.30.0) (2025-09-27)
+
+
+### Features
+
+* improve Plex connectivity setup and download error handling ([7020bf6](https://github.com/DialmasterOrg/Youtarr/commit/7020bf68647b483d2880029dfb410cb224c5525f))
+
+
+### Bug Fixes
+
+* hide Account & Security section when internal auth is disabled ([1ccdd22](https://github.com/DialmasterOrg/Youtarr/commit/1ccdd22c951e20dbd6f354a72207eeb4fcdc5587))
+
+
+### Tests
+
+* stabilize WSL Plex path suggestion scenario ([2ad2dc9](https://github.com/DialmasterOrg/Youtarr/commit/2ad2dc92d16244faa8ea0fd6080ece7c0881b237))
+
+
+### Documentation
+
+* update CHANGELOG for v1.29.3 ([26d4b13](https://github.com/DialmasterOrg/Youtarr/commit/26d4b13562520e2a9cf7b339f21664a3ea099aa0))
+
+
+
+
+
+## [v1.29.3](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.29.3) - 2025-09-26
+
+### [1.29.3](https://github.com/DialmasterOrg/Youtarr/compare/vv1.29.2...v1.29.3) (2025-09-26)
+
+
+### Bug Fixes
+
+* allow platform auth to bypass plex setup ([25c2731](https://github.com/DialmasterOrg/Youtarr/commit/25c2731c9506724bd2494596cc0acd2ba281fa4f))
+* remove Python dependency from setup scripts ([82d4179](https://github.com/DialmasterOrg/Youtarr/commit/82d41793db0e405b3504d5b1587f3d731f68c188))
+
+
+### Documentation
+
+* update CHANGELOG for v1.29.2 ([9cda97a](https://github.com/DialmasterOrg/Youtarr/commit/9cda97aaf4d5934e9955ee787e674f28392fcad1))
+
+
+
+
+
 ## [v1.29.2](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.29.2) - 2025-09-26
 
 ### [1.29.2](https://github.com/DialmasterOrg/Youtarr/compare/vv1.29.1...v1.29.2) (2025-09-26)

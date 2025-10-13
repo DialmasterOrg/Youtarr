@@ -14,6 +14,7 @@ Video.init(
     youtubeId: {
       type: DataTypes.STRING,
       allowNull: false,
+      unique: true,
     },
     youTubeChannelName: {
       type: DataTypes.STRING,
@@ -38,6 +39,39 @@ Video.init(
     channel_id: {
       type: DataTypes.STRING,
       allowNull: true,
+    },
+    filePath: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    fileSize: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+    },
+    removed: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    media_type: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: 'video',
+    },
+    youtube_removed: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    youtube_removed_checked_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
+    },
+    last_downloaded_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
     },
   },
   {

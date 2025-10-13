@@ -1,6 +1,5 @@
 const configModule = require('./configModule');
 const downloadModule = require('./downloadModule');
-const archiveModule = require('./archiveModule');
 const cron = require('node-cron');
 const fs = require('fs-extra');
 const fsPromises = fs.promises;
@@ -10,6 +9,7 @@ const Channel = require('../models/channel');
 const ChannelVideo = require('../models/channelvideo');
 const MessageEmitter = require('./messageEmitter.js');
 const { Op } = require('sequelize');
+const fileCheckModule = require('./fileCheckModule');
 
 const { v4: uuidv4 } = require('uuid');
 const { spawn, execSync } = require('child_process');
@@ -20,6 +20,12 @@ const TAB_TYPES = {
   LIVE: 'streams',
 };
 
+const MEDIA_TAB_TYPE_MAP = {
+  'videos': 'video',
+  'shorts': 'short',
+  'streams': 'livestream',
+};
+
 class ChannelModule {
   constructor() {
     this.channelAutoDownload = this.channelAutoDownload.bind(this);
@@ -27,6 +33,64 @@ class ChannelModule {
     this.subscribe();
     this.populateMissingChannelInfo();
     this.normalizeChannelUrls();
+    // Track active fetch operations per channel to prevent concurrent fetches
+    this.activeFetches = new Map();
+  }
+
+  /**
+   * Get the last fetched timestamp for a specific tab type
+   * @param {Object} channel - Channel database record
+   * @param {string} mediaType - Media type: 'video', 'short', or 'livestream'
+   * @returns {Date|null} - Last fetched timestamp for the tab, or null if never fetched
+   */
+  getLastFetchedForTab(channel, mediaType) {
+    if (!channel || !channel.lastFetchedByTab) {
+      return null;
+    }
+
+    try {
+      const lastFetchedByTab = JSON.parse(channel.lastFetchedByTab);
+      const timestamp = lastFetchedByTab[mediaType];
+      return timestamp ? new Date(timestamp) : null;
+    } catch (error) {
+      console.error('Error parsing lastFetchedByTab:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Set the last fetched timestamp for a specific tab type
+   * Uses atomic SQL UPDATE to prevent race conditions when multiple tabs fetch concurrently
+   * @param {Object} channel - Channel database record
+   * @param {string} mediaType - Media type: 'video', 'short', or 'livestream'
+   * @param {Date} timestamp - Timestamp to set
+   * @returns {Promise<void>}
+   */
+  async setLastFetchedForTab(channel, mediaType, timestamp) {
+    if (!channel || !channel.channel_id) return;
+
+    const { sequelize } = require('../db');
+
+    // Use atomic JSON_SET to update just this one key without read-modify-write race
+    // COALESCE handles the case where lastFetchedByTab is NULL
+    await sequelize.query(`
+      UPDATE channels
+      SET lastFetchedByTab = JSON_SET(
+        COALESCE(lastFetchedByTab, '{}'),
+        :jsonPath,
+        :timestamp
+      )
+      WHERE channel_id = :channelId
+    `, {
+      replacements: {
+        jsonPath: `$.${mediaType}`,
+        timestamp: timestamp.toISOString(),
+        channelId: channel.channel_id
+      }
+    });
+
+    // Reload channel to sync in-memory state with database
+    await channel.reload();
   }
 
 
@@ -186,6 +250,7 @@ class ChannelModule {
       title: channel.title,
       description: channel.description,
       url: channel.url,
+      auto_download_enabled_tabs: channel.auto_download_enabled_tabs ?? 'video',
     };
   }
 
@@ -193,13 +258,29 @@ class ChannelModule {
    * Insert or update channel in database
    * @param {Object} channelData - Channel data to save
    * @param {boolean} enabled - Whether the channel should be enabled (default: false)
+   * @param {string|null} autoDownloadEnabledTabs - Comma-separated list of enabled tabs (default: null, uses model default)
    * @returns {Promise<Object>} - Saved channel record
    */
-  async upsertChannel(channelData, enabled = false) {
+  async upsertChannel(channelData, enabled = false, autoDownloadEnabledTabs = null) {
     // First, try to find by channel_id (preferred)
     let channel = await Channel.findOne({
       where: { channel_id: channelData.id }
     });
+
+    // Prepare update data
+    const updateData = {
+      channel_id: channelData.id,
+      title: channelData.title,
+      description: channelData.description,
+      uploader: channelData.uploader,
+      url: channelData.url,
+      enabled: enabled,
+    };
+
+    // Only set auto_download_enabled_tabs if explicitly provided
+    if (autoDownloadEnabledTabs !== null) {
+      updateData.auto_download_enabled_tabs = autoDownloadEnabledTabs;
+    }
 
     if (!channel) {
       // Fallback: try to find by URL (for legacy data without channel_id)
@@ -210,36 +291,16 @@ class ChannelModule {
       if (channel) {
         // Found by URL - update with channel_id and other fields
         // This backfills legacy data with the channel_id
-        await channel.update({
-          channel_id: channelData.id,
-          title: channelData.title,
-          description: channelData.description,
-          uploader: channelData.uploader,
-          url: channelData.url,
-          enabled: enabled,
-        });
+        await channel.update(updateData);
       }
     } else {
       // Found by channel_id - just update metadata
-      await channel.update({
-        title: channelData.title,
-        description: channelData.description,
-        uploader: channelData.uploader,
-        url: channelData.url,
-        enabled: enabled,
-      });
+      await channel.update(updateData);
     }
 
     // Only create if not found by either method
     if (!channel) {
-      channel = await Channel.create({
-        channel_id: channelData.id,
-        title: channelData.title,
-        description: channelData.description,
-        uploader: channelData.uploader,
-        url: channelData.url,
-        enabled: enabled,
-      });
+      channel = await Channel.create(updateData);
     }
 
     return channel;
@@ -308,7 +369,7 @@ class ChannelModule {
           enabled: true,
           channel_id: { [Op.ne]: null }
         },
-        attributes: ['id', 'channel_id', 'url', 'title', 'lastFetched']
+        attributes: ['id', 'channel_id', 'url', 'title', 'lastFetchedByTab']
       });
 
       let handleUrlCount = 0;
@@ -316,8 +377,21 @@ class ChannelModule {
         // Check if URL looks like a handle URL
         if (channel.url && channel.url.includes('@')) {
           handleUrlCount++;
-          const daysSinceUpdate = channel.lastFetched
-            ? Math.floor((Date.now() - new Date(channel.lastFetched).getTime()) / (1000 * 60 * 60 * 24))
+          // Get the most recent fetch across all tabs
+          let mostRecentFetch = null;
+          if (channel.lastFetchedByTab) {
+            try {
+              const lastFetchedByTab = JSON.parse(channel.lastFetchedByTab);
+              const timestamps = Object.values(lastFetchedByTab).filter(t => t !== null);
+              if (timestamps.length > 0) {
+                mostRecentFetch = new Date(Math.max(...timestamps.map(t => new Date(t).getTime())));
+              }
+            } catch (error) {
+              // Ignore parse errors
+            }
+          }
+          const daysSinceUpdate = mostRecentFetch
+            ? Math.floor((Date.now() - mostRecentFetch.getTime()) / (1000 * 60 * 60 * 24))
             : 'never';
           console.log(`Channel "${channel.title}" uses handle URL: ${channel.url} (last updated: ${daysSinceUpdate === 'never' ? 'never' : `${daysSinceUpdate} days ago`})`);
         }
@@ -336,6 +410,7 @@ class ChannelModule {
   /**
    * Trigger automatic channel video downloads.
    * Called by cron scheduler based on configured frequency.
+   * Skips execution if a Channel Downloads job is already running to prevent queue backup.
    * @returns {void}
    */
   channelAutoDownload() {
@@ -344,6 +419,20 @@ class ChannelModule {
       'Running new Channel Downloads at interval: ' +
         configModule.getConfig().channelDownloadFrequency
     );
+
+    // Check if a Channel Downloads job is already running
+    const jobModule = require('./jobModule');
+    const jobs = jobModule.getAllJobs();
+    const hasRunningChannelDownload = Object.values(jobs).some(
+      job => job.jobType === 'Channel Downloads' &&
+             (job.status === 'In Progress' || job.status === 'Pending')
+    );
+
+    if (hasRunningChannelDownload) {
+      console.log('Skipping scheduled channel download - previous download still in progress');
+      return;
+    }
+
     downloadModule.doChannelDownloads();
   }
 
@@ -436,18 +525,65 @@ class ChannelModule {
 
     // Extract the actual current handle URL from the response
     const actualChannelUrl = channelData.channel_url || channelData.url || channelUrl;
-    console.log(`Storing handle URL for channel ${channelData.id}: ${actualChannelUrl}`);
 
-    await Promise.all([
-      this.upsertChannel({
-        id: channelData.id,
+    // Get the proper channel ID - prefer channel_id, then uploader_id, fallback to id
+    // yt-dlp sometimes returns the handle as 'id', but channel_id or uploader_id should have the UCxxx format
+    const properChannelId = channelData.channel_id || channelData.uploader_id || channelData.id;
+
+    console.log(`Storing handle URL for channel ${properChannelId}: ${actualChannelUrl}`);
+
+    // First, upsert the channel so it exists in the database
+    // We'll update auto_download_enabled_tabs after detecting available tabs
+    await this.upsertChannel({
+      id: properChannelId,
+      title: channelData.title,
+      description: channelData.description,
+      uploader: channelData.uploader,
+      url: actualChannelUrl,  // Store the actual handle URL for display
+    }, enableChannel);
+
+    // Now process thumbnail using the proper channel ID
+    await this.processChannelThumbnail(channelUrl, properChannelId);
+
+    // Detect available tabs to set smart default for auto_download_enabled_tabs
+    // This ensures we don't default to 'video' for channels that only have shorts/streams
+    let availableTabs = [];
+    let autoDownloadEnabledTabs = 'video'; // Default fallback
+
+    try {
+      availableTabs = await this.getChannelAvailableTabs(properChannelId);
+
+      // Determine smart default: prefer 'video' if it exists, otherwise use first available tab
+      const TAB_TO_MEDIA_TYPE = {
+        'videos': 'video',
+        'shorts': 'short',
+        'streams': 'livestream'
+      };
+
+      if (availableTabs.includes('videos')) {
+        autoDownloadEnabledTabs = 'video';
+      } else if (availableTabs.length > 0) {
+        // Use first available tab as default
+        const firstTab = availableTabs[0];
+        autoDownloadEnabledTabs = TAB_TO_MEDIA_TYPE[firstTab] || 'video';
+        console.log(`Channel ${properChannelId} has no 'videos' tab, defaulting to '${autoDownloadEnabledTabs}'`);
+      } else {
+        console.warn(`Channel ${properChannelId} has no detectable tabs, using default 'video'`);
+      }
+
+      // Update the channel with the determined auto_download_enabled_tabs
+      await this.upsertChannel({
+        id: properChannelId,
         title: channelData.title,
         description: channelData.description,
         uploader: channelData.uploader,
-        url: actualChannelUrl,  // Store the actual handle URL for display
-      }, enableChannel),
-      this.processChannelThumbnail(channelUrl, channelData.id)
-    ]);
+        url: actualChannelUrl,
+      }, enableChannel, autoDownloadEnabledTabs);
+
+    } catch (err) {
+      console.error(`Error fetching tabs for channel ${properChannelId}:`, err.message);
+      // Keep default 'video' on error
+    }
 
     if (emitMessage) {
       console.log('Channel data fetched -- emitting message!');
@@ -461,12 +597,13 @@ class ChannelModule {
     }
 
     return {
-      id: channelData.id,
+      id: properChannelId,
       uploader: channelData.uploader,
-      uploader_id: channelData.uploader_id,
+      uploader_id: channelData.uploader_id || properChannelId,
       title: channelData.title,
       description: channelData.description,
       url: channelUrl,
+      auto_download_enabled_tabs: autoDownloadEnabledTabs,
     };
   }
 
@@ -562,6 +699,7 @@ class ChannelModule {
         url: channel.url,
         uploader: channel.uploader || '',
         channel_id: channel.channel_id || '',
+        auto_download_enabled_tabs: channel.auto_download_enabled_tabs ?? 'video',
       }));
     } catch (err) {
       console.error('Error reading channels from database:', err);
@@ -620,6 +758,7 @@ class ChannelModule {
 
   /**
    * Generate a temporary file with enabled channel URLs for yt-dlp
+   * Respects the auto_download_enabled_tabs column to generate URLs for each enabled tab type
    * @returns {Promise<string>} - Path to the temporary file
    */
   async generateChannelsFile() {
@@ -627,20 +766,55 @@ class ChannelModule {
     try {
       const channels = await Channel.findAll({
         where: { enabled: true },
-        attributes: ['channel_id', 'url']
+        attributes: ['channel_id', 'url', 'auto_download_enabled_tabs']
       });
 
-      // Use canonical channel URLs with the explicit Videos tab when channel_id exists,
-      // so the auto-download list aligns with the ChannelVideos tab (newest-first Videos only).
-      const urls = channels.map(c => {
-        if (c.channel_id) {
-          const canonical = this.resolveChannelUrlFromId(c.channel_id);
-          return `${canonical}/videos`;
-        }
-        return c.url;
-      }).join('\n');
+      // Generate URLs for each channel, respecting their auto_download_enabled_tabs setting
+      const urls = [];
+      for (const channel of channels) {
+        if (channel.channel_id) {
+          const canonical = this.resolveChannelUrlFromId(channel.channel_id);
 
-      await fsPromises.writeFile(tempFilePath, urls);
+          // Parse the enabled tabs for this channel (empty string means no tabs enabled)
+          const enabledTabs = (channel.auto_download_enabled_tabs ?? '')
+            .split(',')
+            .map(t => t.trim())
+            .filter(tab => tab.length > 0);
+
+          if (enabledTabs.length === 0) {
+            // All tabs disabled for this channel, skip adding URLs
+            continue;
+          }
+
+          // Generate a URL for each enabled tab type
+          for (const tabType of enabledTabs) {
+            // Map the media type back to tab type if needed
+            // auto_download_enabled_tabs stores 'video', 'short', 'livestream'
+            // but we need 'videos', 'shorts', 'streams' for URLs
+            let tabUrl;
+            switch (tabType) {
+            case 'video':
+              tabUrl = 'videos';
+              break;
+            case 'short':
+              tabUrl = 'shorts';
+              break;
+            case 'livestream':
+              tabUrl = 'streams';
+              break;
+            default:
+              tabUrl = 'videos'; // fallback
+            }
+
+            urls.push(`${canonical}/${tabUrl}`);
+          }
+        } else {
+          // Fallback for channels without channel_id
+          urls.push(channel.url);
+        }
+      }
+
+      await fsPromises.writeFile(tempFilePath, urls.join('\n'));
 
       return tempFilePath;
     } catch (err) {
@@ -661,8 +835,12 @@ class ChannelModule {
    * @param {string} channelId - Channel ID these videos belong to
    * @returns {Promise<void>}
    */
-  async insertVideosIntoDb(videos, channelId) {
-    for (const video of videos) {
+  async insertVideosIntoDb(videos, channelId, mediaType = 'video') {
+    const syntheticBaseTime = Date.now();
+
+    for (const [index, video] of videos.entries()) {
+      const syntheticPublishedAt = video.publishedAt || new Date(syntheticBaseTime - index * 1000).toISOString();
+
       const [videoRecord, created] = await ChannelVideo.findOrCreate({
         where: {
           youtube_id: video.youtube_id,
@@ -670,55 +848,273 @@ class ChannelModule {
         },
         defaults: {
           ...video,
+          publishedAt: syntheticPublishedAt,
           channel_id: channelId,
+          media_type: mediaType,
         },
       });
 
       if (!created) {
-        await videoRecord.update({
+        const updates = {
           title: video.title,
           thumbnail: video.thumbnail,
           duration: video.duration,
-          publishedAt: video.publishedAt,
           availability: video.availability || null,
-        });
+          media_type: mediaType,
+          live_status: video.live_status || null,
+          publishedAt: video.publishedAt || syntheticPublishedAt,
+        };
+
+        await videoRecord.update(updates);
       }
     }
   }
 
   /**
-   * Enrich videos with download status
+   * Enrich videos with download status by checking Videos table and file existence
    * @param {Array} videos - Array of video objects
-   * @returns {Array} - Videos with 'added' property
+   * @param {boolean} checkFiles - Whether to check file existence for current page (default false)
+   * @returns {Promise<Array>} - Videos with 'added' and 'removed' properties
    */
-  enrichVideosWithDownloadStatus(videos) {
-    const completeListArray = archiveModule.readCompleteListLines();
+  async enrichVideosWithDownloadStatus(videos, checkFiles = false) {
+    const Video = require('../models/video');
+    const { sequelize, Sequelize } = require('../db');
+
+    // Get all youtube IDs from the input videos
+    const youtubeIds = videos.map(v => v.youtube_id || v.youtubeId);
+
+    // Query Videos table for ALL matching IDs (regardless of removed status)
+    const downloadedVideos = await Video.findAll({
+      where: {
+        youtubeId: youtubeIds
+      },
+      attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+    });
+
+    // Create Maps for O(1) lookup of download status
+    const downloadStatusMap = new Map();
+    const videosToCheck = [];
+
+    downloadedVideos.forEach(v => {
+      downloadStatusMap.set(v.youtubeId, {
+        id: v.id,
+        added: true,
+        removed: v.removed,
+        fileSize: v.fileSize,
+        filePath: v.filePath
+      });
+
+      // Collect videos that need file checking (only if checkFiles is true)
+      if (checkFiles && v.filePath) {
+        videosToCheck.push(v);
+      }
+    });
+
+    // Check file existence for downloaded videos if requested
+    if (checkFiles && videosToCheck.length > 0) {
+      const { videos: checkedVideos, updates } = await fileCheckModule.checkVideoFiles(videosToCheck);
+
+      // Update the download status map with file check results
+      checkedVideos.forEach(v => {
+        const status = downloadStatusMap.get(v.youtubeId);
+        if (status) {
+          status.removed = v.removed;
+          status.fileSize = v.fileSize;
+        }
+      });
+
+      // Apply database updates for file status changes
+      if (updates.length > 0) {
+        await fileCheckModule.applyVideoUpdates(sequelize, Sequelize, updates);
+      }
+    }
 
     return videos.map((video) => {
       const plainVideoObject = video.toJSON ? video.toJSON() : video;
-      plainVideoObject.added = completeListArray.includes(
-        `youtube ${plainVideoObject.youtube_id}`
-      );
+      const videoId = plainVideoObject.youtube_id || plainVideoObject.youtubeId;
+      const status = downloadStatusMap.get(videoId);
+
+      if (status) {
+        // Video exists in database
+        plainVideoObject.added = true;
+        plainVideoObject.removed = status.removed;
+        plainVideoObject.fileSize = status.fileSize;
+      } else {
+        // Video never downloaded
+        plainVideoObject.added = false;
+        plainVideoObject.removed = false;
+        plainVideoObject.fileSize = null;
+      }
+
       return plainVideoObject;
     });
   }
 
   /**
-   * Fetch the newest videos for a channel from the database.
-   * Returns up to 50 most recent videos with download status.
+   * Fetch the newest videos for a channel from the database with search and sort.
+   * Returns videos with download status.
    * @param {string} channelId - Channel ID to fetch videos for
+   * @param {number} limit - Maximum number of videos to return (default 50)
+   * @param {number} offset - Number of videos to skip (default 0)
+   * @param {boolean} excludeDownloaded - Whether to exclude downloaded videos (default false)
+   * @param {string} searchQuery - Search query to filter videos by title (default '')
+   * @param {string} sortBy - Field to sort by: 'date', 'title', 'duration', 'size' (default 'date')
+   * @param {string} sortOrder - Sort order: 'asc' or 'desc' (default 'desc')
+   * @param {boolean} checkFiles - Whether to check file existence for current page (default false)
+   * @param {string} mediaType - Media type to filter by: 'video', 'short', 'livestream' (default 'video')
    * @returns {Promise<Array>} - Array of video objects with download status
    */
-  async fetchNewestVideosFromDb(channelId) {
-    const videos = await ChannelVideo.findAll({
+  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, excludeDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video') {
+    // First get all videos to enrich with download status
+    const allChannelVideos = await ChannelVideo.findAll({
       where: {
         channel_id: channelId,
+        media_type: mediaType,
       },
       order: [['publishedAt', 'DESC']],
-      limit: 50,
     });
 
-    return this.enrichVideosWithDownloadStatus(videos);
+    // Enrich all videos with download status, but only check files for the current page
+    // We'll determine which videos are on the current page after filtering and sorting
+    const enrichedVideos = await this.enrichVideosWithDownloadStatus(allChannelVideos, false);
+
+    // Filter if needed
+    let filteredVideos = enrichedVideos;
+    if (excludeDownloaded) {
+      filteredVideos = enrichedVideos.filter(video => !video.added || video.removed);
+    }
+
+    // Apply search filter
+    if (searchQuery) {
+      const searchLower = searchQuery.toLowerCase();
+      filteredVideos = filteredVideos.filter(video =>
+        video.title && video.title.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Apply sorting
+    filteredVideos.sort((a, b) => {
+      let comparison = 0;
+      switch (sortBy) {
+      case 'date':
+        comparison = new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime();
+        break;
+      case 'title':
+        comparison = (a.title || '').localeCompare(b.title || '');
+        break;
+      case 'duration':
+        comparison = (a.duration || 0) - (b.duration || 0);
+        break;
+      case 'size':
+        comparison = (a.fileSize || 0) - (b.fileSize || 0);
+        break;
+      default:
+        comparison = new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime();
+      }
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+
+    // Apply pagination
+    const paginatedVideos = filteredVideos.slice(offset, offset + limit);
+
+    // If checkFiles is true, check file existence for only the current page
+    if (checkFiles && paginatedVideos.length > 0) {
+      // Re-enrich only the paginated videos with file checking enabled
+      const paginatedChannelVideos = paginatedVideos.map(v => ({
+        youtube_id: v.youtube_id || v.youtubeId,
+        title: v.title,
+        thumbnail: v.thumbnail,
+        duration: v.duration,
+        publishedAt: v.publishedAt,
+        availability: v.availability,
+        youtube_removed: v.youtube_removed
+      }));
+
+      // This will check files for only the current page
+      const checkedVideos = await this.enrichVideosWithDownloadStatus(paginatedChannelVideos, true);
+
+      // Merge the checked results back into the paginated videos
+      for (let i = 0; i < paginatedVideos.length; i++) {
+        if (checkedVideos[i]) {
+          paginatedVideos[i].added = checkedVideos[i].added;
+          paginatedVideos[i].removed = checkedVideos[i].removed;
+          paginatedVideos[i].fileSize = checkedVideos[i].fileSize;
+        }
+        // If a video is removed from YouTube, fallback to using the locally stored thumbnail if available
+        if (paginatedVideos[i].youtube_removed) {
+          paginatedVideos[i].thumbnail = `/images/videothumb-${paginatedVideos[i].youtube_id}.jpg`;
+        }
+      }
+    }
+
+    return paginatedVideos;
+  }
+
+  /**
+   * Get the total count and oldest video date for a channel
+   * @param {string} channelId - Channel ID
+   * @param {boolean} excludeDownloaded - Whether to exclude downloaded videos (default false)
+   * @param {string} searchQuery - Search query to filter videos by title (default '')
+   * @param {string} mediaType - Media type to filter by: 'video', 'short', 'livestream' (default 'video')
+   * @returns {Promise<Object>} - Object with totalCount and oldestVideoDate
+   */
+  async getChannelVideoStats(channelId, excludeDownloaded = false, searchQuery = '', mediaType = 'video') {
+    // If we have search or filter, we need to get all videos
+    if (excludeDownloaded || searchQuery) {
+      // Need to filter by download status and/or search
+      const allChannelVideos = await ChannelVideo.findAll({
+        where: {
+          channel_id: channelId,
+          media_type: mediaType,
+        },
+        order: [['publishedAt', 'DESC']],
+      });
+
+      const enrichedVideos = await this.enrichVideosWithDownloadStatus(allChannelVideos);
+
+      let filteredVideos = enrichedVideos;
+
+      // Apply download filter
+      if (excludeDownloaded) {
+        filteredVideos = filteredVideos.filter(video => !video.added || video.removed);
+      }
+
+      // Apply search filter
+      if (searchQuery) {
+        const searchLower = searchQuery.toLowerCase();
+        filteredVideos = filteredVideos.filter(video =>
+          video.title && video.title.toLowerCase().includes(searchLower)
+        );
+      }
+
+      return {
+        totalCount: filteredVideos.length,
+        oldestVideoDate: filteredVideos.length > 0 ?
+          filteredVideos[filteredVideos.length - 1].publishedAt : null
+      };
+    } else {
+      // Fast path - just use database counts when no filters
+      const totalCount = await ChannelVideo.count({
+        where: {
+          channel_id: channelId,
+          media_type: mediaType,
+        }
+      });
+
+      const oldestVideo = await ChannelVideo.findOne({
+        where: {
+          channel_id: channelId,
+          media_type: mediaType,
+        },
+        order: [['publishedAt', 'ASC']],
+        attributes: ['publishedAt']
+      });
+
+      return {
+        totalCount,
+        oldestVideoDate: oldestVideo ? oldestVideo.publishedAt : null
+      };
+    }
   }
 
   /**
@@ -736,9 +1132,10 @@ class ChannelModule {
       const day = entry.upload_date.substring(6, 8);
       return new Date(`${year}-${month}-${day}`).toISOString();
     }
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-    return ninetyDaysAgo.toISOString();
+    if (entry.release_timestamp) {
+      return new Date(entry.release_timestamp * 1000).toISOString();
+    }
+    return null;
   }
 
   /**
@@ -773,6 +1170,8 @@ class ChannelModule {
       thumbnail: this.extractThumbnailUrl(entry),
       duration: entry.duration || 0,
       availability: entry.availability || null,
+      media_type: entry.media_type || 'video',
+      live_status: entry.live_status || null,
     };
   }
 
@@ -828,13 +1227,13 @@ class ChannelModule {
     }
 
     // Determine how many videos to fetch based on recency
-    // If we have recent data (within 3 days), fetch fewer videos for faster response
+    // If we have recent data (within 10 days), fetch fewer videos for faster response
     let videoCount = 50; // Default/max for initial fetch or stale data
     if (mostRecentVideoDate) {
       const daysSinceLastVideo = Math.floor((Date.now() - new Date(mostRecentVideoDate).getTime()) / (1000 * 60 * 60 * 24));
-      if (daysSinceLastVideo <= 5) {
-        // If we fetched videos today, then fetch last 5 videos, else fetch 10 videos per day
-        videoCount = Math.max(5, daysSinceLastVideo * 10);
+      if (daysSinceLastVideo <= 10) {
+        // Fetch 5 videos minimum, or 5 videos per day since last fetch, up to 50 max
+        videoCount = Math.min(50, Math.max(5, daysSinceLastVideo * 5));
       }
     }
 
@@ -865,16 +1264,19 @@ class ChannelModule {
   }
 
   /**
-   * Check if channel videos need refreshing
+   * Check if channel videos need refreshing for a specific tab
    * @param {Object} channel - Channel database record
-   * @param {number} videoCount - Current video count
+   * @param {number} videoCount - Current video count for this tab
+   * @param {string} mediaType - Media type: 'video', 'short', or 'livestream'
    * @returns {boolean} - True if refresh needed
    */
-  shouldRefreshChannelVideos(channel, videoCount) {
+  shouldRefreshChannelVideos(channel, videoCount, mediaType) {
     if (!channel) return false;
 
-    return !channel.lastFetched ||
-           new Date() - new Date(channel.lastFetched) > 1 * 60 * 60 * 1000 ||
+    const lastFetched = this.getLastFetchedForTab(channel, mediaType);
+
+    return !lastFetched ||
+           new Date() - lastFetched > 1 * 60 * 60 * 1000 ||
            videoCount === 0;
   }
 
@@ -883,16 +1285,134 @@ class ChannelModule {
    * @param {Array} videos - Array of videos
    * @param {Object} channel - Channel database record
    * @param {string} dataSource - Data source ('cache' or 'yt_dlp')
+   * @param {Object} stats - Stats object with totalCount and oldestVideoDate
+   * @param {boolean} autoDownloadsEnabled - Whether auto downloads are enabled
+   * @param {string} mediaType - Media type to get last fetched timestamp for
    * @returns {Object} - Formatted response
    */
-  buildChannelVideosResponse(videos, channel, dataSource = 'cache') {
+  buildChannelVideosResponse(videos, channel, dataSource = 'cache', stats = null, autoDownloadsEnabled = false, mediaType = 'video') {
+    // Parse available tabs if present
+    const availableTabs = channel && channel.available_tabs ? channel.available_tabs.split(',') : [];
+
+    // Get the last fetched timestamp for this specific tab
+    const lastFetched = channel ? this.getLastFetchedForTab(channel, mediaType) : null;
+
     return {
       videos: videos,
-      videoFail: videos.length === 0,
-      failureReason: videos.length === 0 ? 'fetch_error' : null,
+      videoFail: videos.length === 0 && (!stats || stats.totalCount === 0),
+      failureReason: videos.length === 0 && (!stats || stats.totalCount === 0) ? 'fetch_error' : null,
       dataSource: dataSource,
-      lastFetched: channel ? channel.lastFetched : null,
+      lastFetched: lastFetched,
+      totalCount: stats ? stats.totalCount : videos.length,
+      oldestVideoDate: stats ? stats.oldestVideoDate : null,
+      autoDownloadsEnabled: autoDownloadsEnabled,
+      availableTabs: availableTabs,
     };
+  }
+
+  /**
+   * Detect which tab types (videos, shorts, streams) are available for a channel.
+   * Caches the result in the channel's available_tabs column.
+   * @param {string} channelId - Channel ID to detect tabs for
+   * @returns {Promise<Array<string>>} - Array of available tab types (e.g., ['videos', 'shorts'])
+   */
+  async getChannelAvailableTabs(channelId) {
+    const channel = await Channel.findOne({
+      where: { channel_id: channelId },
+    });
+
+    if (!channel) {
+      throw new Error('Channel not found in database');
+    }
+
+    // If we already have available_tabs data, return it
+    if (channel.available_tabs) {
+      return channel.available_tabs.split(',');
+    }
+
+    // Otherwise, detect which tabs exist by testing each one
+    const availableTabs = [];
+    const tabTypesToTest = [TAB_TYPES.VIDEOS, TAB_TYPES.SHORTS, TAB_TYPES.LIVE];
+    const canonicalChannelUrl = this.resolveChannelUrlFromId(channelId);
+
+    console.log(`Detecting available tabs for channel ${channelId} (${channel.title})`);
+
+    for (const tabType of tabTypesToTest) {
+      try {
+        const tabUrl = `${canonicalChannelUrl}/${tabType}`;
+
+        // Test if the tab exists by trying to fetch just 1 video
+        await this.withTempFile(`tab-test-${tabType}`, async (outputFilePath) => {
+          await this.executeYtDlpCommand([
+            '--flat-playlist',
+            '--dump-single-json',
+            '--playlist-end', '1',
+            '-4',
+            tabUrl,
+          ], outputFilePath);
+        });
+
+        // If we got here without error, the tab exists
+        availableTabs.push(tabType);
+        console.log(`  ✓ ${tabType} tab exists`);
+      } catch (error) {
+        // Tab doesn't exist or is empty - that's fine
+        console.log(`  ✗ ${tabType} tab not available`);
+      }
+    }
+
+    // Store the result in the database for future use
+    if (availableTabs.length > 0) {
+      channel.available_tabs = availableTabs.join(',');
+      await channel.save();
+    }
+
+    return availableTabs;
+  }
+
+  /**
+   * Update the auto download setting for a specific tab type for a channel
+   * @param {string} channelId - Channel ID
+   * @param {string} tabType - Tab type ('videos', 'shorts', or 'streams')
+   * @param {boolean} enabled - Whether to enable auto downloads for this tab
+   */
+  async updateAutoDownloadForTab(channelId, tabType, enabled) {
+    const channel = await Channel.findOne({
+      where: { channel_id: channelId },
+    });
+
+    if (!channel) {
+      throw new Error('Channel not found in database');
+    }
+
+    // Convert tabType to mediaType
+    const mediaType = MEDIA_TAB_TYPE_MAP[tabType] || 'video';
+
+    // Get current enabled tabs
+    const currentEnabledTabs = (channel.auto_download_enabled_tabs || 'video')
+      .split(',')
+      .map(t => t.trim())
+      .filter(Boolean);
+
+    let newEnabledTabs;
+    if (enabled) {
+      // Add mediaType if not already present
+      if (!currentEnabledTabs.includes(mediaType)) {
+        newEnabledTabs = [...currentEnabledTabs, mediaType];
+      } else {
+        newEnabledTabs = currentEnabledTabs;
+      }
+    } else {
+      // Remove mediaType
+      newEnabledTabs = currentEnabledTabs.filter(t => t !== mediaType);
+    }
+
+    // Update the channel (empty string if no tabs are enabled)
+    channel.auto_download_enabled_tabs = newEnabledTabs.join(',');
+    await channel.save();
+
+    console.log(`Updated auto download for channel ${channelId}, tab ${tabType}: ${enabled ? 'enabled' : 'disabled'}`);
+    console.log(`New auto_download_enabled_tabs: ${channel.auto_download_enabled_tabs}`);
   }
 
   /**
@@ -900,37 +1420,153 @@ class ChannelModule {
    * Returns cached data if fresh, otherwise fetches new data from YouTube.
    * Falls back to cached data on errors.
    * @param {string} channelId - Channel ID to get videos for
+   * @param {number} page - Page number (1-based, default 1)
+   * @param {number} pageSize - Number of videos per page (default 50)
+   * @param {boolean} hideDownloaded - Whether to hide downloaded videos (default false)
+   * @param {string} searchQuery - Search query to filter videos by title (default '')
+   * @param {string} sortBy - Field to sort by: 'date', 'title', 'duration', 'size' (default 'date')
+   * @param {string} sortOrder - Sort order: 'asc' or 'desc' (default 'desc')
+   * @param {string} tabType - Tab type to fetch: 'videos', 'shorts', or 'streams' (default 'videos')
    * @returns {Promise<Object>} - Response object with videos and metadata
    */
-  async getChannelVideos(channelId) {
+  async getChannelVideos(channelId, page = 1, pageSize = 50, hideDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS) {
     const channel = await Channel.findOne({
       where: { channel_id: channelId },
     });
 
-    try {
-      let newestVideos = await this.fetchNewestVideosFromDb(channelId);
+    if (!channel) {
+      throw new Error('Channel not found');
+    }
 
-      if (this.shouldRefreshChannelVideos(channel, newestVideos.length)) {
-        // Get the most recent video date to optimize fetch count
-        const mostRecentVideoDate = newestVideos.length > 0 ? newestVideos[0].publishedAt : null;
-        // Hardcoded for videos tab only right now. We will add support for shorts and live streams later.
-        await this.fetchAndSaveVideosViaYtDlp(channel, channelId, TAB_TYPES.VIDEOS, mostRecentVideoDate);
-        newestVideos = await this.fetchNewestVideosFromDb(channelId);
-        return this.buildChannelVideosResponse(newestVideos, channel, 'yt_dlp');
+    // Convert tabType to mediaType for database filtering
+    const mediaType = MEDIA_TAB_TYPE_MAP[tabType] || 'video';
+    const autoDownloadsEnabled = channel.auto_download_enabled_tabs.split(',').includes(mediaType);
+
+    // Check if the requested tab exists in available_tabs
+    // If available_tabs is populated and the requested tab doesn't exist, don't try to fetch from YouTube
+    let shouldFetchFromYoutube = true;
+    if (channel.available_tabs) {
+      const availableTabs = channel.available_tabs.split(',');
+      if (!availableTabs.includes(tabType)) {
+        console.log(`Tab '${tabType}' not available for channel ${channelId}. Available tabs: ${availableTabs.join(', ')}`);
+        shouldFetchFromYoutube = false;
+      }
+    }
+
+    try {
+      // First check if we need to refresh recent videos from YouTube
+      const allVideos = await this.fetchNewestVideosFromDb(channelId, 1, 0, false, '', 'date', 'desc', false, mediaType);
+      const mostRecentVideoDate = allVideos.length > 0 ? allVideos[0].publishedAt : null;
+
+      if (shouldFetchFromYoutube && this.shouldRefreshChannelVideos(channel, allVideos.length, mediaType)) {
+        // Check if there's already an active fetch for this channel
+        if (this.activeFetches.has(channelId)) {
+          console.log(`Skipping auto-refresh for channel ${channelId} - fetch already in progress`);
+        } else {
+          // Register this fetch operation
+          this.activeFetches.set(channelId, {
+            startTime: new Date().toISOString(),
+            type: 'autoRefresh'
+          });
+
+          try {
+            // Fetch videos for the specified tab type
+            await this.fetchAndSaveVideosViaYtDlp(channel, channelId, tabType, mostRecentVideoDate);
+          } finally {
+            // Clear the active fetch record
+            this.activeFetches.delete(channelId);
+          }
+        }
       }
 
-      return this.buildChannelVideosResponse(newestVideos, channel, 'cache');
+      // Now fetch the requested page of videos with file checking enabled
+      const offset = (page - 1) * pageSize;
+      const paginatedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType);
+
+      // Check if videos still exist on YouTube and mark as removed if they don't
+      const videoValidationModule = require('./videoValidationModule');
+      const updates = [];
+      const timestampUpdates = [];
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      // Check all videos concurrently for better performance
+      // Only check videos that haven't been checked in the last 24 hours
+      const checkPromises = paginatedVideos.map(async (video) => {
+        const youtubeId = video.youtube_id || video.youtubeId;
+        const lastChecked = video.youtube_removed_checked_at ? new Date(video.youtube_removed_checked_at) : null;
+
+        // Skip if already marked as removed or checked within last 24 hours
+        if (video.youtube_removed || (lastChecked && lastChecked > twentyFourHoursAgo)) {
+          return null;
+        }
+
+        if (youtubeId) {
+          const exists = await videoValidationModule.checkVideoExistsOnYoutube(youtubeId);
+          const now = new Date();
+
+          if (!exists) {
+            console.log(`Video ${youtubeId} no longer exists on YouTube, marking as removed in channelvideos`);
+            video.youtube_removed = true;
+            video.youtube_removed_checked_at = now;
+            return { youtube_id: youtubeId, channel_id: channelId, removed: true, checked_at: now };
+          } else {
+            // Video exists, just update the timestamp
+            video.youtube_removed_checked_at = now;
+            return { youtube_id: youtubeId, channel_id: channelId, removed: false, checked_at: now };
+          }
+        }
+        return null;
+      });
+
+      const checkResults = await Promise.all(checkPromises);
+      const validResults = checkResults.filter(result => result !== null);
+
+      // Separate updates for removed videos and timestamp updates
+      for (const result of validResults) {
+        if (result.removed) {
+          updates.push(result);
+        } else {
+          timestampUpdates.push(result);
+        }
+      }
+
+      // Bulk update channelvideos table for removed videos
+      if (updates.length > 0) {
+        for (const update of updates) {
+          await ChannelVideo.update(
+            { youtube_removed: true, youtube_removed_checked_at: update.checked_at },
+            { where: { youtube_id: update.youtube_id, channel_id: update.channel_id } }
+          );
+        }
+      }
+
+      // Bulk update channelvideos table for timestamp-only updates
+      if (timestampUpdates.length > 0) {
+        for (const update of timestampUpdates) {
+          await ChannelVideo.update(
+            { youtube_removed_checked_at: update.checked_at },
+            { where: { youtube_id: update.youtube_id, channel_id: update.channel_id } }
+          );
+        }
+      }
+
+      // Get stats for the response
+      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType);
+
+      return this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
 
     } catch (error) {
       console.error('Error fetching channel videos:', error.message);
-      const cachedVideos = await this.fetchNewestVideosFromDb(channelId);
-      return this.buildChannelVideosResponse(cachedVideos, channel, 'cache');
+      const offset = (page - 1) * pageSize;
+      const cachedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType);
+      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType);
+      return this.buildChannelVideosResponse(cachedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
     }
   }
 
   /**
    * Fetch videos from YouTube and save to database.
-   * Updates channel's lastFetched timestamp on success.
+   * Updates channel's lastFetchedByTab timestamp for the specific tab on success.
    * Also updates the channel URL if it has changed (e.g., handle renamed).
    * @param {Object} channel - Channel database record
    * @param {string} channelId - Channel ID
@@ -944,8 +1580,10 @@ class ChannelModule {
       const result = await this.fetchChannelVideosViaYtDlp(channelId, mostRecentVideoDate, tabType);
       const { videos, currentChannelUrl } = result;
 
+      const mediaType = MEDIA_TAB_TYPE_MAP[tabType];
+
       if (videos.length > 0) {
-        await this.insertVideosIntoDb(videos, channelId);
+        await this.insertVideosIntoDb(videos, channelId, mediaType);
       }
 
       if (channel) {
@@ -953,14 +1591,111 @@ class ChannelModule {
         if (currentChannelUrl && currentChannelUrl !== channel.url) {
           console.log(`Channel URL updated for ${channel.title}: ${currentChannelUrl}`);
           channel.url = currentChannelUrl;
+          await channel.save(); // Save URL change before atomic timestamp update
         }
 
-        channel.lastFetched = new Date();
-        await channel.save();
+        // Update the last fetched timestamp for this specific tab (atomic SQL update)
+        await this.setLastFetchedForTab(channel, mediaType, new Date());
       }
     } catch (ytdlpError) {
       console.error('Error fetching channel videos:', ytdlpError.message);
       throw ytdlpError;
+    }
+  }
+
+  /**
+   * Fetch ALL videos for a channel from YouTube and save to database.
+   * This is a long-running operation that fetches the complete video history.
+   * @param {string} channelId - Channel ID
+   * @param {number} requestedPage - Page requested by frontend
+   * @param {number} requestedPageSize - Page size requested by frontend
+   * @param {boolean} hideDownloaded - Whether to hide downloaded videos in response
+   * @param {string} tabType - Tab type to fetch: 'videos', 'shorts', or 'streams' (default 'videos')
+   * @returns {Promise<Object>} - Response with success status and paginated data
+   */
+  async fetchAllChannelVideos(channelId, requestedPage = 1, requestedPageSize = 50, hideDownloaded = false, tabType = TAB_TYPES.VIDEOS) {
+    // Check if there's already an active fetch for this channel
+    if (this.activeFetches.has(channelId)) {
+      const activeOperation = this.activeFetches.get(channelId);
+      throw new Error(`A fetch operation is already in progress for this channel (started ${activeOperation.startTime})`);
+    }
+
+    // Register this fetch operation
+    this.activeFetches.set(channelId, {
+      startTime: new Date().toISOString(),
+      type: 'fetchAll'
+    });
+
+    try {
+      const channel = await Channel.findOne({
+        where: { channel_id: channelId },
+      });
+
+      if (!channel) {
+        throw new Error('Channel not found in database');
+      }
+
+      try {
+        console.log(`Starting full video fetch for channel ${channelId} (${channel.title}) - tab: ${tabType}`);
+        const startTime = Date.now();
+
+        // Fetch ALL videos from YouTube (no --playlist-end parameter)
+        const canonicalUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
+
+        const result = await this.withTempFile('channel-all-videos', async (outputFilePath) => {
+          const content = await this.executeYtDlpCommand([
+            '--flat-playlist',
+            '--dump-single-json',
+            '--extractor-args', 'youtubetab:approximate_date',
+            '-4',
+            canonicalUrl,
+          ], outputFilePath);
+
+          const jsonOutput = JSON.parse(content);
+          const videos = this.extractVideosFromYtDlpResponse(jsonOutput);
+          const currentChannelUrl = jsonOutput.uploader_url || jsonOutput.channel_url || jsonOutput.url;
+          return { videos, currentChannelUrl };
+        });
+
+        console.log(`Fetched ${result.videos.length} videos from YouTube in ${(Date.now() - startTime) / 1000}s`);
+
+        // Save all videos to database with correct media type
+        const mediaType = MEDIA_TAB_TYPE_MAP[tabType] || 'video';
+        if (result.videos.length > 0) {
+          await this.insertVideosIntoDb(result.videos, channelId, mediaType);
+        }
+
+        // Update channel metadata
+        if (result.currentChannelUrl && result.currentChannelUrl !== channel.url) {
+          console.log(`Channel URL updated for ${channel.title}: ${result.currentChannelUrl}`);
+          channel.url = result.currentChannelUrl;
+          await channel.save(); // Save URL change before atomic timestamp update
+        }
+        // Update the last fetched timestamp for this specific tab (atomic SQL update)
+        await this.setLastFetchedForTab(channel, mediaType, new Date());
+
+        // Get the requested page of videos after the full fetch
+        const offset = (requestedPage - 1) * requestedPageSize;
+        const paginatedVideos = await this.fetchNewestVideosFromDb(channelId, requestedPageSize, offset, hideDownloaded, '', 'date', 'desc', false, mediaType);
+        const stats = await this.getChannelVideoStats(channelId, hideDownloaded, '', mediaType);
+
+        const elapsedSeconds = (Date.now() - startTime) / 1000;
+        console.log(`Full video fetch for channel ${channelId} completed in ${elapsedSeconds}s`);
+
+        return {
+          success: true,
+          videosFound: result.videos.length,
+          elapsedSeconds: elapsedSeconds,
+          ...this.buildChannelVideosResponse(paginatedVideos, channel, 'yt_dlp_full', stats, false, mediaType)
+        };
+
+      } catch (error) {
+        console.error(`Error fetching all videos for channel ${channelId}:`, error.message);
+        throw error;
+      }
+    } finally {
+      // Always clear the active fetch record, whether successful or failed
+      this.activeFetches.delete(channelId);
     }
   }
 }

@@ -40,6 +40,11 @@ services:
       DB_USER: root
       DB_PASSWORD: 123qweasd
       DB_NAME: youtarr
+      # Optional: Disable authentication (for platforms with external auth like Elfhosted)
+      AUTH_ENABLED: ${AUTH_ENABLED:-}
+      # Optional: Seed initial admin credentials for headless or scripted dev runs
+      AUTH_PRESET_USERNAME: ${AUTH_PRESET_USERNAME:-}
+      AUTH_PRESET_PASSWORD: ${AUTH_PRESET_PASSWORD:-}
       # Optional: Custom data path for platforms like Elfhosted (defaults to /usr/src/app/data)
       # DATA_PATH: /storage/rclone/storagebox/youtube
     ports:
@@ -50,6 +55,12 @@ services:
       - ./config:/app/config
       - ./jobs:/app/jobs
       - ./migrations:/app/migrations
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--output", "/dev/null", "http://localhost:3011/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 networks:
   default:

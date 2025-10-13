@@ -47,13 +47,49 @@ describe('DownloadSettingsDialog', () => {
     test('renders channel mode alert', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="channel" />);
 
-      expect(screen.getByText('This will download any new videos from all channels.')).toBeInTheDocument();
+      expect(screen.getByText('This will download any new videos from all channels and tabs that are enabled for automatic downloads.')).toBeInTheDocument();
     });
 
     test('renders custom settings toggle', () => {
       render(<DownloadSettingsDialog {...defaultProps} />);
 
       expect(screen.getByLabelText('Use custom settings for this download')).toBeInTheDocument();
+    });
+
+    test('renders re-download toggle', () => {
+      render(<DownloadSettingsDialog {...defaultProps} />);
+
+      expect(screen.getByLabelText('Allow re-downloading previously fetched videos')).toBeInTheDocument();
+    });
+
+    test('renders warning for missing videos when missingVideoCount is 1 in manual mode', () => {
+      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={1} mode="manual" />);
+
+      expect(screen.getByText('1 video was previously downloaded.')).toBeInTheDocument();
+    });
+
+    test('renders warning for missing videos when missingVideoCount is greater than 1 in manual mode', () => {
+      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={5} mode="manual" />);
+
+      expect(screen.getByText('5 videos were previously downloaded.')).toBeInTheDocument();
+    });
+
+    test('renders warning for missing videos when missingVideoCount is 1 in channel mode', () => {
+      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={1} mode="channel" />);
+
+      expect(screen.getByText('Re-downloading 1 previously downloaded video.')).toBeInTheDocument();
+    });
+
+    test('renders warning for missing videos when missingVideoCount is greater than 1 in channel mode', () => {
+      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={5} mode="channel" />);
+
+      expect(screen.getByText('Re-downloading 5 previously downloaded videos.')).toBeInTheDocument();
+    });
+
+    test('does not render missing videos warning when missingVideoCount is 0', () => {
+      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={0} />);
+
+      expect(screen.queryByText(/Re-downloading.*previously downloaded/)).not.toBeInTheDocument();
     });
 
     test('renders resolution dropdown with all options', async () => {
@@ -314,53 +350,6 @@ describe('DownloadSettingsDialog', () => {
   });
 
   describe('LocalStorage Integration', () => {
-    test('loads saved manual mode settings from localStorage', () => {
-      const savedSettings = {
-        useCustom: true,
-        resolution: '720',
-      };
-      localStorage.setItem('youtarr_download_settings', JSON.stringify(savedSettings));
-
-      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
-
-      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
-      expect(toggle).toBeChecked();
-
-      const resolutionSelect = screen.getByLabelText('Maximum Resolution');
-      expect(resolutionSelect).toHaveTextContent('720p (HD)');
-    });
-
-    test('loads saved channel mode settings from localStorage', () => {
-      const savedSettings = {
-        useCustom: true,
-        resolution: '480',
-        videoCount: 15,
-      };
-      localStorage.setItem('youtarr_channel_settings', JSON.stringify(savedSettings));
-
-      render(<DownloadSettingsDialog {...defaultProps} mode="channel" />);
-
-      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
-      expect(toggle).toBeChecked();
-
-      const resolutionSelect = screen.getByLabelText('Maximum Resolution');
-      expect(resolutionSelect).toHaveTextContent('480p');
-
-      const videoCountSelect = screen.getByLabelText('Number of videos to download per channel');
-      expect(videoCountSelect).toHaveTextContent('15 videos');
-    });
-
-    test('handles invalid JSON in localStorage gracefully', () => {
-      localStorage.setItem('youtarr_download_settings', 'invalid json');
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
-
-      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
-
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to parse saved settings:', expect.any(Error));
-
-      consoleSpy.mockRestore();
-    });
-
     test('saves settings to localStorage on confirm for manual mode', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
 
@@ -378,6 +367,7 @@ describe('DownloadSettingsDialog', () => {
       expect(saved).toEqual({
         useCustom: true,
         resolution: '720',
+        allowRedownload: false,
       });
     });
 
@@ -399,26 +389,8 @@ describe('DownloadSettingsDialog', () => {
         useCustom: true,
         resolution: '1080',
         videoCount: 10,
+        allowRedownload: false,
       });
-    });
-
-    test('does not reload settings after user interaction', () => {
-      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
-
-      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
-      fireEvent.click(toggle);
-
-      // Save new settings to localStorage
-      localStorage.setItem('youtarr_download_settings', JSON.stringify({
-        useCustom: false,
-        resolution: '360',
-      }));
-
-      // Re-render with dialog still open
-      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
-
-      // Should still have user's changes, not localStorage
-      expect(toggle).toBeChecked();
     });
   });
 
@@ -439,6 +411,7 @@ describe('DownloadSettingsDialog', () => {
       expect(mockOnConfirm).toHaveBeenCalledWith({
         resolution: '720',
         videoCount: 0,
+        allowRedownload: false,
       });
     });
 
@@ -467,6 +440,7 @@ describe('DownloadSettingsDialog', () => {
       expect(mockOnConfirm).toHaveBeenCalledWith({
         resolution: '1080',
         videoCount: 7,
+        allowRedownload: false,
       });
     });
   });
@@ -491,30 +465,111 @@ describe('DownloadSettingsDialog', () => {
       expect(mockOnClose).toHaveBeenCalledTimes(1);
     });
 
-    test('resets hasUserInteracted state on cancel', () => {
-      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+    test('calls onClose when canceled after interaction', () => {
+      const { rerender } = render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
 
       // Make a change
       const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
       fireEvent.click(toggle);
+      expect(toggle).toBeChecked();
 
       // Cancel
       const cancelButton = screen.getByRole('button', { name: 'Cancel' });
       fireEvent.click(cancelButton);
 
-      // Re-open dialog - should load from localStorage again
-      localStorage.setItem('youtarr_download_settings', JSON.stringify({
-        useCustom: false,
-        resolution: '360',
-      }));
+      // Should have called onClose
+      expect(mockOnClose).toHaveBeenCalledTimes(1);
 
-      const { rerender } = render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+      // When dialog is closed and reopened, it starts fresh
       rerender(<DownloadSettingsDialog {...defaultProps} open={false} mode="manual" />);
-      rerender(<DownloadSettingsDialog {...defaultProps} open={true} mode="manual" />);
 
-      // Should have loaded localStorage settings since hasUserInteracted was reset
+      // Cleanup and render fresh instance
+      const { unmount } = render(<DownloadSettingsDialog {...defaultProps} open={false} mode="manual" />);
+      unmount();
+
+      render(<DownloadSettingsDialog {...defaultProps} open={true} mode="manual" />);
+      // New instance should start with defaults
       const newToggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
       expect(newToggle).not.toBeChecked();
+    });
+  });
+
+  describe('Re-download Functionality', () => {
+    test('auto-checks re-download toggle when missing videos are present', () => {
+      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={3} />);
+
+      const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      expect(redownloadToggle).toBeChecked();
+    });
+
+    test('does not auto-check re-download toggle when no missing videos', () => {
+      render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={0} />);
+
+      const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      expect(redownloadToggle).not.toBeChecked();
+    });
+
+    test('calls onConfirm with allowRedownload true when toggle is checked', () => {
+      render(<DownloadSettingsDialog {...defaultProps} />);
+
+      const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      fireEvent.click(redownloadToggle);
+
+      const confirmButton = screen.getByRole('button', { name: /Start Download/i });
+      fireEvent.click(confirmButton);
+
+      expect(mockOnConfirm).toHaveBeenCalledWith({
+        resolution: '1080',
+        videoCount: 0,
+        allowRedownload: true,
+      });
+    });
+
+    test('calls onConfirm with settings when only re-download is enabled', () => {
+      render(<DownloadSettingsDialog {...defaultProps} defaultResolution="720" />);
+
+      // Only enable re-download, not custom settings
+      const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      fireEvent.click(redownloadToggle);
+
+      const confirmButton = screen.getByRole('button', { name: /Start Download/i });
+      fireEvent.click(confirmButton);
+
+      expect(mockOnConfirm).toHaveBeenCalledWith({
+        resolution: '720', // Uses default
+        videoCount: 0,
+        allowRedownload: true,
+      });
+    });
+
+    test('saves allowRedownload state to localStorage', () => {
+      render(<DownloadSettingsDialog {...defaultProps} />);
+
+      const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      fireEvent.click(redownloadToggle);
+
+      const confirmButton = screen.getByRole('button', { name: /Start Download/i });
+      fireEvent.click(confirmButton);
+
+      const saved = JSON.parse(localStorage.getItem('youtarr_download_settings') || '{}');
+      expect(saved.allowRedownload).toBe(true);
+    });
+
+    test('marks user as having interacted when changing re-download toggle', () => {
+      render(<DownloadSettingsDialog {...defaultProps} />);
+
+      const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      fireEvent.click(redownloadToggle);
+
+      // Save something to localStorage
+      localStorage.setItem('youtarr_download_settings', JSON.stringify({
+        useCustom: true,
+        resolution: '360',
+        allowRedownload: false,
+      }));
+
+      // Component should not reload from localStorage after interaction
+      expect(redownloadToggle).toBeChecked();
     });
   });
 
@@ -534,28 +589,27 @@ describe('DownloadSettingsDialog', () => {
     });
 
     test('handles localStorage being unavailable', () => {
-      const originalGetItem = Storage.prototype.getItem;
       const originalSetItem = Storage.prototype.setItem;
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
 
-      // Mock localStorage methods to throw errors
-      Storage.prototype.getItem = jest.fn(() => {
-        throw new Error('localStorage not available');
-      });
+      // Mock localStorage setItem to throw error
       Storage.prototype.setItem = jest.fn(() => {
         throw new Error('localStorage not available');
       });
 
-      // Component should handle the error gracefully
+      render(<DownloadSettingsDialog {...defaultProps} />);
+
+      // Try to save settings - should handle error gracefully
+      const confirmButton = screen.getByRole('button', { name: /Start Download/i });
+
       expect(() => {
-        render(<DownloadSettingsDialog {...defaultProps} />);
+        fireEvent.click(confirmButton);
       }).not.toThrow();
 
-      // Verify error was logged
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to access localStorage:', expect.any(Error));
+      // Verify error was logged when trying to save
+      expect(consoleSpy).toHaveBeenCalledWith('Failed to save settings to localStorage:', expect.any(Error));
 
       // Restore localStorage methods
-      Storage.prototype.getItem = originalGetItem;
       Storage.prototype.setItem = originalSetItem;
       consoleSpy.mockRestore();
     });

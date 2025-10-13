@@ -19,7 +19,11 @@ import { useTheme } from "@mui/material/styles";
 interface PlexLibrarySelectorProps {
   open: boolean;
   handleClose: () => void;
-  setLibraryId: (id: string, path: string) => void;
+  setLibraryId: (selection: {
+    libraryId: string;
+    libraryTitle: string;
+    selectedPath: string;
+  }) => void;
   token: string | null;
 }
 
@@ -82,9 +86,18 @@ function PlexLibrarySelector({
       });
   }, [open, token]);
 
+  useEffect(() => {
+    if (!open) {
+      setSelectedLibrary("");
+      setSelectedPath("");
+      setLocations([]);
+    }
+  }, [open]);
+
   const handleLibraryChange = (event: SelectChangeEvent<string>) => {
     const libraryId = event.target.value as string;
     setSelectedLibrary(libraryId);
+    setSelectedPath("");
 
     const library = libraries.find((lib) => lib.id === libraryId);
     if (library) {
@@ -99,19 +112,16 @@ function PlexLibrarySelector({
   };
 
   const handleSaveSelection = () => {
-    // If no path selected, pass empty string to keep existing directory
-    const pathToSet = selectedPath ? formatPath(selectedPath) : '';
-    setLibraryId(selectedLibrary, pathToSet);
+    const library = libraries.find((lib) => lib.id === selectedLibrary);
+    setLibraryId({
+      libraryId: selectedLibrary,
+      libraryTitle: library?.title || '',
+      selectedPath: selectedPath || '',
+    });
+    setSelectedLibrary("");
+    setSelectedPath("");
+    setLocations([]);
   };
-
-  function formatPath(path: string): string {
-    return (
-      "/" +
-      path
-        .replace(/:\\/g, "/")
-        .replace(/^[a-z]:/i, (match) => match[0].toLowerCase())
-    );
-  }
 
   return (
     <Modal open={open} onClose={handleClose} onBackdropClick={handleClose}>
@@ -183,6 +193,9 @@ function PlexLibrarySelector({
                   <Typography variant="body2">
                     <strong>Optional:</strong> Select a path below to automatically update your YouTube output directory.
                     If you don't select a path, your current output directory will remain unchanged.
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    Paths are shown exactly as Plex reports them. If Youtarr runs inside Docker or WSL, you may need to translate the path (for example, <code>C:\\Media</code> → <code>/mnt/c/Media</code>) before using it.
                   </Typography>
                 </Alert>
                 <InputLabel id="select-plex-path">

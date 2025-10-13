@@ -1,24 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Card, CardContent, Grid, Typography, Button, Box } from '@mui/material';
+import { Card, CardContent, Grid, Typography, Box } from '@mui/material';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { Channel } from '../types/Channel';
 import ChannelVideos from './ChannelPage/ChannelVideos';
-import KeyboardDoubleArrowLeft from '@mui/icons-material/KeyboardDoubleArrowLeft';
-import { useNavigate } from 'react-router-dom';
 
 interface ChannelPageProps {
   token: string | null;
 }
 
-// * If you do not have a youtube API key set, just don't show the ChannelVideos section at all
 function ChannelPage({ token }: ChannelPageProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [channel, setChannel] = useState<Channel | null>(null);
   const { channel_id } = useParams();
-  const navigate = useNavigate();
 
   useEffect(() => {
     fetch(`/getChannelInfo/${channel_id}`, {
@@ -45,16 +41,6 @@ function ChannelPage({ token }: ChannelPageProps) {
 
   return (
     <>
-      <Grid
-        container
-        justifyContent='center'
-        style={{ marginBottom: '16px', marginTop: '-8px' }}
-      >
-        <Button onClick={() => navigate(-1)}>
-          <KeyboardDoubleArrowLeft />
-          Back To Channels Page
-        </Button>
-      </Grid>
       <Card elevation={8} style={{ marginBottom: '16px' }}>
         <CardContent>
           <Grid container spacing={3} justifyContent='center'>
@@ -110,7 +96,7 @@ function ChannelPage({ token }: ChannelPageProps) {
         </CardContent>
       </Card>
 
-      <ChannelVideos token={token} />
+      <ChannelVideos token={token} channelAutoDownloadTabs={channel?.auto_download_enabled_tabs} />
     </>
   );
 }

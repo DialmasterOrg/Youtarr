@@ -15,6 +15,7 @@ RUN npm ci
 # Copy server code and built React app
 COPY server/ ./server/
 COPY client/build/ ./client/build/
+COPY migrations/ ./migrations/
 
 # ---- Release ----
 FROM node:20-slim AS release
@@ -24,11 +25,16 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Download the latest yt-dlp release directly from GitHub
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
     chmod +x /usr/local/bin/yt-dlp
+
+# Install Deno
+ENV DENO_INSTALL="/usr/local"
+RUN curl -fsSL https://deno.land/install.sh | sh
 
 # Copy production node_modules
 COPY --from=dependencies /app/node_modules ./node_modules
@@ -36,6 +42,7 @@ COPY --from=dependencies /app/node_modules ./node_modules
 # Copy application files
 COPY --from=build /app/server ./server
 COPY --from=build /app/client/build ./client/build
+COPY --from=build /app/migrations ./migrations
 
 # Copy the new simplified entrypoint script
 COPY scripts/docker-entrypoint-simple.sh /usr/local/bin/docker-entrypoint.sh
@@ -45,8 +52,8 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 EXPOSE 3011
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3011/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl --fail --silent --show-error --output /dev/null http://localhost:3011/api/health || exit 1
 
 # Use the entrypoint script
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

@@ -18,6 +18,9 @@ class ConfigModule extends EventEmitter {
     }
     this.task = null;
     this.configWatcher = null;
+    this.debounceTimer = null;
+    this.isSaving = false;
+    this.lastConfigContent = null;
 
     this.directoryPath = '';
     if (process.env.IN_DOCKER_CONTAINER) {
@@ -30,10 +33,18 @@ class ConfigModule extends EventEmitter {
       if (process.env.DATA_PATH) {
         this.config.youtubeOutputDirectory = process.env.DATA_PATH;
       }
+
+      // Override temp download settings for Elfhosted platform
+      if (this.isElfhostedPlatform()) {
+        this.config.useTmpForDownloads = true;
+        this.config.tmpFilePath = '/app/config/temp_downloads';
+      }
     } else {
       this.ffmpegPath = this.config.devffmpegPath;
       this.directoryPath = this.config.devYoutubeOutputDirectory;
     }
+
+    let configModified = false;
 
     if (!this.config.channelFilesToDownload) {
       this.config.channelFilesToDownload = 3;
@@ -43,8 +54,20 @@ class ConfigModule extends EventEmitter {
       this.config.preferredResolution = '1080';
     }
 
+    if (!this.config.videoCodec) {
+      this.config.videoCodec = 'default';
+      configModified = true;
+    }
+
+    if (this.config.plexPort === undefined || this.config.plexPort === null || this.config.plexPort === '') {
+      this.config.plexPort = '32400';
+      configModified = true;
+    } else if (typeof this.config.plexPort !== 'string') {
+      this.config.plexPort = String(this.config.plexPort);
+      configModified = true;
+    }
+
     // Initialize channel auto-download settings if not present
-    let configModified = false;
     if (this.config.channelAutoDownload === undefined) {
       this.config.channelAutoDownload = false;
       configModified = true;
@@ -133,6 +156,49 @@ class ConfigModule extends EventEmitter {
       configModified = true;
     }
 
+    // Initialize notification settings if not present
+    if (this.config.notificationsEnabled === undefined) {
+      this.config.notificationsEnabled = false;
+      configModified = true;
+    }
+
+    if (!this.config.notificationService) {
+      this.config.notificationService = 'discord';
+      configModified = true;
+    }
+
+    if (this.config.discordWebhookUrl === undefined) {
+      this.config.discordWebhookUrl = '';
+      configModified = true;
+    }
+
+    // Initialize automatic video removal settings if not present
+    if (this.config.autoRemovalEnabled === undefined) {
+      this.config.autoRemovalEnabled = false;
+      configModified = true;
+    }
+
+    if (this.config.autoRemovalFreeSpaceThreshold === undefined) {
+      this.config.autoRemovalFreeSpaceThreshold = null;
+      configModified = true;
+    }
+
+    if (this.config.autoRemovalVideoAgeThreshold === undefined) {
+      this.config.autoRemovalVideoAgeThreshold = null;
+      configModified = true;
+    }
+
+    // Initialize temp download settings if not present
+    if (this.config.useTmpForDownloads === undefined) {
+      this.config.useTmpForDownloads = false;
+      configModified = true;
+    }
+
+    if (!this.config.tmpFilePath) {
+      this.config.tmpFilePath = '/tmp/youtarr-downloads';
+      configModified = true;
+    }
+
     // Check if a UUID exists in the config
     if (!this.config.uuid) {
       // Generate a new UUID
@@ -193,9 +259,11 @@ class ConfigModule extends EventEmitter {
       defaultConfig = {
         channelFilesToDownload: 3,
         preferredResolution: '1080',
+        videoCodec: 'default',
         channelAutoDownload: false,
         channelDownloadFrequency: '0 */6 * * *',
         plexApiKey: '',
+        plexPort: '32400',
         plexLibrarySection: '',
         youtubeApiKey: '',
         sponsorblockEnabled: false,
@@ -220,7 +288,12 @@ class ConfigModule extends EventEmitter {
         cookiesEnabled: false,
         customCookiesUploaded: false,
         writeChannelPosters: true,
-        writeVideoNfoFiles: true
+        writeVideoNfoFiles: true,
+        notificationsEnabled: false,
+        notificationService: 'discord',
+        discordWebhookUrl: '',
+        useTmpForDownloads: false,
+        tmpFilePath: '/tmp/youtarr-downloads'
       };
     }
 
@@ -247,6 +320,10 @@ class ConfigModule extends EventEmitter {
     return !!process.env.DATA_PATH;
   }
 
+  isElfhostedPlatform() {
+    return process.env.PLATFORM && process.env.PLATFORM.toLowerCase() === 'elfhosted';
+  }
+
   ensurePlatformDirectories() {
     const imagePath = this.getImagePath();
     if (!fs.existsSync(imagePath)) {
@@ -259,6 +336,15 @@ class ConfigModule extends EventEmitter {
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true });
       console.log(`Created platform config directory: ${configDir}`);
+    }
+
+    // Ensure temp download directory exists for Elfhosted
+    if (this.isElfhostedPlatform()) {
+      const tempDownloadPath = '/app/config/temp_downloads';
+      if (!fs.existsSync(tempDownloadPath)) {
+        fs.mkdirSync(tempDownloadPath, { recursive: true });
+        console.log(`Created Elfhosted temp downloads directory: ${tempDownloadPath}`);
+      }
     }
   }
 
@@ -284,6 +370,12 @@ class ConfigModule extends EventEmitter {
       this.config.youtubeOutputDirectory = process.env.DATA_PATH;
     }
 
+    // Override temp download settings for Elfhosted platform
+    if (this.isElfhostedPlatform()) {
+      this.config.useTmpForDownloads = true;
+      this.config.tmpFilePath = '/app/config/temp_downloads';
+    }
+
     this.saveConfig();
     // Emit a change event
     this.emit('change');
@@ -301,7 +393,22 @@ class ConfigModule extends EventEmitter {
       delete configToSave.youtubeOutputDirectory;
     }
 
-    fs.writeFileSync(this.configPath, JSON.stringify(configToSave, null, 2));
+    // Don't save Elfhosted temp download overrides to config file
+    if (this.isElfhostedPlatform()) {
+      delete configToSave.useTmpForDownloads;
+      delete configToSave.tmpFilePath;
+    }
+
+    // Set flag to ignore file watcher events triggered by this save
+    this.isSaving = true;
+    const configContent = JSON.stringify(configToSave, null, 2);
+    this.lastConfigContent = configContent;
+    fs.writeFileSync(this.configPath, configContent);
+
+    // Clear the flag after a short delay to account for fs.watch() firing
+    setTimeout(() => {
+      this.isSaving = false;
+    }, 200);
   }
 
   createDefaultConfig() {
@@ -318,6 +425,7 @@ class ConfigModule extends EventEmitter {
       youtubeOutputDirectory: process.env.DATA_PATH,
       channelFilesToDownload: 3,
       preferredResolution: '1080',
+      videoCodec: 'default',
 
       // Channel auto-download settings
       channelAutoDownload: false,
@@ -325,6 +433,7 @@ class ConfigModule extends EventEmitter {
 
       // Plex settings - use PLEX_URL if provided
       plexApiKey: '',
+      plexPort: '32400',
       plexLibrarySection: ''
     };
 
@@ -367,10 +476,21 @@ class ConfigModule extends EventEmitter {
     defaultConfig.writeChannelPosters = true;
     defaultConfig.writeVideoNfoFiles = true;
 
+    // Notification settings - disabled by default
+    defaultConfig.notificationsEnabled = false;
+    defaultConfig.notificationService = 'discord';
+    defaultConfig.discordWebhookUrl = '';
+
+    // Temp download settings - disabled by default
+    defaultConfig.useTmpForDownloads = false;
+    defaultConfig.tmpFilePath = '/tmp/youtarr-downloads';
+
     // Generate UUID for instance identification
     defaultConfig.uuid = uuidv4();
 
     // Write the config file
+    defaultConfig.plexPort = '32400';
+
     fs.writeFileSync(this.configPath, JSON.stringify(defaultConfig, null, 2));
     console.log(`Auto-created config.json with default settings at: ${this.configPath}`);
   }
@@ -379,38 +499,79 @@ class ConfigModule extends EventEmitter {
     // Watch the config file for changes
     this.configWatcher = fs.watch(this.configPath, (event) => {
       if (event === 'change') {
-        // Load the new config file
-        this.config = JSON.parse(fs.readFileSync(this.configPath));
-
-        // Migrate cronSchedule to channelDownloadFrequency if needed
-        if (!this.config.channelDownloadFrequency && this.config.cronSchedule) {
-          this.config.channelDownloadFrequency = this.config.cronSchedule;
-          delete this.config.cronSchedule;
-          // Save the corrected config
-          this.saveConfig();
+        // Clear any existing debounce timer
+        if (this.debounceTimer) {
+          clearTimeout(this.debounceTimer);
         }
 
-        // Apply configuration migrations to ensure new defaults exist
-        const migratedConfig = this.migrateConfig(this.config);
-        const needsMigrationSave = JSON.stringify(migratedConfig) !== JSON.stringify(this.config);
-        this.config = migratedConfig;
+        // Debounce file change events to prevent rapid-fire triggers
+        this.debounceTimer = setTimeout(() => {
+          // Ignore changes triggered by our own saves
+          if (this.isSaving) {
+            return;
+          }
 
-        if (needsMigrationSave) {
-          this.saveConfig();
-        }
+          try {
+            // Read the current file content
+            const fileContent = fs.readFileSync(this.configPath, 'utf8');
 
-        // IMPORTANT: If DATA_PATH is set, it ALWAYS overrides config.json
-        if (process.env.IN_DOCKER_CONTAINER && process.env.DATA_PATH) {
-          this.config.youtubeOutputDirectory = process.env.DATA_PATH;
-        }
+            // Skip processing if content hasn't actually changed
+            if (this.lastConfigContent && fileContent === this.lastConfigContent) {
+              return;
+            }
 
-        // Emit a change event
-        this.emit('change');
+            // Store whether this is a new config change (for emitting event later)
+            const contentChanged = !this.lastConfigContent || fileContent !== this.lastConfigContent;
+            this.lastConfigContent = fileContent;
+
+            // Load the new config file
+            this.config = JSON.parse(fileContent);
+
+            // Migrate cronSchedule to channelDownloadFrequency if needed
+            if (!this.config.channelDownloadFrequency && this.config.cronSchedule) {
+              this.config.channelDownloadFrequency = this.config.cronSchedule;
+              delete this.config.cronSchedule;
+              // Save the corrected config
+              this.saveConfig();
+            }
+
+            // Apply configuration migrations to ensure new defaults exist
+            const migratedConfig = this.migrateConfig(this.config);
+            const needsMigrationSave = JSON.stringify(migratedConfig) !== JSON.stringify(this.config);
+            this.config = migratedConfig;
+
+            if (needsMigrationSave) {
+              this.saveConfig();
+            }
+
+            // IMPORTANT: If DATA_PATH is set, it ALWAYS overrides config.json
+            if (process.env.IN_DOCKER_CONTAINER && process.env.DATA_PATH) {
+              this.config.youtubeOutputDirectory = process.env.DATA_PATH;
+            }
+
+            // Override temp download settings for Elfhosted platform
+            if (this.isElfhostedPlatform()) {
+              this.config.useTmpForDownloads = true;
+              this.config.tmpFilePath = '/app/config/temp_downloads';
+            }
+
+            // Emit change event if the file content actually changed
+            if (contentChanged) {
+              this.emit('change');
+            }
+          } catch (error) {
+            console.error('Error processing config file change:', error.message);
+          }
+        }, 100); // 100ms debounce delay
       }
     });
   }
 
   stopWatchingConfig() {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
     if (this.configWatcher) {
       this.configWatcher.close();
     }
@@ -473,6 +634,71 @@ class ConfigModule extends EventEmitter {
         }
 
         return migrated;
+      },
+      '1.26.0': (cfg) => {
+        const migrated = { ...cfg };
+
+        if (migrated.plexPort === undefined || migrated.plexPort === null || migrated.plexPort === '') {
+          migrated.plexPort = '32400';
+        } else if (typeof migrated.plexPort !== 'string') {
+          migrated.plexPort = String(migrated.plexPort);
+        }
+
+        return migrated;
+      },
+      '1.35.0': (cfg) => {
+        const migrated = { ...cfg };
+
+        // Add notification settings
+        if (migrated.notificationsEnabled === undefined) {
+          migrated.notificationsEnabled = false;
+        }
+        if (!migrated.notificationService) {
+          migrated.notificationService = 'discord';
+        }
+        if (migrated.discordWebhookUrl === undefined) {
+          migrated.discordWebhookUrl = '';
+        }
+
+        return migrated;
+      },
+      '1.36.0': (cfg) => {
+        const migrated = { ...cfg };
+
+        // Add automatic video removal settings
+        if (migrated.autoRemovalEnabled === undefined) {
+          migrated.autoRemovalEnabled = false;
+        }
+        if (migrated.autoRemovalFreeSpaceThreshold === undefined) {
+          migrated.autoRemovalFreeSpaceThreshold = null;
+        }
+        if (migrated.autoRemovalVideoAgeThreshold === undefined) {
+          migrated.autoRemovalVideoAgeThreshold = null;
+        }
+        return migrated;
+      },
+      '1.38.0': (cfg) => {
+        const migrated = { ...cfg };
+
+        // Add video codec preference setting
+        if (!migrated.videoCodec) {
+          migrated.videoCodec = 'default';
+        }
+
+        return migrated;
+      },
+      '1.42.0': (cfg) => {
+        const migrated = { ...cfg };
+
+        // Add temp download settings
+        if (migrated.useTmpForDownloads === undefined) {
+          migrated.useTmpForDownloads = false;
+        }
+        if (!migrated.tmpFilePath) {
+          migrated.tmpFilePath = '/tmp/youtarr-downloads';
+        }
+
+        return migrated;
       }
     };
 
@@ -529,6 +755,7 @@ class ConfigModule extends EventEmitter {
     this.config.customCookiesUploaded = true;
     this.config.cookiesEnabled = true;
     this.saveConfig();
+    this.emit('change');
 
     return customPath;
   }
@@ -545,6 +772,7 @@ class ConfigModule extends EventEmitter {
     this.config.customCookiesUploaded = false;
     // Keep cookiesEnabled state unchanged
     this.saveConfig();
+    this.emit('change');
 
     return true;
   }
@@ -553,27 +781,31 @@ class ConfigModule extends EventEmitter {
     const { execFile } = require('child_process');
     const util = require('util');
     const execFilePromise = util.promisify(execFile);
-    
+
     try {
-      // Use configurable data path (falls back to /usr/src/app/data for backward compatibility)
-      const dataPath = process.env.DATA_PATH || '/usr/src/app/data';
-      
+      const targetPath = process.env.DATA_PATH || '/usr/src/app/data';
+
+      if (!targetPath) {
+        console.warn('[Storage] No YouTube output directory configured, cannot check storage status');
+        return null;
+      }
+
       // Use execFile with array arguments to prevent shell injection
       // -B 1 forces output in bytes for accurate calculations
-      const { stdout } = await execFilePromise('df', ['-B', '1', dataPath]);
+      const { stdout } = await execFilePromise('df', ['-B', '1', targetPath]);
       const lines = stdout.trim().split('\n');
-      
+
       if (lines.length < 2) {
         throw new Error('Unexpected df output');
       }
-      
+
       // Parse the second line which contains the actual data
       const parts = lines[1].split(/\s+/);
       const total = parseInt(parts[1]);
       const used = parseInt(parts[2]);
       const available = parseInt(parts[3]);
       const percentUsed = Math.round((used / total) * 100);
-      
+
       return {
         total,
         used,
@@ -589,6 +821,60 @@ class ConfigModule extends EventEmitter {
       console.error('Error getting storage status:', error);
       return null;
     }
+  }
+
+  /**
+   * Convert storage threshold string (e.g., "1GB") to bytes
+   * @param {string} threshold - Threshold string like "500MB", "1GB", etc.
+   * @returns {number|null} - Threshold in bytes, or null if invalid/not set
+   */
+  convertStorageThresholdToBytes(threshold) {
+    if (!threshold || threshold === null) {
+      return null;
+    }
+
+    const units = {
+      'MB': 1024 * 1024,
+      'GB': 1024 * 1024 * 1024
+    };
+
+    // Match pattern like "500MB" or "1GB"
+    const match = threshold.toString().match(/^(\d+)(MB|GB)$/);
+    if (!match) {
+      console.warn(`Invalid storage threshold format: ${threshold}`);
+      return null;
+    }
+
+    const value = parseInt(match[1]);
+    const unit = match[2];
+
+    return value * units[unit];
+  }
+
+  /**
+   * Check if current storage is below the threshold
+   * @param {number} currentAvailable - Current available bytes
+   * @param {string|number} threshold - Threshold (string like "1GB" or number in bytes)
+   * @returns {boolean} - true if below threshold, false otherwise
+   */
+  isStorageBelowThreshold(currentAvailable, threshold) {
+    if (currentAvailable === null || currentAvailable === undefined) {
+      console.warn('Cannot check storage threshold: currentAvailable is null/undefined');
+      return false;
+    }
+
+    let thresholdBytes;
+    if (typeof threshold === 'string') {
+      thresholdBytes = this.convertStorageThresholdToBytes(threshold);
+    } else {
+      thresholdBytes = threshold;
+    }
+
+    if (thresholdBytes === null || thresholdBytes === undefined) {
+      return false;
+    }
+
+    return currentAvailable < thresholdBytes;
   }
 }
 

@@ -3,6 +3,10 @@ const path = require('path');
 const { execSync, spawnSync } = require('child_process');
 const configModule = require('./configModule');
 const nfoGenerator = require('./nfoGenerator');
+const tempPathManager = require('./download/tempPathManager');
+const { JobVideoDownload } = require('../models');
+
+const activeJobId = process.env.YOUTARR_JOB_ID;
 
 const videoPath = process.argv[2]; // get the video file path
 const parsedPath = path.parse(videoPath);
@@ -16,6 +20,40 @@ const jsonPath = path.format({
 
 const videoDirectory = path.dirname(videoPath);
 const imagePath = path.join(videoDirectory, 'poster.jpg'); // assume the image thumbnail is named 'poster.jpg'
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function moveWithRetries(src, dest, { retries = 5, delayMs = 200 } = {}) {
+  let attempt = 0;
+  let lastError;
+
+  while (attempt <= retries) {
+    try {
+      await fs.move(src, dest, { overwrite: true });
+      return;
+    } catch (err) {
+      lastError = err;
+      if (attempt === retries) {
+        throw err;
+      }
+      const backoff = delayMs * Math.pow(2, attempt);
+      await sleep(backoff);
+      attempt += 1;
+    }
+  }
+
+  throw lastError;
+}
+
+async function safeRemove(filePath) {
+  try {
+    await fs.remove(filePath);
+  } catch (err) {
+    if (err && err.code !== 'ENOENT') {
+      console.log(`Error deleting temp file ${filePath}: ${err.message}`);
+    }
+  }
+}
 
 function shouldWriteChannelPosters() {
   const config = configModule.getConfig() || {};
@@ -135,6 +173,17 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     fs.ensureDirSync(directoryPath); // ensures that the directory exists, if it doesn't it will create it
     const newJsonPath = path.join(directoryPath, `${id}.info.json`); // define the new path
 
+    // Calculate the final path for _actual_filepath
+    // If temp downloads are enabled, we need to store the FINAL path, not the temp path
+    const finalVideoPathForJson = tempPathManager.isEnabled() && tempPathManager.isTempPath(videoPath)
+      ? tempPathManager.convertTempToFinal(videoPath)
+      : videoPath;
+
+    // Add the actual video filepath to the JSON data before moving it
+    // IMPORTANT: This should always be the final path, never the temp path
+    jsonData._actual_filepath = finalVideoPathForJson;
+    fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 2));
+
     fs.moveSync(jsonPath, newJsonPath, { overwrite: true }); // move the file
 
     // Generate NFO file for Jellyfin/Kodi/Emby compatibility if enabled
@@ -177,6 +226,19 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         ffmpegArgs.push('-metadata', `keywords=${keywords}`);
       }
 
+      // Add release date for Plex/mp4 embedded metadata
+      // Good lord Plex is finicky
+      if (jsonData.upload_date) {
+        const year = jsonData.upload_date.substring(0, 4);
+        const month = jsonData.upload_date.substring(4, 6);
+        const day = jsonData.upload_date.substring(6, 8);
+        const releaseDate = `${year}-${month}-${day}`;
+        ffmpegArgs.push('-metadata', `release_date=${releaseDate}`);
+        ffmpegArgs.push('-metadata', `date=${releaseDate}`);
+        ffmpegArgs.push('-metadata', `year=${year}`);
+        ffmpegArgs.push('-metadata', `originaldate=${releaseDate}`);
+      }
+
       // Add media type hint for Plex (9 = Home Video)
       ffmpegArgs.push('-metadata', 'media_type=9');
 
@@ -199,27 +261,40 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       }
 
       // Replace original with temp file if successful
-      if (fs.existsSync(tempPath)) {
-        const tempStats = fs.statSync(tempPath);
-        const origStats = fs.statSync(videoPath);
+      if (await fs.pathExists(tempPath)) {
+        const tempStats = await fs.stat(tempPath);
+        let origStats = null;
+        try {
+          origStats = await fs.stat(videoPath);
+        } catch (statErr) {
+          if (!statErr || statErr.code !== 'ENOENT') {
+            throw statErr;
+          }
+        }
 
-        // Basic sanity check
-        if (tempStats.size >= origStats.size * 0.9) {
-          fs.renameSync(tempPath, videoPath);
-          console.log('Successfully added additional metadata to video file');
+        const originalSize = origStats ? origStats.size : 0;
+        const sizeThreshold = originalSize * 0.9;
+        const sizeCheckPassed = !origStats || tempStats.size >= sizeThreshold;
+
+        if (sizeCheckPassed) {
+          try {
+            await moveWithRetries(tempPath, videoPath);
+            console.log('Successfully added additional metadata to video file');
+          } catch (moveErr) {
+            console.log(`Note: Could not replace video with metadata-enhanced version: ${moveErr.message}`);
+            await safeRemove(tempPath);
+          }
         } else {
-          fs.unlinkSync(tempPath);
           console.log('Skipped metadata update due to file size mismatch');
+          await safeRemove(tempPath);
         }
       }
     } catch (err) {
       console.log(`Note: Could not add additional metadata: ${err.message}`);
       // Clean up temp file if exists
       const tempPath = videoPath + '.metadata_temp.mp4';
-      if (fs.existsSync(tempPath)) {
-        try { fs.unlinkSync(tempPath); } catch (e) {
-          console.log(`Error deleting temp file: ${e.message}`);
-        }
+      if (await fs.pathExists(tempPath)) {
+        await safeRemove(tempPath);
       }
     }
 
@@ -285,6 +360,75 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
           console.log(`Error setting directory timestamp: ${err.message}`);
         }
       }
+    }
+
+    // If temp downloads are enabled, move files from temp to final location
+    let finalVideoPath = videoPath;
+
+    if (tempPathManager.isEnabled() && tempPathManager.isTempPath(videoPath)) {
+      console.log('[Post-Process] Temp downloads enabled, moving files to final location...');
+
+      // Calculate final paths
+      const finalPath = tempPathManager.convertTempToFinal(videoPath);
+      const finalDir = path.dirname(finalPath);
+
+      console.log('[Post-Process] Moving video directory:');
+      console.log(`  From (temp): ${videoDirectory}`);
+      console.log(`  To (final): ${finalDir}`);
+
+      try {
+        // Move the entire video directory from temp to final location
+        const moveResult = await tempPathManager.moveToFinal(videoDirectory);
+
+        if (!moveResult.success) {
+          console.error(`[Post-Process] ERROR: Failed to move files to final location: ${moveResult.error}`);
+          console.error(`[Post-Process] Files remain in temp location: ${videoDirectory}`);
+          console.error('[Post-Process] This video will be marked as failed.');
+          // Exit with error code to signal failure
+          process.exit(1);
+        }
+
+        // Update paths to final locations
+        finalVideoPath = finalPath;
+
+        console.log(`[Post-Process] Successfully moved to final location: ${finalDir}`);
+
+        // Verify the final file exists
+        if (!fs.existsSync(finalVideoPath)) {
+          console.error(`[Post-Process] ERROR: Final video file doesn't exist after move: ${finalVideoPath}`);
+          process.exit(1);
+        }
+
+      } catch (error) {
+        console.error('[Post-Process] ERROR during move operation:', error);
+        console.error(`[Post-Process] Files remain in temp location: ${videoDirectory}`);
+        process.exit(1);
+      }
+    }
+
+    // Mark this video as completed in the JobVideoDownload tracking table
+    // IMPORTANT: Always use final path in database, never temp path
+    if (activeJobId) {
+      try {
+        const [updatedCount] = await JobVideoDownload.update(
+          { status: 'completed', file_path: finalVideoPath },
+          {
+            where: {
+              job_id: activeJobId,
+              youtube_id: id
+            }
+          }
+        );
+        if (updatedCount > 0) {
+          console.log(`Marked video ${id} as completed in tracking for job ${activeJobId}`);
+          console.log(`  Stored path in DB: ${finalVideoPath}`);
+        }
+      } catch (err) {
+        console.error(`Error updating JobVideoDownload status for ${id}:`, err.message);
+        // Don't fail the entire post-processing if this fails
+      }
+    } else {
+      console.warn(`Job ID not available while marking ${id} as completed; skipping tracking update`);
     }
   }
 })().catch(err => {
