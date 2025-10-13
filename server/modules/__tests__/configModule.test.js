@@ -2,6 +2,9 @@
 const path = require('path');
 const { EventEmitter } = require('events');
 
+// Mock logger module
+jest.mock('../../logger');
+
 // Mock child_process for getStorageStatus tests
 jest.mock('child_process', () => ({
   execFile: jest.fn()
@@ -10,6 +13,7 @@ jest.mock('child_process', () => ({
 describe('ConfigModule', () => {
   let fs;
   let ConfigModule;
+  let logger;
   const mockConfigPath = path.join(__dirname, '../../../config/config.json');
   const mockConfig = {
     plexApiKey: 'test-plex-key',
@@ -40,6 +44,13 @@ describe('ConfigModule', () => {
     }));
 
     fs = require('fs');
+    logger = require('../../logger');
+
+    // Reset logger mocks
+    logger.info.mockClear();
+    logger.warn.mockClear();
+    logger.error.mockClear();
+    logger.debug.mockClear();
 
     delete process.env.IN_DOCKER_CONTAINER;
   });
@@ -390,30 +401,27 @@ describe('ConfigModule', () => {
     });
 
     test('should handle df command errors', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
       execFilePromise.mockRejectedValue(new Error('df command failed'));
 
       const status = await ConfigModule.getStorageStatus();
 
       expect(status).toBeNull();
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Error getting storage status:',
-        expect.any(Error)
+      expect(logger.error).toHaveBeenCalledWith(
+        { err: expect.any(Error) },
+        'Error getting storage status'
       );
-
-      consoleErrorSpy.mockRestore();
     });
 
     test('should handle unexpected df output', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
       execFilePromise.mockResolvedValue({ stdout: 'invalid output' });
 
       const status = await ConfigModule.getStorageStatus();
 
       expect(status).toBeNull();
-      expect(consoleErrorSpy).toHaveBeenCalled();
-
-      consoleErrorSpy.mockRestore();
+      expect(logger.error).toHaveBeenCalledWith(
+        { err: expect.any(Error) },
+        'Error getting storage status'
+      );
     });
 
     test('should use custom DATA_PATH when set', async () => {
@@ -494,7 +502,8 @@ describe('ConfigModule', () => {
 
       jest.doMock('fs', () => mockFs);
 
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      // Get fresh logger reference before requiring ConfigModule
+      const mockLogger = require('../../logger');
       ConfigModule = require('../configModule');
 
       expect(mockFs.writeFileSync).toHaveBeenCalled();
@@ -505,9 +514,7 @@ describe('ConfigModule', () => {
       expect(writtenConfig.channelDownloadFrequency).toBe('0 */6 * * *');
       expect(writtenConfig.plexApiKey).toBe('');
       expect(writtenConfig.plexPort).toBe('32400');
-      expect(consoleSpy).toHaveBeenCalledWith('Platform deployment detected (DATA_PATH is set). Auto-creating config.json...');
-
-      consoleSpy.mockRestore();
+      expect(mockLogger.info).toHaveBeenCalledWith('Platform deployment detected (DATA_PATH is set). Auto-creating config.json...');
       delete process.env.DATA_PATH;
     });
 
@@ -569,7 +576,8 @@ describe('ConfigModule', () => {
 
       jest.doMock('fs', () => mockFs);
 
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      // Get fresh logger reference before requiring ConfigModule
+      const mockLogger = require('../../logger');
       ConfigModule = require('../configModule');
 
       // Verify the config was written
@@ -585,9 +593,7 @@ describe('ConfigModule', () => {
       // Should not have the comment field
       expect(writtenConfig['//comment']).toBeUndefined();
 
-      expect(consoleSpy).toHaveBeenCalledWith('Auto-creating config.json (docker default without DATA_PATH)');
-
-      consoleSpy.mockRestore();
+      expect(mockLogger.info).toHaveBeenCalledWith('Auto-creating config.json (docker default without DATA_PATH)');
       delete process.env.IN_DOCKER_CONTAINER;
     });
 
@@ -618,7 +624,8 @@ describe('ConfigModule', () => {
 
       jest.doMock('fs', () => mockFs);
 
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      // Get fresh logger reference before requiring ConfigModule
+      const mockLogger = require('../../logger');
       ConfigModule = require('../configModule');
 
       expect(mockFs.writeFileSync).toHaveBeenCalled();
@@ -630,9 +637,7 @@ describe('ConfigModule', () => {
       expect(writtenConfig.dockerAutoCreated).toBe(true);
       expect(writtenConfig.plexPort).toBe('32400');
 
-      expect(consoleSpy).toHaveBeenCalledWith('Could not load config.example.json, using inline defaults');
-
-      consoleSpy.mockRestore();
+      expect(mockLogger.info).toHaveBeenCalledWith('Could not load config.example.json, using inline defaults');
     });
 
     test('ensureConfigExists should no-op when file already exists', () => {
@@ -675,13 +680,15 @@ describe('ConfigModule', () => {
 
       jest.doMock('fs', () => mockFs);
 
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      // Get fresh logger reference before requiring ConfigModule
+      const mockLogger = require('../../logger');
       ConfigModule = require('../configModule');
 
       expect(mockFs.mkdirSync).toHaveBeenCalledWith(expect.stringContaining('config'), { recursive: true });
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringMatching(/Created config directory/));
-
-      consoleSpy.mockRestore();
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        { path: expect.stringContaining('config') },
+        'Created config directory'
+      );
       delete process.env.DATA_PATH;
     });
 
@@ -955,16 +962,15 @@ describe('ConfigModule', () => {
     });
 
     test('should return null for invalid formats', () => {
-      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
-
       expect(ConfigModule.convertStorageThresholdToBytes('invalid')).toBeNull();
       expect(ConfigModule.convertStorageThresholdToBytes('100')).toBeNull();
       expect(ConfigModule.convertStorageThresholdToBytes('100TB')).toBeNull();
       expect(ConfigModule.convertStorageThresholdToBytes('GB100')).toBeNull();
 
-      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid storage threshold format'));
-
-      consoleWarnSpy.mockRestore();
+      expect(logger.warn).toHaveBeenCalledWith(
+        { threshold: expect.anything() },
+        'Invalid storage threshold format'
+      );
     });
 
     test('should return null for null or undefined input', () => {
@@ -1014,25 +1020,22 @@ describe('ConfigModule', () => {
     });
 
     test('should return false and log warning for null/undefined currentAvailable', () => {
-      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
-
       expect(ConfigModule.isStorageBelowThreshold(null, '1GB')).toBe(false);
       expect(ConfigModule.isStorageBelowThreshold(undefined, '1GB')).toBe(false);
 
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Cannot check storage threshold')
-      );
-
-      consoleWarnSpy.mockRestore();
+      expect(logger.warn).toHaveBeenCalledWith('Cannot check storage threshold: currentAvailable is null/undefined');
     });
 
     test('should handle invalid threshold format gracefully', () => {
-      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
       const available = 500 * 1024 * 1024;
 
       expect(ConfigModule.isStorageBelowThreshold(available, 'invalid')).toBe(false);
 
-      consoleWarnSpy.mockRestore();
+      // Should have logged a warning about the invalid format
+      expect(logger.warn).toHaveBeenCalledWith(
+        { threshold: 'invalid' },
+        'Invalid storage threshold format'
+      );
     });
 
     test('should correctly compare edge cases', () => {
@@ -1264,7 +1267,8 @@ describe('ConfigModule', () => {
       jest.doMock('fs', () => mockFs);
       jest.doMock('uuid', () => ({ v4: jest.fn(() => 'test-uuid-1234') }));
 
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      // Get fresh logger reference before requiring ConfigModule
+      const mockLogger = require('../../logger');
       require('../configModule');
 
       // Find the mkdirSync call for temp_downloads
@@ -1274,9 +1278,10 @@ describe('ConfigModule', () => {
       expect(tempDownloadCall).toBeDefined();
       expect(tempDownloadCall[1]).toEqual({ recursive: true });
 
-      expect(consoleSpy).toHaveBeenCalledWith('Created Elfhosted temp downloads directory: /app/config/temp_downloads');
-
-      consoleSpy.mockRestore();
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        { path: '/app/config/temp_downloads' },
+        'Created Elfhosted temp downloads directory'
+      );
       delete process.env.PLATFORM;
       delete process.env.DATA_PATH;
     });
@@ -1422,18 +1427,32 @@ describe('ConfigModule', () => {
       });
 
       test('should return null and log warning when file is missing', () => {
-        const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+        // Get a fresh logger reference for this test
+        const mockLogger = require('../../logger');
+
         ConfigModule.config.cookiesEnabled = true;
         ConfigModule.config.customCookiesUploaded = true;
-        fs.existsSync.mockReturnValue(false);
+
+        // Clear previous calls
+        mockLogger.warn.mockClear();
+        fs.existsSync.mockClear();
+
+        // Ensure existsSync returns false for this test
+        fs.existsSync.mockReturnValueOnce(false);
 
         const path = ConfigModule.getCookiesPath();
-        expect(path).toBeNull();
-        expect(consoleWarnSpy).toHaveBeenCalledWith(
-          expect.stringContaining('Cookie file not found')
-        );
 
-        consoleWarnSpy.mockRestore();
+        // Verify the return value
+        expect(path).toBeNull();
+
+        // Verify fs.existsSync was called
+        expect(fs.existsSync).toHaveBeenCalledWith(expect.stringContaining('cookies.user.txt'));
+
+        // Verify logger.warn was called with the expected arguments
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          { cookiePath: expect.stringContaining('cookies.user.txt') },
+          'Cookie file not found, falling back to no cookies'
+        );
       });
     });
 

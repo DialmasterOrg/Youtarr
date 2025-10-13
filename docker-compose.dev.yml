@@ -45,6 +45,8 @@ services:
       # Optional: Seed initial admin credentials for headless or scripted dev runs
       AUTH_PRESET_USERNAME: ${AUTH_PRESET_USERNAME:-}
       AUTH_PRESET_PASSWORD: ${AUTH_PRESET_PASSWORD:-}
+      # Logging configuration
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       # Optional: Custom data path for platforms like Elfhosted (defaults to /usr/src/app/data)
       # DATA_PATH: /storage/rclone/storagebox/youtube
     ports:

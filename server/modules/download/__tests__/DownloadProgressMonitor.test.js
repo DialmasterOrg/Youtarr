@@ -1,5 +1,8 @@
 /* eslint-env jest */
 
+// Mock the logger before requiring DownloadProgressMonitor
+jest.mock('../../../logger');
+
 const DownloadProgressMonitor = require('../DownloadProgressMonitor');
 
 describe('DownloadProgressMonitor', () => {
@@ -15,7 +18,6 @@ describe('DownloadProgressMonitor', () => {
   beforeEach(() => {
     monitor = new DownloadProgressMonitor(mockJobId, 'Channel Downloads');
     jest.spyOn(Date, 'now').mockReturnValue(1000000);
-    jest.spyOn(console, 'log').mockImplementation(() => {});
   });
 
   afterEach(() => {

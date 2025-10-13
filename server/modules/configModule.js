@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const uuidv4 = require('uuid').v4;
 const EventEmitter = require('events');
+const logger = require('../logger');
 
 class ConfigModule extends EventEmitter {
   constructor() {
@@ -225,13 +226,13 @@ class ConfigModule extends EventEmitter {
 
     // Handle platform deployments with DATA_PATH
     if (process.env.DATA_PATH) {
-      console.log('Platform deployment detected (DATA_PATH is set). Auto-creating config.json...');
+      logger.info('Platform deployment detected (DATA_PATH is set). Auto-creating config.json...');
       this.createDefaultConfig();
       return;
     }
 
     // Handle Docker deployments without DATA_PATH
-    console.log('Auto-creating config.json (docker default without DATA_PATH)');
+    logger.info('Auto-creating config.json (docker default without DATA_PATH)');
 
     // Ensure config directory exists
     const configDir = path.dirname(this.configPath);
@@ -253,7 +254,7 @@ class ConfigModule extends EventEmitter {
       // Use example as base
       defaultConfig = exampleConfig;
     } catch (error) {
-      console.log('Could not load config.example.json, using inline defaults');
+      logger.info('Could not load config.example.json, using inline defaults');
 
       // Fallback to minimal defaults if example file unavailable
       defaultConfig = {
@@ -328,14 +329,14 @@ class ConfigModule extends EventEmitter {
     const imagePath = this.getImagePath();
     if (!fs.existsSync(imagePath)) {
       fs.mkdirSync(imagePath, { recursive: true });
-      console.log(`Created platform images directory: ${imagePath}`);
+      logger.info({ path: imagePath }, 'Created platform images directory');
     }
 
     // Jobs directory is created by jobModule, but we can ensure parent exists
     const configDir = path.dirname(this.configPath);
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true });
-      console.log(`Created platform config directory: ${configDir}`);
+      logger.info({ path: configDir }, 'Created platform config directory');
     }
 
     // Ensure temp download directory exists for Elfhosted
@@ -343,7 +344,7 @@ class ConfigModule extends EventEmitter {
       const tempDownloadPath = '/app/config/temp_downloads';
       if (!fs.existsSync(tempDownloadPath)) {
         fs.mkdirSync(tempDownloadPath, { recursive: true });
-        console.log(`Created Elfhosted temp downloads directory: ${tempDownloadPath}`);
+        logger.info({ path: tempDownloadPath }, 'Created Elfhosted temp downloads directory');
       }
     }
   }
@@ -416,7 +417,7 @@ class ConfigModule extends EventEmitter {
     const configDir = path.dirname(this.configPath);
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true });
-      console.log(`Created config directory: ${configDir}`);
+      logger.info({ path: configDir }, 'Created config directory');
     }
 
     // Create default config for platform deployments
@@ -492,7 +493,7 @@ class ConfigModule extends EventEmitter {
     defaultConfig.plexPort = '32400';
 
     fs.writeFileSync(this.configPath, JSON.stringify(defaultConfig, null, 2));
-    console.log(`Auto-created config.json with default settings at: ${this.configPath}`);
+    logger.info({ configPath: this.configPath }, 'Auto-created config.json with default settings');
   }
 
   watchConfig() {
@@ -560,7 +561,7 @@ class ConfigModule extends EventEmitter {
               this.emit('change');
             }
           } catch (error) {
-            console.error('Error processing config file change:', error.message);
+            logger.error({ err: error }, 'Error processing config file change');
           }
         }, 100); // 100ms debounce delay
       }
@@ -725,7 +726,7 @@ class ConfigModule extends EventEmitter {
     }
 
     // Log warning if cookies are enabled but file is missing
-    console.warn(`Cookie file not found: ${cookiePath}. Falling back to no cookies.`);
+    logger.warn({ cookiePath }, 'Cookie file not found, falling back to no cookies');
     return null;
   }
 
@@ -786,7 +787,7 @@ class ConfigModule extends EventEmitter {
       const targetPath = process.env.DATA_PATH || '/usr/src/app/data';
 
       if (!targetPath) {
-        console.warn('[Storage] No YouTube output directory configured, cannot check storage status');
+        logger.warn('No YouTube output directory configured, cannot check storage status');
         return null;
       }
 
@@ -818,7 +819,7 @@ class ConfigModule extends EventEmitter {
         availableGB: (available / (1024 ** 3)).toFixed(1)
       };
     } catch (error) {
-      console.error('Error getting storage status:', error);
+      logger.error({ err: error }, 'Error getting storage status');
       return null;
     }
   }
@@ -841,7 +842,7 @@ class ConfigModule extends EventEmitter {
     // Match pattern like "500MB" or "1GB"
     const match = threshold.toString().match(/^(\d+)(MB|GB)$/);
     if (!match) {
-      console.warn(`Invalid storage threshold format: ${threshold}`);
+      logger.warn({ threshold }, 'Invalid storage threshold format');
       return null;
     }
 
@@ -859,7 +860,7 @@ class ConfigModule extends EventEmitter {
    */
   isStorageBelowThreshold(currentAvailable, threshold) {
     if (currentAvailable === null || currentAvailable === undefined) {
-      console.warn('Cannot check storage threshold: currentAvailable is null/undefined');
+      logger.warn('Cannot check storage threshold: currentAvailable is null/undefined');
       return false;
     }
 

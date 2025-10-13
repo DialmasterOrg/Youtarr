@@ -3,10 +3,12 @@
 const videoValidationModule = require('../videoValidationModule');
 const ytDlpRunner = require('../ytDlpRunner');
 const archiveModule = require('../archiveModule');
+const logger = require('../../logger');
 
 // Mock dependencies
 jest.mock('../ytDlpRunner');
 jest.mock('../archiveModule');
+jest.mock('../../logger');
 
 describe('VideoValidationModule', () => {
   beforeEach(() => {
@@ -14,6 +16,11 @@ describe('VideoValidationModule', () => {
     jest.clearAllMocks();
     // Clear the module's cache
     videoValidationModule.cache.clear();
+    // Clear logger mocks
+    logger.debug.mockClear();
+    logger.info.mockClear();
+    logger.warn.mockClear();
+    logger.error.mockClear();
   });
 
   describe('normalizeUrlToVideoId', () => {
@@ -319,6 +326,149 @@ describe('VideoValidationModule', () => {
 
       expect(result.isValidUrl).toBe(true);
       expect(result.isMembersOnly).toBe(true);
+    });
+  });
+
+  describe('logger integration', () => {
+    it('should log debug message when fetching metadata', async () => {
+      const mockMetadata = {
+        title: 'Test Video',
+        channel: 'TestChannel',
+        duration: 300,
+        availability: 'public'
+      };
+
+      ytDlpRunner.fetchMetadata.mockResolvedValue(mockMetadata);
+      archiveModule.isVideoInArchive.mockResolvedValue(false);
+
+      await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=OOUclRI0Ae4');
+
+      expect(logger.debug).toHaveBeenCalledWith(
+        { videoId: 'OOUclRI0Ae4' },
+        'Fetching metadata for video'
+      );
+    });
+
+    it('should log debug message when using cached response', async () => {
+      const mockMetadata = {
+        title: 'Test Video',
+        channel: 'TestChannel',
+        duration: 300,
+        availability: 'public'
+      };
+
+      ytDlpRunner.fetchMetadata.mockResolvedValue(mockMetadata);
+      archiveModule.isVideoInArchive.mockResolvedValue(false);
+
+      // First call to populate cache
+      await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=OOUclRI0Ae4');
+
+      // Clear mocks before second call
+      logger.debug.mockClear();
+
+      // Second call should use cache
+      await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=OOUclRI0Ae4');
+
+      expect(logger.debug).toHaveBeenCalledWith(
+        { videoId: 'OOUclRI0Ae4' },
+        'Using cached response for video, checking current archive status'
+      );
+    });
+
+    it('should log error when fetchMetadata fails', async () => {
+      const error = new Error('Network error');
+      ytDlpRunner.fetchMetadata.mockRejectedValue(error);
+
+      await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=OOUclRI0Ae4');
+
+      expect(logger.error).toHaveBeenCalledWith(
+        { err: error, url: 'https://www.youtube.com/watch?v=OOUclRI0Ae4' },
+        'Error fetching video metadata'
+      );
+    });
+
+    it('should log warning when archive check fails', async () => {
+      const mockMetadata = {
+        title: 'Test Video',
+        channel: 'TestChannel',
+        duration: 300,
+        availability: 'public'
+      };
+      const archiveError = new Error('Database error');
+
+      ytDlpRunner.fetchMetadata.mockResolvedValue(mockMetadata);
+      archiveModule.isVideoInArchive.mockRejectedValue(archiveError);
+
+      await videoValidationModule.validateVideo('https://www.youtube.com/watch?v=OOUclRI0Ae4');
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        { err: archiveError, videoId: 'OOUclRI0Ae4' },
+        'Error checking archive, assuming video is not duplicate'
+      );
+    });
+  });
+
+  describe('fetchVideoMetadata', () => {
+    it('should fetch metadata successfully', async () => {
+      const mockMetadata = {
+        title: 'Test Video',
+        channel: 'TestChannel',
+        duration: 300
+      };
+      const url = 'https://www.youtube.com/watch?v=test123';
+
+      ytDlpRunner.fetchMetadata.mockResolvedValue(mockMetadata);
+
+      const result = await videoValidationModule.fetchVideoMetadata(url);
+
+      expect(result).toEqual(mockMetadata);
+      expect(ytDlpRunner.fetchMetadata).toHaveBeenCalledWith(url, 10000);
+    });
+
+    it('should log error and rethrow when fetch fails', async () => {
+      const error = new Error('Failed to fetch');
+      const url = 'https://www.youtube.com/watch?v=test123';
+
+      ytDlpRunner.fetchMetadata.mockRejectedValue(error);
+
+      await expect(videoValidationModule.fetchVideoMetadata(url)).rejects.toThrow('Failed to fetch');
+
+      expect(logger.error).toHaveBeenCalledWith(
+        { err: error, url },
+        'Error fetching video metadata'
+      );
+    });
+  });
+
+  describe('isDuplicate', () => {
+    it('should return true when video is in archive', async () => {
+      archiveModule.isVideoInArchive.mockResolvedValue(true);
+
+      const result = await videoValidationModule.isDuplicate('test123');
+
+      expect(result).toBe(true);
+      expect(archiveModule.isVideoInArchive).toHaveBeenCalledWith('test123');
+    });
+
+    it('should return false when video is not in archive', async () => {
+      archiveModule.isVideoInArchive.mockResolvedValue(false);
+
+      const result = await videoValidationModule.isDuplicate('test123');
+
+      expect(result).toBe(false);
+    });
+
+    it('should log warning and return false when archive check fails', async () => {
+      const error = new Error('Database connection failed');
+      archiveModule.isVideoInArchive.mockRejectedValue(error);
+
+      const result = await videoValidationModule.isDuplicate('test123');
+
+      expect(result).toBe(false);
+      expect(logger.warn).toHaveBeenCalledWith(
+        { err: error, videoId: 'test123' },
+        'Error checking archive, assuming video is not duplicate'
+      );
     });
   });
 });

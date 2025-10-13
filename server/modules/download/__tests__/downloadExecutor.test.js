@@ -26,6 +26,9 @@ jest.mock('fs', () => {
   };
 });
 
+// Mock logger
+jest.mock('../../../logger');
+
 // Mock dependencies
 jest.mock('../../configModule', () => ({
   getConfig: jest.fn()
@@ -76,19 +79,14 @@ const DownloadProgressMonitor = require('../DownloadProgressMonitor');
 const VideoMetadataProcessor = require('../videoMetadataProcessor');
 const tempPathManager = require('../tempPathManager');
 const { JobVideoDownload } = require('../../../models');
+const logger = require('../../../logger');
 
 describe('DownloadExecutor', () => {
   let executor;
   let mockProcess;
-  let consoleLogSpy;
-  let consoleErrorSpy;
 
   beforeEach(() => {
     jest.clearAllMocks();
-
-    // Setup console spies
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     // Setup default mocks
     configModule.getConfig.mockReturnValue({
@@ -138,8 +136,6 @@ describe('DownloadExecutor', () => {
   });
 
   afterEach(() => {
-    consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
     // Clear any force kill timeouts from the executor
     if (executor.forceKillTimeout) {
       clearTimeout(executor.forceKillTimeout);
@@ -295,7 +291,7 @@ describe('DownloadExecutor', () => {
 
       await executor.cleanupInProgressVideos('job-123');
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('No in-progress videos to clean up');
+      expect(logger.info).toHaveBeenCalledWith('No in-progress videos to clean up');
     });
 
     it('should cleanup video directory and database entry', async () => {
@@ -329,7 +325,7 @@ describe('DownloadExecutor', () => {
 
       await executor.cleanupInProgressVideos('job-123');
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Skipping non-video directory'));
+      expect(logger.info).toHaveBeenCalledWith({ dirPath: '/output/Channel' }, 'Skipping non-video directory');
       expect(mockFsPromises.rmdir).not.toHaveBeenCalled();
       // Should still destroy the entry since cleanup was attempted
       expect(mockVideoDownload.destroy).not.toHaveBeenCalled();
@@ -370,7 +366,10 @@ describe('DownloadExecutor', () => {
 
       await executor.cleanupInProgressVideos('job-123');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Error removing'), 'Permission denied');
+      expect(logger.error).toHaveBeenCalledWith(
+        { err: expect.any(Error), fileName: 'video.mp4' },
+        'Error removing file'
+      );
     });
   });
 
@@ -424,7 +423,10 @@ describe('DownloadExecutor', () => {
 
       await executor.cleanupPartialFiles(files);
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Error reading directory'), expect.any(String));
+      expect(logger.error).toHaveBeenCalledWith(
+        { err: expect.any(Error), dir: '/output' },
+        'Error reading directory'
+      );
     });
   });
 
@@ -713,7 +715,7 @@ describe('DownloadExecutor', () => {
   describe('terminateCurrentJob', () => {
     it('should return null when no job is running', () => {
       expect(executor.terminateCurrentJob()).toBeNull();
-      expect(consoleLogSpy).toHaveBeenCalledWith('No job currently running to terminate');
+      expect(logger.info).toHaveBeenCalledWith('No job currently running to terminate');
     });
 
     it('should send SIGTERM to current process', () => {
@@ -774,7 +776,10 @@ describe('DownloadExecutor', () => {
 
       expect(jobId).toBeNull();
       expect(executor.manualTerminationReason).toBeNull();
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Error terminating job:', expect.any(String));
+      expect(logger.error).toHaveBeenCalledWith(
+        { err: expect.any(Error) },
+        'Error terminating job'
+      );
     });
   });
 

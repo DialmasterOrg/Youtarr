@@ -5,6 +5,7 @@ const path = require('path');
 
 // Mock dependencies - must be done before requiring the module
 jest.mock('fs');
+jest.mock('../../../logger');
 jest.mock('../../configModule', () => ({
   getJobsPath: jest.fn(),
   directoryPath: '/output/directory'
@@ -17,6 +18,7 @@ fs.promises = {
 
 const VideoMetadataProcessor = require('../videoMetadataProcessor');
 const configModule = require('../../configModule');
+const logger = require('../../../logger');
 
 describe('VideoMetadataProcessor', () => {
   const mockJobsPath = '/jobs/path';
@@ -24,7 +26,6 @@ describe('VideoMetadataProcessor', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     configModule.getJobsPath.mockReturnValue(mockJobsPath);
-    jest.spyOn(console, 'log').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -367,13 +368,21 @@ describe('VideoMetadataProcessor', () => {
 
       await VideoMetadataProcessor.processVideoMetadata(newVideoUrls);
 
-      expect(console.log).toHaveBeenCalledWith(
-        'Looking for info.json file at',
-        path.join(mockJobsPath, 'info/logtest.info.json')
+      expect(logger.debug).toHaveBeenCalledWith(
+        { dataPath: path.join(mockJobsPath, 'info/logtest.info.json'), videoId: 'logtest' },
+        'Looking for info.json file'
       );
-      expect(console.log).toHaveBeenCalledWith(
-        'Found info.json file at',
-        path.join(mockJobsPath, 'info/logtest.info.json')
+      expect(logger.debug).toHaveBeenCalledWith(
+        { dataPath: path.join(mockJobsPath, 'info/logtest.info.json'), videoId: 'logtest' },
+        'Found info.json file'
+      );
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filepath: expect.any(String),
+          fileSize: 1024000,
+          videoId: 'logtest'
+        }),
+        'Found video file'
       );
     });
 
@@ -383,9 +392,9 @@ describe('VideoMetadataProcessor', () => {
 
       await VideoMetadataProcessor.processVideoMetadata(newVideoUrls);
 
-      expect(console.log).toHaveBeenCalledWith(
-        'No info.json file at',
-        path.join(mockJobsPath, 'info/notfound.info.json')
+      expect(logger.debug).toHaveBeenCalledWith(
+        { dataPath: path.join(mockJobsPath, 'info/notfound.info.json'), videoId: 'notfound' },
+        'No info.json file found'
       );
     });
 
@@ -564,7 +573,15 @@ describe('VideoMetadataProcessor', () => {
 
       const result = await resultPromise;
       expect(result).toBe(mockStatsNonZero);
-      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('File found but size is 0'));
+      expect(logger.debug).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filePath: '/test/file.mp4',
+          delayMs: expect.any(Number),
+          attempt: expect.any(Number),
+          maxRetries: 4
+        }),
+        'File found but size is 0, waiting for file to be written'
+      );
     });
 
     it('should use custom retry settings when provided', async () => {
@@ -605,13 +622,22 @@ describe('VideoMetadataProcessor', () => {
       const resultPromise = VideoMetadataProcessor.waitForFile('/test/file.mp4');
 
       await jest.advanceTimersByTimeAsync(100);
-      expect(console.log).toHaveBeenCalledWith('Waiting 100ms for file to be available... (attempt 1/4)');
+      expect(logger.debug).toHaveBeenCalledWith(
+        { filePath: '/test/file.mp4', delayMs: 100, attempt: 1, maxRetries: 4 },
+        'Waiting for file to be available'
+      );
 
       await jest.advanceTimersByTimeAsync(200);
-      expect(console.log).toHaveBeenCalledWith('Waiting 200ms for file to be available... (attempt 2/4)');
+      expect(logger.debug).toHaveBeenCalledWith(
+        { filePath: '/test/file.mp4', delayMs: 200, attempt: 2, maxRetries: 4 },
+        'Waiting for file to be available'
+      );
 
       await jest.advanceTimersByTimeAsync(400);
-      expect(console.log).toHaveBeenCalledWith('Waiting 400ms for file to be available... (attempt 3/4)');
+      expect(logger.debug).toHaveBeenCalledWith(
+        { filePath: '/test/file.mp4', delayMs: 400, attempt: 3, maxRetries: 4 },
+        'Waiting for file to be available'
+      );
 
       await jest.advanceTimersByTimeAsync(800);
       await resultPromise;

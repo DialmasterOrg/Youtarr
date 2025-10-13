@@ -1,7 +1,66 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const logger = require('./logger');
+const pinoHttp = require('pino-http');
 const app = express();
 app.set('trust proxy', true); // Trust proxy headers for correct IP detection
+
+// Setup HTTP request logging with pino-http
+// This must come after trust proxy but before other middleware
+app.use(pinoHttp({
+  logger: logger,
+  // Skip noisy endpoints to reduce log clutter
+  autoLogging: {
+    ignore: (req) => {
+      const noisyEndpoints = [
+        '/api/health',
+        '/getCurrentReleaseVersion',
+        '/getconfig',
+        '/api/storage/status'
+      ];
+      return noisyEndpoints.includes(req.url);
+    }
+  },
+  // Generate unique request ID for correlation
+  genReqId: (req) => {
+    const existingId = req.id || req.headers['x-request-id'];
+    if (existingId) return existingId;
+    return require('crypto').randomUUID();
+  },
+  // Only log warnings and errors at info level, success at debug
+  customLogLevel: (req, res, err) => {
+    if (res.statusCode >= 400 && res.statusCode < 500) {
+      return 'warn';
+    } else if (res.statusCode >= 500 || err) {
+      return 'error';
+    }
+    // Successful requests go to debug level to reduce noise
+    return 'debug';
+  },
+  // Use minimal serializers to reduce verbosity
+  serializers: {
+    req: (req) => ({
+      id: req.id,
+      method: req.method,
+      url: req.url,
+      // Only include query/params if they exist
+      ...(Object.keys(req.query || {}).length > 0 && { query: req.query }),
+      ...(Object.keys(req.params || {}).length > 0 && { params: req.params }),
+      remoteAddress: req.remoteAddress,
+    }),
+    res: (res) => ({
+      statusCode: res.statusCode,
+    }),
+  },
+  // Customize the success message to be more concise
+  customSuccessMessage: (req, res) => {
+    return `${req.method} ${req.url} ${res.statusCode}`;
+  },
+  customErrorMessage: (req, res, err) => {
+    return `${req.method} ${req.url} ${res.statusCode} - ${err?.message || 'Error'}`;
+  },
+}));
+
 app.use(express.json());
 const path = require('path');
 const fs = require('fs');
@@ -88,36 +147,34 @@ const initialize = async () => {
 
     if (presetUsername || presetPassword) {
       if (!presetUsername || !presetPassword) {
-        console.warn('[AUTH] Ignoring preset credentials because both AUTH_PRESET_USERNAME and AUTH_PRESET_PASSWORD must be set.');
+        logger.warn('Ignoring preset credentials because both AUTH_PRESET_USERNAME and AUTH_PRESET_PASSWORD must be set');
       } else {
         const trimmedUsername = presetUsername.trim();
         const config = configModule.getConfig();
 
         if (config.username && config.passwordHash) {
-          console.log('[AUTH] Existing credentials found in config; preset environment values were ignored.');
+          logger.info('Existing credentials found in config; preset environment values were ignored');
         } else if (!trimmedUsername) {
-          console.warn('[AUTH] Ignoring preset credentials because AUTH_PRESET_USERNAME is empty after trimming.');
+          logger.warn('Ignoring preset credentials because AUTH_PRESET_USERNAME is empty after trimming');
         } else if (trimmedUsername.length > userNameMaxLength) {
-          console.warn(`[AUTH] Ignoring preset credentials because username exceeds ${userNameMaxLength} characters.`);
+          logger.warn({ maxLength: userNameMaxLength }, 'Ignoring preset credentials because username exceeds maximum length');
         } else if (presetPassword.length < 8) {
-          console.warn('[AUTH] Ignoring preset credentials because password must be at least 8 characters.');
+          logger.warn('Ignoring preset credentials because password must be at least 8 characters');
         } else if (presetPassword.length > passwordMaxLength) {
-          console.warn(`[AUTH] Ignoring preset credentials because password exceeds ${passwordMaxLength} characters.`);
+          logger.warn({ maxLength: passwordMaxLength }, 'Ignoring preset credentials because password exceeds maximum length');
         } else {
           const passwordHash = await bcrypt.hash(presetPassword, 10);
           config.username = trimmedUsername;
           config.passwordHash = passwordHash;
           configModule.updateConfig(config);
-          console.log('[AUTH] Applied preset credentials from environment variables.');
+          logger.info('Applied preset credentials from environment variables');
         }
       }
     }
 
     channelModule.subscribe();
 
-    console.log(
-      `Youtube downloads directory from config: ${configModule.directoryPath}`
-    );
+    logger.info({ directoryPath: configModule.directoryPath }, 'YouTube downloads directory configured');
 
     const verifyToken = async function(req, res, next) {
       if (process.env.AUTH_ENABLED === 'false') {
@@ -182,7 +239,7 @@ const initialize = async () => {
 
         next();
       } catch (error) {
-        console.error('Token verification error:', error);
+        req.log.error({ err: error }, 'Token verification failed');
         return res.status(500).json({ error: 'Authentication error' });
       }
     };
@@ -195,6 +252,7 @@ const initialize = async () => {
       standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
       legacyHeaders: false, // Disable the `X-RateLimit-*` headers
       skipSuccessfulRequests: true, // Don't count successful requests
+      validate: { trustProxy: false }, // Suppress trust proxy warning - we run in Docker with proxy
       keyGenerator: (req) => {
         // Use IP + username combination for more granular rate limiting
         const username = req.body.username || 'unknown';
@@ -214,6 +272,7 @@ const initialize = async () => {
       message: 'Too many requests from this IP, please try again later',
       standardHeaders: true,
       legacyHeaders: false,
+      validate: { trustProxy: false }, // Suppress trust proxy warning - we run in Docker with proxy
     });
 
     /**** ONLY ROUTES BELOW THIS LINE *********/
@@ -250,11 +309,11 @@ const initialize = async () => {
             }
           )
           .on('error', (err) => {
-            console.log('Error: ' + err.message);
+            logger.error({ err }, 'Failed to fetch Docker Hub version');
             res.status(500).json({ error: err.message });
           });
       } catch (error) {
-        console.log('Error: ' + error.message);
+        logger.error({ err: error }, 'Failed to fetch version from Docker Hub');
         res
           .status(500)
           .json({ error: 'Failed to fetch version from Docker Hub' });
@@ -293,7 +352,7 @@ const initialize = async () => {
             }
             currentConfig.plexApiKey = testApiKey;
             configModule.updateConfig(currentConfig);
-            console.log('Plex credentials auto-saved after successful test');
+            req.log.info('Plex credentials auto-saved after successful test');
           }
         } else {
           // Use saved config values
@@ -303,7 +362,7 @@ const initialize = async () => {
         // Always return an array, even if empty
         res.json(libraries || []);
       } catch (error) {
-        console.log('Error: ' + error.message);
+        req.log.error({ err: error }, 'Failed to get Plex libraries');
         // Return empty array instead of error to prevent frontend issues
         res.json([]);
       }
@@ -337,7 +396,7 @@ const initialize = async () => {
     });
 
     app.post('/updateconfig', verifyToken, (req, res) => {
-      console.log('Updating config');
+      req.log.info('Updating application configuration');
       const currentConfig = configModule.getConfig();
       const updateData = { ...req.body };
 
@@ -362,7 +421,7 @@ const initialize = async () => {
         const status = configModule.getCookiesStatus();
         res.json(status);
       } catch (error) {
-        console.error('Error getting cookie status:', error);
+        req.log.error({ err: error }, 'Failed to get cookie status');
         res.status(500).json({ error: 'Failed to get cookie status' });
       }
     });
@@ -393,7 +452,7 @@ const initialize = async () => {
           cookieStatus: status
         });
       } catch (error) {
-        console.error('Error uploading cookie file:', error);
+        req.log.error({ err: error }, 'Failed to upload cookie file');
         res.status(500).json({ error: 'Failed to upload cookie file' });
       }
     });
@@ -408,7 +467,7 @@ const initialize = async () => {
           cookieStatus: status
         });
       } catch (error) {
-        console.error('Error deleting cookie file:', error);
+        req.log.error({ err: error }, 'Failed to delete cookie file');
         res.status(500).json({ error: 'Failed to delete cookie file' });
       }
     });
@@ -422,7 +481,7 @@ const initialize = async () => {
           message: 'Test notification sent successfully'
         });
       } catch (error) {
-        console.error('Error sending test notification:', error);
+        req.log.error({ err: error }, 'Failed to send test notification');
         res.status(500).json({
           error: 'Failed to send test notification',
           message: error.message
@@ -452,12 +511,12 @@ const initialize = async () => {
       }
 
       try {
-        console.log(`Adding channel info for ${url}`);
+        req.log.info({ url }, 'Adding channel info');
         let channelInfo = await channelModule.getChannelInfo(url, false);
         channelInfo.channel_id = channelInfo.id;
         res.json({ status: 'success', channelInfo: channelInfo });
       } catch (error) {
-        console.error(`Error getting channel info for ${url}:`, error.message);
+        req.log.error({ err: error, url }, 'Failed to get channel info');
 
         // Handle specific error types
         if (error.code === 'CHANNEL_NOT_FOUND') {
@@ -499,7 +558,7 @@ const initialize = async () => {
         await plexModule.refreshLibrary();
         res.json({ success: true, message: 'Library refresh initiated' });
       } catch (error) {
-        console.log('Failed to refresh Plex library:', error.message);
+        req.log.error({ err: error }, 'Failed to refresh Plex library');
         res.status(500).json({ success: false, message: 'Failed to refresh library' });
       }
     });
@@ -511,14 +570,14 @@ const initialize = async () => {
     });
 
     app.get('/api/channels/:channelId/tabs', verifyToken, async (req, res) => {
-      console.log('Getting available tabs for channel');
+      req.log.info({ channelId: req.params.channelId }, 'Getting available tabs for channel');
       const channelId = req.params.channelId;
 
       try {
         const availableTabs = await channelModule.getChannelAvailableTabs(channelId);
         res.status(200).json({ availableTabs });
       } catch (error) {
-        console.error('Error getting available tabs:', error);
+        req.log.error({ err: error, channelId }, 'Failed to get available tabs');
         res.status(500).json({
           error: 'Failed to get available tabs',
           message: error.message
@@ -541,7 +600,7 @@ const initialize = async () => {
         await channelModule.updateAutoDownloadForTab(channelId, tabType, enabled);
         res.status(200).json({ success: true });
       } catch (error) {
-        console.error('Error updating auto download setting:', error);
+        req.log.error({ err: error, channelId, tabType, enabled }, 'Failed to update auto download setting');
         res.status(500).json({
           error: 'Failed to update auto download setting',
           message: error.message
@@ -550,7 +609,7 @@ const initialize = async () => {
     });
 
     app.get('/getchannelvideos/:channelId', verifyToken, async (req, res) => {
-      console.log('Getting channel videos');
+      req.log.info({ channelId: req.params.channelId }, 'Getting channel videos');
       const channelId = req.params.channelId;
       const page = parseInt(req.query.page) || 1;
       const pageSize = parseInt(req.query.pageSize) || 50;
@@ -574,7 +633,7 @@ const initialize = async () => {
     });
 
     app.post('/fetchallchannelvideos/:channelId', verifyToken, async (req, res) => {
-      console.log('Fetching all videos for channel');
+      req.log.info({ channelId: req.params.channelId }, 'Fetching all videos for channel');
       const channelId = req.params.channelId;
       const page = parseInt(req.query.page) || 1;
       const pageSize = parseInt(req.query.pageSize) || 50;
@@ -585,7 +644,7 @@ const initialize = async () => {
         const result = await channelModule.fetchAllChannelVideos(channelId, page, pageSize, hideDownloaded, tabType);
         res.status(200).json(result);
       } catch (error) {
-        console.error('Error fetching all channel videos:', error);
+        req.log.error({ err: error, channelId }, 'Failed to fetch all channel videos');
 
         // Check if this is a concurrency error
         const isConcurrencyError = error.message.includes('fetch operation is already in progress');
@@ -616,7 +675,7 @@ const initialize = async () => {
     });
 
     app.get('/getVideos', verifyToken, async (req, res) => {
-      console.log('Getting videos');
+      req.log.info('Getting videos');
 
       try {
         const { page, limit, search, dateFrom, dateTo, sortBy, sortOrder, channelFilter } = req.query;
@@ -635,7 +694,7 @@ const initialize = async () => {
         const result = await videosModule.getVideosPaginated(options);
         res.json(result);
       } catch (error) {
-        console.error('Error getting videos:', error);
+        req.log.error({ err: error }, 'Failed to get videos');
         res.status(500).json({ error: error.message });
       }
     });
@@ -667,7 +726,7 @@ const initialize = async () => {
 
         res.json(result);
       } catch (error) {
-        console.error('Error deleting videos:', error);
+        req.log.error({ err: error }, 'Failed to delete videos');
         res.status(500).json({
           success: false,
           error: error.message
@@ -711,7 +770,7 @@ const initialize = async () => {
 
         res.json(result);
       } catch (error) {
-        console.error('Error performing auto-removal dry run:', error);
+        req.log.error({ err: error }, 'Failed to perform auto-removal dry run');
         res.status(500).json({ success: false, error: error.message || 'Failed to run auto-removal dry run' });
       }
     });
@@ -725,7 +784,7 @@ const initialize = async () => {
           res.status(500).json({ error: 'Could not retrieve storage status' });
         }
       } catch (error) {
-        console.error('Error in /storage-status endpoint:', error);
+        req.log.error({ err: error }, 'Failed to retrieve storage status');
         res.status(500).json({ error: error.message });
       }
     });
@@ -736,6 +795,7 @@ const initialize = async () => {
       message: 'Too many validation requests, please try again later',
       standardHeaders: true,
       legacyHeaders: false,
+      validate: { trustProxy: false }, // Suppress trust proxy warning - we run in Docker with proxy
     });
 
     // Validate YouTube video URL and fetch metadata
@@ -755,7 +815,7 @@ const initialize = async () => {
 
         res.json(validationResult);
       } catch (error) {
-        console.error('Error validating video URL:', error);
+        req.log.error({ err: error }, 'Failed to validate video URL');
         res.status(500).json({
           isValidUrl: false,
           error: 'Internal server error'
@@ -1059,7 +1119,7 @@ const initialize = async () => {
       const isLocalhost = isLocalhostIP(clientIP) || hostIsLocal;
 
       if (!isLocalhost) {
-        console.log(`[SECURITY] Setup attempt blocked from IP: ${clientIP}`);
+        logger.warn({ clientIP }, 'Setup attempt blocked from non-localhost IP');
         return res.status(403).json({
           error: 'Initial setup can only be performed from localhost for security reasons.',
           instruction: 'Please access Youtarr directly from the server at http://localhost:3087',
@@ -1116,7 +1176,7 @@ const initialize = async () => {
         expires_at: expiresAt
       });
 
-      console.log(`[AUTH] Initial setup completed for user: ${username.trim()}`);
+      logger.info({ username: username.trim() }, 'Initial setup completed for user');
 
       res.json({
         token: sessionToken,
@@ -1142,7 +1202,7 @@ const initialize = async () => {
         const result = await plexModule.getAuthUrl();
         res.json(result);
       } catch (error) {
-        console.log('PIN ERROR!!' + error.message);
+        logger.error({ err: error }, 'Failed to get Plex auth URL');
         res.status(500).json({ error: error.message });
       }
     });
@@ -1179,7 +1239,7 @@ const initialize = async () => {
       require('./modules/webSocketServer.js')(server);
 
       server.listen(port, () => {
-        console.log(`Server listening on port ${port}`);
+        logger.info({ port }, 'Server started and listening');
 
         // Initialize cron jobs
         const cronJobs = require('./modules/cronJobs');
@@ -1187,20 +1247,20 @@ const initialize = async () => {
 
         // Run video metadata backfill asynchronously after server starts
         setTimeout(() => {
-          console.log('Starting async video metadata backfill...');
+          logger.info('Starting async video metadata backfill');
           videosModule.backfillVideoMetadata()
             .then(() => {
-              console.log('Video metadata backfill completed successfully');
+              logger.info('Video metadata backfill completed successfully');
             })
             .catch(err => {
-              console.error('Video metadata backfill failed:', err);
+              logger.error({ err }, 'Video metadata backfill failed');
             });
         }, 5000); // Delay 5 seconds to avoid blocking startup
       });
     }
 
   } catch (error) {
-    console.error('Failed to initialize the application:', error);
+    logger.error({ err: error }, 'Failed to initialize the application');
     // Handle the error here, e.g. exit the process
     process.exit(1);
   }

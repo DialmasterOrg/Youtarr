@@ -7,8 +7,12 @@ jest.mock('../../configModule', () => ({
   stopWatchingConfig: jest.fn()
 }));
 
+// Mock logger
+jest.mock('../../../logger');
+
 const tempPathManager = require('../tempPathManager');
 const configModule = require('../../configModule');
+const logger = require('../../../logger');
 
 describe('TempPathManager', () => {
   beforeEach(() => {
@@ -161,6 +165,10 @@ describe('TempPathManager', () => {
     it('should create temp directory when enabled', async () => {
       await tempPathManager.ensureTempDirectory();
       expect(mockEnsureDir).toHaveBeenCalledWith('/tmp/youtarr-downloads');
+      expect(logger.info).toHaveBeenCalledWith(
+        { tempBasePath: '/tmp/youtarr-downloads' },
+        'Ensured temp directory exists'
+      );
     });
 
     it('should not create directory when temp downloads are disabled', async () => {
@@ -172,6 +180,10 @@ describe('TempPathManager', () => {
     it('should throw error if directory creation fails', async () => {
       mockEnsureDir.mockRejectedValue(new Error('Permission denied'));
       await expect(tempPathManager.ensureTempDirectory()).rejects.toThrow('Cannot create temp directory');
+      expect(logger.error).toHaveBeenCalledWith(
+        { tempBasePath: '/tmp/youtarr-downloads', err: expect.any(Error) },
+        'Failed to create temp directory'
+      );
     });
   });
 
@@ -202,6 +214,15 @@ describe('TempPathManager', () => {
       expect(mockPathExists).toHaveBeenCalledWith('/tmp/youtarr-downloads');
       expect(mockRemove).toHaveBeenCalledWith('/tmp/youtarr-downloads');
       expect(mockEnsureDir).toHaveBeenCalledWith('/tmp/youtarr-downloads');
+      expect(logger.info).toHaveBeenCalledWith(
+        { tempBasePath: '/tmp/youtarr-downloads' },
+        'Cleaning temp directory'
+      );
+      expect(logger.info).toHaveBeenCalledWith('Removed temp directory');
+      expect(logger.info).toHaveBeenCalledWith(
+        { tempBasePath: '/tmp/youtarr-downloads' },
+        'Recreated temp directory'
+      );
     });
 
     it('should create temp directory when it does not exist', async () => {
@@ -211,6 +232,11 @@ describe('TempPathManager', () => {
       expect(mockPathExists).toHaveBeenCalledWith('/tmp/youtarr-downloads');
       expect(mockRemove).not.toHaveBeenCalled();
       expect(mockEnsureDir).toHaveBeenCalledWith('/tmp/youtarr-downloads');
+      expect(logger.debug).toHaveBeenCalledWith('Temp directory doesn\'t exist, nothing to clean');
+      expect(logger.info).toHaveBeenCalledWith(
+        { tempBasePath: '/tmp/youtarr-downloads' },
+        'Recreated temp directory'
+      );
     });
 
     it('should not do anything when temp downloads are disabled', async () => {
@@ -220,11 +246,16 @@ describe('TempPathManager', () => {
       expect(mockPathExists).not.toHaveBeenCalled();
       expect(mockRemove).not.toHaveBeenCalled();
       expect(mockEnsureDir).not.toHaveBeenCalled();
+      expect(logger.debug).toHaveBeenCalledWith('Temp downloads disabled, skipping cleanup');
     });
 
     it('should throw error if cleanup fails', async () => {
       mockRemove.mockRejectedValue(new Error('Deletion failed'));
       await expect(tempPathManager.cleanTempDirectory()).rejects.toThrow('Failed to clean temp directory');
+      expect(logger.error).toHaveBeenCalledWith(
+        { tempBasePath: '/tmp/youtarr-downloads', err: expect.any(Error) },
+        'Error cleaning temp directory'
+      );
     });
   });
 
@@ -267,6 +298,14 @@ describe('TempPathManager', () => {
         '/mnt/network/youtube/Channel/Video - ID',
         { overwrite: true }
       );
+      expect(logger.debug).toHaveBeenCalledWith(
+        { sourcePath: tempPath, destinationPath: '/mnt/network/youtube/Channel/Video - ID' },
+        'Moving from temp to final'
+      );
+      expect(logger.info).toHaveBeenCalledWith(
+        { sourcePath: tempPath, destinationPath: '/mnt/network/youtube/Channel/Video - ID' },
+        'Successfully moved to final location'
+      );
     });
 
     it('should use provided final path if given', async () => {
@@ -286,6 +325,10 @@ describe('TempPathManager', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Source path does not exist');
+      expect(logger.error).toHaveBeenCalledWith(
+        { tempPath, finalPath: null, err: expect.any(Error) },
+        'Error moving to final location'
+      );
     });
 
     it('should return error if move fails', async () => {
@@ -296,6 +339,10 @@ describe('TempPathManager', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Move failed');
+      expect(logger.error).toHaveBeenCalledWith(
+        { tempPath, finalPath: null, err: expect.any(Error) },
+        'Error moving to final location'
+      );
     });
 
     it('should return error if destination does not exist after move', async () => {
@@ -309,6 +356,10 @@ describe('TempPathManager', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Move completed but destination doesn\'t exist');
+      expect(logger.error).toHaveBeenCalledWith(
+        { tempPath, finalPath: null, err: expect.any(Error) },
+        'Error moving to final location'
+      );
     });
 
     it('should handle file path by moving parent directory', async () => {
