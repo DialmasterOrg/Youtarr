@@ -325,7 +325,7 @@ class ChannelModule {
 
     try {
       execSync(
-        `${configModule.ffmpegPath} -y -i ${realImagePath} -vf "scale=iw*0.4:ih*0.4" ${smallImagePath}`,
+        `${configModule.ffmpegPath} -loglevel error -y -i "${realImagePath}" -vf "scale=iw*0.4:ih*0.4" -q:v 2 "${smallImagePath}"`,
         { stdio: 'inherit' }
       );
       await fsPromises.rename(smallImagePath, realImagePath);

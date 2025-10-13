@@ -97,7 +97,7 @@ async function downloadChannelThumbnailIfMissing(channelId) {
       if (fs.existsSync(channelThumbPath)) {
         const tempPath = channelThumbPath + '.temp';
         execSync(
-          `${configModule.ffmpegPath} -y -i "${channelThumbPath}" -vf "scale=iw*0.4:ih*0.4" "${tempPath}"`,
+          `${configModule.ffmpegPath} -loglevel error -y -i "${channelThumbPath}" -vf "scale=iw*0.4:ih*0.4" -q:v 2 "${tempPath}"`,
           { stdio: 'pipe' }
         );
         fs.renameSync(tempPath, channelThumbPath);
