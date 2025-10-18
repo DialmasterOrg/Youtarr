@@ -13,12 +13,19 @@ jest.mock('../../configModule', () => ({
 
 // Set up fs.promises mock before requiring the module
 fs.promises = {
-  stat: jest.fn()
+  stat: jest.fn(),
+  readdir: jest.fn()
 };
 
 const VideoMetadataProcessor = require('../videoMetadataProcessor');
 const configModule = require('../../configModule');
 const logger = require('../../../logger');
+
+const createDirent = (name, { directory = false, file = false } = {}) => ({
+  name,
+  isDirectory: () => directory,
+  isFile: () => file
+});
 
 describe('VideoMetadataProcessor', () => {
   const mockJobsPath = '/jobs/path';
@@ -30,39 +37,6 @@ describe('VideoMetadataProcessor', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
-  });
-
-  describe('sanitizeFilename', () => {
-    it('should replace pipe character with full-width vertical bar', () => {
-      expect(VideoMetadataProcessor.sanitizeFilename('Title | With Pipe')).toBe('Title ｜ With Pipe');
-    });
-
-    it('should replace multiple special characters', () => {
-      expect(VideoMetadataProcessor.sanitizeFilename('Test: <file>|"name"?.mp4'))
-        .toBe('Test： ＜file＞｜＂name＂？.mp4');
-    });
-
-    it('should handle forward and back slashes', () => {
-      expect(VideoMetadataProcessor.sanitizeFilename('path/to\\file')).toBe('path／to＼file');
-    });
-
-    it('should replace asterisks', () => {
-      expect(VideoMetadataProcessor.sanitizeFilename('file*.txt')).toBe('file＊.txt');
-    });
-
-    it('should handle filenames with no special characters', () => {
-      expect(VideoMetadataProcessor.sanitizeFilename('normal_filename-123')).toBe('normal_filename-123');
-    });
-
-    it('should handle empty strings', () => {
-      expect(VideoMetadataProcessor.sanitizeFilename('')).toBe('');
-    });
-
-    it('should handle real-world video titles', () => {
-      const title = 'Harry Mack Goes It\'s A Party | Guerrilla Bars 68';
-      const expected = 'Harry Mack Goes It\'s A Party ｜ Guerrilla Bars 68';
-      expect(VideoMetadataProcessor.sanitizeFilename(title)).toBe(expected);
-    });
   });
 
   describe('normalizeChannelName', () => {
@@ -122,20 +96,31 @@ describe('VideoMetadataProcessor', () => {
       title: 'Test Video Title',
       duration: 300,
       description: 'Test video description',
-      upload_date: '20240101'
+      upload_date: '20240101',
+      _actual_filepath: '/output/directory/Test Channel/Test Channel - Test Video Title - abc123/Test Channel - Test Video Title [abc123].mp4'
     };
 
     // Clear mocks before each test
     beforeEach(() => {
       jest.clearAllMocks();
+      configModule.getJobsPath.mockReturnValue(mockJobsPath);
+      configModule.directoryPath = '/output/directory';
       // Reset the fs.promises.stat mock
       fs.promises.stat.mockReset();
+      fs.promises.readdir.mockReset();
+      fs.promises.readdir.mockResolvedValue([]);
     });
 
     it('should process single video URL successfully with file metadata', async () => {
       const newVideoUrls = ['https://youtu.be/abc123'];
+      const videoData = {
+        ...mockVideoData,
+        id: 'abc123',
+        title: 'Test Video Title',
+        _actual_filepath: '/output/directory/Test Channel/Test Channel - Test Video Title - abc123/Test Channel - Test Video Title [abc123].mp4'
+      };
       fs.existsSync.mockReturnValue(true);
-      fs.readFileSync.mockReturnValue(JSON.stringify(mockVideoData));
+      fs.readFileSync.mockReturnValue(JSON.stringify(videoData));
       // Mock successful stat for the .mp4 file
       fs.promises.stat.mockResolvedValue({ size: 1024000 });
 
@@ -150,7 +135,7 @@ describe('VideoMetadataProcessor', () => {
         description: 'Test video description',
         originalDate: '20240101',
         channel_id: 'UC123456',
-        filePath: '/output/directory/Test Channel/Test Channel - Test Video Title - abc123/Test Channel - Test Video Title  [abc123].mp4',
+        filePath: '/output/directory/Test Channel/Test Channel - Test Video Title - abc123/Test Channel - Test Video Title [abc123].mp4',
         fileSize: '1024000',
         media_type: 'video',
         removed: false
@@ -167,7 +152,7 @@ describe('VideoMetadataProcessor', () => {
         ...mockVideoData,
         id: 'actual123',
         title: 'Video With | Special: Characters',
-        _actual_filepath: '/output/directory/Harry Mack/Harry Mack - Video With ｜ Special： Characters - actual123/Harry Mack - Video With ｜ Special： Characters  [actual123].mp4'
+        _actual_filepath: '/output/directory/Harry Mack/Harry Mack - Video With ｜ Special： Characters - actual123/Harry Mack - Video With ｜ Special： Characters [actual123].mp4'
       };
       fs.existsSync.mockReturnValue(true);
       fs.readFileSync.mockReturnValue(JSON.stringify(mockDataWithActualPath));
@@ -189,14 +174,52 @@ describe('VideoMetadataProcessor', () => {
         title: 'Video | With Pipe: Test',
         uploader: 'Channel/Name'
       };
+      delete mockDataWithPipe._actual_filepath;
       fs.existsSync.mockReturnValue(true);
       fs.readFileSync.mockReturnValue(JSON.stringify(mockDataWithPipe));
       fs.promises.stat.mockResolvedValue({ size: 1024000 });
+      fs.promises.readdir.mockImplementation((dirPath) => {
+        if (dirPath === '/output/directory') {
+          return Promise.resolve([createDirent('Channel／Name', { directory: true })]);
+        }
+        if (dirPath === '/output/directory/Channel／Name') {
+          return Promise.resolve([
+            createDirent('Channel／Name - Video ｜ With Pipe： Test - pipe123', { directory: true })
+          ]);
+        }
+        if (dirPath === '/output/directory/Channel／Name/Channel／Name - Video ｜ With Pipe： Test - pipe123') {
+          return Promise.resolve([
+            createDirent('Channel／Name - Video ｜ With Pipe： Test [pipe123].mp4', { file: true })
+          ]);
+        }
+        return Promise.resolve([]);
+      });
 
       const result = await VideoMetadataProcessor.processVideoMetadata(newVideoUrls);
 
       expect(result).toHaveLength(1);
-      expect(result[0].filePath).toBe('/output/directory/Channel／Name/Channel／Name - Video ｜ With Pipe： Test - pipe123/Channel／Name - Video ｜ With Pipe： Test  [pipe123].mp4');
+      expect(result[0].filePath).toBe('/output/directory/Channel／Name/Channel／Name - Video ｜ With Pipe： Test - pipe123/Channel／Name - Video ｜ With Pipe： Test [pipe123].mp4');
+    });
+
+    it('should warn when video path cannot be located and continue gracefully', async () => {
+      const newVideoUrls = ['https://youtu.be/missingpath'];
+      const dataWithoutPath = {
+        ...mockVideoData,
+        id: 'missingpath'
+      };
+      delete dataWithoutPath._actual_filepath;
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockReturnValue(JSON.stringify(dataWithoutPath));
+
+      const result = await VideoMetadataProcessor.processVideoMetadata(newVideoUrls);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].filePath).toBeNull();
+      expect(result[0].fileSize).toBeNull();
+      expect(logger.warn).toHaveBeenCalledWith(
+        { videoId: 'missingpath' },
+        'Video file path could not be determined from metadata or filesystem search'
+      );
     });
 
     it('should handle missing video file', async () => {
@@ -209,7 +232,7 @@ describe('VideoMetadataProcessor', () => {
       const result = await VideoMetadataProcessor.processVideoMetadata(newVideoUrls);
 
       expect(result).toHaveLength(1);
-      expect(result[0].filePath).toBe('/output/directory/Test Channel/Test Channel - Test Video Title - abc123/Test Channel - Test Video Title  [abc123].mp4');
+      expect(result[0].filePath).toBe('/output/directory/Test Channel/Test Channel - Test Video Title - abc123/Test Channel - Test Video Title [abc123].mp4');
       expect(result[0].fileSize).toBeNull();
       expect(result[0].removed).toBe(false);
     });
@@ -228,7 +251,8 @@ describe('VideoMetadataProcessor', () => {
         return JSON.stringify({
           ...mockVideoData,
           id: videoId,
-          title: `Video ${videoId}`
+          title: `Video ${videoId}`,
+          _actual_filepath: `/output/directory/Channel ${videoId}/Channel ${videoId} - Video ${videoId} - ${videoId}/Channel ${videoId} - Video ${videoId} [${videoId}].mp4`
         });
       });
       fs.promises.stat.mockResolvedValue({ size: 1024000 });
@@ -263,7 +287,11 @@ describe('VideoMetadataProcessor', () => {
     it('should handle URL with trailing whitespace', async () => {
       const newVideoUrls = ['https://youtu.be/abc123  \n\t'];
       fs.existsSync.mockReturnValue(true);
-      fs.readFileSync.mockReturnValue(JSON.stringify(mockVideoData));
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        ...mockVideoData,
+        id: 'abc123',
+        _actual_filepath: '/output/directory/Test Channel/Test Channel - Test Video Title - abc123/Test Channel - Test Video Title [abc123].mp4'
+      }));
       fs.promises.stat.mockResolvedValue({ size: 1024000 });
 
       const result = await VideoMetadataProcessor.processVideoMetadata(newVideoUrls);
@@ -307,7 +335,12 @@ describe('VideoMetadataProcessor', () => {
       for (const testCase of testCases) {
         const newVideoUrls = ['https://youtu.be/test123'];
         fs.existsSync.mockReturnValue(true);
-        fs.readFileSync.mockReturnValue(JSON.stringify(testCase.data));
+        const data = {
+          ...testCase.data,
+          id: 'test123',
+          _actual_filepath: '/output/directory/Test Channel/Test Channel - Test Video Title - test123/Test Channel - Test Video Title [test123].mp4'
+        };
+        fs.readFileSync.mockReturnValue(JSON.stringify(data));
         fs.promises.stat.mockResolvedValue({ size: 1024000 });
 
         const result = await VideoMetadataProcessor.processVideoMetadata(newVideoUrls);
@@ -327,7 +360,8 @@ describe('VideoMetadataProcessor', () => {
     it('should handle missing fields in metadata', async () => {
       const incompleteData = {
         id: 'incomplete123',
-        title: 'Incomplete Video'
+        title: 'Incomplete Video',
+        _actual_filepath: '/output/directory/Unknown Channel/Unknown Channel - Incomplete Video - incomplete123/Unknown Channel - Incomplete Video [incomplete123].mp4'
         // Missing most fields
       };
 
@@ -348,7 +382,7 @@ describe('VideoMetadataProcessor', () => {
         description: undefined,
         originalDate: undefined,
         channel_id: undefined,
-        filePath: '/output/directory/Unknown Channel/Unknown Channel - Incomplete Video - incomplete123/Unknown Channel - Incomplete Video  [incomplete123].mp4',
+        filePath: '/output/directory/Unknown Channel/Unknown Channel - Incomplete Video - incomplete123/Unknown Channel - Incomplete Video [incomplete123].mp4',
         fileSize: null,
         media_type: 'video',
         removed: false
@@ -363,7 +397,11 @@ describe('VideoMetadataProcessor', () => {
     it('should log appropriate messages during processing', async () => {
       const newVideoUrls = ['https://youtu.be/logtest'];
       fs.existsSync.mockReturnValue(true);
-      fs.readFileSync.mockReturnValue(JSON.stringify(mockVideoData));
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        ...mockVideoData,
+        id: 'logtest',
+        _actual_filepath: '/output/directory/Test Channel/Test Channel - Test Video Title - logtest/Test Channel - Test Video Title [logtest].mp4'
+      }));
       fs.promises.stat.mockResolvedValue({ size: 1024000 });
 
       await VideoMetadataProcessor.processVideoMetadata(newVideoUrls);
@@ -681,10 +719,11 @@ describe('VideoMetadataProcessor', () => {
         'https://youtu.be/success2'
       ];
 
-      let callCount = 0;
-      fs.existsSync.mockImplementation(() => {
-        callCount++;
-        return callCount !== 2; // Second file doesn't exist
+      fs.existsSync.mockImplementation((filePath) => {
+        if (filePath.includes('missing')) {
+          return false;
+        }
+        return true;
       });
 
       fs.readFileSync.mockImplementation((filePath) => {

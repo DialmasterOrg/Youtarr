@@ -33,6 +33,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import InfoIcon from '@mui/icons-material/Info';
 import PlexLibrarySelector from './PlexLibrarySelector';
 import PlexAuthDialog from './PlexAuthDialog';
+import SubtitleLanguageSelector from './Configuration/SubtitleLanguageSelector';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import axios from 'axios';
@@ -142,6 +143,8 @@ function Configuration({ token }: ConfigurationProps) {
     autoRemovalVideoAgeThreshold: '',
     useTmpForDownloads: false,
     tmpFilePath: '/tmp/youtarr-downloads',
+    subtitlesEnabled: false,
+    subtitleLanguage: 'en',
   });
   const [openPlexLibrarySelector, setOpenPlexLibrarySelector] = useState(false);
   const [openPlexAuthDialog, setOpenPlexAuthDialog] = useState(false);
@@ -965,6 +968,8 @@ function Configuration({ token }: ConfigurationProps) {
       'autoRemovalFreeSpaceThreshold',
       'autoRemovalVideoAgeThreshold',
       'useTmpForDownloads',
+      'subtitlesEnabled',
+      'subtitleLanguage',
     ];
     const changed = keysToCompare.some((k) => {
       return (config as any)[k] !== (initialConfig as any)[k];
@@ -1209,7 +1214,7 @@ function Configuration({ token }: ConfigurationProps) {
                   }
                   label="Enable Automatic Downloads"
                 />
-                {getInfoIcon('Enable automatic scheduled downloading of videos from your channels. Only channels and tabs that are enabled for automatic downloads will be downloaded on your schedule.')}
+                {getInfoIcon('Globally enable or disable automatic scheduled downloading of videos from your channels. Only tabs that are enabled for your Channels will be checked and downloaded.')}
               </Box>
             </Grid>
 
@@ -1243,7 +1248,7 @@ function Configuration({ token }: ConfigurationProps) {
                   <Select
                     value={config.channelFilesToDownload}
                     onChange={handleChannelFilesChange}
-                    label="Files to Download per Channel"
+                    label="Videos to Download per Channel Tab"
                   >
                     {getChannelFilesOptions().map(count => (
                       <MenuItem key={count} value={count}>
@@ -1252,7 +1257,7 @@ function Configuration({ token }: ConfigurationProps) {
                     ))}
                   </Select>
                 </FormControl>
-                {getInfoIcon('How many videos (starting from the most recent) should be downloaded for each channel when channel downloads are initiated. Already downloaded videos will not be re-downloaded.')}
+                {getInfoIcon('How many videos (starting from most recently uploaded) Youtarr will attempt to download per tab when channel downloads run. Already downloaded videos will be skipped.')}
               </Box>
             </Grid>
 
@@ -1296,10 +1301,10 @@ function Configuration({ token }: ConfigurationProps) {
                       <MenuItem value="h265">H.265/HEVC (Balanced)</MenuItem>
                     </Select>
                   </FormControl>
-                  {getInfoIcon('Select your preferred video codec. Youtarr will download this codec when available, but will automatically fall back to other codecs if your preference is not available for a video. H.264 is recommended for Apple TV and maximum device compatibility.')}
+                  {getInfoIcon('Select your preferred video codec. Youtarr will download this codec when available, and fall back to other codecs if your preference is not available for a video. H.264 is recommended for Apple TV and maximum device compatibility. VP9 is the default codec for most YouTube videos.')}
                 </Box>
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                  Note: H.264 produces larger file sizes but offers maximum compatibility. This is a preference and will fall back to available codecs.
+                  Note: H.264 produces larger file sizes but offers maximum compatibility for Apple TV. This is a preference and will fall back to available codecs.
                 </Typography>
               </Box>
             </Grid>
@@ -1335,6 +1340,34 @@ function Configuration({ token }: ConfigurationProps) {
               </Box>
             </Grid>
 
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      name="subtitlesEnabled"
+                      checked={config.subtitlesEnabled}
+                      onChange={handleCheckboxChange}
+                    />
+                  }
+                  label="Enable Subtitle Downloads"
+                />
+                {getInfoIcon('Download subtitles in SRT format when available. Manual subtitles are preferred, with auto-generated subtitles as fallback.')}
+              </Box>
+            </Grid>
+
+            {config.subtitlesEnabled && (
+              <Grid item xs={12} md={6}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <SubtitleLanguageSelector
+                    value={config.subtitleLanguage}
+                    onChange={(value) => setConfig({ ...config, subtitleLanguage: value })}
+                  />
+                  {getInfoIcon('Select one or more subtitle languages. Subtitles will be downloaded when available; videos without subtitles will still download successfully.')}
+                </Box>
+              </Grid>
+            )}
+
           </Grid>
         </CardContent>
       </Card>
@@ -1363,13 +1396,14 @@ function Configuration({ token }: ConfigurationProps) {
         </AccordionSummary>
         <AccordionDetails>
           <Alert severity="info" sx={{ mb: 2 }}>
-            <AlertTitle>Plex Integration is Optional</AlertTitle>
+            <AlertTitle>Completely Optional Plex Integration</AlertTitle>
             <Typography variant="body2">
-              Youtarr works perfectly without Plex! Plex integration only provides:
               <br />• Automatic library refresh after downloads
               <br />• Direct library selection from Plex server
-              <br /><br />
+              <br />
               If you don't use Plex, your videos will still download to your specified directory.
+              <br />
+              You MUST select a library once connected for automatic refresh to work!
             </Typography>
           </Alert>
 

@@ -8,6 +8,7 @@ const DownloadProgressMonitor = require('./DownloadProgressMonitor');
 const VideoMetadataProcessor = require('./videoMetadataProcessor');
 const tempPathManager = require('./tempPathManager');
 const { JobVideoDownload } = require('../../models');
+const Channel = require('../../models/channel');
 const logger = require('../../logger');
 
 class DownloadExecutor {
@@ -332,7 +333,6 @@ class DownloadExecutor {
       resetActivityTimer();
 
       const partialDestinations = new Set();
-      let partialCleanupPerformed = false;
       let httpForbiddenDetected = false;
       let cookiesSuggestionEmitted = false;
 
@@ -341,8 +341,9 @@ class DownloadExecutor {
           return;
         }
         cookiesSuggestionEmitted = true;
-        const message = 'Download failed: YouTube returned HTTP 403 (Forbidden). Please set cookies in your Configuration or try different cookies to resolve this issue.';
-        monitor.hasError = true;
+        const message = 'HTTP 403 detected: YouTube may be blocking requests. If download fails, try setting cookies in Configuration.';
+        // Don't set monitor.hasError here - let the final exit code determine success/failure
+        // 403s on HLS fragments are often recoverable and don't indicate actual failure
         MessageEmitter.emitMessage(
           'broadcast',
           null,
@@ -350,8 +351,8 @@ class DownloadExecutor {
           'downloadProgress',
           {
             text: message,
-            progress: monitor.snapshot('failed'),
-            error: true,
+            progress: monitor.snapshot('warning'),
+            warning: true,
             errorCode: 'COOKIES_RECOMMENDED'
           }
         );
@@ -579,7 +580,6 @@ class DownloadExecutor {
         } else if (gracefulShutdownInProgress || shutdownReason || wasManuallyTerminated) {
           // Handle timeout/graceful shutdown or manual termination
           await this.cleanupInProgressVideos(jobId);
-          partialCleanupPerformed = true;
 
           const completedCount = videoData.length;
           status = 'Terminated';
@@ -598,46 +598,47 @@ class DownloadExecutor {
           });
 
           logger.info({ terminationReason, completedCount }, 'Job terminated, saved completed videos');
-        } else if (httpForbiddenDetected) {
-          await this.cleanupPartialFiles(Array.from(partialDestinations));
-          partialCleanupPerformed = true;
-
-          status = 'Error';
-          output = `${videoCount} videos. Error: YouTube returned HTTP 403 (Forbidden)`;
-
-          await jobModule.updateJob(jobId, {
-            status: status,
-            endDate: Date.now(),
-            output: output,
-            data: { videos: videoData || [] },
-            notes: 'YouTube denied access (HTTP 403). Configure cookies in Settings to resolve this issue.',
-            error: 'COOKIES_RECOMMENDED'
-          });
-          jobErrorCode = 'COOKIES_RECOMMENDED';
         } else if (code !== 0) {
-          // Cleanup partial files on failure
+          // Download actually failed (non-zero exit code)
           await this.cleanupPartialFiles(Array.from(partialDestinations));
-          partialCleanupPerformed = true;
 
           const failureDetails = monitor.lastParsed || null;
 
           status = signal === 'SIGKILL' ? 'Killed' : 'Error';
-          output = `${videoCount} videos. Error: Command exited with code ${code}`;
 
-          // Add stall detection note if applicable
-          const notes = failureDetails && failureDetails.stalled
-            ? `Stall detected at ${failureDetails.progress.percent.toFixed(1)}% (${Math.round(
-              failureDetails.progress.speedBytesPerSecond / 1024
-            )} KiB/s)`
-            : `Download failed (${signal || `exit ${code}`})`;
+          // Provide more helpful error messages based on what we detected
+          if (httpForbiddenDetected) {
+            // Failed with 403 errors - likely authentication issue
+            output = `${videoCount} videos. Error: YouTube returned HTTP 403 (Forbidden)`;
+            const notes = 'YouTube denied access (HTTP 403). Configure cookies in Settings to resolve this issue.';
+            await jobModule.updateJob(jobId, {
+              status: status,
+              endDate: Date.now(),
+              output: output,
+              data: { videos: videoData || [] },
+              notes: notes,
+              error: 'COOKIES_RECOMMENDED'
+            });
+            jobErrorCode = 'COOKIES_RECOMMENDED';
+          } else {
+            // Failed with other error
+            output = `${videoCount} videos. Error: Command exited with code ${code}`;
 
-          await jobModule.updateJob(jobId, {
-            status: status,
-            endDate: Date.now(),
-            output: output,
-            data: { videos: videoData || [] },
-            notes: notes,
-          });
+            // Add stall detection note if applicable
+            const notes = failureDetails && failureDetails.stalled
+              ? `Stall detected at ${failureDetails.progress.percent.toFixed(1)}% (${Math.round(
+                failureDetails.progress.speedBytesPerSecond / 1024
+              )} KiB/s)`
+              : `Download failed (${signal || `exit ${code}`})`;
+
+            await jobModule.updateJob(jobId, {
+              status: status,
+              endDate: Date.now(),
+              output: output,
+              data: { videos: videoData || [] },
+              notes: notes,
+            });
+          }
         } else if (stderrBuffer && !monitor.hasError) {
           status = 'Complete with Warnings';
           output = `${videoCount} videos.`;
@@ -687,10 +688,6 @@ class DownloadExecutor {
           finalState = 'failed';
           finalErrorCode = 'COOKIES_REQUIRED';
           finalText = 'Download failed: Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.';
-        } else if (httpForbiddenDetected) {
-          finalState = 'failed';
-          finalErrorCode = 'COOKIES_RECOMMENDED';
-          finalText = 'Download failed: YouTube returned HTTP 403 (Forbidden). Please set cookies in your Configuration or try different cookies to resolve this issue.';
         } else if (monitor.hasError && finalState === 'complete') {
           finalState = 'error';
           finalText = 'Download failed';
@@ -762,11 +759,6 @@ class DownloadExecutor {
           });
         }
 
-        // Perform a best-effort cleanup of any partial download artifacts even on success
-        if (!partialCleanupPerformed && partialDestinations.size > 0) {
-          await this.cleanupPartialFiles(Array.from(partialDestinations));
-        }
-
         // Clean up temporary channels file if it exists
         if (this.tempChannelsFile) {
           const fs = require('fs').promises;
@@ -790,6 +782,32 @@ class DownloadExecutor {
         }).catch(err => {
           logger.error({ err }, 'Error cleaning up JobVideoDownload entries');
         });
+
+        // Backfill channel posters for channels with newly downloaded videos
+        if (videoData && videoData.length > 0) {
+          try {
+            // Extract unique channel IDs from downloaded videos
+            const uniqueChannelIds = [...new Set(
+              videoData
+                .map(v => v.channel_id)
+                .filter(Boolean)
+            )];
+
+            if (uniqueChannelIds.length > 0) {
+              const channelsToBackfill = await Channel.findAll({
+                where: { channel_id: uniqueChannelIds }
+              });
+
+              if (channelsToBackfill.length > 0) {
+                await require('../channelModule').backfillChannelPosters(channelsToBackfill);
+                logger.info({ channelCount: channelsToBackfill.length }, 'Backfilled channel posters for downloaded videos');
+              }
+            }
+          } catch (err) {
+            logger.error({ err }, 'Error backfilling channel posters');
+            // Don't fail the job if poster backfill fails
+          }
+        }
 
         plexModule.refreshLibrary().catch(err => {
           logger.error({ err }, 'Failed to refresh Plex library');
@@ -815,7 +833,6 @@ class DownloadExecutor {
         this.currentJobId = null;
 
         await this.cleanupPartialFiles(Array.from(partialDestinations));
-        partialCleanupPerformed = true;
         reject(err);
       });
     }).catch((error) => {

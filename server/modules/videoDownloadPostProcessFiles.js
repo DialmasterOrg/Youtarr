@@ -211,7 +211,7 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       }
 
       // Add studio/network (channel name)
-      const channelName = jsonData.uploader || jsonData.channel || '';
+      const channelName = jsonData.uploader || jsonData.channel || jsonData.uploader_id || '';
       if (channelName) {
         ffmpegArgs.push('-metadata', `network=${channelName}`);
         ffmpegArgs.push('-metadata', `studio=${channelName}`);
@@ -296,14 +296,6 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       if (await fs.pathExists(tempPath)) {
         await safeRemove(tempPath);
       }
-    }
-
-    // Channel folder is one level up from videoDirectory
-    const channelFolderPath = path.dirname(videoDirectory);
-
-    // Copy channel thumbnail as poster.jpg to channel folder if needed
-    if (jsonData.channel_id) {
-      await copyChannelPosterIfNeeded(jsonData.channel_id, channelFolderPath);
     }
 
     if (fs.existsSync(imagePath)) {
@@ -402,6 +394,13 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         logger.error({ videoDirectory }, '[Post-Process] Files remain in temp location');
         process.exit(1);
       }
+    }
+
+    // Copy channel thumbnail as poster.jpg to channel folder (must be done AFTER temp-to-final move)
+    // Calculate the final channel folder path based on the final video path
+    const finalChannelFolderPath = path.dirname(path.dirname(finalVideoPath));
+    if (jsonData.channel_id) {
+      await copyChannelPosterIfNeeded(jsonData.channel_id, finalChannelFolderPath);
     }
 
     // Mark this video as completed in the JobVideoDownload tracking table

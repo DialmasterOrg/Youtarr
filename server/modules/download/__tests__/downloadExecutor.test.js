@@ -57,6 +57,10 @@ jest.mock('../../notificationModule', () => ({
   sendDownloadNotification: jest.fn().mockResolvedValue()
 }));
 
+jest.mock('../../channelModule', () => ({
+  backfillChannelPosters: jest.fn().mockResolvedValue()
+}));
+
 jest.mock('../DownloadProgressMonitor');
 jest.mock('../videoMetadataProcessor');
 jest.mock('../tempPathManager');
@@ -68,6 +72,10 @@ jest.mock('../../../models', () => ({
   }
 }));
 
+jest.mock('../../../models/channel', () => ({
+  findAll: jest.fn().mockResolvedValue([])
+}));
+
 const DownloadExecutor = require('../downloadExecutor');
 const configModule = require('../../configModule');
 const plexModule = require('../../plexModule');
@@ -75,10 +83,12 @@ const jobModule = require('../../jobModule');
 const MessageEmitter = require('../../messageEmitter');
 const archiveModule = require('../../archiveModule');
 const notificationModule = require('../../notificationModule');
+const channelModule = require('../../channelModule');
 const DownloadProgressMonitor = require('../DownloadProgressMonitor');
 const VideoMetadataProcessor = require('../videoMetadataProcessor');
 const tempPathManager = require('../tempPathManager');
 const { JobVideoDownload } = require('../../../models');
+const Channel = require('../../../models/channel');
 const logger = require('../../../logger');
 
 describe('DownloadExecutor', () => {
@@ -541,14 +551,25 @@ describe('DownloadExecutor', () => {
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
 
+      // Should emit warning message during download (not error - 403s may be recoverable)
       expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
         'broadcast',
         null,
         'download',
         'downloadProgress',
         expect.objectContaining({
-          error: true,
-          errorCode: 'COOKIES_RECOMMENDED'
+          warning: true,
+          errorCode: 'COOKIES_RECOMMENDED',
+          text: expect.stringContaining('HTTP 403 detected')
+        })
+      );
+
+      // Should update job as error since exit code was 1
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          status: 'Error',
+          error: 'COOKIES_RECOMMENDED'
         })
       );
     });
@@ -709,6 +730,69 @@ describe('DownloadExecutor', () => {
       expect(JobVideoDownload.destroy).toHaveBeenCalledWith({
         where: { job_id: mockJobId }
       });
+    });
+
+    it('should backfill channel posters when videos are downloaded', async () => {
+      const mockChannels = [
+        { channel_id: 'UC123', uploader: 'Test Channel' }
+      ];
+
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        { youtubeId: 'abc123', channel_id: 'UC123', filePath: '/output/video.mp4' }
+      ]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/abc123']);
+      Channel.findAll.mockResolvedValue(mockChannels);
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(Channel.findAll).toHaveBeenCalledWith({
+        where: { channel_id: ['UC123'] }
+      });
+      expect(channelModule.backfillChannelPosters).toHaveBeenCalledWith(mockChannels);
+    });
+
+    it('should not backfill channel posters when no videos downloaded', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(channelModule.backfillChannelPosters).not.toHaveBeenCalled();
+    });
+
+    it('should handle channel poster backfill errors gracefully', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        { youtubeId: 'abc123', channel_id: 'UC123', filePath: '/output/video.mp4' }
+      ]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/abc123']);
+      Channel.findAll.mockResolvedValue([{ channel_id: 'UC123' }]);
+      channelModule.backfillChannelPosters.mockRejectedValue(new Error('Backfill failed'));
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Should log error but not fail the job
+      expect(logger.error).toHaveBeenCalledWith(
+        { err: expect.any(Error) },
+        'Error backfilling channel posters'
+      );
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          status: 'Complete'
+        })
+      );
     });
   });
 
