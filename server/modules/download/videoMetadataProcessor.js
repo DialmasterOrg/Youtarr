@@ -16,28 +16,6 @@ class VideoMetadataProcessor {
     return trimmed;
   }
 
-  // Replicate yt-dlp's filename sanitization
-  static sanitizeFilename(filename) {
-    // yt-dlp replaces these characters with Unicode equivalents
-    const replacements = {
-      '|': '｜',  // U+FF5C (full-width vertical bar)
-      '<': '＜',  // U+FF1C (full-width less-than)
-      '>': '＞',  // U+FF1E (full-width greater-than)
-      ':': '：',  // U+FF1A (full-width colon) - except for drive letters on Windows
-      '"': '＂',  // U+FF02 (full-width quotation mark)
-      '/': '／',  // U+FF0F (full-width slash)
-      '\\': '＼', // U+FF3C (full-width backslash)
-      '?': '？',  // U+FF1F (full-width question mark)
-      '*': '＊',  // U+FF0A (full-width asterisk)
-    };
-
-    let result = filename;
-    for (const [char, replacement] of Object.entries(replacements)) {
-      result = result.split(char).join(replacement);
-    }
-    return result;
-  }
-
   static async waitForFile(filePath, maxRetries = 4, initialDelayMs = 100) {
     let delayMs = initialDelayMs;
 
@@ -62,6 +40,98 @@ class VideoMetadataProcessor {
       }
     }
     return null;
+  }
+
+  static normalizeForDirectoryMatch(name) {
+    if (!name) {
+      return '';
+    }
+
+    const normalized = name
+      .toString()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+    return normalized.toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  static async searchForVideoFile(startDir, targetSuffix, visited) {
+    const stack = [startDir];
+
+    while (stack.length > 0) {
+      const currentDir = stack.pop();
+
+      if (visited.has(currentDir)) {
+        continue;
+      }
+
+      visited.add(currentDir);
+
+      let entries;
+      try {
+        entries = await fsPromises.readdir(currentDir, { withFileTypes: true });
+      } catch (err) {
+        logger.debug({ err, currentDir }, 'Unable to read directory while locating video file');
+        continue;
+      }
+
+      for (const entry of entries) {
+        const entryPath = path.join(currentDir, entry.name);
+
+        if (entry.isDirectory()) {
+          stack.push(entryPath);
+        } else if (entry.isFile() && entry.name.endsWith(targetSuffix)) {
+          return entryPath;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  static async findVideoFilePath(videoId, preferredChannelName) {
+    const baseDir = configModule.directoryPath;
+
+    if (!baseDir || !fs.existsSync(baseDir)) {
+      return null;
+    }
+
+    const targetSuffix = `[${videoId}].mp4`;
+    const visited = new Set();
+
+    if (preferredChannelName) {
+      const normalizedTarget = this.normalizeForDirectoryMatch(preferredChannelName);
+
+      try {
+        const channelDirs = await fsPromises.readdir(baseDir, { withFileTypes: true });
+
+        for (const dirent of channelDirs) {
+          if (!dirent.isDirectory()) {
+            continue;
+          }
+
+          const dirPath = path.join(baseDir, dirent.name);
+          const normalizedDir = this.normalizeForDirectoryMatch(dirent.name);
+
+          if (
+            normalizedDir &&
+            normalizedTarget &&
+            (normalizedDir === normalizedTarget ||
+              normalizedDir.includes(normalizedTarget) ||
+              normalizedTarget.includes(normalizedDir))
+          ) {
+            const locatedPath = await this.searchForVideoFile(dirPath, targetSuffix, visited);
+            if (locatedPath) {
+              return locatedPath;
+            }
+          }
+        }
+      } catch (err) {
+        logger.warn({ err, baseDir }, 'Error scanning channel directories while locating video file');
+      }
+    }
+
+    return this.searchForVideoFile(baseDir, targetSuffix, visited);
   }
 
   static async processVideoMetadata(newVideoUrls) {
@@ -97,22 +167,23 @@ class VideoMetadataProcessor {
           media_type: data.media_type || 'video',
         };
 
-        // First check if we have the actual filepath from yt-dlp
-        let fullPath;
-        if (data._actual_filepath) {
-          // Use the actual filepath that yt-dlp provided
-          logger.debug({ filepath: data._actual_filepath, videoId: id }, 'Using actual filepath from yt-dlp');
-          fullPath = data._actual_filepath;
-        } else {
-          // Fallback: Calculate the file path based on the yt-dlp output template
-          // Apply yt-dlp's filename sanitization to match the actual files on disk
-          const baseOutputPath = configModule.directoryPath;
-          const sanitizedChannelName = this.sanitizeFilename(preferredChannelName);
-          const sanitizedTitle = this.sanitizeFilename(data.title);
-          const videoFolder = `${sanitizedChannelName} - ${sanitizedTitle} - ${id}`;
-          const videoFileName = `${sanitizedChannelName} - ${sanitizedTitle}  [${id}].mp4`;
-          fullPath = path.join(baseOutputPath, sanitizedChannelName, videoFolder, videoFileName);
-          logger.debug({ filepath: fullPath, videoId: id }, 'Using fallback filepath');
+        let fullPath = data._actual_filepath;
+
+        if (!fullPath) {
+          fullPath = await this.findVideoFilePath(data.id, preferredChannelName);
+
+          if (fullPath) {
+            logger.info({ filepath: fullPath, videoId: id }, 'Located video file path via filesystem search');
+          }
+        }
+
+        if (!fullPath) {
+          logger.warn({ videoId: id }, 'Video file path could not be determined from metadata or filesystem search');
+          videoMetadata.filePath = null;
+          videoMetadata.fileSize = null;
+          videoMetadata.removed = false;
+          processedVideos.push(videoMetadata);
+          continue;
         }
 
         // Check if file exists and get file size - with retry logic for production environments

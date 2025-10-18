@@ -6,8 +6,11 @@ const tempPathManager = require('./tempPathManager');
 // Will use uploader, fall back to channel, then uploader_id
 // The @ prefix from uploader_id will be handled by --replace-in-metadata
 const CHANNEL_TEMPLATE = '%(uploader,channel,uploader_id)s';
-const VIDEO_FOLDER_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title)s - %(id)s`;
-const VIDEO_FILE_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title)s  [%(id)s].%(ext)s`;
+
+// Truncate title to 76 characters to avoid overly long folder/file names that can cause issues with Plex
+// The full title is still stored in metadata and nfo files so it will show properly in Plex/Jellyfin/Emby.
+const VIDEO_FOLDER_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title).76s - %(id)s`;
+const VIDEO_FILE_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title).76s [%(id)s].%(ext)s`;
 
 class YtdlpCommandBuilder {
   // Build format string based on resolution and codec preference
@@ -80,6 +83,25 @@ class YtdlpCommandBuilder {
     return [];
   }
 
+  // Build subtitle args based on configuration
+  static buildSubtitleArgs(config) {
+    const args = [];
+
+    if (!config.subtitlesEnabled) return args;
+
+    const language = config.subtitleLanguage || 'en';
+
+    args.push(
+      '--write-sub',           // Download manual subtitles (preferred)
+      '--write-auto-sub',      // Fallback to auto-generated if manual not available
+      '--sub-langs', language,
+      '--convert-subs', 'srt',
+      '--sleep-subtitles', '2' // Add 2 second delay between subtitle requests to avoid rate limiting
+    );
+
+    return args;
+  }
+
   // Build yt-dlp command args array for channel downloads
   static getBaseCommandArgs(resolution, allowRedownload = false) {
     const config = configModule.getConfig();
@@ -96,11 +118,15 @@ class YtdlpCommandBuilder {
     const args = [
       ...cookiesArgs,
       '-4',
+      '--windows-filenames',  // Sanitize filenames for Windows/Plex compatibility
       '--ffmpeg-location', configModule.ffmpegPath,
       '--socket-timeout', String(config.downloadSocketTimeoutSeconds || 30),
       '--throttled-rate', config.downloadThrottledRate || '100K',
       '--retries', String(config.downloadRetryCount || 2),
       '--fragment-retries', String(config.downloadRetryCount || 2),
+      '--extractor-retries', '3',  // Retry subtitle/metadata extraction (helps with 429 errors)
+      '--retry-sleep', 'http:5',   // Sleep 5s on HTTP errors like 429 before retrying
+      '--sleep-requests', '1',     // Add 1 second delay between all YouTube API requests to avoid rate limiting
       '--newline',
       '--progress',
       '--progress-template',
@@ -112,6 +138,10 @@ class YtdlpCommandBuilder {
       '--write-thumbnail',
       '--convert-thumbnails', 'jpg',
     ];
+
+    // Add subtitle args if configured
+    const subtitleArgs = this.buildSubtitleArgs(config);
+    args.push(...subtitleArgs);
 
     // Only use download archive if NOT allowing re-downloads
     if (!allowRedownload) {
@@ -155,11 +185,15 @@ class YtdlpCommandBuilder {
     const args = [
       ...cookiesArgs,
       '-4',
+      '--windows-filenames',  // Sanitize filenames for Windows/Plex compatibility
       '--ffmpeg-location', configModule.ffmpegPath,
       '--socket-timeout', String(config.downloadSocketTimeoutSeconds || 30),
       '--throttled-rate', config.downloadThrottledRate || '100K',
       '--retries', String(config.downloadRetryCount || 2),
       '--fragment-retries', String(config.downloadRetryCount || 2),
+      '--extractor-retries', '3',  // Retry subtitle/metadata extraction (helps with 429 errors)
+      '--retry-sleep', 'http:5',   // Sleep 5s on HTTP errors like 429 before retrying
+      '--sleep-requests', '1',     // Add 1 second delay between all YouTube API requests to avoid rate limiting
       '--newline',
       '--progress',
       '--progress-template',
@@ -171,6 +205,10 @@ class YtdlpCommandBuilder {
       '--write-thumbnail',
       '--convert-thumbnails', 'jpg',
     ];
+
+    // Add subtitle args if configured
+    const subtitleArgs = this.buildSubtitleArgs(config);
+    args.push(...subtitleArgs);
 
     // Only use download archive if NOT allowing re-downloads
     if (!allowRedownload) {

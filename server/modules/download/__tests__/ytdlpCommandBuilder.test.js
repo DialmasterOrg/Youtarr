@@ -293,7 +293,7 @@ describe('YtdlpCommandBuilder', () => {
       const mainOutput = result[outputIndices[0] + 1];
       expect(mainOutput).toContain('/mock/youtube/output');
       expect(mainOutput).toContain('%(uploader,channel,uploader_id)s');
-      expect(mainOutput).toContain('%(title)s');
+      expect(mainOutput).toContain('%(title).76s');
       expect(mainOutput).toContain('%(id)s');
       expect(mainOutput).toContain('%(ext)s');
 
@@ -507,10 +507,10 @@ describe('YtdlpCommandBuilder', () => {
       expect(mainOutput).toContain('%(uploader,channel,uploader_id)s');
 
       // Folder should have channel - title - id format
-      expect(mainOutput).toContain('%(uploader,channel,uploader_id)s - %(title)s - %(id)s');
+      expect(mainOutput).toContain('%(uploader,channel,uploader_id)s - %(title).76s - %(id)s');
 
       // File should have channel - title [id].ext format
-      expect(mainOutput).toContain('%(uploader,channel,uploader_id)s - %(title)s  [%(id)s].%(ext)s');
+      expect(mainOutput).toContain('%(uploader,channel,uploader_id)s - %(title).76s [%(id)s].%(ext)s');
     });
   });
 

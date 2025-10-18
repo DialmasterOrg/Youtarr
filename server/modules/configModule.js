@@ -200,6 +200,17 @@ class ConfigModule extends EventEmitter {
       configModified = true;
     }
 
+    // Initialize subtitle settings if not present
+    if (this.config.subtitlesEnabled === undefined) {
+      this.config.subtitlesEnabled = false;
+      configModified = true;
+    }
+
+    if (!this.config.subtitleLanguage) {
+      this.config.subtitleLanguage = 'en';
+      configModified = true;
+    }
+
     // Check if a UUID exists in the config
     if (!this.config.uuid) {
       // Generate a new UUID
@@ -294,7 +305,9 @@ class ConfigModule extends EventEmitter {
         notificationService: 'discord',
         discordWebhookUrl: '',
         useTmpForDownloads: false,
-        tmpFilePath: '/tmp/youtarr-downloads'
+        tmpFilePath: '/tmp/youtarr-downloads',
+        subtitlesEnabled: false,
+        subtitleLanguage: 'en'
       };
     }
 
@@ -485,6 +498,10 @@ class ConfigModule extends EventEmitter {
     // Temp download settings - disabled by default
     defaultConfig.useTmpForDownloads = false;
     defaultConfig.tmpFilePath = '/tmp/youtarr-downloads';
+
+    // Subtitle settings - disabled by default
+    defaultConfig.subtitlesEnabled = false;
+    defaultConfig.subtitleLanguage = 'en';
 
     // Generate UUID for instance identification
     defaultConfig.uuid = uuidv4();
@@ -697,6 +714,19 @@ class ConfigModule extends EventEmitter {
         }
         if (!migrated.tmpFilePath) {
           migrated.tmpFilePath = '/tmp/youtarr-downloads';
+        }
+
+        return migrated;
+      },
+      '1.43.0': (cfg) => {
+        const migrated = { ...cfg };
+
+        // Add subtitle settings
+        if (migrated.subtitlesEnabled === undefined) {
+          migrated.subtitlesEnabled = false;
+        }
+        if (!migrated.subtitleLanguage) {
+          migrated.subtitleLanguage = 'en';
         }
 
         return migrated;
