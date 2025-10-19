@@ -138,13 +138,22 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     if (!currentProgress) {
       return { title: '', eta: '' };
     }
+
+    // Only hide video title when we're preparing the NEXT video (between videos)
+    // All other states (subtitles, metadata processing) are for a specific video we already know
+    const isPreparing = currentProgress.state === 'preparing';
+
     // Don't show "Unknown title" - just show empty if no title
     const title = currentProgress.videoInfo?.displayTitle || '';
-    const displayTitle = (title === 'Unknown title' || title === 'Unknown Title') ? '' : title;
+    const displayTitle = (title === 'Unknown title' || title === 'Unknown Title' || isPreparing) ? '' : title;
 
-    // Get ETA if available
+    // Get ETA if available (hide during preparing and other non-download states)
+    const showEta =
+      currentProgress.state === 'downloading_video' ||
+      currentProgress.state === 'downloading_audio' ||
+      currentProgress.state === 'downloading_subtitles';
     const eta = currentProgress.progress?.etaSeconds;
-    const formattedEta = formatEta(eta || 0);
+    const formattedEta = showEta ? formatEta(eta || 0) : '';
 
     return {
       title: displayTitle,
@@ -160,9 +169,13 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
     switch(currentProgress.state) {
       case 'initiating': return 'Initiating download...';
+      case 'preparing': return 'Preparing next video...';
+      case 'preparing_subtitles': return 'Preparing subtitles...';
+      case 'downloading_subtitles': return 'Downloading subtitles...';
       case 'downloading_video': return 'Downloading video stream...';
       case 'downloading_audio': return 'Downloading audio stream...';
       case 'downloading_thumbnail': return 'Downloading thumbnail...';
+      case 'processing_metadata': return 'Processing metadata...';
       case 'merging': return 'Merging formats...';
       case 'metadata': return 'Adding metadata...';
       case 'processing': return 'Processing file...';
@@ -541,9 +554,14 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             <Box sx={{ position: 'relative', mb: 1 }}>
               <LinearProgress
                 variant={
+                  // Show determinate for actual downloads (video, audio, subtitles)
+                  // Show indeterminate for processing stages without progress data
                   currentProgress.state === 'merging' ||
                   currentProgress.state === 'metadata' ||
-                  currentProgress.state === 'processing'
+                  currentProgress.state === 'processing' ||
+                  currentProgress.state === 'preparing' ||
+                  currentProgress.state === 'preparing_subtitles' ||
+                  currentProgress.state === 'processing_metadata'
                     ? 'indeterminate'
                     : 'determinate'
                 }
@@ -625,7 +643,11 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
               <Typography variant="caption" color="text.secondary">
                 {statusMessage}
               </Typography>
-              {currentProgress.progress && (
+              {/* Show progress details for actual downloads (video, audio, subtitles) */}
+              {currentProgress.progress &&
+               (currentProgress.state === 'downloading_video' ||
+                currentProgress.state === 'downloading_audio' ||
+                currentProgress.state === 'downloading_subtitles') && (
                 <Typography variant="caption" color="text.secondary">
                   {formatBytes(currentProgress.progress.speedBytesPerSecond)}/s •{' '}
                   {currentProgress.progress.percent.toFixed(1)}% •{' '}

@@ -1,17 +1,20 @@
 /* eslint-env jest */
 
+// Mock logger before any imports
+jest.mock('../../logger');
+
 describe('VideoDeletionModule', () => {
   let VideoDeletionModule;
   let mockVideo;
   let mockFs;
-  let consoleErrorSpy;
-  let consoleLogSpy;
-  let consoleInfoSpy;
-  let consoleWarnSpy;
+  let mockLogger;
 
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
+
+    // Get the mocked logger
+    mockLogger = require('../../logger');
 
     // Mock the Video model
     mockVideo = {
@@ -34,21 +37,8 @@ describe('VideoDeletionModule', () => {
       promises: mockFs
     }));
 
-    // Spy on console methods
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-    consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation();
-    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
-
     // Require the module after mocks are in place
     VideoDeletionModule = require('../videoDeletionModule');
-  });
-
-  afterEach(() => {
-    consoleErrorSpy.mockRestore();
-    consoleLogSpy.mockRestore();
-    consoleInfoSpy.mockRestore();
-    consoleWarnSpy.mockRestore();
   });
 
   describe('deleteVideoById', () => {
@@ -77,8 +67,9 @@ describe('VideoDeletionModule', () => {
         videoId: 1,
         message: 'Video deleted successfully'
       });
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Deleted video directory')
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ videoId: 1 }),
+        'Deleted video directory'
       );
     });
 
@@ -149,7 +140,8 @@ describe('VideoDeletionModule', () => {
 
       const result = await VideoDeletionModule.deleteVideoById(1);
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ videoId: 1 }),
         expect.stringContaining('Safety check failed')
       );
       expect(result).toEqual({
@@ -177,8 +169,9 @@ describe('VideoDeletionModule', () => {
 
       const result = await VideoDeletionModule.deleteVideoById(1);
 
-      expect(consoleInfoSpy).toHaveBeenCalledWith(
-        expect.stringContaining('already removed')
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ videoId: 1 }),
+        'Directory already removed'
       );
       expect(mockVideoRecord.update).toHaveBeenCalledWith({ removed: true });
       expect(result).toEqual({
@@ -204,9 +197,9 @@ describe('VideoDeletionModule', () => {
 
       const result = await VideoDeletionModule.deleteVideoById(1);
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to delete directory'),
-        permissionError
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ videoId: 1, err: permissionError }),
+        'Failed to delete directory'
       );
       expect(result).toEqual({
         success: false,
@@ -229,9 +222,9 @@ describe('VideoDeletionModule', () => {
 
       const result = await VideoDeletionModule.deleteVideoById(1);
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Error deleting video'),
-        expect.any(Error)
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ videoId: 1, err: expect.any(Error) }),
+        'Error deleting video'
       );
       expect(result).toEqual({
         success: false,
@@ -245,9 +238,9 @@ describe('VideoDeletionModule', () => {
 
       const result = await VideoDeletionModule.deleteVideoById(1);
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Error deleting video'),
-        expect.any(Error)
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ videoId: 1, err: expect.any(Error) }),
+        'Error deleting video'
       );
       expect(result).toEqual({
         success: false,
@@ -644,6 +637,7 @@ describe('VideoDeletionModule', () => {
       }));
 
       jest.resetModules();
+      mockLogger = require('../../logger');
       VideoDeletionModule = require('../videoDeletionModule');
     });
 
@@ -679,8 +673,9 @@ describe('VideoDeletionModule', () => {
         })
       );
       expect(result).toEqual(mockVideos);
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Found 2 videos older than 30 days')
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ count: 2, ageInDays: 30 }),
+        '[Auto-Removal] Found videos older than threshold'
       );
     });
 
@@ -690,8 +685,9 @@ describe('VideoDeletionModule', () => {
       const result = await VideoDeletionModule.getVideosOlderThanThreshold(60);
 
       expect(result).toEqual([]);
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Found 0 videos older than 60 days')
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ count: 0, ageInDays: 60 }),
+        '[Auto-Removal] Found videos older than threshold'
       );
     });
 
@@ -701,9 +697,9 @@ describe('VideoDeletionModule', () => {
       const result = await VideoDeletionModule.getVideosOlderThanThreshold(30);
 
       expect(result).toEqual([]);
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Error getting videos older than threshold:',
-        expect.any(Error)
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ err: expect.any(Error) }),
+        'Error getting videos older than threshold'
       );
     });
   });
@@ -724,6 +720,7 @@ describe('VideoDeletionModule', () => {
       }));
 
       jest.resetModules();
+      mockLogger = require('../../logger');
       VideoDeletionModule = require('../videoDeletionModule');
     });
 
@@ -751,8 +748,9 @@ describe('VideoDeletionModule', () => {
         })
       );
       expect(result).toEqual(mockVideos);
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Found 1 oldest videos (limit: 10)')
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ count: 1, limit: 10 }),
+        '[Auto-Removal] Found oldest videos'
       );
     });
 
@@ -811,9 +809,9 @@ describe('VideoDeletionModule', () => {
       const result = await VideoDeletionModule.getOldestVideos(10);
 
       expect(result).toEqual([]);
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Error getting oldest videos:',
-        expect.any(Error)
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ err: expect.any(Error) }),
+        'Error getting oldest videos'
       );
     });
   });
@@ -843,6 +841,7 @@ describe('VideoDeletionModule', () => {
       }));
 
       jest.resetModules();
+      mockLogger = require('../../logger');
       VideoDeletionModule = require('../videoDeletionModule');
     });
 
@@ -857,8 +856,8 @@ describe('VideoDeletionModule', () => {
 
       expect(result.totalDeleted).toBe(0);
       expect(result.success).toBe(true);
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Auto-removal is disabled')
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        '[Auto-Removal] Auto-removal is disabled, skipping cleanup'
       );
     });
 
@@ -872,8 +871,8 @@ describe('VideoDeletionModule', () => {
       const result = await VideoDeletionModule.performAutomaticCleanup();
 
       expect(result.totalDeleted).toBe(0);
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('No thresholds configured')
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        '[Auto-Removal] No thresholds configured, skipping cleanup'
       );
     });
 
@@ -1009,8 +1008,9 @@ describe('VideoDeletionModule', () => {
       expect(result.plan.spaceStrategy.enabled).toBe(true);
       expect(result.plan.spaceStrategy.needsCleanup).toBe(false);
       expect(result.deletedBySpace).toBe(0);
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Storage is above threshold')
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ availableGB: 50 }),
+        '[Auto-Removal] Storage is above threshold, no space-based cleanup needed'
       );
     });
 
@@ -1039,8 +1039,8 @@ describe('VideoDeletionModule', () => {
       const result = await VideoDeletionModule.performAutomaticCleanup();
 
       expect(result.errors).toContain('Storage status unavailable, skipped space-based cleanup');
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Could not retrieve storage status')
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        '[Auto-Removal] Could not retrieve storage status - skipping space-based cleanup for safety'
       );
     });
 
@@ -1059,9 +1059,9 @@ describe('VideoDeletionModule', () => {
       // so the cleanup continues successfully with 0 deletions
       expect(result.success).toBe(true);
       expect(result.totalDeleted).toBe(0);
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Error getting videos older than threshold:',
-        expect.any(Error)
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ err: expect.any(Error) }),
+        'Error getting videos older than threshold'
       );
     });
 

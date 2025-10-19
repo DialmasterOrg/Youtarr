@@ -18,15 +18,20 @@ COMPOSE_CMD=$(get_compose_command)
 
 # Parse command line arguments
 NO_AUTH=false
-for arg in "$@"; do
-  case $arg in
+LOG_LEVEL="info"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
     --no-auth)
       NO_AUTH=true
       shift
       ;;
+    --debug)
+      LOG_LEVEL="debug"
+      shift
+      ;;
     *)
-      echo "Unknown option: $arg"
-      echo "Usage: $0 [--no-auth]"
+      echo "Unknown option: $1"
+      echo "Usage: $0 [--no-auth] [--debug]"
       exit 1
       ;;
   esac
@@ -118,6 +123,7 @@ echo "YouTube output directory verified: $CHECK_DIR"
 
 # Export the YouTube output directory for docker-compose
 export YOUTUBE_OUTPUT_DIR="$youtubeOutputDirectory"
+export LOG_LEVEL
 
 # Determine if authentication is already configured in config.json
 passwordHash=$(grep -o '"passwordHash"[[:space:]]*:[[:space:]]*"[^"]*"' config/config.json 2>/dev/null | \

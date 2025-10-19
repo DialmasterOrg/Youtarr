@@ -411,7 +411,7 @@ const renderConfiguration = async ({
       const accordion = screen.getByText('Optional: Plex Media Server Integration');
       fireEvent.click(accordion);
 
-      await screen.findByText('Plex Integration is Optional');
+      await screen.findByText('Completely Optional Plex Integration');
 
       const plexIpInput = screen.getByRole('textbox', { name: /Plex Server IP/i });
       expect(plexIpInput).toHaveValue('192.168.1.100');

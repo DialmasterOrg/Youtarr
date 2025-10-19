@@ -1,5 +1,29 @@
 # Changelog
 
+## [v1.43.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.43.0) - 2025-10-18
+
+## [1.43.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.42.2...v1.43.0) (2025-10-18)
+
+
+### Features
+
+* adopt structured logging with pino for backend ([36acfe2](https://github.com/DialmasterOrg/Youtarr/commit/36acfe2ce0e3de3ce4e4a2ae345daf11657a8fcf))
+* **subtitles:** add subtitle download support and fix filename handling ([149cb0b](https://github.com/DialmasterOrg/Youtarr/commit/149cb0bd4c5ddac4a2f182f0b3ef5a127bd33970)), closes [#243](https://github.com/DialmasterOrg/Youtarr/issues/243)
+
+
+### Bug Fixes
+
+* improve ffmpeg thumbnail processing quality and logging ([c76e02f](https://github.com/DialmasterOrg/Youtarr/commit/c76e02fb75543c1b4eb4613592167a262b4e154e))
+
+
+### Documentation
+
+* update CHANGELOG for v1.42.2 [skip ci] ([b265452](https://github.com/DialmasterOrg/Youtarr/commit/b26545278f931d7c21e7788ff591b9a7a3d73adb))
+
+
+
+
+
 ## [v1.42.2](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.42.2) - 2025-10-12
 
 ### [1.42.2](https://github.com/DialmasterOrg/Youtarr/compare/vv1.42.1...v1.42.2) (2025-10-12)

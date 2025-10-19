@@ -1,4 +1,5 @@
 const schedule = require('node-cron');
+const logger = require('../logger');
 
 /**
  * Initialize all scheduled cron jobs for the application
@@ -9,27 +10,30 @@ function initialize() {
   const videosModule = require('./videosModule');
   const videoDeletionModule = require('./videoDeletionModule');
 
-  console.log('[CronJobs] Initializing scheduled tasks...');
+  logger.info('Initializing scheduled cron jobs');
 
   // ============================================================================
   // AUTOMATIC VIDEO CLEANUP - 2:00 AM Daily
   // ============================================================================
   schedule.schedule('0 2 * * *', async () => {
-    console.log('[CRON] Running automatic video cleanup at 2:00 AM...');
+    logger.info('Running automatic video cleanup cron job');
     try {
       const result = await videoDeletionModule.performAutomaticCleanup();
 
       if (result.totalDeleted > 0) {
-        console.log(`[CRON] Automatic cleanup completed: ${result.totalDeleted} videos deleted, ${(result.freedBytes / (1024 ** 3)).toFixed(2)} GB freed`);
+        logger.info({
+          totalDeleted: result.totalDeleted,
+          freedGB: (result.freedBytes / (1024 ** 3)).toFixed(2)
+        }, 'Automatic cleanup completed successfully');
       } else {
-        console.log('[CRON] Automatic cleanup completed: no videos deleted');
+        logger.info('Automatic cleanup completed: no videos deleted');
       }
 
       if (result.errors.length > 0) {
-        console.warn(`[CRON] Automatic cleanup completed with ${result.errors.length} errors`);
+        logger.warn({ errorCount: result.errors.length }, 'Automatic cleanup completed with errors');
       }
     } catch (error) {
-      console.error('[CRON] Error during automatic video cleanup:', error);
+      logger.error({ err: error }, 'Error during automatic video cleanup');
     }
   });
 
@@ -55,9 +59,9 @@ function initialize() {
           ]
         }
       });
-      console.log(`[CLEANUP] Removed ${result} expired sessions`);
+      logger.info({ removed: result }, 'Removed expired sessions');
     } catch (error) {
-      console.error('[CLEANUP] Error cleaning sessions:', error);
+      logger.error({ err: error }, 'Error cleaning sessions');
     }
   });
 
@@ -65,29 +69,29 @@ function initialize() {
   // VIDEO METADATA BACKFILL - 3:30 AM Daily
   // ============================================================================
   schedule.schedule('30 3 * * *', async () => {
-    console.log('[CRON] Starting scheduled video metadata backfill at 3:30 AM...');
+    logger.info('Starting scheduled video metadata backfill');
     try {
       // Run asynchronously without blocking - the method handles its own async flow
       videosModule.backfillVideoMetadata()
         .then(result => {
           if (result && result.timedOut) {
-            console.log('[CRON] Video metadata backfill reached time limit, will continue tomorrow');
+            logger.info('Video metadata backfill reached time limit, will continue tomorrow');
           } else {
-            console.log('[CRON] Video metadata backfill completed successfully');
+            logger.info('Video metadata backfill completed successfully');
           }
         })
         .catch(err => {
-          console.error('[CRON] Video metadata backfill failed:', err);
+          logger.error({ err }, 'Video metadata backfill failed');
         });
     } catch (error) {
-      console.error('[CRON] Error starting video metadata backfill:', error);
+      logger.error({ err: error }, 'Error starting video metadata backfill');
     }
   });
 
-  console.log('[CronJobs] Scheduled tasks initialized:');
-  console.log('  - Automatic video cleanup: 2:00 AM daily');
-  console.log('  - Session cleanup: 3:00 AM daily');
-  console.log('  - Video metadata backfill: 3:30 AM daily');
+  logger.info('Scheduled cron jobs initialized successfully');
+  logger.info('  - Automatic video cleanup: 2:00 AM daily');
+  logger.info('  - Session cleanup: 3:00 AM daily');
+  logger.info('  - Video metadata backfill: 3:30 AM daily');
 }
 
 module.exports = {

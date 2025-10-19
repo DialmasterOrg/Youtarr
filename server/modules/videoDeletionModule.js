@@ -1,6 +1,7 @@
 const { Video } = require('../models');
 const fs = require('fs').promises;
 const path = require('path');
+const logger = require('../logger');
 
 class VideoDeletionModule {
   constructor() {}
@@ -68,7 +69,7 @@ class VideoDeletionModule {
       // Safety check: ensure the directory path contains the youtube ID
       // This prevents accidentally deleting the wrong directory
       if (!videoDirectory.includes(video.youtubeId)) {
-        console.error(`Safety check failed: directory path ${videoDirectory} doesn't contain youtube ID ${video.youtubeId}`);
+        logger.error({ videoId, videoDirectory, youtubeId: video.youtubeId }, 'Safety check failed: directory path doesn\'t contain youtube ID');
         return {
           success: false,
           videoId,
@@ -79,13 +80,13 @@ class VideoDeletionModule {
       // Delete the video directory
       try {
         await fs.rm(videoDirectory, { recursive: true, force: true });
-        console.log(`Deleted video directory: ${videoDirectory}`);
+        logger.info({ videoId, videoDirectory }, 'Deleted video directory');
       } catch (fsError) {
         if (fsError.code === 'ENOENT') {
           // Directory already gone; treat as success but still mark removed in DB
-          console.info(`Directory ${videoDirectory} already removed: ${fsError.message}`);
+          logger.info({ videoId, videoDirectory, error: fsError.message }, 'Directory already removed');
         } else {
-          console.error(`Failed to delete directory ${videoDirectory}:`, fsError);
+          logger.error({ videoId, videoDirectory, err: fsError }, 'Failed to delete directory');
           return {
             success: false,
             videoId,
@@ -103,7 +104,7 @@ class VideoDeletionModule {
         message: 'Video deleted successfully'
       };
     } catch (error) {
-      console.error(`Error deleting video ${videoId}:`, error);
+      logger.error({ videoId, err: error }, 'Error deleting video');
       return {
         success: false,
         videoId,
@@ -225,10 +226,10 @@ class VideoDeletionModule {
         type: Sequelize.QueryTypes.SELECT
       });
 
-      console.log(`[Auto-Removal] Found ${videos.length} videos older than ${ageInDays} days`);
+      logger.info({ count: videos.length, ageInDays }, '[Auto-Removal] Found videos older than threshold');
       return videos;
     } catch (error) {
-      console.error('Error getting videos older than threshold:', error);
+      logger.error({ err: error }, 'Error getting videos older than threshold');
       return [];
     }
   }
@@ -274,10 +275,10 @@ ${excludeClause}        ORDER BY timeCreated ASC
         type: Sequelize.QueryTypes.SELECT
       });
 
-      console.log(`[Auto-Removal] Found ${videos.length} oldest videos (limit: ${limit})`);
+      logger.info({ count: videos.length, limit }, '[Auto-Removal] Found oldest videos');
       return videos;
     } catch (error) {
-      console.error('Error getting oldest videos:', error);
+      logger.error({ err: error }, 'Error getting oldest videos');
       return [];
     }
   }
@@ -341,18 +342,18 @@ ${excludeClause}        ORDER BY timeCreated ASC
 
     const dryRunAgeCandidateIds = dryRun ? new Set() : null;
 
-    console.log(`[Auto-Removal] Starting ${dryRun ? 'dry-run ' : ''}automatic video cleanup...`);
+    logger.info({ dryRun }, '[Auto-Removal] Starting automatic video cleanup');
 
     const hasAgeThreshold = config.autoRemovalVideoAgeThreshold !== null && config.autoRemovalVideoAgeThreshold !== '';
     const hasSpaceThreshold = config.autoRemovalFreeSpaceThreshold !== null && config.autoRemovalFreeSpaceThreshold !== '';
 
     if (!config.autoRemovalEnabled && !dryRun) {
-      console.log('[Auto-Removal] Auto-removal is disabled, skipping cleanup');
+      logger.info('[Auto-Removal] Auto-removal is disabled, skipping cleanup');
       return result;
     }
 
     if (!hasAgeThreshold && !hasSpaceThreshold) {
-      console.log('[Auto-Removal] No thresholds configured, skipping cleanup');
+      logger.info('[Auto-Removal] No thresholds configured, skipping cleanup');
       return result;
     }
 
@@ -361,13 +362,13 @@ ${excludeClause}        ORDER BY timeCreated ASC
       const thresholdDays = parseInt(config.autoRemovalVideoAgeThreshold, 10);
 
       if (Number.isNaN(thresholdDays) || thresholdDays <= 0) {
-        console.warn('[Auto-Removal] Invalid age threshold provided, skipping age-based cleanup');
+        logger.warn({ threshold: config.autoRemovalVideoAgeThreshold }, '[Auto-Removal] Invalid age threshold provided, skipping age-based cleanup');
       } else {
         result.plan.ageStrategy.enabled = true;
         result.plan.ageStrategy.thresholdDays = thresholdDays;
 
         try {
-          console.log(`[Auto-Removal] Checking for videos older than ${thresholdDays} days...`);
+          logger.info({ thresholdDays }, '[Auto-Removal] Checking for videos older than threshold');
           const oldVideos = await this.getVideosOlderThanThreshold(thresholdDays);
           const estimatedFreed = oldVideos.reduce((sum, v) => sum + (parseInt(v.fileSize) || 0), 0);
 
@@ -388,7 +389,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
               result.simulationTotals.estimatedFreedBytes += estimatedFreed;
             }
           } else if (oldVideos.length > 0) {
-            console.log(`[Auto-Removal] Deleting ${oldVideos.length} videos older than threshold...`);
+            logger.info({ count: oldVideos.length }, '[Auto-Removal] Deleting videos older than threshold');
             const videoIds = oldVideos.map(v => v.id);
             const deleteResult = await this.deleteVideos(videoIds);
 
@@ -400,7 +401,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
             if (deleteResult.failed.length > 0) {
               result.errors.push(`Failed to delete ${deleteResult.failed.length} videos by age`);
               deleteResult.failed.forEach(f => {
-                console.error(`[Auto-Removal] Failed to delete video ${f.videoId}: ${f.error}`);
+                logger.error({ videoId: f.videoId, error: f.error }, '[Auto-Removal] Failed to delete video');
               });
             }
 
@@ -414,12 +415,12 @@ ${excludeClause}        ORDER BY timeCreated ASC
               result.plan.ageStrategy.sampleVideos = deletedSamples;
             }
 
-            console.log(`[Auto-Removal] Age-based cleanup: deleted ${deleteResult.deleted.length} videos, freed ${(freed / (1024 ** 3)).toFixed(2)} GB`);
+            logger.info({ deletedCount: deleteResult.deleted.length, freedGB: (freed / (1024 ** 3)).toFixed(2) }, '[Auto-Removal] Age-based cleanup completed');
           } else {
-            console.log('[Auto-Removal] No videos found older than age threshold');
+            logger.info('[Auto-Removal] No videos found older than age threshold');
           }
         } catch (error) {
-          console.error('[Auto-Removal] Error during age-based cleanup:', error);
+          logger.error({ err: error }, '[Auto-Removal] Error during age-based cleanup');
           result.errors.push(`Age-based cleanup error: ${error.message}`);
           result.success = false;
         }
@@ -429,13 +430,13 @@ ${excludeClause}        ORDER BY timeCreated ASC
     // Space-based cleanup
     if (hasSpaceThreshold) {
       try {
-        console.log(`[Auto-Removal] Checking storage status against threshold ${config.autoRemovalFreeSpaceThreshold}...`);
+        logger.info({ threshold: config.autoRemovalFreeSpaceThreshold }, '[Auto-Removal] Checking storage status against threshold');
         const storageStatus = await configModule.getStorageStatus();
 
         result.plan.spaceStrategy.storageStatus = storageStatus;
 
         if (!storageStatus) {
-          console.warn('[Auto-Removal] WARNING: Could not retrieve storage status - skipping space-based cleanup for safety');
+          logger.warn('[Auto-Removal] Could not retrieve storage status - skipping space-based cleanup for safety');
           result.errors.push('Storage status unavailable, skipped space-based cleanup');
         } else {
           const isBelowThreshold = configModule.isStorageBelowThreshold(
@@ -448,7 +449,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
           const thresholdBytes = configModule.convertStorageThresholdToBytes(config.autoRemovalFreeSpaceThreshold);
 
           if (thresholdBytes === null) {
-            console.warn('[Auto-Removal] Invalid storage threshold format, skipping space-based cleanup');
+            logger.warn('[Auto-Removal] Invalid storage threshold format, skipping space-based cleanup');
             result.errors.push('Invalid storage threshold format, skipped space-based cleanup');
           } else {
             result.plan.spaceStrategy.enabled = true;
@@ -456,7 +457,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
 
             if (isBelowThreshold) {
               const spaceToFree = thresholdBytes - storageStatus.available;
-              console.log(`[Auto-Removal] Need to free approximately ${(spaceToFree / (1024 ** 3)).toFixed(2)} GB`);
+              logger.info({ spaceToFreeGB: (spaceToFree / (1024 ** 3)).toFixed(2) }, '[Auto-Removal] Need to free storage space');
 
               const batchSize = 50;
               const maxIterations = 10;
@@ -470,7 +471,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
                   const oldestVideos = await this.getOldestVideos(batchSize, Array.from(processedIds));
 
                   if (oldestVideos.length === 0) {
-                    console.log('[Auto-Removal] Dry-run: no more videos available for space-based cleanup');
+                    logger.info('[Auto-Removal] Dry-run: no more videos available for space-based cleanup');
                     break;
                   }
 
@@ -507,7 +508,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
                   const oldestVideos = await this.getOldestVideos(batchSize);
 
                   if (oldestVideos.length === 0) {
-                    console.log('[Auto-Removal] No more videos available to delete');
+                    logger.info('[Auto-Removal] No more videos available to delete');
                     break;
                   }
 
@@ -517,7 +518,7 @@ ${excludeClause}        ORDER BY timeCreated ASC
                   // Delete videos one-by-one until threshold is met to avoid over-deletion
                   for (const video of oldestVideos) {
                     if (freedSoFar >= spaceToFree) {
-                      console.log('[Auto-Removal] Space threshold met, stopping space-based cleanup');
+                      logger.info('[Auto-Removal] Space threshold met, stopping space-based cleanup');
                       break;
                     }
 
@@ -543,11 +544,16 @@ ${excludeClause}        ORDER BY timeCreated ASC
                     } else {
                       result.plan.spaceStrategy.failedCount += 1;
                       result.errors.push(`Failed to delete video ${video.id}: ${deleteResult.error}`);
-                      console.error(`[Auto-Removal] Failed to delete video ${video.id}: ${deleteResult.error}`);
+                      logger.error({ videoId: video.id, error: deleteResult.error }, '[Auto-Removal] Failed to delete video');
                     }
                   }
 
-                  console.log(`[Auto-Removal] Batch ${iterations + 1}: deleted ${batchDeletedCount} videos, freed ${(batchFreed / (1024 ** 3)).toFixed(2)} GB (total freed: ${(freedSoFar / (1024 ** 3)).toFixed(2)} GB)`);
+                  logger.info({
+                    batch: iterations + 1,
+                    deletedCount: batchDeletedCount,
+                    batchFreedGB: (batchFreed / (1024 ** 3)).toFixed(2),
+                    totalFreedGB: (freedSoFar / (1024 ** 3)).toFixed(2)
+                  }, '[Auto-Removal] Batch completed');
 
                   iterations += 1;
 
@@ -559,35 +565,37 @@ ${excludeClause}        ORDER BY timeCreated ASC
                 result.plan.spaceStrategy.iterations = iterations;
 
                 if (iterations >= maxIterations) {
-                  console.warn('[Auto-Removal] Reached maximum iterations for space-based cleanup');
+                  logger.warn('[Auto-Removal] Reached maximum iterations for space-based cleanup');
                   result.errors.push('Reached maximum iterations, may need additional cleanup');
                 }
               }
             } else {
-              console.log(`[Auto-Removal] Storage is above threshold (${storageStatus.availableGB} GB available), no space-based cleanup needed`);
+              logger.info({ availableGB: storageStatus.availableGB }, '[Auto-Removal] Storage is above threshold, no space-based cleanup needed');
             }
           }
         }
       } catch (error) {
-        console.error('[Auto-Removal] Error during space-based cleanup:', error);
+        logger.error({ err: error }, '[Auto-Removal] Error during space-based cleanup');
         result.errors.push(`Space-based cleanup error: ${error.message}`);
         result.success = false;
       }
     }
 
-    console.log(`[Auto-Removal] ${dryRun ? 'Dry-run ' : ''}cleanup completed:`);
-    console.log(`  - Total videos deleted: ${result.totalDeleted}`);
-    console.log(`  - Deleted by age: ${result.deletedByAge}`);
-    console.log(`  - Deleted by space: ${result.deletedBySpace}`);
-    console.log(`  - Total space freed: ${(result.freedBytes / (1024 ** 3)).toFixed(2)} GB`);
+    logger.info({
+      dryRun,
+      totalDeleted: result.totalDeleted,
+      deletedByAge: result.deletedByAge,
+      deletedBySpace: result.deletedBySpace,
+      totalFreedGB: (result.freedBytes / (1024 ** 3)).toFixed(2),
+      errorCount: result.errors.length
+    }, '[Auto-Removal] Cleanup completed');
 
     if (dryRun && result.simulationTotals) {
-      console.log(`  - Simulated deletions (age/space): ${result.simulationTotals.byAge}/${result.simulationTotals.bySpace}`);
-      console.log(`  - Estimated space to free: ${(result.simulationTotals.estimatedFreedBytes / (1024 ** 3)).toFixed(2)} GB`);
-    }
-
-    if (result.errors.length > 0) {
-      console.log(`  - Errors: ${result.errors.length}`);
+      logger.info({
+        simulatedByAge: result.simulationTotals.byAge,
+        simulatedBySpace: result.simulationTotals.bySpace,
+        estimatedFreedGB: (result.simulationTotals.estimatedFreedBytes / (1024 ** 3)).toFixed(2)
+      }, '[Auto-Removal] Dry-run simulation summary');
     }
 
     return result;

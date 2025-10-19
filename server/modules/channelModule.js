@@ -10,6 +10,7 @@ const ChannelVideo = require('../models/channelvideo');
 const MessageEmitter = require('./messageEmitter.js');
 const { Op } = require('sequelize');
 const fileCheckModule = require('./fileCheckModule');
+const logger = require('../logger');
 
 const { v4: uuidv4 } = require('uuid');
 const { spawn, execSync } = require('child_process');
@@ -53,7 +54,7 @@ class ChannelModule {
       const timestamp = lastFetchedByTab[mediaType];
       return timestamp ? new Date(timestamp) : null;
     } catch (error) {
-      console.error('Error parsing lastFetchedByTab:', error);
+      logger.error({ err: error, channelId: channel?.channel_id, mediaType }, 'Error parsing lastFetchedByTab');
       return null;
     }
   }
@@ -324,13 +325,13 @@ class ChannelModule {
 
     try {
       execSync(
-        `${configModule.ffmpegPath} -y -i ${realImagePath} -vf "scale=iw*0.4:ih*0.4" ${smallImagePath}`,
+        `${configModule.ffmpegPath} -loglevel error -y -i "${realImagePath}" -vf "scale=iw*0.4:ih*0.4" -q:v 2 "${smallImagePath}"`,
         { stdio: 'inherit' }
       );
       await fsPromises.rename(smallImagePath, realImagePath);
-      console.log('Image resized successfully');
+      logger.debug({ channelId }, 'Channel thumbnail resized successfully');
     } catch (err) {
-      console.log(`Error resizing image: ${err}`);
+      logger.error({ err, channelId, imagePath: realImagePath }, 'Error resizing channel thumbnail');
     }
   }
 
@@ -361,7 +362,7 @@ class ChannelModule {
    */
   async normalizeChannelUrls() {
     try {
-      console.log('Checking for channels with potentially stale handle URLs...');
+      logger.info('Checking for channels with potentially stale handle URLs');
 
       // Find all enabled channels with channel_id and handle URLs
       const channels = await Channel.findAll({
@@ -393,17 +394,21 @@ class ChannelModule {
           const daysSinceUpdate = mostRecentFetch
             ? Math.floor((Date.now() - mostRecentFetch.getTime()) / (1000 * 60 * 60 * 24))
             : 'never';
-          console.log(`Channel "${channel.title}" uses handle URL: ${channel.url} (last updated: ${daysSinceUpdate === 'never' ? 'never' : `${daysSinceUpdate} days ago`})`);
+          logger.info({
+            channelTitle: channel.title,
+            channelUrl: channel.url,
+            lastUpdated: daysSinceUpdate === 'never' ? 'never' : `${daysSinceUpdate} days ago`
+          }, 'Channel uses handle URL');
         }
       }
 
       if (handleUrlCount > 0) {
-        console.log(`Found ${handleUrlCount} channel(s) with handle URLs. These will be updated automatically when accessed.`);
+        logger.info({ handleUrlCount }, 'Found channels with handle URLs - will be updated automatically when accessed');
       } else {
-        console.log('No channels with handle URLs found.');
+        logger.info('No channels with handle URLs found');
       }
     } catch (error) {
-      console.error('Error during channel URL check:', error);
+      logger.error({ err: error }, 'Error during channel URL check');
     }
   }
 
@@ -414,11 +419,10 @@ class ChannelModule {
    * @returns {void}
    */
   channelAutoDownload() {
-    console.log('The current time is ' + new Date());
-    console.log(
-      'Running new Channel Downloads at interval: ' +
-        configModule.getConfig().channelDownloadFrequency
-    );
+    logger.info({
+      currentTime: new Date(),
+      interval: configModule.getConfig().channelDownloadFrequency
+    }, 'Running scheduled channel downloads');
 
     // Check if a Channel Downloads job is already running
     const jobModule = require('./jobModule');
@@ -429,7 +433,7 @@ class ChannelModule {
     );
 
     if (hasRunningChannelDownload) {
-      console.log('Skipping scheduled channel download - previous download still in progress');
+      logger.warn('Skipping scheduled channel download - previous download still in progress');
       return;
     }
 
@@ -530,7 +534,7 @@ class ChannelModule {
     // yt-dlp sometimes returns the handle as 'id', but channel_id or uploader_id should have the UCxxx format
     const properChannelId = channelData.channel_id || channelData.uploader_id || channelData.id;
 
-    console.log(`Storing handle URL for channel ${properChannelId}: ${actualChannelUrl}`);
+    logger.info({ channelId: properChannelId, channelUrl: actualChannelUrl }, 'Storing handle URL for channel');
 
     // First, upsert the channel so it exists in the database
     // We'll update auto_download_enabled_tabs after detecting available tabs
@@ -566,9 +570,9 @@ class ChannelModule {
         // Use first available tab as default
         const firstTab = availableTabs[0];
         autoDownloadEnabledTabs = TAB_TO_MEDIA_TYPE[firstTab] || 'video';
-        console.log(`Channel ${properChannelId} has no 'videos' tab, defaulting to '${autoDownloadEnabledTabs}'`);
+        logger.warn({ channelId: properChannelId, defaultTab: autoDownloadEnabledTabs }, 'Channel has no videos tab, using alternative default');
       } else {
-        console.warn(`Channel ${properChannelId} has no detectable tabs, using default 'video'`);
+        logger.warn({ channelId: properChannelId }, 'Channel has no detectable tabs, using default video tab');
       }
 
       // Update the channel with the determined auto_download_enabled_tabs
@@ -581,12 +585,12 @@ class ChannelModule {
       }, enableChannel, autoDownloadEnabledTabs);
 
     } catch (err) {
-      console.error(`Error fetching tabs for channel ${properChannelId}:`, err.message);
+      logger.error({ err, channelId: properChannelId }, 'Error fetching tabs for channel');
       // Keep default 'video' on error
     }
 
     if (emitMessage) {
-      console.log('Channel data fetched -- emitting message!');
+      logger.debug('Channel data fetched, emitting update message');
       MessageEmitter.emitMessage(
         'broadcast',
         null,
@@ -613,23 +617,22 @@ class ChannelModule {
    * @returns {void}
    */
   scheduleTask() {
-    console.log(
-      'Scheduling task to run at: ' +
-        configModule.getConfig().channelDownloadFrequency
-    );
+    const frequency = configModule.getConfig().channelDownloadFrequency;
+    logger.info({ frequency }, 'Scheduling channel download task');
+
     if (this.task) {
-      console.log('Stopping old task');
+      logger.info('Stopping old scheduled task');
       this.task.stop();
     }
 
     if (configModule.getConfig().channelAutoDownload) {
       this.task = cron.schedule(
-        configModule.getConfig().channelDownloadFrequency,
+        frequency,
         this.channelAutoDownload
       );
-      console.log('Auto-downloads enabled, task scheduled!');
+      logger.info({ frequency }, 'Auto-downloads enabled, task scheduled');
     } else {
-      console.log('Auto-downloads disabled');
+      logger.info('Auto-downloads disabled');
     }
   }
 
@@ -671,13 +674,13 @@ class ChannelModule {
             try {
               fs.copySync(channelThumbPath, channelPosterPath);
             } catch (copyErr) {
-              console.log(`Error backfilling poster for ${channel.uploader}: ${copyErr.message}`);
+              logger.error({ err: copyErr, channelUploader: channel.uploader }, 'Error backfilling poster for channel');
             }
           }
         }
       }
     } catch (err) {
-      console.error('Error during channel poster backfill:', err);
+      logger.error({ err }, 'Error during channel poster backfill');
     }
   }
 
@@ -702,7 +705,7 @@ class ChannelModule {
         auto_download_enabled_tabs: channel.auto_download_enabled_tabs ?? 'video',
       }));
     } catch (err) {
-      console.error('Error reading channels from database:', err);
+      logger.error({ err }, 'Error reading channels from database');
       return [];
     }
   }
@@ -743,7 +746,7 @@ class ChannelModule {
         await Channel.update({ enabled: false }, { where: { url: toDisable } });
       }
     } catch (err) {
-      console.error('Error updating channels in database:', err);
+      logger.error({ err }, 'Error updating channels in database');
     }
   }
 
@@ -818,7 +821,7 @@ class ChannelModule {
 
       return tempFilePath;
     } catch (err) {
-      console.error('Error generating channels file:', err);
+      logger.error({ err }, 'Error generating channels file');
       try {
         await fsPromises.unlink(tempFilePath);
       } catch (unlinkErr) {
@@ -1184,7 +1187,7 @@ class ChannelModule {
     const videos = [];
 
     if (!jsonOutput.entries || !Array.isArray(jsonOutput.entries)) {
-      console.log('No entries found in yt-dlp JSON response');
+      logger.warn('No entries found in yt-dlp JSON response');
       return videos;
     }
 
@@ -1196,7 +1199,7 @@ class ChannelModule {
 
       // Skip playlist entries (shouldn't happen when fetching specific tabs)
       if (entry._type === 'playlist') {
-        console.log('Unexpected playlist entry found when fetching /videos tab');
+        logger.warn('Unexpected playlist entry found when fetching specific tab');
         continue;
       }
 
@@ -1335,7 +1338,7 @@ class ChannelModule {
     const tabTypesToTest = [TAB_TYPES.VIDEOS, TAB_TYPES.SHORTS, TAB_TYPES.LIVE];
     const canonicalChannelUrl = this.resolveChannelUrlFromId(channelId);
 
-    console.log(`Detecting available tabs for channel ${channelId} (${channel.title})`);
+    logger.info({ channelId, channelTitle: channel.title }, 'Detecting available tabs for channel');
 
     for (const tabType of tabTypesToTest) {
       try {
@@ -1354,10 +1357,10 @@ class ChannelModule {
 
         // If we got here without error, the tab exists
         availableTabs.push(tabType);
-        console.log(`  ✓ ${tabType} tab exists`);
+        logger.info({ channelId, tabType }, 'Tab exists for channel');
       } catch (error) {
         // Tab doesn't exist or is empty - that's fine
-        console.log(`  ✗ ${tabType} tab not available`);
+        logger.debug({ channelId, tabType }, 'Tab not available for channel');
       }
     }
 
@@ -1411,8 +1414,12 @@ class ChannelModule {
     channel.auto_download_enabled_tabs = newEnabledTabs.join(',');
     await channel.save();
 
-    console.log(`Updated auto download for channel ${channelId}, tab ${tabType}: ${enabled ? 'enabled' : 'disabled'}`);
-    console.log(`New auto_download_enabled_tabs: ${channel.auto_download_enabled_tabs}`);
+    logger.info({
+      channelId,
+      tabType,
+      enabled,
+      autoDownloadEnabledTabs: channel.auto_download_enabled_tabs
+    }, 'Updated auto download setting for channel tab');
   }
 
   /**
@@ -1448,7 +1455,11 @@ class ChannelModule {
     if (channel.available_tabs) {
       const availableTabs = channel.available_tabs.split(',');
       if (!availableTabs.includes(tabType)) {
-        console.log(`Tab '${tabType}' not available for channel ${channelId}. Available tabs: ${availableTabs.join(', ')}`);
+        logger.info({
+          channelId,
+          requestedTab: tabType,
+          availableTabs: availableTabs.join(', ')
+        }, 'Requested tab not available for channel');
         shouldFetchFromYoutube = false;
       }
     }
@@ -1461,7 +1472,7 @@ class ChannelModule {
       if (shouldFetchFromYoutube && this.shouldRefreshChannelVideos(channel, allVideos.length, mediaType)) {
         // Check if there's already an active fetch for this channel
         if (this.activeFetches.has(channelId)) {
-          console.log(`Skipping auto-refresh for channel ${channelId} - fetch already in progress`);
+          logger.info({ channelId }, 'Skipping auto-refresh - fetch already in progress');
         } else {
           // Register this fetch operation
           this.activeFetches.set(channelId, {
@@ -1505,7 +1516,7 @@ class ChannelModule {
           const now = new Date();
 
           if (!exists) {
-            console.log(`Video ${youtubeId} no longer exists on YouTube, marking as removed in channelvideos`);
+            logger.info({ youtubeId, channelId }, 'Video no longer exists on YouTube, marking as removed');
             video.youtube_removed = true;
             video.youtube_removed_checked_at = now;
             return { youtube_id: youtubeId, channel_id: channelId, removed: true, checked_at: now };
@@ -1556,7 +1567,7 @@ class ChannelModule {
       return this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
 
     } catch (error) {
-      console.error('Error fetching channel videos:', error.message);
+      logger.error({ err: error, channelId }, 'Error fetching channel videos');
       const offset = (page - 1) * pageSize;
       const cachedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType);
       const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType);
@@ -1589,7 +1600,11 @@ class ChannelModule {
       if (channel) {
         // Update URL if it has changed (e.g., handle renamed)
         if (currentChannelUrl && currentChannelUrl !== channel.url) {
-          console.log(`Channel URL updated for ${channel.title}: ${currentChannelUrl}`);
+          logger.info({
+            channelTitle: channel.title,
+            oldUrl: channel.url,
+            newUrl: currentChannelUrl
+          }, 'Channel URL updated');
           channel.url = currentChannelUrl;
           await channel.save(); // Save URL change before atomic timestamp update
         }
@@ -1598,7 +1613,7 @@ class ChannelModule {
         await this.setLastFetchedForTab(channel, mediaType, new Date());
       }
     } catch (ytdlpError) {
-      console.error('Error fetching channel videos:', ytdlpError.message);
+      logger.error({ err: ytdlpError, channelId }, 'Error fetching channel videos');
       throw ytdlpError;
     }
   }
@@ -1636,7 +1651,7 @@ class ChannelModule {
       }
 
       try {
-        console.log(`Starting full video fetch for channel ${channelId} (${channel.title}) - tab: ${tabType}`);
+        logger.info({ channelId, channelTitle: channel.title, tabType }, 'Starting full video fetch for channel');
         const startTime = Date.now();
 
         // Fetch ALL videos from YouTube (no --playlist-end parameter)
@@ -1657,7 +1672,12 @@ class ChannelModule {
           return { videos, currentChannelUrl };
         });
 
-        console.log(`Fetched ${result.videos.length} videos from YouTube in ${(Date.now() - startTime) / 1000}s`);
+        const fetchDuration = (Date.now() - startTime) / 1000;
+        logger.info({
+          channelId,
+          videoCount: result.videos.length,
+          durationSeconds: fetchDuration
+        }, 'Fetched videos from YouTube');
 
         // Save all videos to database with correct media type
         const mediaType = MEDIA_TAB_TYPE_MAP[tabType] || 'video';
@@ -1667,7 +1687,11 @@ class ChannelModule {
 
         // Update channel metadata
         if (result.currentChannelUrl && result.currentChannelUrl !== channel.url) {
-          console.log(`Channel URL updated for ${channel.title}: ${result.currentChannelUrl}`);
+          logger.info({
+            channelTitle: channel.title,
+            oldUrl: channel.url,
+            newUrl: result.currentChannelUrl
+          }, 'Channel URL updated');
           channel.url = result.currentChannelUrl;
           await channel.save(); // Save URL change before atomic timestamp update
         }
@@ -1680,7 +1704,11 @@ class ChannelModule {
         const stats = await this.getChannelVideoStats(channelId, hideDownloaded, '', mediaType);
 
         const elapsedSeconds = (Date.now() - startTime) / 1000;
-        console.log(`Full video fetch for channel ${channelId} completed in ${elapsedSeconds}s`);
+        logger.info({
+          channelId,
+          elapsedSeconds,
+          videosFound: result.videos.length
+        }, 'Full video fetch completed');
 
         return {
           success: true,
@@ -1690,7 +1718,7 @@ class ChannelModule {
         };
 
       } catch (error) {
-        console.error(`Error fetching all videos for channel ${channelId}:`, error.message);
+        logger.error({ err: error, channelId }, 'Error fetching all videos for channel');
         throw error;
       }
     } finally {

@@ -4,6 +4,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const configModule = require('./configModule');
 const fileCheckModule = require('./fileCheckModule');
+const logger = require('../logger');
 
 class VideosModule {
   constructor() {}
@@ -144,7 +145,7 @@ class VideosModule {
           const now = new Date();
 
           if (!exists) {
-            console.log(`Video ${video.youtubeId} no longer exists on YouTube, marking as removed in Videos table`);
+            logger.info({ youtubeId: video.youtubeId }, 'Video no longer exists on YouTube, marking as removed');
             video.youtube_removed = true;
             video.youtube_removed_checked_at = now;
             return { id: video.id, removed: true, checked_at: now };
@@ -204,7 +205,7 @@ class VideosModule {
         enabledChannels: enabledChannels.map(ch => ({ channel_id: ch.channel_id, uploader: ch.uploader }))
       };
     } catch (err) {
-      console.error('Error in getVideosPaginated:', err);
+      logger.error({ err }, 'Error in getVideosPaginated');
       throw err;
     }
   }
@@ -250,7 +251,7 @@ class VideosModule {
       // Convert to sorted array
       return Array.from(channelSet).sort();
     } catch (err) {
-      console.error('Error in getAllUniqueChannels:', err);
+      logger.error({ err }, 'Error in getAllUniqueChannels');
       return [];
     }
   }
@@ -284,7 +285,7 @@ class VideosModule {
               // Keep the larger file (likely the more complete download)
               const existingFile = fileMap.get(youtubeId);
               if (stats.size > existingFile.fileSize) {
-                console.log(`  Duplicate found for ${youtubeId}: keeping larger file (${fullPath})`);
+                logger.warn({ youtubeId, filePath: fullPath, size: stats.size }, 'Duplicate found: keeping larger file');
                 fileMap.set(youtubeId, {
                   filePath: fullPath,
                   fileSize: stats.size
@@ -300,7 +301,7 @@ class VideosModule {
         }
       }
     } catch (err) {
-      console.error(`Error scanning directory ${dir}:`, err.message);
+      logger.error({ err, dir }, 'Error scanning directory');
     }
 
     return { fileMap, duplicates };
@@ -310,7 +311,7 @@ class VideosModule {
     const startTime = Date.now();
     const logProgress = (message) => {
       const elapsed = Math.round((Date.now() - startTime) / 1000);
-      console.log(`[Backfill ${elapsed}s] ${message}`);
+      logger.info({ elapsed, context: 'backfill' }, message);
     };
 
     try {
@@ -318,7 +319,7 @@ class VideosModule {
       const outputDir = configModule.directoryPath;
 
       if (!outputDir) {
-        console.log('No YouTube output directory configured, skipping backfill');
+        logger.info('No YouTube output directory configured, skipping backfill');
         return;
       }
 
@@ -336,10 +337,9 @@ class VideosModule {
 
 
       if (duplicates.size > 0) {
-        console.log(`WARNING: Found ${duplicates.size} videos with duplicate files:`);
+        logger.warn({ duplicateCount: duplicates.size }, 'Found videos with duplicate files');
         for (const [youtubeId, paths] of duplicates.entries()) {
-          console.log(`  ${youtubeId}: ${paths.length} files found`);
-          paths.forEach(p => console.log(`    - ${p}`));
+          logger.warn({ youtubeId, fileCount: paths.length, paths }, 'Duplicate video files found');
         }
       }
 
@@ -460,13 +460,13 @@ class VideosModule {
                   batchSuccess++;
                 } catch (err) {
                   batchFailed++;
-                  console.error(`Failed to update video ${update.id}:`, err.message);
+                  logger.error({ err, videoId: update.id }, 'Failed to update video');
                 }
               }
             }
 
             if (batchFailed > 0) {
-              console.log(`Batch update results: ${batchSuccess} succeeded, ${batchFailed} failed`);
+              logger.info({ batchSuccess, batchFailed }, 'Batch update results');
             }
           }
         }
@@ -483,11 +483,13 @@ class VideosModule {
       }
 
       const elapsed = Math.round((Date.now() - startTime) / 1000);
-      console.log(`Video metadata backfill completed in ${elapsed} seconds:`);
-      console.log(`  - Total videos processed: ${totalProcessed}`);
-      console.log(`  - Video files found on disk: ${fileMap.size}`);
-      console.log(`  - Videos updated with file info: ${totalUpdated}`);
-      console.log(`  - Videos marked as removed: ${totalRemoved}`);
+      logger.info({
+        elapsed,
+        totalProcessed,
+        filesOnDisk: fileMap.size,
+        updated: totalUpdated,
+        removed: totalRemoved
+      }, 'Video metadata backfill completed');
 
       return {
         processed: totalProcessed,
@@ -499,11 +501,10 @@ class VideosModule {
     } catch (err) {
       if (err.message && err.message.includes('Time limit exceeded')) {
         const elapsed = Math.round((Date.now() - startTime) / 1000);
-        console.log(`Video metadata backfill stopped after ${elapsed} seconds (time limit reached)`);
-        console.log('Backfill will continue at next scheduled run');
+        logger.info({ elapsed }, 'Video metadata backfill stopped (time limit reached), will continue at next scheduled run');
         return { timedOut: true, timeElapsed: elapsed };
       }
-      console.error('Error during video metadata backfill:', err);
+      logger.error({ err }, 'Error during video metadata backfill');
       throw err;
     }
   }

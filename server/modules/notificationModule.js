@@ -1,5 +1,6 @@
 const https = require('https');
 const { URL } = require('url');
+const logger = require('../logger');
 
 class NotificationModule {
   constructor() {
@@ -29,7 +30,7 @@ class NotificationModule {
    */
   async sendDownloadNotification(notificationData) {
     if (!this.isConfigured()) {
-      console.log('Notifications not configured, skipping notification');
+      logger.debug('Notifications not configured, skipping notification');
       return;
     }
 
@@ -39,16 +40,16 @@ class NotificationModule {
 
       // Don't send notification if nothing was downloaded
       if (finalSummary.totalDownloaded === 0) {
-        console.log('No new videos downloaded, skipping notification');
+        logger.debug('No new videos downloaded, skipping notification');
         return;
       }
 
       const message = this.formatDownloadMessage(finalSummary, videoData);
       await this.sendDiscordWebhook(config.discordWebhookUrl, message);
-      console.log('Download notification sent successfully');
+      logger.info({ downloadCount: finalSummary.totalDownloaded }, 'Download notification sent successfully');
     } catch (error) {
       // Never crash the app due to notification failures
-      console.error('Failed to send download notification:', error.message);
+      logger.error({ err: error }, 'Failed to send download notification');
     }
   }
 

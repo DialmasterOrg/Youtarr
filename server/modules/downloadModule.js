@@ -3,6 +3,7 @@ const jobModule = require('./jobModule');
 const DownloadExecutor = require('./download/downloadExecutor');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const tempPathManager = require('./download/tempPathManager');
+const logger = require('../logger');
 
 class DownloadModule {
   constructor() {
@@ -18,7 +19,7 @@ class DownloadModule {
     try {
       await tempPathManager.cleanTempDirectory();
     } catch (error) {
-      console.error('[DownloadModule] Error cleaning temp directory on startup:', error.message);
+      logger.error({ err: error }, 'Error cleaning temp directory on startup');
       // Don't fail initialization, just log the error
     }
   }
@@ -29,7 +30,7 @@ class DownloadModule {
 
   async doChannelDownloads(jobData = {}, isNextJob = false) {
     const jobType = 'Channel Downloads';
-    console.log(`Running ${jobType}`);
+    logger.info('Running channel downloads job');
 
     const jobId = await jobModule.addOrUpdateJob(
       {
@@ -64,7 +65,7 @@ class DownloadModule {
 
         this.downloadExecutor.doDownload(args, jobId, jobType);
       } catch (err) {
-        console.error('Error in doChannelDownloads:', err);
+        logger.error({ err }, 'Error in channel downloads');
         if (tempChannelsFile) {
           // Clean up temp file on error
           const fs = require('fs').promises;
@@ -86,10 +87,7 @@ class DownloadModule {
     const jobType = 'Manually Added Urls';
     const jobData = reqOrJobData.body ? reqOrJobData.body : reqOrJobData;
 
-    console.log(
-      'Running doSpecificDownloads and jobData: ',
-      JSON.stringify(jobData)
-    );
+    logger.info({ jobData }, 'Running specific downloads job');
 
     const urls = reqOrJobData.body
       ? reqOrJobData.body.urls

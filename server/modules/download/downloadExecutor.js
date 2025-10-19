@@ -8,6 +8,8 @@ const DownloadProgressMonitor = require('./DownloadProgressMonitor');
 const VideoMetadataProcessor = require('./videoMetadataProcessor');
 const tempPathManager = require('./tempPathManager');
 const { JobVideoDownload } = require('../../models');
+const Channel = require('../../models/channel');
+const logger = require('../../logger');
 
 class DownloadExecutor {
   constructor() {
@@ -20,6 +22,12 @@ class DownloadExecutor {
     this.currentJobId = null;
     this.manualTerminationReason = null;
     this.forceKillTimeout = null;
+    // WebSocket message throttling for progress updates
+    this.lastProgressEmitTime = 0;
+    this.pendingProgressMessage = null;
+    this.progressFlushTimer = null;
+    this.lastEmittedProgressState = null;
+    this.PROGRESS_THROTTLE_MS = 250; // Throttle progress updates to 250ms intervals
   }
 
   getCountOfDownloadedVideos() {
@@ -52,7 +60,7 @@ class DownloadExecutor {
 
       return null;
     } catch (error) {
-      console.error(`Error extracting youtube ID from path ${filePath}:`, error.message);
+      logger.error({ err: error, filePath }, 'Error extracting youtube ID from path');
       return null;
     }
   }
@@ -90,7 +98,7 @@ class DownloadExecutor {
 
       return false;
     } catch (error) {
-      console.error(`Error checking if directory is video-specific: ${error.message}`);
+      logger.error({ err: error }, 'Error checking if directory is video-specific');
       return false;
     }
   }
@@ -109,11 +117,11 @@ class DownloadExecutor {
       });
 
       if (inProgressVideos.length === 0) {
-        console.log('No in-progress videos to clean up');
+        logger.info('No in-progress videos to clean up');
         return;
       }
 
-      console.log(`Cleaning up ${inProgressVideos.length} in-progress video(s)`);
+      logger.info({ count: inProgressVideos.length }, 'Cleaning up in-progress videos');
 
       for (const videoDownload of inProgressVideos) {
         const videoDir = videoDownload.file_path;
@@ -133,18 +141,18 @@ class DownloadExecutor {
             // Verify directory exists and is a video-specific directory
             const dirExists = await fsPromises.access(dirPath).then(() => true).catch(() => false);
             if (!dirExists) {
-              console.log(`Directory doesn't exist: ${dirPath}`);
+              logger.info({ dirPath }, 'Directory does not exist');
               continue;
             }
 
             foundExistingPath = true;
 
             if (!this.isVideoSpecificDirectory(dirPath)) {
-              console.log(`Skipping non-video directory: ${dirPath}`);
+              logger.info({ dirPath }, 'Skipping non-video directory');
               continue;
             }
 
-            console.log(`Cleaning up in-progress video: ${videoDownload.youtube_id} at ${dirPath}`);
+            logger.info({ youtubeId: videoDownload.youtube_id, dirPath }, 'Cleaning up in-progress video');
 
             // Remove all files in the directory
             const dirFiles = await fsPromises.readdir(dirPath);
@@ -154,24 +162,24 @@ class DownloadExecutor {
                 const stats = await fsPromises.stat(fullPath);
                 if (stats.isFile()) {
                   await fsPromises.unlink(fullPath);
-                  console.log(`  Removed file: ${fileName}`);
+                  logger.info({ fileName }, 'Removed file');
                 } else if (stats.isDirectory()) {
                   await fsPromises.rm(fullPath, { recursive: true, force: true });
-                  console.log(`  Removed subdirectory: ${fileName}`);
+                  logger.info({ fileName }, 'Removed subdirectory');
                 }
               } catch (fileError) {
-                console.error(`  Error removing ${fileName}:`, fileError.message);
+                logger.error({ err: fileError, fileName }, 'Error removing file');
               }
             }
 
             // Remove the now-empty video directory
             await fsPromises.rmdir(dirPath);
-            console.log(`Successfully removed video directory: ${dirPath}`);
+            logger.info({ dirPath }, 'Successfully removed video directory');
             cleanedAny = true;
           }
 
           if (!foundExistingPath) {
-            console.log(`All candidate directories already removed for ${videoDownload.youtube_id}`);
+            logger.info({ youtubeId: videoDownload.youtube_id }, 'All candidate directories already removed');
             await videoDownload.destroy();
             continue;
           }
@@ -181,11 +189,11 @@ class DownloadExecutor {
             await videoDownload.destroy();
           }
         } catch (error) {
-          console.error(`Error cleaning up video ${videoDownload.youtube_id}:`, error.message);
+          logger.error({ err: error, youtubeId: videoDownload.youtube_id }, 'Error cleaning up video');
         }
       }
     } catch (error) {
-      console.error('Error querying in-progress videos for cleanup:', error.message);
+      logger.error({ err: error }, 'Error querying in-progress videos for cleanup');
     }
   }
 
@@ -203,7 +211,7 @@ class DownloadExecutor {
         // Remove .part file
         if (await fsPromises.access(partFile).then(() => true).catch(() => false)) {
           await fsPromises.unlink(partFile);
-          console.log(`Cleaned up partial file: ${partFile}`);
+          logger.info({ partFile }, 'Cleaned up partial file');
         }
 
         // Remove fragment files
@@ -214,16 +222,162 @@ class DownloadExecutor {
           for (const f of dirFiles) {
             if (f.startsWith(basename + '.f')) {
               await fsPromises.unlink(path.join(dir, f));
-              console.log(`Cleaned up fragment: ${f}`);
+              logger.info({ fragment: f }, 'Cleaned up fragment');
             }
           }
         } catch (readDirError) {
-          console.error(`Error reading directory ${dir}:`, readDirError.message);
+          logger.error({ err: readDirError, dir }, 'Error reading directory');
         }
       } catch (error) {
-        console.error(`Error cleaning up partial files for ${file}:`, error);
+        logger.error({ err: error, file }, 'Error cleaning up partial files');
       }
     }
+  }
+
+  /**
+   * Determine if a message should bypass throttling and be sent immediately
+   * Important messages include state changes, errors, warnings, and completion events
+   * @param {string} line - The raw line from yt-dlp
+   * @param {object|null} structuredProgress - Parsed progress from monitor
+   * @returns {boolean} - True if message is important and should be sent immediately
+   */
+  isImportantMessage(line, structuredProgress) {
+    // State-changing events should always be sent immediately
+    const importantPatterns = [
+      '[download] Destination:',      // New file download starting
+      '[Merger]',                      // Merging video/audio
+      '[MoveFiles]',                   // Moving file to final location
+      '[Metadata]',                    // Adding metadata
+      '[ExtractAudio]',                // Extracting audio
+      '[download] 100%',               // Download complete
+      'Downloading item',              // New item in playlist
+      'already been recorded in the archive', // Skipped (already downloaded)
+      'does not pass filter',          // Skipped (filtered out)
+      'ERROR:',                        // Error occurred
+      'WARNING:',                      // Warning occurred
+      'HTTP Error 403',                // Authentication issue
+      '403: Forbidden',                // Authentication issue (alternate format)
+      'Sign in to confirm',            // Bot detection
+      '[youtube] Extracting URL:',     // Starting to fetch video metadata
+      'Downloading webpage',           // Fetching video metadata
+      'Downloading tv client config',  // Fetching video metadata
+      'Downloading player',            // Fetching video player
+      'Downloading m3u8 information',  // Fetching stream info
+      '[info]',                        // Info messages (subtitles, thumbnails, metadata)
+      '[SubtitlesConvertor]',          // Converting subtitles
+      '[ThumbnailsConvertor]',         // Converting thumbnails
+    ];
+
+    for (const pattern of importantPatterns) {
+      if (line.includes(pattern)) {
+        return true;
+      }
+    }
+
+    // Check if monitor detected a state change
+    if (structuredProgress && structuredProgress.state) {
+      const stateChanged = structuredProgress.state !== this.lastEmittedProgressState;
+      if (stateChanged) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Emit progress message with throttling for non-important updates
+   * Important messages are sent immediately, progress updates are throttled to PROGRESS_THROTTLE_MS
+   * @param {string} text - The message text to emit
+   * @param {object|null} progress - The structured progress object
+   */
+  emitProgressMessage(text, progress) {
+    const isImportant = this.isImportantMessage(text, progress);
+
+    if (isImportant) {
+      // Important messages: send immediately and clear any pending timer
+      if (this.progressFlushTimer) {
+        clearTimeout(this.progressFlushTimer);
+        this.progressFlushTimer = null;
+        this.pendingProgressMessage = null;
+      }
+
+      MessageEmitter.emitMessage(
+        'broadcast',
+        null,
+        'download',
+        'downloadProgress',
+        {
+          text: text,
+          progress: progress,
+        }
+      );
+
+      this.lastProgressEmitTime = Date.now();
+      if (progress && progress.state) {
+        this.lastEmittedProgressState = progress.state;
+      }
+      return;
+    }
+
+    // Progress update: throttle to PROGRESS_THROTTLE_MS interval
+    const now = Date.now();
+    const timeSinceLastEmit = now - this.lastProgressEmitTime;
+
+    if (timeSinceLastEmit >= this.PROGRESS_THROTTLE_MS) {
+      // Enough time has passed, send immediately
+      MessageEmitter.emitMessage(
+        'broadcast',
+        null,
+        'download',
+        'downloadProgress',
+        {
+          text: text,
+          progress: progress,
+        }
+      );
+
+      this.lastProgressEmitTime = now;
+      if (progress && progress.state) {
+        this.lastEmittedProgressState = progress.state;
+      }
+    } else {
+      // Too soon, store as pending
+      this.pendingProgressMessage = {
+        text: text,
+        progress: progress,
+      };
+
+      // Set timer if not already set
+      if (!this.progressFlushTimer) {
+        const remainingTime = this.PROGRESS_THROTTLE_MS - timeSinceLastEmit;
+        this.progressFlushTimer = setTimeout(() => {
+          this.flushPendingProgressMessage();
+          this.progressFlushTimer = null;
+        }, remainingTime);
+      }
+    }
+  }
+
+  flushPendingProgressMessage() {
+    if (!this.pendingProgressMessage) {
+      return;
+    }
+
+    MessageEmitter.emitMessage(
+      'broadcast',
+      null,
+      'download',
+      'downloadProgress',
+      this.pendingProgressMessage
+    );
+
+    this.lastProgressEmitTime = Date.now();
+    const { progress } = this.pendingProgressMessage;
+    if (progress && progress.state) {
+      this.lastEmittedProgressState = progress.state;
+    }
+    this.pendingProgressMessage = null;
   }
 
   async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false) {
@@ -240,13 +394,12 @@ class DownloadExecutor {
     try {
       await tempPathManager.cleanTempDirectory();
     } catch (error) {
-      console.error('[DownloadExecutor] Error cleaning temp directory before job start:', error.message);
+      logger.error({ err: error }, 'Error cleaning temp directory before job start');
       // Continue anyway - don't fail the job just because cleanup failed
     }
 
     return new Promise((resolve, reject) => {
-      console.log(`Running yt-dlp for ${jobType}`);
-      console.log('Command args:', args);
+      logger.info({ jobType, args }, 'Running yt-dlp');
       const proc = spawn('yt-dlp', args, {
         env: {
           ...process.env,
@@ -296,23 +449,23 @@ class DownloadExecutor {
         gracefulShutdownInProgress = true;
         shutdownReason = reason;
 
-        console.log(`Initiating graceful shutdown: ${reason}`);
+        logger.info({ reason }, 'Initiating graceful shutdown');
 
         // Send SIGTERM to allow process to finish current video
         try {
           proc.kill('SIGTERM');
         } catch (err) {
-          console.log('Error sending SIGTERM:', err.message);
+          logger.error({ err }, 'Error sending SIGTERM');
         }
 
         // Wait up to 60 seconds for graceful exit, then force kill
         setTimeout(() => {
           if (proc.exitCode === null && proc.signalCode === null) {
-            console.log('Grace period expired, forcing kill with SIGKILL');
+            logger.info('Grace period expired, forcing kill with SIGKILL');
             try {
               proc.kill('SIGKILL');
             } catch (err) {
-              console.log('Error sending SIGKILL:', err.message);
+              logger.error({ err }, 'Error sending SIGKILL');
             }
           }
         }, 60 * 1000);
@@ -332,7 +485,6 @@ class DownloadExecutor {
       resetActivityTimer();
 
       const partialDestinations = new Set();
-      let partialCleanupPerformed = false;
       let httpForbiddenDetected = false;
       let cookiesSuggestionEmitted = false;
 
@@ -341,8 +493,9 @@ class DownloadExecutor {
           return;
         }
         cookiesSuggestionEmitted = true;
-        const message = 'Download failed: YouTube returned HTTP 403 (Forbidden). Please set cookies in your Configuration or try different cookies to resolve this issue.';
-        monitor.hasError = true;
+        const message = 'HTTP 403 detected: YouTube may be blocking requests. If download fails, try setting cookies in Configuration.';
+        // Don't set monitor.hasError here - let the final exit code determine success/failure
+        // 403s on HLS fragments are often recoverable and don't indicate actual failure
         MessageEmitter.emitMessage(
           'broadcast',
           null,
@@ -350,8 +503,8 @@ class DownloadExecutor {
           'downloadProgress',
           {
             text: message,
-            progress: monitor.snapshot('failed'),
-            error: true,
+            progress: monitor.snapshot('warning'),
+            warning: true,
             errorCode: 'COOKIES_RECOMMENDED'
           }
         );
@@ -377,7 +530,7 @@ class DownloadExecutor {
           .map((line) => line.trim())
           .filter(Boolean)
           .forEach((line) => {
-            console.log(line); // log the data in real-time
+            logger.info({ source: 'yt-dlp' }, line);
 
             // Track activity indicators and reset timeout
             // Reset on any download progress output
@@ -411,7 +564,7 @@ class DownloadExecutor {
                       status: 'in_progress'
                     }
                   }).catch(err => {
-                    console.error(`Error creating JobVideoDownload tracking entry: ${err.message}`);
+                    logger.error({ err }, 'Error creating JobVideoDownload tracking entry');
                   });
                 }
               }
@@ -432,16 +585,8 @@ class DownloadExecutor {
               }
             }
 
-            MessageEmitter.emitMessage(
-              'broadcast',
-              null,
-              'download',
-              'downloadProgress',
-              {
-                text: line,
-                progress: structuredProgress || monitor.lastParsed || null,
-              }
-            );
+            // Use throttled message emission (250ms for progress, immediate for important messages)
+            this.emitProgressMessage(line, structuredProgress || monitor.lastParsed || null);
 
             const lowerLine = line.toLowerCase();
             if (!httpForbiddenDetected && (lowerLine.includes('http error 403') || lowerLine.includes('403: forbidden'))) {
@@ -456,7 +601,7 @@ class DownloadExecutor {
       proc.stderr.on('data', (data) => {
         const dataStr = data.toString();
         stderrBuffer += dataStr;
-        console.log(dataStr); // log the data in real-time
+        logger.info({ source: 'yt-dlp-stderr' }, dataStr);
 
         const lowerData = dataStr.toLowerCase();
         if (!httpForbiddenDetected && (lowerData.includes('http error 403') || lowerData.includes('403: forbidden'))) {
@@ -494,6 +639,13 @@ class DownloadExecutor {
           this.forceKillTimeout = null;
         }
 
+        // Clear pending progress timer if it exists
+        if (this.progressFlushTimer) {
+          clearTimeout(this.progressFlushTimer);
+          this.progressFlushTimer = null;
+        }
+        this.flushPendingProgressMessage();
+
         // Check for manual termination before clearing references
         const wasManuallyTerminated = this.manualTerminationReason !== null;
         const manualReason = this.manualTerminationReason;
@@ -508,14 +660,14 @@ class DownloadExecutor {
             stderrBuffer.includes('Sign in to confirm') &&
             stderrBuffer.includes('not a bot')) {
           botDetected = true;
-          console.log('Bot detection found in stderr buffer');
+          logger.info('Bot detection found in stderr buffer');
         }
 
         if (!httpForbiddenDetected && stderrBuffer) {
           const lowerStderr = stderrBuffer.toLowerCase();
           if (lowerStderr.includes('http error 403') || lowerStderr.includes('403: forbidden')) {
             httpForbiddenDetected = true;
-            console.log('HTTP 403 detected in stderr buffer');
+            logger.info('HTTP 403 detected in stderr buffer');
             emitCookiesSuggestionMessage();
           }
         }
@@ -526,7 +678,7 @@ class DownloadExecutor {
             // Convert full YouTube URLs to youtu.be format for consistency
             if (url.includes('youtube.com/watch?v=')) {
               const videoId = url.split('v=')[1].split('&')[0];
-              console.log(`[DEBUG] Converting ${url} to https://youtu.be/${videoId}`);
+              logger.debug({ url, convertedUrl: `https://youtu.be/${videoId}` }, 'Converting YouTube URL format');
               return `https://youtu.be/${videoId}`;
             }
             return url;
@@ -541,7 +693,7 @@ class DownloadExecutor {
         // If allowRedownload is true, we need to manually update the archive since yt-dlp won't
         if (allowRedownload && videoData.length > 0) {
           const archiveModule = require('../archiveModule');
-          console.log(`[DEBUG] Updating archive for ${videoData.length} videos (allowRedownload was true)`);
+          logger.debug({ videoCount: videoData.length }, 'Updating archive for videos (allowRedownload was true)');
 
           for (const video of videoData) {
             if (video.youtubeId && video.filePath) {
@@ -550,15 +702,13 @@ class DownloadExecutor {
               if (fs.existsSync(video.filePath)) {
                 await archiveModule.addVideoToArchive(video.youtubeId);
               } else {
-                console.log(`[DEBUG] Skipping archive update for ${video.youtubeId} - file not found`);
+                logger.debug({ youtubeId: video.youtubeId }, 'Skipping archive update - file not found');
               }
             }
           }
         }
 
-        console.log(
-          `${jobType} complete (with or without errors) for Job ID: ${jobId}`
-        );
+        logger.info({ jobType, jobId }, 'Job complete (with or without errors)');
 
         let status = '';
         let output = '';
@@ -581,7 +731,6 @@ class DownloadExecutor {
         } else if (gracefulShutdownInProgress || shutdownReason || wasManuallyTerminated) {
           // Handle timeout/graceful shutdown or manual termination
           await this.cleanupInProgressVideos(jobId);
-          partialCleanupPerformed = true;
 
           const completedCount = videoData.length;
           status = 'Terminated';
@@ -599,47 +748,48 @@ class DownloadExecutor {
             notes: terminationReason,
           });
 
-          console.log(`Job terminated: ${terminationReason}. Saved ${completedCount} completed videos.`);
-        } else if (httpForbiddenDetected) {
-          await this.cleanupPartialFiles(Array.from(partialDestinations));
-          partialCleanupPerformed = true;
-
-          status = 'Error';
-          output = `${videoCount} videos. Error: YouTube returned HTTP 403 (Forbidden)`;
-
-          await jobModule.updateJob(jobId, {
-            status: status,
-            endDate: Date.now(),
-            output: output,
-            data: { videos: videoData || [] },
-            notes: 'YouTube denied access (HTTP 403). Configure cookies in Settings to resolve this issue.',
-            error: 'COOKIES_RECOMMENDED'
-          });
-          jobErrorCode = 'COOKIES_RECOMMENDED';
+          logger.info({ terminationReason, completedCount }, 'Job terminated, saved completed videos');
         } else if (code !== 0) {
-          // Cleanup partial files on failure
+          // Download actually failed (non-zero exit code)
           await this.cleanupPartialFiles(Array.from(partialDestinations));
-          partialCleanupPerformed = true;
 
           const failureDetails = monitor.lastParsed || null;
 
           status = signal === 'SIGKILL' ? 'Killed' : 'Error';
-          output = `${videoCount} videos. Error: Command exited with code ${code}`;
 
-          // Add stall detection note if applicable
-          const notes = failureDetails && failureDetails.stalled
-            ? `Stall detected at ${failureDetails.progress.percent.toFixed(1)}% (${Math.round(
-              failureDetails.progress.speedBytesPerSecond / 1024
-            )} KiB/s)`
-            : `Download failed (${signal || `exit ${code}`})`;
+          // Provide more helpful error messages based on what we detected
+          if (httpForbiddenDetected) {
+            // Failed with 403 errors - likely authentication issue
+            output = `${videoCount} videos. Error: YouTube returned HTTP 403 (Forbidden)`;
+            const notes = 'YouTube denied access (HTTP 403). Configure cookies in Settings to resolve this issue.';
+            await jobModule.updateJob(jobId, {
+              status: status,
+              endDate: Date.now(),
+              output: output,
+              data: { videos: videoData || [] },
+              notes: notes,
+              error: 'COOKIES_RECOMMENDED'
+            });
+            jobErrorCode = 'COOKIES_RECOMMENDED';
+          } else {
+            // Failed with other error
+            output = `${videoCount} videos. Error: Command exited with code ${code}`;
 
-          await jobModule.updateJob(jobId, {
-            status: status,
-            endDate: Date.now(),
-            output: output,
-            data: { videos: videoData || [] },
-            notes: notes,
-          });
+            // Add stall detection note if applicable
+            const notes = failureDetails && failureDetails.stalled
+              ? `Stall detected at ${failureDetails.progress.percent.toFixed(1)}% (${Math.round(
+                failureDetails.progress.speedBytesPerSecond / 1024
+              )} KiB/s)`
+              : `Download failed (${signal || `exit ${code}`})`;
+
+            await jobModule.updateJob(jobId, {
+              status: status,
+              endDate: Date.now(),
+              output: output,
+              data: { videos: videoData || [] },
+              notes: notes,
+            });
+          }
         } else if (stderrBuffer && !monitor.hasError) {
           status = 'Complete with Warnings';
           output = `${videoCount} videos.`;
@@ -668,7 +818,14 @@ class DownloadExecutor {
         const isWarningOnly = (code === 1 && !monitor.hasError && (hasProcessedVideos || hasDownloadedNewVideos));
         let finalState = (code === 0 || isWarningOnly) ? 'complete' : 'error';
 
-        console.log(`[DEBUG] Final state determination - code: ${code}, hasProcessedVideos: ${hasProcessedVideos}, hasDownloadedNewVideos: ${hasDownloadedNewVideos}, isWarningOnly: ${isWarningOnly}, hasError: ${monitor.hasError}, finalState: ${finalState}`);
+        logger.debug({
+          code,
+          hasProcessedVideos,
+          hasDownloadedNewVideos,
+          isWarningOnly,
+          hasError: monitor.hasError,
+          finalState
+        }, 'Final state determination');
 
         // Create a more informative final message
         let finalText;
@@ -682,10 +839,6 @@ class DownloadExecutor {
           finalState = 'failed';
           finalErrorCode = 'COOKIES_REQUIRED';
           finalText = 'Download failed: Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.';
-        } else if (httpForbiddenDetected) {
-          finalState = 'failed';
-          finalErrorCode = 'COOKIES_RECOMMENDED';
-          finalText = 'Download failed: YouTube returned HTTP 403 (Forbidden). Please set cookies in your Configuration or try different cookies to resolve this issue.';
         } else if (monitor.hasError && finalState === 'complete') {
           finalState = 'error';
           finalText = 'Download failed';
@@ -752,14 +905,9 @@ class DownloadExecutor {
             videoData: videoData,
             channelName: monitor.currentChannelName
           }).catch(err => {
-            console.error('Failed to send notification:', err.message);
+            logger.error({ err }, 'Failed to send notification');
             // Continue execution - don't crash if notification fails
           });
-        }
-
-        // Perform a best-effort cleanup of any partial download artifacts even on success
-        if (!partialCleanupPerformed && partialDestinations.size > 0) {
-          await this.cleanupPartialFiles(Array.from(partialDestinations));
         }
 
         // Clean up temporary channels file if it exists
@@ -767,11 +915,11 @@ class DownloadExecutor {
           const fs = require('fs').promises;
           fs.unlink(this.tempChannelsFile)
             .then(() => {
-              console.log('Cleaned up temporary channels file');
+              logger.info('Cleaned up temporary channels file');
               this.tempChannelsFile = null;
             })
             .catch((err) => {
-              console.log('Failed to clean up temp channels file:', err.message);
+              logger.error({ err }, 'Failed to clean up temp channels file');
             });
         }
 
@@ -780,14 +928,40 @@ class DownloadExecutor {
           where: { job_id: jobId }
         }).then(count => {
           if (count > 0) {
-            console.log(`Cleaned up ${count} JobVideoDownload tracking entries`);
+            logger.info({ count }, 'Cleaned up JobVideoDownload tracking entries');
           }
         }).catch(err => {
-          console.error('Error cleaning up JobVideoDownload entries:', err.message);
+          logger.error({ err }, 'Error cleaning up JobVideoDownload entries');
         });
 
+        // Backfill channel posters for channels with newly downloaded videos
+        if (videoData && videoData.length > 0) {
+          try {
+            // Extract unique channel IDs from downloaded videos
+            const uniqueChannelIds = [...new Set(
+              videoData
+                .map(v => v.channel_id)
+                .filter(Boolean)
+            )];
+
+            if (uniqueChannelIds.length > 0) {
+              const channelsToBackfill = await Channel.findAll({
+                where: { channel_id: uniqueChannelIds }
+              });
+
+              if (channelsToBackfill.length > 0) {
+                await require('../channelModule').backfillChannelPosters(channelsToBackfill);
+                logger.info({ channelCount: channelsToBackfill.length }, 'Backfilled channel posters for downloaded videos');
+              }
+            }
+          } catch (err) {
+            logger.error({ err }, 'Error backfilling channel posters');
+            // Don't fail the job if poster backfill fails
+          }
+        }
+
         plexModule.refreshLibrary().catch(err => {
-          console.log('Failed to refresh Plex library:', err.message);
+          logger.error({ err }, 'Failed to refresh Plex library');
         });
         jobModule.startNextJob();
         resolve();
@@ -805,23 +979,29 @@ class DownloadExecutor {
           this.forceKillTimeout = null;
         }
 
+        // Clear pending progress timer if it exists
+        if (this.progressFlushTimer) {
+          clearTimeout(this.progressFlushTimer);
+          this.progressFlushTimer = null;
+        }
+        this.flushPendingProgressMessage();
+
         // Clear current process references
         this.currentProcess = null;
         this.currentJobId = null;
 
         await this.cleanupPartialFiles(Array.from(partialDestinations));
-        partialCleanupPerformed = true;
         reject(err);
       });
     }).catch((error) => {
-      console.log('Download process error:', error.message);
+      logger.error({ err: error }, 'Download process error');
 
       // Clean up temporary channels file on error
       if (this.tempChannelsFile) {
         const fs = require('fs').promises;
         fs.unlink(this.tempChannelsFile)
           .catch((err) => {
-            console.log('Failed to clean up temp channels file:', err.message);
+            logger.error({ err }, 'Failed to clean up temp channels file');
           });
         this.tempChannelsFile = null;
       }
@@ -842,12 +1022,12 @@ class DownloadExecutor {
    */
   terminateCurrentJob(reason = 'User requested termination') {
     if (!this.currentProcess || !this.currentJobId) {
-      console.log('No job currently running to terminate');
+      logger.info('No job currently running to terminate');
       return null;
     }
 
     const jobId = this.currentJobId;
-    console.log(`Terminating job ${jobId}: ${reason}`);
+    logger.info({ jobId, reason }, 'Terminating job');
 
     // Set the manual termination reason so the exit handler knows this was manual
     this.manualTerminationReason = reason;
@@ -855,7 +1035,7 @@ class DownloadExecutor {
     // Send SIGTERM to allow process to finish current video gracefully
     try {
       this.currentProcess.kill('SIGTERM');
-      console.log(`Sent SIGTERM to job ${jobId}`);
+      logger.info({ jobId }, 'Sent SIGTERM to job');
 
       // Clear any existing force kill timeout
       if (this.forceKillTimeout) {
@@ -866,11 +1046,11 @@ class DownloadExecutor {
       // Wait up to 60 seconds for graceful exit, then force kill
       this.forceKillTimeout = setTimeout(() => {
         if (this.currentProcess && this.currentJobId === jobId) {
-          console.log(`Grace period expired for job ${jobId}, forcing kill with SIGKILL`);
+          logger.info({ jobId }, 'Grace period expired, forcing kill with SIGKILL');
           try {
             this.currentProcess.kill('SIGKILL');
           } catch (err) {
-            console.log('Error sending SIGKILL:', err.message);
+            logger.error({ err }, 'Error sending SIGKILL');
           }
         }
         this.forceKillTimeout = null;
@@ -878,7 +1058,7 @@ class DownloadExecutor {
 
       return jobId;
     } catch (err) {
-      console.error('Error terminating job:', err.message);
+      logger.error({ err }, 'Error terminating job');
       // Clear the manual termination reason on error
       this.manualTerminationReason = null;
       return null;

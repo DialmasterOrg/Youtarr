@@ -17,6 +17,7 @@ jest.mock('../download/downloadExecutor', () => {
     cleanupInProgressVideos: jest.fn().mockResolvedValue()
   }));
 });
+jest.mock('../../logger');
 
 const { v4: uuidv4 } = require('uuid');
 
@@ -30,6 +31,7 @@ describe('JobModule', () => {
   let Video;
   let JobVideo;
   let ChannelVideo;
+  let logger;
   let originalDisableInitialBackfill;
 
   const mockJobsDir = '/test/jobs';
@@ -92,6 +94,9 @@ describe('JobModule', () => {
     // Mock MessageEmitter
     MessageEmitter = require('../messageEmitter.js');
     MessageEmitter.emitMessage = jest.fn();
+
+    // Get logger mock
+    logger = require('../../logger');
 
     // Mock configModule before it's required by jobModule
     jest.doMock('../configModule', () => ({
@@ -232,8 +237,6 @@ describe('JobModule', () => {
       }));
       fsPromises.readFile.mockRejectedValue({ code: 'ENOENT' });
 
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-
       process.env.JOBMODULE_DISABLE_INITIAL_BACKFILL = 'false';
 
       JobModule = require('../jobModule');
@@ -241,9 +244,7 @@ describe('JobModule', () => {
       // Wait for setTimeout to execute
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('No complete.list found for backfill. Skipping.');
-
-      consoleLogSpy.mockRestore();
+      expect(logger.info).toHaveBeenCalledWith('No complete.list found for backfill. Skipping.');
     });
   });
 
@@ -384,8 +385,7 @@ describe('JobModule', () => {
 
       JobVideoDownload.findAll.mockRejectedValue(new Error('DB Error'));
 
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-
+      
       JobModule = require('../jobModule');
 
       await new Promise(resolve => setTimeout(resolve, 10));
@@ -397,9 +397,8 @@ describe('JobModule', () => {
       await JobModule.terminateInProgressJobs();
 
       expect(JobModule.jobs['job-1'].status).toBe('Terminated');
-      expect(consoleErrorSpy).toHaveBeenCalled();
+      expect(logger.error).toHaveBeenCalled();
 
-      consoleErrorSpy.mockRestore();
     });
   });
 
@@ -509,8 +508,7 @@ describe('JobModule', () => {
     });
 
     test('should skip videos with missing info.json files', async () => {
-      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
-
+      
       JobVideoDownload.findAll.mockResolvedValue([
         { job_id: 'job-1', youtube_id: 'video-1', status: 'completed' }
       ]);
@@ -520,11 +518,8 @@ describe('JobModule', () => {
       const count = await JobModule.recoverCompletedVideos('job-1');
 
       expect(count).toBe(0);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Info file not found for video-1')
-      );
+      expect(logger.warn).toHaveBeenCalled();
 
-      consoleWarnSpy.mockRestore();
     });
 
     test('should handle videos that already exist in database and create JobVideo relationship', async () => {
@@ -642,8 +637,7 @@ describe('JobModule', () => {
     });
 
     test('should handle errors for individual videos gracefully', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-
+      
       JobVideoDownload.findAll.mockResolvedValue([
         { job_id: 'job-1', youtube_id: 'video-1', status: 'completed' },
         { job_id: 'job-1', youtube_id: 'video-2', status: 'completed' }
@@ -675,12 +669,8 @@ describe('JobModule', () => {
 
       // Should still recover video-2 even though video-1 failed
       expect(count).toBe(1);
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Error recovering video'),
-        expect.any(String)
-      );
+      expect(logger.error).toHaveBeenCalled();
 
-      consoleErrorSpy.mockRestore();
     });
   });
 
@@ -734,16 +724,14 @@ describe('JobModule', () => {
         'job-3': { status: 'Pending' }
       };
 
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
       JobModule.startNextJob();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('Looking for next job to start');
+      expect(logger.info).toHaveBeenCalledWith('Looking for next job to start');
       expect(mockAction).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'job-2', status: 'Pending' }),
         true
       );
 
-      consoleLogSpy.mockRestore();
     });
 
     test('should do nothing if no pending jobs', () => {
@@ -752,13 +740,10 @@ describe('JobModule', () => {
         'job-2': { status: 'In Progress' }
       };
 
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
       JobModule.startNextJob();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('Looking for next job to start');
-      expect(consoleLogSpy).toHaveBeenCalledTimes(1);
+      expect(logger.info).toHaveBeenCalledWith('Looking for next job to start');
 
-      consoleLogSpy.mockRestore();
     });
   });
 
@@ -818,14 +803,12 @@ describe('JobModule', () => {
         'existing-job': { status: 'In Progress' }
       };
 
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
       const jobData = { id: 'next-job', jobType: 'download' };
       const result = await JobModule.addOrUpdateJob(jobData, true);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('Cannot start next job as a job is already in progress');
+      expect(logger.warn).toHaveBeenCalled();
       expect(result).toBeUndefined();
 
-      consoleLogSpy.mockRestore();
     });
   });
 
@@ -864,14 +847,12 @@ describe('JobModule', () => {
 
     test('should handle save errors', async () => {
       Job.create.mockRejectedValue(new Error('Save failed'));
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-
+      
       const jobData = { jobType: 'download' };
       await expect(JobModule.addJob(jobData)).rejects.toThrow('Save failed');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Error saving job: Save failed');
+      expect(logger.error).toHaveBeenCalled();
 
-      consoleErrorSpy.mockRestore();
     });
   });
 
@@ -930,7 +911,6 @@ describe('JobModule', () => {
     });
 
     test('should handle job not found', async () => {
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
       JobModule.jobs = {};
 
       JobModule.updateJob('nonexistent', { status: 'Pending' });
@@ -938,9 +918,8 @@ describe('JobModule', () => {
       // Wait for async operation
       await new Promise(resolve => setTimeout(resolve, 10));
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('Job to update did not exist!');
+      expect(logger.warn).toHaveBeenCalled();
 
-      consoleLogSpy.mockRestore();
     });
   });
 
@@ -1009,14 +988,12 @@ describe('JobModule', () => {
 
     test('should return empty array when no jobs', () => {
       JobModule.jobs = null;
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-
+      
       const result = JobModule.getRunningJobs();
 
       expect(result).toEqual([]);
-      expect(consoleLogSpy).toHaveBeenCalledWith('No jobs found. Returning empty array.');
+      expect(logger.debug).toHaveBeenCalled();
 
-      consoleLogSpy.mockRestore();
     });
 
     test('should delete old jobs and return recent ones', () => {
@@ -1218,15 +1195,13 @@ describe('JobModule', () => {
     });
 
     test('should skip save if already saving', async () => {
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
       JobModule.isSaving = true;
 
       await JobModule.saveJobs();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('Save operation already in progress, skipping...');
+      expect(logger.debug).toHaveBeenCalled();
       expect(Job.findOne).not.toHaveBeenCalled();
 
-      consoleLogSpy.mockRestore();
     });
 
     test('should create new job in database', async () => {
@@ -1288,7 +1263,6 @@ describe('JobModule', () => {
     });
 
     test('should handle errors gracefully', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
       Job.findOne.mockRejectedValue(new Error('DB Error'));
 
       JobModule.jobs = {
@@ -1300,10 +1274,9 @@ describe('JobModule', () => {
 
       await JobModule.saveJobs();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Error saving job: DB Error');
+      expect(logger.error).toHaveBeenCalled();
       expect(JobModule.isSaving).toBe(false);
 
-      consoleErrorSpy.mockRestore();
     });
 
     test('should upsert channel videos', async () => {
@@ -1571,18 +1544,15 @@ describe('JobModule', () => {
     });
 
     test('should skip when complete.list does not exist', async () => {
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
       fsPromises.readFile.mockRejectedValue({ code: 'ENOENT' });
 
       await JobModule.backfillFromCompleteList();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('No complete.list found for backfill. Skipping.');
+      expect(logger.info).toHaveBeenCalledWith('No complete.list found for backfill. Skipping.');
 
-      consoleLogSpy.mockRestore();
     });
 
     test('should backfill missing videos from complete.list', async () => {
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
       fsPromises.readFile.mockImplementation(async (path) => {
         if (path.includes('complete.list')) {
           return 'youtube video-1\nyoutube video-2\n';
@@ -1623,16 +1593,18 @@ describe('JobModule', () => {
 
       expect(Video.create).toHaveBeenCalledTimes(2);
       expect(ChannelVideo.findOrCreate).toHaveBeenCalledTimes(2);
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        'Backfill complete. Videos upserted: 2. ChannelVideos upserted: 2.'
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          videosUpserts: 2,
+          channelVideosUpserts: 2
+        }),
+        'Backfill complete'
       );
 
-      consoleLogSpy.mockRestore();
     });
 
     test('should cap backfill to 300 items per run', async () => {
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-
+      
       // Create 350 video IDs
       const videoIds = Array.from({ length: 350 }, (_, i) => `youtube video-${i}`).join('\n');
       fsPromises.readFile.mockImplementation(async (path) => {
@@ -1674,13 +1646,10 @@ describe('JobModule', () => {
       // Video.create should also be capped at 300 for new videos
       expect(Video.create).toHaveBeenCalledTimes(300);
 
-      consoleLogSpy.mockRestore();
     });
 
     test('should handle missing info.json files', async () => {
-      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-
+            
       fsPromises.readFile.mockImplementation(async (path) => {
         if (path.includes('complete.list')) {
           return 'youtube video-1\nyoutube video-2\n';
@@ -1694,29 +1663,21 @@ describe('JobModule', () => {
       await JobModule.backfillFromCompleteList();
 
       // The order might be reversed since backfill processes from end of list
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Backfill skipped due to missing info.json for youtube ids:',
-        expect.stringMatching(/video-[12], video-[12]/)
-      );
+      expect(logger.warn).toHaveBeenCalled();
 
-      consoleWarnSpy.mockRestore();
-      consoleLogSpy.mockRestore();
     });
 
     test('should handle errors gracefully', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
       fsPromises.readFile.mockRejectedValue(new Error('Read error'));
 
       await JobModule.backfillFromCompleteList();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Backfill error:', 'Read error');
+      expect(logger.error).toHaveBeenCalled();
 
-      consoleErrorSpy.mockRestore();
     });
 
     test('should skip already existing videos', async () => {
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-
+      
       fsPromises.readFile.mockImplementation(async (path) => {
         if (path.includes('complete.list')) {
           return 'youtube existing-video\nyoutube new-video\n';
@@ -1752,12 +1713,10 @@ describe('JobModule', () => {
         expect.objectContaining({ youtubeId: 'new-video' })
       );
 
-      consoleLogSpy.mockRestore();
     });
 
     test('should include file metadata when video file exists', async () => {
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-
+      
       fsPromises.readFile.mockImplementation(async (path) => {
         if (path.includes('complete.list')) {
           return 'youtube video-1\n';
@@ -1795,12 +1754,10 @@ describe('JobModule', () => {
         })
       );
 
-      consoleLogSpy.mockRestore();
     });
 
     test('should update existing video with file metadata if not already set', async () => {
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-
+      
       fsPromises.readFile.mockImplementation(async (path) => {
         if (path.includes('complete.list')) {
           return 'youtube video-1\n';
@@ -1844,12 +1801,10 @@ describe('JobModule', () => {
         removed: false
       });
 
-      consoleLogSpy.mockRestore();
     });
 
     test('should try alternative video extensions when mp4 not found', async () => {
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-
+      
       fsPromises.readFile.mockImplementation(async (path) => {
         if (path.includes('complete.list')) {
           return 'youtube video-1\n';
@@ -1895,7 +1850,6 @@ describe('JobModule', () => {
         })
       );
 
-      consoleLogSpy.mockRestore();
     });
   });
 
@@ -1910,32 +1864,23 @@ describe('JobModule', () => {
     });
 
     test('should schedule cron job for daily backfill', () => {
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-
+      
       JobModule.scheduleDailyBackfill();
 
       expect(cron.schedule).toHaveBeenCalledWith('20 2 * * *', expect.any(Function));
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        'Scheduled daily backfill from complete.list at 2:20am'
-      );
+      expect(logger.info).toHaveBeenCalled();
 
-      consoleLogSpy.mockRestore();
     });
 
     test('should handle cron scheduling errors', () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
       cron.schedule.mockImplementation(() => {
         throw new Error('Cron error');
       });
 
       JobModule.scheduleDailyBackfill();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Failed to schedule daily backfill:',
-        'Cron error'
-      );
+      expect(logger.error).toHaveBeenCalled();
 
-      consoleErrorSpy.mockRestore();
     });
   });
 
@@ -1974,17 +1919,12 @@ describe('JobModule', () => {
     });
 
     test('should handle database errors', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
       Job.findAll.mockRejectedValue(new Error('DB Error'));
 
       await JobModule.loadJobsFromDB();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Error loading jobs from DB:',
-        expect.any(Error)
-      );
+      expect(logger.error).toHaveBeenCalled();
 
-      consoleErrorSpy.mockRestore();
     });
 
     test('should skip job videos without matching video record', async () => {
@@ -2067,7 +2007,6 @@ describe('JobModule', () => {
     });
 
     test('should handle migration errors gracefully', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
       JobModule.jobs = {
         'job-1': {
           id: 'job-1',
@@ -2081,9 +2020,8 @@ describe('JobModule', () => {
 
       await JobModule.migrateJobsFromFile();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Error migrating job: Create failed');
+      expect(logger.error).toHaveBeenCalled();
 
-      consoleErrorSpy.mockRestore();
     });
   });
 

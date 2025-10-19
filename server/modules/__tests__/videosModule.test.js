@@ -8,8 +8,7 @@ describe('VideosModule', () => {
   let mockFs;
   let mockConfigModule;
   let mockVideoValidationModule;
-  let consoleErrorSpy;
-  let consoleLogSpy;
+  let mockLogger;
 
   beforeEach(() => {
     jest.resetModules();
@@ -46,6 +45,16 @@ describe('VideosModule', () => {
       checkVideoExistsOnYoutube: jest.fn().mockResolvedValue(true)
     };
 
+    // Mock logger - use the mock from __mocks__/logger.js
+    mockLogger = {
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+      trace: jest.fn(),
+      fatal: jest.fn()
+    };
+
     // Mock the database module
     jest.doMock('../../db.js', () => ({
       Sequelize,
@@ -70,9 +79,8 @@ describe('VideosModule', () => {
 
     jest.doMock('../videoValidationModule', () => mockVideoValidationModule);
 
-    // Spy on console.error and console.log
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
+    // Mock logger
+    jest.doMock('../../logger', () => mockLogger);
 
     // Require the module after mocks are in place
     VideosModule = require('../videosModule');
@@ -80,8 +88,6 @@ describe('VideosModule', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
-    consoleErrorSpy.mockRestore();
-    consoleLogSpy.mockRestore();
   });
 
   describe('constructor', () => {
@@ -243,7 +249,7 @@ describe('VideosModule', () => {
 
       await expect(VideosModule.getVideosPaginated()).rejects.toThrow('Database connection failed');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Error in getVideosPaginated:', mockError);
+      expect(mockLogger.error).toHaveBeenCalledWith({ err: mockError }, 'Error in getVideosPaginated');
       expect(mockSequelize.query).toHaveBeenCalledTimes(1);
     });
 
@@ -253,7 +259,7 @@ describe('VideosModule', () => {
 
       await expect(VideosModule.getVideosPaginated()).rejects.toThrow('SequelizeDatabaseError');
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Error in getVideosPaginated:', sequelizeError);
+      expect(mockLogger.error).toHaveBeenCalledWith({ err: sequelizeError }, 'Error in getVideosPaginated');
     });
 
     test('should handle search filter correctly', async () => {
@@ -596,15 +602,16 @@ describe('VideosModule', () => {
     });
 
     test('should handle filesystem errors gracefully', async () => {
-      mockFs.readdir.mockRejectedValueOnce(new Error('Permission denied'));
+      const mockError = new Error('Permission denied');
+      mockFs.readdir.mockRejectedValueOnce(mockError);
 
       const { fileMap, duplicates } = await VideosModule.scanForVideoFiles('/restricted');
 
       expect(fileMap.size).toBe(0);
       expect(duplicates.size).toBe(0);
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Error scanning directory /restricted:',
-        'Permission denied'
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        { err: mockError, dir: '/restricted' },
+        'Error scanning directory'
       );
     });
   });
@@ -657,8 +664,9 @@ describe('VideosModule', () => {
 
       expect(result.timedOut).toBe(true);
       expect(result.timeElapsed).toBeDefined();
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('stopped after')
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        { elapsed: expect.any(Number) },
+        'Video metadata backfill stopped (time limit reached), will continue at next scheduled run'
       );
     });
 
@@ -669,7 +677,7 @@ describe('VideosModule', () => {
       const result = await VideosModule.backfillVideoMetadata();
 
       expect(result).toBeUndefined();
-      expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect(mockLogger.info).toHaveBeenCalledWith(
         'No YouTube output directory configured, skipping backfill'
       );
       expect(mockFs.readdir).not.toHaveBeenCalled();
@@ -739,12 +747,13 @@ describe('VideosModule', () => {
 
     test('should handle database errors during backfill', async () => {
       mockFs.readdir.mockResolvedValueOnce([]);
-      mockVideo.count.mockRejectedValueOnce(new Error('Database error'));
+      const mockError = new Error('Database error');
+      mockVideo.count.mockRejectedValueOnce(mockError);
 
       await expect(VideosModule.backfillVideoMetadata()).rejects.toThrow('Database error');
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Error during video metadata backfill:',
-        expect.any(Error)
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        { err: mockError },
+        'Error during video metadata backfill'
       );
     });
   });
@@ -778,7 +787,7 @@ describe('VideosModule', () => {
       mockSequelize.query.mockRejectedValue(timeoutError);
 
       await expect(VideosModule.getVideosPaginated()).rejects.toThrow('ETIMEDOUT');
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Error in getVideosPaginated:', timeoutError);
+      expect(mockLogger.error).toHaveBeenCalledWith({ err: timeoutError }, 'Error in getVideosPaginated');
     });
 
     test('should handle permission errors', async () => {
@@ -787,7 +796,7 @@ describe('VideosModule', () => {
       mockSequelize.query.mockRejectedValue(permissionError);
 
       await expect(VideosModule.getVideosPaginated()).rejects.toThrow('Permission denied');
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Error in getVideosPaginated:', permissionError);
+      expect(mockLogger.error).toHaveBeenCalledWith({ err: permissionError }, 'Error in getVideosPaginated');
     });
 
     test('should rethrow errors after logging', async () => {
@@ -803,7 +812,7 @@ describe('VideosModule', () => {
         expect(error.message).toBe('Custom error message');
       }
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Error in getVideosPaginated:', customError);
+      expect(mockLogger.error).toHaveBeenCalledWith({ err: customError }, 'Error in getVideosPaginated');
     });
   });
 });

@@ -1,4 +1,5 @@
 /* eslint-env jest */
+const loggerMock = require('../__mocks__/logger');
 
 const findRouteHandler = (app, method, routePath) => {
   const stack = app?._router?.stack || [];
@@ -20,6 +21,7 @@ const createMockRequest = (overrides = {}) => ({
   ip: '127.0.0.1',
   connection: { remoteAddress: '127.0.0.1' },
   socket: { remoteAddress: '127.0.0.1' },
+  log: loggerMock,
   ...overrides
 });
 

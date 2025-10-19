@@ -1,5 +1,6 @@
 const ytDlpRunner = require('./ytDlpRunner');
 const archiveModule = require('./archiveModule');
+const logger = require('../logger');
 
 class VideoValidationModule {
   constructor() {
@@ -84,7 +85,7 @@ class VideoValidationModule {
       const metadata = await ytDlpRunner.fetchMetadata(url, timeoutMs);
       return metadata;
     } catch (error) {
-      console.error('Error fetching video metadata:', error);
+      logger.error({ err: error, url }, 'Error fetching video metadata');
       throw error;
     }
   }
@@ -99,7 +100,7 @@ class VideoValidationModule {
       const isInArchive = await archiveModule.isVideoInArchive(videoId);
       return isInArchive;
     } catch (error) {
-      console.error('Error checking archive:', error);
+      logger.warn({ err: error, videoId }, 'Error checking archive, assuming video is not duplicate');
       return false;
     }
   }
@@ -189,7 +190,7 @@ class VideoValidationModule {
    * @returns {Promise<boolean>} - True if video exists, false otherwise
    */
   async checkVideoExistsOnYoutube(youtubeId) {
-    console.log(`Checking if video ${youtubeId} exists on YouTube`);
+    logger.debug({ youtubeId }, 'Checking if video exists on YouTube');
     try {
       const oEmbedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${youtubeId}&format=json`;
 
@@ -202,7 +203,7 @@ class VideoValidationModule {
       // 403 means private and inaccessible
       return response.status !== 404 && response.status !== 403;
     } catch (error) {
-      console.error(`Error checking if video ${youtubeId} exists:`, error);
+      logger.warn({ err: error, youtubeId }, 'Error checking if video exists on YouTube, assuming video exists');
       // If there's a network error or other issue, assume video exists
       return true;
     }
@@ -224,7 +225,7 @@ class VideoValidationModule {
 
       const cachedResponse = this.getCachedResponse(videoId);
       if (cachedResponse) {
-        console.log(`Using cached response for video ${videoId}, checking current archive status`);
+        logger.debug({ videoId }, 'Using cached response for video, checking current archive status');
         // Always check the current archive status, even for cached responses
         const currentDuplicateStatus = await this.isDuplicate(videoId);
         cachedResponse.isAlreadyDownloaded = currentDuplicateStatus;
@@ -236,7 +237,7 @@ class VideoValidationModule {
         return cachedResponse;
       }
 
-      console.log(`Fetching metadata for video ${videoId}`);
+      logger.debug({ videoId }, 'Fetching metadata for video');
       const metadata = await this.fetchVideoMetadata(canonicalUrl, { timeoutMs: 10000 });
 
       const isDuplicateVideo = await this.isDuplicate(videoId);

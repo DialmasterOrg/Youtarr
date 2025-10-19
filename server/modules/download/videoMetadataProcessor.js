@@ -2,6 +2,7 @@ const fs = require('fs');
 const fsPromises = fs.promises;
 const path = require('path');
 const configModule = require('../configModule');
+const logger = require('../../logger');
 
 class VideoMetadataProcessor {
   static normalizeChannelName(value) {
@@ -15,28 +16,6 @@ class VideoMetadataProcessor {
     return trimmed;
   }
 
-  // Replicate yt-dlp's filename sanitization
-  static sanitizeFilename(filename) {
-    // yt-dlp replaces these characters with Unicode equivalents
-    const replacements = {
-      '|': '｜',  // U+FF5C (full-width vertical bar)
-      '<': '＜',  // U+FF1C (full-width less-than)
-      '>': '＞',  // U+FF1E (full-width greater-than)
-      ':': '：',  // U+FF1A (full-width colon) - except for drive letters on Windows
-      '"': '＂',  // U+FF02 (full-width quotation mark)
-      '/': '／',  // U+FF0F (full-width slash)
-      '\\': '＼', // U+FF3C (full-width backslash)
-      '?': '？',  // U+FF1F (full-width question mark)
-      '*': '＊',  // U+FF0A (full-width asterisk)
-    };
-
-    let result = filename;
-    for (const [char, replacement] of Object.entries(replacements)) {
-      result = result.split(char).join(replacement);
-    }
-    return result;
-  }
-
   static async waitForFile(filePath, maxRetries = 4, initialDelayMs = 100) {
     let delayMs = initialDelayMs;
 
@@ -47,10 +26,10 @@ class VideoMetadataProcessor {
         if (stats.size > 0) {
           return stats;
         }
-        console.log(`File found but size is 0, waiting ${delayMs}ms... (attempt ${i + 1}/${maxRetries})`);
+        logger.debug({ filePath, delayMs, attempt: i + 1, maxRetries }, 'File found but size is 0, waiting for file to be written');
       } catch (err) {
         if (i < maxRetries - 1) {
-          console.log(`Waiting ${delayMs}ms for file to be available... (attempt ${i + 1}/${maxRetries})`);
+          logger.debug({ filePath, delayMs, attempt: i + 1, maxRetries }, 'Waiting for file to be available');
         }
       }
 
@@ -63,6 +42,98 @@ class VideoMetadataProcessor {
     return null;
   }
 
+  static normalizeForDirectoryMatch(name) {
+    if (!name) {
+      return '';
+    }
+
+    const normalized = name
+      .toString()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+    return normalized.toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  static async searchForVideoFile(startDir, targetSuffix, visited) {
+    const stack = [startDir];
+
+    while (stack.length > 0) {
+      const currentDir = stack.pop();
+
+      if (visited.has(currentDir)) {
+        continue;
+      }
+
+      visited.add(currentDir);
+
+      let entries;
+      try {
+        entries = await fsPromises.readdir(currentDir, { withFileTypes: true });
+      } catch (err) {
+        logger.debug({ err, currentDir }, 'Unable to read directory while locating video file');
+        continue;
+      }
+
+      for (const entry of entries) {
+        const entryPath = path.join(currentDir, entry.name);
+
+        if (entry.isDirectory()) {
+          stack.push(entryPath);
+        } else if (entry.isFile() && entry.name.endsWith(targetSuffix)) {
+          return entryPath;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  static async findVideoFilePath(videoId, preferredChannelName) {
+    const baseDir = configModule.directoryPath;
+
+    if (!baseDir || !fs.existsSync(baseDir)) {
+      return null;
+    }
+
+    const targetSuffix = `[${videoId}].mp4`;
+    const visited = new Set();
+
+    if (preferredChannelName) {
+      const normalizedTarget = this.normalizeForDirectoryMatch(preferredChannelName);
+
+      try {
+        const channelDirs = await fsPromises.readdir(baseDir, { withFileTypes: true });
+
+        for (const dirent of channelDirs) {
+          if (!dirent.isDirectory()) {
+            continue;
+          }
+
+          const dirPath = path.join(baseDir, dirent.name);
+          const normalizedDir = this.normalizeForDirectoryMatch(dirent.name);
+
+          if (
+            normalizedDir &&
+            normalizedTarget &&
+            (normalizedDir === normalizedTarget ||
+              normalizedDir.includes(normalizedTarget) ||
+              normalizedTarget.includes(normalizedDir))
+          ) {
+            const locatedPath = await this.searchForVideoFile(dirPath, targetSuffix, visited);
+            if (locatedPath) {
+              return locatedPath;
+            }
+          }
+        }
+      } catch (err) {
+        logger.warn({ err, baseDir }, 'Error scanning channel directories while locating video file');
+      }
+    }
+
+    return this.searchForVideoFile(baseDir, targetSuffix, visited);
+  }
+
   static async processVideoMetadata(newVideoUrls) {
     const processedVideos = [];
 
@@ -72,10 +143,10 @@ class VideoMetadataProcessor {
         configModule.getJobsPath(),
         `info/${id}.info.json`
       );
-      console.log('Looking for info.json file at', dataPath);
+      logger.debug({ dataPath, videoId: id }, 'Looking for info.json file');
 
       if (fs.existsSync(dataPath)) {
-        console.log('Found info.json file at', dataPath);
+        logger.debug({ dataPath, videoId: id }, 'Found info.json file');
         const data = JSON.parse(fs.readFileSync(dataPath, 'utf-8'));
 
         const preferredChannelName =
@@ -96,22 +167,23 @@ class VideoMetadataProcessor {
           media_type: data.media_type || 'video',
         };
 
-        // First check if we have the actual filepath from yt-dlp
-        let fullPath;
-        if (data._actual_filepath) {
-          // Use the actual filepath that yt-dlp provided
-          console.log(`Using actual filepath from yt-dlp: ${data._actual_filepath}`); // DEBUG TO REMOVE LATER
-          fullPath = data._actual_filepath;
-        } else {
-          // Fallback: Calculate the file path based on the yt-dlp output template
-          // Apply yt-dlp's filename sanitization to match the actual files on disk
-          const baseOutputPath = configModule.directoryPath;
-          const sanitizedChannelName = this.sanitizeFilename(preferredChannelName);
-          const sanitizedTitle = this.sanitizeFilename(data.title);
-          const videoFolder = `${sanitizedChannelName} - ${sanitizedTitle} - ${id}`;
-          const videoFileName = `${sanitizedChannelName} - ${sanitizedTitle}  [${id}].mp4`;
-          fullPath = path.join(baseOutputPath, sanitizedChannelName, videoFolder, videoFileName);
-          console.log(`Using fallback filepath: ${fullPath}`); // DEBUG TO REMOVE LATER
+        let fullPath = data._actual_filepath;
+
+        if (!fullPath) {
+          fullPath = await this.findVideoFilePath(data.id, preferredChannelName);
+
+          if (fullPath) {
+            logger.info({ filepath: fullPath, videoId: id }, 'Located video file path via filesystem search');
+          }
+        }
+
+        if (!fullPath) {
+          logger.warn({ videoId: id }, 'Video file path could not be determined from metadata or filesystem search');
+          videoMetadata.filePath = null;
+          videoMetadata.fileSize = null;
+          videoMetadata.removed = false;
+          processedVideos.push(videoMetadata);
+          continue;
         }
 
         // Check if file exists and get file size - with retry logic for production environments
@@ -121,10 +193,10 @@ class VideoMetadataProcessor {
           videoMetadata.filePath = fullPath;
           videoMetadata.fileSize = stats.size.toString(); // Convert to string as DB expects BIGINT as string
           videoMetadata.removed = false;
-          console.log(`Found video file at ${fullPath}, size: ${stats.size} bytes`);
+          logger.info({ filepath: fullPath, fileSize: stats.size, videoId: id }, 'Found video file');
         } else {
           // File doesn't exist after retries
-          console.log(`WARNING: Video file not found after all retries for ${id}`);
+          logger.warn({ videoId: id, expectedPath: fullPath }, 'Video file not found after all retries');
           videoMetadata.filePath = fullPath; // Store expected path anyway
           videoMetadata.fileSize = null;
           videoMetadata.removed = false; // Assume it's not removed, just not found yet
@@ -132,7 +204,7 @@ class VideoMetadataProcessor {
 
         processedVideos.push(videoMetadata);
       } else {
-        console.log('No info.json file at', dataPath);
+        logger.debug({ dataPath, videoId: id }, 'No info.json file found');
       }
     }
 

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const logger = require('../logger');
 
 /**
  * Generates an NFO file for a video
@@ -70,7 +71,7 @@ class NfoGenerator {
    * @returns {boolean} True if successful, false otherwise
    */
   writeVideoNfoFile(videoPath, jsonData) {
-    console.log(`Writing NFO file for video ${videoPath}`);
+    logger.info({ videoPath }, 'Writing NFO file for video');
     try {
       // Generate NFO path (same as video but with .nfo extension)
       const parsedPath = path.parse(videoPath);
@@ -171,11 +172,11 @@ class NfoGenerator {
 
       // Write the NFO file
       fs.writeFileSync(nfoPath, xml, 'utf8');
-      console.log(`NFO file created: ${nfoPath}`);
+      logger.info({ nfoPath }, 'NFO file created successfully');
 
       return true;
     } catch (error) {
-      console.error(`Error creating NFO file: ${error.message}`);
+      logger.error({ err: error, videoPath }, 'Error creating NFO file');
       return false;
     }
   }

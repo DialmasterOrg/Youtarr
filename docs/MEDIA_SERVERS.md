@@ -39,10 +39,15 @@ Youtarr generates two types of metadata:
    - **Agent**: Personal Media
    - **Scanner**: Plex Video Files Scanner
 
+<img width="829" height="369" alt="image" src="https://github.com/user-attachments/assets/0a0ee8d1-e049-4a19-9430-5977464e9dde" />
+<img width="816" height="561" alt="image" src="https://github.com/user-attachments/assets/a7650ad5-68d5-495b-957d-e42515154dbf" />
+
 2. Configure Agent Settings:
    - Enable "Local Media Assets"
    - Place it at the top of the agent list
    - Optional: Enable "Prefer local metadata"
+
+<img width="1288" height="220" alt="image" src="https://github.com/user-attachments/assets/6e796c9a-243f-4e98-8d87-1d1283e060cc" />
 
 3. Point the library to your Youtarr download directory
 
@@ -51,6 +56,10 @@ Youtarr generates two types of metadata:
 - Embedded metadata displays automatically
 - Thumbnails from poster.jpg files
 - Rich descriptions and metadata
+
+<img width="1137" height="967" alt="image" src="https://github.com/user-attachments/assets/c70ebfd3-2370-4ff8-89dd-88a0e2186345" />
+<img width="1478" height="1248" alt="image" src="https://github.com/user-attachments/assets/f146ba72-abe0-4e4d-93bb-6f34cea8e5e5" />
+
 
 ### Tips for Plex
 - The embedded metadata ensures videos display correctly even without NFO support

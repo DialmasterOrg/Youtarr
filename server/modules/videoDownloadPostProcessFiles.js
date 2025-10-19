@@ -5,6 +5,7 @@ const configModule = require('./configModule');
 const nfoGenerator = require('./nfoGenerator');
 const tempPathManager = require('./download/tempPathManager');
 const { JobVideoDownload } = require('../models');
+const logger = require('../logger');
 
 const activeJobId = process.env.YOUTARR_JOB_ID;
 
@@ -50,7 +51,7 @@ async function safeRemove(filePath) {
     await fs.remove(filePath);
   } catch (err) {
     if (err && err.code !== 'ENOENT') {
-      console.log(`Error deleting temp file ${filePath}: ${err.message}`);
+      logger.warn({ err, filePath }, 'Error deleting temp file');
     }
   }
 }
@@ -96,13 +97,13 @@ async function downloadChannelThumbnailIfMissing(channelId) {
       if (fs.existsSync(channelThumbPath)) {
         const tempPath = channelThumbPath + '.temp';
         execSync(
-          `${configModule.ffmpegPath} -y -i "${channelThumbPath}" -vf "scale=iw*0.4:ih*0.4" "${tempPath}"`,
+          `${configModule.ffmpegPath} -loglevel error -y -i "${channelThumbPath}" -vf "scale=iw*0.4:ih*0.4" -q:v 2 "${tempPath}"`,
           { stdio: 'pipe' }
         );
         fs.renameSync(tempPath, channelThumbPath);
       }
     } catch (err) {
-      console.log(`Error downloading channel thumbnail: ${err.message}`);
+      logger.warn({ err }, 'Error downloading channel thumbnail');
     }
   }
 }
@@ -127,11 +128,11 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
 
       if (fs.existsSync(channelThumbPath)) {
         fs.copySync(channelThumbPath, channelPosterPath);
-        console.log(`Channel poster.jpg created in ${channelFolderPath}`);
+        logger.info({ channelFolderPath }, 'Channel poster.jpg created');
       }
     }
   } catch (err) {
-    console.log(`Error copying channel poster: ${err.message}`);
+    logger.warn({ err }, 'Error copying channel poster');
   }
 }
 
@@ -153,11 +154,11 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
 
         // Check if the date is valid
         if (isNaN(uploadDate.getTime())) {
-          console.log(`Invalid upload_date format: ${jsonData.upload_date}`);
+          logger.warn({ uploadDate: jsonData.upload_date }, 'Invalid upload_date format');
           uploadDate = null;
         }
       } catch (err) {
-        console.log(`Error parsing upload_date: ${err.message}`);
+        logger.warn({ err, uploadDate: jsonData.upload_date }, 'Error parsing upload_date');
         uploadDate = null;
       }
     }
@@ -187,7 +188,6 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     fs.moveSync(jsonPath, newJsonPath, { overwrite: true }); // move the file
 
     // Generate NFO file for Jellyfin/Kodi/Emby compatibility if enabled
-    console.log(`Should write video NFO files: ${shouldWriteVideoNfoFiles()}`);
     if (shouldWriteVideoNfoFiles()) {
       nfoGenerator.writeVideoNfoFile(videoPath, jsonData);
     }
@@ -211,7 +211,7 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       }
 
       // Add studio/network (channel name)
-      const channelName = jsonData.uploader || jsonData.channel || '';
+      const channelName = jsonData.uploader || jsonData.channel || jsonData.uploader_id || '';
       if (channelName) {
         ffmpegArgs.push('-metadata', `network=${channelName}`);
         ffmpegArgs.push('-metadata', `studio=${channelName}`);
@@ -245,7 +245,7 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       // Output file
       ffmpegArgs.push('-y', tempPath);
 
-      console.log('Adding additional metadata for Plex...');
+      logger.info('Adding additional metadata for Plex');
       const result = spawnSync(configModule.ffmpegPath, ffmpegArgs, {
         stdio: 'pipe',
         maxBuffer: 10 * 1024 * 1024
@@ -279,31 +279,23 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         if (sizeCheckPassed) {
           try {
             await moveWithRetries(tempPath, videoPath);
-            console.log('Successfully added additional metadata to video file');
+            logger.info('Successfully added additional metadata to video file');
           } catch (moveErr) {
-            console.log(`Note: Could not replace video with metadata-enhanced version: ${moveErr.message}`);
+            logger.warn({ err: moveErr }, 'Could not replace video with metadata-enhanced version');
             await safeRemove(tempPath);
           }
         } else {
-          console.log('Skipped metadata update due to file size mismatch');
+          logger.warn('Skipped metadata update due to file size mismatch');
           await safeRemove(tempPath);
         }
       }
     } catch (err) {
-      console.log(`Note: Could not add additional metadata: ${err.message}`);
+      logger.warn({ err }, 'Could not add additional metadata');
       // Clean up temp file if exists
       const tempPath = videoPath + '.metadata_temp.mp4';
       if (await fs.pathExists(tempPath)) {
         await safeRemove(tempPath);
       }
-    }
-
-    // Channel folder is one level up from videoDirectory
-    const channelFolderPath = path.dirname(videoDirectory);
-
-    // Copy channel thumbnail as poster.jpg to channel folder if needed
-    if (jsonData.channel_id) {
-      await copyChannelPosterIfNeeded(jsonData.channel_id, channelFolderPath);
     }
 
     if (fs.existsSync(imagePath)) {
@@ -323,9 +315,9 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
           { stdio: 'inherit' }
         );
         fs.rename(newImageFullPathSmall, newImageFullPath);
-        console.log('Image resized successfully');
+        logger.info('Image resized successfully');
       } catch (err) {
-        console.log(`Error resizing image: ${err}`);
+        logger.error({ err }, 'Error resizing image');
       }
     }
 
@@ -335,9 +327,9 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       if (fs.existsSync(videoPath)) {
         try {
           fs.utimesSync(videoPath, uploadDate, uploadDate);
-          console.log(`Set video timestamp to ${uploadDate.toISOString()}`);
+          logger.info({ timestamp: uploadDate.toISOString() }, 'Set video timestamp');
         } catch (err) {
-          console.log(`Error setting video timestamp: ${err.message}`);
+          logger.warn({ err }, 'Error setting video timestamp');
         }
       }
 
@@ -345,9 +337,9 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       if (fs.existsSync(imagePath)) {
         try {
           fs.utimesSync(imagePath, uploadDate, uploadDate);
-          console.log(`Set thumbnail timestamp to ${uploadDate.toISOString()}`);
+          logger.info({ timestamp: uploadDate.toISOString() }, 'Set thumbnail timestamp');
         } catch (err) {
-          console.log(`Error setting thumbnail timestamp: ${err.message}`);
+          logger.warn({ err }, 'Error setting thumbnail timestamp');
         }
       }
 
@@ -355,9 +347,9 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       if (fs.existsSync(videoDirectory)) {
         try {
           fs.utimesSync(videoDirectory, uploadDate, uploadDate);
-          console.log(`Set directory timestamp to ${uploadDate.toISOString()}`);
+          logger.info({ timestamp: uploadDate.toISOString() }, 'Set directory timestamp');
         } catch (err) {
-          console.log(`Error setting directory timestamp: ${err.message}`);
+          logger.warn({ err }, 'Error setting directory timestamp');
         }
       }
     }
@@ -366,24 +358,22 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     let finalVideoPath = videoPath;
 
     if (tempPathManager.isEnabled() && tempPathManager.isTempPath(videoPath)) {
-      console.log('[Post-Process] Temp downloads enabled, moving files to final location...');
+      logger.info('[Post-Process] Temp downloads enabled, moving files to final location');
 
       // Calculate final paths
       const finalPath = tempPathManager.convertTempToFinal(videoPath);
       const finalDir = path.dirname(finalPath);
 
-      console.log('[Post-Process] Moving video directory:');
-      console.log(`  From (temp): ${videoDirectory}`);
-      console.log(`  To (final): ${finalDir}`);
+      logger.info({ from: videoDirectory, to: finalDir }, '[Post-Process] Moving video directory');
 
       try {
         // Move the entire video directory from temp to final location
         const moveResult = await tempPathManager.moveToFinal(videoDirectory);
 
         if (!moveResult.success) {
-          console.error(`[Post-Process] ERROR: Failed to move files to final location: ${moveResult.error}`);
-          console.error(`[Post-Process] Files remain in temp location: ${videoDirectory}`);
-          console.error('[Post-Process] This video will be marked as failed.');
+          logger.error({ error: moveResult.error, videoDirectory }, '[Post-Process] Failed to move files to final location');
+          logger.error({ videoDirectory }, '[Post-Process] Files remain in temp location');
+          logger.error('[Post-Process] This video will be marked as failed');
           // Exit with error code to signal failure
           process.exit(1);
         }
@@ -391,19 +381,26 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         // Update paths to final locations
         finalVideoPath = finalPath;
 
-        console.log(`[Post-Process] Successfully moved to final location: ${finalDir}`);
+        logger.info({ finalDir }, '[Post-Process] Successfully moved to final location');
 
         // Verify the final file exists
         if (!fs.existsSync(finalVideoPath)) {
-          console.error(`[Post-Process] ERROR: Final video file doesn't exist after move: ${finalVideoPath}`);
+          logger.error({ finalVideoPath }, '[Post-Process] Final video file doesn\'t exist after move');
           process.exit(1);
         }
 
       } catch (error) {
-        console.error('[Post-Process] ERROR during move operation:', error);
-        console.error(`[Post-Process] Files remain in temp location: ${videoDirectory}`);
+        logger.error({ error, videoDirectory }, '[Post-Process] ERROR during move operation');
+        logger.error({ videoDirectory }, '[Post-Process] Files remain in temp location');
         process.exit(1);
       }
+    }
+
+    // Copy channel thumbnail as poster.jpg to channel folder (must be done AFTER temp-to-final move)
+    // Calculate the final channel folder path based on the final video path
+    const finalChannelFolderPath = path.dirname(path.dirname(finalVideoPath));
+    if (jsonData.channel_id) {
+      await copyChannelPosterIfNeeded(jsonData.channel_id, finalChannelFolderPath);
     }
 
     // Mark this video as completed in the JobVideoDownload tracking table
@@ -420,19 +417,18 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
           }
         );
         if (updatedCount > 0) {
-          console.log(`Marked video ${id} as completed in tracking for job ${activeJobId}`);
-          console.log(`  Stored path in DB: ${finalVideoPath}`);
+          logger.info({ id, activeJobId, finalVideoPath }, 'Marked video as completed in tracking');
         }
       } catch (err) {
-        console.error(`Error updating JobVideoDownload status for ${id}:`, err.message);
+        logger.error({ err, id }, 'Error updating JobVideoDownload status');
         // Don't fail the entire post-processing if this fails
       }
     } else {
-      console.warn(`Job ID not available while marking ${id} as completed; skipping tracking update`);
+      logger.warn({ id }, 'Job ID not available while marking video as completed; skipping tracking update');
     }
   }
 })().catch(err => {
-  console.error('Error in post-processing:', err);
+  logger.error({ err }, 'Error in post-processing');
   process.exit(1);
 });
 

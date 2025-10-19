@@ -1,6 +1,6 @@
 {
   "name": "youtarr",
-  "version": "1.42.2",
+  "version": "1.43.0",
   "description": "",
   "main": "server/index.js",
   "scripts": {
@@ -53,6 +53,9 @@
     "multer": "^2.0.2",
     "mysql2": "^3.9.4",
     "node-cron": "^3.0.2",
+    "pino": "^10.0.0",
+    "pino-http": "^11.0.0",
+    "pino-pretty": "^13.1.2",
     "sequelize": "^6.31.1",
     "sequelize-cli": "^6.6.0",
     "umzug": "^2.3.0",

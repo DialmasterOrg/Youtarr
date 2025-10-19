@@ -1,4 +1,10 @@
 const { Sequelize } = require('sequelize');
+const logger = require('./logger');
+
+// Configure SQL query logging based on LOG_SQL environment variable
+const sqlLogging = process.env.LOG_SQL === 'true'
+  ? (sql, timing) => logger.debug({ sql, timing }, 'SQL query')
+  : false;
 
 const sequelize = new Sequelize(
   process.env.DB_NAME || 'youtarr',
@@ -8,7 +14,7 @@ const sequelize = new Sequelize(
     host: process.env.DB_HOST || 'localhost',
     dialect: 'mysql',
     port: process.env.DB_PORT || 3321,
-    logging: false,
+    logging: sqlLogging,
     pool: {
       max: 10, // Maximum number of connection in pool
       min: 0,  // Minimum number of connection in pool
@@ -39,7 +45,7 @@ const sequelize = new Sequelize(
 const initializeDatabase = async () => {
   try {
     await sequelize.authenticate();
-    console.log('Connection has been established successfully.');
+    logger.info('Database connection established successfully');
 
     // Ensure connection uses utf8mb4
     await sequelize.query('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci');
@@ -69,7 +75,7 @@ const initializeDatabase = async () => {
       module.exports[modelName] = models[modelName];
     });
   } catch (error) {
-    console.error('Unable to initialize the database:', error);
+    logger.error({ err: error }, 'Failed to initialize database');
     throw error;
   }
 };

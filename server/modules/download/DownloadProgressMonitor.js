@@ -1,3 +1,5 @@
+const logger = require('../../logger');
+
 // Progress monitoring class for detecting stalled downloads
 class DownloadProgressMonitor {
   constructor(jobId, jobType = '') {
@@ -262,13 +264,44 @@ class DownloadProgressMonitor {
   }
 
   determineState(line) {
+    // Detect metadata fetching phase (before actual downloads start)
+    if (line.includes('[youtube] Extracting URL:') && !line.includes('[youtube:tab]')) {
+      return 'preparing';
+    }
+    if (line.match(/\[youtube\] [^:]+: Downloading webpage/)) {
+      return 'preparing';
+    }
+    if (line.match(/\[youtube\] [^:]+: Downloading (tv|web|android|ios) (client config|player API|safari player)/)) {
+      return 'preparing';
+    }
+    if (line.match(/\[youtube\] [^:]+: Downloading player/)) {
+      return 'preparing';
+    }
+    if (line.match(/\[youtube\] [^:]+: Downloading m3u8 information/)) {
+      return 'preparing';
+    }
+
+    // Detect subtitle download announcement (not the actual download)
+    if (line.match(/\[info\] [^:]+: Downloading subtitles:/)) {
+      return 'preparing_subtitles';
+    }
+
     // Detect download type from file extension
     if (line.includes('[download] Destination:')) {
       const path = line.split('Destination:')[1].trim();
+      // Detect subtitle file downloads
+      if (path.match(/\.(vtt|srt)$/i)) return 'downloading_subtitles';
       if (path.match(/\.f\d+\.mp4$/)) return 'downloading_video';
       if (path.match(/\.f\d+\.m4a$/)) return 'downloading_audio';
       if (path.includes('poster') || path.includes('thumbnail')) return 'downloading_thumbnail';
     }
+
+    // Detect thumbnail and metadata operations
+    if (line.includes('[info] Downloading video thumbnail')) return 'processing_metadata';
+    if (line.includes('[info] Writing video thumbnail')) return 'processing_metadata';
+    if (line.includes('[info] Writing video metadata')) return 'processing_metadata';
+    if (line.includes('[SubtitlesConvertor]')) return 'processing_metadata';
+    if (line.includes('[ThumbnailsConvertor]')) return 'processing_metadata';
 
     // Detect processing stages
     if (line.includes('[Merger]')) return 'merging';
@@ -304,7 +337,7 @@ class DownloadProgressMonitor {
       // Reset current video count when starting a new channel BUT ONLY IN CHANNEL DOWNLOADS
       if (this.isChannelDownload) {
         if (this.currentChannelName && this.currentChannelName !== newChannelName) {
-          console.log(`Starting new channel: ${newChannelName}, resetting counts`);
+          logger.debug({ jobId: this.jobId, newChannelName, oldChannelName: this.currentChannelName }, 'Starting new channel, resetting counts');
           this.videoCount.current = 1;
           this.videoCount.skippedThisChannel = 0;
           this.currentVideoCompleted = false;
@@ -331,7 +364,7 @@ class DownloadProgressMonitor {
 
       // Reset current video count when startng a new channel
       if (this.currentChannelName && this.currentChannelName !== newChannelName) {
-        console.log(`Starting new channel: ${newChannelName}, resetting all counts`);
+        logger.debug({ jobId: this.jobId, newChannelName, oldChannelName: this.currentChannelName }, 'Starting new channel, resetting all counts');
         // These don't reset because they are tracking the FULL TOTALS for this job
         // this.videoCount.completed = 0;
         this.videoCount.skippedThisChannel = 0;
@@ -349,7 +382,6 @@ class DownloadProgressMonitor {
     // Check if item was skipped (already in archive or does not pass filter (subscribers only))
     // If so, increment the skipped count for the current channel AND the total skipped count.
     if (line.includes('has already been recorded in the archive') || line.includes('does not pass filter')) {
-      console.log(`Already in archive or does not pass filter and currentVideoCompleted is ${this.currentVideoCompleted} and videoCount.current is ${this.videoCount.current}`);
       // Only increment skipped once per video
       if (!this.currentVideoCompleted) {
         this.videoCount.skipped++;
@@ -359,7 +391,11 @@ class DownloadProgressMonitor {
           this.videoCount.current++;
         }
         // this.currentVideoCompleted = true; // Mark as "completed" so we don't count it again
-        console.log(`Video ${this.videoCount.current} was skipped (already archived). Total skipped: ${this.videoCount.skipped}`);
+        logger.debug({
+          jobId: this.jobId,
+          current: this.videoCount.current,
+          totalSkipped: this.videoCount.skipped
+        }, 'Video skipped (already archived or does not pass filter)');
       }
       return true;
     }
@@ -370,7 +406,6 @@ class DownloadProgressMonitor {
     // This only matches on channel downloads
     const itemMatch = line.match(/\[download\] Downloading item (\d+) of (\d+)/);
     if (itemMatch) {
-      console.log(`Downloading item ${itemMatch[1]} of ${itemMatch[2]}`);
       const newCurrent = parseInt(itemMatch[1], 10);
       this.videoCount.total = parseInt(itemMatch[2], 10);
 
@@ -379,7 +414,11 @@ class DownloadProgressMonitor {
       this.videoCount.current = newCurrent;
       this.currentState = 'initiating';
       this.resetProgressTracking();
-      console.log(`Starting download of item ${newCurrent} of ${this.videoCount.total}`);
+      logger.debug({
+        jobId: this.jobId,
+        current: newCurrent,
+        total: this.videoCount.total
+      }, 'Starting download of item');
       return true;
     }
 
@@ -430,13 +469,15 @@ class DownloadProgressMonitor {
     const isCompleted = completionIndicators.some(indicator => line.includes(indicator));
 
     if (isCompleted) {
-      console.log(`Completed indicator found: ${line}`);
       // Only increment completed once per video and after the first video
       if (!this.currentVideoCompleted) {
-        console.log(`Incrementing completed from from ${this.videoCount.completed} to ${this.videoCount.completed + 1}`);
         this.videoCount.completed++;
         this.currentVideoCompleted = true;
-        console.log(`Video ${this.videoCount.current} downloaded successfully. Total completed: ${this.videoCount.completed}`);
+        logger.debug({
+          jobId: this.jobId,
+          current: this.videoCount.current,
+          totalCompleted: this.videoCount.completed
+        }, 'Video downloaded successfully');
       }
       return true;
     }
@@ -463,7 +504,17 @@ class DownloadProgressMonitor {
     this.parseAndUpdateVideoCounts(rawLine);
 
     // Extract video info if available
-    const videoInfo = this.extractVideoInfo(rawLine);
+    let videoInfo = this.extractVideoInfo(rawLine);
+
+    // Clear video title ONLY when preparing the next video (between videos)
+    // Keep title during subtitle/metadata processing - those are for a specific video
+    if (this.currentState === 'preparing') {
+      videoInfo = {
+        channel: videoInfo?.channel || this.currentChannelName || '',
+        title: '',
+        displayTitle: ''
+      };
+    }
 
     const videoInfoChanged = !!videoInfo && (
       !this.lastParsed?.videoInfo ||
