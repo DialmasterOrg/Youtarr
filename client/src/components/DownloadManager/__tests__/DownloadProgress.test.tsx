@@ -144,8 +144,13 @@ describe('DownloadProgress', () => {
 
     const states = [
       { state: 'initiating', message: 'Initiating download...' },
+      { state: 'preparing', message: 'Preparing next video...' },
+      { state: 'preparing_subtitles', message: 'Preparing subtitles...' },
+      { state: 'downloading_video', message: 'Downloading video stream...' },
       { state: 'downloading_audio', message: 'Downloading audio stream...' },
+      { state: 'downloading_subtitles', message: 'Downloading subtitles...' },
       { state: 'downloading_thumbnail', message: 'Downloading thumbnail...' },
+      { state: 'processing_metadata', message: 'Processing metadata...' },
       { state: 'merging', message: 'Merging formats...' },
       { state: 'metadata', message: 'Adding metadata...' },
       { state: 'processing', message: 'Processing file...' },
@@ -490,6 +495,91 @@ describe('DownloadProgress', () => {
     expect(screen.queryByText('Unknown title')).not.toBeInTheDocument();
   });
 
+  test('hides title during preparing state', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
+        token="test-token"
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    await act(async () => {
+      processCallback({
+        progress: {
+          jobId: 'test-job',
+          progress: {
+            percent: 0,
+            downloadedBytes: 0,
+            totalBytes: 0,
+            speedBytesPerSecond: 0,
+            etaSeconds: 0,
+          },
+          stalled: false,
+          state: 'preparing',
+          videoInfo: {
+            channel: 'Test Channel',
+            title: 'Some Video Title',
+            displayTitle: 'Some Video Title',
+          },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Preparing next video...')).toBeInTheDocument();
+    });
+    // Title should be hidden during preparing state
+    expect(screen.queryByText('Some Video Title')).not.toBeInTheDocument();
+  });
+
+  test('shows title during subtitle processing states', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
+        token="test-token"
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    const subtitleStates = ['preparing_subtitles', 'downloading_subtitles', 'processing_metadata'];
+
+    for (const state of subtitleStates) {
+      await act(async () => {
+        processCallback({
+          progress: {
+            jobId: 'test-job',
+            progress: {
+              percent: 50,
+              downloadedBytes: 1024,
+              totalBytes: 2048,
+              speedBytesPerSecond: 512,
+              etaSeconds: 60,
+            },
+            stalled: false,
+            state,
+            videoInfo: {
+              channel: 'Test Channel',
+              title: 'Test Video Title',
+              displayTitle: 'Test Video Title',
+            },
+          },
+        });
+      });
+
+      await waitFor(() => {
+        // Title should be shown during subtitle/metadata processing states
+        expect(screen.getByText('Test Video Title')).toBeInTheDocument();
+      });
+    }
+  });
+
   test('handles WebSocket context not found', () => {
     expect(() => {
       render(
@@ -642,6 +732,7 @@ describe('DownloadProgress', () => {
 
     const [, processCallback] = mockSubscribe.mock.calls[0];
 
+    // Use downloading_video state instead of initiating to see progress details
     await act(async () => {
       processCallback({
         progress: {
@@ -654,13 +745,13 @@ describe('DownloadProgress', () => {
             etaSeconds: 0,
           },
           stalled: false,
-          state: 'initiating',
+          state: 'downloading_video',
         },
       });
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Initiating download...')).toBeInTheDocument();
+      expect(screen.getByText('Downloading video stream...')).toBeInTheDocument();
     });
     expect(screen.getByText(/0 B\/s.*0.0%.*0 B.*0 B/)).toBeInTheDocument();
   });
@@ -736,7 +827,7 @@ describe('DownloadProgress', () => {
 
     const [, processCallback] = mockSubscribe.mock.calls[0];
 
-    const indeterminateStates = ['merging', 'metadata', 'processing'];
+    const indeterminateStates = ['merging', 'metadata', 'processing', 'preparing', 'preparing_subtitles', 'processing_metadata'];
 
     for (const state of indeterminateStates) {
       await act(async () => {
@@ -776,7 +867,7 @@ describe('DownloadProgress', () => {
 
     const [, processCallback] = mockSubscribe.mock.calls[0];
 
-    const determinateStates = ['downloading_video', 'downloading_audio', 'downloading_thumbnail'];
+    const determinateStates = ['downloading_video', 'downloading_audio', 'downloading_subtitles', 'downloading_thumbnail'];
 
     for (const state of determinateStates) {
       await act(async () => {
@@ -971,6 +1062,94 @@ describe('DownloadProgress', () => {
       expect(screen.getByText('My Awesome Video Title')).toBeInTheDocument();
     });
     expect(screen.queryByText(/ETA/)).not.toBeInTheDocument();
+  });
+
+  test('hides ETA during non-download states', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
+        token="test-token"
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    const nonDownloadStates = ['preparing', 'preparing_subtitles', 'processing_metadata', 'merging', 'metadata', 'processing'];
+
+    for (const state of nonDownloadStates) {
+      await act(async () => {
+        processCallback({
+          progress: {
+            jobId: 'test-job',
+            progress: {
+              percent: 50,
+              downloadedBytes: 1024000,
+              totalBytes: 2048000,
+              speedBytesPerSecond: 512000,
+              etaSeconds: 120,
+            },
+            stalled: false,
+            state,
+            videoInfo: {
+              channel: 'Test Channel',
+              title: 'Test Video',
+              displayTitle: 'Test Video',
+            },
+          },
+        });
+      });
+
+      await waitFor(() => {
+        // ETA should not be shown for non-download states
+        expect(screen.queryByText(/ETA/)).not.toBeInTheDocument();
+      });
+    }
+  });
+
+  test('shows ETA during download states', async () => {
+    renderWithContext(
+      <DownloadProgress
+        downloadProgressRef={mockDownloadProgressRef}
+        downloadInitiatedRef={mockDownloadInitiatedRef}
+        pendingJobs={[]}
+        token="test-token"
+      />
+    );
+
+    const [, processCallback] = mockSubscribe.mock.calls[0];
+
+    const downloadStates = ['downloading_video', 'downloading_audio', 'downloading_subtitles'];
+
+    for (const state of downloadStates) {
+      await act(async () => {
+        processCallback({
+          progress: {
+            jobId: 'test-job',
+            progress: {
+              percent: 50,
+              downloadedBytes: 1024000,
+              totalBytes: 2048000,
+              speedBytesPerSecond: 512000,
+              etaSeconds: 120,
+            },
+            stalled: false,
+            state,
+            videoInfo: {
+              channel: 'Test Channel',
+              title: 'Test Video',
+              displayTitle: 'Test Video',
+            },
+          },
+        });
+      });
+
+      await waitFor(() => {
+        // ETA should be shown for download states
+        expect(screen.getByText(/ETA 2m/)).toBeInTheDocument();
+      });
+    }
   });
 
   describe('terminated state handling', () => {
@@ -1809,7 +1988,19 @@ describe('DownloadProgress', () => {
 
       const [, processCallback] = mockSubscribe.mock.calls[0];
 
-      const activeStates = ['initiating', 'downloading_video', 'downloading_audio', 'downloading_thumbnail', 'merging', 'metadata', 'processing'];
+      const activeStates = [
+        'initiating',
+        'preparing',
+        'preparing_subtitles',
+        'downloading_video',
+        'downloading_audio',
+        'downloading_subtitles',
+        'downloading_thumbnail',
+        'processing_metadata',
+        'merging',
+        'metadata',
+        'processing'
+      ];
 
       for (const state of activeStates) {
         await act(async () => {

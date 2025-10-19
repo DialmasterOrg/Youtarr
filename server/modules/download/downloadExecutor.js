@@ -258,6 +258,14 @@ class DownloadExecutor {
       'HTTP Error 403',                // Authentication issue
       '403: Forbidden',                // Authentication issue (alternate format)
       'Sign in to confirm',            // Bot detection
+      '[youtube] Extracting URL:',     // Starting to fetch video metadata
+      'Downloading webpage',           // Fetching video metadata
+      'Downloading tv client config',  // Fetching video metadata
+      'Downloading player',            // Fetching video player
+      'Downloading m3u8 information',  // Fetching stream info
+      '[info]',                        // Info messages (subtitles, thumbnails, metadata)
+      '[SubtitlesConvertor]',          // Converting subtitles
+      '[ThumbnailsConvertor]',         // Converting thumbnails
     ];
 
     for (const pattern of importantPatterns) {
