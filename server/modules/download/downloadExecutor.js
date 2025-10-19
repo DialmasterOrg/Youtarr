@@ -22,6 +22,12 @@ class DownloadExecutor {
     this.currentJobId = null;
     this.manualTerminationReason = null;
     this.forceKillTimeout = null;
+    // WebSocket message throttling for progress updates
+    this.lastProgressEmitTime = 0;
+    this.pendingProgressMessage = null;
+    this.progressFlushTimer = null;
+    this.lastEmittedProgressState = null;
+    this.PROGRESS_THROTTLE_MS = 250; // Throttle progress updates to 250ms intervals
   }
 
   getCountOfDownloadedVideos() {
@@ -226,6 +232,152 @@ class DownloadExecutor {
         logger.error({ err: error, file }, 'Error cleaning up partial files');
       }
     }
+  }
+
+  /**
+   * Determine if a message should bypass throttling and be sent immediately
+   * Important messages include state changes, errors, warnings, and completion events
+   * @param {string} line - The raw line from yt-dlp
+   * @param {object|null} structuredProgress - Parsed progress from monitor
+   * @returns {boolean} - True if message is important and should be sent immediately
+   */
+  isImportantMessage(line, structuredProgress) {
+    // State-changing events should always be sent immediately
+    const importantPatterns = [
+      '[download] Destination:',      // New file download starting
+      '[Merger]',                      // Merging video/audio
+      '[MoveFiles]',                   // Moving file to final location
+      '[Metadata]',                    // Adding metadata
+      '[ExtractAudio]',                // Extracting audio
+      '[download] 100%',               // Download complete
+      'Downloading item',              // New item in playlist
+      'already been recorded in the archive', // Skipped (already downloaded)
+      'does not pass filter',          // Skipped (filtered out)
+      'ERROR:',                        // Error occurred
+      'WARNING:',                      // Warning occurred
+      'HTTP Error 403',                // Authentication issue
+      '403: Forbidden',                // Authentication issue (alternate format)
+      'Sign in to confirm',            // Bot detection
+      '[youtube] Extracting URL:',     // Starting to fetch video metadata
+      'Downloading webpage',           // Fetching video metadata
+      'Downloading tv client config',  // Fetching video metadata
+      'Downloading player',            // Fetching video player
+      'Downloading m3u8 information',  // Fetching stream info
+      '[info]',                        // Info messages (subtitles, thumbnails, metadata)
+      '[SubtitlesConvertor]',          // Converting subtitles
+      '[ThumbnailsConvertor]',         // Converting thumbnails
+    ];
+
+    for (const pattern of importantPatterns) {
+      if (line.includes(pattern)) {
+        return true;
+      }
+    }
+
+    // Check if monitor detected a state change
+    if (structuredProgress && structuredProgress.state) {
+      const stateChanged = structuredProgress.state !== this.lastEmittedProgressState;
+      if (stateChanged) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Emit progress message with throttling for non-important updates
+   * Important messages are sent immediately, progress updates are throttled to PROGRESS_THROTTLE_MS
+   * @param {string} text - The message text to emit
+   * @param {object|null} progress - The structured progress object
+   */
+  emitProgressMessage(text, progress) {
+    const isImportant = this.isImportantMessage(text, progress);
+
+    if (isImportant) {
+      // Important messages: send immediately and clear any pending timer
+      if (this.progressFlushTimer) {
+        clearTimeout(this.progressFlushTimer);
+        this.progressFlushTimer = null;
+        this.pendingProgressMessage = null;
+      }
+
+      MessageEmitter.emitMessage(
+        'broadcast',
+        null,
+        'download',
+        'downloadProgress',
+        {
+          text: text,
+          progress: progress,
+        }
+      );
+
+      this.lastProgressEmitTime = Date.now();
+      if (progress && progress.state) {
+        this.lastEmittedProgressState = progress.state;
+      }
+      return;
+    }
+
+    // Progress update: throttle to PROGRESS_THROTTLE_MS interval
+    const now = Date.now();
+    const timeSinceLastEmit = now - this.lastProgressEmitTime;
+
+    if (timeSinceLastEmit >= this.PROGRESS_THROTTLE_MS) {
+      // Enough time has passed, send immediately
+      MessageEmitter.emitMessage(
+        'broadcast',
+        null,
+        'download',
+        'downloadProgress',
+        {
+          text: text,
+          progress: progress,
+        }
+      );
+
+      this.lastProgressEmitTime = now;
+      if (progress && progress.state) {
+        this.lastEmittedProgressState = progress.state;
+      }
+    } else {
+      // Too soon, store as pending
+      this.pendingProgressMessage = {
+        text: text,
+        progress: progress,
+      };
+
+      // Set timer if not already set
+      if (!this.progressFlushTimer) {
+        const remainingTime = this.PROGRESS_THROTTLE_MS - timeSinceLastEmit;
+        this.progressFlushTimer = setTimeout(() => {
+          this.flushPendingProgressMessage();
+          this.progressFlushTimer = null;
+        }, remainingTime);
+      }
+    }
+  }
+
+  flushPendingProgressMessage() {
+    if (!this.pendingProgressMessage) {
+      return;
+    }
+
+    MessageEmitter.emitMessage(
+      'broadcast',
+      null,
+      'download',
+      'downloadProgress',
+      this.pendingProgressMessage
+    );
+
+    this.lastProgressEmitTime = Date.now();
+    const { progress } = this.pendingProgressMessage;
+    if (progress && progress.state) {
+      this.lastEmittedProgressState = progress.state;
+    }
+    this.pendingProgressMessage = null;
   }
 
   async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false) {
@@ -433,16 +585,8 @@ class DownloadExecutor {
               }
             }
 
-            MessageEmitter.emitMessage(
-              'broadcast',
-              null,
-              'download',
-              'downloadProgress',
-              {
-                text: line,
-                progress: structuredProgress || monitor.lastParsed || null,
-              }
-            );
+            // Use throttled message emission (250ms for progress, immediate for important messages)
+            this.emitProgressMessage(line, structuredProgress || monitor.lastParsed || null);
 
             const lowerLine = line.toLowerCase();
             if (!httpForbiddenDetected && (lowerLine.includes('http error 403') || lowerLine.includes('403: forbidden'))) {
@@ -494,6 +638,13 @@ class DownloadExecutor {
           clearTimeout(this.forceKillTimeout);
           this.forceKillTimeout = null;
         }
+
+        // Clear pending progress timer if it exists
+        if (this.progressFlushTimer) {
+          clearTimeout(this.progressFlushTimer);
+          this.progressFlushTimer = null;
+        }
+        this.flushPendingProgressMessage();
 
         // Check for manual termination before clearing references
         const wasManuallyTerminated = this.manualTerminationReason !== null;
@@ -827,6 +978,13 @@ class DownloadExecutor {
           clearTimeout(this.forceKillTimeout);
           this.forceKillTimeout = null;
         }
+
+        // Clear pending progress timer if it exists
+        if (this.progressFlushTimer) {
+          clearTimeout(this.progressFlushTimer);
+          this.progressFlushTimer = null;
+        }
+        this.flushPendingProgressMessage();
 
         // Clear current process references
         this.currentProcess = null;

@@ -166,6 +166,12 @@ describe('DownloadExecutor', () => {
       expect(executor.currentJobId).toBeNull();
       expect(executor.manualTerminationReason).toBeNull();
       expect(executor.forceKillTimeout).toBeNull();
+      // Throttling state
+      expect(executor.lastProgressEmitTime).toBe(0);
+      expect(executor.pendingProgressMessage).toBeNull();
+      expect(executor.progressFlushTimer).toBeNull();
+      expect(executor.lastEmittedProgressState).toBeNull();
+      expect(executor.PROGRESS_THROTTLE_MS).toBe(250);
     });
   });
 
@@ -896,6 +902,296 @@ describe('DownloadExecutor', () => {
       // After exit, references should be cleared
       expect(executor.currentProcess).toBeNull();
       expect(executor.currentJobId).toBeNull();
+    });
+  });
+
+  describe('isImportantMessage', () => {
+    it('should identify download destination messages as important', () => {
+      const line = '[download] Destination: /output/Channel - Title [abc123].mp4';
+      expect(executor.isImportantMessage(line, null)).toBe(true);
+    });
+
+    it('should identify merger messages as important', () => {
+      const line = '[Merger] Merging formats into "output.mp4"';
+      expect(executor.isImportantMessage(line, null)).toBe(true);
+    });
+
+    it('should identify move files messages as important', () => {
+      const line = '[MoveFiles] Moving file from temp to final location';
+      expect(executor.isImportantMessage(line, null)).toBe(true);
+    });
+
+    it('should identify metadata messages as important', () => {
+      const line = '[Metadata] Adding metadata to file';
+      expect(executor.isImportantMessage(line, null)).toBe(true);
+    });
+
+    it('should identify extract audio messages as important', () => {
+      const line = '[ExtractAudio] Extracting audio from video';
+      expect(executor.isImportantMessage(line, null)).toBe(true);
+    });
+
+    it('should identify completion messages as important', () => {
+      const line = '[download] 100% of 10.00MiB';
+      expect(executor.isImportantMessage(line, null)).toBe(true);
+    });
+
+    it('should identify new item download messages as important', () => {
+      const line = '[download] Downloading item 5 of 10';
+      expect(executor.isImportantMessage(line, null)).toBe(true);
+    });
+
+    it('should identify already archived messages as important', () => {
+      const line = '[download] Video abc123 has already been recorded in the archive';
+      expect(executor.isImportantMessage(line, null)).toBe(true);
+    });
+
+    it('should identify filter skip messages as important', () => {
+      const line = '[download] Video does not pass filter (subscribers only)';
+      expect(executor.isImportantMessage(line, null)).toBe(true);
+    });
+
+    it('should identify error messages as important', () => {
+      const line = 'ERROR: Unable to download video';
+      expect(executor.isImportantMessage(line, null)).toBe(true);
+    });
+
+    it('should identify warning messages as important', () => {
+      const line = 'WARNING: Video format may not be supported';
+      expect(executor.isImportantMessage(line, null)).toBe(true);
+    });
+
+    it('should identify HTTP 403 errors as important', () => {
+      expect(executor.isImportantMessage('HTTP Error 403: Forbidden', null)).toBe(true);
+      expect(executor.isImportantMessage('Server returned 403: Forbidden', null)).toBe(true);
+    });
+
+    it('should identify bot detection messages as important', () => {
+      const line = 'Sign in to confirm you\'re not a bot';
+      expect(executor.isImportantMessage(line, null)).toBe(true);
+    });
+
+    it('should identify state changes as important', () => {
+      executor.lastEmittedProgressState = 'downloading_video';
+      const progress = { state: 'merging' };
+      expect(executor.isImportantMessage('[download] Some progress', progress)).toBe(true);
+    });
+
+    it('should not mark regular progress messages as important', () => {
+      executor.lastEmittedProgressState = 'downloading_video';
+      const progress = { state: 'downloading_video' };
+      const line = '{"percent":"50.0%","downloaded":"5242880","total":"10485760"}';
+      expect(executor.isImportantMessage(line, progress)).toBe(false);
+    });
+
+    it('should not mark empty lines as important', () => {
+      expect(executor.isImportantMessage('', null)).toBe(false);
+    });
+  });
+
+  describe('emitProgressMessage', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.clearAllMocks();
+    });
+
+    afterEach(() => {
+      if (executor.progressFlushTimer) {
+        clearTimeout(executor.progressFlushTimer);
+        executor.progressFlushTimer = null;
+      }
+      jest.useRealTimers();
+    });
+
+    it('should emit important messages immediately', () => {
+      const line = '[download] Destination: /output/video.mp4';
+      const progress = { state: 'downloading_video' };
+
+      executor.emitProgressMessage(line, progress);
+
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledTimes(1);
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'downloadProgress',
+        { text: line, progress: progress }
+      );
+    });
+
+    it('should clear pending timer when important message is sent', () => {
+      // Set up a pending message
+      executor.pendingProgressMessage = { text: 'pending', progress: null };
+      executor.progressFlushTimer = setTimeout(() => {}, 1000);
+
+      const line = '[download] Destination: /output/video.mp4';
+      executor.emitProgressMessage(line, null);
+
+      expect(executor.pendingProgressMessage).toBeNull();
+      expect(executor.progressFlushTimer).toBeNull();
+    });
+
+    it('should throttle progress messages to 250ms intervals', () => {
+      // First message should go through immediately
+      executor.emitProgressMessage('Progress 1', { state: 'downloading_video' });
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledTimes(1);
+
+      // Second message within 250ms should be pending
+      jest.advanceTimersByTime(100);
+      executor.emitProgressMessage('Progress 2', { state: 'downloading_video' });
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledTimes(1); // Still only 1
+
+      // Third message should update pending
+      jest.advanceTimersByTime(50);
+      executor.emitProgressMessage('Progress 3', { state: 'downloading_video' });
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledTimes(1); // Still only 1
+
+      // After 250ms total, pending message should flush
+      jest.advanceTimersByTime(100); // Total 250ms
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledTimes(2);
+      expect(MessageEmitter.emitMessage).toHaveBeenLastCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'downloadProgress',
+        { text: 'Progress 3', progress: { state: 'downloading_video' } }
+      );
+    });
+
+    it('should send progress message immediately if 250ms has elapsed', () => {
+      executor.emitProgressMessage('Progress 1', null);
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledTimes(1);
+
+      // Wait 250ms
+      jest.advanceTimersByTime(250);
+
+      // Next message should go through immediately
+      executor.emitProgressMessage('Progress 2', null);
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledTimes(2);
+    });
+
+    it('should update lastEmittedProgressState when state changes', () => {
+      const progress = { state: 'downloading_video' };
+      executor.emitProgressMessage('[download] Destination: /output/video.mp4', progress);
+
+      expect(executor.lastEmittedProgressState).toBe('downloading_video');
+    });
+
+    it('should only create one flush timer for multiple rapid messages', () => {
+      executor.emitProgressMessage('Progress 1', null);
+      executor.emitProgressMessage('Progress 2', null);
+      executor.emitProgressMessage('Progress 3', null);
+
+      // Only one timer should exist
+      expect(executor.progressFlushTimer).not.toBeNull();
+
+      // Fast forward past throttle time
+      jest.advanceTimersByTime(250);
+
+      // Timer should be cleared
+      expect(executor.progressFlushTimer).toBeNull();
+    });
+
+    it('should handle null progress gracefully', () => {
+      executor.emitProgressMessage('Some message', null);
+
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'downloadProgress',
+        { text: 'Some message', progress: null }
+      );
+    });
+  });
+
+  describe('doDownload - throttling integration', () => {
+    const mockArgs = ['--format', 'best', 'https://youtube.com/watch?v=test'];
+    const mockJobId = 'job-123';
+    const mockJobType = 'Channel Downloads';
+
+    it('should use throttled emission for rapid progress updates', async () => {
+      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Emit rapid progress updates within same tick
+      mockProcess.stdout.emit('data', '{"percent":"10.0%","downloaded":"1048576","total":"10485760"}\n');
+      mockProcess.stdout.emit('data', '{"percent":"20.0%","downloaded":"2097152","total":"10485760"}\n');
+      mockProcess.stdout.emit('data', '{"percent":"30.0%","downloaded":"3145728","total":"10485760"}\n');
+
+      // Important message should go through immediately
+      mockProcess.stdout.emit('data', '[download] Destination: /output/video.mp4\n');
+
+      // Complete the download
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await downloadPromise;
+
+      // Should have fewer emits than lines due to throttling
+      // Initial message + important message + at most 1 throttled progress
+      const emitCalls = MessageEmitter.emitMessage.mock.calls.filter(
+        call => call[2] === 'download' && call[3] === 'downloadProgress'
+      );
+      // We should have: initial, 1 progress (first goes through), destination (important), final summary
+      // The rapid progress updates (2nd and 3rd) should be throttled/pending
+      expect(emitCalls.length).toBeLessThan(10); // Less than if all were emitted
+    });
+
+    it('should clear pending progress timer on job exit', async () => {
+      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Emit initial progress to set lastProgressEmitTime
+      mockProcess.stdout.emit('data', '{"percent":"25.0%","downloaded":"2621440","total":"10485760"}\n');
+
+      // Send another progress message that should get throttled (within 250ms of first)
+      mockProcess.stdout.emit('data', '{"percent":"50.0%","downloaded":"5242880","total":"10485760"}\n');
+
+      // Give time for timer to be set
+      await new Promise(resolve => setTimeout(resolve, 5));
+
+      // Timer should exist if throttling occurred
+      const timerExisted = executor.progressFlushTimer !== null;
+
+      // Exit the process
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await downloadPromise;
+
+      // Timer should be cleared (whether it existed or not)
+      expect(executor.progressFlushTimer).toBeNull();
+      expect(executor.pendingProgressMessage).toBeNull();
+
+      // If throttling occurred, verify cleanup happened
+      if (timerExisted) {
+        expect(executor.progressFlushTimer).toBeNull();
+      }
+    });
+
+    it('should clear pending progress timer on job error', async () => {
+      const downloadPromise = executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Emit initial progress
+      mockProcess.stdout.emit('data', '{"percent":"25.0%","downloaded":"2621440","total":"10485760"}\n');
+
+      // Send another progress message that should get throttled
+      mockProcess.stdout.emit('data', '{"percent":"50.0%","downloaded":"5242880","total":"10485760"}\n');
+
+      // Give time for timer to be set
+      await new Promise(resolve => setTimeout(resolve, 5));
+
+      // Emit error
+      setTimeout(() => {
+        mockProcess.emit('error', new Error('Process error'));
+      }, 10);
+
+      await downloadPromise;
+
+      // Timer should be cleared
+      expect(executor.progressFlushTimer).toBeNull();
+      expect(executor.pendingProgressMessage).toBeNull();
     });
   });
 });

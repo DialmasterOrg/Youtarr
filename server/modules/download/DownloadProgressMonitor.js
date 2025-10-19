@@ -264,13 +264,44 @@ class DownloadProgressMonitor {
   }
 
   determineState(line) {
+    // Detect metadata fetching phase (before actual downloads start)
+    if (line.includes('[youtube] Extracting URL:') && !line.includes('[youtube:tab]')) {
+      return 'preparing';
+    }
+    if (line.match(/\[youtube\] [^:]+: Downloading webpage/)) {
+      return 'preparing';
+    }
+    if (line.match(/\[youtube\] [^:]+: Downloading (tv|web|android|ios) (client config|player API|safari player)/)) {
+      return 'preparing';
+    }
+    if (line.match(/\[youtube\] [^:]+: Downloading player/)) {
+      return 'preparing';
+    }
+    if (line.match(/\[youtube\] [^:]+: Downloading m3u8 information/)) {
+      return 'preparing';
+    }
+
+    // Detect subtitle download announcement (not the actual download)
+    if (line.match(/\[info\] [^:]+: Downloading subtitles:/)) {
+      return 'preparing_subtitles';
+    }
+
     // Detect download type from file extension
     if (line.includes('[download] Destination:')) {
       const path = line.split('Destination:')[1].trim();
+      // Detect subtitle file downloads
+      if (path.match(/\.(vtt|srt)$/i)) return 'downloading_subtitles';
       if (path.match(/\.f\d+\.mp4$/)) return 'downloading_video';
       if (path.match(/\.f\d+\.m4a$/)) return 'downloading_audio';
       if (path.includes('poster') || path.includes('thumbnail')) return 'downloading_thumbnail';
     }
+
+    // Detect thumbnail and metadata operations
+    if (line.includes('[info] Downloading video thumbnail')) return 'processing_metadata';
+    if (line.includes('[info] Writing video thumbnail')) return 'processing_metadata';
+    if (line.includes('[info] Writing video metadata')) return 'processing_metadata';
+    if (line.includes('[SubtitlesConvertor]')) return 'processing_metadata';
+    if (line.includes('[ThumbnailsConvertor]')) return 'processing_metadata';
 
     // Detect processing stages
     if (line.includes('[Merger]')) return 'merging';
@@ -473,7 +504,17 @@ class DownloadProgressMonitor {
     this.parseAndUpdateVideoCounts(rawLine);
 
     // Extract video info if available
-    const videoInfo = this.extractVideoInfo(rawLine);
+    let videoInfo = this.extractVideoInfo(rawLine);
+
+    // Clear video title ONLY when preparing the next video (between videos)
+    // Keep title during subtitle/metadata processing - those are for a specific video
+    if (this.currentState === 'preparing') {
+      videoInfo = {
+        channel: videoInfo?.channel || this.currentChannelName || '',
+        title: '',
+        displayTitle: ''
+      };
+    }
 
     const videoInfoChanged = !!videoInfo && (
       !this.lastParsed?.videoInfo ||
