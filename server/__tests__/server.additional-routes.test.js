@@ -233,6 +233,11 @@ const createServerModule = ({
         jest.doMock('../modules/downloadModule', () => downloadModuleMock);
         jest.doMock('../modules/jobModule', () => jobModuleMock);
         jest.doMock('../modules/videosModule', () => videosModuleMock);
+        jest.doMock('../modules/channelSettingsModule', () => ({
+          getChannelSettings: jest.fn(),
+          updateChannelSettings: jest.fn(),
+          getAllSubFolders: jest.fn()
+        }));
         jest.doMock('../modules/cronJobs', () => ({ initialize: jest.fn() }));
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => ({ schedule: jest.fn() }));

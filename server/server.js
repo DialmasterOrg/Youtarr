@@ -608,6 +608,43 @@ const initialize = async () => {
       }
     });
 
+    // Channel settings endpoints
+    const channelSettingsModule = require('./modules/channelSettingsModule');
+
+    app.get('/api/channels/:channelId/settings', verifyToken, async (req, res) => {
+      try {
+        const settings = await channelSettingsModule.getChannelSettings(req.params.channelId);
+        res.json(settings);
+      } catch (error) {
+        console.error('Error getting channel settings:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    app.put('/api/channels/:channelId/settings', verifyToken, async (req, res) => {
+      try {
+        const result = await channelSettingsModule.updateChannelSettings(
+          req.params.channelId,
+          req.body
+        );
+        res.json(result);
+      } catch (error) {
+        console.error('Error updating channel settings:', error);
+        const statusCode = error.message.includes('Cannot change subfolder while downloads are in progress') ? 409 : 500;
+        res.status(statusCode).json({ error: error.message });
+      }
+    });
+
+    app.get('/api/channels/subfolders', verifyToken, async (req, res) => {
+      try {
+        const subfolders = await channelSettingsModule.getAllSubFolders();
+        res.json(subfolders);
+      } catch (error) {
+        console.error('Error getting subfolders:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
     app.get('/getchannelvideos/:channelId', verifyToken, async (req, res) => {
       req.log.info({ channelId: req.params.channelId }, 'Getting channel videos');
       const channelId = req.params.channelId;

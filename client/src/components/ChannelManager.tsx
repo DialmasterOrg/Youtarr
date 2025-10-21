@@ -6,11 +6,9 @@ import {
   Card,
   CardHeader,
   ListItem,
-  ListItemSecondaryAction,
   IconButton,
   TextField,
   List,
-  ListItemText,
   Dialog,
   DialogContentText,
   DialogContent,
@@ -20,17 +18,23 @@ import {
   Alert,
   CircularProgress,
   Chip,
+  Typography,
 } from '@mui/material';
 import Delete from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import InfoIcon from '@mui/icons-material/Info';
-import AlarmOnIcon from '@mui/icons-material/AlarmOn';
+import FolderIcon from '@mui/icons-material/Folder';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import SettingsIcon from '@mui/icons-material/Settings';
 import axios from 'axios';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import WebSocketContext, { Message } from '../contexts/WebSocketContext';
 import { Channel } from '../types/Channel';
 import { useNavigate } from 'react-router-dom';
+import { useConfig } from '../hooks/useConfig';
+import HelpDialog from './ChannelManager/HelpDialog';
 
 interface ChannelManagerProps {
   token: string | null;
@@ -53,6 +57,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
   const [channelToDelete, setChannelToDelete] = useState<string | null>(null);
   const [isAddingChannel, setIsAddingChannel] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [helpDialogOpen, setHelpDialogOpen] = useState(false);
   const websocketContext = useContext(WebSocketContext);
   const navigate = useNavigate();
   if (!websocketContext) {
@@ -61,6 +66,8 @@ function ChannelManager({ token }: ChannelManagerProps) {
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { config } = useConfig(token);
+  const globalPreferredResolution = config.preferredResolution || '1080';
 
   const reloadChannels = useCallback(() => {
     if (token) {
@@ -338,35 +345,84 @@ function ChannelManager({ token }: ChannelManagerProps) {
     setIsDialogOpen(false);
   };
 
-  const renderAutoDownloadBadges = (autoDownloadTabs: string | undefined) => {
-    const tabMap: Record<string, { full: string; short: string }> = {
-      'video': { full: 'Videos', short: 'Videos' },
-      'short': { full: 'Shorts', short: 'Shorts' },
-      'livestream': { full: 'Live', short: 'Live' },
+  const renderSubFolder = (subFolder: string | null | undefined) => {
+    const displayText = subFolder ? `__${subFolder}/` : 'default';
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <FolderIcon sx={{ fontSize: isMobile ? '0.75rem' : '0.85rem', color: 'text.secondary' }} />
+        <Typography sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem', color: subFolder ? '#555' : '#888', fontStyle: subFolder ? 'normal' : 'italic' }}>
+          {displayText}
+        </Typography>
+      </Box>
+    );
+  };
+
+  const renderQualityChip = (videoQuality: string | null | undefined) => {
+    const resolvedQuality = videoQuality || globalPreferredResolution;
+    const isOverride = Boolean(videoQuality);
+
+    return (
+      <Chip
+        label={`${resolvedQuality}p`}
+        size="small"
+        color={isOverride ? 'success' : 'default'}
+        icon={isOverride ? <SettingsIcon sx={{ fontSize: isMobile ? '0.7rem' : '0.8rem' }} /> : undefined}
+        sx={{
+          height: isMobile ? '18px' : '20px',
+          fontSize: isMobile ? '0.65rem' : '0.7rem',
+          maxWidth: '125px',
+          '& .MuiChip-icon': {
+            ml: isMobile ? 0.25 : 0.5,
+          },
+        }}
+      />
+    );
+  };
+
+  const renderAutoDownloadBadges = (availableTabs: string | null | undefined, autoDownloadTabs: string | undefined) => {
+    // Map available tabs (videos, shorts, streams) to media types (video, short, livestream)
+    const availableToMediaTypeMap: Record<string, string> = {
+      'videos': 'video',
+      'shorts': 'short',
+      'streams': 'livestream',
     };
 
-    const tabs = autoDownloadTabs
-      ? autoDownloadTabs
-          .split(',')
-          .map(tab => tab.trim())
-          .filter(tab => tab.length > 0)
+    const tabDisplayMap: Record<string, { full: string; short: string }> = {
+      'videos': { full: 'Videos', short: 'Videos' },
+      'shorts': { full: 'Shorts', short: 'Shorts' },
+      'streams': { full: 'Live', short: 'Live' },
+    };
+
+    // Parse available tabs
+    const available = availableTabs
+      ? availableTabs.split(',').map(tab => tab.trim()).filter(tab => tab.length > 0)
       : [];
 
-    if (tabs.length === 0) {
+    // Parse auto-download enabled tabs (these are media types: video, short, livestream)
+    const autoDownloadEnabled = autoDownloadTabs
+      ? autoDownloadTabs.split(',').map(tab => tab.trim()).filter(tab => tab.length > 0)
+      : [];
+
+    // If no available tabs, show a message
+    if (available.length === 0) {
       return (
-        <Box sx={{ mt: 0.5 }}>
+        <Box sx={{ mt: 0.5, textAlign: 'center' }}>
           <span style={{ fontSize: isMobile ? '0.65rem' : '0.75rem', color: '#888' }}>
-            Automatic downloads disabled
+            No tabs detected
           </span>
         </Box>
       );
     }
 
     return (
-      <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
-        {tabs.map((tab) => {
-          const tabInfo = tabMap[tab];
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'center' }}>
+        {available.map((tab) => {
+          const tabInfo = tabDisplayMap[tab];
           if (!tabInfo) return null;
+
+          // Check if this tab is enabled for auto-download
+          const mediaType = availableToMediaTypeMap[tab];
+          const isAutoDownloadEnabled = mediaType && autoDownloadEnabled.includes(mediaType);
 
           return (
             <Chip
@@ -374,10 +430,11 @@ function ChannelManager({ token }: ChannelManagerProps) {
               label={isMobile ? tabInfo.short : tabInfo.full}
               size="small"
               variant="outlined"
-              icon={<AlarmOnIcon sx={{ fontSize: isMobile ? '0.75rem' : '0.85rem', color: 'error.main' }} />}
+              icon={isAutoDownloadEnabled ? <FileDownloadIcon sx={{ fontSize: isMobile ? '0.75rem' : '0.85rem', color: 'success.main' }} /> : undefined}
               sx={{
                 height: isMobile ? '18px' : '20px',
                 fontSize: isMobile ? '0.65rem' : '0.7rem',
+                maxWidth: '125px',
                 '& .MuiChip-label': {
                   px: isMobile ? 0.5 : 0.75,
                 },
@@ -396,7 +453,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
     <Card elevation={8} style={{
       padding: '8px',
       marginBottom: '16px',
-      height: 'calc(100vh - 175px)',
+      height: isMobile ? 'calc(100vh - 135px)' : 'calc(100vh - 165px)',
       display: 'flex',
       flexDirection: 'column'
     }}>
@@ -408,7 +465,31 @@ function ChannelManager({ token }: ChannelManagerProps) {
         mb: 2
       }}>
         <Card elevation={2} sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <CardHeader title='Your Channels' align='center' />
+          <CardHeader
+            title='Your Channels'
+            align='center'
+            action={
+              <Tooltip title="Help & Legend" arrow>
+                <IconButton
+                  onClick={() => setHelpDialogOpen(true)}
+                  size="small"
+                  sx={{
+                    mt: isMobile ? 0 : 1,
+                    mr: 1,
+                    position: 'absolute',
+                    right: 8,
+                    top: 8
+                  }}
+                >
+                  <HelpOutlineIcon />
+                </IconButton>
+              </Tooltip>
+            }
+            sx={{
+              py: isMobile ? 1 : 2,
+              position: 'relative'
+            }}
+          />
             <Box
               ref={listContainerRef}
               sx={{
@@ -417,6 +498,39 @@ function ChannelManager({ token }: ChannelManagerProps) {
                 border: '1px solid #DDE',
                 borderTop: 'none'
               }}>
+              {/* Column Headers */}
+              <Box
+                sx={{
+                  position: 'sticky',
+                  top: 0,
+                  backgroundColor: '#f5f5f5',
+                  borderBottom: '2px solid #999',
+                  zIndex: 10,
+                  py: 1,
+                  px: 2
+                }}
+              >
+                <Grid container spacing={0} alignItems="center">
+                  <Grid item xs={4} sm={3} sx={{ display: 'flex', justifyContent: 'center' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 'bold', fontSize: isMobile ? '0.7rem' : '1rem' }}>
+                      Channel
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={3} sm={4} sx={{ display: 'flex', justifyContent: 'center' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 'bold', fontSize: isMobile ? '0.7rem' : '1rem' }}>
+                      {isMobile ? 'Types' : 'Content Types'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={4} sm={3} sx={{ display: 'flex', justifyContent: 'center' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 'bold', fontSize: isMobile ? '0.7rem' : '1rem' }}>
+                      Settings
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={1} sm={2}>
+                    {/* Empty for delete column */}
+                  </Grid>
+                </Grid>
+              </Box>
               <List>
               {channels.map((channel, index) => (
                 <ListItem
@@ -436,73 +550,72 @@ function ChannelManager({ token }: ChannelManagerProps) {
                 >
                   <Grid
                     container
-                    direction={isMobile ? 'row' : 'row'}
-                    alignItems='center'
-                    spacing={0}
+                    spacing={1}
+                    alignItems="center"
                   >
+                    {/* Column 1: Channel (Thumbnail + Name) */}
                     <Grid
                       item
-                      xs={11}
-                      sm={11}
+                      xs={4}
+                      sm={3}
                       onClick={() => navigate(`/channel/${channel.channel_id}`)}
                       style={{ cursor: 'pointer' }}
                       data-testid={`channel-click-area-${channel.channel_id}`}
-                      >
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                    >
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
                         <img
                           src={`/images/channelthumb-${channel.channel_id}.jpg`}
                           alt={`${channel.uploader} thumbnail`}
                           style={{
-                            height: isMobile ? '50px' : '75px',
-                            width: isMobile ? '50px' : '75px',
-                            marginRight: '10px',
+                            height: isMobile ? '40px' : '60px',
+                            width: isMobile ? '40px' : '60px',
+                            borderRadius: '50%',
                           }}
                           data-size={isMobile ? 'small' : 'large'}
                           onError={(e) => {
-                            (e.target as HTMLImageElement).style.display =
-                              'none';
+                            (e.target as HTMLImageElement).style.display = 'none';
                           }}
                           onLoad={(e) => {
                             (e.target as HTMLImageElement).style.display = '';
                           }}
-                        />{' '}
-                        <ListItemText
-                          primary={
-                            <div
-                              style={{
-                                fontSize: isMobile ? 'small' : 'medium',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                fontWeight: unsavedChannels.includes(
-                                  channel.url
-                                )
-                                  ? 'bold'
-                                  : 'normal',
-                                textDecoration: deletedChannels.includes(
-                                  channel.url
-                                )
-                                  ? 'line-through'
-                                  : 'none',
-                                color: deletedChannels.includes(channel.url)
-                                  ? 'red'
-                                  : 'inherit',
-                              }}
-                            >
-                              {channel.uploader || channel.url}
-                            </div>
-                          }
-                          secondary={renderAutoDownloadBadges(channel.auto_download_enabled_tabs)}
-                          secondaryTypographyProps={{ component: 'div' }}
                         />
-                      </div>{' '}
+                        <Typography
+                          sx={{
+                            fontSize: isMobile ? '0.7rem' : '0.85rem',
+                            textAlign: 'center',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            width: '100%',
+                            fontWeight: unsavedChannels.includes(channel.url) ? 'bold' : 'normal',
+                            textDecoration: deletedChannels.includes(channel.url) ? 'line-through' : 'none',
+                            color: deletedChannels.includes(channel.url) ? 'red' : 'inherit',
+                          }}
+                        >
+                          {channel.uploader || channel.url}
+                        </Typography>
+                      </Box>
                     </Grid>
 
-                    {!deletedChannels.includes(channel.url) && (
-                      <Grid item xs={12} sm={3}>
-                        <ListItemSecondaryAction>
+                    {/* Column 2: Content Types (Tab chips) */}
+                    <Grid item xs={3} sm={4}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'center' }}>
+                        {renderAutoDownloadBadges(channel.available_tabs, channel.auto_download_enabled_tabs)}
+                      </Box>
+                    </Grid>
+
+                    {/* Column 3: Settings (Folder + Quality) */}
+                    <Grid item xs={4} sm={3}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'center' }}>
+                        {renderSubFolder(channel.sub_folder)}
+                        {renderQualityChip(channel.video_quality)}
+                      </Box>
+                    </Grid>
+
+                    {/* Column 4: Delete Action */}
+                    <Grid item xs={1} sm={2}>
+                      {!deletedChannels.includes(channel.url) && (
+                        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
                           <IconButton
-                            edge='end'
                             onClick={() => handleDeleteClick(index)}
                             size={isMobile ? 'small' : 'medium'}
                             data-testid='delete-channel-button'
@@ -510,9 +623,9 @@ function ChannelManager({ token }: ChannelManagerProps) {
                           >
                             <Delete />
                           </IconButton>
-                        </ListItemSecondaryAction>
-                      </Grid>
-                    )}
+                        </Box>
+                      )}
+                    </Grid>
                   </Grid>
                 </ListItem>
               ))}
@@ -670,6 +783,13 @@ function ChannelManager({ token }: ChannelManagerProps) {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <HelpDialog
+        open={helpDialogOpen}
+        onClose={() => setHelpDialogOpen(false)}
+        isMobile={isMobile}
+      />
+
 
       <Snackbar
         open={Boolean(mobileTooltip)}

@@ -249,6 +249,18 @@ const createServerModule = ({
           })
         };
 
+        const channelSettingsModuleMock = {
+          getChannelSettings: jest.fn().mockResolvedValue({
+            sub_folder: null,
+            video_quality: null
+          }),
+          updateChannelSettings: jest.fn().mockResolvedValue({
+            success: true,
+            folderMoved: false
+          }),
+          getAllSubFolders: jest.fn().mockResolvedValue([])
+        };
+
         const bcryptMock = {
           compare: jest.fn().mockResolvedValue(true),
           hash: jest.fn().mockResolvedValue('new-hashed-password')
@@ -298,6 +310,7 @@ const createServerModule = ({
         jest.doMock('../modules/videosModule', () => videosModuleMock);
         jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
         jest.doMock('../modules/videoValidationModule', () => videoValidationModuleMock);
+        jest.doMock('../modules/channelSettingsModule', () => channelSettingsModuleMock);
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => cronMock);
         jest.doMock('express-rate-limit', () => rateLimitMiddleware);
@@ -321,6 +334,7 @@ const createServerModule = ({
         state.videosModuleMock = videosModuleMock;
         state.videoDeletionModuleMock = videoDeletionModuleMock;
         state.videoValidationModuleMock = videoValidationModuleMock;
+        state.channelSettingsModuleMock = channelSettingsModuleMock;
         state.bcryptMock = bcryptMock;
         state.uuidMock = uuidMock;
         state.httpsMock = httpsMock;

@@ -123,6 +123,11 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
   jest.doMock('../modules/videosModule', () => ({
     getVideos: jest.fn().mockResolvedValue([])
   }));
+  jest.doMock('../modules/channelSettingsModule', () => ({
+    getChannelSettings: jest.fn(),
+    updateChannelSettings: jest.fn(),
+    getAllSubFolders: jest.fn()
+  }));
   jest.doMock('../modules/webSocketServer.js', () => jest.fn());
 
   jest.doMock('node-cron', () => ({ schedule: jest.fn() }));

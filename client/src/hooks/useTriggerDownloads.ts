@@ -8,6 +8,7 @@ interface DownloadOverrideSettings {
 interface TriggerDownloadsParams {
   urls: string[];
   overrideSettings?: DownloadOverrideSettings;
+  channelId?: string | null;
 }
 
 interface UseTriggerDownloadsResult {
@@ -21,7 +22,7 @@ export function useTriggerDownloads(token: string | null): UseTriggerDownloadsRe
   const [error, setError] = useState<Error | null>(null);
 
   const triggerDownloads = useCallback(
-    async ({ urls, overrideSettings }: TriggerDownloadsParams): Promise<boolean> => {
+    async ({ urls, overrideSettings, channelId }: TriggerDownloadsParams): Promise<boolean> => {
       if (!token) {
         setError(new Error('No authentication token provided'));
         return false;
@@ -38,6 +39,10 @@ export function useTriggerDownloads(token: string | null): UseTriggerDownloadsRe
             resolution: overrideSettings.resolution,
             allowRedownload: overrideSettings.allowRedownload,
           };
+        }
+
+        if (channelId) {
+          requestBody.channelId = channelId;
         }
 
         const response = await fetch('/triggerspecificdownloads', {

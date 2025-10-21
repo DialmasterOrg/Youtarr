@@ -13,7 +13,7 @@ import DownloadSettingsDialog from '../DownloadManager/ManualDownload/DownloadSe
 import DeleteVideosDialog from '../shared/DeleteVideosDialog';
 import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
 
-interface ChannelVideosDialogsProps {
+export interface ChannelVideosDialogsProps {
   downloadDialogOpen: boolean;
   refreshConfirmOpen: boolean;
   deleteDialogOpen: boolean;
@@ -25,6 +25,7 @@ interface ChannelVideosDialogsProps {
   missingVideoCount: number;
   selectedForDeletion: number;
   defaultResolution: string;
+  defaultResolutionSource: 'channel' | 'global';
   selectedTab: string;
   tabLabel: string;
   onDownloadDialogClose: () => void;
@@ -51,6 +52,7 @@ function ChannelVideosDialogs({
   missingVideoCount,
   selectedForDeletion,
   defaultResolution,
+  defaultResolutionSource,
   selectedTab,
   tabLabel,
   onDownloadDialogClose,
@@ -74,6 +76,7 @@ function ChannelVideosDialogs({
         videoCount={videoCount}
         missingVideoCount={missingVideoCount}
         defaultResolution={defaultResolution}
+        defaultResolutionSource={defaultResolutionSource}
         mode="manual"
       />
 

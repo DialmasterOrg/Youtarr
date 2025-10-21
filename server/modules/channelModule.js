@@ -252,6 +252,9 @@ class ChannelModule {
       description: channel.description,
       url: channel.url,
       auto_download_enabled_tabs: channel.auto_download_enabled_tabs ?? 'video',
+      available_tabs: channel.available_tabs || null,
+      sub_folder: channel.sub_folder || null,
+      video_quality: channel.video_quality || null,
     };
   }
 
@@ -608,6 +611,9 @@ class ChannelModule {
       description: channelData.description,
       url: channelUrl,
       auto_download_enabled_tabs: autoDownloadEnabledTabs,
+      available_tabs: availableTabs.length > 0 ? availableTabs.join(',') : null,
+      sub_folder: null,
+      video_quality: null,
     };
   }
 
@@ -687,7 +693,7 @@ class ChannelModule {
   /**
    * Read all enabled channels from the database.
    * Also backfills poster.jpg files for existing channel folders.
-   * @returns {Promise<Array>} - Array of channel objects with url, uploader, and channel_id
+   * @returns {Promise<Array>} - Array of channel objects with url, uploader, channel_id, auto_download_enabled_tabs, available_tabs, sub_folder, and video_quality
    */
   async readChannels() {
     try {
@@ -703,6 +709,9 @@ class ChannelModule {
         uploader: channel.uploader || '',
         channel_id: channel.channel_id || '',
         auto_download_enabled_tabs: channel.auto_download_enabled_tabs ?? 'video',
+        available_tabs: channel.available_tabs || null,
+        sub_folder: channel.sub_folder || null,
+        video_quality: channel.video_quality || null,
       }));
     } catch (err) {
       logger.error({ err }, 'Error reading channels from database');
@@ -815,6 +824,13 @@ class ChannelModule {
           // Fallback for channels without channel_id
           urls.push(channel.url);
         }
+      }
+
+      // Check if we have any URLs to download
+      if (urls.length === 0) {
+        const error = new Error('No valid channel URLs to download - all enabled channels have no enabled tabs');
+        logger.warn('No URLs generated for channel downloads - all enabled channels have disabled tabs');
+        throw error;
       }
 
       await fsPromises.writeFile(tempFilePath, urls.join('\n'));

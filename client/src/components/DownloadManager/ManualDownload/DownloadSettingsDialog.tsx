@@ -32,6 +32,7 @@ interface DownloadSettingsDialogProps {
   defaultResolution?: string;
   defaultVideoCount?: number; // For channel downloads
   mode?: 'manual' | 'channel'; // To differentiate between modes
+  defaultResolutionSource?: 'channel' | 'global';
 }
 
 const RESOLUTION_OPTIONS = [
@@ -51,7 +52,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   missingVideoCount = 0,
   defaultResolution = '1080',
   defaultVideoCount = 3,
-  mode = 'manual'
+  mode = 'manual',
+  defaultResolutionSource = 'global'
 }) => {
   const [useCustomSettings, setUseCustomSettings] = useState(false);
   const [resolution, setResolution] = useState(defaultResolution);
@@ -59,15 +61,33 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   const [allowRedownload, setAllowRedownload] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
 
+  const selectedDefaultOption = RESOLUTION_OPTIONS.find((option) => option.value === defaultResolution);
+  const defaultQualityLabel = selectedDefaultOption
+    ? selectedDefaultOption.label
+    : `${defaultResolution}p`;
+  const qualitySourceLabel = defaultResolutionSource === 'channel' ? 'channel override' : 'global default';
+
   // Load last used settings from localStorage and auto-detect re-download need
   useEffect(() => {
     if (open && !hasUserInteracted) {
+      setResolution(defaultResolution);
+      setChannelVideoCount(defaultVideoCount);
       // Auto-check re-download if there are missing videos or previously downloaded videos in manual mode
       if (missingVideoCount > 0) {
         setAllowRedownload(true);
+      } else {
+        setAllowRedownload(false);
       }
     }
-  }, [open, hasUserInteracted, mode, missingVideoCount]);
+  }, [open, hasUserInteracted, mode, missingVideoCount, defaultResolution, defaultVideoCount]);
+
+  useEffect(() => {
+    if (!open) {
+      setHasUserInteracted(false);
+      setUseCustomSettings(false);
+      setAllowRedownload(false);
+    }
+  }, [open]);
 
   const handleUseCustomToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
     setUseCustomSettings(event.target.checked);
@@ -201,18 +221,24 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                 checked={useCustomSettings}
                 onChange={handleUseCustomToggle}
                 color="primary"
-              />
-            }
-            label="Use custom settings for this download"
-            sx={{ mb: 2 }}
           />
+        }
+        label="Use custom settings for this download"
+        sx={{ mb: 2 }}
+      />
 
-          <Divider sx={{ mb: 2 }} />
+      <Divider sx={{ mb: 2 }} />
 
-          <Box sx={{ opacity: useCustomSettings ? 1 : 0.5, transition: 'opacity 0.3s' }} data-testid="custom-settings-section">
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>
-              Custom Video Quality
-            </Typography>
+      <Alert severity="info" sx={{ mb: 2 }}>
+        <Typography variant="body2">
+          Current automatic setting: {defaultQualityLabel} ({qualitySourceLabel}).
+        </Typography>
+      </Alert>
+
+      <Box sx={{ opacity: useCustomSettings ? 1 : 0.5, transition: 'opacity 0.3s' }} data-testid="custom-settings-section">
+        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>
+          Custom Video Quality
+        </Typography>
 
             <FormControl fullWidth disabled={!useCustomSettings}>
               <InputLabel id="resolution-select-label">Maximum Resolution</InputLabel>

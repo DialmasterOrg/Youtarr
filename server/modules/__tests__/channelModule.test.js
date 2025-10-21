@@ -422,7 +422,10 @@ describe('ChannelModule', () => {
           title: 'Test Channel',
           description: 'Test Description',
           url: 'https://youtube.com/@test',
-          auto_download_enabled_tabs: 'video,short'
+          auto_download_enabled_tabs: 'video,short',
+          available_tabs: null,
+          sub_folder: null,
+          video_quality: null,
         });
       });
 
@@ -440,6 +443,9 @@ describe('ChannelModule', () => {
         const result = ChannelModule.mapChannelToResponse(channel);
 
         expect(result.auto_download_enabled_tabs).toBe('video');
+        expect(result.available_tabs).toBeNull();
+        expect(result.sub_folder).toBeNull();
+        expect(result.video_quality).toBeNull();
       });
     });
 
@@ -1483,14 +1489,20 @@ describe('ChannelModule', () => {
             uploader: 'Channel 1',
             channel_id: 'UC111',
             enabled: true,
-            auto_download_enabled_tabs: 'video,short'
+            auto_download_enabled_tabs: 'video,short',
+            available_tabs: 'videos,shorts,livestream',
+            sub_folder: null,
+            video_quality: null,
           },
           {
             url: 'https://youtube.com/@channel2',
             uploader: 'Channel 2',
             channel_id: 'UC222',
             enabled: true,
-            auto_download_enabled_tabs: 'video'
+            auto_download_enabled_tabs: 'video',
+            available_tabs: 'videos,shorts',
+            sub_folder: null,
+            video_quality: null,
           }
         ];
 
@@ -1507,13 +1519,19 @@ describe('ChannelModule', () => {
             url: 'https://youtube.com/@channel1',
             uploader: 'Channel 1',
             channel_id: 'UC111',
-            auto_download_enabled_tabs: 'video,short'
+            auto_download_enabled_tabs: 'video,short',
+            available_tabs: 'videos,shorts,livestream',
+            sub_folder: null,
+            video_quality: null,
           },
           {
             url: 'https://youtube.com/@channel2',
             uploader: 'Channel 2',
             channel_id: 'UC222',
-            auto_download_enabled_tabs: 'video'
+            auto_download_enabled_tabs: 'video',
+            available_tabs: 'videos,shorts',
+            sub_folder: null,
+            video_quality: null,
           }
         ]);
       });

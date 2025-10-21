@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import ChannelVideosDialogs from '../ChannelVideosDialogs';
+import ChannelVideosDialogs, { ChannelVideosDialogsProps } from '../ChannelVideosDialogs';
 import { renderWithProviders } from '../../../test-utils';
 
 // Mock child components
@@ -14,6 +14,8 @@ jest.mock('../../DownloadManager/ManualDownload/DownloadSettingsDialog', () => (
       'data-open': props.open,
       'data-video-count': props.videoCount,
       'data-missing-count': props.missingVideoCount,
+      'data-default-resolution': props.defaultResolution,
+      'data-default-resolution-source': props.defaultResolutionSource,
       onClick: () => {
         if (props.onConfirm) {
           props.onConfirm({ resolution: '1080', allowRedownload: false });
@@ -36,7 +38,7 @@ jest.mock('../../shared/DeleteVideosDialog', () => ({
 }));
 
 describe('ChannelVideosDialogs Component', () => {
-  const defaultProps = {
+  const defaultProps: ChannelVideosDialogsProps = {
     downloadDialogOpen: false,
     refreshConfirmOpen: false,
     deleteDialogOpen: false,
@@ -48,6 +50,7 @@ describe('ChannelVideosDialogs Component', () => {
     missingVideoCount: 0,
     selectedForDeletion: 0,
     defaultResolution: '1080',
+    defaultResolutionSource: 'global',
     selectedTab: 'videos',
     tabLabel: 'Videos',
     onDownloadDialogClose: jest.fn(),
@@ -121,8 +124,37 @@ describe('ChannelVideosDialogs Component', () => {
         />
       );
 
-      // Component should be rendered (mock doesn't check this prop, but it's passed)
-      expect(screen.getByTestId('download-settings-dialog')).toBeInTheDocument();
+      const dialog = screen.getByTestId('download-settings-dialog');
+      expect(dialog).toBeInTheDocument();
+      expect(dialog).toHaveAttribute('data-default-resolution', '720');
+    });
+
+    test('passes global default resolution source to DownloadSettingsDialog', () => {
+      renderWithProviders(
+        <ChannelVideosDialogs
+          {...defaultProps}
+          defaultResolution="1080"
+          defaultResolutionSource="global"
+        />
+      );
+
+      const dialog = screen.getByTestId('download-settings-dialog');
+      expect(dialog).toHaveAttribute('data-default-resolution', '1080');
+      expect(dialog).toHaveAttribute('data-default-resolution-source', 'global');
+    });
+
+    test('passes channel default resolution source to DownloadSettingsDialog', () => {
+      renderWithProviders(
+        <ChannelVideosDialogs
+          {...defaultProps}
+          defaultResolution="720"
+          defaultResolutionSource="channel"
+        />
+      );
+
+      const dialog = screen.getByTestId('download-settings-dialog');
+      expect(dialog).toHaveAttribute('data-default-resolution', '720');
+      expect(dialog).toHaveAttribute('data-default-resolution-source', 'channel');
     });
   });
 
