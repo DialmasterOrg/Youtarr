@@ -294,6 +294,8 @@ class DownloadProgressMonitor {
       if (path.match(/\.f\d+\.mp4$/)) return 'downloading_video';
       if (path.match(/\.f\d+\.m4a$/)) return 'downloading_audio';
       if (path.includes('poster') || path.includes('thumbnail')) return 'downloading_thumbnail';
+      // Check for final video file (without format code) - HLS downloads or merged output
+      if (path.match(/\.mp4$/i)) return 'downloading_video';
     }
 
     // Detect thumbnail and metadata operations
@@ -493,10 +495,11 @@ class DownloadProgressMonitor {
       this.currentState = newState;
     }
 
-    // Fix race condition: If we're receiving actual download progress while in 'initiating' state,
+    // Fix race condition: If we're receiving actual download progress while in a non-downloading state,
     // automatically transition to downloading state. This handles cases where JSON progress
-    // appears before the [download] Destination line.
-    if (!newState && this.currentState === 'initiating' && parsed && parsed.percent > 0) {
+    // appears before the [download] Destination line, or after metadata processing.
+    const nonDownloadingStates = ['initiating', 'preparing', 'processing_metadata', 'preparing_subtitles'];
+    if (!newState && nonDownloadingStates.includes(this.currentState) && parsed && parsed.percent > 0) {
       this.currentState = 'downloading_video';
     }
 

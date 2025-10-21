@@ -118,6 +118,7 @@ class YtdlpCommandBuilder {
     const args = [
       ...cookiesArgs,
       '-4',
+      '--extractor-args', 'youtube:player_client=default,-tv',
       '--windows-filenames',  // Sanitize filenames for Windows/Plex compatibility
       '--ffmpeg-location', configModule.ffmpegPath,
       '--socket-timeout', String(config.downloadSocketTimeoutSeconds || 30),
@@ -185,6 +186,7 @@ class YtdlpCommandBuilder {
     const args = [
       ...cookiesArgs,
       '-4',
+      '--extractor-args', 'youtube:player_client=default,-tv',
       '--windows-filenames',  // Sanitize filenames for Windows/Plex compatibility
       '--ffmpeg-location', configModule.ffmpegPath,
       '--socket-timeout', String(config.downloadSocketTimeoutSeconds || 30),
