@@ -498,6 +498,80 @@ describe('DownloadProgressMonitor', () => {
       expect(result).toBe(true);
       expect(monitor.videoCount.skipped).toBe(1);
     });
+
+    describe('Deleting original file handling', () => {
+      it('should not count video completion when deleting thumbnail files', () => {
+        monitor.currentVideoCompleted = false;
+        monitor.videoCount.completed = 0;
+
+        const testCases = [
+          'Deleting original file /path/video.webp',
+          'Deleting original file /path/thumbnail.jpg',
+          'Deleting original file /path/poster.JPEG',
+          'Deleting original file /path/image.png'
+        ];
+
+        testCases.forEach(line => {
+          const result = monitor.parseAndUpdateVideoCounts(line);
+          expect(result).toBe(true);
+          expect(monitor.videoCount.completed).toBe(0);
+          expect(monitor.currentVideoCompleted).toBe(false);
+        });
+      });
+
+      it('should not count video completion when deleting subtitle files', () => {
+        monitor.currentVideoCompleted = false;
+        monitor.videoCount.completed = 0;
+
+        const testCases = [
+          'Deleting original file /path/video.en.vtt',
+          'Deleting original file /path/video.es.VTT',
+          'Deleting original file /path/video.en.srt',
+          'Deleting original file /path/video.fr.SRT'
+        ];
+
+        testCases.forEach(line => {
+          const result = monitor.parseAndUpdateVideoCounts(line);
+          expect(result).toBe(true);
+          expect(monitor.videoCount.completed).toBe(0);
+          expect(monitor.currentVideoCompleted).toBe(false);
+        });
+      });
+
+      it('should count video completion when deleting actual video files', () => {
+        monitor.currentVideoCompleted = false;
+        monitor.videoCount.completed = 0;
+
+        const testCases = [
+          'Deleting original file /path/video.f137.mp4',
+          'Deleting original file /path/video.f140.m4a',
+          'Deleting original file /path/video.mkv'
+        ];
+
+        testCases.forEach((line, index) => {
+          const result = monitor.parseAndUpdateVideoCounts(line);
+          expect(result).toBe(true);
+          expect(monitor.videoCount.completed).toBe(index + 1);
+          // Reset for next iteration
+          monitor.currentVideoCompleted = false;
+        });
+      });
+
+      it('should handle mixed case file extensions in deletion messages', () => {
+        monitor.currentVideoCompleted = false;
+        monitor.videoCount.completed = 0;
+
+        // Subtitle with mixed case - should NOT count
+        let result = monitor.parseAndUpdateVideoCounts('Deleting original file /path/video.EN.VTT');
+        expect(result).toBe(true);
+        expect(monitor.videoCount.completed).toBe(0);
+
+        // Image with mixed case - should NOT count
+        result = monitor.parseAndUpdateVideoCounts('Deleting original file /path/thumbnail.JPG');
+        expect(result).toBe(true);
+        expect(monitor.videoCount.completed).toBe(0);
+      });
+    });
   });
 
   describe('snapshot', () => {

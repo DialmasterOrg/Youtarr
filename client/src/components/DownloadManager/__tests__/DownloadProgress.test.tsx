@@ -283,7 +283,7 @@ describe('DownloadProgress', () => {
     await waitFor(() => {
       expect(screen.getByText('Summary of last job')).toBeInTheDocument();
     });
-    expect(screen.getByText(/5 new videos downloaded, 2 already existed or members only/)).toBeInTheDocument();
+    expect(screen.getByText(/✓ 5 videos downloaded, 2 already existed or members only/)).toBeInTheDocument();
     expect(screen.getByText(/Channel update.*Completed/)).toBeInTheDocument();
   });
 
@@ -310,7 +310,7 @@ describe('DownloadProgress', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText(/1 new video downloaded/)).toBeInTheDocument();
+      expect(screen.getByText(/✓ 1 video downloaded/)).toBeInTheDocument();
     });
     expect(screen.getByText(/Manual download/)).toBeInTheDocument();
   });
@@ -1330,7 +1330,7 @@ describe('DownloadProgress', () => {
         expect(screen.getByText('Download Terminated')).toBeInTheDocument();
       });
       expect(screen.getByText('Summary of last job')).toBeInTheDocument();
-      expect(screen.getByText(/5 new videos downloaded, 2 already existed or members only/)).toBeInTheDocument();
+      expect(screen.getByText(/✓ 5 videos downloaded, 2 already existed or members only/)).toBeInTheDocument();
 
       jest.useRealTimers();
     });
@@ -1562,6 +1562,344 @@ describe('DownloadProgress', () => {
       await waitFor(() => {
         expect(screen.getByText('1. Manual Download')).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('failed videos display', () => {
+    test('displays final summary with failed videos', async () => {
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={[]}
+          token="test-token"
+        />
+      );
+
+      const [, processCallback] = mockSubscribe.mock.calls[0];
+
+      await act(async () => {
+        processCallback({
+          finalSummary: {
+            totalDownloaded: 3,
+            totalSkipped: 1,
+            totalFailed: 2,
+            failedVideos: [
+              {
+                youtubeId: 'video1',
+                title: 'Test Video 1',
+                channel: 'Test Channel',
+                error: 'Video unavailable',
+              },
+              {
+                youtubeId: 'video2',
+                title: 'Test Video 2',
+                channel: 'Test Channel',
+                error: 'Video unavailable',
+              },
+            ],
+            jobType: 'Channel Downloads',
+            completedAt: '2024-01-15T10:30:00Z',
+          },
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+      });
+      expect(screen.getByText(/✓ 3 videos downloaded, ✗ 2 failed/)).toBeInTheDocument();
+      expect(screen.getByText('Failed Downloads')).toBeInTheDocument();
+      expect(screen.getByText(/2 videos failed:/)).toBeInTheDocument();
+      expect(screen.getByText('Video unavailable')).toBeInTheDocument();
+      expect(screen.getByText(/Test Video 1/)).toBeInTheDocument();
+      expect(screen.getByText(/Test Video 2/)).toBeInTheDocument();
+    });
+
+    test('groups failed videos by error message', async () => {
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={[]}
+          token="test-token"
+        />
+      );
+
+      const [, processCallback] = mockSubscribe.mock.calls[0];
+
+      await act(async () => {
+        processCallback({
+          finalSummary: {
+            totalDownloaded: 1,
+            totalSkipped: 0,
+            totalFailed: 3,
+            failedVideos: [
+              {
+                youtubeId: 'video1',
+                title: 'Video A',
+                channel: 'Channel 1',
+                error: 'Video unavailable',
+              },
+              {
+                youtubeId: 'video2',
+                title: 'Video B',
+                channel: 'Channel 1',
+                error: 'Video unavailable',
+              },
+              {
+                youtubeId: 'video3',
+                title: 'Video C',
+                channel: 'Channel 2',
+                error: 'Network timeout',
+              },
+            ],
+            jobType: 'Manually Added Urls',
+          },
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+      });
+      expect(screen.getByText(/2 videos failed:/)).toBeInTheDocument();
+      expect(screen.getByText(/1 video failed:/)).toBeInTheDocument();
+      expect(screen.getByText('Video unavailable')).toBeInTheDocument();
+      expect(screen.getByText('Network timeout')).toBeInTheDocument();
+    });
+
+    test('hides unknown video titles in failed videos list', async () => {
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={[]}
+          token="test-token"
+        />
+      );
+
+      const [, processCallback] = mockSubscribe.mock.calls[0];
+
+      await act(async () => {
+        processCallback({
+          finalSummary: {
+            totalDownloaded: 0,
+            totalSkipped: 0,
+            totalFailed: 2,
+            failedVideos: [
+              {
+                youtubeId: 'video1',
+                title: 'Unknown',
+                channel: 'Unknown',
+                error: 'Video unavailable',
+              },
+              {
+                youtubeId: 'video2',
+                title: 'Unknown',
+                channel: 'Unknown',
+                error: 'Video unavailable',
+              },
+            ],
+            jobType: 'Manually Added Urls',
+          },
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+      });
+      expect(screen.getByText(/2 videos failed:/)).toBeInTheDocument();
+      expect(screen.getByText('Video unavailable')).toBeInTheDocument();
+      // Should not show individual video details when titles are unknown
+      expect(screen.queryByText(/Unknown/)).not.toBeInTheDocument();
+    });
+
+    test('shows mixed known and unknown video titles', async () => {
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={[]}
+          token="test-token"
+        />
+      );
+
+      const [, processCallback] = mockSubscribe.mock.calls[0];
+
+      await act(async () => {
+        processCallback({
+          finalSummary: {
+            totalDownloaded: 0,
+            totalSkipped: 0,
+            totalFailed: 3,
+            failedVideos: [
+              {
+                youtubeId: 'video1',
+                title: 'Known Video Title',
+                channel: 'Test Channel',
+                error: 'Video unavailable',
+              },
+              {
+                youtubeId: 'video2',
+                title: 'Unknown',
+                channel: 'Unknown',
+                error: 'Video unavailable',
+              },
+              {
+                youtubeId: 'video3',
+                title: 'Another Known Video',
+                channel: 'Test Channel',
+                error: 'Video unavailable',
+              },
+            ],
+            jobType: 'Manually Added Urls',
+          },
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+      });
+      // Should show the known titles only
+      expect(screen.getByText(/Known Video Title/)).toBeInTheDocument();
+      expect(screen.getByText(/Another Known Video/)).toBeInTheDocument();
+    });
+
+    test('displays failed videos with successful downloads in summary', async () => {
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={[]}
+          token="test-token"
+        />
+      );
+
+      const [, processCallback] = mockSubscribe.mock.calls[0];
+
+      await act(async () => {
+        processCallback({
+          finalSummary: {
+            totalDownloaded: 3,
+            totalSkipped: 0,
+            totalFailed: 1,
+            failedVideos: [
+              {
+                youtubeId: 'video1',
+                title: 'Failed Video',
+                channel: 'Test Channel',
+                error: 'Download error',
+              },
+            ],
+            jobType: 'Manually Added Urls',
+          },
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+      });
+      // Verify both successes and failures are displayed
+      expect(screen.getByText(/✓ 3 videos downloaded, ✗ 1 failed/)).toBeInTheDocument();
+      expect(screen.getByText('Failed Downloads')).toBeInTheDocument();
+      expect(screen.getByText(/Failed Video/)).toBeInTheDocument();
+    });
+
+    test('displays summary with only failed videos and no downloads', async () => {
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={[]}
+          token="test-token"
+        />
+      );
+
+      const [, processCallback] = mockSubscribe.mock.calls[0];
+
+      await act(async () => {
+        processCallback({
+          finalSummary: {
+            totalDownloaded: 0,
+            totalSkipped: 0,
+            totalFailed: 2,
+            failedVideos: [
+              {
+                youtubeId: 'video1',
+                title: 'Failed Video 1',
+                channel: 'Test Channel',
+                error: 'Network error',
+              },
+              {
+                youtubeId: 'video2',
+                title: 'Failed Video 2',
+                channel: 'Test Channel',
+                error: 'Network error',
+              },
+            ],
+            jobType: 'Manually Added Urls',
+          },
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Summary of last job')).toBeInTheDocument();
+      });
+      expect(screen.getByText(/✗ 2 failed/)).toBeInTheDocument();
+      // When there are failed videos but no downloads, only the failed count should show
+      expect(screen.queryByText(/✓.*downloaded/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('warning state', () => {
+    test('handles warning state with delay like complete and terminated', async () => {
+      jest.useFakeTimers();
+
+      renderWithContext(
+        <DownloadProgress
+          downloadProgressRef={mockDownloadProgressRef}
+          downloadInitiatedRef={mockDownloadInitiatedRef}
+          pendingJobs={[]}
+          token="test-token"
+        />
+      );
+
+      const [, processCallback] = mockSubscribe.mock.calls[0];
+
+      await act(async () => {
+        processCallback({
+          progress: {
+            jobId: 'test-job',
+            progress: {
+              percent: 50,
+              downloadedBytes: 1024,
+              totalBytes: 2048,
+              speedBytesPerSecond: 512,
+              etaSeconds: 60,
+            },
+            stalled: false,
+            state: 'warning',
+          },
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Processing...')).toBeInTheDocument();
+      });
+
+      // Progress should still be visible before delay
+      expect(screen.getByRole('progressbar')).toBeInTheDocument();
+
+      // Advance timer by 2 seconds
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+
+      // Progress should be hidden after delay
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+
+      jest.useRealTimers();
     });
   });
 
