@@ -488,6 +488,11 @@ class DownloadExecutor {
       let httpForbiddenDetected = false;
       let cookiesSuggestionEmitted = false;
 
+      // Track failed videos with their error messages
+      const failedVideos = new Map(); // youtubeId -> { url, error, youtubeId }
+      let currentVideoId = null; // Track the current video being processed
+      let lastErrorMessage = null; // Store the last error message seen
+
       const emitCookiesSuggestionMessage = () => {
         if (cookiesSuggestionEmitted) {
           return;
@@ -542,6 +547,22 @@ class DownloadExecutor {
               resetActivityTimer();
             }
 
+            // Track current video being processed
+            if (line.includes('[youtube] Extracting URL:') && !line.includes('[youtube:tab]')) {
+              const urlMatch = line.match(/\[youtube\] Extracting URL: (.+)/);
+              if (urlMatch) {
+                const url = urlMatch[1].trim();
+                // Extract video ID from URL
+                const idMatch = url.match(/[?&]v=([^&]+)|youtu\.be\/([^?&]+)|\/watch\/([^?&]+)|\/([a-zA-Z0-9_-]{10,12})$/);
+                if (idMatch) {
+                  currentVideoId = idMatch[1] || idMatch[2] || idMatch[3] || idMatch[4];
+                  logger.debug({ currentVideoId, url }, 'Tracking video extraction');
+                  // Clear any previous error for this video
+                  lastErrorMessage = null;
+                }
+              }
+            }
+
             // Track destination files for cleanup
             if (line.startsWith('[download] Destination:')) {
               const destPath = line.replace('[download] Destination:', '').trim();
@@ -551,6 +572,12 @@ class DownloadExecutor {
                 // Create tracking entry for any video download
                 const youtubeId = this.extractYoutubeIdFromPath(destPath);
                 if (youtubeId) {
+                  // Update current video ID if we can extract it from the path
+                  if (this.isMainVideoFile(destPath)) {
+                    currentVideoId = youtubeId;
+                    logger.debug({ currentVideoId, destPath }, 'Updated current video ID from destination');
+                  }
+
                   const videoDir = path.dirname(destPath);
                   JobVideoDownload.findOrCreate({
                     where: {
@@ -566,6 +593,25 @@ class DownloadExecutor {
                   }).catch(err => {
                     logger.error({ err }, 'Error creating JobVideoDownload tracking entry');
                   });
+                }
+              }
+            }
+
+            // Detect and track ERROR messages
+            if (line.includes('ERROR:')) {
+              const errorMatch = line.match(/ERROR:\s*(.+)/);
+              if (errorMatch) {
+                lastErrorMessage = errorMatch[1].trim();
+                logger.warn({ error: lastErrorMessage, currentVideoId }, 'Error detected during download');
+
+                // Associate error with current video if we know which video is being processed
+                if (currentVideoId && !failedVideos.has(currentVideoId)) {
+                  failedVideos.set(currentVideoId, {
+                    youtubeId: currentVideoId,
+                    error: lastErrorMessage,
+                    url: null // Will be populated later from urlsToProcess
+                  });
+                  logger.info({ youtubeId: currentVideoId, error: lastErrorMessage }, 'Recorded video failure');
                 }
               }
             }
@@ -607,6 +653,25 @@ class DownloadExecutor {
         if (!httpForbiddenDetected && (lowerData.includes('http error 403') || lowerData.includes('403: forbidden'))) {
           httpForbiddenDetected = true;
           emitCookiesSuggestionMessage();
+        }
+
+        // Detect and track ERROR messages from stderr
+        if (dataStr.includes('ERROR:')) {
+          const errorMatch = dataStr.match(/ERROR:\s*(.+)/);
+          if (errorMatch) {
+            lastErrorMessage = errorMatch[1].trim();
+            logger.warn({ error: lastErrorMessage, currentVideoId }, 'Error detected in stderr');
+
+            // Associate error with current video if we know which video is being processed
+            if (currentVideoId && !failedVideos.has(currentVideoId)) {
+              failedVideos.set(currentVideoId, {
+                youtubeId: currentVideoId,
+                error: lastErrorMessage,
+                url: null // Will be populated later from urlsToProcess
+              });
+              logger.info({ youtubeId: currentVideoId, error: lastErrorMessage }, 'Recorded video failure from stderr');
+            }
+          }
         }
 
         // Check for bot detection message (handle different quote types and patterns)
@@ -687,8 +752,73 @@ class DownloadExecutor {
           urlsToProcess = this.getNewVideoUrls(initialCount);
         }
 
+        // Populate URLs in failedVideos Map
+        for (const url of urlsToProcess) {
+          const videoId = url.split('youtu.be/')[1]?.trim().split('?')[0].split('&')[0];
+          if (videoId && failedVideos.has(videoId)) {
+            const failureInfo = failedVideos.get(videoId);
+            failureInfo.url = url;
+            failedVideos.set(videoId, failureInfo);
+          }
+        }
+
         const videoCount = urlsToProcess.length;
         let videoData = await VideoMetadataProcessor.processVideoMetadata(urlsToProcess);
+
+        // Separate successful videos (with actual video files) from failed videos
+        const successfulVideos = [];
+        const failedVideosList = [];
+
+        for (const video of videoData) {
+          // Check if this video was explicitly marked as failed during download
+          const wasMarkedFailed = failedVideos.has(video.youtubeId);
+
+          // Check if video file actually exists and has size
+          const hasVideoFile = video.fileSize && video.fileSize !== 'null' && video.fileSize !== '0';
+
+          if (wasMarkedFailed || !hasVideoFile) {
+            // This video failed
+            const failureInfo = failedVideos.get(video.youtubeId) || {
+              youtubeId: video.youtubeId,
+              error: hasVideoFile ? 'Unknown error' : 'Video file not found or incomplete',
+              url: urlsToProcess.find(u => u.includes(video.youtubeId))
+            };
+
+            failedVideosList.push({
+              youtubeId: video.youtubeId,
+              title: video.youTubeVideoName,
+              channel: video.youTubeChannelName,
+              error: failureInfo.error,
+              url: failureInfo.url
+            });
+
+            logger.warn({
+              youtubeId: video.youtubeId,
+              error: failureInfo.error,
+              hasVideoFile
+            }, 'Video download failed');
+          } else {
+            // This video succeeded
+            successfulVideos.push(video);
+          }
+        }
+
+        // For any videos in failedVideos that weren't in videoData, add them to failedVideosList
+        for (const [youtubeId, failureInfo] of failedVideos) {
+          if (!videoData.find(v => v.youtubeId === youtubeId)) {
+            failedVideosList.push({
+              youtubeId: youtubeId,
+              title: 'Unknown',
+              channel: 'Unknown',
+              error: failureInfo.error,
+              url: failureInfo.url
+            });
+            logger.warn({ youtubeId, error: failureInfo.error }, 'Video failed without metadata');
+          }
+        }
+
+        // Use successful videos for further processing (archive, database, etc.)
+        videoData = successfulVideos;
 
         // If allowRedownload is true, we need to manually update the archive since yt-dlp won't
         if (allowRedownload && videoData.length > 0) {
@@ -723,7 +853,10 @@ class DownloadExecutor {
             status: status,
             endDate: Date.now(),
             output: output,
-            data: { videos: videoData || [] },
+            data: {
+              videos: videoData || [],
+              failedVideos: failedVideosList || []
+            },
             notes: 'YouTube requires authentication. Enable cookies in Configuration to resolve this issue.',
             error: 'COOKIES_REQUIRED'
           });
@@ -744,11 +877,14 @@ class DownloadExecutor {
             status: status,
             endDate: Date.now(),
             output: output,
-            data: { videos: videoData || [] },
+            data: {
+              videos: videoData || [],
+              failedVideos: failedVideosList || []
+            },
             notes: terminationReason,
           });
 
-          logger.info({ terminationReason, completedCount }, 'Job terminated, saved completed videos');
+          logger.info({ terminationReason, completedCount, failedCount: failedVideosList.length }, 'Job terminated, saved completed videos');
         } else if (code !== 0) {
           // Download actually failed (non-zero exit code)
           await this.cleanupPartialFiles(Array.from(partialDestinations));
@@ -766,7 +902,10 @@ class DownloadExecutor {
               status: status,
               endDate: Date.now(),
               output: output,
-              data: { videos: videoData || [] },
+              data: {
+                videos: videoData || [],
+                failedVideos: failedVideosList || []
+              },
               notes: notes,
               error: 'COOKIES_RECOMMENDED'
             });
@@ -786,7 +925,10 @@ class DownloadExecutor {
               status: status,
               endDate: Date.now(),
               output: output,
-              data: { videos: videoData || [] },
+              data: {
+                videos: videoData || [],
+                failedVideos: failedVideosList || []
+              },
               notes: notes,
             });
           }
@@ -796,7 +938,10 @@ class DownloadExecutor {
           jobModule.updateJob(jobId, {
             status: status,
             output: output,
-            data: { videos: videoData },
+            data: {
+              videos: videoData,
+              failedVideos: failedVideosList || []
+            },
           });
         } else {
           status = 'Complete';
@@ -804,7 +949,10 @@ class DownloadExecutor {
           jobModule.updateJob(jobId, {
             status: status,
             output: output,
-            data: { videos: videoData },
+            data: {
+              videos: videoData,
+              failedVideos: failedVideosList || []
+            },
           });
         }
 
@@ -816,7 +964,18 @@ class DownloadExecutor {
         const hasProcessedVideos = (monitor.videoCount.completed > 0 || monitor.videoCount.skipped > 0);
         const hasDownloadedNewVideos = videoCount > 0;
         const isWarningOnly = (code === 1 && !monitor.hasError && (hasProcessedVideos || hasDownloadedNewVideos));
-        let finalState = (code === 0 || isWarningOnly) ? 'complete' : 'error';
+
+        // If videos failed but some succeeded, treat as warning rather than complete error
+        const hasFailures = failedVideosList.length > 0;
+        const hasSuccesses = videoData.length > 0;
+
+        let finalState;
+        if (code === 0 || isWarningOnly) {
+          // Exit code was successful, but check for partial failures
+          finalState = hasFailures ? 'warning' : 'complete';
+        } else {
+          finalState = 'error';
+        }
 
         logger.debug({
           code,
@@ -824,6 +983,10 @@ class DownloadExecutor {
           hasDownloadedNewVideos,
           isWarningOnly,
           hasError: monitor.hasError,
+          hasFailures,
+          hasSuccesses,
+          successCount: videoData.length,
+          failureCount: failedVideosList.length,
           finalState
         }, 'Final state determination');
 
@@ -842,15 +1005,26 @@ class DownloadExecutor {
         } else if (monitor.hasError && finalState === 'complete') {
           finalState = 'error';
           finalText = 'Download failed';
-        } else if (finalState === 'complete') {
-          const actualCount = monitor.videoCount.completed || videoCount;
+        } else if (finalState === 'complete' || finalState === 'warning') {
+          const actualCount = videoData.length;
           const skippedCount = monitor.videoCount.skipped || 0;
-          if (actualCount > 0 && skippedCount > 0) {
-            finalText = `Download completed: ${actualCount} new video${actualCount !== 1 ? 's' : ''} downloaded, ${skippedCount} already existed`;
-          } else if (actualCount > 0) {
-            finalText = `Download completed: ${actualCount} new video${actualCount !== 1 ? 's' : ''} downloaded`;
-          } else if (skippedCount > 0) {
-            finalText = `Download completed: All ${skippedCount} video${skippedCount !== 1 ? 's' : ''} already existed`;
+          const failedCount = failedVideosList.length;
+
+          // Build message parts
+          const parts = [];
+          if (actualCount > 0) {
+            parts.push(`${actualCount} video${actualCount !== 1 ? 's' : ''} downloaded`);
+          }
+          if (failedCount > 0) {
+            parts.push(`${failedCount} failed`);
+          }
+          if (skippedCount > 0) {
+            parts.push(`${skippedCount} already existed`);
+          }
+
+          if (parts.length > 0) {
+            const statusText = finalState === 'warning' ? 'completed with errors' : 'completed';
+            finalText = `Download ${statusText}: ${parts.join(', ')}`;
           } else {
             finalText = 'Download completed: No new videos to download';
           }
@@ -859,20 +1033,21 @@ class DownloadExecutor {
         }
 
         // Make sure final counts are accurate
-        if (monitor.videoCount.completed === 0 && videoCount > 0 && finalState === 'complete') {
-          monitor.videoCount.completed = videoCount;
+        if (monitor.videoCount.completed === 0 && videoData.length > 0 && (finalState === 'complete' || finalState === 'warning')) {
+          monitor.videoCount.completed = videoData.length;
         }
 
-        const isFinalError = finalState !== 'complete';
+        const isFinalError = finalState !== 'complete' && finalState !== 'warning';
         const finalProgress = monitor.snapshot(finalState);
         const finalPayload = {
           text: finalText,
           progress: finalProgress,
           finalSummary: {
-            // For terminated jobs, use videoData.length (actual completed videos)
-            // For other states, use monitor count or fall back to videoCount
-            totalDownloaded: finalState === 'terminated' ? videoData.length : (monitor.videoCount.completed || videoCount),
+            // Use actual videoData.length for successful downloads
+            totalDownloaded: videoData.length,
             totalSkipped: monitor.videoCount.skipped || 0,
+            totalFailed: failedVideosList.length,
+            failedVideos: failedVideosList,
             jobType: jobType,
             completedAt: new Date().toISOString()
           }
@@ -882,7 +1057,14 @@ class DownloadExecutor {
           // Terminated jobs are warnings, not full errors
           finalPayload.warning = true;
           finalPayload.terminationReason = wasManuallyTerminated ? manualReason : shutdownReason;
+        } else if (finalState === 'warning') {
+          // Partial failures - some videos succeeded, some failed
+          finalPayload.warning = true;
+          if (finalErrorCode) {
+            finalPayload.errorCode = finalErrorCode;
+          }
         } else if (isFinalError) {
+          // Complete failure
           finalPayload.error = true;
           if (finalErrorCode) {
             finalPayload.errorCode = finalErrorCode;

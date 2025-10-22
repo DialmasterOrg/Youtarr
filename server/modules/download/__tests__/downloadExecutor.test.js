@@ -497,7 +497,7 @@ describe('DownloadExecutor', () => {
 
     it('should handle successful completion', async () => {
       VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
-        { youtubeId: 'abc123', filePath: '/output/video.mp4' }
+        { youtubeId: 'abc123', filePath: '/output/video.mp4', fileSize: '1024' }
       ]);
       archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/abc123']);
 
@@ -649,7 +649,7 @@ describe('DownloadExecutor', () => {
       fs.existsSync.mockReturnValue(true);
 
       VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
-        { youtubeId: 'abc123XYZ_d', filePath: '/output/video.mp4' }
+        { youtubeId: 'abc123XYZ_d', filePath: '/output/video.mp4', fileSize: '1024' }
       ]);
 
       setTimeout(() => {
@@ -708,7 +708,7 @@ describe('DownloadExecutor', () => {
 
     it('should send notification on successful download', async () => {
       VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
-        { youtubeId: 'abc123XYZ_d', filePath: '/output/video.mp4' }
+        { youtubeId: 'abc123XYZ_d', filePath: '/output/video.mp4', fileSize: '1024' }
       ]);
       archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/abc123XYZ_d']);
 
@@ -720,7 +720,14 @@ describe('DownloadExecutor', () => {
 
       expect(notificationModule.sendDownloadNotification).toHaveBeenCalledWith(
         expect.objectContaining({
-          finalSummary: expect.any(Object),
+          finalSummary: expect.objectContaining({
+            totalDownloaded: 1,
+            totalSkipped: 0,
+            totalFailed: 0,
+            failedVideos: expect.any(Array),
+            jobType: mockJobType,
+            completedAt: expect.any(String)
+          }),
           videoData: expect.any(Array)
         })
       );
@@ -744,7 +751,7 @@ describe('DownloadExecutor', () => {
       ];
 
       VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
-        { youtubeId: 'abc123', channel_id: 'UC123', filePath: '/output/video.mp4' }
+        { youtubeId: 'abc123', channel_id: 'UC123', filePath: '/output/video.mp4', fileSize: '1024' }
       ]);
       archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/abc123']);
       Channel.findAll.mockResolvedValue(mockChannels);
@@ -776,7 +783,7 @@ describe('DownloadExecutor', () => {
 
     it('should handle channel poster backfill errors gracefully', async () => {
       VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
-        { youtubeId: 'abc123', channel_id: 'UC123', filePath: '/output/video.mp4' }
+        { youtubeId: 'abc123', channel_id: 'UC123', filePath: '/output/video.mp4', fileSize: '1024' }
       ]);
       archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/abc123']);
       Channel.findAll.mockResolvedValue([{ channel_id: 'UC123' }]);
@@ -798,6 +805,312 @@ describe('DownloadExecutor', () => {
         expect.objectContaining({
           status: 'Complete'
         })
+      );
+    });
+  });
+
+  describe('failed video tracking', () => {
+    const mockArgs = ['--format', 'best', 'https://youtube.com/watch?v=test'];
+    const mockJobId = 'job-failed-123';
+    const mockJobType = 'Manually Added Urls';
+
+    it('should track failed videos when ERROR is detected in stdout', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+
+      setTimeout(() => {
+        // Simulate extracting a video URL
+        mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=abc123XYZ_d\n');
+        // Simulate an error for that video
+        mockProcess.stdout.emit('data', 'ERROR: Video unavailable\n');
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Should log the error
+      expect(logger.warn).toHaveBeenCalledWith(
+        { error: 'Video unavailable', currentVideoId: 'abc123XYZ_d' },
+        'Error detected during download'
+      );
+      expect(logger.info).toHaveBeenCalledWith(
+        { youtubeId: 'abc123XYZ_d', error: 'Video unavailable' },
+        'Recorded video failure'
+      );
+    });
+
+    it('should track failed videos when ERROR is detected in stderr', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+
+      setTimeout(() => {
+        mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=def456XYZ\n');
+        mockProcess.stderr.emit('data', 'ERROR: Private video\n');
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        { error: 'Private video', currentVideoId: 'def456XYZ' },
+        'Error detected in stderr'
+      );
+    });
+
+    it('should track currentVideoId from destination path for main video files', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+
+      setTimeout(() => {
+        mockProcess.stdout.emit('data', '[download] Destination: /output/Channel - Title [xyz789ABC_d].mp4\n');
+        mockProcess.stdout.emit('data', 'ERROR: Download failed\n');
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(logger.debug).toHaveBeenCalledWith(
+        { currentVideoId: 'xyz789ABC_d', destPath: '/output/Channel - Title [xyz789ABC_d].mp4' },
+        'Updated current video ID from destination'
+      );
+    });
+
+    it('should separate successful and failed videos based on fileSize', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        { youtubeId: 'success123', filePath: '/output/video1.mp4', fileSize: '1024', youTubeVideoName: 'Success Video', youTubeChannelName: 'Test Channel' },
+        { youtubeId: 'failed456', filePath: '/output/video2.mp4', fileSize: null, youTubeVideoName: 'Failed Video', youTubeChannelName: 'Test Channel' }
+      ]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/success123']);
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Should log warning for failed video
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          youtubeId: 'failed456',
+          error: 'Video file not found or incomplete'
+        }),
+        'Video download failed'
+      );
+
+      // Job data should include failedVideos
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            videos: expect.arrayContaining([
+              expect.objectContaining({ youtubeId: 'success123' })
+            ]),
+            failedVideos: expect.arrayContaining([
+              expect.objectContaining({
+                youtubeId: 'failed456',
+                title: 'Failed Video',
+                channel: 'Test Channel',
+                error: 'Video file not found or incomplete'
+              })
+            ])
+          })
+        })
+      );
+    });
+
+    it('should treat fileSize of "0" or "null" string as failed', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        { youtubeId: 'zero123', filePath: '/output/video1.mp4', fileSize: '0', youTubeVideoName: 'Zero Size', youTubeChannelName: 'Channel' },
+        { youtubeId: 'null456', filePath: '/output/video2.mp4', fileSize: 'null', youTubeVideoName: 'Null Size', youTubeChannelName: 'Channel' }
+      ]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            videos: [],
+            failedVideos: expect.arrayContaining([
+              expect.objectContaining({ youtubeId: 'zero123' }),
+              expect.objectContaining({ youtubeId: 'null456' })
+            ])
+          })
+        })
+      );
+    });
+
+    it('should include failed videos that have no metadata', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+
+      setTimeout(() => {
+        mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=nodata123\n');
+        mockProcess.stdout.emit('data', 'ERROR: This video is not available\n');
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        { youtubeId: 'nodata123', error: 'This video is not available' },
+        'Video failed without metadata'
+      );
+
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            failedVideos: expect.arrayContaining([
+              expect.objectContaining({
+                youtubeId: 'nodata123',
+                title: 'Unknown',
+                channel: 'Unknown',
+                error: 'This video is not available'
+              })
+            ])
+          })
+        })
+      );
+    });
+
+    it('should set final state to "warning" when some videos fail but others succeed', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        { youtubeId: 'success1', filePath: '/output/video1.mp4', fileSize: '1024', youTubeVideoName: 'Good', youTubeChannelName: 'Channel' },
+        { youtubeId: 'failed1', filePath: '/output/video2.mp4', fileSize: null, youTubeVideoName: 'Bad', youTubeChannelName: 'Channel' }
+      ]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/success1']);
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Final message should indicate partial failure
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'downloadProgress',
+        expect.objectContaining({
+          text: expect.stringContaining('completed with errors'),
+          warning: true,
+          finalSummary: expect.objectContaining({
+            totalDownloaded: 1,
+            totalFailed: 1,
+            failedVideos: expect.any(Array)
+          })
+        })
+      );
+    });
+
+    it('should include failed count in completion message', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        { youtubeId: 'ok1', filePath: '/output/v1.mp4', fileSize: '1024', youTubeVideoName: 'OK', youTubeChannelName: 'Ch' },
+        { youtubeId: 'ok2', filePath: '/output/v2.mp4', fileSize: '2048', youTubeVideoName: 'OK2', youTubeChannelName: 'Ch' },
+        { youtubeId: 'bad1', filePath: '/output/v3.mp4', fileSize: '0', youTubeVideoName: 'Bad', youTubeChannelName: 'Ch' }
+      ]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/ok1', 'https://youtu.be/ok2']);
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'downloadProgress',
+        expect.objectContaining({
+          text: expect.stringContaining('2 videos downloaded, 1 failed')
+        })
+      );
+    });
+
+    it('should not duplicate errors for the same video', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+
+      setTimeout(() => {
+        mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=dup123\n');
+        mockProcess.stdout.emit('data', 'ERROR: First error\n');
+        mockProcess.stdout.emit('data', 'ERROR: Second error\n'); // Should not replace first
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Should only record the first error
+      expect(logger.info).toHaveBeenCalledWith(
+        { youtubeId: 'dup123', error: 'First error' },
+        'Recorded video failure'
+      );
+
+      // Second error should be logged but not recorded
+      expect(logger.info).not.toHaveBeenCalledWith(
+        { youtubeId: 'dup123', error: 'Second error' },
+        'Recorded video failure'
+      );
+    });
+
+    it('should populate URL in failedVideos from urlsToProcess', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+      const testUrls = ['https://youtu.be/url123', 'https://youtu.be/url456'];
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(testUrls);
+
+      setTimeout(() => {
+        mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=url123\n');
+        mockProcess.stdout.emit('data', 'ERROR: Failed to download\n');
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            failedVideos: expect.arrayContaining([
+              expect.objectContaining({
+                youtubeId: 'url123',
+                url: 'https://youtu.be/url123'
+              })
+            ])
+          })
+        })
+      );
+    });
+
+    it('should clear lastErrorMessage when starting new video', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+
+      setTimeout(() => {
+        mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=first\n');
+        mockProcess.stdout.emit('data', 'ERROR: Error for first video\n');
+        // Start second video - should clear error
+        mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=second\n');
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Should track video ID change
+      expect(logger.debug).toHaveBeenCalledWith(
+        { currentVideoId: 'first', url: 'https://youtube.com/watch?v=first' },
+        'Tracking video extraction'
+      );
+      expect(logger.debug).toHaveBeenCalledWith(
+        { currentVideoId: 'second', url: 'https://youtube.com/watch?v=second' },
+        'Tracking video extraction'
       );
     });
   });
