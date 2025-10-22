@@ -69,9 +69,19 @@ interface StructuredProgress {
   videoCount?: { current: number; total: number; completed: number; skipped: number, skippedThisChannel: number };
 }
 
+interface FailedVideo {
+  youtubeId: string;
+  title: string;
+  channel: string;
+  error: string;
+  url?: string;
+}
+
 interface FinalSummary {
   totalDownloaded: number;
   totalSkipped: number;
+  totalFailed?: number;
+  failedVideos?: FailedVideo[];
   jobType: string;
   completedAt?: string;
 }
@@ -299,6 +309,13 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             setCurrentProgress(null);
             setVideoCount({ current: 0, total: 0, completed: 0, skipped: 0, skippedThisChannel: 0 });
           }, 2000);
+        } else if (progress.state === 'warning') {
+          // Clear progress after a delay to show final summary with warnings
+          setTimeout(() => {
+            setShowProgress(false);
+            setCurrentProgress(null);
+            setVideoCount({ current: 0, total: 0, completed: 0, skipped: 0, skippedThisChannel: 0 });
+          }, 2000);
         } else if (progress.state === 'terminated') {
           // Clear progress after a delay to show final state and allow summary to display
           setTimeout(() => {
@@ -513,17 +530,22 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
           <Box sx={{ px: 2, pb: 2 }}>
             <Box sx={{
               p: 1,
-              backgroundColor: 'success.light',
+              backgroundColor: (finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'warning.light' : 'success.light',
               borderRadius: 1,
               textAlign: 'center'
             }}>
-              <Typography variant="h6" color="success.contrastText">
+              <Typography variant="h6" color={(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'warning.contrastText' : 'success.contrastText'}>
                 Summary of last job
               </Typography>
-              <Typography variant="body1" color="success.contrastText">
-                ✓ {(() => {
+              <Typography variant="body1" color={(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'warning.contrastText' : 'success.contrastText'}>
+                {(() => {
                   const parts = [];
-                  parts.push(`${finalSummary.totalDownloaded} new video${finalSummary.totalDownloaded !== 1 ? 's' : ''} downloaded`);
+                  if (finalSummary.totalDownloaded > 0) {
+                    parts.push(`✓ ${finalSummary.totalDownloaded} video${finalSummary.totalDownloaded !== 1 ? 's' : ''} downloaded`);
+                  }
+                  if (finalSummary.totalFailed && finalSummary.totalFailed > 0) {
+                    parts.push(`✗ ${finalSummary.totalFailed} failed`);
+                  }
                   if (finalSummary.totalSkipped > 0) {
                     parts.push(`${finalSummary.totalSkipped} already existed or members only`);
                   }
@@ -533,7 +555,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                   return parts.join(', ');
                 })()}
               </Typography>
-              <Typography variant="caption" color="success.contrastText" sx={{ mt: 0.5, display: 'block' }}>
+              <Typography variant="caption" color={(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'warning.contrastText' : 'success.contrastText'} sx={{ mt: 0.5, display: 'block' }}>
                 {(() => {
                   const jobTypeLabel = finalSummary.jobType === 'Channel Downloads'
                     ? 'Channel update'
@@ -544,6 +566,49 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                 })()}
               </Typography>
             </Box>
+
+            {/* Show details of failed videos if any */}
+            {finalSummary.failedVideos && finalSummary.failedVideos.length > 0 && (
+              <Box sx={{ mt: 2 }}>
+                <Alert severity="error">
+                  <AlertTitle>Failed Downloads</AlertTitle>
+                  {(() => {
+                    // Group videos by error message
+                    const errorGroups = new Map<string, FailedVideo[]>();
+                    finalSummary.failedVideos.forEach(video => {
+                      const existing = errorGroups.get(video.error) || [];
+                      existing.push(video);
+                      errorGroups.set(video.error, existing);
+                    });
+
+                    return Array.from(errorGroups.entries()).map(([error, videos], groupIndex) => (
+                      <Box key={groupIndex} sx={{ mt: groupIndex > 0 ? 1.5 : 0 }}>
+                        <Typography variant="body2" component="div" sx={{ fontWeight: 'bold' }}>
+                          {videos.length} video{videos.length !== 1 ? 's' : ''} failed:
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.5 }}>
+                          {error}
+                        </Typography>
+
+                        {/* Only show individual video details if titles are known */}
+                        {videos.some(v => v.title !== 'Unknown') && (
+                          <Box sx={{ mt: 1, pl: 2 }}>
+                            {videos
+                              .filter(v => v.title !== 'Unknown')
+                              .map((video, index) => (
+                                <Typography key={video.youtubeId || index} variant="caption" component="div" color="text.secondary">
+                                  • {video.title}
+                                  {video.channel && video.channel !== 'Unknown' && ` by ${video.channel}`}
+                                </Typography>
+                              ))}
+                          </Box>
+                        )}
+                      </Box>
+                    ));
+                  })()}
+                </Alert>
+              </Box>
+            )}
           </Box>
         )}
 

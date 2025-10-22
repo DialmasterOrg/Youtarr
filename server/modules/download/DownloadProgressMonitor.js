@@ -453,9 +453,9 @@ class DownloadProgressMonitor {
     // A video is complete when we see various completion indicators
     if (line.includes('Deleting original file')) {
       const lowerLine = line.toLowerCase();
-      const isThumbnailCleanup = ['.webp', '.jpg', '.jpeg', '.png']
+      const isNonVideoCleanup = ['.webp', '.jpg', '.jpeg', '.png', '.vtt', '.srt']
         .some(ext => lowerLine.includes(ext));
-      if (isThumbnailCleanup) {
+      if (isNonVideoCleanup) {
         return true;
       }
     }
