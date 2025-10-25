@@ -166,6 +166,129 @@ describe('DownloadModule', () => {
     });
   });
 
+  describe('getJobDataValue', () => {
+    it('should return value from direct property', () => {
+      const jobData = { channelId: 'UC123', someValue: 'test' };
+      expect(downloadModule.getJobDataValue(jobData, 'channelId')).toBe('UC123');
+      expect(downloadModule.getJobDataValue(jobData, 'someValue')).toBe('test');
+    });
+
+    it('should return value from nested data property', () => {
+      const jobData = {
+        id: 'job-456',
+        data: {
+          channelId: 'UC789',
+          overrideSettings: { resolution: '720' }
+        }
+      };
+      expect(downloadModule.getJobDataValue(jobData, 'channelId')).toBe('UC789');
+      expect(downloadModule.getJobDataValue(jobData, 'overrideSettings')).toEqual({ resolution: '720' });
+    });
+
+    it('should prioritize direct property over nested data', () => {
+      const jobData = {
+        channelId: 'UC123',
+        data: {
+          channelId: 'UC789'
+        }
+      };
+      expect(downloadModule.getJobDataValue(jobData, 'channelId')).toBe('UC123');
+    });
+
+    it('should return undefined when property does not exist', () => {
+      const jobData = { someValue: 'test' };
+      expect(downloadModule.getJobDataValue(jobData, 'nonExistent')).toBeUndefined();
+    });
+
+    it('should handle null or undefined jobData', () => {
+      expect(downloadModule.getJobDataValue(null, 'channelId')).toBeUndefined();
+      expect(downloadModule.getJobDataValue(undefined, 'channelId')).toBeUndefined();
+    });
+
+    it('should handle jobData without nested data property', () => {
+      const jobData = { channelId: 'UC123' };
+      expect(downloadModule.getJobDataValue(jobData, 'channelId')).toBe('UC123');
+    });
+  });
+
+  describe('setJobDataValue', () => {
+    it('should set value on direct property', () => {
+      const jobData = {};
+      downloadModule.setJobDataValue(jobData, 'channelId', 'UC123');
+      expect(jobData.channelId).toBe('UC123');
+    });
+
+    it('should set value on both direct and nested data properties', () => {
+      const jobData = { data: {} };
+      downloadModule.setJobDataValue(jobData, 'effectiveQuality', '720');
+      expect(jobData.effectiveQuality).toBe('720');
+      expect(jobData.data.effectiveQuality).toBe('720');
+    });
+
+    it('should handle null or undefined jobData', () => {
+      expect(() => downloadModule.setJobDataValue(null, 'key', 'value')).not.toThrow();
+      expect(() => downloadModule.setJobDataValue(undefined, 'key', 'value')).not.toThrow();
+    });
+
+    it('should create nested data property if not present', () => {
+      const jobData = { channelId: 'UC123' };
+      downloadModule.setJobDataValue(jobData, 'effectiveQuality', '1080');
+      expect(jobData.effectiveQuality).toBe('1080');
+      expect(jobData.data).toBeUndefined();
+    });
+  });
+
+  describe('getOverrideSettings', () => {
+    it('should return override settings from direct property', () => {
+      const jobData = {
+        overrideSettings: {
+          resolution: '720',
+          videoCount: 5,
+          allowRedownload: true
+        }
+      };
+      const result = downloadModule.getOverrideSettings(jobData);
+      expect(result).toEqual({
+        resolution: '720',
+        videoCount: 5,
+        allowRedownload: true
+      });
+    });
+
+    it('should return override settings from nested data property', () => {
+      const jobData = {
+        data: {
+          overrideSettings: {
+            resolution: '480',
+            videoCount: 10
+          }
+        }
+      };
+      const result = downloadModule.getOverrideSettings(jobData);
+      expect(result).toEqual({
+        resolution: '480',
+        videoCount: 10
+      });
+    });
+
+    it('should return empty object when no override settings', () => {
+      const jobData = { channelId: 'UC123' };
+      const result = downloadModule.getOverrideSettings(jobData);
+      expect(result).toEqual({});
+    });
+
+    it('should return empty object when override settings is not an object', () => {
+      const jobData = { overrideSettings: 'invalid' };
+      const result = downloadModule.getOverrideSettings(jobData);
+      expect(result).toEqual({});
+    });
+
+    it('should handle null or undefined jobData', () => {
+      expect(downloadModule.getOverrideSettings(null)).toEqual({});
+      expect(downloadModule.getOverrideSettings(undefined)).toEqual({});
+    });
+  });
+
   describe('doChannelDownloads', () => {
     let channelDownloadGrouperMock;
 
@@ -203,7 +326,7 @@ describe('DownloadModule', () => {
       await downloadModule.doChannelDownloads();
 
       expect(consoleLogSpy).toHaveBeenCalledWith('Using grouped downloads: 2 group(s) with resolved settings');
-      expect(spy).toHaveBeenCalledWith({}, groups);
+      expect(spy).toHaveBeenCalledWith({}, groups, false);
     });
 
     it('should call doGroupedChannelDownloads when single group has subfolder', async () => {
@@ -215,7 +338,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doChannelDownloads();
 
-      expect(spy).toHaveBeenCalledWith({}, groups);
+      expect(spy).toHaveBeenCalledWith({}, groups, false);
     });
 
     it('should call doGroupedChannelDownloads when group quality differs from global', async () => {
@@ -227,7 +350,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doChannelDownloads();
 
-      expect(spy).toHaveBeenCalledWith({}, groups);
+      expect(spy).toHaveBeenCalledWith({}, groups, false);
     });
 
     it('should call doSingleChannelDownloadJob with effectiveQuality for single uniform group', async () => {
@@ -239,7 +362,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doChannelDownloads();
 
-      expect(spy).toHaveBeenCalledWith({ effectiveQuality: '1080' }, false);
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining({ effectiveQuality: '1080' }), false);
     });
 
     it('should pass override resolution to generateDownloadGroups', async () => {
@@ -250,6 +373,36 @@ describe('DownloadModule', () => {
       await downloadModule.doChannelDownloads(jobData);
 
       expect(channelDownloadGrouperMock.generateDownloadGroups).toHaveBeenCalledWith('480');
+    });
+
+    it('applies override settings stored in queued job data', async () => {
+      const jobModuleMock = require('../jobModule');
+      const channelModuleMock = require('../channelModule');
+      const YtdlpCommandBuilderMock = require('../download/ytdlpCommandBuilder');
+
+      channelDownloadGrouperMock.generateDownloadGroups.mockResolvedValue(null);
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+      channelModuleMock.generateChannelsFile.mockResolvedValue('/tmp/channels.txt');
+      YtdlpCommandBuilderMock.getBaseCommandArgs.mockReturnValue(['yt', 'args']);
+
+      const queuedJob = {
+        id: 'job-123',
+        data: {
+          overrideSettings: {
+            resolution: '720',
+            videoCount: 5,
+            allowRedownload: true
+          }
+        }
+      };
+
+      await downloadModule.doChannelDownloads(queuedJob, true);
+
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('720', true);
+      expect(mockDownloadExecutor.doDownload).toHaveBeenCalled();
+      const args = mockDownloadExecutor.doDownload.mock.calls[0][0];
+      expect(args).toContain('--playlist-end');
+      expect(args).toContain('5');
     });
 
     it('should fall back to doSingleChannelDownloadJob on error', async () => {
@@ -410,7 +563,6 @@ describe('DownloadModule', () => {
         { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] },
         { quality: '720', subFolder: 'custom', channels: [{ channel_id: 'UC2' }] }
       ];
-      const executeSpy = jest.spyOn(downloadModule, 'executeGroupDownload').mockResolvedValue();
 
       await downloadModule.doGroupedChannelDownloads({}, groups);
 
@@ -498,7 +650,6 @@ describe('DownloadModule', () => {
       ];
       const plexModuleMock = require('../plexModule');
       plexModuleMock.refreshLibrary = jest.fn().mockReturnValue(Promise.resolve());
-      const executeSpy = jest.spyOn(downloadModule, 'executeGroupDownload').mockResolvedValue();
 
       await downloadModule.doGroupedChannelDownloads({}, groups);
 

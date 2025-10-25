@@ -1675,7 +1675,7 @@ describe('ChannelModule', () => {
         );
       });
 
-      test('should skip channel when auto_download_enabled_tabs is null', async () => {
+      test('should throw error when auto_download_enabled_tabs is null', async () => {
         const mockChannels = [
           { channel_id: 'UC111', url: 'https://youtube.com/@channel1', auto_download_enabled_tabs: null }
         ];
@@ -1683,12 +1683,9 @@ describe('ChannelModule', () => {
         Channel.findAll = jest.fn().mockResolvedValue(mockChannels);
         fsPromises.writeFile.mockResolvedValue();
 
-        await ChannelModule.generateChannelsFile();
+        await expect(ChannelModule.generateChannelsFile()).rejects.toThrow('No valid channel URLs to download');
 
-        expect(fsPromises.writeFile).toHaveBeenCalledWith(
-          expect.stringContaining('channels-temp-'),
-          ''
-        );
+        expect(logger.warn).toHaveBeenCalledWith('No URLs generated for channel downloads - all enabled channels have disabled tabs');
       });
 
       test('should handle error and cleanup temp file', async () => {

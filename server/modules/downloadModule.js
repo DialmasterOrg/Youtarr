@@ -28,8 +28,58 @@ class DownloadModule {
     this.config = newConfig; // Update the configuration
   }
 
+  /**
+   * Safely read a property from job payloads (handles queued jobs where data is nested)
+   * @param {Object} jobData - job payload (direct invocation or queued job)
+   * @param {string} key - property name to resolve
+   * @returns {*|undefined} resolved value if found
+   */
+  getJobDataValue(jobData, key) {
+    if (!jobData) {
+      return undefined;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(jobData, key)) {
+      return jobData[key];
+    }
+
+    if (jobData.data && Object.prototype.hasOwnProperty.call(jobData.data, key)) {
+      return jobData.data[key];
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Set a property on both the job wrapper and nested data (if present)
+   * @param {Object} jobData - job payload (direct invocation or queued job)
+   * @param {string} key - property name to set
+   * @param {*} value - value to assign
+   */
+  setJobDataValue(jobData, key, value) {
+    if (!jobData) {
+      return;
+    }
+
+    jobData[key] = value;
+
+    if (jobData.data) {
+      jobData.data[key] = value;
+    }
+  }
+
+  /**
+   * Resolve override settings from job payloads
+   * @param {Object} jobData - job payload (direct invocation or queued job)
+   * @returns {Object} override settings or empty object
+   */
+  getOverrideSettings(jobData) {
+    const direct = this.getJobDataValue(jobData, 'overrideSettings');
+    return direct && typeof direct === 'object' ? direct : {};
+  }
+
   async doChannelDownloads(jobData = {}, isNextJob = false) {
-    const overrideSettings = jobData.overrideSettings || {};
+    const overrideSettings = this.getOverrideSettings(jobData);
     const overrideResolution = overrideSettings.resolution || null;
     const channelDownloadGrouper = require('./channelDownloadGrouper');
 
@@ -55,7 +105,7 @@ class DownloadModule {
 
       if (needsGrouping) {
         console.log(`Using grouped downloads: ${groups.length} group(s) with resolved settings`);
-        return await this.doGroupedChannelDownloads(jobData, groups);
+        return await this.doGroupedChannelDownloads(jobData, groups, isNextJob);
       }
 
       // Single group with uniform settings – reuse the existing single-job flow but
@@ -65,6 +115,7 @@ class DownloadModule {
         ...jobData,
         effectiveQuality: singleGroup?.quality || effectiveGlobalQuality,
       };
+      this.setJobDataValue(jobDataWithQuality, 'effectiveQuality', jobDataWithQuality.effectiveQuality);
 
       return await this.doSingleChannelDownloadJob(jobDataWithQuality, isNextJob);
     } catch (err) {
@@ -97,9 +148,9 @@ class DownloadModule {
         tempChannelsFile = await channelModule.generateChannelsFile();
 
         // Use override settings if provided, otherwise use defaults
-        const overrideSettings = jobData.overrideSettings || {};
+        const overrideSettings = this.getOverrideSettings(jobData);
         const resolution =
-          jobData.effectiveQuality ||
+          this.getJobDataValue(jobData, 'effectiveQuality') ||
           overrideSettings.resolution ||
           configModule.config.preferredResolution ||
           '1080';
@@ -261,8 +312,9 @@ class DownloadModule {
 
       await fs.writeFile(tempChannelsFile, urls.join('\n'));
 
-      const videoCount = jobData.overrideSettings?.videoCount || configModule.config.channelFilesToDownload;
-      const allowRedownload = !!(jobData.overrideSettings && jobData.overrideSettings.allowRedownload);
+      const overrideSettings = this.getOverrideSettings(jobData);
+      const videoCount = overrideSettings.videoCount || configModule.config.channelFilesToDownload;
+      const allowRedownload = !!overrideSettings.allowRedownload;
 
       // Do NOT pass subfolder to download - post-processing handles subfolder routing with __ prefix
       const args = YtdlpCommandBuilder.getBaseCommandArgs(group.quality, allowRedownload);
@@ -311,14 +363,18 @@ class DownloadModule {
 
     if (jobModule.getJob(jobId).status === 'In Progress') {
       // Use override settings if provided, otherwise use defaults
-      const overrideSettings = jobData.overrideSettings || {};
-      let effectiveQuality = overrideSettings.resolution || jobData.effectiveQuality || null;
+      const overrideSettings = this.getOverrideSettings(jobData);
+      let effectiveQuality = overrideSettings.resolution ||
+        this.getJobDataValue(jobData, 'effectiveQuality') ||
+        null;
 
-      if (!effectiveQuality && jobData.channelId) {
+      const channelId = this.getJobDataValue(jobData, 'channelId');
+
+      if (!effectiveQuality && channelId) {
         try {
           const Channel = require('../models/channel');
           const channelRecord = await Channel.findOne({
-            where: { channel_id: jobData.channelId },
+            where: { channel_id: channelId },
             attributes: ['video_quality'],
           });
 
@@ -334,7 +390,7 @@ class DownloadModule {
       const allowRedownload = overrideSettings.allowRedownload || false;
 
       // Persist resolved quality for any subsequent retries of this job
-      jobData.effectiveQuality = resolution;
+      this.setJobDataValue(jobData, 'effectiveQuality', resolution);
 
       // For manual downloads, we don't apply duration filters but still exclude members-only
       // Note: Subfolder routing is now handled post-download in videoDownloadPostProcessFiles.js

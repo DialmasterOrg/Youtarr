@@ -744,11 +744,11 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         errorMessage={errorMessage}
         videoCount={checkedBoxes.length}
         missingVideoCount={getMissingVideoCount()}
-      selectedForDeletion={selectedForDeletion.length}
-      defaultResolution={defaultResolution}
-      defaultResolutionSource={defaultResolutionSource}
-      selectedTab={selectedTab || 'videos'}
-      tabLabel={getTabLabel(selectedTab || 'videos')}
+        selectedForDeletion={selectedForDeletion.length}
+        defaultResolution={defaultResolution}
+        defaultResolutionSource={defaultResolutionSource}
+        selectedTab={selectedTab || 'videos'}
+        tabLabel={getTabLabel(selectedTab || 'videos')}
         onDownloadDialogClose={() => setDownloadDialogOpen(false)}
         onDownloadConfirm={handleDownloadConfirm}
         onRefreshCancel={handleRefreshCancel}

@@ -20,6 +20,19 @@ function ChannelPage({ token }: ChannelPageProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { channel_id } = useParams();
 
+  const handleSettingsSaved = (updated: { sub_folder: string | null; video_quality: string | null }) => {
+    setChannel((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        ...prev,
+        sub_folder: updated.sub_folder,
+        video_quality: updated.video_quality,
+      };
+    });
+  };
+
   useEffect(() => {
     fetch(`/getChannelInfo/${channel_id}`, {
       headers: {
@@ -143,6 +156,7 @@ function ChannelPage({ token }: ChannelPageProps) {
           channelId={channel_id}
           channelName={channel.uploader}
           token={token}
+          onSettingsSaved={handleSettingsSaved}
         />
       )}
     </>

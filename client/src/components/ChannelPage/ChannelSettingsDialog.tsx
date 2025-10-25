@@ -17,17 +17,18 @@ import {
   Typography
 } from '@mui/material';
 
+interface ChannelSettings {
+  sub_folder: string | null;
+  video_quality: string | null;
+}
+
 interface ChannelSettingsDialogProps {
   open: boolean;
   onClose: () => void;
   channelId: string;
   channelName: string;
   token: string | null;
-}
-
-interface ChannelSettings {
-  sub_folder: string | null;
-  video_quality: string | null;
+  onSettingsSaved?: (settings: ChannelSettings) => void;
 }
 
 function ChannelSettingsDialog({
@@ -35,7 +36,8 @@ function ChannelSettingsDialog({
   onClose,
   channelId,
   channelName,
-  token
+  token,
+  onSettingsSaved
 }: ChannelSettingsDialogProps) {
   const [settings, setSettings] = useState<ChannelSettings>({
     sub_folder: null,
@@ -167,8 +169,18 @@ function ChannelSettingsDialog({
       }
 
       const result = await response.json();
+      const updatedSettings = {
+        sub_folder: result?.settings?.sub_folder ?? settings.sub_folder ?? null,
+        video_quality: result?.settings?.video_quality ?? settings.video_quality ?? null
+      };
+
+      setSettings(updatedSettings);
+      setOriginalSettings(updatedSettings);
       setSuccess(true);
-      setOriginalSettings(settings);
+
+      if (onSettingsSaved) {
+        onSettingsSaved(updatedSettings);
+      }
 
       // Show success message briefly then close
       setTimeout(() => {
