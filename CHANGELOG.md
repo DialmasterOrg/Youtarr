@@ -1,5 +1,28 @@
 # Changelog
 
+## [v1.44.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.44.0) - 2025-10-22
+
+## [1.44.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.43.0...v1.44.0) (2025-10-22)
+
+
+### Features
+
+* **downloads:** show 403 errors in UI + new yt-dlp ([43f450e](https://github.com/DialmasterOrg/Youtarr/commit/43f450e360ead51d6055160bf0e165227ac38c58))
+
+
+### Performance Improvements
+
+* **downloads:** throttle websocket progress updates to reduce overhead ([08b5833](https://github.com/DialmasterOrg/Youtarr/commit/08b5833a307330a366a6a8817104e24988f1d1fb))
+
+
+### Documentation
+
+* update CHANGELOG for v1.43.0 [skip ci] ([cd23bb9](https://github.com/DialmasterOrg/Youtarr/commit/cd23bb92f478f7ec37b07469960e2f265ac73548))
+
+
+
+
+
 ## [v1.43.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.43.0) - 2025-10-18
 
 ## [1.43.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.42.2...v1.43.0) (2025-10-18)
