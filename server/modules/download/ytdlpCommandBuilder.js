@@ -40,10 +40,13 @@ class YtdlpCommandBuilder {
       ? tempPathManager.getTempBasePath()
       : configModule.directoryPath;
 
+    // Use same filename as video file (without extension - yt-dlp adds .jpg)
+    const thumbnailFilename = `${CHANNEL_TEMPLATE} - %(title).76s [%(id)s]`;
+
     if (subFolder) {
-      return path.join(baseOutputPath, subFolder, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, 'poster');
+      return path.join(baseOutputPath, subFolder, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, thumbnailFilename);
     } else {
-      return path.join(baseOutputPath, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, 'poster');
+      return path.join(baseOutputPath, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, thumbnailFilename);
     }
   }
   // Build format string based on resolution and codec preference
