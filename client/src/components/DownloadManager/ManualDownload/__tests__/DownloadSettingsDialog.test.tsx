@@ -62,6 +62,34 @@ describe('DownloadSettingsDialog', () => {
       expect(screen.getByLabelText('Allow re-downloading previously fetched videos')).toBeInTheDocument();
     });
 
+    test('shows current automatic setting with channel override source', () => {
+      render(
+        <DownloadSettingsDialog
+          {...defaultProps}
+          defaultResolution="720"
+          defaultResolutionSource="channel"
+        />
+      );
+
+      expect(
+        screen.getByText(/Current automatic setting: 720p \(HD\) \(channel override\)/i)
+      ).toBeInTheDocument();
+    });
+
+    test('shows current automatic setting with global default source', () => {
+      render(
+        <DownloadSettingsDialog
+          {...defaultProps}
+          defaultResolution="1080"
+          defaultResolutionSource="global"
+        />
+      );
+
+      expect(
+        screen.getByText(/Current automatic setting: 1080p \(Full HD\) \(global default\)/i)
+      ).toBeInTheDocument();
+    });
+
     test('renders warning for missing videos when missingVideoCount is 1 in manual mode', () => {
       render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={1} mode="manual" />);
 
@@ -569,6 +597,96 @@ describe('DownloadSettingsDialog', () => {
       }));
 
       // Component should not reload from localStorage after interaction
+      expect(redownloadToggle).toBeChecked();
+    });
+  });
+
+  describe('State Management', () => {
+    test('resets state when dialog is closed and reopened', () => {
+      const { rerender } = render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+
+      // Make changes
+      const customToggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(customToggle);
+      expect(customToggle).toBeChecked();
+
+      const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      fireEvent.click(redownloadToggle);
+      expect(redownloadToggle).toBeChecked();
+
+      // Close dialog
+      rerender(<DownloadSettingsDialog {...defaultProps} open={false} mode="manual" />);
+
+      // Reopen dialog
+      rerender(<DownloadSettingsDialog {...defaultProps} open={true} mode="manual" />);
+
+      // State should be reset
+      const newCustomToggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      expect(newCustomToggle).not.toBeChecked();
+
+      const newRedownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      expect(newRedownloadToggle).not.toBeChecked();
+    });
+
+    test('preserves defaultResolutionSource when dialog reopens', () => {
+      const { rerender } = render(
+        <DownloadSettingsDialog
+          {...defaultProps}
+          defaultResolution="720"
+          defaultResolutionSource="channel"
+        />
+      );
+
+      expect(
+        screen.getByText(/Current automatic setting: 720p \(HD\) \(channel override\)/i)
+      ).toBeInTheDocument();
+
+      // Close and reopen
+      rerender(
+        <DownloadSettingsDialog
+          {...defaultProps}
+          open={false}
+          defaultResolution="720"
+          defaultResolutionSource="channel"
+        />
+      );
+
+      rerender(
+        <DownloadSettingsDialog
+          {...defaultProps}
+          open={true}
+          defaultResolution="720"
+          defaultResolutionSource="channel"
+        />
+      );
+
+      // Should still show channel override
+      expect(
+        screen.getByText(/Current automatic setting: 720p \(HD\) \(channel override\)/i)
+      ).toBeInTheDocument();
+    });
+
+    test('auto-enables redownload toggle again when reopened with missing videos', () => {
+      const { rerender } = render(
+        <DownloadSettingsDialog {...defaultProps} missingVideoCount={3} />
+      );
+
+      // Should be auto-checked
+      let redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      expect(redownloadToggle).toBeChecked();
+
+      // User unchecks it
+      fireEvent.click(redownloadToggle);
+      expect(redownloadToggle).not.toBeChecked();
+
+      // Close dialog
+      rerender(<DownloadSettingsDialog {...defaultProps} open={false} missingVideoCount={3} />);
+
+      // Reopen with missing videos again
+      rerender(<DownloadSettingsDialog {...defaultProps} open={true} missingVideoCount={3} />);
+
+      // Should be auto-checked again (hasUserInteracted was reset)
+      redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
       expect(redownloadToggle).toBeChecked();
     });
   });

@@ -13,6 +13,39 @@ const VIDEO_FOLDER_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title).76s - %(id)s`;
 const VIDEO_FILE_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title).76s [%(id)s].%(ext)s`;
 
 class YtdlpCommandBuilder {
+  /**
+   * Build output path with optional subfolder support
+   * @param {string|null} subFolder - Optional subfolder name
+   * @returns {string} - Full output path template
+   */
+  static buildOutputPath(subFolder = null) {
+    const baseOutputPath = tempPathManager.isEnabled()
+      ? tempPathManager.getTempBasePath()
+      : configModule.directoryPath;
+
+    if (subFolder) {
+      return path.join(baseOutputPath, subFolder, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, VIDEO_FILE_TEMPLATE);
+    } else {
+      return path.join(baseOutputPath, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, VIDEO_FILE_TEMPLATE);
+    }
+  }
+
+  /**
+   * Build thumbnail output path with optional subfolder support
+   * @param {string|null} subFolder - Optional subfolder name
+   * @returns {string} - Thumbnail path template
+   */
+  static buildThumbnailPath(subFolder = null) {
+    const baseOutputPath = tempPathManager.isEnabled()
+      ? tempPathManager.getTempBasePath()
+      : configModule.directoryPath;
+
+    if (subFolder) {
+      return path.join(baseOutputPath, subFolder, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, 'poster');
+    } else {
+      return path.join(baseOutputPath, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, 'poster');
+    }
+  }
   // Build format string based on resolution and codec preference
   static buildFormatString(resolution, videoCodec = 'default') {
     const res = resolution || '1080';
@@ -103,15 +136,13 @@ class YtdlpCommandBuilder {
   }
 
   // Build yt-dlp command args array for channel downloads
-  static getBaseCommandArgs(resolution, allowRedownload = false) {
+  static getBaseCommandArgs(resolution, allowRedownload = false, subFolder = null) {
     const config = configModule.getConfig();
     const res = resolution || config.preferredResolution || '1080';
     const videoCodec = config.videoCodec || 'default';
 
-    // Use temp path if temp downloads are enabled, otherwise use final path
-    const baseOutputPath = tempPathManager.isEnabled()
-      ? tempPathManager.getTempBasePath()
-      : configModule.directoryPath;
+    const outputPath = this.buildOutputPath(subFolder);
+    const thumbnailPath = this.buildThumbnailPath(subFolder);
 
     // Add cookies args first if enabled
     const cookiesArgs = this.buildCookiesArgs();
@@ -155,9 +186,9 @@ class YtdlpCommandBuilder {
       '--no-write-playlist-metafiles',
       '--extractor-args', 'youtubetab:tab=videos;sort=dd',
       '--match-filter', 'availability!=subscriber_only & !is_live & live_status!=is_upcoming',
-      '-o', `${baseOutputPath}/${CHANNEL_TEMPLATE}/${VIDEO_FOLDER_TEMPLATE}/${VIDEO_FILE_TEMPLATE}`,
+      '-o', outputPath,
       '--datebefore', 'now',
-      '-o', `thumbnail:${baseOutputPath}/${CHANNEL_TEMPLATE}/${VIDEO_FOLDER_TEMPLATE}/poster`,
+      '-o', `thumbnail:${thumbnailPath}`,
       '-o', 'pl_thumbnail:',
       '--exec', `node ${path.resolve(__dirname, '../videoDownloadPostProcessFiles.js')} {}`
     );
@@ -170,15 +201,14 @@ class YtdlpCommandBuilder {
   }
 
   // Build yt-dlp command args array for manual downloads - no duration filter
+  // Note: Subfolder routing is handled post-download in videoDownloadPostProcessFiles.js
   static getBaseCommandArgsForManualDownload(resolution, allowRedownload = false) {
     const config = configModule.getConfig();
     const res = resolution || config.preferredResolution || '1080';
     const videoCodec = config.videoCodec || 'default';
 
-    // Use temp path if temp downloads are enabled, otherwise use final path
-    const baseOutputPath = tempPathManager.isEnabled()
-      ? tempPathManager.getTempBasePath()
-      : configModule.directoryPath;
+    const outputPath = this.buildOutputPath(null);
+    const thumbnailPath = this.buildThumbnailPath(null);
 
     // Add cookies args first if enabled
     const cookiesArgs = this.buildCookiesArgs();
@@ -222,9 +252,9 @@ class YtdlpCommandBuilder {
       '--no-write-playlist-metafiles',
       '--extractor-args', 'youtubetab:tab=videos;sort=dd',
       '--match-filter', 'availability!=subscriber_only & !is_live & live_status!=is_upcoming',
-      '-o', `${baseOutputPath}/${CHANNEL_TEMPLATE}/${VIDEO_FOLDER_TEMPLATE}/${VIDEO_FILE_TEMPLATE}`,
+      '-o', outputPath,
       '--datebefore', 'now',
-      '-o', `thumbnail:${baseOutputPath}/${CHANNEL_TEMPLATE}/${VIDEO_FOLDER_TEMPLATE}/poster`,
+      '-o', `thumbnail:${thumbnailPath}`,
       '-o', 'pl_thumbnail:',
       '--exec', `node ${path.resolve(__dirname, '../videoDownloadPostProcessFiles.js')} {}`
     );

@@ -51,6 +51,16 @@ Channel.init(
       allowNull: false,
       defaultValue: 'video',
     },
+    sub_folder: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      defaultValue: null,
+    },
+    video_quality: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     sequelize,

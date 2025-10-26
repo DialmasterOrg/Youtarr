@@ -175,6 +175,7 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
         defaultResolution={defaultResolution}
         defaultVideoCount={defaultVideoCount}
         mode="channel"
+        defaultResolutionSource="global"
       />
     </Grid>
   );

@@ -271,6 +271,7 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
         missingVideoCount={previouslyDownloadedCount}
         defaultResolution={defaultResolution}
         mode="manual"
+        defaultResolutionSource="global"
       />
     </Box>
   );

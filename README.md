@@ -21,8 +21,9 @@ https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
  
 ### Core Features (No Plex Required)
 - **📥 Smart Downloads**: Pre-validate YouTube URLs with metadata preview before downloading (powered by [yt-dlp](https://github.com/yt-dlp/yt-dlp))
-- **🎯 Custom Quality Settings**: Per-download resolution control with support from 360p to 4K
+- **🎯 Custom Quality Settings**: Global and per-channel resolution control with support from 360p to 4K
 - **📺 Channel Subscriptions**: Subscribe to channels and auto-download new videos, shorts, and streams with per-tab controls
+- **📁 Channel Grouping & Multi-Library Support**: Organize channels into custom subfolders (e.g., `__kids`, `__music`, `__news`) to create separate media server libraries with distinct parental controls, sharing rules, and content organization
 - **🚫 SponsorBlock Integration**: Automatically remove or mark sponsored segments, intros, outros, and more using the crowdsourced SponsorBlock database
 - **🗂️ Smart Organization**: Videos organized by channel with metadata and thumbnails
 - **📝 Multi-Server Support**: Compatible with Plex, Kodi, Jellyfin, and Emby through NFO metadata files and embedded MP4 metadata
@@ -114,6 +115,10 @@ https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
 1. Go to Channels page
 2. Add channel by URL or @handle (e.g., `@MrBeast` or `https://youtube.com/@MrBeast`)
 3. Choose to download all videos or let automation handle new ones
+4. (Optional) Configure channel-specific settings:
+   - Click on a channel to open its page, then click the settings icon (gear)
+   - Set a custom subfolder to organize channels into separate media libraries (e.g., `__kids`, `__music`)
+   - Override the global quality setting with a channel-specific resolution preference
 
 ### Configure Automation
 1. Visit Configuration page

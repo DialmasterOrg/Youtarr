@@ -103,6 +103,95 @@ class DownloadExecutor {
     }
   }
 
+  // Helper function to check if a directory is a channel-level directory
+  // A channel directory is:
+  // - One level below baseDir (no subfolder): baseDir/channelName
+  // - Two levels below baseDir (with subfolder): baseDir/subfolder/channelName
+  // We never want to clean up baseDir itself or subfolder directories
+  isChannelDirectory(dirPath) {
+    try {
+      const configModule = require('../configModule');
+      const baseDir = configModule.directoryPath;
+
+      // Normalize paths for comparison
+      const normalizedDirPath = path.resolve(dirPath);
+      const normalizedBaseDir = path.resolve(baseDir);
+
+      // Cannot be baseDir itself
+      if (normalizedDirPath === normalizedBaseDir) {
+        return false;
+      }
+
+      // Get the parent directory
+      const parentDir = path.dirname(normalizedDirPath);
+
+      // Check if parent is baseDir (channel without subfolder)
+      if (parentDir === normalizedBaseDir) {
+        return true;
+      }
+
+      // Check if grandparent is baseDir (channel with subfolder)
+      const grandparentDir = path.dirname(parentDir);
+      if (grandparentDir === normalizedBaseDir) {
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      logger.error({ err: error, dirPath }, 'Error checking if directory is channel directory');
+      return false;
+    }
+  }
+
+  // Helper function to check if a directory exists and is empty
+  async isDirectoryEmpty(dirPath) {
+    const fsPromises = require('fs').promises;
+
+    try {
+      const entries = await fsPromises.readdir(dirPath);
+      return entries.length === 0;
+    } catch (error) {
+      // Directory doesn't exist or can't be read
+      logger.debug({ err: error, dirPath }, 'Cannot read directory (may not exist)');
+      return false;
+    }
+  }
+
+  // Helper function to remove a channel directory if it's empty
+  // This is called after removing a video directory to clean up empty channel folders
+  async cleanupEmptyChannelDirectory(channelDir) {
+    const fsPromises = require('fs').promises;
+
+    try {
+      // Verify this is actually a channel directory (not root or subfolder)
+      if (!this.isChannelDirectory(channelDir)) {
+        logger.debug({ channelDir }, 'Not a channel directory, skipping cleanup');
+        return;
+      }
+
+      // Check if directory exists
+      const exists = await fsPromises.access(channelDir).then(() => true).catch(() => false);
+      if (!exists) {
+        logger.debug({ channelDir }, 'Channel directory does not exist');
+        return;
+      }
+
+      // Check if directory is empty
+      const isEmpty = await this.isDirectoryEmpty(channelDir);
+      if (!isEmpty) {
+        logger.debug({ channelDir }, 'Channel directory not empty, keeping it');
+        return;
+      }
+
+      // Remove empty channel directory
+      await fsPromises.rmdir(channelDir);
+      logger.info({ channelDir }, 'Removed empty channel directory');
+    } catch (error) {
+      logger.error({ err: error, channelDir }, 'Error cleaning up empty channel directory');
+      // Don't throw - this is a best-effort cleanup
+    }
+  }
+
   // Cleanup function for in-progress videos based on database tracking
   async cleanupInProgressVideos(jobId) {
     const fsPromises = require('fs').promises;
@@ -176,6 +265,10 @@ class DownloadExecutor {
             await fsPromises.rmdir(dirPath);
             logger.info({ dirPath }, 'Successfully removed video directory');
             cleanedAny = true;
+
+            // Check if parent channel directory is now empty and should be removed
+            const channelDir = path.dirname(dirPath);
+            await this.cleanupEmptyChannelDirectory(channelDir);
           }
 
           if (!foundExistingPath) {
@@ -380,7 +473,7 @@ class DownloadExecutor {
     this.pendingProgressMessage = null;
   }
 
-  async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false) {
+  async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false) {
     const initialCount = this.getCountOfDownloadedVideos();
     const config = configModule.getConfig();
     const monitor = new DownloadProgressMonitor(jobId, jobType);
@@ -1142,10 +1235,13 @@ class DownloadExecutor {
           }
         }
 
-        plexModule.refreshLibrary().catch(err => {
-          logger.error({ err }, 'Failed to refresh Plex library');
-        });
-        jobModule.startNextJob();
+        // Only refresh Plex and start next job if not processing multiple groups
+        if (!skipJobTransition) {
+          plexModule.refreshLibrary().catch(err => {
+            logger.error({ err }, 'Failed to refresh Plex library');
+          });
+          jobModule.startNextJob();
+        }
         resolve();
       });
 

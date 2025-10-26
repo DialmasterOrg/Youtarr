@@ -74,10 +74,14 @@ jest.mock('../ChannelVideosHeader', () => ({
 
 jest.mock('../ChannelVideosDialogs', () => ({
   __esModule: true,
-  default: function MockChannelVideosDialogs() {
+  default: function MockChannelVideosDialogs(props: any) {
     const React = require('react');
     return React.createElement('div', {
-      'data-testid': 'channel-videos-dialogs'
+      'data-testid': 'channel-videos-dialogs',
+      'data-default-resolution': props.defaultResolution,
+      'data-default-resolution-source': props.defaultResolutionSource,
+      'data-selected-tab': props.selectedTab,
+      'data-tab-label': props.tabLabel
     });
   }
 }));
@@ -539,6 +543,109 @@ describe('ChannelVideos Component', () => {
         null, // tabType - null until tabs are loaded
         mockToken
       );
+    });
+  });
+
+  describe('Props Override', () => {
+    test('uses channelId prop when provided instead of route param', async () => {
+      const propChannelId = 'UCCustomChannel';
+      renderChannelVideos({ channelId: propChannelId });
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith(
+          `/api/channels/${propChannelId}/tabs`,
+          expect.objectContaining({
+            headers: { 'x-access-token': mockToken },
+          })
+        );
+      });
+
+      expect(useChannelVideos).toHaveBeenCalledWith(
+        expect.objectContaining({
+          channelId: propChannelId,
+        })
+      );
+    });
+
+    test('uses route param channelId when prop not provided', async () => {
+      renderChannelVideos();
+
+      await waitFor(() => {
+        expect(mockFetch).toHaveBeenCalledWith(
+          '/api/channels/UC123456/tabs',
+          expect.objectContaining({
+            headers: { 'x-access-token': mockToken },
+          })
+        );
+      });
+
+      expect(useChannelVideos).toHaveBeenCalledWith(
+        expect.objectContaining({
+          channelId: 'UC123456',
+        })
+      );
+    });
+
+    test('uses channel-level video quality when provided', () => {
+      renderChannelVideos({ channelVideoQuality: '720' });
+
+      // The defaultResolution should use the channel override
+      const dialogsElement = screen.getByTestId('channel-videos-dialogs');
+      expect(dialogsElement).toBeInTheDocument();
+      expect(dialogsElement).toHaveAttribute('data-default-resolution', '720');
+      expect(dialogsElement).toHaveAttribute('data-default-resolution-source', 'channel');
+    });
+
+    test('uses global video quality when channel override not provided', () => {
+      useConfig.mockReturnValue({
+        config: { preferredResolution: '1080' },
+      });
+
+      renderChannelVideos();
+
+      // The defaultResolution should fall back to global config
+      const dialogsElement = screen.getByTestId('channel-videos-dialogs');
+      expect(dialogsElement).toBeInTheDocument();
+      expect(dialogsElement).toHaveAttribute('data-default-resolution', '1080');
+      expect(dialogsElement).toHaveAttribute('data-default-resolution-source', 'global');
+    });
+
+    test('prioritizes channel quality over global quality', () => {
+      useConfig.mockReturnValue({
+        config: { preferredResolution: '1080' },
+      });
+
+      renderChannelVideos({ channelVideoQuality: '720' });
+
+      // Channel override should take precedence
+      const dialogsElement = screen.getByTestId('channel-videos-dialogs');
+      expect(dialogsElement).toBeInTheDocument();
+      expect(dialogsElement).toHaveAttribute('data-default-resolution', '720');
+      expect(dialogsElement).toHaveAttribute('data-default-resolution-source', 'channel');
+    });
+
+    test('handles null channelVideoQuality', () => {
+      useConfig.mockReturnValue({
+        config: { preferredResolution: '1080' },
+      });
+
+      renderChannelVideos({ channelVideoQuality: null });
+
+      const dialogsElement = screen.getByTestId('channel-videos-dialogs');
+      expect(dialogsElement).toHaveAttribute('data-default-resolution', '1080');
+      expect(dialogsElement).toHaveAttribute('data-default-resolution-source', 'global');
+    });
+
+    test('falls back to 1080 when no config or channel quality provided', () => {
+      useConfig.mockReturnValue({
+        config: {},
+      });
+
+      renderChannelVideos();
+
+      const dialogsElement = screen.getByTestId('channel-videos-dialogs');
+      expect(dialogsElement).toHaveAttribute('data-default-resolution', '1080');
+      expect(dialogsElement).toHaveAttribute('data-default-resolution-source', 'global');
     });
   });
 

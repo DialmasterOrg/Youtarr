@@ -197,6 +197,11 @@ const createServerModule = ({
           getRunningJobs: jest.fn(() => [])
         }));
         jest.doMock('../modules/videosModule', () => ({}));
+        jest.doMock('../modules/channelSettingsModule', () => ({
+          getChannelSettings: jest.fn(),
+          updateChannelSettings: jest.fn(),
+          getAllSubFolders: jest.fn()
+        }));
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => ({ schedule: jest.fn() }));
         jest.doMock('express-rate-limit', () => jest.fn(() => (req, res, next) => next()));

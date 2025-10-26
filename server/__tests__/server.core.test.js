@@ -193,6 +193,11 @@ const createServerModule = ({
         jest.doMock('../modules/jobModule', () => jobModuleMock);
         jest.doMock('../modules/videosModule', () => videosModuleMock);
         jest.doMock('../modules/videoValidationModule', () => videoValidationModuleMock);
+        jest.doMock('../modules/channelSettingsModule', () => ({
+          getChannelSettings: jest.fn(),
+          updateChannelSettings: jest.fn(),
+          getAllSubFolders: jest.fn()
+        }));
         jest.doMock('../modules/cronJobs', () => cronJobsMock);
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => cronMock);

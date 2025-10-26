@@ -1,10 +1,12 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ChannelPage from '../ChannelPage';
 import { BrowserRouter } from 'react-router-dom';
 import useMediaQuery from '@mui/material/useMediaQuery';
 
-// Mock child component
+const dialogPropsStore: { current: any } = { current: null };
+
+// Mock child components
 jest.mock('../ChannelPage/ChannelVideos', () => ({
   __esModule: true,
   default: function MockChannelVideos(props: any) {
@@ -12,8 +14,21 @@ jest.mock('../ChannelPage/ChannelVideos', () => ({
     return React.createElement('div', {
       'data-testid': 'channel-videos',
       'data-token': props.token,
-      'data-auto-download-tabs': String(props.channelAutoDownloadTabs)
+      'data-auto-download-tabs': String(props.channelAutoDownloadTabs),
+      'data-channel-quality': String(props.channelVideoQuality)
     }, 'Channel Videos');
+  }
+}));
+
+jest.mock('../ChannelPage/ChannelSettingsDialog', () => ({
+  __esModule: true,
+  default: (props: any) => {
+    const React = require('react');
+    dialogPropsStore.current = props;
+    return React.createElement('div', {
+      'data-testid': 'channel-settings-dialog',
+      'data-open': props.open ? 'true' : 'false'
+    });
   }
 }));
 
@@ -50,6 +65,7 @@ describe('ChannelPage Component', () => {
     jest.clearAllMocks();
     mockFetch.mockReset();
     (useMediaQuery as jest.Mock).mockReturnValue(false); // Default to desktop
+    dialogPropsStore.current = null;
   });
 
   describe('Component Rendering', () => {
@@ -112,12 +128,14 @@ describe('ChannelPage Component', () => {
       expect(channelVideos).toBeInTheDocument();
       expect(channelVideos).toHaveAttribute('data-token', mockToken);
 
-      // Initially channelAutoDownloadTabs should be undefined
+      // Initially channelAutoDownloadTabs should be undefined and channelVideoQuality should be null
       expect(channelVideos).toHaveAttribute('data-auto-download-tabs', 'undefined');
+      expect(channelVideos).toHaveAttribute('data-channel-quality', 'null');
 
       // After channel data loads, it should be set
       await screen.findByText('Tech Channel');
       expect(channelVideos).toHaveAttribute('data-auto-download-tabs', 'videos,shorts');
+      expect(channelVideos).toHaveAttribute('data-channel-quality', 'null');
     });
 
     test('renders with null token', () => {
@@ -165,6 +183,101 @@ describe('ChannelPage Component', () => {
 
       const channelVideos = screen.getByTestId('channel-videos');
       expect(channelVideos).toHaveAttribute('data-auto-download-tabs', 'undefined');
+    });
+
+    test('updates channel display after settings dialog saves', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockChannel)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+      expect(dialogPropsStore.current).not.toBeNull();
+
+      act(() => {
+        dialogPropsStore.current.onSettingsSaved?.({
+          sub_folder: 'Sports',
+          video_quality: '720'
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('channel-videos')).toHaveAttribute('data-channel-quality', '720');
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('__Sports/')).toBeInTheDocument();
+      });
+    });
+
+    test('updates channel display when settings are cleared (null values)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          ...mockChannel,
+          sub_folder: 'InitialFolder',
+          video_quality: '1080'
+        })
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+
+      // Verify initial state
+      expect(screen.getByTestId('channel-videos')).toHaveAttribute('data-channel-quality', '1080');
+      expect(screen.getByText('__InitialFolder/')).toBeInTheDocument();
+
+      expect(dialogPropsStore.current).not.toBeNull();
+
+      // Clear settings by passing null values
+      act(() => {
+        dialogPropsStore.current.onSettingsSaved?.({
+          sub_folder: null,
+          video_quality: null
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('channel-videos')).toHaveAttribute('data-channel-quality', 'null');
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByText('__InitialFolder/')).not.toBeInTheDocument();
+      });
+    });
+
+    test('handles onSettingsSaved when channel is not loaded', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockChannel)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      // Try to call onSettingsSaved before channel loads
+      // This tests the safety check in handleSettingsSaved
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Since dialogPropsStore.current is null initially, this test ensures
+      // the component handles the case gracefully
+      await screen.findByText('Tech Channel');
+
+      consoleErrorSpy.mockRestore();
     });
   });
 

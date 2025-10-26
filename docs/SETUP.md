@@ -139,6 +139,39 @@ For Youtarr to work correctly with Plex:
 
 Note on removal: Removing a channel in the UI disables future downloads for that channel but does not delete existing videos or download history.
 
+### Channel-Level Configuration
+
+Each channel can have custom settings that override global defaults. To access these settings:
+1. Click on a channel in the Channel Manager to open the channel page
+2. Click the settings icon (gear) next to the channel name
+3. Configure your custom subfolder and/or quality settings
+
+**Custom Subfolder Organization**:
+- Organize channels into subfolders to create separate media server libraries
+- Common use cases:
+  - `__kids` - Children's content with parental controls in a dedicated library
+  - `__music` - Music videos with music-focused metadata and views
+  - `__news` - News channels in a private library
+  - `__education` - Educational content separated from entertainment
+  - Leave blank for default behavior (channel folder in root directory)
+- This enables you to create multiple Plex/Jellyfin/Emby libraries, each pointing to a different subfolder
+- Each library can have its own sharing rules, age restrictions, and viewing settings
+
+**Custom Video Quality**:
+- Override the global quality setting for specific channels
+- Useful when certain channels benefit from higher/lower quality
+- Examples:
+  - High-quality gaming or tech channels → 4K/1440p
+  - News or podcast channels → 720p to save space
+  - Kids content → 480p for smaller files
+- Leave as "Use Global Setting" to inherit the default quality
+
+**Editing Settings**:
+- Settings can be changed at any time from the Channel Manager
+- New quality settings apply to future downloads only
+- Existing videos are not affected by quality changes
+- Changing a subfolder will affect where new videos are downloaded and move existing files for the channel into that subfolder
+
 ## Network Access
 
 To access Youtarr from other devices on your network:

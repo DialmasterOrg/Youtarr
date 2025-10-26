@@ -49,13 +49,15 @@ import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
 interface ChannelVideosProps {
   token: string | null;
   channelAutoDownloadTabs?: string;
+  channelId?: string;
+  channelVideoQuality?: string | null;
 }
 
 type ViewMode = 'table' | 'grid' | 'list';
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
 
-function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
+function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelId, channelVideoQuality }: ChannelVideosProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -88,16 +90,17 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
 
   const { deleteVideosByYoutubeIds, loading: deleteLoading } = useVideoDeletion();
 
-  const { channel_id } = useParams();
+  const { channel_id: routeChannelId } = useParams();
+  const channelId = propChannelId ?? routeChannelId ?? undefined;
 
   // Fetch available tabs on mount
   useEffect(() => {
     const fetchAvailableTabs = async () => {
-      if (!channel_id || !token) return;
+      if (!channelId || !token) return;
 
       setTabsLoading(true);
       try {
-        const response = await fetch(`/api/channels/${channel_id}/tabs`, {
+        const response = await fetch(`/api/channels/${channelId}/tabs`, {
           headers: {
             'x-access-token': token,
           },
@@ -135,7 +138,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
     };
 
     fetchAvailableTabs();
-  }, [channel_id, token]);
+  }, [channelId, token]);
 
   // Initialize tab auto-download status from prop
   useEffect(() => {
@@ -172,7 +175,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
     loading: videosLoading,
     refetch: refetchVideos,
   } = useChannelVideos({
-    channelId: channel_id,
+    channelId,
     page,
     pageSize,
     hideDownloaded,
@@ -191,7 +194,9 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
   }, [availableTabsFromVideos]);
 
   const { config } = useConfig(token);
-  const defaultResolution = config.preferredResolution || '1080';
+  const hasChannelOverride = Boolean(channelVideoQuality);
+  const defaultResolution = channelVideoQuality || config.preferredResolution || '1080';
+  const defaultResolutionSource: 'channel' | 'global' = hasChannelOverride ? 'channel' : 'global';
 
   const { triggerDownloads } = useTriggerDownloads(token);
 
@@ -200,7 +205,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
     loading: fetchingAllVideos,
     error: fetchAllError,
     clearError: clearFetchAllError,
-  } = useRefreshChannelVideos(channel_id, page, pageSize, hideDownloaded, selectedTab, token);
+  } = useRefreshChannelVideos(channelId, page, pageSize, hideDownloaded, selectedTab, token);
   const navigate = useNavigate();
 
   // Videos are already filtered, sorted, and paginated by the server
@@ -251,7 +256,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
         }
       : undefined;
 
-    await triggerDownloads({ urls, overrideSettings });
+    await triggerDownloads({ urls, overrideSettings, channelId });
 
     setCheckedBoxes([]);
     navigate('/downloads');
@@ -334,13 +339,13 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
   };
 
   const handleAutoDownloadChange = async (enabled: boolean) => {
-    if (!channel_id || !token || !selectedTab) return;
+    if (!channelId || !token || !selectedTab) return;
 
     // Store selectedTab in a const so TypeScript knows it's not null
     const currentTab = selectedTab;
 
     try {
-      const response = await fetch(`/api/channels/${channel_id}/tabs/${currentTab}/auto-download`, {
+      const response = await fetch(`/api/channels/${channelId}/tabs/${currentTab}/auto-download`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -741,6 +746,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs }: ChannelVideosProps) {
         missingVideoCount={getMissingVideoCount()}
         selectedForDeletion={selectedForDeletion.length}
         defaultResolution={defaultResolution}
+        defaultResolutionSource={defaultResolutionSource}
         selectedTab={selectedTab || 'videos'}
         tabLabel={getTabLabel(selectedTab || 'videos')}
         onDownloadDialogClose={() => setDownloadDialogOpen(false)}
