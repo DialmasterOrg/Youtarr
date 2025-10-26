@@ -1,5 +1,25 @@
 # Changelog
 
+## [v1.45.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.45.0) - 2025-10-26
+
+## [1.45.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.44.0...v1.45.0) (2025-10-26)
+
+
+### Features
+
+* **#120:** channel level overrides WIP... ([3095632](https://github.com/DialmasterOrg/Youtarr/commit/309563210b5a759cbd55388c841710af55e5ab4f)), closes [#120](https://github.com/DialmasterOrg/Youtarr/issues/120)
+* **#120:** sync channel settings updates and honor queued override settings ([c0ae2f8](https://github.com/DialmasterOrg/Youtarr/commit/c0ae2f8bfedfbeb51f37dd7dc79f2b71dc66f0e0)), closes [#120](https://github.com/DialmasterOrg/Youtarr/issues/120)
+
+
+### Documentation
+
+* update CHANGELOG for v1.44.0 [skip ci] ([0c7b34b](https://github.com/DialmasterOrg/Youtarr/commit/0c7b34bd9e1e8ceb1e52d426872d107086569530))
+* **#120:** document channel-level configuration overrides ([2878a2d](https://github.com/DialmasterOrg/Youtarr/commit/2878a2d2d7615fc156ea06ad7614c9d0864f228b)), closes [#120](https://github.com/DialmasterOrg/Youtarr/issues/120)
+
+
+
+
+
 ## [v1.44.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.44.0) - 2025-10-22
 
 ## [1.44.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.43.0...v1.44.0) (2025-10-22)
