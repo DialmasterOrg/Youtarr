@@ -203,7 +203,7 @@ Licensed under the ISC License. See [LICENSE.md](LICENSE.md) for details.
 ## Screenshots
 
 <img width="1888" height="1072" alt="image" src="https://github.com/user-attachments/assets/a4e8172c-eb7f-44bb-a891-a9d436ee9b73" />
-<img width="1908" height="1036" alt="image" src="https://github.com/user-attachments/assets/61aad031-1789-4734-be46-61662baaab80" />
+<img width="1489" height="976" alt="image" src="https://github.com/user-attachments/assets/cbf765c6-67d1-431b-a393-0ac0c4e2f7e2" />
 <img width="1890" height="1383" alt="image" src="https://github.com/user-attachments/assets/b8d586b1-fe5b-4cb4-a61a-79d1905cc44e" />
 <img width="1472" height="1236" alt="image" src="https://github.com/user-attachments/assets/cd71937b-8423-42b3-9ddd-070f69c80662" />
 <img width="1476" height="1186" alt="image" src="https://github.com/user-attachments/assets/86fb9b48-2284-4ef9-a76b-e083a2d70584" />
