@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.45.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.45.1) - 2025-10-26
+
+### [1.45.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.45.0...v1.45.1) (2025-10-26)
+
+
+### Bug Fixes
+
+* **#120:** fix download history for channel downloads ([f82a15c](https://github.com/DialmasterOrg/Youtarr/commit/f82a15cb62993ca0eb8f85f76b64b0787746f5fa))
+
+
+### Documentation
+
+* update CHANGELOG for v1.45.0 [skip ci] ([be51d54](https://github.com/DialmasterOrg/Youtarr/commit/be51d548a5d4471f7179c5537814cc9d3adb25f2))
+
+
+
+
+
 ## [v1.45.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.45.0) - 2025-10-26
 
 ## [1.45.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.44.0...v1.45.0) (2025-10-26)
