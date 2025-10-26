@@ -220,8 +220,8 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                       videosText = '---';
                     }
                     let formattedJobType = '';
-                    if (job.jobType === 'Channel Downloads') {
-                      formattedJobType = 'Channel';
+                    if (job.jobType.includes('Channel Downloads')) {
+                      formattedJobType = 'Channels';
                     } else if (job.jobType === 'Manually Added Urls') {
                       formattedJobType = 'Manual Videos';
                     }
