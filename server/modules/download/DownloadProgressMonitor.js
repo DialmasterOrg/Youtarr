@@ -20,7 +20,7 @@ class DownloadProgressMonitor {
       skipped: 0,
       skippedThisChannel: 0
     };
-    this.isChannelDownload = jobType === 'Channel Downloads';
+    this.isChannelDownload = jobType.includes('Channel Downloads');
     this.currentChannelName = '';
     this.currentVideoCompleted = false; // Track if current video is done
     this.channelNameJustSet = false; // Track when channel name is newly set

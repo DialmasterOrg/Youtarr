@@ -288,6 +288,30 @@ class JobModule {
         }
       }
     }
+
+    // Terminate all Pending jobs (they can't be safely resumed after restart)
+    for (let jobId in this.jobs) {
+      if (this.jobs[jobId].status === 'Pending') {
+        logger.warn({ jobId, jobType: this.jobs[jobId].jobType },
+          'Terminating pending job - jobs cannot be resumed after server restart');
+
+        this.jobs[jobId].status = 'Terminated';
+        this.jobs[jobId].output = 'Job terminated during server restart';
+
+        try {
+          await Job.update(
+            {
+              status: 'Terminated',
+              output: 'Job terminated during server restart'
+            },
+            { where: { id: jobId } }
+          );
+          logger.info({ jobId }, 'Pending job marked as Terminated');
+        } catch (err) {
+          logger.error({ err, jobId }, 'Failed to update pending job in database');
+        }
+      }
+    }
   }
 
   saveJobsAndStartNext() {
@@ -308,6 +332,8 @@ class JobModule {
           data: {
             videos: [],
           },
+          // Don't restore action functions - pending jobs will be terminated on startup
+          // since they can't be safely resumed (missing urls, etc.)
         };
       }
 
@@ -380,6 +406,18 @@ class JobModule {
         jobs[id].id = id;
         if (jobs[id].action) {
           jobs[id].action(jobs[id], true); // Invoke the function
+        } else {
+          // Job is missing its action function (likely loaded from DB after restart)
+          logger.warn({ jobId: id, jobType: jobs[id].jobType },
+            'Cannot start pending job - missing action function, marking as Terminated');
+
+          this.updateJob(id, {
+            status: 'Terminated',
+            output: 'Job could not be started after server restart',
+          });
+
+          // Try to start the next pending job
+          this.startNextJob();
         }
         break;
       }
@@ -972,7 +1010,7 @@ class JobModule {
         null,
         'download',
         'downloadComplete',
-        { text: 'Download job completed.', videos: updatedFields.data.videos || [] }
+        { text: 'Download job completed.', videos: updatedFields.data?.videos || [] }
       );
 
       // Only modify output and status for actual completions, not terminations
