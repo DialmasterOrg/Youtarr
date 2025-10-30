@@ -1,5 +1,28 @@
 # Changelog
 
+## [v1.46.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.46.0) - 2025-10-30
+
+## [1.46.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.45.1...v1.46.0) (2025-10-30)
+
+
+### Features
+
+* use video filename for video posters instead of generic poster.jpg ([c779e03](https://github.com/DialmasterOrg/Youtarr/commit/c779e0369e0a3c4fbdb830cf852a4a4b0cc639c7))
+
+
+### Bug Fixes
+
+* prevent stuck pending jobs blocking download queue ([c69ea6e](https://github.com/DialmasterOrg/Youtarr/commit/c69ea6e10afbec87c2cf2fb5615b54b13c7459f7))
+
+
+### Documentation
+
+* update CHANGELOG for v1.45.1 [skip ci] ([20c3b4a](https://github.com/DialmasterOrg/Youtarr/commit/20c3b4aa65fd086a881c09238622dbb5ebb7dc3e))
+
+
+
+
+
 ## [v1.45.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.45.1) - 2025-10-26
 
 ### [1.45.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.45.0...v1.45.1) (2025-10-26)
