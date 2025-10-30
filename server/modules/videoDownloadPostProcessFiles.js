@@ -20,7 +20,8 @@ const jsonPath = path.format({
 });
 
 const videoDirectory = path.dirname(videoPath);
-const imagePath = path.join(videoDirectory, 'poster.jpg'); // assume the image thumbnail is named 'poster.jpg'
+// Poster image uses same filename as video but with .jpg extension
+const imagePath = path.join(videoDirectory, parsedPath.name + '.jpg');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
