@@ -106,7 +106,7 @@ class NotificationModule {
    */
   formatDownloadMessage(finalSummary, videoData) {
     const { totalDownloaded, jobType } = finalSummary;
-    const isChannelDownload = jobType === 'Channel Downloads';
+    const isChannelDownload = jobType.includes('Channel Downloads');
 
     // Build the title
     let title;

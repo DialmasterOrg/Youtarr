@@ -918,7 +918,7 @@ const initialize = async () => {
       const runningJobs = jobModule.getRunningJobs();
       const channelDownloadJob = runningJobs.find(
         (job) =>
-          job.jobType === 'Channel Downloads' && job.status === 'In Progress'
+          job.jobType.includes('Channel Downloads') && job.status === 'In Progress'
       );
       if (channelDownloadJob) {
         res.status(400).json({ error: 'Job Already Running' });

@@ -298,7 +298,7 @@ describe('JobModule', () => {
 
       JobModule.jobs = {
         'job-1': { status: 'In Progress', id: 'job-1' },
-        'job-2': { status: 'Pending', id: 'job-2' },
+        'job-2': { status: 'Pending', id: 'job-2', jobType: 'Channel Downloads' },
         'job-3': { status: 'In Progress', id: 'job-3' },
         'job-4': { status: 'Complete', id: 'job-4' }
       };
@@ -307,7 +307,8 @@ describe('JobModule', () => {
 
       expect(JobModule.jobs['job-1'].status).toBe('Terminated');
       expect(JobModule.jobs['job-1'].output).toContain('1 video completed');
-      expect(JobModule.jobs['job-2'].status).toBe('Pending');
+      // Pending jobs are now also terminated on startup
+      expect(JobModule.jobs['job-2'].status).toBe('Terminated');
       expect(JobModule.jobs['job-3'].status).toBe('Terminated');
       expect(JobModule.jobs['job-4'].status).toBe('Complete');
       expect(Job.update).toHaveBeenCalledWith(
@@ -385,7 +386,7 @@ describe('JobModule', () => {
 
       JobVideoDownload.findAll.mockRejectedValue(new Error('DB Error'));
 
-      
+
       JobModule = require('../jobModule');
 
       await new Promise(resolve => setTimeout(resolve, 10));
@@ -399,6 +400,82 @@ describe('JobModule', () => {
       expect(JobModule.jobs['job-1'].status).toBe('Terminated');
       expect(logger.error).toHaveBeenCalled();
 
+    });
+
+    test('should terminate all Pending jobs on startup', async () => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        plexApiKey: 'test-key',
+        youtubeOutputDirectory: '/test/output'
+      }));
+
+      JobVideoDownload.findAll.mockResolvedValue([]);
+      JobVideoDownload.destroy.mockResolvedValue(0);
+
+      JobModule = require('../jobModule');
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      JobModule.jobs = {
+        'job-1': { status: 'In Progress', id: 'job-1', jobType: 'Channel Downloads' },
+        'job-2': { status: 'Pending', id: 'job-2', jobType: 'Manually Added Urls' },
+        'job-3': { status: 'Pending', id: 'job-3', jobType: 'Channel Downloads' },
+        'job-4': { status: 'Complete', id: 'job-4', jobType: 'Channel Downloads' }
+      };
+
+      await JobModule.terminateInProgressJobs();
+
+      // In Progress jobs should be terminated
+      expect(JobModule.jobs['job-1'].status).toBe('Terminated');
+      // Pending jobs should also be terminated
+      expect(JobModule.jobs['job-2'].status).toBe('Terminated');
+      expect(JobModule.jobs['job-2'].output).toBe('Job terminated during server restart');
+      expect(JobModule.jobs['job-3'].status).toBe('Terminated');
+      expect(JobModule.jobs['job-3'].output).toBe('Job terminated during server restart');
+      // Complete jobs should remain unchanged
+      expect(JobModule.jobs['job-4'].status).toBe('Complete');
+
+      // Verify DB updates were called for both Pending jobs
+      expect(Job.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'Terminated',
+          output: 'Job terminated during server restart'
+        }),
+        expect.objectContaining({ where: { id: 'job-2' } })
+      );
+      expect(Job.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'Terminated',
+          output: 'Job terminated during server restart'
+        }),
+        expect.objectContaining({ where: { id: 'job-3' } })
+      );
+    });
+
+    test('should handle DB update errors for Pending jobs gracefully', async () => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        plexApiKey: 'test-key',
+        youtubeOutputDirectory: '/test/output'
+      }));
+
+      JobVideoDownload.findAll.mockResolvedValue([]);
+      Job.update.mockRejectedValue(new Error('DB Update Error'));
+
+      JobModule = require('../jobModule');
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      JobModule.jobs = {
+        'job-1': { status: 'Pending', id: 'job-1', jobType: 'Channel Downloads' }
+      };
+
+      await JobModule.terminateInProgressJobs();
+
+      // Job should still be terminated in memory
+      expect(JobModule.jobs['job-1'].status).toBe('Terminated');
+      // Error should be logged
+      expect(logger.error).toHaveBeenCalled();
     });
   });
 
@@ -745,6 +822,78 @@ describe('JobModule', () => {
       expect(logger.info).toHaveBeenCalledWith('Looking for next job to start');
 
     });
+
+    test('should terminate job with missing action function and try next job', () => {
+      const mockAction = jest.fn();
+      const mockUpdateJob = jest.fn();
+
+      // Save original method
+      const originalUpdateJob = JobModule.updateJob;
+      const originalStartNextJob = JobModule.startNextJob;
+
+      // Mock updateJob to track calls
+      JobModule.updateJob = mockUpdateJob;
+
+      // Create a call counter to prevent infinite recursion
+      let startNextCallCount = 0;
+      JobModule.startNextJob = function() {
+        startNextCallCount++;
+        if (startNextCallCount > 2) return; // Prevent infinite recursion
+        originalStartNextJob.call(this);
+      };
+
+      JobModule.jobs = {
+        'job-1': { status: 'Complete' },
+        'job-2': { status: 'Pending', jobType: 'Manually Added Urls' }, // No action function
+        'job-3': { status: 'Pending', action: mockAction, jobType: 'Channel Downloads' }
+      };
+
+      JobModule.startNextJob();
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ jobId: 'job-2', jobType: 'Manually Added Urls' }),
+        'Cannot start pending job - missing action function, marking as Terminated'
+      );
+      expect(mockUpdateJob).toHaveBeenCalledWith('job-2', {
+        status: 'Terminated',
+        output: 'Job could not be started after server restart',
+      });
+      // Should recursively call startNextJob to try the next pending job
+      expect(startNextCallCount).toBeGreaterThan(1);
+
+      // Restore original methods
+      JobModule.updateJob = originalUpdateJob;
+      JobModule.startNextJob = originalStartNextJob;
+    });
+
+    test('should not invoke action if job has no action function', () => {
+      JobModule.updateJob = jest.fn();
+
+      JobModule.jobs = {
+        'job-1': { status: 'Pending', jobType: 'Channel Downloads' } // No action
+      };
+
+      // Need to actually test the real startNextJob implementation
+      const RealJobModule = require('../jobModule');
+      RealJobModule.jobs = JobModule.jobs;
+      RealJobModule.updateJob = JobModule.updateJob;
+      // Mock startNextJob to prevent infinite recursion
+      const originalStartNext = RealJobModule.startNextJob.bind(RealJobModule);
+      let callCount = 0;
+      RealJobModule.startNextJob = function() {
+        callCount++;
+        if (callCount === 1) {
+          originalStartNext();
+        }
+      };
+
+      RealJobModule.startNextJob();
+
+      expect(JobModule.updateJob).toHaveBeenCalledWith('job-1', {
+        status: 'Terminated',
+        output: 'Job could not be started after server restart',
+      });
+    });
   });
 
   describe('addOrUpdateJob', () => {
@@ -920,6 +1069,59 @@ describe('JobModule', () => {
 
       expect(logger.warn).toHaveBeenCalled();
 
+    });
+
+    test('should handle Terminated status without data.videos gracefully', async () => {
+      JobModule.jobs = {
+        'job-1': { status: 'Pending', jobType: 'Channel Downloads' }
+      };
+
+      JobModule.saveJobOnly = jest.fn().mockResolvedValue();
+
+      // Update without data property (like when terminating a job with missing action)
+      JobModule.updateJob('job-1', {
+        status: 'Terminated',
+        output: 'Job could not be started after server restart'
+      });
+
+      // Wait for async save operation
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'downloadComplete',
+        expect.objectContaining({ videos: [] }) // Should use empty array when data.videos is undefined
+      );
+      expect(JobModule.jobs['job-1'].status).toBe('Terminated');
+      expect(JobModule.jobs['job-1'].output).toBe('Job could not be started after server restart');
+      expect(JobModule.saveJobOnly).toHaveBeenCalledWith('job-1', expect.any(Object));
+    });
+
+    test('should emit download complete with videos when data.videos is present', async () => {
+      JobModule.jobs = {
+        'job-1': { status: 'In Progress', data: { videos: [] } }
+      };
+
+      JobModule.saveJobOnly = jest.fn().mockResolvedValue();
+
+      JobModule.updateJob('job-1', {
+        status: 'Complete',
+        data: { videos: ['video1', 'video2', 'video3'] }
+      });
+
+      // Wait for async save operation
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'downloadComplete',
+        expect.objectContaining({ videos: ['video1', 'video2', 'video3'] })
+      );
+      expect(JobModule.jobs['job-1'].output).toBe('3 videos.');
     });
   });
 

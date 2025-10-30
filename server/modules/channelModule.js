@@ -430,8 +430,10 @@ class ChannelModule {
     // Check if a Channel Downloads job is already running
     const jobModule = require('./jobModule');
     const jobs = jobModule.getAllJobs();
+    // Check for both In Progress and Pending channel downloads to prevent accumulation
+    // Note: Pending jobs are terminated on app restart, so they won't get stuck
     const hasRunningChannelDownload = Object.values(jobs).some(
-      job => job.jobType === 'Channel Downloads' &&
+      job => job.jobType.includes('Channel Downloads') &&
              (job.status === 'In Progress' || job.status === 'Pending')
     );
 

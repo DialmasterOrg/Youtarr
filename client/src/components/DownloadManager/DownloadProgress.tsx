@@ -462,7 +462,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
               <AccordionDetails sx={{ pt: 0, pb: 1.5 }}>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                   {pendingJobs.map((job, index) => {
-                    const isChannelDownload = job.jobType === 'Channel Downloads';
+                    const isChannelDownload = job.jobType.includes('Channel Downloads');
                     const label = isChannelDownload ? 'Channel Update' : 'Manual Download';
                     const icon = isChannelDownload ?
                       <PlaylistPlayIcon fontSize="small" /> :
@@ -557,7 +557,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
               </Typography>
               <Typography variant="caption" color={(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'warning.contrastText' : 'success.contrastText'} sx={{ mt: 0.5, display: 'block' }}>
                 {(() => {
-                  const jobTypeLabel = finalSummary.jobType === 'Channel Downloads'
+                  const jobTypeLabel = finalSummary.jobType.includes('Channel Downloads')
                     ? 'Channel update'
                     : finalSummary.jobType === 'Manually Added Urls'
                     ? 'Manual download'
