@@ -247,7 +247,13 @@ class DownloadModule {
     }
 
     // All groups completed successfully
-    logger.info('All download groups completed, refreshing Plex and starting next job');
+    logger.info('All download groups completed, marking job as complete');
+
+    // Mark the job as complete - this will trigger video reload from DB
+    await jobModule.updateJob(jobId, {
+      status: 'Complete',
+      output: 'All groups completed successfully.',
+    });
 
     // Refresh Plex library once after all groups
     const plexModule = require('./plexModule');

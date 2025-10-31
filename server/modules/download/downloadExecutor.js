@@ -1028,25 +1028,49 @@ class DownloadExecutor {
         } else if (stderrBuffer && !monitor.hasError) {
           status = 'Complete with Warnings';
           output = `${videoCount} videos.`;
-          await jobModule.updateJob(jobId, {
-            status: status,
-            output: output,
-            data: {
-              videos: videoData,
-              failedVideos: failedVideosList || []
-            },
-          });
+          // When skipJobTransition is true, we're processing multiple groups
+          // Don't mark as complete yet - just save the videos
+          if (skipJobTransition) {
+            await jobModule.updateJob(jobId, {
+              output: output,
+              data: {
+                videos: videoData,
+                failedVideos: failedVideosList || []
+              },
+            });
+          } else {
+            await jobModule.updateJob(jobId, {
+              status: status,
+              output: output,
+              data: {
+                videos: videoData,
+                failedVideos: failedVideosList || []
+              },
+            });
+          }
         } else {
           status = 'Complete';
           output = `${videoCount} videos.`;
-          await jobModule.updateJob(jobId, {
-            status: status,
-            output: output,
-            data: {
-              videos: videoData,
-              failedVideos: failedVideosList || []
-            },
-          });
+          // When skipJobTransition is true, we're processing multiple groups
+          // Don't mark as complete yet - just save the videos
+          if (skipJobTransition) {
+            await jobModule.updateJob(jobId, {
+              output: output,
+              data: {
+                videos: videoData,
+                failedVideos: failedVideosList || []
+              },
+            });
+          } else {
+            await jobModule.updateJob(jobId, {
+              status: status,
+              output: output,
+              data: {
+                videos: videoData,
+                failedVideos: failedVideosList || []
+              },
+            });
+          }
         }
 
         // Consider it successful if:
