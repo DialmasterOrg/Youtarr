@@ -256,7 +256,7 @@ class DownloadModule {
     });
 
     // Now start the next job in the queue
-    jobModule.startNextJob();
+    await jobModule.startNextJob();
   }
 
   /**

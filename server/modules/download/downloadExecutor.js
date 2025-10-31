@@ -1028,7 +1028,7 @@ class DownloadExecutor {
         } else if (stderrBuffer && !monitor.hasError) {
           status = 'Complete with Warnings';
           output = `${videoCount} videos.`;
-          jobModule.updateJob(jobId, {
+          await jobModule.updateJob(jobId, {
             status: status,
             output: output,
             data: {
@@ -1039,7 +1039,7 @@ class DownloadExecutor {
         } else {
           status = 'Complete';
           output = `${videoCount} videos.`;
-          jobModule.updateJob(jobId, {
+          await jobModule.updateJob(jobId, {
             status: status,
             output: output,
             data: {
@@ -1240,7 +1240,9 @@ class DownloadExecutor {
           plexModule.refreshLibrary().catch(err => {
             logger.error({ err }, 'Failed to refresh Plex library');
           });
-          jobModule.startNextJob();
+          jobModule.startNextJob().catch(err => {
+            logger.error({ err }, 'Failed to start next job');
+          });
         }
         resolve();
       });
@@ -1271,7 +1273,7 @@ class DownloadExecutor {
         await this.cleanupPartialFiles(Array.from(partialDestinations));
         reject(err);
       });
-    }).catch((error) => {
+    }).catch(async (error) => {
       logger.error({ err: error }, 'Download process error');
 
       // Clean up temporary channels file on error
@@ -1286,7 +1288,7 @@ class DownloadExecutor {
 
       // This catch block is now only for unexpected errors, not timeouts
       // Timeouts are handled gracefully in the exit handler
-      jobModule.updateJob(jobId, {
+      await jobModule.updateJob(jobId, {
         status: 'Error',
         output: 'Download process error: ' + error.message,
       });

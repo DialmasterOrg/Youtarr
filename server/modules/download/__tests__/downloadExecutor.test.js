@@ -40,7 +40,7 @@ jest.mock('../../plexModule', () => ({
 
 jest.mock('../../jobModule', () => ({
   updateJob: jest.fn().mockResolvedValue(),
-  startNextJob: jest.fn()
+  startNextJob: jest.fn().mockResolvedValue()
 }));
 
 jest.mock('../../messageEmitter', () => ({
