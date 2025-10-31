@@ -242,27 +242,37 @@ class ChannelSettingsModule {
       updateData.video_quality = settings.video_quality;
     }
 
-    // Move the channel folder if subfolder changed
-    let moveResult = null;
-    if (subFolderChanged) {
-      moveResult = await this.moveChannelFolder(channel, oldSubFolder, newSubFolder);
-    }
-
-    // Persist changes only after filesystem operations succeed
+    // Update database FIRST to ensure changes are persisted before slow file operations
+    // This prevents issues where HTTP requests timeout during file operations
     let updatedChannel = channel;
     if (Object.keys(updateData).length > 0) {
       try {
         updatedChannel = await channel.update(updateData);
+        console.log(`Updated channel settings in database: ${JSON.stringify(updateData)}`);
       } catch (updateError) {
-        // Attempt to roll back folder move if DB update fails
-        if (subFolderChanged && moveResult && moveResult.success) {
-          try {
-            await this.moveChannelFolder(channel, newSubFolder, oldSubFolder);
-          } catch (rollbackError) {
-            console.error('Error rolling back channel folder move after DB update failure:', rollbackError.message);
-          }
-        }
+        console.error('Error updating channel settings in database:', updateError.message);
         throw updateError;
+      }
+    }
+
+    // Move the channel folder if subfolder changed
+    // If this fails, we'll roll back the database change
+    let moveResult = null;
+    if (subFolderChanged) {
+      try {
+        moveResult = await this.moveChannelFolder(updatedChannel, oldSubFolder, newSubFolder);
+      } catch (moveError) {
+        // Roll back database change if folder move fails
+        console.error('Error moving channel folder, rolling back database change:', moveError.message);
+        try {
+          await updatedChannel.update({ sub_folder: oldSubFolder });
+          console.log('Successfully rolled back database change');
+        } catch (rollbackError) {
+          console.error('Error rolling back database change after folder move failure:', rollbackError.message);
+          // Database is now inconsistent - log critical error
+          console.error('CRITICAL: Database sub_folder is out of sync with filesystem!');
+        }
+        throw moveError;
       }
     }
 
@@ -329,15 +339,19 @@ class ChannelSettingsModule {
       // Update all video file paths in the database
       await this.updateVideoFilePaths(channel.channel_id, oldPath, newPath);
 
-      // Trigger Plex library refresh
-      try {
-        const plexModule = require('./plexModule');
-        await plexModule.refreshLibrary();
-        console.log('Plex library refresh initiated after folder move');
-      } catch (plexError) {
-        console.log('Could not refresh Plex library:', plexError.message);
-        // Don't fail the whole operation if Plex refresh fails
-      }
+      // Trigger Plex library refresh asynchronously (non-blocking)
+      // Don't await this to prevent timeout issues from blocking the operation
+      setImmediate(async () => {
+        try {
+          const plexModule = require('./plexModule');
+          await plexModule.refreshLibrary();
+          console.log('Plex library refresh completed after folder move');
+        } catch (plexError) {
+          console.log('Could not refresh Plex library:', plexError.message);
+          // Don't fail the whole operation if Plex refresh fails
+        }
+      });
+      console.log('Plex library refresh initiated asynchronously');
 
       return {
         success: true,
