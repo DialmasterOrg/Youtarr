@@ -301,7 +301,8 @@ describe('YtdlpCommandBuilder', () => {
       const thumbOutput = result[outputIndices[1] + 1];
       expect(thumbOutput).toContain('thumbnail:');
       expect(thumbOutput).toContain('/mock/youtube/output');
-      expect(thumbOutput).toContain('/poster');
+      // Thumbnail should use same filename as video (without extension)
+      expect(thumbOutput).toContain('%(uploader,channel,uploader_id)s - %(title).76s [%(id)s]');
 
       // Check playlist thumbnail is disabled
       const plThumbOutput = result[outputIndices[2] + 1];
