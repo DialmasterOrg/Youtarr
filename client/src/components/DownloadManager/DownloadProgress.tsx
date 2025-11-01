@@ -735,7 +735,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
               }}>
                 <Typography variant="body2" color="text.secondary">
                   {(() => {
-                    const isChannelDownload = currentProgress.downloadType === 'Channel Downloads';
+                    const isChannelDownload = currentProgress.downloadType?.includes('Channel Downloads');
 
                     if (isChannelDownload) {
                       const channelName = currentProgress.currentChannelName || 'channels';
