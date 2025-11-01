@@ -247,7 +247,75 @@ class DownloadModule {
     }
 
     // All groups completed successfully
-    logger.info('All download groups completed, refreshing Plex and starting next job');
+    logger.info('All download groups completed, marking job as complete');
+
+    // Mark the job as complete - this will trigger video reload from DB
+    await jobModule.updateJob(jobId, {
+      status: 'Complete',
+    });
+
+    // Get the updated job with all videos reloaded from database
+    const completedJob = jobModule.getJob(jobId);
+
+    if (completedJob && completedJob.data) {
+      // Emit final summary WebSocket message with cumulative totals
+      const MessageEmitter = require('./messageEmitter');
+      const totalVideos = completedJob.data.videos?.length || 0;
+      const failedVideos = completedJob.data.failedVideos || [];
+      const totalSkipped = completedJob.data.cumulativeSkipped || 0;
+
+      const finalSummary = {
+        totalDownloaded: totalVideos,
+        totalSkipped: totalSkipped,
+        totalFailed: failedVideos.length,
+        failedVideos: failedVideos,
+        jobType: 'Channel Downloads - All Groups',
+        completedAt: new Date().toISOString()
+      };
+
+      // Build completion message with counts
+      const messageParts = [`${totalVideos} downloaded`];
+      if (totalSkipped > 0) messageParts.push(`${totalSkipped} skipped`);
+      if (failedVideos.length > 0) messageParts.push(`${failedVideos.length} failed`);
+      const completionText = `Download completed: ${messageParts.join(', ')} across ${groups.length} groups`;
+
+      const finalPayload = {
+        text: completionText,
+        progress: {
+          jobId: jobId,
+          state: 'complete',
+          videoCount: {
+            completed: totalVideos,
+            total: totalVideos,
+            skipped: totalSkipped
+          }
+        },
+        finalSummary: finalSummary
+      };
+
+      MessageEmitter.emitMessage(
+        'broadcast',
+        null,
+        'download',
+        'downloadProgress',
+        finalPayload
+      );
+
+      logger.info({ jobId, totalVideos, totalFailed: failedVideos.length, groupCount: groups.length },
+        'Emitted final summary for multi-group download');
+
+      // Send notification for successful multi-group download
+      if (totalVideos > 0) {
+        const notificationModule = require('./notificationModule');
+        notificationModule.sendDownloadNotification({
+          finalSummary: finalSummary,
+          videoData: completedJob.data.videos || [],
+          channelName: `${groups.length} groups`
+        }).catch(err => {
+          logger.error({ err }, 'Failed to send notification for multi-group download');
+        });
+      }
+    }
 
     // Refresh Plex library once after all groups
     const plexModule = require('./plexModule');
@@ -256,7 +324,7 @@ class DownloadModule {
     });
 
     // Now start the next job in the queue
-    jobModule.startNextJob();
+    await jobModule.startNextJob();
   }
 
   /**

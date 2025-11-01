@@ -1028,25 +1028,77 @@ class DownloadExecutor {
         } else if (stderrBuffer && !monitor.hasError) {
           status = 'Complete with Warnings';
           output = `${videoCount} videos.`;
-          jobModule.updateJob(jobId, {
-            status: status,
-            output: output,
-            data: {
-              videos: videoData,
-              failedVideos: failedVideosList || []
-            },
-          });
+          // When skipJobTransition is true, we're processing multiple groups
+          // Don't mark as complete yet - just save the videos
+          if (skipJobTransition) {
+            // For multi-group downloads, accumulate videos, failedVideos and skipped counts
+            const currentJob = jobModule.getJob(jobId);
+            const existingVideos = currentJob?.data?.videos || [];
+            const existingFailedVideos = currentJob?.data?.failedVideos || [];
+            const existingSkippedCount = currentJob?.data?.cumulativeSkipped || 0;
+
+            await jobModule.updateJob(jobId, {
+              output: output,
+              data: {
+                videos: [...existingVideos, ...videoData],
+                failedVideos: [...existingFailedVideos, ...(failedVideosList || [])],
+                cumulativeSkipped: existingSkippedCount + (monitor.videoCount.skipped || 0)
+              },
+            });
+          } else {
+            await jobModule.updateJob(jobId, {
+              status: status,
+              output: output,
+              data: {
+                videos: videoData,
+                failedVideos: failedVideosList || []
+              },
+            });
+          }
         } else {
           status = 'Complete';
           output = `${videoCount} videos.`;
-          jobModule.updateJob(jobId, {
-            status: status,
-            output: output,
-            data: {
-              videos: videoData,
-              failedVideos: failedVideosList || []
-            },
-          });
+          // When skipJobTransition is true, we're processing multiple groups
+          // Don't mark as complete yet - just save the videos
+          if (skipJobTransition) {
+            // For multi-group downloads, accumulate videos, failedVideos and skipped counts
+            const currentJob = jobModule.getJob(jobId);
+            const existingVideos = currentJob?.data?.videos || [];
+            const existingFailedVideos = currentJob?.data?.failedVideos || [];
+            const existingSkippedCount = currentJob?.data?.cumulativeSkipped || 0;
+
+            await jobModule.updateJob(jobId, {
+              output: output,
+              data: {
+                videos: [...existingVideos, ...videoData],
+                failedVideos: [...existingFailedVideos, ...(failedVideosList || [])],
+                cumulativeSkipped: existingSkippedCount + (monitor.videoCount.skipped || 0)
+              },
+            });
+          } else {
+            await jobModule.updateJob(jobId, {
+              status: status,
+              output: output,
+              data: {
+                videos: videoData,
+                failedVideos: failedVideosList || []
+              },
+            });
+          }
+        }
+
+        // For multi-group downloads, persist videos to database immediately after each group
+        // This ensures resilience against crashes or terminations
+        if (skipJobTransition) {
+          const currentJob = jobModule.getJob(jobId);
+          if (currentJob) {
+            await jobModule.saveJobOnly(jobId, currentJob);
+            logger.info({
+              jobId,
+              totalAccumulatedVideos: currentJob.data?.videos?.length || 0,
+              currentGroupVideos: videoData.length
+            }, 'Persisted accumulated videos to database after group completion');
+          }
         }
 
         // Consider it successful if:
@@ -1134,8 +1186,13 @@ class DownloadExecutor {
         const finalProgress = monitor.snapshot(finalState);
         const finalPayload = {
           text: finalText,
-          progress: finalProgress,
-          finalSummary: {
+          progress: finalProgress
+        };
+
+        // Only include finalSummary if this is the final completion (not an intermediate group)
+        // For multi-group downloads, skipJobTransition=true means more groups are coming
+        if (!skipJobTransition) {
+          finalPayload.finalSummary = {
             // Use actual videoData.length for successful downloads
             totalDownloaded: videoData.length,
             totalSkipped: monitor.videoCount.skipped || 0,
@@ -1143,8 +1200,8 @@ class DownloadExecutor {
             failedVideos: failedVideosList,
             jobType: jobType,
             completedAt: new Date().toISOString()
-          }
-        };
+          };
+        }
 
         if (finalState === 'terminated') {
           // Terminated jobs are warnings, not full errors
@@ -1173,7 +1230,8 @@ class DownloadExecutor {
         );
 
         // Send notification if download was successful and notifications are enabled
-        if (finalState === 'complete' && !isFinalError) {
+        // Skip notifications for intermediate groups (only send for final completion)
+        if (finalState === 'complete' && !isFinalError && !skipJobTransition) {
           const notificationModule = require('../notificationModule');
           notificationModule.sendDownloadNotification({
             finalSummary: finalPayload.finalSummary,
@@ -1240,7 +1298,9 @@ class DownloadExecutor {
           plexModule.refreshLibrary().catch(err => {
             logger.error({ err }, 'Failed to refresh Plex library');
           });
-          jobModule.startNextJob();
+          jobModule.startNextJob().catch(err => {
+            logger.error({ err }, 'Failed to start next job');
+          });
         }
         resolve();
       });
@@ -1271,7 +1331,7 @@ class DownloadExecutor {
         await this.cleanupPartialFiles(Array.from(partialDestinations));
         reject(err);
       });
-    }).catch((error) => {
+    }).catch(async (error) => {
       logger.error({ err: error }, 'Download process error');
 
       // Clean up temporary channels file on error
@@ -1286,7 +1346,7 @@ class DownloadExecutor {
 
       // This catch block is now only for unexpected errors, not timeouts
       // Timeouts are handled gracefully in the exit handler
-      jobModule.updateJob(jobId, {
+      await jobModule.updateJob(jobId, {
         status: 'Error',
         output: 'Download process error: ' + error.message,
       });

@@ -823,9 +823,9 @@ describe('JobModule', () => {
 
     });
 
-    test('should terminate job with missing action function and try next job', () => {
+    test('should terminate job with missing action function and try next job', async () => {
       const mockAction = jest.fn();
-      const mockUpdateJob = jest.fn();
+      const mockUpdateJob = jest.fn().mockResolvedValue();
 
       // Save original method
       const originalUpdateJob = JobModule.updateJob;
@@ -836,10 +836,10 @@ describe('JobModule', () => {
 
       // Create a call counter to prevent infinite recursion
       let startNextCallCount = 0;
-      JobModule.startNextJob = function() {
+      JobModule.startNextJob = async function() {
         startNextCallCount++;
         if (startNextCallCount > 2) return; // Prevent infinite recursion
-        originalStartNextJob.call(this);
+        await originalStartNextJob.call(this);
       };
 
       JobModule.jobs = {
@@ -848,7 +848,7 @@ describe('JobModule', () => {
         'job-3': { status: 'Pending', action: mockAction, jobType: 'Channel Downloads' }
       };
 
-      JobModule.startNextJob();
+      await JobModule.startNextJob();
 
       expect(logger.warn).toHaveBeenCalledWith(
         expect.objectContaining({ jobId: 'job-2', jobType: 'Manually Added Urls' }),
@@ -1040,7 +1040,18 @@ describe('JobModule', () => {
 
       JobModule.saveJobOnly = jest.fn().mockResolvedValue();
 
-      JobModule.updateJob('job-1', {
+      // Mock database calls for video reload logic
+      const mockVideo1 = { id: 1, youtubeId: 'video1', dataValues: { id: 1, youtubeId: 'video1' } };
+      const mockVideo2 = { id: 2, youtubeId: 'video2', dataValues: { id: 2, youtubeId: 'video2' } };
+      JobVideo.findAll.mockResolvedValue([
+        { job_id: 'job-1', video_id: 1 },
+        { job_id: 'job-1', video_id: 2 }
+      ]);
+      Video.findOne
+        .mockResolvedValueOnce(mockVideo1)
+        .mockResolvedValueOnce(mockVideo2);
+
+      await JobModule.updateJob('job-1', {
         status: 'Complete',
         data: { videos: ['video1', 'video2'] }
       });
@@ -1106,7 +1117,21 @@ describe('JobModule', () => {
 
       JobModule.saveJobOnly = jest.fn().mockResolvedValue();
 
-      JobModule.updateJob('job-1', {
+      // Mock database calls for video reload logic
+      const mockVideo1 = { id: 1, youtubeId: 'video1', dataValues: { id: 1, youtubeId: 'video1' } };
+      const mockVideo2 = { id: 2, youtubeId: 'video2', dataValues: { id: 2, youtubeId: 'video2' } };
+      const mockVideo3 = { id: 3, youtubeId: 'video3', dataValues: { id: 3, youtubeId: 'video3' } };
+      JobVideo.findAll.mockResolvedValue([
+        { job_id: 'job-1', video_id: 1 },
+        { job_id: 'job-1', video_id: 2 },
+        { job_id: 'job-1', video_id: 3 }
+      ]);
+      Video.findOne
+        .mockResolvedValueOnce(mockVideo1)
+        .mockResolvedValueOnce(mockVideo2)
+        .mockResolvedValueOnce(mockVideo3);
+
+      await JobModule.updateJob('job-1', {
         status: 'Complete',
         data: { videos: ['video1', 'video2', 'video3'] }
       });
@@ -1122,6 +1147,118 @@ describe('JobModule', () => {
         expect.objectContaining({ videos: ['video1', 'video2', 'video3'] })
       );
       expect(JobModule.jobs['job-1'].output).toBe('3 videos.');
+    });
+
+    test('should reload videos from database when job completes', async () => {
+      JobModule.jobs = {
+        'job-1': {
+          status: 'In Progress',
+          data: { videos: ['incomplete-video'] } // This should be replaced by DB data
+        }
+      };
+
+      JobModule.saveJobOnly = jest.fn().mockResolvedValue();
+
+      // Mock database calls for video reload logic
+      const mockVideo1 = {
+        id: 1,
+        youtubeId: 'db-video-1',
+        youTubeVideoName: 'Database Video 1',
+        dataValues: { id: 1, youtubeId: 'db-video-1', youTubeVideoName: 'Database Video 1' }
+      };
+      const mockVideo2 = {
+        id: 2,
+        youtubeId: 'db-video-2',
+        youTubeVideoName: 'Database Video 2',
+        dataValues: { id: 2, youtubeId: 'db-video-2', youTubeVideoName: 'Database Video 2' }
+      };
+
+      JobVideo.findAll.mockResolvedValue([
+        { job_id: 'job-1', video_id: 1 },
+        { job_id: 'job-1', video_id: 2 }
+      ]);
+      Video.findOne
+        .mockResolvedValueOnce(mockVideo1)
+        .mockResolvedValueOnce(mockVideo2);
+
+      await JobModule.updateJob('job-1', {
+        status: 'Complete',
+        data: { videos: ['old-video'] }
+      });
+
+      // Wait for async operations
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Verify videos were reloaded from database
+      expect(JobVideo.findAll).toHaveBeenCalledWith({
+        where: { job_id: 'job-1' }
+      });
+      expect(Video.findOne).toHaveBeenCalledTimes(2);
+      expect(JobModule.jobs['job-1'].data.videos).toHaveLength(2);
+      expect(JobModule.jobs['job-1'].data.videos[0]).toEqual(mockVideo1.dataValues);
+      expect(JobModule.jobs['job-1'].data.videos[1]).toEqual(mockVideo2.dataValues);
+      expect(JobModule.jobs['job-1'].output).toBe('2 videos.');
+      expect(logger.info).toHaveBeenCalledWith(
+        { jobId: 'job-1', videoCount: 2 },
+        'Reloaded videos from database for completed job'
+      );
+    });
+
+    test('should handle video reload errors gracefully', async () => {
+      JobModule.jobs = {
+        'job-1': { status: 'In Progress', data: { videos: [] } }
+      };
+
+      JobModule.saveJobOnly = jest.fn().mockResolvedValue();
+
+      // Mock database error
+      JobVideo.findAll.mockRejectedValue(new Error('Database connection failed'));
+
+      await JobModule.updateJob('job-1', {
+        status: 'Complete',
+        data: { videos: [] }
+      });
+
+      // Wait for async operations
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Should log error but continue with save
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          err: expect.any(Error),
+          jobId: 'job-1'
+        }),
+        'Error loading videos from database for completed job'
+      );
+      expect(JobModule.saveJobOnly).toHaveBeenCalled();
+    });
+
+    test('should not reload videos for Terminated jobs', async () => {
+      JobModule.jobs = {
+        'job-1': { status: 'In Progress', data: { videos: [] } }
+      };
+
+      JobModule.saveJobOnly = jest.fn().mockResolvedValue();
+
+      // Mock database calls
+      JobVideo.findAll.mockResolvedValue([
+        { job_id: 'job-1', video_id: 1 }
+      ]);
+      const mockVideo = { id: 1, youtubeId: 'video1', dataValues: { id: 1, youtubeId: 'video1' } };
+      Video.findOne.mockResolvedValue(mockVideo);
+
+      await JobModule.updateJob('job-1', {
+        status: 'Terminated',
+        output: 'Job terminated by user'
+      });
+
+      // Wait for async operations
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Videos should be reloaded (for accurate count)
+      expect(JobVideo.findAll).toHaveBeenCalled();
+      // But output should not be modified for Terminated status
+      expect(JobModule.jobs['job-1'].output).toBe('Job terminated by user');
     });
   });
 

@@ -314,9 +314,9 @@ class JobModule {
     }
   }
 
-  saveJobsAndStartNext() {
+  async saveJobsAndStartNext() {
     // Just start the next job - no need to save anything on startup
-    this.startNextJob();
+    await this.startNextJob();
   }
 
   async loadJobsFromDB() {
@@ -398,7 +398,7 @@ class JobModule {
     return null;
   }
 
-  startNextJob() {
+  async startNextJob() {
     logger.info('Looking for next job to start');
     const jobs = this.getAllJobs();
     for (let id in jobs) {
@@ -411,7 +411,7 @@ class JobModule {
           logger.warn({ jobId: id, jobType: jobs[id].jobType },
             'Cannot start pending job - missing action function, marking as Terminated');
 
-          this.updateJob(id, {
+          await this.updateJob(id, {
             status: 'Terminated',
             output: 'Job could not be started after server restart',
           });
@@ -442,7 +442,7 @@ class JobModule {
     } else if (isNextJob && !inProgressJobId) {
       // If this is a next job and there's no job in progress, update its status to In Progress
       logger.info('This is a "next job", flipping from Pending to In Progress');
-      this.updateJob(jobData.id, {
+      await this.updateJob(jobData.id, {
         status: 'In Progress',
         timeInitiated: Date.now(),
       });
@@ -991,7 +991,7 @@ class JobModule {
     }
   }
 
-  updateJob(jobId, updatedFields) {
+  async updateJob(jobId, updatedFields) {
     logger.debug({ jobId, status: updatedFields.status }, 'updateJob called');
     if (updatedFields.data && updatedFields.data.videos) {
       logger.debug({ jobId, videoCount: updatedFields.data.videos.length }, 'updateJob data contains videos');
@@ -1039,6 +1039,39 @@ class JobModule {
                            updatedFields.status === 'Killed';
 
     if (isCompletedJob) {
+      // For completed jobs, reload videos from DB to ensure accurate counts
+      // This is especially important for multi-group downloads where each group
+      // updates the job with only its own videos, potentially losing earlier videos
+      try {
+        const jobVideos = await JobVideo.findAll({
+          where: { job_id: jobId }
+        });
+
+        const videos = [];
+        for (const jobVideo of jobVideos) {
+          const video = await Video.findOne({ where: { id: jobVideo.video_id } });
+          if (video) {
+            videos.push(video.dataValues);
+          }
+        }
+
+        // Update in-memory structure with complete video list from DB
+        if (!job.data) {
+          job.data = {};
+        }
+        job.data.videos = videos;
+
+        // Update output message to reflect correct video count
+        if (updatedFields.status !== 'Terminated') {
+          job.output = `${videos.length} videos.`;
+        }
+
+        logger.info({ jobId, videoCount: videos.length }, 'Reloaded videos from database for completed job');
+      } catch (loadErr) {
+        logger.error({ err: loadErr, jobId }, 'Error loading videos from database for completed job');
+        // Continue with save anyway - don't fail the job completion
+      }
+
       // For completed jobs, save the job and its video data with retry on failure
       this.saveJobOnly(jobId, job).catch(err => {
         logger.error({ err, jobId }, 'Failed to save completed job, marking for retry');
