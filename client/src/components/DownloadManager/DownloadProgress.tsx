@@ -630,7 +630,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                     ? 'indeterminate'
                     : 'determinate'
                 }
-                value={currentProgress.progress.percent}
+                value={currentProgress.progress?.percent ?? 0}
                 sx={{
                   height: 32,
                   borderRadius: 1,
@@ -668,9 +668,9 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                       sx={{
                         flex: 1,
                         minWidth: 0,
-                        color: currentProgress.progress.percent > 50 ? 'white' : 'black',
+                        color: (currentProgress.progress?.percent ?? 0) > 50 ? 'white' : 'black',
                         fontWeight: 'bold',
-                        textShadow: currentProgress.progress.percent > 50 ?
+                        textShadow: (currentProgress.progress?.percent ?? 0) > 50 ?
                           '1px 1px 2px rgba(0,0,0,0.7)' :
                           '1px 1px 2px rgba(255,255,255,0.7)'
                       }}
@@ -684,9 +684,9 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                       sx={{
                         flexShrink: 0,
                         whiteSpace: 'nowrap',
-                        color: currentProgress.progress.percent > 50 ? 'white' : 'black',
+                        color: (currentProgress.progress?.percent ?? 0) > 50 ? 'white' : 'black',
                         fontWeight: 'bold',
-                        textShadow: currentProgress.progress.percent > 50 ?
+                        textShadow: (currentProgress.progress?.percent ?? 0) > 50 ?
                           '1px 1px 2px rgba(0,0,0,0.7)' :
                           '1px 1px 2px rgba(255,255,255,0.7)'
                       }}
@@ -714,10 +714,10 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                 currentProgress.state === 'downloading_audio' ||
                 currentProgress.state === 'downloading_subtitles') && (
                 <Typography variant="caption" color="text.secondary">
-                  {formatBytes(currentProgress.progress.speedBytesPerSecond)}/s •{' '}
-                  {currentProgress.progress.percent.toFixed(1)}% •{' '}
-                  {formatBytes(currentProgress.progress.downloadedBytes)} /{' '}
-                  {formatBytes(currentProgress.progress.totalBytes)}
+                  {formatBytes(currentProgress.progress?.speedBytesPerSecond ?? 0)}/s •{' '}
+                  {(currentProgress.progress?.percent ?? 0).toFixed(1)}% •{' '}
+                  {formatBytes(currentProgress.progress?.downloadedBytes ?? 0)} /{' '}
+                  {formatBytes(currentProgress.progress?.totalBytes ?? 0)}
                 </Typography>
               )}
             </Box>
