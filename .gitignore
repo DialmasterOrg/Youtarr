@@ -44,3 +44,4 @@ yarn-error.log*
 
 # Platform deployment testing
 docker-compose.override.*
+.vscode/*
