@@ -17,7 +17,8 @@ Youtarr uses Docker Compose with two containers:
   - `./server/images:/app/server/images` - Thumbnails/cache
   - `./config:/app/config` - Configuration files
   - `./jobs:/app/jobs` - Job state and artifacts
-  - `./migrations:/app/migrations` - DB migrations
+
+> **⚠️ CRITICAL**: Do **NOT** mount `./migrations:/app/migrations` as a volume. See [warning below](#critical-do-not-mount-migrations-volume).
 
 ### Database Container (youtarr-db)
 - **Image**: `mariadb:10.3`
@@ -25,6 +26,31 @@ Youtarr uses Docker Compose with two containers:
 - **Volumes**:
   - `youtarr_db_data:/var/lib/mysql` - Database persistence
 - **Character Set**: utf8mb4 (full Unicode support)
+
+## ⚠️ CRITICAL: Do Not Mount Migrations Volume
+
+**DO NOT** mount `./migrations:/app/migrations` as a volume. Migrations are already included in the Docker image.
+
+### Why This Matters
+
+If you mount an empty or missing local migrations directory (common with Ansible, Terraform, or Kubernetes automation), it **overwrites** the migrations in the image, causing database initialization to fail.
+
+```yaml
+# ❌ WRONG - Causes DB initialization failures
+volumes:
+  - ./migrations:/app/migrations
+
+# ✅ CORRECT - Use migrations from the image
+volumes:
+  - ${YOUTUBE_OUTPUT_DIR}:/usr/src/app/data
+  - ./server/images:/app/server/images
+  - ./config:/app/config
+  - ./jobs:/app/jobs
+```
+
+If your automation creates a migrations directory, remove it from both directory creation and volume mounts.
+
+**Note:** `docker-compose.dev.yml` does mount migrations for development convenience only.
 
 ## Configuration Setup
 
