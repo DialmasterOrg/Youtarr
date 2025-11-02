@@ -1045,7 +1045,25 @@ class DownloadExecutor {
                 cumulativeSkipped: existingSkippedCount + (monitor.videoCount.skipped || 0)
               },
             });
+
+            // Persist accumulated videos to DB immediately for resilience
+            const updatedJob = jobModule.getJob(jobId);
+            if (updatedJob && updatedJob.data && updatedJob.data.videos) {
+              await jobModule.saveJobOnly(jobId, updatedJob);
+            }
           } else {
+            // For manual/single downloads, persist to DB BEFORE calling updateJob
+            // This ensures videos are in DB before updateJob reloads from DB
+            if (videoData && videoData.length > 0) {
+              const currentJob = jobModule.getJob(jobId);
+              if (currentJob) {
+                currentJob.data = currentJob.data || {};
+                currentJob.data.videos = videoData;
+                currentJob.data.failedVideos = failedVideosList || [];
+                await jobModule.saveJobOnly(jobId, currentJob);
+              }
+            }
+
             await jobModule.updateJob(jobId, {
               status: status,
               output: output,
@@ -1075,7 +1093,25 @@ class DownloadExecutor {
                 cumulativeSkipped: existingSkippedCount + (monitor.videoCount.skipped || 0)
               },
             });
+
+            // Persist accumulated videos to DB immediately for resilience
+            const updatedJob = jobModule.getJob(jobId);
+            if (updatedJob && updatedJob.data && updatedJob.data.videos) {
+              await jobModule.saveJobOnly(jobId, updatedJob);
+            }
           } else {
+            // For manual/single downloads, persist to DB BEFORE calling updateJob
+            // This ensures videos are in DB before updateJob reloads from DB
+            if (videoData && videoData.length > 0) {
+              const currentJob = jobModule.getJob(jobId);
+              if (currentJob) {
+                currentJob.data = currentJob.data || {};
+                currentJob.data.videos = videoData;
+                currentJob.data.failedVideos = failedVideosList || [];
+                await jobModule.saveJobOnly(jobId, currentJob);
+              }
+            }
+
             await jobModule.updateJob(jobId, {
               status: status,
               output: output,
@@ -1084,20 +1120,6 @@ class DownloadExecutor {
                 failedVideos: failedVideosList || []
               },
             });
-          }
-        }
-
-        // For multi-group downloads, persist videos to database immediately after each group
-        // This ensures resilience against crashes or terminations
-        if (skipJobTransition) {
-          const currentJob = jobModule.getJob(jobId);
-          if (currentJob) {
-            await jobModule.saveJobOnly(jobId, currentJob);
-            logger.info({
-              jobId,
-              totalAccumulatedVideos: currentJob.data?.videos?.length || 0,
-              currentGroupVideos: videoData.length
-            }, 'Persisted accumulated videos to database after group completion');
           }
         }
 

@@ -18,7 +18,7 @@ https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
 - **Plex-Ready**: Seamlessly integrates with Plex if desired, but never requires it
 
 ## 🎯 Key Features
- 
+
 ### Core Features (No Plex Required)
 - **📥 Smart Downloads**: Pre-validate YouTube URLs with metadata preview before downloading (powered by [yt-dlp](https://github.com/yt-dlp/yt-dlp))
 - **🎯 Custom Quality Settings**: Global and per-channel resolution control with support from 360p to 4K
@@ -62,6 +62,8 @@ https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
 ### Installation
 
 > ⚠️ **IMPORTANT**: Always use `./start.sh` to start Youtarr (not `docker compose up` directly). The start script configures required environment variables from your config.json.
+
+Instructions for a custom docker setup can be found in the [Docker documentation](docs/DOCKER.md).
 
 1. **Clone the repository**:
    ```bash
@@ -208,7 +210,3 @@ Licensed under the ISC License. See [LICENSE.md](LICENSE.md) for details.
 <img width="1472" height="1236" alt="image" src="https://github.com/user-attachments/assets/cd71937b-8423-42b3-9ddd-070f69c80662" />
 <img width="1476" height="1186" alt="image" src="https://github.com/user-attachments/assets/86fb9b48-2284-4ef9-a76b-e083a2d70584" />
 <img width="1466" height="1227" alt="image" src="https://github.com/user-attachments/assets/12629a9f-56be-4c71-8c43-e6673504f388" />
-
-
-
-
