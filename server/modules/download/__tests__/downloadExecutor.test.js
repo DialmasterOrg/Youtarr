@@ -40,7 +40,9 @@ jest.mock('../../plexModule', () => ({
 
 jest.mock('../../jobModule', () => ({
   updateJob: jest.fn().mockResolvedValue(),
-  startNextJob: jest.fn(() => Promise.resolve())
+  startNextJob: jest.fn(() => Promise.resolve()),
+  getJob: jest.fn(),
+  saveJobOnly: jest.fn().mockResolvedValue()
 }));
 
 jest.mock('../../messageEmitter', () => ({
@@ -766,6 +768,97 @@ describe('DownloadExecutor', () => {
         where: { channel_id: ['UC123'] }
       });
       expect(channelModule.backfillChannelPosters).toHaveBeenCalledWith(mockChannels);
+    });
+
+    it('should persist videos to database before updateJob for manual downloads', async () => {
+      const mockVideoData = [
+        { youtubeId: 'abc123', filePath: '/output/video.mp4', fileSize: '1024' }
+      ];
+      const mockFailedVideos = [];
+
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue(mockVideoData);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/abc123']);
+
+      // Mock getJob to return a job with empty data initially
+      const mockJob = { data: {} };
+      jobModule.getJob.mockReturnValue(mockJob);
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, 'Manually Added Urls');
+
+      // Verify saveJobOnly was called with the video data
+      expect(jobModule.saveJobOnly).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            videos: mockVideoData,
+            failedVideos: mockFailedVideos
+          })
+        })
+      );
+
+      // Verify saveJobOnly was called BEFORE updateJob
+      const saveJobOnlyCallIndex = jobModule.saveJobOnly.mock.invocationCallOrder[0];
+      const updateJobCallIndex = jobModule.updateJob.mock.invocationCallOrder.find(
+        (order, idx) => {
+          const call = jobModule.updateJob.mock.calls[idx];
+          return call[1]?.status === 'Complete';
+        }
+      );
+
+      expect(saveJobOnlyCallIndex).toBeLessThan(updateJobCallIndex);
+    });
+
+    it('should persist videos to database after updateJob for multi-group downloads', async () => {
+      const mockVideoData = [
+        { youtubeId: 'abc123', filePath: '/output/video.mp4', fileSize: '1024' }
+      ];
+
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue(mockVideoData);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/abc123']);
+
+      // Mock getJob to return a job with accumulated video data after updateJob
+      const mockJobAfterUpdate = {
+        data: {
+          videos: mockVideoData,
+          failedVideos: []
+        }
+      };
+      jobModule.getJob.mockReturnValue(mockJobAfterUpdate);
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      // Pass skipJobTransition=true to simulate multi-group download
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true);
+
+      // Verify saveJobOnly was called with accumulated videos
+      expect(jobModule.saveJobOnly).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            videos: mockVideoData
+          })
+        })
+      );
+    });
+
+    it('should not persist to database when no videos were downloaded', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, 'Manually Added Urls');
+
+      // saveJobOnly should not be called when there are no videos
+      expect(jobModule.saveJobOnly).not.toHaveBeenCalled();
     });
 
     it('should not backfill channel posters when no videos downloaded', async () => {
