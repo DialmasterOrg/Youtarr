@@ -1,5 +1,31 @@
 # Changelog
 
+## [v1.46.2](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.46.2) - 2025-11-02
+
+### [1.46.2](https://github.com/DialmasterOrg/Youtarr/compare/vv1.46.1...v1.46.2) (2025-11-02)
+
+
+### Bug Fixes
+
+* display current channel name during grouped channel downloads ([81a03a3](https://github.com/DialmasterOrg/Youtarr/commit/81a03a3662294452edff9ccfe08c0c089f2925bf))
+* ensure all videos from multi-group downloads are persisted and displayed correctly ([4372305](https://github.com/DialmasterOrg/Youtarr/commit/43723057da7cd5e9a7fe0f05cbed910d8891b4e1))
+* ensure database updates complete and job history shows all videos ([0ac02fa](https://github.com/DialmasterOrg/Youtarr/commit/0ac02fa5695904ad7fb62609dc97f1884651cbeb))
+* persist manual download videos to database before job completion ([26f3abc](https://github.com/DialmasterOrg/Youtarr/commit/26f3abcf7f8db390c8180838f2c7de511265f051))
+* prevent premature job completion in multi-group downloads ([4f33e34](https://github.com/DialmasterOrg/Youtarr/commit/4f33e34b6332b9a748120a84471bd61a0254233a))
+* update channel sub_folder in database before file operations ([18a8f82](https://github.com/DialmasterOrg/Youtarr/commit/18a8f825c37e93642e130490344dc5d1b56e0515))
+* **docker:** remove migrations volume mount from production compose files ([f9aa22b](https://github.com/DialmasterOrg/Youtarr/commit/f9aa22b14d456999dbcd3db3b230813fc08a3e75))
+
+
+### Documentation
+
+* update CHANGELOG for v1.46.0 [skip ci] ([0f4e0c1](https://github.com/DialmasterOrg/Youtarr/commit/0f4e0c1d867bba7ff60f029cad78cd6caba8a800))
+* update CHANGELOG for v1.46.1 [skip ci] ([5111eee](https://github.com/DialmasterOrg/Youtarr/commit/5111eeee29ad66ee0d00607e9893692e5308b3c8))
+* **docker:** remove migrations volume and add critical warning ([f34a3fd](https://github.com/DialmasterOrg/Youtarr/commit/f34a3fdc602634fbf8791bae7e7fe4cdf663c197))
+
+
+
+
+
 ## [v1.46.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.46.1) - 2025-11-01
 
 ### [1.46.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.46.0...v1.46.1) (2025-11-01)
