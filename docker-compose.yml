@@ -16,7 +16,6 @@ services:
       - "3321:3321"
     volumes:
       - ./database:/var/lib/mysql
-      - ./migrations:/docker-entrypoint-initdb.d
       - ./config/mariadb.cnf:/etc/mysql/conf.d/charset.cnf:ro
     command: --port=3321 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     healthcheck:
