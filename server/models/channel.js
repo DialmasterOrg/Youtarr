@@ -61,6 +61,21 @@ Channel.init(
       allowNull: true,
       defaultValue: null,
     },
+    min_duration: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: null,
+    },
+    max_duration: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: null,
+    },
+    title_filter_regex: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     sequelize,

@@ -353,6 +353,29 @@ describe('DownloadModule', () => {
       expect(spy).toHaveBeenCalledWith({}, groups, false);
     });
 
+    it('should call doGroupedChannelDownloads when group has download filters', async () => {
+      const groups = [
+        {
+          quality: '1080',
+          subFolder: null,
+          filterConfig: {
+            minDuration: 300,
+            maxDuration: 3600,
+            titleFilterRegex: null,
+            hasFilters: jest.fn().mockReturnValue(true)
+          },
+          channels: [{ channel_id: 'UC1' }]
+        }
+      ];
+      channelDownloadGrouperMock.generateDownloadGroups.mockResolvedValue(groups);
+      const spy = jest.spyOn(downloadModule, 'doGroupedChannelDownloads').mockResolvedValue();
+
+      await downloadModule.doChannelDownloads();
+
+      expect(groups[0].filterConfig.hasFilters).toHaveBeenCalled();
+      expect(spy).toHaveBeenCalledWith({}, groups, false);
+    });
+
     it('should call doSingleChannelDownloadJob with effectiveQuality for single uniform group', async () => {
       const groups = [
         { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] }
@@ -732,7 +755,7 @@ describe('DownloadModule', () => {
       await downloadModule.executeGroupDownload(group, mockJobId, 'Channel Downloads - Group 1/1 (480p, lowres)', jobData, true);
 
       // Subfolder should NOT be passed to download - post-processing handles subfolder routing
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('480', false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('480', false, null, undefined);
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--playlist-end', '5'
@@ -762,7 +785,32 @@ describe('DownloadModule', () => {
       await downloadModule.executeGroupDownload(group, mockJobId, 'Channel Downloads - Group 1/1 (1080p)', jobData, true);
 
       // Subfolder should NOT be passed - post-processing handles it
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('1080', true);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('1080', true, null, undefined);
+    });
+
+    it('should pass filterConfig to YtdlpCommandBuilder when group has filters', async () => {
+      const mockFilterConfig = {
+        minDuration: 300,
+        maxDuration: 3600,
+        titleFilterRegex: 'test.*',
+        hasFilters: jest.fn().mockReturnValue(true)
+      };
+      const group = {
+        quality: '1080',
+        subFolder: null,
+        filterConfig: mockFilterConfig,
+        channels: [
+          {
+            channel_id: 'UC123',
+            auto_download_enabled_tabs: 'video'
+          }
+        ]
+      };
+
+      await downloadModule.executeGroupDownload(group, mockJobId, 'Channel Downloads - Group 1/1 (1080p)', {}, true);
+
+      // Verify filterConfig is passed as the 4th parameter
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('1080', false, null, mockFilterConfig);
     });
 
     it('should pass skipJobTransition flag to doDownload', async () => {

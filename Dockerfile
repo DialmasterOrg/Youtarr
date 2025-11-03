@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
     unzip \
+    python3-minimal \
     && rm -rf /var/lib/apt/lists/*
 
 # Download the latest yt-dlp release directly from GitHub

@@ -67,7 +67,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
     : `${defaultResolution}p`;
   const qualitySourceLabel = defaultResolutionSource === 'channel' ? 'channel override' : 'global default';
 
-  // Load last used settings from localStorage and auto-detect re-download need
+  // Auto-detect re-download need
   useEffect(() => {
     if (open && !hasUserInteracted) {
       setResolution(defaultResolution);
@@ -177,7 +177,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
           <Alert severity="info" sx={{ mb: 2 }}>
             <Typography variant="body2">
               {mode === 'channel'
-                ? 'This will download any new videos from all channels and tabs that are enabled for automatic downloads.'
+                ? 'Downloading new videos from auto-download enabled channels/tabs. Channel settings and filters will be applied per channel.'
                 : videoCount === 1
                 ? 'You are about to download 1 video.'
                 : `You are about to download ${videoCount} videos.`}

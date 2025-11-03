@@ -14,12 +14,38 @@ import {
   CircularProgress,
   Alert,
   Box,
-  Typography
+  Typography,
+  Divider,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  IconButton,
+  Link
 } from '@mui/material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
+import InfoIcon from '@mui/icons-material/Info';
 
 interface ChannelSettings {
   sub_folder: string | null;
   video_quality: string | null;
+  min_duration: number | null;
+  max_duration: number | null;
+  title_filter_regex: string | null;
+}
+
+interface FilterPreviewVideo {
+  video_id: string;
+  title: string;
+  upload_date: string;
+  matches: boolean;
+}
+
+interface FilterPreviewResult {
+  videos: FilterPreviewVideo[];
+  totalCount: number;
+  matchCount: number;
 }
 
 interface ChannelSettingsDialogProps {
@@ -41,11 +67,17 @@ function ChannelSettingsDialog({
 }: ChannelSettingsDialogProps) {
   const [settings, setSettings] = useState<ChannelSettings>({
     sub_folder: null,
-    video_quality: null
+    video_quality: null,
+    min_duration: null,
+    max_duration: null,
+    title_filter_regex: null
   });
   const [originalSettings, setOriginalSettings] = useState<ChannelSettings>({
     sub_folder: null,
-    video_quality: null
+    video_quality: null,
+    min_duration: null,
+    max_duration: null,
+    title_filter_regex: null
   });
   const [subfolders, setSubfolders] = useState<string[]>([]);
   const [globalQuality, setGlobalQuality] = useState('1080');
@@ -54,9 +86,18 @@ function ChannelSettingsDialog({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  // Duration input state (in minutes for UI convenience)
+  const [minDurationMinutes, setMinDurationMinutes] = useState<string>('');
+  const [maxDurationMinutes, setMaxDurationMinutes] = useState<string>('');
+
+  // Preview state
+  const [previewResult, setPreviewResult] = useState<FilterPreviewResult | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
   const effectiveQualityDisplay = settings.video_quality
-    ? `${settings.video_quality}p (channel override)`
-    : `${globalQuality}p (global default)`;
+    ? `${settings.video_quality}p (channel)`
+    : `${globalQuality}p (global)`;
 
   const qualityOptions = [
     { value: null, label: `Use Global Setting (${globalQuality}p)` },
@@ -96,10 +137,21 @@ function ChannelSettingsDialog({
         const settingsData = await settingsResponse.json();
         const loadedSettings = {
           sub_folder: settingsData.sub_folder || null,
-          video_quality: settingsData.video_quality || null
+          video_quality: settingsData.video_quality || null,
+          min_duration: settingsData.min_duration || null,
+          max_duration: settingsData.max_duration || null,
+          title_filter_regex: settingsData.title_filter_regex || null
         };
         setSettings(loadedSettings);
         setOriginalSettings(loadedSettings);
+
+        // Convert seconds to minutes for UI
+        if (settingsData.min_duration) {
+          setMinDurationMinutes(String(Math.floor(settingsData.min_duration / 60)));
+        }
+        if (settingsData.max_duration) {
+          setMaxDurationMinutes(String(Math.floor(settingsData.max_duration / 60)));
+        }
 
         // Load subfolders (non-critical)
         try {
@@ -156,22 +208,37 @@ function ChannelSettingsDialog({
         },
         body: JSON.stringify({
           sub_folder: settings.sub_folder || null,
-          video_quality: settings.video_quality || null
+          video_quality: settings.video_quality || null,
+          min_duration: settings.min_duration,
+          max_duration: settings.max_duration,
+          title_filter_regex: settings.title_filter_regex || null
         })
       });
 
       if (!response.ok) {
-        const data = await response.json();
         if (response.status === 409) {
           throw new Error('Cannot change subfolder while downloads are in progress for this channel. Please wait for downloads to complete.');
         }
-        throw new Error(data.error || 'Failed to update settings');
+
+        let errorMessage = 'Failed to update settings';
+        try {
+          const data = await response.json();
+          errorMessage = data.error || errorMessage;
+        } catch (parseError) {
+          // If JSON parsing fails, use generic error with status
+          errorMessage = `Server error: ${response.status} ${response.statusText}`;
+        }
+
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
       const updatedSettings = {
         sub_folder: result?.settings?.sub_folder ?? settings.sub_folder ?? null,
-        video_quality: result?.settings?.video_quality ?? settings.video_quality ?? null
+        video_quality: result?.settings?.video_quality ?? settings.video_quality ?? null,
+        min_duration: result?.settings?.min_duration ?? settings.min_duration ?? null,
+        max_duration: result?.settings?.max_duration ?? settings.max_duration ?? null,
+        title_filter_regex: result?.settings?.title_filter_regex ?? settings.title_filter_regex ?? null
       };
 
       setSettings(updatedSettings);
@@ -192,7 +259,8 @@ function ChannelSettingsDialog({
         console.log('Channel folder moved:', result.moveResult);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save settings');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save settings';
+      setError(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -205,7 +273,68 @@ function ChannelSettingsDialog({
 
   const hasChanges = () => {
     return settings.sub_folder !== originalSettings.sub_folder ||
-           settings.video_quality !== originalSettings.video_quality;
+           settings.video_quality !== originalSettings.video_quality ||
+           settings.min_duration !== originalSettings.min_duration ||
+           settings.max_duration !== originalSettings.max_duration ||
+           settings.title_filter_regex !== originalSettings.title_filter_regex;
+  };
+
+  const handlePreviewFilter = async () => {
+    setLoadingPreview(true);
+    setPreviewError(null);
+
+    try {
+      const regex = settings.title_filter_regex || '';
+      const response = await fetch(
+        `/api/channels/${channelId}/filter-preview?title_filter_regex=${encodeURIComponent(regex)}`,
+        {
+          headers: {
+            'x-access-token': token || ''
+          }
+        }
+      );
+
+      let data;
+
+      if (!response.ok) {
+        try {
+          data = await response.json();
+        } catch (parseError) {
+          // Ignore JSON parse failure; will fall back to default message
+        }
+        const serverMessage = data?.error;
+        throw new Error(serverMessage && typeof serverMessage === 'string'
+          ? serverMessage
+          : 'Failed to load preview');
+      }
+
+      data = await response.json();
+      setPreviewResult(data);
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : 'Failed to load preview');
+      setPreviewResult(null);
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
+  const handleDurationChange = (field: 'min' | 'max', value: string) => {
+    // Allow empty or numeric values only
+    if (value === '' || /^\d+$/.test(value)) {
+      if (field === 'min') {
+        setMinDurationMinutes(value);
+        setSettings({
+          ...settings,
+          min_duration: value ? parseInt(value) * 60 : null
+        });
+      } else {
+        setMaxDurationMinutes(value);
+        setSettings({
+          ...settings,
+          max_duration: value ? parseInt(value) * 60 : null
+        });
+      }
+    }
   };
 
   return (
@@ -219,7 +348,7 @@ function ChannelSettingsDialog({
             <CircularProgress />
           </Box>
         ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 2 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
             {error && (
               <Alert severity="error" onClose={() => setError(null)}>
                 {error}
@@ -257,7 +386,7 @@ function ChannelSettingsDialog({
             </FormControl>
 
             <Typography variant="body2" color="text.secondary">
-              Effective channel quality: {effectiveQualityDisplay}. Manual download overrides will override this setting.
+              Effective channel quality: {effectiveQualityDisplay}.
             </Typography>
 
             <Alert severity="info" sx={{ mb: 2 }}>
@@ -265,9 +394,7 @@ function ChannelSettingsDialog({
                 Subfolder Organization
               </Typography>
               <Typography variant="body2" component="div">
-                Subfolders are automatically prefixed with <code>__</code> on the filesystem to prevent conflicts with channel names.
-                <br />
-                <strong>Example:</strong> Enter "Sports" → creates folder <code>__Sports/</code>
+                Subfolders are automatically prefixed with <code>__</code> on the filesystem.
               </Typography>
             </Alert>
 
@@ -306,9 +433,130 @@ function ChannelSettingsDialog({
             />
 
             <Typography variant="caption" color="text.secondary">
-              Note: Changing the subfolder will move the channel's existing folder to the new location.
-              This cannot be done while downloads are in progress.
+              Note: Changing the subfolder will move the channel's existing folder and files!
             </Typography>
+
+            {/* Download Filters Section */}
+            <Divider sx={{ my: 0 }} />
+
+            <Typography variant="h6" sx={{ mb: 1 }}>
+              Download Filters
+            </Typography>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <Typography variant="body2">
+                These filters only apply to channel downloads. Manually selected videos will always download.
+              </Typography>
+            </Alert>
+
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField
+                label="Minimum Duration (minutes)"
+                type="number"
+                value={minDurationMinutes}
+                onChange={(e) => handleDurationChange('min', e.target.value)}
+                placeholder="No minimum"
+                helperText="Shorter videos will be skipped"
+                fullWidth
+                InputProps={{
+                  inputProps: { min: 0 }
+                }}
+                InputLabelProps={{
+                  shrink: true
+                }}
+              />
+              <TextField
+                label="Maximum Duration (minutes)"
+                type="number"
+                value={maxDurationMinutes}
+                onChange={(e) => handleDurationChange('max', e.target.value)}
+                placeholder="No maximum"
+                helperText="Longer videos will be skipped"
+                fullWidth
+                InputProps={{
+                  inputProps: { min: 0 }
+                }}
+                InputLabelProps={{
+                  shrink: true
+                }}
+              />
+            </Box>
+
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+              <TextField
+                label="Title Filter (Python Regex)"
+                value={settings.title_filter_regex || ''}
+                onChange={(e) => setSettings({
+                  ...settings,
+                  title_filter_regex: e.target.value || null
+                })}
+                placeholder="e.g., (?i)podcast|interview"
+                helperText="Only download videos with titles matching regex pattern. (?i) for case-insensitive."
+                fullWidth
+                InputLabelProps={{
+                  shrink: true
+                }}
+              />
+              <IconButton
+                size="small"
+                component={Link}
+                href="https://docs.python.org/3/library/re.html#regular-expression-syntax"
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{ mt: 1 }}
+                title="Python regex documentation"
+              >
+                <InfoIcon fontSize="small" />
+              </IconButton>
+            </Box>
+
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <Button
+                variant="outlined"
+                onClick={handlePreviewFilter}
+                disabled={loadingPreview || !settings.title_filter_regex}
+                size="small"
+              >
+                {loadingPreview ? <CircularProgress size={20} /> : 'Preview Regex'}
+              </Button>
+              {previewResult && (
+                <Typography variant="body2" color="text.secondary">
+                  {previewResult.matchCount} of {previewResult.totalCount} recent videos match
+                </Typography>
+              )}
+            </Box>
+
+            {previewError && (
+              <Alert severity="error" onClose={() => setPreviewError(null)}>
+                {previewError}
+              </Alert>
+            )}
+
+            {previewResult && (
+              <Box sx={{ mt: 2, maxHeight: 300, overflow: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                <List dense>
+                  {previewResult.videos.map((video) => (
+                    <ListItem key={video.video_id}>
+                      <ListItemIcon sx={{ minWidth: 36 }}>
+                        {video.matches ? (
+                          <CheckCircleIcon color="success" fontSize="small" />
+                        ) : (
+                          <CancelIcon color="error" fontSize="small" />
+                        )}
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={video.title}
+                        primaryTypographyProps={{
+                          sx: {
+                            opacity: video.matches ? 1 : 0.5,
+                            textDecoration: video.matches ? 'none' : 'line-through'
+                          }
+                        }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Box>
+            )}
           </Box>
         )}
       </DialogContent>

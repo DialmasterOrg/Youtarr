@@ -283,7 +283,7 @@ describe('DownloadProgress', () => {
     await waitFor(() => {
       expect(screen.getByText('Summary of last job')).toBeInTheDocument();
     });
-    expect(screen.getByText(/✓ 5 videos downloaded, 2 already existed or members only/)).toBeInTheDocument();
+    expect(screen.getByText(/✓ 5 videos downloaded, 2 skipped \(already downloaded or filtered\)/)).toBeInTheDocument();
     expect(screen.getByText(/Channel update.*Completed/)).toBeInTheDocument();
   });
 
@@ -1330,7 +1330,7 @@ describe('DownloadProgress', () => {
         expect(screen.getByText('Download Terminated')).toBeInTheDocument();
       });
       expect(screen.getByText('Summary of last job')).toBeInTheDocument();
-      expect(screen.getByText(/✓ 5 videos downloaded, 2 already existed or members only/)).toBeInTheDocument();
+      expect(screen.getByText(/✓ 5 videos downloaded, 2 skipped \(already downloaded or filtered\)/)).toBeInTheDocument();
 
       jest.useRealTimers();
     });

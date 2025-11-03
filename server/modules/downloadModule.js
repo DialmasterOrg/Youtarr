@@ -95,13 +95,15 @@ class DownloadModule {
         overrideResolution || configModule.config.preferredResolution || '1080';
 
       // We need grouping when:
-      // - Multiple distinct groups exist (different quality or subfolders)
+      // - Multiple distinct groups exist (different quality or subfolders or filters)
       // - Any group has a custom subfolder
       // - Any group has a quality that differs from the effective global quality
+      // - Any group has download filters (duration or title regex)
       const needsGrouping =
         groups.length > 1 ||
         groups.some((g) => g.subFolder !== null) ||
-        groups.some((g) => g.quality !== effectiveGlobalQuality);
+        groups.some((g) => g.quality !== effectiveGlobalQuality) ||
+        groups.some((g) => g.filterConfig && g.filterConfig.hasFilters && g.filterConfig.hasFilters());
 
       if (needsGrouping) {
         console.log(`Using grouped downloads: ${groups.length} group(s) with resolved settings`);
@@ -385,7 +387,8 @@ class DownloadModule {
       const allowRedownload = !!overrideSettings.allowRedownload;
 
       // Do NOT pass subfolder to download - post-processing handles subfolder routing with __ prefix
-      const args = YtdlpCommandBuilder.getBaseCommandArgs(group.quality, allowRedownload);
+      // Pass filter config for channel-specific duration and title filtering
+      const args = YtdlpCommandBuilder.getBaseCommandArgs(group.quality, allowRedownload, null, group.filterConfig);
       args.push('-a', tempChannelsFile);
       args.push('--playlist-end', String(videoCount));
 
