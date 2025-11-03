@@ -3,6 +3,7 @@ const path = require('path');
 const Channel = require('../models/channel');
 const configModule = require('./configModule');
 const { Op } = require('sequelize');
+const logger = require('../logger');
 
 /**
  * Module for managing channel-level configuration settings
@@ -61,6 +62,118 @@ class ChannelSettingsModule {
     const validQualities = ['360', '480', '720', '1080', '1440', '2160'];
     if (!validQualities.includes(quality)) {
       return { valid: false, error: 'Invalid video quality. Valid values: 360, 480, 720, 1080, 1440, 2160, or null for global setting' };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Validate duration filter settings
+   * @param {number|null} minDuration - Minimum duration in seconds
+   * @param {number|null} maxDuration - Maximum duration in seconds
+   * @returns {Object} - { valid: boolean, error?: string }
+   */
+  validateDurationSettings(minDuration, maxDuration) {
+    // Both null is valid (no duration filtering)
+    if (minDuration === null && maxDuration === null) {
+      return { valid: true };
+    }
+
+    // Validate min_duration if set
+    if (minDuration !== null && minDuration !== undefined) {
+      if (!Number.isInteger(minDuration) || minDuration < 0) {
+        return {
+          valid: false,
+          error: 'Minimum duration must be a non-negative integer (seconds)',
+        };
+      }
+      if (minDuration > 86400) {
+        // 24 hours in seconds
+        return {
+          valid: false,
+          error: 'Minimum duration cannot exceed 24 hours (86400 seconds)',
+        };
+      }
+    }
+
+    // Validate max_duration if set
+    if (maxDuration !== null && maxDuration !== undefined) {
+      if (!Number.isInteger(maxDuration) || maxDuration < 0) {
+        return {
+          valid: false,
+          error: 'Maximum duration must be a non-negative integer (seconds)',
+        };
+      }
+      if (maxDuration > 86400) {
+        // 24 hours in seconds
+        return {
+          valid: false,
+          error: 'Maximum duration cannot exceed 24 hours (86400 seconds)',
+        };
+      }
+    }
+
+    // If both are set, min must be less than max
+    if (
+      minDuration !== null &&
+      minDuration !== undefined &&
+      maxDuration !== null &&
+      maxDuration !== undefined
+    ) {
+      if (minDuration >= maxDuration) {
+        return {
+          valid: false,
+          error: 'Minimum duration must be less than maximum duration',
+        };
+      }
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Validate title filter regex pattern (Python regex syntax)
+   * Uses Python directly to test regex validity - same as yt-dlp
+   * @param {string|null} titleFilterRegex - Python regex pattern to validate
+   * @returns {Object} - { valid: boolean, error?: string }
+   */
+  validateTitleRegex(titleFilterRegex) {
+    // NULL or empty string is valid (no title filtering)
+    if (!titleFilterRegex || titleFilterRegex.trim() === '') {
+      return { valid: true };
+    }
+
+    const trimmed = titleFilterRegex.trim();
+
+    // Check length (reasonable limit for regex patterns)
+    if (trimmed.length > 500) {
+      return {
+        valid: false,
+        error: 'Title filter regex must be 500 characters or less',
+      };
+    }
+
+    // Test if it's a valid Python regex by testing against a sample string
+    try {
+      const { execFileSync } = require('child_process');
+      const path = require('path');
+      const scriptPath = path.join(__dirname, '../utils/test-python-regex.py');
+
+      // Use execFileSync with argument array to prevent shell injection
+      const result = execFileSync('python3', [scriptPath, trimmed, 'test'], {
+        encoding: 'utf8',
+        timeout: 1000,
+      });
+
+      const parsed = JSON.parse(result);
+      if (parsed.error) {
+        return { valid: false, error: parsed.error };
+      }
+    } catch (err) {
+      return {
+        valid: false,
+        error: `Invalid Python regex pattern: ${err.message}`,
+      };
     }
 
     return { valid: true };
@@ -164,6 +277,94 @@ class ChannelSettingsModule {
   }
 
   /**
+   * Preview how a title filter regex would apply to recent channel videos
+   * Uses Python directly to test regex - EXACTLY the same as yt-dlp
+   * @param {string} channelId - Channel ID
+   * @param {string} regexPattern - Python regex pattern to test
+   * @returns {Promise<Object>} - { videos: [...], totalCount, matchCount }
+   */
+  async previewTitleFilter(channelId, regexPattern) {
+    const ChannelVideo = require('../models/channelvideo');
+    const path = require('path');
+
+    // Validate the regex pattern first
+    const validation = this.validateTitleRegex(regexPattern);
+    if (!validation.valid) {
+      throw new Error(validation.error);
+    }
+
+    // Get recent 20 videos for this channel from channelvideos table
+    // This table is populated when browsing channel page, before any downloads
+    const channelVideos = await ChannelVideo.findAll({
+      where: { channel_id: channelId },
+      attributes: ['youtube_id', 'title', 'publishedAt'],
+      order: [['publishedAt', 'DESC']],
+      limit: 20,
+    });
+
+    // If no regex pattern provided or empty, all videos match
+    if (!regexPattern || regexPattern.trim() === '') {
+      const videos = channelVideos.map((cv) => ({
+        video_id: cv.youtube_id,
+        title: cv.title,
+        upload_date: cv.publishedAt,
+        matches: true,
+      }));
+      return {
+        videos,
+        totalCount: videos.length,
+        matchCount: videos.length,
+      };
+    }
+
+    // Use Python to test each video title - same regex engine as yt-dlp
+    const { execFileSync } = require('child_process');
+    const scriptPath = path.join(__dirname, '../utils/test-python-regex.py');
+    const trimmedPattern = regexPattern.trim();
+
+    const videos = channelVideos.map((cv) => {
+      const title = cv.title || '';
+      let matches = false;
+
+      try {
+        // Use execFileSync with argument array to prevent shell injection
+        const result = execFileSync(
+          'python3',
+          [scriptPath, trimmedPattern, title],
+          { encoding: 'utf8', timeout: 1000 }
+        );
+
+        const parsed = JSON.parse(result);
+        if (parsed.error) {
+          logger.error({ err: parsed.error, title }, 'Regex test error in previewTitleFilter');
+          matches = false;
+        } else {
+          matches = parsed.matches;
+        }
+      } catch (testError) {
+        // If Python execution fails for a specific title, consider it non-matching
+        logger.error({ err: testError.message, title }, 'Failed to test title in previewTitleFilter');
+        matches = false;
+      }
+
+      return {
+        video_id: cv.youtube_id,
+        title,
+        upload_date: cv.publishedAt,
+        matches,
+      };
+    });
+
+    const matchCount = videos.filter((v) => v.matches).length;
+
+    return {
+      videos,
+      totalCount: videos.length,
+      matchCount,
+    };
+  }
+
+  /**
    * Get channel settings
    * @param {string} channelId - Channel ID
    * @returns {Promise<Object>} - Channel settings
@@ -181,7 +382,10 @@ class ChannelSettingsModule {
       channel_id: channel.channel_id,
       uploader: channel.uploader,
       sub_folder: channel.sub_folder,
-      video_quality: channel.video_quality
+      video_quality: channel.video_quality,
+      min_duration: channel.min_duration,
+      max_duration: channel.max_duration,
+      title_filter_regex: channel.title_filter_regex,
     };
   }
 
@@ -224,6 +428,36 @@ class ChannelSettingsModule {
       }
     }
 
+    // Validate duration settings if provided
+    if (
+      settings.min_duration !== undefined ||
+      settings.max_duration !== undefined
+    ) {
+      const minDuration =
+        settings.min_duration !== undefined
+          ? settings.min_duration
+          : channel.min_duration;
+      const maxDuration =
+        settings.max_duration !== undefined
+          ? settings.max_duration
+          : channel.max_duration;
+      const validation = this.validateDurationSettings(
+        minDuration,
+        maxDuration
+      );
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+    }
+
+    // Validate title filter regex if provided
+    if (settings.title_filter_regex !== undefined) {
+      const validation = this.validateTitleRegex(settings.title_filter_regex);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+    }
+
     // Store old subfolder for potential move
     const oldSubFolder = channel.sub_folder;
     const newSubFolder = settings.sub_folder !== undefined ?
@@ -241,6 +475,17 @@ class ChannelSettingsModule {
     if (settings.video_quality !== undefined) {
       updateData.video_quality = settings.video_quality;
     }
+    if (settings.min_duration !== undefined) {
+      updateData.min_duration = settings.min_duration;
+    }
+    if (settings.max_duration !== undefined) {
+      updateData.max_duration = settings.max_duration;
+    }
+    if (settings.title_filter_regex !== undefined) {
+      updateData.title_filter_regex = settings.title_filter_regex
+        ? settings.title_filter_regex.trim()
+        : null;
+    }
 
     // Update database FIRST to ensure changes are persisted before slow file operations
     // This prevents issues where HTTP requests timeout during file operations
@@ -248,9 +493,9 @@ class ChannelSettingsModule {
     if (Object.keys(updateData).length > 0) {
       try {
         updatedChannel = await channel.update(updateData);
-        console.log(`Updated channel settings in database: ${JSON.stringify(updateData)}`);
+        logger.info({ updateData }, 'Updated channel settings in database');
       } catch (updateError) {
-        console.error('Error updating channel settings in database:', updateError.message);
+        logger.error({ err: updateError.message }, 'Error updating channel settings in database');
         throw updateError;
       }
     }
@@ -263,14 +508,14 @@ class ChannelSettingsModule {
         moveResult = await this.moveChannelFolder(updatedChannel, oldSubFolder, newSubFolder);
       } catch (moveError) {
         // Roll back database change if folder move fails
-        console.error('Error moving channel folder, rolling back database change:', moveError.message);
+        logger.error({ err: moveError.message }, 'Error moving channel folder, rolling back database change');
         try {
           await updatedChannel.update({ sub_folder: oldSubFolder });
-          console.log('Successfully rolled back database change');
+          logger.info('Successfully rolled back database change');
         } catch (rollbackError) {
-          console.error('Error rolling back database change after folder move failure:', rollbackError.message);
+          logger.error({ err: rollbackError.message }, 'Error rolling back database change after folder move failure');
           // Database is now inconsistent - log critical error
-          console.error('CRITICAL: Database sub_folder is out of sync with filesystem!');
+          logger.error('CRITICAL: Database sub_folder is out of sync with filesystem!');
         }
         throw moveError;
       }
@@ -281,7 +526,10 @@ class ChannelSettingsModule {
         channel_id: updatedChannel.channel_id,
         uploader: updatedChannel.uploader,
         sub_folder: updatedChannel.sub_folder,
-        video_quality: updatedChannel.video_quality
+        video_quality: updatedChannel.video_quality,
+        min_duration: updatedChannel.min_duration,
+        max_duration: updatedChannel.max_duration,
+        title_filter_regex: updatedChannel.title_filter_regex,
       },
       folderMoved: subFolderChanged,
       moveResult
@@ -308,11 +556,11 @@ class ChannelSettingsModule {
       path.join(baseDir, `__${newSubFolder}`, channelName) :
       path.join(baseDir, channelName);
 
-    console.log(`Moving channel folder from ${oldPath} to ${newPath}`);
+    logger.info(`Moving channel folder from ${oldPath} to ${newPath}`);
 
     // Check if old folder exists
     if (!fs.existsSync(oldPath)) {
-      console.log(`Old channel folder does not exist: ${oldPath}`);
+      logger.warn({ oldPath }, 'Old channel folder does not exist');
       return {
         success: true,
         message: 'No existing folder to move',
@@ -334,7 +582,7 @@ class ChannelSettingsModule {
       // Move the folder
       await fs.move(oldPath, newPath);
 
-      console.log(`Successfully moved channel folder to ${newPath}`);
+      logger.info({ newPath }, 'Successfully moved channel folder');
 
       // Update all video file paths in the database
       await this.updateVideoFilePaths(channel.channel_id, oldPath, newPath);
@@ -345,13 +593,13 @@ class ChannelSettingsModule {
         try {
           const plexModule = require('./plexModule');
           await plexModule.refreshLibrary();
-          console.log('Plex library refresh completed after folder move');
+          logger.info('Plex library refresh completed after folder move');
         } catch (plexError) {
-          console.log('Could not refresh Plex library:', plexError.message);
+          logger.error({ err: plexError.message }, 'Could not refresh Plex library');
           // Don't fail the whole operation if Plex refresh fails
         }
       });
-      console.log('Plex library refresh initiated asynchronously');
+      logger.info('Plex library refresh initiated asynchronously');
 
       return {
         success: true,
@@ -360,7 +608,7 @@ class ChannelSettingsModule {
         newPath
       };
     } catch (error) {
-      console.error(`Error moving channel folder: ${error.message}`);
+      logger.error({ err: error.message }, 'Error moving channel folder');
       throw new Error(`Failed to move channel folder: ${error.message}`);
     }
   }
@@ -375,9 +623,7 @@ class ChannelSettingsModule {
   async updateVideoFilePaths(channelId, oldBasePath, newBasePath) {
     const Video = require('../models/video');
 
-    console.log(`Updating video file paths for channel ${channelId}`);
-    console.log(`  Old base: ${oldBasePath}`);
-    console.log(`  New base: ${newBasePath}`);
+    logger.info({ channelId, oldBasePath, newBasePath }, 'Updating video file paths for channel');
 
     try {
       // Get all videos for this channel that have file paths
@@ -390,7 +636,7 @@ class ChannelSettingsModule {
         }
       });
 
-      console.log(`Found ${videos.length} videos to update`);
+      logger.info({ count: videos.length }, 'Found videos to update');
 
       let updateCount = 0;
       for (const video of videos) {
@@ -403,15 +649,15 @@ class ChannelSettingsModule {
           const newFilePath = newBasePath + relativePath;
 
           await video.update({ filePath: newFilePath });
-          console.log(`Updated: ${path.basename(oldFilePath)} -> ${newFilePath}`);
+          logger.info({ oldFilePath, newFilePath }, 'Updated video file path');
           updateCount++;
         }
       }
 
-      console.log(`Updated ${updateCount} video file paths`);
+      logger.info({ count: updateCount }, 'Updated video file paths');
       return updateCount;
     } catch (error) {
-      console.error('Error updating video file paths:', error);
+      logger.error({ err: error.message }, 'Error updating video file paths');
       throw error;
     }
   }

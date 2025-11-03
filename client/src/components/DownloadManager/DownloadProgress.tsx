@@ -547,7 +547,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                     parts.push(`✗ ${finalSummary.totalFailed} failed`);
                   }
                   if (finalSummary.totalSkipped > 0) {
-                    parts.push(`${finalSummary.totalSkipped} already existed or members only`);
+                    parts.push(`${finalSummary.totalSkipped} skipped (already downloaded or filtered)`);
                   }
                   if (parts.length === 0) {
                     return 'No new videos downloaded';

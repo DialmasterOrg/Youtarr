@@ -3,8 +3,54 @@ const configModule = require('./configModule');
 const path = require('path');
 
 /**
+ * Encapsulates channel filter settings for download filtering
+ */
+class ChannelFilterConfig {
+  constructor(minDuration = null, maxDuration = null, titleFilterRegex = null) {
+    this.minDuration = minDuration;
+    this.maxDuration = maxDuration;
+    this.titleFilterRegex = titleFilterRegex;
+  }
+
+  /**
+   * Build a unique key for grouping channels with identical filters
+   * Uses JSON.stringify to avoid collisions with sentinel values
+   * @returns {string} - Unique key representing this filter configuration
+   */
+  buildFilterKey() {
+    // Use JSON to safely encode null values without collision risk
+    return JSON.stringify({
+      min: this.minDuration,
+      max: this.maxDuration,
+      regex: this.titleFilterRegex
+    });
+  }
+
+  /**
+   * Check if any filters are set
+   * @returns {boolean} - True if at least one filter is configured
+   */
+  hasFilters() {
+    return this.minDuration !== null || this.maxDuration !== null || this.titleFilterRegex !== null;
+  }
+
+  /**
+   * Create a ChannelFilterConfig from a channel record
+   * @param {Object} channel - Channel record from database
+   * @returns {ChannelFilterConfig} - New filter config instance
+   */
+  static fromChannel(channel) {
+    return new ChannelFilterConfig(
+      channel.min_duration,
+      channel.max_duration,
+      channel.title_filter_regex
+    );
+  }
+}
+
+/**
  * Module for grouping channels by their download settings
- * Handles per-channel quality and subfolder organization
+ * Handles per-channel quality, subfolder organization, and download filters
  */
 class ChannelDownloadGrouper {
   /**
@@ -14,18 +60,27 @@ class ChannelDownloadGrouper {
   async getEnabledChannelsWithSettings() {
     const channels = await Channel.findAll({
       where: { enabled: true },
-      attributes: ['channel_id', 'uploader', 'sub_folder', 'video_quality', 'auto_download_enabled_tabs']
+      attributes: [
+        'channel_id',
+        'uploader',
+        'sub_folder',
+        'video_quality',
+        'auto_download_enabled_tabs',
+        'min_duration',
+        'max_duration',
+        'title_filter_regex'
+      ]
     });
 
     return channels;
   }
 
   /**
-   * Group channels by quality and subfolder settings for batch downloads
-   * Channels with the same quality+subfolder can be downloaded together
+   * Group channels by quality, subfolder, and filter settings for batch downloads
+   * Channels with identical settings can be downloaded together in a single yt-dlp invocation
    * @param {Array} channels - Array of channel records
    * @param {string} globalQuality - Global quality setting (fallback)
-   * @returns {Array} - Array of groups, each with { quality, subfolder, channels }
+   * @returns {Array} - Array of groups, each with { quality, subfolder, filterConfig, channels }
    */
   groupChannels(channels, globalQuality) {
     const groups = new Map();
@@ -37,13 +92,17 @@ class ChannelDownloadGrouper {
       // Determine subfolder (null if not set)
       const subFolder = channel.sub_folder ? channel.sub_folder.trim() : null;
 
-      // Create group key
-      const groupKey = `${quality}|${subFolder || 'root'}`;
+      // Create filter config for this channel
+      const filterConfig = ChannelFilterConfig.fromChannel(channel);
+
+      // Create group key including filter settings
+      const groupKey = `${quality}|${subFolder || 'root'}|${filterConfig.buildFilterKey()}`;
 
       if (!groups.has(groupKey)) {
         groups.set(groupKey, {
           quality,
           subFolder,
+          filterConfig,
           channels: []
         });
       }
@@ -125,20 +184,27 @@ class ChannelDownloadGrouper {
   }
 
   /**
-   * Group channels only by subfolder (for use with quality override)
+   * Group channels by subfolder and filters (for use with quality override)
+   * Quality override should not affect duration/title filters
    * @param {Array} channels - Array of channel records
-   * @returns {Array} - Array of groups by subfolder
+   * @returns {Array} - Array of groups by subfolder and filter config
    */
   groupChannelsBySubfolderOnly(channels) {
     const groups = new Map();
 
     for (const channel of channels) {
       const subFolder = channel.sub_folder ? channel.sub_folder.trim() : null;
-      const groupKey = subFolder || 'root';
+
+      // Create filter config for this channel (filters still apply with quality override)
+      const filterConfig = ChannelFilterConfig.fromChannel(channel);
+
+      // Group by both subfolder and filter settings
+      const groupKey = `${subFolder || 'root'}|${filterConfig.buildFilterKey()}`;
 
       if (!groups.has(groupKey)) {
         groups.set(groupKey, {
           subFolder,
+          filterConfig,
           channels: []
         });
       }
@@ -150,4 +216,7 @@ class ChannelDownloadGrouper {
   }
 }
 
-module.exports = new ChannelDownloadGrouper();
+const grouperInstance = new ChannelDownloadGrouper();
+grouperInstance.ChannelFilterConfig = ChannelFilterConfig;
+
+module.exports = grouperInstance;

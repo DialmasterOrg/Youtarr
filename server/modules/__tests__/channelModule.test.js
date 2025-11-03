@@ -426,6 +426,9 @@ describe('ChannelModule', () => {
           available_tabs: null,
           sub_folder: null,
           video_quality: null,
+          min_duration: null,
+          max_duration: null,
+          title_filter_regex: null,
         });
       });
 
@@ -446,6 +449,9 @@ describe('ChannelModule', () => {
         expect(result.available_tabs).toBeNull();
         expect(result.sub_folder).toBeNull();
         expect(result.video_quality).toBeNull();
+        expect(result.min_duration).toBeNull();
+        expect(result.max_duration).toBeNull();
+        expect(result.title_filter_regex).toBeNull();
       });
     });
 
@@ -1523,6 +1529,9 @@ describe('ChannelModule', () => {
             available_tabs: 'videos,shorts,livestream',
             sub_folder: null,
             video_quality: null,
+            min_duration: null,
+            max_duration: null,
+            title_filter_regex: null,
           },
           {
             url: 'https://youtube.com/@channel2',
@@ -1532,6 +1541,9 @@ describe('ChannelModule', () => {
             available_tabs: 'videos,shorts',
             sub_folder: null,
             video_quality: null,
+            min_duration: null,
+            max_duration: null,
+            title_filter_regex: null,
           }
         ]);
       });

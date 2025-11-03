@@ -138,8 +138,67 @@ class YtdlpCommandBuilder {
     return args;
   }
 
+  /**
+   * Build match filter string for yt-dlp based on channel filter configuration
+   * @param {Object} filterConfig - ChannelFilterConfig instance with min_duration, max_duration, title_filter_regex
+   * @returns {string} - Complete match filter string for yt-dlp
+   */
+  static buildMatchFilters(filterConfig = null) {
+    // Base filters - always applied for channel downloads
+    const baseFilters = [
+      'availability!=subscriber_only',
+      '!is_live',
+      'live_status!=is_upcoming',
+    ];
+
+    // If no filter config provided or no filters set, return base filters only
+    if (
+      !filterConfig ||
+      !filterConfig.hasFilters ||
+      (typeof filterConfig.hasFilters === 'function' &&
+        !filterConfig.hasFilters())
+    ) {
+      return baseFilters.join(' & ');
+    }
+
+    const additionalFilters = [];
+
+    // Add duration filters if specified
+    if (
+      filterConfig.minDuration !== null &&
+      filterConfig.minDuration !== undefined
+    ) {
+      additionalFilters.push(`duration >= ${filterConfig.minDuration}`);
+    }
+    if (
+      filterConfig.maxDuration !== null &&
+      filterConfig.maxDuration !== undefined
+    ) {
+      additionalFilters.push(`duration <= ${filterConfig.maxDuration + 59}`); // This way it captures the full minute (e.g. max 10 mins includes up to 10:59)
+    }
+
+    // Add title regex filter if specified
+    if (filterConfig.titleFilterRegex) {
+      // Escape backslashes and single quotes for Python string literal
+      const escapedRegex = filterConfig.titleFilterRegex
+        .replace(/\\/g, '\\\\') // Escape backslashes first
+        // eslint-disable-next-line quotes
+        .replace(/'/g, "\\'"); // Escape single quotes
+      additionalFilters.push(`title ~= '${escapedRegex}'`);
+    }
+
+    // Combine all filters
+    const allFilters = [...baseFilters, ...additionalFilters];
+    return allFilters.join(' & ');
+  }
+
   // Build yt-dlp command args array for channel downloads
-  static getBaseCommandArgs(resolution, allowRedownload = false, subFolder = null) {
+  static getBaseCommandArgs(
+    resolution,
+    allowRedownload = false,
+    subFolder = null,
+    filterConfig = null
+  ) {
     const config = configModule.getConfig();
     const res = resolution || config.preferredResolution || '1080';
     const videoCodec = config.videoCodec || 'default';
@@ -182,13 +241,16 @@ class YtdlpCommandBuilder {
       args.push('--download-archive', './config/complete.list');
     }
 
+    // Build match filter with any channel-specific filtering
+    const matchFilter = this.buildMatchFilters(filterConfig);
+
     args.push(
       '--ignore-errors',
       '--embed-metadata',
       '--write-info-json',
       '--no-write-playlist-metafiles',
       '--extractor-args', 'youtubetab:tab=videos;sort=dd',
-      '--match-filter', 'availability!=subscriber_only & !is_live & live_status!=is_upcoming',
+      '--match-filter', matchFilter,
       '-o', outputPath,
       '--datebefore', 'now',
       '-o', `thumbnail:${thumbnailPath}`,

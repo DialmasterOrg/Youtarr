@@ -645,6 +645,20 @@ const initialize = async () => {
       }
     });
 
+    app.get('/api/channels/:channelId/filter-preview', verifyToken, async (req, res) => {
+      try {
+        const { title_filter_regex } = req.query;
+        const result = await channelSettingsModule.previewTitleFilter(
+          req.params.channelId,
+          title_filter_regex || ''
+        );
+        res.json(result);
+      } catch (error) {
+        console.error('Error previewing title filter:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
     app.get('/getchannelvideos/:channelId', verifyToken, async (req, res) => {
       req.log.info({ channelId: req.params.channelId }, 'Getting channel videos');
       const channelId = req.params.channelId;

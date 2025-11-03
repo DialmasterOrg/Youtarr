@@ -203,7 +203,10 @@ describe('ChannelPage Component', () => {
       act(() => {
         dialogPropsStore.current.onSettingsSaved?.({
           sub_folder: 'Sports',
-          video_quality: '720'
+          video_quality: '720',
+          min_duration: null,
+          max_duration: null,
+          title_filter_regex: null
         });
       });
 
@@ -244,7 +247,10 @@ describe('ChannelPage Component', () => {
       act(() => {
         dialogPropsStore.current.onSettingsSaved?.({
           sub_folder: null,
-          video_quality: null
+          video_quality: null,
+          min_duration: null,
+          max_duration: null,
+          title_filter_regex: null
         });
       });
 
@@ -278,6 +284,445 @@ describe('ChannelPage Component', () => {
       await screen.findByText('Tech Channel');
 
       consoleErrorSpy.mockRestore();
+    });
+
+    test('updates channel with new filter settings', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockChannel)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+      expect(dialogPropsStore.current).not.toBeNull();
+
+      act(() => {
+        dialogPropsStore.current.onSettingsSaved?.({
+          sub_folder: null,
+          video_quality: '1080',
+          min_duration: 300,
+          max_duration: 3600,
+          title_filter_regex: 'tutorial.*'
+        });
+      });
+
+      // Wait for filter indicators to appear
+      await waitFor(() => {
+        expect(screen.getByText('1080p')).toBeInTheDocument();
+      });
+      expect(screen.getByText('5-60 min')).toBeInTheDocument();
+      expect(screen.getByText('Title Filter')).toBeInTheDocument();
+    });
+  });
+
+  describe('Filter Indicators', () => {
+    test('does not render filter indicators when no filters are set', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(mockChannel)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+
+      // None of the filter chips should be present
+      expect(screen.queryByText(/p$/)).not.toBeInTheDocument(); // quality chip
+      expect(screen.queryByText(/min$/)).not.toBeInTheDocument(); // duration chip
+      expect(screen.queryByText('Title Filter')).not.toBeInTheDocument(); // regex chip
+    });
+
+    test('renders quality filter indicator when video_quality is set', async () => {
+      const channelWithQuality = {
+        ...mockChannel,
+        video_quality: '1080'
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(channelWithQuality)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+      expect(screen.getByText('1080p')).toBeInTheDocument();
+    });
+
+    test('renders duration filter with min and max', async () => {
+      const channelWithDuration = {
+        ...mockChannel,
+        min_duration: 300, // 5 minutes
+        max_duration: 3600 // 60 minutes
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(channelWithDuration)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+      expect(screen.getByText('5-60 min')).toBeInTheDocument();
+    });
+
+    test('renders duration filter with only min duration', async () => {
+      const channelWithMinDuration = {
+        ...mockChannel,
+        min_duration: 600 // 10 minutes
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(channelWithMinDuration)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+      expect(screen.getByText('≥10 min')).toBeInTheDocument();
+    });
+
+    test('renders duration filter with only max duration', async () => {
+      const channelWithMaxDuration = {
+        ...mockChannel,
+        max_duration: 1800 // 30 minutes
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(channelWithMaxDuration)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+      expect(screen.getByText('≤30 min')).toBeInTheDocument();
+    });
+
+    test('renders regex filter indicator when title_filter_regex is set', async () => {
+      const channelWithRegex = {
+        ...mockChannel,
+        title_filter_regex: '^tutorial.*'
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(channelWithRegex)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+      expect(screen.getByText('Title Filter')).toBeInTheDocument();
+    });
+
+    test('renders all filter indicators when all filters are set', async () => {
+      const channelWithAllFilters = {
+        ...mockChannel,
+        video_quality: '720',
+        min_duration: 120,
+        max_duration: 1200,
+        title_filter_regex: 'test.*pattern'
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(channelWithAllFilters)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+
+      expect(screen.getByText('720p')).toBeInTheDocument();
+      expect(screen.getByText('2-20 min')).toBeInTheDocument();
+      expect(screen.getByText('Title Filter')).toBeInTheDocument();
+    });
+  });
+
+  describe('Regex Filter Popover/Dialog', () => {
+    test('opens popover on desktop when regex chip is clicked', async () => {
+      (useMediaQuery as jest.Mock).mockReturnValue(false); // Desktop
+
+      const channelWithRegex = {
+        ...mockChannel,
+        title_filter_regex: '^tutorial.*test$'
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(channelWithRegex)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+
+      const regexChip = screen.getByText('Title Filter');
+      expect(regexChip).toBeInTheDocument();
+
+      // Click the regex chip
+      await act(async () => {
+        regexChip.click();
+      });
+
+      // Popover should appear with the regex pattern
+      await waitFor(() => {
+        expect(screen.getByText('Title Filter Regex Pattern:')).toBeInTheDocument();
+      });
+      expect(screen.getByText('^tutorial.*test$')).toBeInTheDocument();
+    });
+
+    test('popover displays correct regex pattern on desktop', async () => {
+      (useMediaQuery as jest.Mock).mockReturnValue(false); // Desktop
+
+      const channelWithRegex = {
+        ...mockChannel,
+        title_filter_regex: 'test-pattern'
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(channelWithRegex)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+
+      const regexChip = screen.getByText('Title Filter');
+      await act(async () => {
+        regexChip.click();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('test-pattern')).toBeInTheDocument();
+      });
+    });
+
+    test('opens dialog on mobile when regex chip is clicked', async () => {
+      (useMediaQuery as jest.Mock).mockReturnValue(true); // Mobile
+
+      const channelWithRegex = {
+        ...mockChannel,
+        title_filter_regex: 'mobile-regex-pattern'
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(channelWithRegex)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+
+      const regexChip = screen.getByText('Title Filter');
+      await act(async () => {
+        regexChip.click();
+      });
+
+      // Dialog should appear with the regex pattern
+      await waitFor(() => {
+        expect(screen.getByText('Title Filter Regex Pattern')).toBeInTheDocument();
+      });
+      expect(screen.getByText('mobile-regex-pattern')).toBeInTheDocument();
+    });
+
+    test('renders dialog instead of popover on mobile', async () => {
+      (useMediaQuery as jest.Mock).mockReturnValue(true); // Mobile
+
+      const channelWithRegex = {
+        ...mockChannel,
+        title_filter_regex: 'test-pattern'
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(channelWithRegex)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+
+      const regexChip = screen.getByText('Title Filter');
+      await act(async () => {
+        regexChip.click();
+      });
+
+      // Dialog should appear (not popover)
+      await waitFor(() => {
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+      });
+    });
+
+    test('does not show dialog initially on desktop', async () => {
+      (useMediaQuery as jest.Mock).mockReturnValue(false); // Desktop
+
+      const channelWithRegex = {
+        ...mockChannel,
+        title_filter_regex: 'test-pattern'
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(channelWithRegex)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+
+      // Dialog should not be in the document initially on desktop
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('formatDuration Helper', () => {
+    test('formats duration with both min and max', async () => {
+      const channelWithBothDurations = {
+        ...mockChannel,
+        min_duration: 600,  // 10 minutes
+        max_duration: 3600  // 60 minutes
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(channelWithBothDurations)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+      expect(screen.getByText('10-60 min')).toBeInTheDocument();
+    });
+
+    test('formats duration with min of 0 as no min filter', async () => {
+      const channelWithZeroMin = {
+        ...mockChannel,
+        min_duration: 0,
+        max_duration: 1800
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(channelWithZeroMin)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+      // 0 is falsy, so should only show max
+      expect(screen.getByText('≤30 min')).toBeInTheDocument();
+    });
+
+    test('formats duration with max of 0 as no max filter', async () => {
+      const channelWithZeroMax = {
+        ...mockChannel,
+        min_duration: 300,
+        max_duration: 0
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(channelWithZeroMax)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+      // 0 is falsy, so should only show min
+      expect(screen.getByText('≥5 min')).toBeInTheDocument();
+    });
+
+    test('handles seconds that do not divide evenly into minutes', async () => {
+      const channelWithOddSeconds = {
+        ...mockChannel,
+        min_duration: 90,   // 1.5 minutes -> floors to 1
+        max_duration: 150   // 2.5 minutes -> floors to 2
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce(channelWithOddSeconds)
+      });
+
+      render(
+        <BrowserRouter>
+          <ChannelPage token={mockToken} />
+        </BrowserRouter>
+      );
+
+      await screen.findByText('Tech Channel');
+      expect(screen.getByText('1-2 min')).toBeInTheDocument();
     });
   });
 
