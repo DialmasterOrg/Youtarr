@@ -450,7 +450,7 @@ function ChannelSettingsDialog({
 
             <Box sx={{ display: 'flex', gap: 2 }}>
               <TextField
-                label="Minimum Duration (minutes)"
+                label="Min Duration (mins)"
                 type="number"
                 value={minDurationMinutes}
                 onChange={(e) => handleDurationChange('min', e.target.value)}
@@ -465,7 +465,7 @@ function ChannelSettingsDialog({
                 }}
               />
               <TextField
-                label="Maximum Duration (minutes)"
+                label="Max Duration (mins)"
                 type="number"
                 value={maxDurationMinutes}
                 onChange={(e) => handleDurationChange('max', e.target.value)}

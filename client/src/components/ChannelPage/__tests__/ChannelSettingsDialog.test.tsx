@@ -103,8 +103,8 @@ describe('ChannelSettingsDialog', () => {
 
       expect(screen.getByLabelText('Channel Video Quality Override')).toBeInTheDocument();
       expect(screen.getByLabelText('Subfolder (optional)')).toBeInTheDocument();
-      expect(screen.getByLabelText('Minimum Duration (minutes)')).toBeInTheDocument();
-      expect(screen.getByLabelText('Maximum Duration (minutes)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Min Duration (mins)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Max Duration (mins)')).toBeInTheDocument();
       expect(screen.getByLabelText('Title Filter (Python Regex)')).toBeInTheDocument();
     });
   });
@@ -146,10 +146,10 @@ describe('ChannelSettingsDialog', () => {
       const subfolderInput = screen.getByLabelText('Subfolder (optional)');
       expect(subfolderInput).toHaveValue('__Sports');
 
-      const minDurationInput = screen.getByLabelText('Minimum Duration (minutes)');
+      const minDurationInput = screen.getByLabelText('Min Duration (mins)');
       expect(minDurationInput).toHaveValue(5);
 
-      const maxDurationInput = screen.getByLabelText('Maximum Duration (minutes)');
+      const maxDurationInput = screen.getByLabelText('Max Duration (mins)');
       expect(maxDurationInput).toHaveValue(60);
 
       const regexInput = screen.getByLabelText('Title Filter (Python Regex)');
@@ -562,10 +562,10 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const minDurationInput = screen.getByLabelText('Minimum Duration (minutes)');
+      const minDurationInput = screen.getByLabelText('Min Duration (mins)');
       expect(minDurationInput).toHaveValue(3);
 
-      const maxDurationInput = screen.getByLabelText('Maximum Duration (minutes)');
+      const maxDurationInput = screen.getByLabelText('Max Duration (mins)');
       expect(maxDurationInput).toHaveValue(30);
     });
 
@@ -598,11 +598,11 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const minDurationInput = screen.getByLabelText('Minimum Duration (minutes)');
+      const minDurationInput = screen.getByLabelText('Min Duration (mins)');
       await user.clear(minDurationInput);
       await user.type(minDurationInput, '10');
 
-      const maxDurationInput = screen.getByLabelText('Maximum Duration (minutes)');
+      const maxDurationInput = screen.getByLabelText('Max Duration (mins)');
       await user.clear(maxDurationInput);
       await user.type(maxDurationInput, '60');
 
@@ -653,7 +653,7 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const minDurationInput = screen.getByLabelText('Minimum Duration (minutes)');
+      const minDurationInput = screen.getByLabelText('Min Duration (mins)');
       await user.type(minDurationInput, 'abc');
 
       expect(minDurationInput).toHaveValue(null);
@@ -685,7 +685,7 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const minDurationInput = screen.getByLabelText('Minimum Duration (minutes)');
+      const minDurationInput = screen.getByLabelText('Min Duration (mins)');
       expect(minDurationInput).toHaveValue(5);
 
       await user.clear(minDurationInput);
