@@ -1,5 +1,30 @@
 # Changelog
 
+## [v1.47.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.47.0) - 2025-11-03
+
+## [1.47.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.46.2...v1.47.0) (2025-11-03)
+
+
+### Features
+
+* add channel download filters with duration and regex support ([a4996e1](https://github.com/DialmasterOrg/Youtarr/commit/a4996e1d4dccfef4e350d5507a2078ab654f5414))
+* add filter indicators to channel manager and channel page UI ([71c15a6](https://github.com/DialmasterOrg/Youtarr/commit/71c15a605bcd51c9e93345deef170e9298a0e455))
+
+
+### Bug Fixes
+
+* Channel settings text for MB ([f41869c](https://github.com/DialmasterOrg/Youtarr/commit/f41869cf6dbbb58be8325267faa47132ca2bc29e))
+
+
+### Documentation
+
+* remove migrations volume mount references and improve Docker setup docs ([f94c8d0](https://github.com/DialmasterOrg/Youtarr/commit/f94c8d04439e580f9b822217b267a3e5ebbd6e2d))
+* update CHANGELOG for v1.46.2 [skip ci] ([8084df4](https://github.com/DialmasterOrg/Youtarr/commit/8084df489f72104af834c649703aedfb7401ece4))
+
+
+
+
+
 ## [v1.46.2](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.46.2) - 2025-11-02
 
 ### [1.46.2](https://github.com/DialmasterOrg/Youtarr/compare/vv1.46.1...v1.46.2) (2025-11-02)
