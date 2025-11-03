@@ -13,12 +13,14 @@ import {
   DialogContentText,
   DialogContent,
   DialogActions,
+  DialogTitle,
   Box,
   Snackbar,
   Alert,
   CircularProgress,
   Chip,
   Typography,
+  Popover,
 } from '@mui/material';
 import Delete from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -27,6 +29,8 @@ import FolderIcon from '@mui/icons-material/Folder';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import SettingsIcon from '@mui/icons-material/Settings';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import axios from 'axios';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
@@ -58,6 +62,8 @@ function ChannelManager({ token }: ChannelManagerProps) {
   const [isAddingChannel, setIsAddingChannel] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
+  const [regexPopoverAnchor, setRegexPopoverAnchor] = useState<{ el: HTMLElement; regex: string } | null>(null);
+  const [regexDialogData, setRegexDialogData] = useState<{ open: boolean; regex: string }>({ open: false, regex: '' });
   const websocketContext = useContext(WebSocketContext);
   const navigate = useNavigate();
   if (!websocketContext) {
@@ -449,6 +455,118 @@ function ChannelManager({ token }: ChannelManagerProps) {
     );
   };
 
+  const formatDuration = (minSeconds: number | null | undefined, maxSeconds: number | null | undefined) => {
+    const minMinutes = minSeconds ? Math.floor(minSeconds / 60) : null;
+    const maxMinutes = maxSeconds ? Math.floor(maxSeconds / 60) : null;
+
+    if (minMinutes && maxMinutes) {
+      return isMobile ? `${minMinutes}-${maxMinutes}m` : `${minMinutes}-${maxMinutes} min`;
+    } else if (minMinutes) {
+      return isMobile ? `≥${minMinutes}m` : `≥${minMinutes} min`;
+    } else if (maxMinutes) {
+      return isMobile ? `≤${maxMinutes}m` : `≤${maxMinutes} min`;
+    }
+    return '';
+  };
+
+  const handleRegexClick = (event: React.MouseEvent<HTMLElement>, regex: string) => {
+    event.stopPropagation();
+    if (isMobile) {
+      setRegexDialogData({ open: true, regex });
+    } else {
+      setRegexPopoverAnchor({ el: event.currentTarget, regex });
+    }
+  };
+
+  const handleRegexClose = () => {
+    setRegexPopoverAnchor(null);
+    setRegexDialogData({ open: false, regex: '' });
+  };
+
+  const renderFilterIndicators = (channel: Channel) => {
+    const hasDurationFilter = channel.min_duration || channel.max_duration;
+    const hasRegexFilter = channel.title_filter_regex;
+
+    if (!hasDurationFilter && !hasRegexFilter) {
+      return null;
+    }
+
+    return (
+      <Box sx={{ display: 'flex', gap: 0.3, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', mt: 0.5 }}>
+        {hasDurationFilter && (
+          <Tooltip title={`Duration filter: ${formatDuration(channel.min_duration, channel.max_duration)}`}>
+            <Chip
+              icon={<AccessTimeIcon />}
+              label={formatDuration(channel.min_duration, channel.max_duration)}
+              size="small"
+              variant="outlined"
+              color="primary"
+              sx={{
+                height: isMobile ? '16px' : '18px',
+                fontSize: isMobile ? '0.6rem' : '0.65rem',
+                '& .MuiChip-icon': {
+                  fontSize: isMobile ? '0.7rem' : '0.75rem',
+                  ml: isMobile ? 0.25 : 0.5,
+                },
+                '& .MuiChip-label': {
+                  px: isMobile ? 0.5 : 0.75,
+                },
+              }}
+            />
+          </Tooltip>
+        )}
+
+        {hasRegexFilter && (
+          isMobile ? (
+            // Mobile: Just an icon button
+            <Tooltip title="Title filter (tap to view)">
+              <IconButton
+                size="small"
+                onClick={(e) => handleRegexClick(e, channel.title_filter_regex || '')}
+                data-testid="regex-filter-button"
+                sx={{
+                  width: 20,
+                  height: 20,
+                  padding: 0,
+                  color: 'primary.main',
+                }}
+              >
+                <FilterAltIcon sx={{ fontSize: '0.9rem' }} />
+              </IconButton>
+            </Tooltip>
+          ) : (
+            // Desktop: Small chip with icon
+            <Tooltip title="Title regex filter (click to view)">
+              <Chip
+                icon={<FilterAltIcon />}
+                label="Title"
+                size="small"
+                variant="outlined"
+                color="primary"
+                onClick={(e) => handleRegexClick(e, channel.title_filter_regex || '')}
+                sx={{
+                  height: '18px',
+                  fontSize: '0.65rem',
+                  cursor: 'pointer',
+                  '& .MuiChip-icon': {
+                    fontSize: '0.75rem',
+                    ml: 0.5,
+                  },
+                  '& .MuiChip-label': {
+                    px: 0.75,
+                  },
+                  '&:hover': {
+                    backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                  },
+                }}
+              />
+            </Tooltip>
+          )
+        )}
+      </Box>
+    );
+  };
+
   return (
     <Card elevation={8} style={{
       padding: '8px',
@@ -603,11 +721,12 @@ function ChannelManager({ token }: ChannelManagerProps) {
                       </Box>
                     </Grid>
 
-                    {/* Column 3: Settings (Folder + Quality) */}
+                    {/* Column 3: Settings (Folder + Quality + Filters) */}
                     <Grid item xs={4} sm={3}>
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'center' }}>
                         {renderSubFolder(channel.sub_folder)}
                         {renderQualityChip(channel.video_quality)}
+                        {renderFilterIndicators(channel)}
                       </Box>
                     </Grid>
 
@@ -790,6 +909,63 @@ function ChannelManager({ token }: ChannelManagerProps) {
         isMobile={isMobile}
       />
 
+      {/* Popover for desktop regex display */}
+      <Popover
+        open={Boolean(regexPopoverAnchor)}
+        anchorEl={regexPopoverAnchor?.el}
+        onClose={handleRegexClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'left',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'left',
+        }}
+      >
+        <Box sx={{ p: 2, maxWidth: 400 }}>
+          <Typography variant="subtitle2" gutterBottom>
+            Title Filter Regex Pattern:
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{
+              fontFamily: 'monospace',
+              backgroundColor: 'rgba(0, 0, 0, 0.05)',
+              p: 1,
+              borderRadius: 1,
+              wordBreak: 'break-all',
+            }}
+          >
+            {regexPopoverAnchor?.regex}
+          </Typography>
+        </Box>
+      </Popover>
+
+      {/* Dialog for mobile regex display */}
+      <Dialog open={regexDialogData.open} onClose={handleRegexClose} fullWidth maxWidth="sm">
+        <DialogTitle>Title Filter Regex Pattern</DialogTitle>
+        <DialogContent>
+          <Typography
+            variant="body2"
+            sx={{
+              fontFamily: 'monospace',
+              backgroundColor: 'rgba(0, 0, 0, 0.05)',
+              p: 1,
+              borderRadius: 1,
+              wordBreak: 'break-all',
+              mt: 1,
+            }}
+          >
+            {regexDialogData.regex}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleRegexClose} color="primary">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar
         open={Boolean(mobileTooltip)}

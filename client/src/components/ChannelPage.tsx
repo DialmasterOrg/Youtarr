@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Card, CardContent, Grid, Typography, Box, IconButton, Tooltip } from '@mui/material';
+import { Card, CardContent, Grid, Typography, Box, IconButton, Tooltip, Chip, Popover, Dialog, DialogTitle, DialogContent } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import FolderIcon from '@mui/icons-material/Folder';
+import VideocamIcon from '@mui/icons-material/Videocam';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { Channel } from '../types/Channel';
@@ -18,9 +21,17 @@ function ChannelPage({ token }: ChannelPageProps) {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [channel, setChannel] = useState<Channel | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [regexAnchorEl, setRegexAnchorEl] = useState<HTMLElement | null>(null);
+  const [regexDialogOpen, setRegexDialogOpen] = useState(false);
   const { channel_id } = useParams();
 
-  const handleSettingsSaved = (updated: { sub_folder: string | null; video_quality: string | null }) => {
+  const handleSettingsSaved = (updated: {
+    sub_folder: string | null;
+    video_quality: string | null;
+    min_duration: number | null;
+    max_duration: number | null;
+    title_filter_regex: string | null;
+  }) => {
     setChannel((prev) => {
       if (!prev) {
         return prev;
@@ -29,6 +40,9 @@ function ChannelPage({ token }: ChannelPageProps) {
         ...prev,
         sub_folder: updated.sub_folder,
         video_quality: updated.video_quality,
+        min_duration: updated.min_duration,
+        max_duration: updated.max_duration,
+        title_filter_regex: updated.title_filter_regex,
       };
     });
   };
@@ -68,6 +82,153 @@ function ChannelPage({ token }: ChannelPageProps) {
     );
   };
 
+  const handleRegexClick = (event: React.MouseEvent<HTMLElement>) => {
+    if (isMobile) {
+      setRegexDialogOpen(true);
+    } else {
+      setRegexAnchorEl(event.currentTarget);
+    }
+  };
+
+  const handleRegexClose = () => {
+    setRegexAnchorEl(null);
+    setRegexDialogOpen(false);
+  };
+
+  const formatDuration = (minSeconds: number | null | undefined, maxSeconds: number | null | undefined) => {
+    const minMinutes = minSeconds ? Math.floor(minSeconds / 60) : null;
+    const maxMinutes = maxSeconds ? Math.floor(maxSeconds / 60) : null;
+
+    if (minMinutes && maxMinutes) {
+      return `${minMinutes}-${maxMinutes} min`;
+    } else if (minMinutes) {
+      return `≥${minMinutes} min`;
+    } else if (maxMinutes) {
+      return `≤${maxMinutes} min`;
+    }
+    return '';
+  };
+
+  const renderFilterIndicators = () => {
+    if (!channel) return null;
+
+    const hasQualityOverride = channel.video_quality;
+    const hasDurationFilter = channel.min_duration || channel.max_duration;
+    const hasRegexFilter = channel.title_filter_regex;
+
+    if (!hasQualityOverride && !hasDurationFilter && !hasRegexFilter) {
+      return null;
+    }
+
+    return (
+      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', marginBottom: 0.5, alignItems: 'center' }}>
+        {hasQualityOverride && (
+          <Tooltip title={`Auto-download quality override: ${channel.video_quality}p`}>
+            <Chip
+              icon={<VideocamIcon />}
+              label={`${channel.video_quality}p`}
+              size="small"
+              variant="outlined"
+              color="primary"
+              sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem', height: isMobile ? '20px' : '24px' }}
+            />
+          </Tooltip>
+        )}
+
+        {hasDurationFilter && (
+          <Tooltip title={`Duration filter: ${formatDuration(channel.min_duration, channel.max_duration)}`}>
+            <Chip
+              icon={<AccessTimeIcon />}
+              label={formatDuration(channel.min_duration, channel.max_duration)}
+              size="small"
+              variant="outlined"
+              color="primary"
+              sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem', height: isMobile ? '20px' : '24px' }}
+            />
+          </Tooltip>
+        )}
+
+        {hasRegexFilter && (
+          <Tooltip title="Title regex filter (click to view pattern)">
+            <Chip
+              icon={<FilterAltIcon />}
+              label="Title Filter"
+              size="small"
+              variant="outlined"
+              color="primary"
+              onClick={handleRegexClick}
+              sx={{
+                fontSize: isMobile ? '0.65rem' : '0.75rem',
+                height: isMobile ? '20px' : '24px',
+                cursor: 'pointer',
+                '&:hover': {
+                  backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                }
+              }}
+            />
+          </Tooltip>
+        )}
+
+        {/* Popover for desktop */}
+        {!isMobile && (
+          <Popover
+            open={Boolean(regexAnchorEl)}
+            anchorEl={regexAnchorEl}
+            onClose={handleRegexClose}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'left',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'left',
+            }}
+          >
+            <Box sx={{ p: 2, maxWidth: 400 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Title Filter Regex Pattern:
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontFamily: 'monospace',
+                  backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                  p: 1,
+                  borderRadius: 1,
+                  wordBreak: 'break-all',
+                }}
+              >
+                {channel.title_filter_regex}
+              </Typography>
+            </Box>
+          </Popover>
+        )}
+
+        {/* Dialog for mobile */}
+        {isMobile && (
+          <Dialog open={regexDialogOpen} onClose={handleRegexClose} fullWidth maxWidth="sm">
+            <DialogTitle>Title Filter Regex Pattern</DialogTitle>
+            <DialogContent>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontFamily: 'monospace',
+                  backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                  p: 1,
+                  borderRadius: 1,
+                  wordBreak: 'break-all',
+                  mt: 1,
+                }}
+              >
+                {channel.title_filter_regex}
+              </Typography>
+            </DialogContent>
+          </Dialog>
+        )}
+      </Box>
+    );
+  };
+
   return (
     <>
       <Card elevation={8} style={{ marginBottom: '16px' }}>
@@ -101,24 +262,29 @@ function ChannelPage({ token }: ChannelPageProps) {
                   {channel ? channel.uploader : 'Loading...'}
                 </Typography>
                 {channel && (
-                  <>
-                    <Tooltip title="Channel Settings">
-                      <IconButton
-                        onClick={() => setSettingsOpen(true)}
-                        size={isMobile ? 'small' : 'medium'}
-                        sx={{ mb: 1 }}
-                      >
-                        <SettingsIcon />
-                      </IconButton>
-                    </Tooltip>
-                    {renderSubFolder(channel.sub_folder)}
-                  </>
+                  <Tooltip title="Channel Settings">
+                    <IconButton
+                      onClick={() => setSettingsOpen(true)}
+                      size={isMobile ? 'small' : 'medium'}
+                      sx={{ mb: 1 }}
+                    >
+                      <SettingsIcon />
+                    </IconButton>
+                  </Tooltip>
                 )}
               </Box>
+              {channel && (
+                <Box display="flex" justifyContent="center" flexDirection="column" alignItems="center">
+                  <Box display="flex" gap={0.5} flexWrap="wrap" justifyContent="center" alignItems="center">
+                    {renderSubFolder(channel.sub_folder)}
+                    {renderFilterIndicators()}
+                  </Box>
+                </Box>
+              )}
               <Box
                 sx={{
-                  maxHeight: isMobile ? '96px' : '184px',
-                  minHeight: isMobile ? '16px' : '184px',
+                  maxHeight: isMobile ? '84px' : '172px',
+                  minHeight: isMobile ? '16px' : '172px',
                   overflowY: 'scroll',
                   border: '1px solid grey',
                   padding: isMobile ? '12px' : '24px',

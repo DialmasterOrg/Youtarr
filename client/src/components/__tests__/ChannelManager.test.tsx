@@ -715,6 +715,247 @@ describe('ChannelManager Component', () => {
     });
   });
 
+  describe('Filter Indicators', () => {
+    describe('Duration Filters', () => {
+      test('displays duration filter chip with min and max values', async () => {
+        const channelWithDuration: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', min_duration: 300, max_duration: 1800 }
+        ];
+        mockGetChannelsOnce(channelWithDuration);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.getByText('5-30 min')).toBeInTheDocument();
+        expect(screen.getByTestId('AccessTimeIcon')).toBeInTheDocument();
+      });
+
+      test('displays duration filter chip with only min value', async () => {
+        const channelWithMinDuration: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', min_duration: 600, max_duration: null }
+        ];
+        mockGetChannelsOnce(channelWithMinDuration);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.getByText('≥10 min')).toBeInTheDocument();
+      });
+
+      test('displays duration filter chip with only max value', async () => {
+        const channelWithMaxDuration: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', min_duration: null, max_duration: 1200 }
+        ];
+        mockGetChannelsOnce(channelWithMaxDuration);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.getByText('≤20 min')).toBeInTheDocument();
+      });
+
+      test('displays shortened duration format in mobile view', async () => {
+        (useMediaQuery as jest.Mock).mockReturnValue(true);
+        const channelWithDuration: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', min_duration: 300, max_duration: 1800 }
+        ];
+        mockGetChannelsOnce(channelWithDuration);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.getByText('5-30m')).toBeInTheDocument();
+      });
+
+      test('does not display duration filter when both values are null', async () => {
+        const channelWithoutDuration: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', min_duration: null, max_duration: null }
+        ];
+        mockGetChannelsOnce(channelWithoutDuration);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.queryByTestId('AccessTimeIcon')).not.toBeInTheDocument();
+      });
+    });
+
+    describe('Title Regex Filters', () => {
+      test('displays title filter chip for desktop', async () => {
+        const channelWithRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: '^Gaming.*' }
+        ];
+        mockGetChannelsOnce(channelWithRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.getByText('Title')).toBeInTheDocument();
+        expect(screen.getByTestId('FilterAltIcon')).toBeInTheDocument();
+      });
+
+      test('displays title filter icon button for mobile', async () => {
+        (useMediaQuery as jest.Mock).mockReturnValue(true);
+        const channelWithRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: '^Gaming.*' }
+        ];
+        mockGetChannelsOnce(channelWithRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.getByTestId('FilterAltIcon')).toBeInTheDocument();
+        expect(screen.queryByText('Title')).not.toBeInTheDocument();
+      });
+
+      test('does not display title filter when regex is null', async () => {
+        const channelWithoutRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: null }
+        ];
+        mockGetChannelsOnce(channelWithoutRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.queryByTestId('FilterAltIcon')).not.toBeInTheDocument();
+      });
+
+      test('does not display title filter when regex is undefined', async () => {
+        const channelWithoutRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123' }
+        ];
+        mockGetChannelsOnce(channelWithoutRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.queryByTestId('FilterAltIcon')).not.toBeInTheDocument();
+      });
+    });
+
+    describe('Combined Filters', () => {
+      test('displays both duration and regex filters together', async () => {
+        const channelWithBothFilters: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', min_duration: 300, max_duration: 1800, title_filter_regex: '^Gaming.*' }
+        ];
+        mockGetChannelsOnce(channelWithBothFilters);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.getByText('5-30 min')).toBeInTheDocument();
+        expect(screen.getByTestId('AccessTimeIcon')).toBeInTheDocument();
+        expect(screen.getByText('Title')).toBeInTheDocument();
+        expect(screen.getByTestId('FilterAltIcon')).toBeInTheDocument();
+      });
+
+      test('does not render filter indicators box when no filters exist', async () => {
+        const channelWithoutFilters: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123' }
+        ];
+        mockGetChannelsOnce(channelWithoutFilters);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.queryByTestId('AccessTimeIcon')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('FilterAltIcon')).not.toBeInTheDocument();
+      });
+    });
+
+    describe('Regex Popover (Desktop)', () => {
+      test('opens popover when title filter chip is clicked', async () => {
+        const user = userEvent.setup();
+        const channelWithRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: '^Gaming.*' }
+        ];
+        mockGetChannelsOnce(channelWithRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+
+        const titleChip = screen.getByText('Title');
+        await user.click(titleChip);
+
+        expect(await screen.findByText('Title Filter Regex Pattern:')).toBeInTheDocument();
+        expect(screen.getByText('^Gaming.*')).toBeInTheDocument();
+      });
+
+      test('opens and displays popover content correctly', async () => {
+        const user = userEvent.setup();
+        const channelWithRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: '^Gaming.*' }
+        ];
+        mockGetChannelsOnce(channelWithRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+
+        // Verify popover is not initially visible
+        expect(screen.queryByText('Title Filter Regex Pattern:')).not.toBeInTheDocument();
+
+        const titleChip = screen.getByText('Title');
+        await user.click(titleChip);
+
+        // Verify popover opens with correct content
+        await screen.findByText('Title Filter Regex Pattern:');
+        expect(screen.getByText('^Gaming.*')).toBeInTheDocument();
+      });
+
+      test('displays complex regex pattern in popover', async () => {
+        const user = userEvent.setup();
+        const complexRegex = '(?i)^(Gaming|Review|Tutorial).*(?<!Old)$';
+        const channelWithComplexRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: complexRegex }
+        ];
+        mockGetChannelsOnce(channelWithComplexRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+
+        const titleChip = screen.getByText('Title');
+        await user.click(titleChip);
+
+        expect(await screen.findByText(complexRegex)).toBeInTheDocument();
+      });
+    });
+
+    describe('Regex Dialog (Mobile)', () => {
+      beforeEach(() => {
+        (useMediaQuery as jest.Mock).mockReturnValue(true);
+      });
+
+      test('opens dialog when title filter icon is clicked on mobile', async () => {
+        const user = userEvent.setup();
+        const channelWithRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: '^Gaming.*' }
+        ];
+        mockGetChannelsOnce(channelWithRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+
+        const filterButton = screen.getByTestId('regex-filter-button');
+        await user.click(filterButton);
+
+        expect(await screen.findByText('Title Filter Regex Pattern')).toBeInTheDocument();
+        expect(screen.getByText('^Gaming.*')).toBeInTheDocument();
+      });
+
+      test('closes dialog when Close button is clicked', async () => {
+        const user = userEvent.setup();
+        const channelWithRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: '^Gaming.*' }
+        ];
+        mockGetChannelsOnce(channelWithRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+
+        const filterButton = screen.getByTestId('regex-filter-button');
+        await user.click(filterButton);
+
+        await screen.findByText('Title Filter Regex Pattern');
+
+        const closeButton = screen.getByRole('button', { name: /close/i });
+        await user.click(closeButton);
+
+        await waitFor(() => {
+          expect(screen.queryByText('Title Filter Regex Pattern')).not.toBeInTheDocument();
+        });
+      });
+
+      test('displays complex regex pattern in mobile dialog', async () => {
+        const user = userEvent.setup();
+        const complexRegex = '(?i)^(Gaming|Review|Tutorial).*(?<!Old)$';
+        const channelWithComplexRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: complexRegex }
+        ];
+        mockGetChannelsOnce(channelWithComplexRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+
+        const filterButton = screen.getByTestId('regex-filter-button');
+        await user.click(filterButton);
+
+        expect(await screen.findByText(complexRegex)).toBeInTheDocument();
+      });
+    });
+  });
+
   describe('Edge Cases', () => {
     test('handles empty channel list', async () => {
       mockGetChannelsOnce([]);

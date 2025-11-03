@@ -255,6 +255,9 @@ class ChannelModule {
       available_tabs: channel.available_tabs || null,
       sub_folder: channel.sub_folder || null,
       video_quality: channel.video_quality || null,
+      min_duration: channel.min_duration || null,
+      max_duration: channel.max_duration || null,
+      title_filter_regex: channel.title_filter_regex || null,
     };
   }
 
@@ -714,6 +717,9 @@ class ChannelModule {
         available_tabs: channel.available_tabs || null,
         sub_folder: channel.sub_folder || null,
         video_quality: channel.video_quality || null,
+        min_duration: channel.min_duration || null,
+        max_duration: channel.max_duration || null,
+        title_filter_regex: channel.title_filter_regex || null,
       }));
     } catch (err) {
       logger.error({ err }, 'Error reading channels from database');
