@@ -63,7 +63,9 @@ https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
 
 > ⚠️ **IMPORTANT**: Always use `./start.sh` to start Youtarr (not `docker compose up` directly). The start script configures required environment variables from your config.json.
 
-Instructions for a custom docker setup can be found in the [Docker documentation](docs/DOCKER.md).
+**Platform-Specific Instructions**:
+- **Synology NAS** (DSM 7+): See the [Synology NAS Guide](docs/SYNOLOGY.md) for optimized installation steps
+- **Custom Docker Setup**: See the [Docker documentation](docs/DOCKER.md) for advanced configuration
 
 1. **Clone the repository**:
    ```bash
@@ -154,6 +156,7 @@ Instructions for a custom docker setup can be found in the [Docker documentation
 ## 📖 Documentation
 
 - **[Setup Guide](docs/SETUP.md)** - Detailed installation and configuration instructions
+- **[Synology NAS Guide](docs/SYNOLOGY.md)** - Synology-specific installation instructions for DSM 7+
 - **[Media Server Guide](docs/MEDIA_SERVERS.md)** - Configuration for Plex, Kodi, Jellyfin, and Emby
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Solutions to common issues
 - **[Docker Guide](docs/DOCKER.md)** - Docker configuration and management
