@@ -15,8 +15,10 @@ class DownloadExecutor {
   constructor() {
     this.tempChannelsFile = null;
     // Timeout configuration
-    this.activityTimeoutMs = 30 * 60 * 1000; // 30 minutes of no activity
-    this.maxAbsoluteTimeoutMs = 4 * 60 * 60 * 1000; // 4 hours maximum runtime
+    this.activityTimeoutMs = 30 * 60 * 1000; // 30 minutes of no activity (default)
+    this.postProcessingTimeoutMs = 60 * 60 * 1000; // 60 minutes for post-processing operations
+    this.maxAbsoluteTimeoutMs = 6 * 60 * 60 * 1000; // 6 hours maximum runtime
+    this.currentActivityTimeout = this.activityTimeoutMs; // Track current timeout duration
     // Current process tracking for manual termination
     this.currentProcess = null;
     this.currentJobId = null;
@@ -478,6 +480,9 @@ class DownloadExecutor {
     const config = configModule.getConfig();
     const monitor = new DownloadProgressMonitor(jobId, jobType);
 
+    // Reset activity timeout to default at start of each job
+    this.currentActivityTimeout = this.activityTimeoutMs;
+
     // For manual URL downloads, set the total count upfront
     if (jobType === 'Manually Added Urls' && urlCount > 0) {
       monitor.videoCount.total = urlCount;
@@ -520,7 +525,7 @@ class DownloadExecutor {
         const timeSinceActivity = now - lastActivityTime;
         const totalRuntime = now - jobStartTime;
 
-        if (timeSinceActivity > this.activityTimeoutMs) {
+        if (timeSinceActivity > this.currentActivityTimeout) {
           return {
             timeout: true,
             reason: `No download activity for ${Math.round(timeSinceActivity / 60000)} minutes`
@@ -631,12 +636,31 @@ class DownloadExecutor {
             logger.info({ source: 'yt-dlp' }, line);
 
             // Track activity indicators and reset timeout
-            // Reset on any download progress output
-            if (line.includes('[download]') ||
-                line.includes('[Merger]') ||
-                line.includes('[MoveFiles]') ||
-                line.includes('[Metadata]') ||
-                line.includes('Downloading item')) {
+            // For post-processing start patterns, extend timeout to 60 minutes
+            const isPostProcessingStart = line.includes('[Merger]') ||
+                                          line.includes('[Metadata]') ||
+                                          line.includes('[MoveFiles]') ||
+                                          line.includes('[ModifyChapters]') ||
+                                          line.includes('[ExtractAudio]');
+
+            const isDownloadActivity = line.includes('[download]') ||
+                                       line.includes('Downloading item');
+
+            if (isPostProcessingStart) {
+              this.currentActivityTimeout = this.postProcessingTimeoutMs;
+              resetActivityTimer();
+              logger.info({ timeout: '60 minutes' }, 'Post-processing detected, extended inactivity timeout');
+            } else if (isDownloadActivity) {
+              // Reset to normal 30-minute timeout when download activity resumes
+              if (this.currentActivityTimeout !== this.activityTimeoutMs) {
+                this.currentActivityTimeout = this.activityTimeoutMs;
+                logger.debug({ timeout: '30 minutes' }, 'Download activity resumed, reset to normal timeout');
+              }
+              resetActivityTimer();
+            } else if (line.includes('[SubtitlesConvertor]') ||
+                       line.includes('[ThumbnailsConvertor]') ||
+                       line.includes('Deleting original file')) {
+              // Other activity - just reset timer, keep current timeout
               resetActivityTimer();
             }
 
@@ -807,6 +831,9 @@ class DownloadExecutor {
         // Check for manual termination before clearing references
         const wasManuallyTerminated = this.manualTerminationReason !== null;
         const manualReason = this.manualTerminationReason;
+
+        // Reset activity timeout to default for next job
+        this.currentActivityTimeout = this.activityTimeoutMs;
 
         // Clear current process references
         this.currentProcess = null;
@@ -1345,6 +1372,9 @@ class DownloadExecutor {
           this.progressFlushTimer = null;
         }
         this.flushPendingProgressMessage();
+
+        // Reset activity timeout to default for next job
+        this.currentActivityTimeout = this.activityTimeoutMs;
 
         // Clear current process references
         this.currentProcess = null;
