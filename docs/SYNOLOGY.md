@@ -168,7 +168,7 @@ Ensure `YOUTUBE_OUTPUT_DIR` matches the directory you created in Step 4.
 
 ---
 
-### Step 6: Start Youtarr (2 min)
+### Step 6: Start Youtarr
 
 Start the containers using docker-compose:
 
@@ -201,7 +201,7 @@ docker-compose logs -f
 
 ---
 
-### Step 7: Access Youtarr (1 min)
+### Step 7: Access Youtarr
 
 Open your web browser and navigate to:
 
