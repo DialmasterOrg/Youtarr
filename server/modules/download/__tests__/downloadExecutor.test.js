@@ -163,7 +163,7 @@ describe('DownloadExecutor', () => {
     it('should initialize with correct default values', () => {
       expect(executor.tempChannelsFile).toBeNull();
       expect(executor.activityTimeoutMs).toBe(30 * 60 * 1000);
-      expect(executor.maxAbsoluteTimeoutMs).toBe(4 * 60 * 60 * 1000);
+      expect(executor.maxAbsoluteTimeoutMs).toBe(6 * 60 * 60 * 1000);
       expect(executor.currentProcess).toBeNull();
       expect(executor.currentJobId).toBeNull();
       expect(executor.manualTerminationReason).toBeNull();
@@ -1284,7 +1284,7 @@ describe('DownloadExecutor', () => {
 
     it('should have configurable timeout values', () => {
       expect(executor.activityTimeoutMs).toBe(30 * 60 * 1000); // 30 minutes
-      expect(executor.maxAbsoluteTimeoutMs).toBe(4 * 60 * 60 * 1000); // 4 hours
+      expect(executor.maxAbsoluteTimeoutMs).toBe(6 * 60 * 60 * 1000); // 6 hours
     });
 
     it('should track current process for manual termination', async () => {
