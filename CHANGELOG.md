@@ -1,5 +1,25 @@
 # Changelog
 
+## [v1.47.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.47.1) - 2025-11-04
+
+### [1.47.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.47.0...v1.47.1) (2025-11-04)
+
+
+### Bug Fixes
+
+* prevent timeout during long video post-processing operations ([3678372](https://github.com/DialmasterOrg/Youtarr/commit/3678372ac998620f0d3acd0c62afabe87d8290f4))
+
+
+### Documentation
+
+* add Synology NAS installation guide ([9d92498](https://github.com/DialmasterOrg/Youtarr/commit/9d924985c1006b447c4ffdfbd0facb301d0fe121))
+* Remove time references ([cdb560f](https://github.com/DialmasterOrg/Youtarr/commit/cdb560f8f7279ab2031c853f2de1589eacd91f52))
+* update CHANGELOG for v1.47.0 [skip ci] ([c347b73](https://github.com/DialmasterOrg/Youtarr/commit/c347b739d35592e85006cdd0cb0a0c9aed0c03fc))
+
+
+
+
+
 ## [v1.47.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.47.0) - 2025-11-03
 
 ## [1.47.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.46.2...v1.47.0) (2025-11-03)
