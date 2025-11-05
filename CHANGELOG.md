@@ -1,5 +1,28 @@
 # Changelog
 
+## [v1.48.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.48.0) - 2025-11-05
+
+## [1.48.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.47.1...v1.48.0) (2025-11-05)
+
+
+### Features
+
+* add ignore flag for channel videos to prevent auto-downloads ([8573795](https://github.com/DialmasterOrg/Youtarr/commit/85737952fcd34b43f79020f9139dc7ab78b3806d))
+
+
+### Bug Fixes
+
+* prevent page reload when toggling video ignore status ([e7b1679](https://github.com/DialmasterOrg/Youtarr/commit/e7b1679d909e2c537d2568220b120cb5d920ba77))
+
+
+### Documentation
+
+* update CHANGELOG for v1.47.1 [skip ci] ([9fc9197](https://github.com/DialmasterOrg/Youtarr/commit/9fc9197b361c549f2e1c6fba3197d247dc41dd08))
+
+
+
+
+
 ## [v1.47.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.47.1) - 2025-11-04
 
 ### [1.47.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.47.0...v1.47.1) (2025-11-04)
