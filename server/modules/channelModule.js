@@ -1054,7 +1054,9 @@ class ChannelModule {
         duration: v.duration,
         publishedAt: v.publishedAt,
         availability: v.availability,
-        youtube_removed: v.youtube_removed
+        youtube_removed: v.youtube_removed,
+        ignored: v.ignored,
+        ignored_at: v.ignored_at
       }));
 
       // This will check files for only the current page

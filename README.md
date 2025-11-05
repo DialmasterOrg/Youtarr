@@ -169,7 +169,9 @@ https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
 - **Storage Growth**: Downloads can consume significant disk space over time. The UI includes a storage status chip that shows total and free space for your selected directory/drive, making it easy to monitor and adjust limits/schedule as needed. Automatic Video Removal can purge old videos nightly at 2:00 AM once you configure age or free-space thresholds; space-based cleanup relies on the storage status chip reporting accurate disk usage.
 - **Format**: Downloads as MP4 with comprehensive embedded metadata (title, genre, studio, keywords) and NFO files for maximum media server compatibility
 - **File Management**: Videos must retain their `[youtubeid].mp4` filename and remain in their download location. Moving or renaming files will cause Youtarr to mark them as "missing"
+- **⚠️ CRITICAL: Download Archive File**: The `config/complete.list` file tracks all downloaded videos and prevents re-downloads during automatic channel updates. **Never delete this file** - doing so will cause Youtarr to re-download all videos from subscribed channels on the next scheduled run. This file also stores videos you've marked to ignore for automatic downloads.
 - **Filtering**: Automatically skips subscriber-only content; configure auto-downloads separately for long-form videos, Shorts, and Streams
+- **Manual Ignore**: Mark individual videos to exclude them from automatic channel downloads while keeping auto-downloads enabled for the rest of the channel. Use the ignore button on videos that haven't been downloaded yet, or bulk-ignore multiple videos at once
 - **Authentication**: Uses local authentication (create admin account on first access)
 - **Security**: Leave authentication enabled unless you have your own auth in front of Youtarr. If you launch with `--no-auth` (or set `AUTH_ENABLED=false`), never expose that instance directly to the public internet.
 

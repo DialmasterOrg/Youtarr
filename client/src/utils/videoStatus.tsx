@@ -5,11 +5,15 @@ import LockIcon from '@mui/icons-material/Lock';
 import NewReleasesIcon from '@mui/icons-material/NewReleases';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
+import BlockIcon from '@mui/icons-material/Block';
 import { ChannelVideo } from '../types/ChannelVideo';
 
-export type VideoStatus = 'never_downloaded' | 'downloaded' | 'missing' | 'members_only';
+export type VideoStatus = 'never_downloaded' | 'downloaded' | 'missing' | 'members_only' | 'ignored';
 
 export const getVideoStatus = (video: ChannelVideo): VideoStatus => {
+  if (video.ignored) {
+    return 'ignored';
+  }
   if (video.availability === 'subscriber_only') {
     return 'members_only';
   }
@@ -30,6 +34,8 @@ export const getStatusColor = (status: VideoStatus) => {
       return 'warning';
     case 'members_only':
       return 'default';
+    case 'ignored':
+      return 'default';
     default:
       return 'info';
   }
@@ -43,6 +49,8 @@ export const getStatusIcon = (status: VideoStatus) => {
       return <CloudOffIcon fontSize="small" />;
     case 'members_only':
       return <LockIcon fontSize="small" />;
+    case 'ignored':
+      return <BlockIcon fontSize="small" />;
     default:
       return <NewReleasesIcon fontSize="small" />;
   }
@@ -56,6 +64,8 @@ export const getStatusLabel = (status: VideoStatus) => {
       return 'Missing';
     case 'members_only':
       return 'Members Only';
+    case 'ignored':
+      return 'Ignored';
     default:
       return 'Not Downloaded';
   }

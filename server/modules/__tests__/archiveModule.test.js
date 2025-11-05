@@ -30,6 +30,7 @@ youtube video3
     fs = require('fs');
     fs.readFileSync = jest.fn();
     fs.appendFileSync = jest.fn();
+    fs.writeFileSync = jest.fn();
 
     logger = require('../../logger');
 
@@ -495,6 +496,219 @@ youtube video2
       expect(result1).toBe(true);
       expect(result2).toBe(false);
       expect(fs.appendFileSync).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('removeVideoFromArchive', () => {
+    test('should remove video from archive successfully', async () => {
+      fs.readFileSync.mockReturnValue('youtube video1\nyoutube video2\nyoutube video3');
+
+      const result = await ArchiveModule.removeVideoFromArchive('video2');
+
+      expect(result).toBe(true);
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        mockArchivePath,
+        'youtube video1\nyoutube video3\n',
+        'utf-8'
+      );
+      expect(logger.debug).toHaveBeenCalledWith(
+        { videoId: 'video2' },
+        'Removed video from archive'
+      );
+    });
+
+    test('should return false when videoId is empty', async () => {
+      const result = await ArchiveModule.removeVideoFromArchive('');
+
+      expect(result).toBe(false);
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
+      expect(logger.debug).toHaveBeenCalledWith(
+        'removeVideoFromArchive called with empty videoId, skipping'
+      );
+    });
+
+    test('should return false when videoId is null', async () => {
+      const result = await ArchiveModule.removeVideoFromArchive(null);
+
+      expect(result).toBe(false);
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
+      expect(logger.debug).toHaveBeenCalledWith(
+        'removeVideoFromArchive called with empty videoId, skipping'
+      );
+    });
+
+    test('should return false when videoId is undefined', async () => {
+      const result = await ArchiveModule.removeVideoFromArchive(undefined);
+
+      expect(result).toBe(false);
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
+      expect(logger.debug).toHaveBeenCalledWith(
+        'removeVideoFromArchive called with empty videoId, skipping'
+      );
+    });
+
+    test('should return false when video does not exist in archive', async () => {
+      fs.readFileSync.mockReturnValue('youtube video1\nyoutube video2');
+
+      const result = await ArchiveModule.removeVideoFromArchive('video999');
+
+      expect(result).toBe(false);
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
+      expect(logger.debug).toHaveBeenCalledWith(
+        { videoId: 'video999' },
+        'Video not in archive, nothing to remove'
+      );
+    });
+
+    test('should return false when archive is empty', async () => {
+      fs.readFileSync.mockReturnValue('');
+
+      const result = await ArchiveModule.removeVideoFromArchive('video1');
+
+      expect(result).toBe(false);
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
+      expect(logger.debug).toHaveBeenCalledWith(
+        { videoId: 'video1' },
+        'Video not in archive, nothing to remove'
+      );
+    });
+
+    test('should return false when archive file does not exist', async () => {
+      const error = new Error('File not found');
+      error.code = 'ENOENT';
+      fs.readFileSync.mockImplementation(() => {
+        throw error;
+      });
+
+      const result = await ArchiveModule.removeVideoFromArchive('video1');
+
+      expect(result).toBe(false);
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
+    });
+
+    test('should handle file write errors gracefully', async () => {
+      fs.readFileSync.mockReturnValue('youtube video1\nyoutube video2');
+      const writeError = new Error('Permission denied');
+      writeError.code = 'EACCES';
+      fs.writeFileSync.mockImplementation(() => {
+        throw writeError;
+      });
+
+      const result = await ArchiveModule.removeVideoFromArchive('video2');
+
+      expect(result).toBe(false);
+      expect(logger.error).toHaveBeenCalledWith(
+        { videoId: 'video2', err: 'Permission denied' },
+        'Failed to remove video from archive'
+      );
+    });
+
+    test('should remove video with special characters in ID', async () => {
+      fs.readFileSync.mockReturnValue('youtube video1\nyoutube Video-With_Special.Chars123\nyoutube video3');
+
+      const result = await ArchiveModule.removeVideoFromArchive('Video-With_Special.Chars123');
+
+      expect(result).toBe(true);
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        mockArchivePath,
+        'youtube video1\nyoutube video3\n',
+        'utf-8'
+      );
+    });
+
+    test('should handle lines with extra spaces correctly', async () => {
+      const contentWithSpaces = 'youtube   video1\nyoutube video2\n  youtube video3';
+      fs.readFileSync.mockReturnValue(contentWithSpaces);
+
+      const result = await ArchiveModule.removeVideoFromArchive('video2');
+
+      expect(result).toBe(true);
+      // Note: readCompleteListLines trims the lines, so whitespace is normalized
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        mockArchivePath,
+        'youtube   video1\nyoutube video3\n',
+        'utf-8'
+      );
+    });
+
+    test('should only remove lines matching "youtube" prefix', async () => {
+      const mixedContent = 'youtube video1\nvimeo video2\nyoutube video2\nyoutube video3';
+      fs.readFileSync.mockReturnValue(mixedContent);
+
+      const result = await ArchiveModule.removeVideoFromArchive('video2');
+
+      expect(result).toBe(true);
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        mockArchivePath,
+        'youtube video1\nvimeo video2\nyoutube video3\n',
+        'utf-8'
+      );
+    });
+
+    test('should remove only the first video when there are no others', async () => {
+      fs.readFileSync.mockReturnValue('youtube video1');
+
+      const result = await ArchiveModule.removeVideoFromArchive('video1');
+
+      expect(result).toBe(true);
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        mockArchivePath,
+        '',
+        'utf-8'
+      );
+    });
+
+    test('should remove video from beginning of list', async () => {
+      fs.readFileSync.mockReturnValue('youtube video1\nyoutube video2\nyoutube video3');
+
+      const result = await ArchiveModule.removeVideoFromArchive('video1');
+
+      expect(result).toBe(true);
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        mockArchivePath,
+        'youtube video2\nyoutube video3\n',
+        'utf-8'
+      );
+    });
+
+    test('should remove video from end of list', async () => {
+      fs.readFileSync.mockReturnValue('youtube video1\nyoutube video2\nyoutube video3');
+
+      const result = await ArchiveModule.removeVideoFromArchive('video3');
+
+      expect(result).toBe(true);
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        mockArchivePath,
+        'youtube video1\nyoutube video2\n',
+        'utf-8'
+      );
+    });
+
+    test('should match exact video ID only', async () => {
+      fs.readFileSync.mockReturnValue('youtube video123\nyoutube video12\nyoutube video1234');
+
+      const result = await ArchiveModule.removeVideoFromArchive('video123');
+
+      expect(result).toBe(true);
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        mockArchivePath,
+        'youtube video12\nyoutube video1234\n',
+        'utf-8'
+      );
+    });
+
+    test('should handle Windows line endings when removing', async () => {
+      const windowsContent = 'youtube video1\r\nyoutube video2\r\nyoutube video3';
+      fs.readFileSync.mockReturnValue(windowsContent);
+
+      const result = await ArchiveModule.removeVideoFromArchive('video2');
+
+      expect(result).toBe(true);
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        mockArchivePath,
+        'youtube video1\nyoutube video3\n',
+        'utf-8'
+      );
     });
   });
 });

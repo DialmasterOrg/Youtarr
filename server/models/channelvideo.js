@@ -60,6 +60,16 @@ ChannelVideo.init(
       allowNull: true,
       defaultValue: null,
     },
+    ignored: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    ignored_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     sequelize,

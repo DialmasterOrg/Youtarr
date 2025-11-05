@@ -467,6 +467,42 @@ class DownloadModule {
       // Note: Subfolder routing is now handled post-download in videoDownloadPostProcessFiles.js
       const args = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload(resolution, allowRedownload);
 
+      // Check if any URLs are for videos marked as ignored, and remove them from archive
+      // This allows users to manually download videos they've marked to ignore for channel downloads
+      if (!allowRedownload) {
+        try {
+          const archiveModule = require('./archiveModule');
+          const ChannelVideo = require('../models/channelvideo');
+
+          // Extract YouTube IDs from URLs
+          const youtubeIds = urls.map(url => {
+            // Match various YouTube URL formats
+            const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+            return match ? match[1] : null;
+          }).filter(Boolean);
+
+          if (youtubeIds.length > 0) {
+            // Find which of these videos are marked as ignored
+            const ignoredVideos = await ChannelVideo.findAll({
+              where: {
+                youtube_id: youtubeIds,
+                ignored: true
+              },
+              attributes: ['youtube_id']
+            });
+
+            // Remove ignored videos from archive so they can be downloaded
+            for (const video of ignoredVideos) {
+              await archiveModule.removeVideoFromArchive(video.youtube_id);
+              logger.info({ youtubeId: video.youtube_id }, 'Removed ignored video from archive for manual download');
+            }
+          }
+        } catch (err) {
+          logger.error({ err }, 'Error removing ignored videos from archive');
+          // Continue with download even if this fails
+        }
+      }
+
       // Add URLs to args array
       urls.forEach((url) => {
         if (url.startsWith('-')) {

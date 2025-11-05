@@ -68,6 +68,7 @@ describe('ChannelVideosHeader Component', () => {
     onSelectAll: jest.fn(),
     onClearSelection: jest.fn(),
     onDeleteClick: jest.fn(),
+    onBulkIgnoreClick: jest.fn(),
     onInfoIconClick: jest.fn(),
   };
 
@@ -418,6 +419,7 @@ describe('ChannelVideosHeader Component', () => {
       expect(screen.getByRole('button', { name: /Download Selected/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Select All This Page/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Clear/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Ignore Selected/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Delete Selected/i })).toBeInTheDocument();
     });
 
@@ -429,6 +431,7 @@ describe('ChannelVideosHeader Component', () => {
       expect(screen.queryByRole('button', { name: /Download.*Selected/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Select All This Page/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Clear/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Ignore Selected/i })).not.toBeInTheDocument();
     });
   });
 
@@ -524,6 +527,26 @@ describe('ChannelVideosHeader Component', () => {
       expect(button).not.toBeDisabled();
     });
 
+    test('select all button is enabled when ignored videos exist', () => {
+      const ignoredVideos: ChannelVideo[] = [
+        {
+          ...mockVideos[0],
+          ignored: true,
+        },
+      ];
+
+      renderWithProviders(
+        <ChannelVideosHeader
+          {...defaultProps}
+          checkedBoxes={[]}
+          paginatedVideos={ignoredVideos}
+        />
+      );
+
+      const button = screen.getByRole('button', { name: /Select All This Page/i });
+      expect(button).not.toBeDisabled();
+    });
+
     test('calls onSelectAll when clicked', async () => {
       const user = userEvent.setup();
       const onSelectAll = jest.fn();
@@ -575,6 +598,63 @@ describe('ChannelVideosHeader Component', () => {
 
       await user.click(screen.getByRole('button', { name: /^Clear$/i }));
       expect(onClearSelection).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Ignore Selected Button', () => {
+    test('renders ignore selected button on desktop', () => {
+      renderWithProviders(<ChannelVideosHeader {...defaultProps} />);
+      expect(screen.getByRole('button', { name: /Ignore Selected/i })).toBeInTheDocument();
+    });
+
+    test('does not render ignore selected button on mobile', () => {
+      renderWithProviders(
+        <ChannelVideosHeader {...defaultProps} isMobile={true} />
+      );
+      expect(screen.queryByRole('button', { name: /Ignore Selected/i })).not.toBeInTheDocument();
+    });
+
+    test('ignore selected button is disabled when no videos checked', () => {
+      renderWithProviders(
+        <ChannelVideosHeader {...defaultProps} checkedBoxes={[]} />
+      );
+
+      const button = screen.getByRole('button', { name: /Ignore Selected/i });
+      expect(button).toBeDisabled();
+    });
+
+    test('ignore selected button is enabled when videos are checked', () => {
+      renderWithProviders(
+        <ChannelVideosHeader {...defaultProps} checkedBoxes={['video1', 'video2']} />
+      );
+
+      const button = screen.getByRole('button', { name: /Ignore Selected/i });
+      expect(button).not.toBeDisabled();
+    });
+
+    test('calls onBulkIgnoreClick when clicked', async () => {
+      const user = userEvent.setup();
+      const onBulkIgnoreClick = jest.fn();
+
+      renderWithProviders(
+        <ChannelVideosHeader
+          {...defaultProps}
+          checkedBoxes={['video1']}
+          onBulkIgnoreClick={onBulkIgnoreClick}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: /Ignore Selected/i }));
+      expect(onBulkIgnoreClick).toHaveBeenCalledTimes(1);
+    });
+
+    test('ignore button has warning color', () => {
+      renderWithProviders(
+        <ChannelVideosHeader {...defaultProps} checkedBoxes={['video1']} />
+      );
+
+      const button = screen.getByRole('button', { name: /Ignore Selected/i });
+      expect(button).toHaveClass('MuiButton-outlinedWarning');
     });
   });
 

@@ -38,6 +38,7 @@ describe('VideoTableView Component', () => {
     onClearSelection: jest.fn(),
     onSortChange: jest.fn(),
     onToggleDeletion: jest.fn(),
+    onToggleIgnore: jest.fn(),
   };
 
   beforeEach(() => {
@@ -485,6 +486,182 @@ describe('VideoTableView Component', () => {
 
       expect(onToggleDeletion).toHaveBeenCalledTimes(1);
       expect(onCheckChange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Ignore/Unignore Button', () => {
+    test('renders ignore button for never downloaded videos', () => {
+      renderWithProviders(<VideoTableView {...defaultProps} />);
+      const buttons = screen.getAllByRole('button', { name: /ignore/i });
+      expect(buttons.length).toBeGreaterThan(0);
+    });
+
+    test('renders ignore button for missing videos', () => {
+      const missingVideo = { ...mockVideo, added: true, removed: true };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[missingVideo]} />);
+      const buttons = screen.getAllByRole('button', { name: /ignore/i });
+      expect(buttons.length).toBeGreaterThan(0);
+    });
+
+    test('renders unignore button for ignored videos', () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[ignoredVideo]} />);
+      const buttons = screen.getAllByRole('button', { name: /unignore/i });
+      expect(buttons.length).toBeGreaterThan(0);
+    });
+
+    test('does not render ignore button for downloaded videos', () => {
+      const downloadedVideo = { ...mockVideo, added: true, removed: false };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[downloadedVideo]} />);
+      expect(screen.queryByRole('button', { name: /ignore/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /unignore/i })).not.toBeInTheDocument();
+    });
+
+    test('does not render ignore button for still live videos', () => {
+      const liveVideo = { ...mockVideo, live_status: 'is_live' };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[liveVideo]} />);
+      expect(screen.queryByRole('button', { name: /ignore/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /unignore/i })).not.toBeInTheDocument();
+    });
+
+    test('calls onToggleIgnore when ignore button is clicked', async () => {
+      const user = userEvent.setup();
+      const onToggleIgnore = jest.fn();
+
+      renderWithProviders(
+        <VideoTableView
+          {...defaultProps}
+          onToggleIgnore={onToggleIgnore}
+        />
+      );
+
+      const ignoreButton = screen.getByRole('button', { name: /ignore/i });
+      await user.click(ignoreButton);
+      expect(onToggleIgnore).toHaveBeenCalledTimes(1);
+      expect(onToggleIgnore).toHaveBeenCalledWith('test123');
+    });
+
+    test('calls onToggleIgnore when unignore button is clicked', async () => {
+      const user = userEvent.setup();
+      const onToggleIgnore = jest.fn();
+      const ignoredVideo = { ...mockVideo, ignored: true };
+
+      renderWithProviders(
+        <VideoTableView
+          {...defaultProps}
+          videos={[ignoredVideo]}
+          onToggleIgnore={onToggleIgnore}
+        />
+      );
+
+      const unignoreButton = screen.getByRole('button', { name: /unignore/i });
+      await user.click(unignoreButton);
+      expect(onToggleIgnore).toHaveBeenCalledTimes(1);
+      expect(onToggleIgnore).toHaveBeenCalledWith('test123');
+    });
+
+    test('ignore button click stops propagation', async () => {
+      const user = userEvent.setup();
+      const onToggleIgnore = jest.fn();
+      const onCheckChange = jest.fn();
+
+      renderWithProviders(
+        <VideoTableView
+          {...defaultProps}
+          onToggleIgnore={onToggleIgnore}
+          onCheckChange={onCheckChange}
+        />
+      );
+
+      const ignoreButton = screen.getByRole('button', { name: /ignore/i });
+      await user.click(ignoreButton);
+      expect(onToggleIgnore).toHaveBeenCalledTimes(1);
+      expect(onCheckChange).not.toHaveBeenCalled();
+    });
+
+    test('ignore button has correct title attribute', () => {
+      renderWithProviders(<VideoTableView {...defaultProps} />);
+      const ignoreButton = screen.getByRole('button', { name: /ignore/i });
+      expect(ignoreButton).toHaveAttribute('title', 'Ignore');
+    });
+
+    test('unignore button has correct title attribute', () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[ignoredVideo]} />);
+      const unignoreButton = screen.getByRole('button', { name: /unignore/i });
+      expect(unignoreButton).toHaveAttribute('title', 'Unignore');
+    });
+  });
+
+  describe('Ignored Video Status', () => {
+    test('renders "Ignored" status for ignored videos', () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[ignoredVideo]} />);
+      expect(screen.getByText('Ignored')).toBeInTheDocument();
+    });
+
+    test('ignored videos have reduced opacity', () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[ignoredVideo]} />);
+      const rows = screen.getAllByRole('row');
+      // Find the row containing the ignored video (skip header row)
+      const videoRow = rows.find(row => row.textContent?.includes('Test Video Title'));
+      expect(videoRow).toHaveStyle({ opacity: 0.7 });
+    });
+
+    test('ignored videos are selectable with checkbox', () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[ignoredVideo]} />);
+      const checkboxes = screen.getAllByRole('checkbox');
+      // Header + 1 video checkbox (ignored videos are selectable)
+      expect(checkboxes).toHaveLength(2);
+    });
+
+    test('renders BlockIcon for ignored videos in status chip', () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[ignoredVideo]} />);
+      expect(screen.getByTestId('BlockIcon')).toBeInTheDocument();
+    });
+  });
+
+  describe('Ignore and Delete Button Interaction', () => {
+    test('does not render both ignore and delete buttons on same video', () => {
+      const downloadedVideo = { ...mockVideo, added: true, removed: false };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[downloadedVideo]} />);
+
+      // Should have delete button
+      expect(screen.getByTestId('DeleteIcon')).toBeInTheDocument();
+
+      // Should not have ignore button
+      expect(screen.queryByRole('button', { name: /ignore/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /unignore/i })).not.toBeInTheDocument();
+    });
+
+    test('renders ignore button for missing video, not delete button', () => {
+      const missingVideo = { ...mockVideo, added: true, removed: true };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[missingVideo]} />);
+
+      // Should have ignore button
+      expect(screen.getByRole('button', { name: /ignore/i })).toBeInTheDocument();
+
+      // Should not have delete button
+      expect(screen.queryByTestId('DeleteIcon')).not.toBeInTheDocument();
+    });
+
+    test('renders unignore button for ignored missing video', () => {
+      const ignoredMissingVideo = {
+        ...mockVideo,
+        added: true,
+        removed: true,
+        ignored: true
+      };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[ignoredMissingVideo]} />);
+
+      // Should have unignore button
+      expect(screen.getByRole('button', { name: /unignore/i })).toBeInTheDocument();
+
+      // Should not have delete button
+      expect(screen.queryByTestId('DeleteIcon')).not.toBeInTheDocument();
     });
   });
 

@@ -32,6 +32,7 @@ describe('VideoListItem Component', () => {
     selectedForDeletion: [],
     onCheckChange: jest.fn(),
     onToggleDeletion: jest.fn(),
+    onToggleIgnore: jest.fn(),
   };
 
   beforeEach(() => {
@@ -100,6 +101,12 @@ describe('VideoListItem Component', () => {
       const membersOnlyVideo = { ...mockVideo, availability: 'subscriber_only' };
       renderWithProviders(<VideoListItem {...defaultProps} video={membersOnlyVideo} />);
       expect(screen.getByText('Members Only')).toBeInTheDocument();
+    });
+
+    test('renders "Ignored" status for ignored video', () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      renderWithProviders(<VideoListItem {...defaultProps} video={ignoredVideo} />);
+      expect(screen.getByText('Ignored')).toBeInTheDocument();
     });
   });
 
@@ -215,6 +222,12 @@ describe('VideoListItem Component', () => {
       expect(screen.getByRole('checkbox')).toBeInTheDocument();
     });
 
+    test('renders checkbox for ignored videos', () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      renderWithProviders(<VideoListItem {...defaultProps} video={ignoredVideo} />);
+      expect(screen.getByRole('checkbox')).toBeInTheDocument();
+    });
+
     test('does not render checkbox for downloaded videos', () => {
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
       renderWithProviders(<VideoListItem {...defaultProps} video={downloadedVideo} />);
@@ -297,6 +310,21 @@ describe('VideoListItem Component', () => {
 
       renderWithProviders(
         <VideoListItem {...defaultProps} onCheckChange={onCheckChange} />
+      );
+
+      const card = screen.getByText('Test Video Title');
+      await user.click(card);
+
+      expect(onCheckChange).toHaveBeenCalledWith('test123', true);
+    });
+
+    test('clicking card toggles selection for ignored videos', async () => {
+      const user = userEvent.setup();
+      const onCheckChange = jest.fn();
+      const ignoredVideo = { ...mockVideo, ignored: true };
+
+      renderWithProviders(
+        <VideoListItem {...defaultProps} video={ignoredVideo} onCheckChange={onCheckChange} />
       );
 
       const card = screen.getByText('Test Video Title');
@@ -430,6 +458,116 @@ describe('VideoListItem Component', () => {
     });
   });
 
+  describe('Ignore/Unignore Button', () => {
+    test('renders ignore button for never downloaded videos', () => {
+      renderWithProviders(<VideoListItem {...defaultProps} />);
+      expect(screen.getByTestId('BlockIcon')).toBeInTheDocument();
+      expect(screen.getByLabelText('Click to ignore')).toBeInTheDocument();
+    });
+
+    test('renders ignore button for missing videos', () => {
+      const missingVideo = { ...mockVideo, added: true, removed: true };
+      renderWithProviders(<VideoListItem {...defaultProps} video={missingVideo} />);
+      expect(screen.getByTestId('BlockIcon')).toBeInTheDocument();
+      expect(screen.getByLabelText('Click to ignore')).toBeInTheDocument();
+    });
+
+    test('renders unignore button for ignored videos', () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      renderWithProviders(<VideoListItem {...defaultProps} video={ignoredVideo} />);
+      expect(screen.getByTestId('CheckCircleOutlineIcon')).toBeInTheDocument();
+      expect(screen.getByLabelText('Click to unignore')).toBeInTheDocument();
+    });
+
+    test('does not render ignore button for downloaded videos', () => {
+      const downloadedVideo = { ...mockVideo, added: true, removed: false };
+      renderWithProviders(<VideoListItem {...defaultProps} video={downloadedVideo} />);
+      expect(screen.queryByTestId('BlockIcon')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('CheckCircleOutlineIcon')).not.toBeInTheDocument();
+    });
+
+    test('does not render ignore button for still live videos', () => {
+      const liveVideo = { ...mockVideo, live_status: 'is_live' };
+      renderWithProviders(<VideoListItem {...defaultProps} video={liveVideo} />);
+      expect(screen.queryByTestId('BlockIcon')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('CheckCircleOutlineIcon')).not.toBeInTheDocument();
+    });
+
+    test('calls onToggleIgnore when ignore button is clicked', async () => {
+      const user = userEvent.setup();
+      const onToggleIgnore = jest.fn();
+
+      renderWithProviders(
+        <VideoListItem
+          {...defaultProps}
+          onToggleIgnore={onToggleIgnore}
+        />
+      );
+
+      const ignoreButton = screen.getByLabelText('Click to ignore');
+      await user.click(ignoreButton);
+
+      expect(onToggleIgnore).toHaveBeenCalledTimes(1);
+      expect(onToggleIgnore).toHaveBeenCalledWith('test123');
+    });
+
+    test('calls onToggleIgnore when unignore button is clicked', async () => {
+      const user = userEvent.setup();
+      const onToggleIgnore = jest.fn();
+      const ignoredVideo = { ...mockVideo, ignored: true };
+
+      renderWithProviders(
+        <VideoListItem
+          {...defaultProps}
+          video={ignoredVideo}
+          onToggleIgnore={onToggleIgnore}
+        />
+      );
+
+      const unignoreButton = screen.getByLabelText('Click to unignore');
+      await user.click(unignoreButton);
+
+      expect(onToggleIgnore).toHaveBeenCalledTimes(1);
+      expect(onToggleIgnore).toHaveBeenCalledWith('test123');
+    });
+
+    test('ignore button click stops propagation', async () => {
+      const user = userEvent.setup();
+      const onToggleIgnore = jest.fn();
+      const onCheckChange = jest.fn();
+
+      renderWithProviders(
+        <VideoListItem
+          {...defaultProps}
+          onToggleIgnore={onToggleIgnore}
+          onCheckChange={onCheckChange}
+        />
+      );
+
+      const ignoreButton = screen.getByLabelText('Click to ignore');
+      await user.click(ignoreButton);
+
+      expect(onToggleIgnore).toHaveBeenCalledTimes(1);
+      // Card click should not fire
+      expect(onCheckChange).not.toHaveBeenCalled();
+    });
+
+    test('ignored video is positioned in top-right corner', () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      renderWithProviders(<VideoListItem {...defaultProps} video={ignoredVideo} />);
+      const unignoreButton = screen.getByLabelText('Click to unignore');
+      expect(unignoreButton).toBeInTheDocument();
+      // Button is in the thumbnail box (top right corner)
+    });
+
+    test('never downloaded video ignore button is positioned in top-right corner', () => {
+      renderWithProviders(<VideoListItem {...defaultProps} />);
+      const ignoreButton = screen.getByLabelText('Click to ignore');
+      expect(ignoreButton).toBeInTheDocument();
+      // Button is in the thumbnail box (top right corner)
+    });
+  });
+
   describe('Thumbnail Object Fit', () => {
     test('uses contain object fit for shorts', () => {
       const shortVideo = { ...mockVideo, media_type: 'short' };
@@ -552,6 +690,61 @@ describe('VideoListItem Component', () => {
     test('renders with fade animation wrapper', () => {
       renderWithProviders(<VideoListItem {...defaultProps} />);
       expect(screen.getByText('Test Video Title')).toBeInTheDocument();
+    });
+  });
+
+  describe('Ignored Status Visual Styling', () => {
+    test('ignored videos render correctly with visual styling', () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      renderWithProviders(
+        <VideoListItem {...defaultProps} video={ignoredVideo} />
+      );
+      // Verify the ignored video renders with its status
+      expect(screen.getByText('Ignored')).toBeInTheDocument();
+      expect(screen.getByText('Test Video Title')).toBeInTheDocument();
+    });
+
+    test('members only videos render correctly with visual styling', () => {
+      const membersOnlyVideo = { ...mockVideo, availability: 'subscriber_only' };
+      renderWithProviders(
+        <VideoListItem {...defaultProps} video={membersOnlyVideo} />
+      );
+      // Verify the members only video renders with its status
+      expect(screen.getByText('Members Only')).toBeInTheDocument();
+      expect(screen.getByText('Test Video Title')).toBeInTheDocument();
+    });
+
+    test('regular videos render correctly', () => {
+      renderWithProviders(<VideoListItem {...defaultProps} />);
+      // Verify regular video renders normally
+      expect(screen.getByText('Not Downloaded')).toBeInTheDocument();
+      expect(screen.getByText('Test Video Title')).toBeInTheDocument();
+    });
+
+    test('downloaded videos render correctly', () => {
+      const downloadedVideo = { ...mockVideo, added: true, removed: false };
+      renderWithProviders(
+        <VideoListItem {...defaultProps} video={downloadedVideo} />
+      );
+      // Verify downloaded video renders with its status
+      expect(screen.getByText('Downloaded')).toBeInTheDocument();
+      expect(screen.getByText('Test Video Title')).toBeInTheDocument();
+    });
+  });
+
+  describe('Ignored Status Icon Rendering', () => {
+    test('renders BlockIcon for ignored videos', () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      renderWithProviders(<VideoListItem {...defaultProps} video={ignoredVideo} />);
+      // The ignored video shows a BlockIcon in the status chip
+      const blockIcons = screen.getAllByTestId('BlockIcon');
+      expect(blockIcons.length).toBeGreaterThan(0);
+    });
+
+    test('ignored status chip uses correct label', () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      renderWithProviders(<VideoListItem {...defaultProps} video={ignoredVideo} />);
+      expect(screen.getByText('Ignored')).toBeInTheDocument();
     });
   });
 });

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Card,
@@ -87,6 +87,9 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Local state to track ignore status changes without refetching
+  const [localIgnoreStatus, setLocalIgnoreStatus] = useState<Record<string, boolean>>({});
 
   const { deleteVideosByYoutubeIds, loading: deleteLoading } = useVideoDeletion();
 
@@ -193,6 +196,11 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     }
   }, [availableTabsFromVideos]);
 
+  // Clear local ignore status overrides when videos are refetched (page change, tab change, etc)
+  useEffect(() => {
+    setLocalIgnoreStatus({});
+  }, [page, selectedTab, hideDownloaded, searchQuery, sortBy, sortOrder]);
+
   const { config } = useConfig(token);
   const hasChannelOverride = Boolean(channelVideoQuality);
   const defaultResolution = channelVideoQuality || config.preferredResolution || '1080';
@@ -208,8 +216,23 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   } = useRefreshChannelVideos(channelId, page, pageSize, hideDownloaded, selectedTab, token);
   const navigate = useNavigate();
 
+  // Apply local ignore status overrides to videos (for optimistic updates)
+  const videosWithOverrides = useMemo(() => {
+    return videos.map(video => {
+      // If we have a local override for this video, use it
+      if (video.youtube_id in localIgnoreStatus) {
+        return {
+          ...video,
+          ignored: localIgnoreStatus[video.youtube_id],
+          ignored_at: localIgnoreStatus[video.youtube_id] ? new Date().toISOString() : null,
+        };
+      }
+      return video;
+    });
+  }, [videos, localIgnoreStatus]);
+
   // Videos are already filtered, sorted, and paginated by the server
-  const paginatedVideos = videos;
+  const paginatedVideos = videosWithOverrides;
 
   // Use server-provided total count for pagination
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
@@ -228,7 +251,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const handleSelectAll = useCallback(() => {
     const selectableVideos = paginatedVideos.filter((video) => {
       const status = getVideoStatus(video);
-      return status === 'never_downloaded' || status === 'missing';
+      return status === 'never_downloaded' || status === 'missing' || status === 'ignored';
     });
     const videoIds = selectableVideos.map((video) => video.youtube_id);
     setCheckedBoxes((prevState) => {
@@ -324,6 +347,105 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
   const handleDeleteCancel = () => {
     setDeleteDialogOpen(false);
+  };
+
+  // Ignore/unignore handlers
+  const toggleIgnore = async (youtubeId: string) => {
+    if (!channelId || !token) return;
+
+    const video = paginatedVideos.find(v => v.youtube_id === youtubeId);
+    const isCurrentlyIgnored = video?.ignored;
+    const endpoint = isCurrentlyIgnored ? 'unignore' : 'ignore';
+    const newIgnoreStatus = !isCurrentlyIgnored;
+
+    // Capture original state BEFORE optimistic update (for potential rollback)
+    const originalIgnoreStatus = isCurrentlyIgnored ?? false;
+
+    // Optimistically update local state immediately
+    setLocalIgnoreStatus(prev => ({
+      ...prev,
+      [youtubeId]: newIgnoreStatus
+    }));
+
+    try {
+      const response = await fetch(`/api/channels/${channelId}/videos/${youtubeId}/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'x-access-token': token,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to ${endpoint} video`);
+      }
+
+      let successMessage;
+      if (isCurrentlyIgnored) {
+        successMessage = `Video unignored. Channel downloads will include this video`;
+      } else {
+        successMessage = `Video ignored. Channel downloads will exclude this video`;
+      }
+      setSuccessMessage(successMessage);
+    } catch (error) {
+      // Revert optimistic update on ANY error (network failure, non-OK response, etc.)
+      setLocalIgnoreStatus(prev => ({
+        ...prev,
+        [youtubeId]: originalIgnoreStatus
+      }));
+      console.error('Error toggling ignore:', error);
+      setErrorMessage(`Failed to ${endpoint} video`);
+    }
+  };
+
+  const handleBulkIgnore = async () => {
+    if (!channelId || !token || checkedBoxes.length === 0) {
+      setErrorMessage('No videos selected to ignore');
+      return;
+    }
+
+    // Capture original state BEFORE optimistic update (for potential rollback)
+    const originalIgnoreStates: Record<string, boolean> = {};
+    checkedBoxes.forEach(youtubeId => {
+      const video = paginatedVideos.find(v => v.youtube_id === youtubeId);
+      originalIgnoreStates[youtubeId] = video?.ignored ?? false;
+    });
+
+    // Optimistically update local state for all selected videos
+    const bulkIgnoreUpdates: Record<string, boolean> = {};
+    checkedBoxes.forEach(youtubeId => {
+      bulkIgnoreUpdates[youtubeId] = true;
+    });
+    setLocalIgnoreStatus(prev => ({
+      ...prev,
+      ...bulkIgnoreUpdates
+    }));
+
+    try {
+      const response = await fetch(`/api/channels/${channelId}/videos/bulk-ignore`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-access-token': token,
+        },
+        body: JSON.stringify({ youtubeIds: checkedBoxes }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to bulk ignore videos');
+      }
+
+      const result = await response.json();
+      setSuccessMessage(result.message || `Successfully ignored ${checkedBoxes.length} videos`);
+      setCheckedBoxes([]);
+    } catch (error) {
+      // Revert optimistic updates on ANY error (network failure, non-OK response, etc.)
+      setLocalIgnoreStatus(prev => ({
+        ...prev,
+        ...originalIgnoreStates
+      }));
+      console.error('Error bulk ignoring:', error);
+      setErrorMessage('Failed to bulk ignore videos');
+    }
   };
 
   const handleTabChange = (event: React.SyntheticEvent, newTab: string) => {
@@ -590,6 +712,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           onSelectAll={handleSelectAll}
           onClearSelection={handleClearSelection}
           onDeleteClick={handleDeleteClick}
+          onBulkIgnoreClick={handleBulkIgnore}
           onInfoIconClick={(tooltip) => setMobileTooltip(tooltip)}
         />
 
@@ -675,6 +798,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                       onCheckChange={handleCheckChange}
                       onHoverChange={setHoveredVideo}
                       onToggleDeletion={toggleDeletionSelection}
+                      onToggleIgnore={toggleIgnore}
                       onMobileTooltip={setMobileTooltip}
                     />
                   ))}
@@ -691,6 +815,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                       selectedForDeletion={selectedForDeletion}
                       onCheckChange={handleCheckChange}
                       onToggleDeletion={toggleDeletionSelection}
+                      onToggleIgnore={toggleIgnore}
                       onMobileTooltip={setMobileTooltip}
                     />
                   ))}
@@ -709,6 +834,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                   onClearSelection={handleClearSelection}
                   onSortChange={handleSortChange}
                   onToggleDeletion={toggleDeletionSelection}
+                  onToggleIgnore={toggleIgnore}
                   onMobileTooltip={setMobileTooltip}
                 />
               )}

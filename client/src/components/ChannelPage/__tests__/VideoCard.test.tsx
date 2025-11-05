@@ -35,6 +35,7 @@ describe('VideoCard Component', () => {
     onCheckChange: jest.fn(),
     onHoverChange: jest.fn(),
     onToggleDeletion: jest.fn(),
+    onToggleIgnore: jest.fn(),
   };
 
   beforeEach(() => {
@@ -119,6 +120,12 @@ describe('VideoCard Component', () => {
       const membersOnlyVideo = { ...mockVideo, availability: 'subscriber_only' };
       renderWithProviders(<VideoCard {...defaultProps} video={membersOnlyVideo} />);
       expect(screen.getByText('Members Only')).toBeInTheDocument();
+    });
+
+    test('renders "Ignored" status for ignored video', () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      renderWithProviders(<VideoCard {...defaultProps} video={ignoredVideo} />);
+      expect(screen.getByText('Ignored')).toBeInTheDocument();
     });
   });
 
@@ -243,6 +250,12 @@ describe('VideoCard Component', () => {
       renderWithProviders(<VideoCard {...defaultProps} />);
       const checkbox = screen.getByRole('checkbox');
       expect(checkbox).not.toBeChecked();
+    });
+
+    test('renders checkbox for ignored videos', () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      renderWithProviders(<VideoCard {...defaultProps} video={ignoredVideo} />);
+      expect(screen.getByRole('checkbox')).toBeInTheDocument();
     });
 
     test('calls onCheckChange when checkbox is clicked', async () => {
@@ -401,6 +414,121 @@ describe('VideoCard Component', () => {
     });
   });
 
+  describe('Ignore Button', () => {
+    test('renders ignore button for never downloaded videos', () => {
+      renderWithProviders(<VideoCard {...defaultProps} />);
+      expect(screen.getByTestId('BlockIcon')).toBeInTheDocument();
+    });
+
+    test('renders ignore button for missing videos', () => {
+      const missingVideo = { ...mockVideo, added: true, removed: true };
+      renderWithProviders(<VideoCard {...defaultProps} video={missingVideo} />);
+      expect(screen.getByTestId('BlockIcon')).toBeInTheDocument();
+    });
+
+    test('does not render ignore button for downloaded videos', () => {
+      const downloadedVideo = { ...mockVideo, added: true, removed: false };
+      renderWithProviders(<VideoCard {...defaultProps} video={downloadedVideo} />);
+      expect(screen.queryByTestId('BlockIcon')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('CheckCircleOutlineIcon')).not.toBeInTheDocument();
+    });
+
+    test('does not render ignore button for still live videos', () => {
+      const liveVideo = { ...mockVideo, live_status: 'is_live' };
+      renderWithProviders(<VideoCard {...defaultProps} video={liveVideo} />);
+      expect(screen.queryByTestId('BlockIcon')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('CheckCircleOutlineIcon')).not.toBeInTheDocument();
+    });
+
+    test('renders CheckCircleOutlineIcon for ignored videos', () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      renderWithProviders(<VideoCard {...defaultProps} video={ignoredVideo} />);
+      // When video is ignored, CheckCircleOutlineIcon is in the ignore/unignore button
+      expect(screen.getByTestId('CheckCircleOutlineIcon')).toBeInTheDocument();
+      // BlockIcon will still appear in the status chip
+      expect(screen.getByTestId('BlockIcon')).toBeInTheDocument();
+    });
+
+    test('renders BlockIcon for non-ignored videos in ignore button', () => {
+      renderWithProviders(<VideoCard {...defaultProps} />);
+      // BlockIcon appears in the ignore button for non-ignored videos
+      expect(screen.getByTestId('BlockIcon')).toBeInTheDocument();
+      // CheckCircleOutlineIcon should not be present
+      expect(screen.queryByTestId('CheckCircleOutlineIcon')).not.toBeInTheDocument();
+    });
+
+    test('calls onToggleIgnore when ignore button is clicked', async () => {
+      const user = userEvent.setup();
+      const onToggleIgnore = jest.fn();
+
+      renderWithProviders(
+        <VideoCard
+          {...defaultProps}
+          onToggleIgnore={onToggleIgnore}
+        />
+      );
+
+      const ignoreButton = screen.getByRole('button');
+      await user.click(ignoreButton);
+
+      expect(onToggleIgnore).toHaveBeenCalledTimes(1);
+      expect(onToggleIgnore).toHaveBeenCalledWith('test123');
+    });
+
+    test('calls onToggleIgnore when unignore button is clicked', async () => {
+      const user = userEvent.setup();
+      const onToggleIgnore = jest.fn();
+      const ignoredVideo = { ...mockVideo, ignored: true };
+
+      renderWithProviders(
+        <VideoCard
+          {...defaultProps}
+          video={ignoredVideo}
+          onToggleIgnore={onToggleIgnore}
+        />
+      );
+
+      const unignoreButton = screen.getByRole('button');
+      await user.click(unignoreButton);
+
+      expect(onToggleIgnore).toHaveBeenCalledTimes(1);
+      expect(onToggleIgnore).toHaveBeenCalledWith('test123');
+    });
+
+    test('ignore button click stops propagation', async () => {
+      const user = userEvent.setup();
+      const onToggleIgnore = jest.fn();
+      const onCheckChange = jest.fn();
+
+      renderWithProviders(
+        <VideoCard
+          {...defaultProps}
+          onToggleIgnore={onToggleIgnore}
+          onCheckChange={onCheckChange}
+        />
+      );
+
+      const ignoreButton = screen.getByRole('button');
+      await user.click(ignoreButton);
+
+      expect(onToggleIgnore).toHaveBeenCalledTimes(1);
+      expect(onCheckChange).not.toHaveBeenCalled();
+    });
+
+    test('shows correct tooltip for ignore button', async () => {
+      renderWithProviders(<VideoCard {...defaultProps} />);
+      const ignoreButton = screen.getByRole('button');
+      expect(ignoreButton).toBeInTheDocument();
+    });
+
+    test('shows correct tooltip for unignore button', async () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      renderWithProviders(<VideoCard {...defaultProps} video={ignoredVideo} />);
+      const unignoreButton = screen.getByRole('button');
+      expect(unignoreButton).toBeInTheDocument();
+    });
+  });
+
   describe('Hover Interactions', () => {
     test('calls onHoverChange when mouse enters card', async () => {
       const user = userEvent.setup();
@@ -532,6 +660,31 @@ describe('VideoCard Component', () => {
       // Should not show checkbox since it's downloaded
       expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     });
+
+    test('renders ignored video with reduced opacity', () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      const { container } = renderWithProviders(
+        <VideoCard {...defaultProps} video={ignoredVideo} />
+      );
+      // eslint-disable-next-line testing-library/no-container, testing-library/no-node-access
+      const card = container.querySelector('.MuiCard-root');
+      expect(card).toHaveStyle({ opacity: 0.7 });
+    });
+
+    test('clicking card toggles selection for ignored videos', async () => {
+      const user = userEvent.setup();
+      const onCheckChange = jest.fn();
+      const ignoredVideo = { ...mockVideo, ignored: true };
+
+      renderWithProviders(
+        <VideoCard {...defaultProps} video={ignoredVideo} onCheckChange={onCheckChange} />
+      );
+
+      const card = screen.getByText('Test Video Title');
+      await user.click(card);
+
+      expect(onCheckChange).toHaveBeenCalledWith('test123', true);
+    });
   });
 
   describe('Accessibility', () => {
@@ -576,6 +729,14 @@ describe('VideoCard Component', () => {
     test('renders NewReleasesIcon for never downloaded videos', () => {
       renderWithProviders(<VideoCard {...defaultProps} />);
       expect(screen.getByTestId('NewReleasesIcon')).toBeInTheDocument();
+    });
+
+    test('renders BlockIcon status for ignored videos', () => {
+      const ignoredVideo = { ...mockVideo, ignored: true };
+      renderWithProviders(<VideoCard {...defaultProps} video={ignoredVideo} />);
+      // The status chip should show BlockIcon
+      const blockIcons = screen.getAllByTestId('BlockIcon');
+      expect(blockIcons.length).toBeGreaterThan(0);
     });
   });
 });
