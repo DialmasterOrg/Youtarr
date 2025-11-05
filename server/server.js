@@ -141,6 +141,7 @@ const initialize = async () => {
     const downloadModule = require('./modules/downloadModule');
     const jobModule = require('./modules/jobModule');
     const videosModule = require('./modules/videosModule');
+    const archiveModule = require('./modules/archiveModule');
 
     const presetUsername = process.env.AUTH_PRESET_USERNAME;
     const presetPassword = process.env.AUTH_PRESET_PASSWORD;
@@ -704,6 +705,148 @@ const initialize = async () => {
         res.status(statusCode).json({
           success: false,
           error: isConcurrencyError ? 'FETCH_IN_PROGRESS' : 'Failed to fetch all channel videos',
+          message: error.message
+        });
+      }
+    });
+
+    // Ignore a single channel video
+    app.post('/api/channels/:channelId/videos/:youtubeId/ignore', verifyToken, async (req, res) => {
+      const { channelId, youtubeId } = req.params;
+      req.log.info({ channelId, youtubeId }, 'Ignoring channel video');
+
+      try {
+        const ChannelVideo = require('./models/channelvideo');
+
+        // Find the channel video
+        const channelVideo = await ChannelVideo.findOne({
+          where: { channel_id: channelId, youtube_id: youtubeId }
+        });
+
+        if (!channelVideo) {
+          return res.status(404).json({
+            success: false,
+            error: 'Channel video not found'
+          });
+        }
+
+        // Update the ignored status
+        await channelVideo.update({
+          ignored: true,
+          ignored_at: new Date()
+        });
+
+        // Add to archive so yt-dlp skips it
+        await archiveModule.addVideoToArchive(youtubeId);
+
+        req.log.info({ channelId, youtubeId }, 'Successfully ignored channel video');
+        res.json({
+          success: true,
+          message: 'Video marked as ignored'
+        });
+      } catch (error) {
+        req.log.error({ err: error, channelId, youtubeId }, 'Failed to ignore channel video');
+        res.status(500).json({
+          success: false,
+          error: 'Failed to ignore video',
+          message: error.message
+        });
+      }
+    });
+
+    // Unignore a single channel video
+    app.post('/api/channels/:channelId/videos/:youtubeId/unignore', verifyToken, async (req, res) => {
+      const { channelId, youtubeId } = req.params;
+      req.log.info({ channelId, youtubeId }, 'Unignoring channel video');
+
+      try {
+        const ChannelVideo = require('./models/channelvideo');
+
+        // Find the channel video
+        const channelVideo = await ChannelVideo.findOne({
+          where: { channel_id: channelId, youtube_id: youtubeId }
+        });
+
+        if (!channelVideo) {
+          return res.status(404).json({
+            success: false,
+            error: 'Channel video not found'
+          });
+        }
+
+        // Update the ignored status
+        await channelVideo.update({
+          ignored: false,
+          ignored_at: null
+        });
+
+        // Remove from archive so yt-dlp can download it
+        await archiveModule.removeVideoFromArchive(youtubeId);
+
+        req.log.info({ channelId, youtubeId }, 'Successfully unignored channel video');
+        res.json({
+          success: true,
+          message: 'Video unmarked as ignored'
+        });
+      } catch (error) {
+        req.log.error({ err: error, channelId, youtubeId }, 'Failed to unignore channel video');
+        res.status(500).json({
+          success: false,
+          error: 'Failed to unignore video',
+          message: error.message
+        });
+      }
+    });
+
+    // Bulk ignore channel videos
+    app.post('/api/channels/:channelId/videos/bulk-ignore', verifyToken, async (req, res) => {
+      const { channelId } = req.params;
+      const { youtubeIds } = req.body;
+
+      if (!Array.isArray(youtubeIds) || youtubeIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'youtubeIds must be a non-empty array'
+        });
+      }
+
+      req.log.info({ channelId, count: youtubeIds.length }, 'Bulk ignoring channel videos');
+
+      try {
+        const ChannelVideo = require('./models/channelvideo');
+
+        // Update all videos in a single transaction
+        const results = await Promise.all(
+          youtubeIds.map(async (youtubeId) => {
+            const channelVideo = await ChannelVideo.findOne({
+              where: { channel_id: channelId, youtube_id: youtubeId }
+            });
+
+            if (channelVideo) {
+              await channelVideo.update({
+                ignored: true,
+                ignored_at: new Date()
+              });
+              await archiveModule.addVideoToArchive(youtubeId);
+              return { youtubeId, success: true };
+            }
+            return { youtubeId, success: false, reason: 'not found' };
+          })
+        );
+
+        const successCount = results.filter(r => r.success).length;
+        req.log.info({ channelId, successCount, total: youtubeIds.length }, 'Bulk ignore completed');
+
+        res.json({
+          success: true,
+          message: `Successfully ignored ${successCount} of ${youtubeIds.length} videos`,
+          results
+        });
+      } catch (error) {
+        req.log.error({ err: error, channelId }, 'Failed to bulk ignore channel videos');
+        res.status(500).json({
+          success: false,
+          error: 'Failed to bulk ignore videos',
           message: error.message
         });
       }

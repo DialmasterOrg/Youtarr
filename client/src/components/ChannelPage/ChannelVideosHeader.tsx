@@ -21,6 +21,7 @@ import ViewListIcon from '@mui/icons-material/ViewList';
 import DownloadIcon from '@mui/icons-material/Download';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
+import BlockIcon from '@mui/icons-material/Block';
 import InfoIcon from '@mui/icons-material/Info';
 import { getVideoStatus } from '../../utils/videoStatus';
 import { ChannelVideo } from '../../types/ChannelVideo';
@@ -50,6 +51,7 @@ interface ChannelVideosHeaderProps {
   onSelectAll: () => void;
   onClearSelection: () => void;
   onDeleteClick: () => void;
+  onBulkIgnoreClick: () => void;
   onInfoIconClick: (tooltip: string) => void;
 }
 
@@ -76,6 +78,7 @@ function ChannelVideosHeader({
   onSelectAll,
   onClearSelection,
   onDeleteClick,
+  onBulkIgnoreClick,
   onInfoIconClick,
 }: ChannelVideosHeaderProps) {
   const renderInfoIcon = (message: string) => {
@@ -219,14 +222,14 @@ function ChannelVideosHeader({
 
           {!isMobile && (
             <FormControlLabel
-              control={
+            control={
                 <Switch
-                  checked={hideDownloaded}
-                  onChange={(e) => onHideDownloadedChange(e.target.checked)}
-                  size="small"
+                checked={hideDownloaded}
+                onChange={(e) => onHideDownloadedChange(e.target.checked)}
+                size="small"
                 />
-              }
-              label="Hide Downloaded"
+            }
+            label="Hide Downloaded"
             />
           )}
         </Box>
@@ -249,7 +252,7 @@ function ChannelVideosHeader({
               onClick={onSelectAll}
               disabled={checkedBoxes.length === 0 && paginatedVideos.filter(v => {
                 const status = getVideoStatus(v);
-                return status === 'never_downloaded' || status === 'missing';
+                return status === 'never_downloaded' || status === 'missing' || status === 'ignored';
               }).length === 0}
             >
               Select All This Page
@@ -261,6 +264,16 @@ function ChannelVideosHeader({
               disabled={checkedBoxes.length === 0}
             >
               Clear
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              color="warning"
+              startIcon={<BlockIcon />}
+              onClick={onBulkIgnoreClick}
+              disabled={checkedBoxes.length === 0}
+            >
+              Ignore Selected
             </Button>
             <Button
               variant="contained"

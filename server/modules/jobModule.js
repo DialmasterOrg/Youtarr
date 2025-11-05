@@ -718,10 +718,28 @@ class JobModule {
 
     const [record, created] = await ChannelVideo.findOrCreate({
       where: { youtube_id, channel_id },
-      defaults: { title, thumbnail, duration, publishedAt, availability, media_type },
+      defaults: {
+        title,
+        thumbnail,
+        duration,
+        publishedAt,
+        availability,
+        media_type,
+        ignored: false,
+        ignored_at: null
+      },
     });
     if (!created && !skipUpdateIfExists) {
-      await record.update({ title, thumbnail, duration, availability, media_type });
+      // Clear ignored flag when video is downloaded - user action shows they want this video
+      await record.update({
+        title,
+        thumbnail,
+        duration,
+        availability,
+        media_type,
+        ignored: false,
+        ignored_at: null
+      });
     }
   }
 

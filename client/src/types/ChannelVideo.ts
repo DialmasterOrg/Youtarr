@@ -19,4 +19,6 @@ export interface ChannelVideo {
   fileSize?: number | null;
   media_type?: string | null;
   live_status?: string | null;
+  ignored?: boolean;
+  ignored_at?: string | null;
 }

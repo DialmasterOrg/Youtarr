@@ -8,10 +8,13 @@ import {
   IconButton,
   CardContent,
   Fade,
+  Tooltip,
 } from '@mui/material';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import StorageIcon from '@mui/icons-material/Storage';
 import DeleteIcon from '@mui/icons-material/Delete';
+import BlockIcon from '@mui/icons-material/Block';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { useTheme } from '@mui/material/styles';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
@@ -25,6 +28,7 @@ interface VideoListItemProps {
   selectedForDeletion: string[];
   onCheckChange: (videoId: string, isChecked: boolean) => void;
   onToggleDeletion: (youtubeId: string) => void;
+  onToggleIgnore: (youtubeId: string) => void;
   onMobileTooltip?: (message: string) => void;
 }
 
@@ -34,15 +38,17 @@ function VideoListItem({
   selectedForDeletion,
   onCheckChange,
   onToggleDeletion,
+  onToggleIgnore,
   onMobileTooltip,
 }: VideoListItemProps) {
   const theme = useTheme();
   const status = getVideoStatus(video);
   // Check if video is still live (not "was_live" and not null/undefined)
   const isStillLive = video.live_status && video.live_status !== 'was_live';
-  const isSelectable = (status === 'never_downloaded' || status === 'missing') && !isStillLive;
+  const isSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !isStillLive;
   const isChecked = checkedBoxes.includes(video.youtube_id);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
+  const isIgnored = status === 'ignored';
 
   return (
     <Fade in timeout={300} key={video.youtube_id}>
@@ -53,7 +59,7 @@ function VideoListItem({
           position: 'relative',
           transition: 'all 0.2s ease',
           cursor: isSelectable ? 'pointer' : 'default',
-          opacity: status === 'members_only' ? 0.7 : 1,
+          opacity: status === 'members_only' || isIgnored ? 0.7 : 1,
           '&:hover': {
             boxShadow: theme.shadows[3],
           },
@@ -158,8 +164,8 @@ function VideoListItem({
             />
           )}
 
-          {/* Delete icon for downloaded videos */}
-          {status === 'downloaded' && (
+          {/* Delete icon for downloaded videos that exist on disk */}
+          {video.added && !video.removed && (
             <IconButton
               onClick={(e) => {
                 e.stopPropagation();
@@ -181,6 +187,37 @@ function VideoListItem({
             >
               <DeleteIcon sx={{ fontSize: 18 }} />
             </IconButton>
+          )}
+
+          {/* Ignore/Unignore button - for videos not currently on disk (never downloaded or missing) */}
+          {!isStillLive && (!video.added || video.removed) && (
+            <Tooltip
+              title={isIgnored ? "Click to unignore" : "Click to ignore"}
+              arrow
+              placement="top"
+            >
+              <IconButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleIgnore(video.youtube_id);
+                }}
+                sx={{
+                  position: 'absolute',
+                  top: 2,
+                  right: 2,
+                  bgcolor: isIgnored ? 'warning.main' : 'rgba(0,0,0,0.6)',
+                  color: 'white',
+                  padding: 0.5,
+                  '&:hover': {
+                    bgcolor: isIgnored ? 'warning.dark' : 'rgba(0,0,0,0.8)',
+                  },
+                  transition: 'all 0.2s',
+                }}
+                size="small"
+              >
+                {isIgnored ? <CheckCircleOutlineIcon sx={{ fontSize: 18 }} /> : <BlockIcon sx={{ fontSize: 18 }} />}
+              </IconButton>
+            </Tooltip>
           )}
         </Box>
 

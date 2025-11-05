@@ -8,10 +8,13 @@ import {
   IconButton,
   Grid,
   Fade,
+  Tooltip,
 } from '@mui/material';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import StorageIcon from '@mui/icons-material/Storage';
 import DeleteIcon from '@mui/icons-material/Delete';
+import BlockIcon from '@mui/icons-material/Block';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { useTheme } from '@mui/material/styles';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
@@ -28,6 +31,7 @@ interface VideoCardProps {
   onCheckChange: (videoId: string, isChecked: boolean) => void;
   onHoverChange: (videoId: string | null) => void;
   onToggleDeletion: (youtubeId: string) => void;
+  onToggleIgnore: (youtubeId: string) => void;
   onMobileTooltip?: (message: string) => void;
 }
 
@@ -40,15 +44,17 @@ function VideoCard({
   onCheckChange,
   onHoverChange,
   onToggleDeletion,
+  onToggleIgnore,
   onMobileTooltip,
 }: VideoCardProps) {
   const theme = useTheme();
   const status = getVideoStatus(video);
   // Check if video is still live (not "was_live" and not null/undefined)
   const isStillLive = video.live_status && video.live_status !== 'was_live';
-  const isSelectable = (status === 'never_downloaded' || status === 'missing') && !isStillLive;
+  const isSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !isStillLive;
   const isChecked = checkedBoxes.includes(video.youtube_id);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
+  const isIgnored = status === 'ignored';
 
   return (
     <Fade in timeout={300} key={video.youtube_id}>
@@ -61,7 +67,7 @@ function VideoCard({
             position: 'relative',
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             cursor: isSelectable ? 'pointer' : 'default',
-            opacity: status === 'members_only' ? 0.7 : 1,
+            opacity: status === 'members_only' || isIgnored ? 0.7 : 1,
             transform: hoveredVideo === video.youtube_id ? 'translateY(-4px)' : 'translateY(0)',
             boxShadow: hoveredVideo === video.youtube_id ? theme.shadows[8] : theme.shadows[1],
             '&:hover': {
@@ -181,8 +187,8 @@ function VideoCard({
               </Box>
             )}
 
-            {/* Delete icon for downloaded videos */}
-            {status === 'downloaded' && (
+            {/* Delete icon for downloaded videos that exist on disk */}
+            {video.added && !video.removed && (
               <IconButton
                 onClick={(e) => {
                   e.stopPropagation();
@@ -204,6 +210,37 @@ function VideoCard({
               >
                 <DeleteIcon fontSize="small" />
               </IconButton>
+            )}
+
+            {/* Ignore/Unignore button - for videos not currently on disk (never downloaded or missing) */}
+            {!isStillLive && (!video.added || video.removed) && (
+              <Tooltip
+                title={isIgnored ? "Click to unignore (allow auto-downloads)" : "Click to ignore (prevent auto-downloads)"}
+                arrow
+                placement="top"
+              >
+                <IconButton
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleIgnore(video.youtube_id);
+                  }}
+                  sx={{
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                    bgcolor: isIgnored ? 'warning.main' : 'rgba(0,0,0,0.6)',
+                    color: 'white',
+                    '&:hover': {
+                      bgcolor: isIgnored ? 'warning.dark' : 'rgba(0,0,0,0.8)',
+                    },
+                    transition: 'all 0.2s',
+                    zIndex: 3,
+                  }}
+                  size="small"
+                >
+                  {isIgnored ? <CheckCircleOutlineIcon fontSize="small" /> : <BlockIcon fontSize="small" />}
+                </IconButton>
+              </Tooltip>
             )}
           </Box>
 

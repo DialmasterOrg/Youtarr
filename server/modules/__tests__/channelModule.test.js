@@ -1191,6 +1191,58 @@ describe('ChannelModule', () => {
         expect(result[1].added).toBe(true);
         expect(result[1].removed).toBe(true);
       });
+
+      test('should include ignored and ignored_at fields in paginated results', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          {
+            youtube_id: 'video1',
+            title: 'Video 1',
+            publishedAt: '2024-01-02',
+            ignored: true,
+            ignored_at: '2024-01-02T10:00:00Z',
+            toJSON() { return this; }
+          },
+          {
+            youtube_id: 'video2',
+            title: 'Video 2',
+            publishedAt: '2024-01-01',
+            ignored: false,
+            ignored_at: null,
+            toJSON() { return this; }
+          }
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb('UC123', 50, 0, false, '', 'date', 'desc', false);
+
+        expect(result).toHaveLength(2);
+        expect(result[0].ignored).toBe(true);
+        expect(result[0].ignored_at).toBe('2024-01-02T10:00:00Z');
+        expect(result[1].ignored).toBe(false);
+        expect(result[1].ignored_at).toBeNull();
+      });
+
+      test('should handle videos without ignored fields', async () => {
+        const Video = require('../../models/video');
+        const mockVideos = [
+          {
+            youtube_id: 'video1',
+            title: 'Video 1',
+            publishedAt: '2024-01-02',
+            toJSON() { return this; }
+          }
+        ];
+        ChannelVideo.findAll.mockResolvedValue(mockVideos);
+        Video.findAll = jest.fn().mockResolvedValue([]);
+
+        const result = await ChannelModule.fetchNewestVideosFromDb('UC123', 50, 0, false, '', 'date', 'desc', false);
+
+        expect(result).toHaveLength(1);
+        expect(result[0].ignored).toBeUndefined();
+        expect(result[0].ignored_at).toBeUndefined();
+      });
     });
 
     describe('extractPublishedDate', () => {

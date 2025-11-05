@@ -228,7 +228,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const handleSelectAll = useCallback(() => {
     const selectableVideos = paginatedVideos.filter((video) => {
       const status = getVideoStatus(video);
-      return status === 'never_downloaded' || status === 'missing';
+      return status === 'never_downloaded' || status === 'missing' || status === 'ignored';
     });
     const videoIds = selectableVideos.map((video) => video.youtube_id);
     setCheckedBoxes((prevState) => {
@@ -324,6 +324,74 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
   const handleDeleteCancel = () => {
     setDeleteDialogOpen(false);
+  };
+
+  // Ignore/unignore handlers
+  const toggleIgnore = async (youtubeId: string) => {
+    if (!channelId || !token) return;
+
+    const video = paginatedVideos.find(v => v.youtube_id === youtubeId);
+    const isCurrentlyIgnored = video?.ignored;
+    const endpoint = isCurrentlyIgnored ? 'unignore' : 'ignore';
+
+    try {
+      const response = await fetch(`/api/channels/${channelId}/videos/${youtubeId}/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'x-access-token': token,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to ${endpoint} video`);
+      }
+
+      let successMessage;
+      if (isCurrentlyIgnored) {
+        successMessage = `Video unignored. Channel downloads will include this video`;
+      } else {
+        successMessage = `Video ignored. Channel downloads will exclude this video`;
+      }
+      setSuccessMessage(successMessage);
+
+      // Refresh the videos list
+      await refetchVideos();
+    } catch (error) {
+      console.error('Error toggling ignore:', error);
+      setErrorMessage(`Failed to ${endpoint} video`);
+    }
+  };
+
+  const handleBulkIgnore = async () => {
+    if (!channelId || !token || checkedBoxes.length === 0) {
+      setErrorMessage('No videos selected to ignore');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/channels/${channelId}/videos/bulk-ignore`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-access-token': token,
+        },
+        body: JSON.stringify({ youtubeIds: checkedBoxes }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to bulk ignore videos');
+      }
+
+      const result = await response.json();
+      setSuccessMessage(result.message || `Successfully ignored ${checkedBoxes.length} videos`);
+      setCheckedBoxes([]);
+
+      // Refresh the videos list
+      await refetchVideos();
+    } catch (error) {
+      console.error('Error bulk ignoring:', error);
+      setErrorMessage('Failed to bulk ignore videos');
+    }
   };
 
   const handleTabChange = (event: React.SyntheticEvent, newTab: string) => {
@@ -590,6 +658,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           onSelectAll={handleSelectAll}
           onClearSelection={handleClearSelection}
           onDeleteClick={handleDeleteClick}
+          onBulkIgnoreClick={handleBulkIgnore}
           onInfoIconClick={(tooltip) => setMobileTooltip(tooltip)}
         />
 
@@ -675,6 +744,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                       onCheckChange={handleCheckChange}
                       onHoverChange={setHoveredVideo}
                       onToggleDeletion={toggleDeletionSelection}
+                      onToggleIgnore={toggleIgnore}
                       onMobileTooltip={setMobileTooltip}
                     />
                   ))}
@@ -691,6 +761,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                       selectedForDeletion={selectedForDeletion}
                       onCheckChange={handleCheckChange}
                       onToggleDeletion={toggleDeletionSelection}
+                      onToggleIgnore={toggleIgnore}
                       onMobileTooltip={setMobileTooltip}
                     />
                   ))}
@@ -709,6 +780,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                   onClearSelection={handleClearSelection}
                   onSortChange={handleSortChange}
                   onToggleDeletion={toggleDeletionSelection}
+                  onToggleIgnore={toggleIgnore}
                   onMobileTooltip={setMobileTooltip}
                 />
               )}

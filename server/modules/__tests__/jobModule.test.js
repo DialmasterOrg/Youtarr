@@ -1816,7 +1816,9 @@ describe('JobModule', () => {
           duration: 300,
           publishedAt: '2024-01-15T00:00:00.000Z',
           availability: 'public',
-          thumbnail: 'https://i.ytimg.com/vi/video-1/mqdefault.jpg'
+          thumbnail: 'https://i.ytimg.com/vi/video-1/mqdefault.jpg',
+          ignored: false,
+          ignored_at: null
         })
       });
     });
@@ -1837,13 +1839,15 @@ describe('JobModule', () => {
 
       await JobModule.upsertChannelVideoFromInfo(info);
 
-      // Verify that update is called with correct fields
+      // Verify that update is called with correct fields, including clearing ignored flags
       expect(mockRecord.update).toHaveBeenCalledWith({
         title: 'Updated Video',
         thumbnail: 'https://i.ytimg.com/vi/video-1/mqdefault.jpg',
         duration: 120,
         availability: 'public',
-        media_type: 'video'
+        media_type: 'video',
+        ignored: false,
+        ignored_at: null
       });
 
       // Explicitly verify that publishedAt is NOT included in the update

@@ -15,6 +15,8 @@ import {
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import DeleteIcon from '@mui/icons-material/Delete';
+import BlockIcon from '@mui/icons-material/Block';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { formatFileSize, decodeHtml } from '../../utils/formatters';
@@ -35,6 +37,7 @@ interface VideoTableViewProps {
   onClearSelection: () => void;
   onSortChange: (newSortBy: SortBy) => void;
   onToggleDeletion: (youtubeId: string) => void;
+  onToggleIgnore: (youtubeId: string) => void;
   onMobileTooltip?: (message: string) => void;
 }
 
@@ -49,6 +52,7 @@ function VideoTableView({
   onClearSelection,
   onSortChange,
   onToggleDeletion,
+  onToggleIgnore,
   onMobileTooltip,
 }: VideoTableViewProps) {
   return (
@@ -110,7 +114,7 @@ function VideoTableView({
             const status = getVideoStatus(video);
             // Check if video is still live (not "was_live" and not null/undefined)
             const isStillLive = video.live_status && video.live_status !== 'was_live';
-            const isSelectable = (status === 'never_downloaded' || status === 'missing') && !video.youtube_removed && !isStillLive;
+            const isSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !video.youtube_removed && !isStillLive;
             const isChecked = checkedBoxes.includes(video.youtube_id);
             const mediaTypeInfo = getMediaTypeInfo(video.media_type);
 
@@ -119,7 +123,7 @@ function VideoTableView({
                 key={video.youtube_id}
                 hover
                 sx={{
-                  opacity: status === 'members_only' ? 0.6 : 1,
+                  opacity: status === 'members_only' || status === 'ignored' ? 0.7 : 1,
                   cursor: isSelectable ? 'pointer' : 'default',
                 }}
               >
@@ -132,7 +136,8 @@ function VideoTableView({
                       onChange={(e) => onCheckChange(video.youtube_id, e.target.checked)}
                     />
                   )}
-                  {status === 'downloaded' && (
+                  {/* Delete icon for downloaded videos that exist on disk */}
+                  {video.added && !video.removed && (
                     <IconButton
                       onClick={(e) => {
                         e.stopPropagation();
@@ -148,6 +153,26 @@ function VideoTableView({
                       size="small"
                     >
                       <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                  {/* Ignore/Unignore button - for videos not currently on disk (never downloaded or missing) */}
+                  {!isStillLive && (!video.added || video.removed) && (
+                    <IconButton
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleIgnore(video.youtube_id);
+                      }}
+                      sx={{
+                        color: status === 'ignored' ? 'warning.main' : 'action.active',
+                        '&:hover': {
+                          color: status === 'ignored' ? 'warning.dark' : 'warning.main',
+                          bgcolor: 'warning.light',
+                        },
+                      }}
+                      size="small"
+                      title={status === 'ignored' ? 'Unignore' : 'Ignore'}
+                    >
+                      {status === 'ignored' ? <CheckCircleOutlineIcon fontSize="small" /> : <BlockIcon fontSize="small" />}
                     </IconButton>
                   )}
                 </TableCell>

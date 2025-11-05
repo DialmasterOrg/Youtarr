@@ -75,10 +75,49 @@ async function addVideoToArchive(videoId) {
   }
 }
 
+// Remove a video from the archive (used when unignoring videos)
+async function removeVideoFromArchive(videoId) {
+  if (!videoId) {
+    logger.debug('removeVideoFromArchive called with empty videoId, skipping');
+    return false;
+  }
+
+  // Check if video exists in archive
+  const alreadyInArchive = await isVideoInArchive(videoId);
+  if (!alreadyInArchive) {
+    logger.debug({ videoId }, 'Video not in archive, nothing to remove');
+    return false;
+  }
+
+  const archivePath = getArchivePath();
+
+  try {
+    // Read all lines
+    const lines = readCompleteListLines();
+
+    // Filter out the line matching this videoId
+    const filteredLines = lines.filter(line => {
+      const parts = line.split(/\s+/).filter(Boolean);
+      return !(parts.length >= 2 && parts[0] === 'youtube' && parts[1] === videoId);
+    });
+
+    // Write back to file
+    const content = filteredLines.join('\n') + (filteredLines.length > 0 ? '\n' : '');
+    fs.writeFileSync(archivePath, content, 'utf-8');
+
+    logger.debug({ videoId }, 'Removed video from archive');
+    return true;
+  } catch (err) {
+    logger.error({ videoId, err: err.message }, 'Failed to remove video from archive');
+    return false;
+  }
+}
+
 module.exports = {
   getArchivePath,
   readCompleteListLines,
   getNewVideoUrlsSince,
   isVideoInArchive,
   addVideoToArchive,
+  removeVideoFromArchive,
 };
