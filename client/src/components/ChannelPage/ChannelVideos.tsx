@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Card,
@@ -87,6 +87,9 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Local state to track ignore status changes without refetching
+  const [localIgnoreStatus, setLocalIgnoreStatus] = useState<Record<string, boolean>>({});
 
   const { deleteVideosByYoutubeIds, loading: deleteLoading } = useVideoDeletion();
 
@@ -193,6 +196,11 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     }
   }, [availableTabsFromVideos]);
 
+  // Clear local ignore status overrides when videos are refetched (page change, tab change, etc)
+  useEffect(() => {
+    setLocalIgnoreStatus({});
+  }, [page, selectedTab, hideDownloaded, searchQuery, sortBy, sortOrder]);
+
   const { config } = useConfig(token);
   const hasChannelOverride = Boolean(channelVideoQuality);
   const defaultResolution = channelVideoQuality || config.preferredResolution || '1080';
@@ -208,8 +216,23 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   } = useRefreshChannelVideos(channelId, page, pageSize, hideDownloaded, selectedTab, token);
   const navigate = useNavigate();
 
+  // Apply local ignore status overrides to videos (for optimistic updates)
+  const videosWithOverrides = useMemo(() => {
+    return videos.map(video => {
+      // If we have a local override for this video, use it
+      if (video.youtube_id in localIgnoreStatus) {
+        return {
+          ...video,
+          ignored: localIgnoreStatus[video.youtube_id],
+          ignored_at: localIgnoreStatus[video.youtube_id] ? new Date().toISOString() : null,
+        };
+      }
+      return video;
+    });
+  }, [videos, localIgnoreStatus]);
+
   // Videos are already filtered, sorted, and paginated by the server
-  const paginatedVideos = videos;
+  const paginatedVideos = videosWithOverrides;
 
   // Use server-provided total count for pagination
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
@@ -333,6 +356,16 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     const video = paginatedVideos.find(v => v.youtube_id === youtubeId);
     const isCurrentlyIgnored = video?.ignored;
     const endpoint = isCurrentlyIgnored ? 'unignore' : 'ignore';
+    const newIgnoreStatus = !isCurrentlyIgnored;
+
+    // Capture original state BEFORE optimistic update (for potential rollback)
+    const originalIgnoreStatus = isCurrentlyIgnored ?? false;
+
+    // Optimistically update local state immediately
+    setLocalIgnoreStatus(prev => ({
+      ...prev,
+      [youtubeId]: newIgnoreStatus
+    }));
 
     try {
       const response = await fetch(`/api/channels/${channelId}/videos/${youtubeId}/${endpoint}`, {
@@ -353,10 +386,12 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         successMessage = `Video ignored. Channel downloads will exclude this video`;
       }
       setSuccessMessage(successMessage);
-
-      // Refresh the videos list
-      await refetchVideos();
     } catch (error) {
+      // Revert optimistic update on ANY error (network failure, non-OK response, etc.)
+      setLocalIgnoreStatus(prev => ({
+        ...prev,
+        [youtubeId]: originalIgnoreStatus
+      }));
       console.error('Error toggling ignore:', error);
       setErrorMessage(`Failed to ${endpoint} video`);
     }
@@ -367,6 +402,23 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
       setErrorMessage('No videos selected to ignore');
       return;
     }
+
+    // Capture original state BEFORE optimistic update (for potential rollback)
+    const originalIgnoreStates: Record<string, boolean> = {};
+    checkedBoxes.forEach(youtubeId => {
+      const video = paginatedVideos.find(v => v.youtube_id === youtubeId);
+      originalIgnoreStates[youtubeId] = video?.ignored ?? false;
+    });
+
+    // Optimistically update local state for all selected videos
+    const bulkIgnoreUpdates: Record<string, boolean> = {};
+    checkedBoxes.forEach(youtubeId => {
+      bulkIgnoreUpdates[youtubeId] = true;
+    });
+    setLocalIgnoreStatus(prev => ({
+      ...prev,
+      ...bulkIgnoreUpdates
+    }));
 
     try {
       const response = await fetch(`/api/channels/${channelId}/videos/bulk-ignore`, {
@@ -385,10 +437,12 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
       const result = await response.json();
       setSuccessMessage(result.message || `Successfully ignored ${checkedBoxes.length} videos`);
       setCheckedBoxes([]);
-
-      // Refresh the videos list
-      await refetchVideos();
     } catch (error) {
+      // Revert optimistic updates on ANY error (network failure, non-OK response, etc.)
+      setLocalIgnoreStatus(prev => ({
+        ...prev,
+        ...originalIgnoreStates
+      }));
       console.error('Error bulk ignoring:', error);
       setErrorMessage('Failed to bulk ignore videos');
     }
