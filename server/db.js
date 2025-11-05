@@ -1,5 +1,6 @@
 const { Sequelize } = require('sequelize');
 const logger = require('./logger');
+const databaseHealth = require('./modules/databaseHealthModule');
 
 // Configure SQL query logging based on LOG_SQL environment variable
 const sqlLogging = process.env.LOG_SQL === 'true'
@@ -43,9 +44,15 @@ const sequelize = new Sequelize(
 );
 
 const initializeDatabase = async () => {
+  const errors = [];
+  let connected = false;
+  let schemaValid = false;
+
   try {
+    // Attempt database connection
     await sequelize.authenticate();
     logger.info('Database connection established successfully');
+    connected = true;
 
     // Ensure connection uses utf8mb4
     await sequelize.query('SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci');
@@ -66,17 +73,55 @@ const initializeDatabase = async () => {
     });
 
     await migrator.up();
-    
+    logger.info('Database migrations completed successfully');
+
     // Load models after migrations
     const models = require('./models');
-    
+
     // Attach models to db object for easy access
     Object.keys(models).forEach(modelName => {
       module.exports[modelName] = models[modelName];
     });
+
+    // Validate database schema matches models
+    logger.info('Starting database schema validation');
+    const validation = await databaseHealth.validateDatabaseSchema(sequelize, models);
+
+    if (validation.valid) {
+      logger.info('Database schema validation passed');
+      schemaValid = true;
+    } else {
+      logger.error({ errorCount: validation.errors.length }, 'Database schema validation failed');
+      errors.push(...validation.errors);
+    }
+
   } catch (error) {
     logger.error({ err: error }, 'Failed to initialize database');
-    throw error;
+
+    // Categorize the error with a helpful message
+    if (error.name === 'SequelizeConnectionError' || error.original?.code === 'ECONNREFUSED') {
+      const dbHost = process.env.DB_HOST || 'localhost';
+      const dbPort = process.env.DB_PORT || 3321;
+      errors.push(`Cannot connect to database at ${dbHost}:${dbPort}. Error: ${error.message}`);
+    } else if (error.name === 'SequelizeAccessDeniedError') {
+      errors.push(`Database authentication failed. Check DB_USER and DB_PASSWORD. Error: ${error.message}`);
+    } else if (error.name === 'SequelizeDatabaseError') {
+      errors.push(`Database error: ${error.message}`);
+    } else {
+      errors.push(`Database initialization failed: ${error.message}`);
+    }
+  }
+
+  // Store startup health status
+  databaseHealth.setStartupHealth(connected, schemaValid, errors);
+
+  // If database failed to connect or schema is invalid, log but don't throw
+  // This allows the server to start and report the issue via the API
+  if (!connected || !schemaValid) {
+    logger.warn(
+      { connected, schemaValid, errorCount: errors.length },
+      'Database is not in healthy state - server starting in degraded mode'
+    );
   }
 };
 

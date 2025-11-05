@@ -48,6 +48,7 @@ import InitialSetup from './components/InitialSetup';
 import ChannelPage from './components/ChannelPage';
 import StorageStatus from './components/StorageStatus';
 import ErrorBoundary from './components/ErrorBoundary';
+import DatabaseErrorOverlay from './components/DatabaseErrorOverlay';
 
 function AppContent() {
   const [token, setToken] = useState<string | null>(
@@ -61,6 +62,8 @@ function AppContent() {
   const [showTmpWarning, setShowTmpWarning] = useState(false);
   const [shouldShowWarning, setShouldShowWarning] = useState(false);
   const [platformName, setPlatformName] = useState<string | null>(null);
+  const [dbStatus, setDbStatus] = useState<'checking' | 'healthy' | 'error'>('checking');
+  const [dbErrors, setDbErrors] = useState<string[]>([]);
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -72,6 +75,30 @@ function AppContent() {
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
+
+  const handleDatabaseRetry = () => {
+    // Reload the page to re-check database status
+    window.location.reload();
+  };
+
+  // Check database status on initial load
+  useEffect(() => {
+    fetch('/api/db-status')
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.status === 'healthy') {
+          setDbStatus('healthy');
+        } else {
+          setDbStatus('error');
+          setDbErrors(data.database?.errors || ['Unknown database error']);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to check database status:', error);
+        // If we can't reach the endpoint, assume healthy and let other errors surface naturally
+        setDbStatus('healthy');
+      });
+  }, []);
 
   // Check configuration for temp directory warning
   useEffect(() => {
@@ -182,6 +209,11 @@ function AppContent() {
 
   return (
     <>
+      {/* Database Error Overlay - shows when database is unavailable */}
+      {dbStatus === 'error' && (
+        <DatabaseErrorOverlay errors={dbErrors} onRetry={handleDatabaseRetry} />
+      )}
+
       <AppBar
         position="fixed"
         style={{

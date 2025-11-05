@@ -231,37 +231,63 @@ describe('db.js', () => {
       });
     });
 
-    it('should handle authentication errors', async () => {
+    it('should handle authentication errors gracefully', async () => {
       const authError = new Error('Authentication failed');
+      authError.name = 'SequelizeConnectionError';
       mockAuthenticate.mockRejectedValue(authError);
 
-      await expect(db.initializeDatabase()).rejects.toThrow('Authentication failed');
+      // Should not throw - errors are captured in health status
+      await db.initializeDatabase();
+
       expect(loggerErrorSpy).toHaveBeenCalledWith(
         { err: authError },
         'Failed to initialize database'
       );
+
+      // Verify health status was set with error
+      const databaseHealth = require('../modules/databaseHealthModule');
+      expect(databaseHealth.getStartupHealth().database.connected).toBe(false);
+      expect(databaseHealth.getStartupHealth().database.errors.length).toBeGreaterThan(0);
     });
 
-    it('should handle migration errors', async () => {
+    it('should handle migration errors gracefully', async () => {
       const migrationError = new Error('Migration failed');
       mockUmzugUp.mockRejectedValue(migrationError);
 
-      await expect(db.initializeDatabase()).rejects.toThrow('Migration failed');
+      // Should not throw - errors are captured in health status
+      await db.initializeDatabase();
+
       expect(loggerErrorSpy).toHaveBeenCalledWith(
         { err: migrationError },
         'Failed to initialize database'
       );
+
+      // Verify health status was set with error
+      // Note: connected=true because authentication succeeded, but migration failed
+      const databaseHealth = require('../modules/databaseHealthModule');
+      expect(databaseHealth.getStartupHealth().database.connected).toBe(true);
+      expect(databaseHealth.getStartupHealth().database.schemaValid).toBe(false);
+      expect(databaseHealth.getStartupHealth().database.errors.length).toBeGreaterThan(0);
     });
 
-    it('should handle query errors when setting charset', async () => {
+    it('should handle query errors when setting charset gracefully', async () => {
       const queryError = new Error('Query failed');
       mockQuery.mockRejectedValue(queryError);
 
-      await expect(db.initializeDatabase()).rejects.toThrow('Query failed');
+      // Should not throw - errors are captured in health status
+      await db.initializeDatabase();
+
       expect(loggerErrorSpy).toHaveBeenCalledWith(
         { err: queryError },
         'Failed to initialize database'
       );
+
+      // Verify health status was set with error
+      // Note: connected=true because authentication succeeded, but charset query failed
+      const databaseHealth = require('../modules/databaseHealthModule');
+      expect(databaseHealth.getStartupHealth().database.connected).toBe(true);
+      expect(databaseHealth.getStartupHealth().database.schemaValid).toBe(false);
+      expect(databaseHealth.getStartupHealth().database.errors.length).toBeGreaterThan(0);
     });
 
     it('should complete initialization in correct order', async () => {

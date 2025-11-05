@@ -65,6 +65,7 @@ app.use(express.json());
 const path = require('path');
 const fs = require('fs');
 const db = require('./db');
+const databaseHealth = require('./modules/databaseHealthModule');
 const https = require('https');
 const http = require('http');
 const bcrypt = require('bcrypt');
@@ -177,6 +178,69 @@ const initialize = async () => {
 
     logger.info({ directoryPath: configModule.directoryPath }, 'YouTube downloads directory configured');
 
+    // Degraded mode middleware - checks database health before processing requests
+    const checkDatabaseHealth = function(req, res, next) {
+      // Skip health check for the db-status endpoint itself
+      if (req.path === '/api/db-status') {
+        return next();
+      }
+
+      // INVERTED LOGIC: Allow only what's needed to serve the React app (fail-safe by default)
+      // Everything else is blocked when DB is unhealthy
+
+      // Allow static assets (JS, CSS, images, fonts, etc.)
+      const isStaticAsset = req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|map|json|txt)$/i);
+      if (isStaticAsset) {
+        return next();
+      }
+
+      // Allow requests for HTML pages (React SPA and deep links)
+      // Check Accept header for browsers requesting HTML
+      const acceptsHtml = req.headers.accept && req.headers.accept.includes('text/html');
+      const isGetRequest = req.method === 'GET';
+
+      // Allow GET requests that accept HTML (this covers React Router deep links)
+      if (isGetRequest && acceptsHtml) {
+        return next();
+      }
+
+      // Allow static file paths explicitly
+      if (req.path.startsWith('/static/') ||
+          req.path.startsWith('/images/') ||
+          req.path === '/favicon.ico' ||
+          req.path === '/manifest.json' ||
+          req.path === '/asset-manifest.json') {
+        return next();
+      }
+
+      // Everything else is treated as an API call - block if DB unhealthy
+      if (!databaseHealth.isDatabaseHealthy()) {
+        const health = databaseHealth.getStartupHealth();
+
+        // Determine the type of error
+        let errorType, errorMessage;
+        if (!health.database.connected) {
+          errorType = 'Database Connection Failed';
+          errorMessage = 'Unable to connect to the database. Please ensure the database server is running and accessible.';
+        } else if (!health.database.schemaValid) {
+          errorType = 'Database Schema Mismatch';
+          errorMessage = 'The database schema does not match the application models. This usually means migrations need to be run or the code is out of sync with the database.';
+        } else {
+          errorType = 'Database Error';
+          errorMessage = 'A database error has occurred. Please check the logs for details.';
+        }
+
+        return res.status(503).json({
+          error: errorType,
+          message: errorMessage,
+          requiresDbFix: true,
+          details: health.database.errors
+        });
+      }
+
+      next();
+    };
+
     const verifyToken = async function(req, res, next) {
       if (process.env.AUTH_ENABLED === 'false') {
         return next();
@@ -253,7 +317,10 @@ const initialize = async () => {
       standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
       legacyHeaders: false, // Disable the `X-RateLimit-*` headers
       skipSuccessfulRequests: true, // Don't count successful requests
-      validate: { trustProxy: false }, // Suppress trust proxy warning - we run in Docker with proxy
+      validate: {
+        trustProxy: false, // Suppress trust proxy warning - we run in Docker with proxy
+        ip: false, // Disable IP validation - we're using a custom key
+      },
       keyGenerator: (req) => {
         // Use IP + username combination for more granular rate limiting
         const username = req.body.username || 'unknown';
@@ -278,9 +345,23 @@ const initialize = async () => {
 
     /**** ONLY ROUTES BELOW THIS LINE *********/
 
+    // Apply database health check middleware to all routes
+    app.use(checkDatabaseHealth);
+
     // Health check endpoint - unauthenticated for Docker health checks
     app.get('/api/health', (req, res) => {
       res.status(200).json({ status: 'healthy' });
+    });
+
+    // Database status endpoint - unauthenticated, returns startup health check results
+    app.get('/api/db-status', (req, res) => {
+      const health = databaseHealth.getStartupHealth();
+      const isHealthy = health.database.connected && health.database.schemaValid;
+
+      res.status(isHealthy ? 200 : 503).json({
+        status: isHealthy ? 'healthy' : 'error',
+        database: health.database
+      });
     });
 
     app.use('/images', express.static(configModule.getImagePath()));
@@ -1435,28 +1516,43 @@ const initialize = async () => {
       server.listen(port, () => {
         logger.info({ port }, 'Server started and listening');
 
-        // Initialize cron jobs
-        const cronJobs = require('./modules/cronJobs');
-        cronJobs.initialize();
+        // Only initialize cron jobs and background tasks if database is healthy
+        if (databaseHealth.isDatabaseHealthy()) {
+          // Initialize cron jobs
+          const cronJobs = require('./modules/cronJobs');
+          cronJobs.initialize();
 
-        // Run video metadata backfill asynchronously after server starts
-        setTimeout(() => {
-          logger.info('Starting async video metadata backfill');
-          videosModule.backfillVideoMetadata()
-            .then(() => {
-              logger.info('Video metadata backfill completed successfully');
-            })
-            .catch(err => {
-              logger.error({ err }, 'Video metadata backfill failed');
-            });
-        }, 5000); // Delay 5 seconds to avoid blocking startup
+          // Run video metadata backfill asynchronously after server starts
+          setTimeout(() => {
+            logger.info('Starting async video metadata backfill');
+            videosModule.backfillVideoMetadata()
+              .then(() => {
+                logger.info('Video metadata backfill completed successfully');
+              })
+              .catch(err => {
+                logger.error({ err }, 'Video metadata backfill failed');
+              });
+          }, 5000); // Delay 5 seconds to avoid blocking startup
+        } else {
+          logger.warn('Skipping cron jobs and background tasks - database is not healthy');
+        }
       });
     }
 
   } catch (error) {
     logger.error({ err: error }, 'Failed to initialize the application');
-    // Handle the error here, e.g. exit the process
-    process.exit(1);
+
+    // Check if this is a database error (which should be handled gracefully)
+    // or some other critical error (which should still exit)
+    const dbHealth = databaseHealth.getStartupHealth();
+    if (dbHealth.database.connected === false || dbHealth.database.schemaValid === false) {
+      // Database issue - server will continue in degraded mode
+      logger.warn('Server starting in degraded mode due to database issues');
+    } else {
+      // Critical non-database error - exit the process
+      logger.fatal({ err: error }, 'Critical error during initialization - exiting');
+      process.exit(1);
+    }
   }
 };
 
