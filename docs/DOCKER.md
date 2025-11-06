@@ -18,22 +18,20 @@ Youtarr uses Docker Compose with two containers:
   - `./config:/app/config` - Configuration files
   - `./jobs:/app/jobs` - Job state and artifacts
 
-> **⚠️ CRITICAL**: Do **NOT** mount `./migrations:/app/migrations` as a volume. See [warning below](#critical-do-not-mount-migrations-volume).
-
 ### Database Container (youtarr-db)
 - **Image**: `mariadb:10.3`
 - **Port**: 3321 (both host and container)
 - **Volumes**:
-  - `youtarr_db_data:/var/lib/mysql` - Database persistence
+  - `./database:/var/lib/mysql` - Database persistence
 - **Character Set**: utf8mb4 (full Unicode support)
 
-## ⚠️ CRITICAL: Do Not Mount Migrations Volume
+## ⚠️ Important: Do Not Mount the Migrations Directory
 
-**DO NOT** mount `./migrations:/app/migrations` as a volume. Migrations are already included in the Docker image.
+Avoid adding a `./migrations:/app/migrations` volume. The production image already includes the migration files it needs.
 
 ### Why This Matters
 
-If you mount an empty or missing local migrations directory (common with Ansible, Terraform, or Kubernetes automation), it **overwrites** the migrations in the image, causing database initialization to fail.
+If you mount an empty or missing local migrations directory (common with Ansible, Terraform, or Kubernetes automation), it overwrites the packaged migrations and the database bootstrap will fail.
 
 ```yaml
 # ❌ WRONG - Causes DB initialization failures
@@ -50,7 +48,7 @@ volumes:
 
 If your automation creates a migrations directory, remove it from both directory creation and volume mounts.
 
-**Note:** `docker-compose.dev.yml` does mount migrations for development convenience only.
+**Note:** `docker-compose.dev.yml` mounts migrations for development convenience only.
 
 ## Configuration Setup
 
@@ -69,16 +67,23 @@ Starting with version 1.23.0, Youtarr now **automatically creates** a `config/co
    - **UI Behavior**: YouTube Output Directory field is **editable** - changes require restart via `./start.sh`
 
 2. **Manual Docker Configuration (docker-compose directly)**
-   - Skip setup.sh entirely
-   - **IMPORTANT**: You **must** edit `docker-compose.yml` first to hardcode your volume mount:
+   - Skip setup.sh entirely for Docker-native platforms (Portainer, TrueNAS, etc)
+   - **Create a .env file** to configure environment variables:
+     ```bash
+     cp .env.example .env
+     nano .env  # Set YOUTUBE_OUTPUT_DIR to your video storage path
+     ```
+   - **Alternative**: Edit `docker-compose.yml` to hardcode your volume mount:
      ```yaml
      volumes:
        - /your/host/path:/usr/src/app/data  # Replace ${YOUTUBE_OUTPUT_DIR} with your path
      ```
-   - Running `docker compose up` without this edit will fail with: `invalid spec: :/usr/src/app/data: empty section between colons`
-   - After editing the compose file, start containers with `docker compose up -d`
+   - Start containers with `docker compose up -d`
    - Container auto-creates `config.json` with `/usr/src/app/data` (container's internal path)
    - **UI Behavior**: YouTube Output Directory field is **read-only** - shows "Docker Volume" chip
+   - **Host Path Reminder**: Create the `/your/host/path` directory ahead of time and ensure it is writable. Docker will otherwise create it as root-owned, which prevents Youtarr from saving videos.
+
+   Using a .env file is **recommended** for manual Docker setups as it keeps configuration separate from the compose file and makes upgrades easier.
 
 #### How Volume Mounts Work
 
@@ -206,7 +211,43 @@ docker exec -it youtarr-db mysql -u root -p123qweasd youtarr
 
 ## Environment Variables
 
-Set in docker-compose.yml:
+### Configuration Methods
+
+You can configure environment variables in three ways:
+
+1. **Using .env file** (Recommended for manual Docker setups):
+   ```bash
+   cp .env.example .env
+   nano .env  # Edit your configuration
+   ```
+   Docker Compose automatically reads `.env` and substitutes variables in docker-compose.yml.
+
+2. **Using start.sh script**:
+   The script reads `config/config.json` and exports variables before starting containers.
+
+3. **Hardcoding in docker-compose.yml**:
+   Edit the compose file directly (not recommended - makes upgrades harder).
+
+### Required Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `YOUTUBE_OUTPUT_DIR` | Host path for video downloads | `/mnt/media/youtube` |
+
+### Optional Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AUTH_PRESET_USERNAME` | Initial admin username for headless deployments | (empty) |
+| `AUTH_PRESET_PASSWORD` | Initial admin password for headless deployments | (empty) |
+| `AUTH_ENABLED` | Set to `false` to disable authentication | `true` |
+| `LOG_LEVEL` | Logging verbosity: `warn`, `info`, or `debug` | `warn` |
+
+See `.env.example` for detailed documentation of each variable.
+
+### Variables Set in docker-compose.yml
+
+These are hardcoded in the compose file and don't need configuration:
 
 ```yaml
 environment:
@@ -318,7 +359,7 @@ spec:
 
 ### Persistent Data Locations
 
-- **Database**: Docker volume `youtarr_db_data`
+- **Database**: `./database` directory
 - **Config**: `./config` directory
 - **Videos**: User-specified directory (set via setup.sh)
 - **Images/Jobs**: `./server/images` and `./jobs` directories
@@ -452,8 +493,11 @@ docker exec -i youtarr-db mysql -u root -p123qweasd youtarr < backup.sql
 # Create backup
 tar -czf youtarr-backup.tar.gz config/ database/ jobs/ server/images/
 
-# Include database volume
-docker run --rm -v youtarr_db_data:/data -v $(pwd):/backup alpine tar -czf /backup/db-backup.tar.gz -C /data .
+# Include database directory (default compose setup)
+tar -czf db-backup.tar.gz database/
+
+# If you switched to a named Docker volume, adjust the command accordingly:
+# docker run --rm -v your_volume_name:/data -v $(pwd):/backup alpine tar -czf /backup/db-backup.tar.gz -C /data .
 ```
 
 ## Health Checks

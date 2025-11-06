@@ -9,7 +9,7 @@ Before setting up Youtarr, ensure you have:
 1. **Docker & Docker Compose** installed on your system
 2. **Bash Shell** (Git Bash for Windows users)
 3. **Git** to clone the repository
-4. Access to your **Plex Media Server** (Youtarr should run on the same machine)
+4. Access to your **Plex Media Server** (Youtarr just needs network reachability; running on the same machine is optional)
 
 ### First-Time Installation
 
@@ -38,6 +38,52 @@ Before setting up Youtarr, ensure you have:
    - On first access from localhost, you'll be prompted to create an admin account
    - Choose a strong password (minimum 8 characters recommended)
    - This account will be used for all future logins
+
+### Alternative: Manual Configuration with .env
+
+If you prefer to use standard `docker compose up` commands (eg. for Portainer, TrueNAS, or other Docker GUI platforms):
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/dialmaster/Youtarr.git
+   cd Youtarr
+   ```
+
+2. **Create environment configuration**:
+   ```bash
+   cp .env.example .env
+   ```
+
+3. **Edit the .env file**:
+   ```bash
+   nano .env  # or use your preferred editor
+   ```
+
+   Set the required `YOUTUBE_OUTPUT_DIR` variable to your video storage location:
+   ```bash
+   YOUTUBE_OUTPUT_DIR=/path/to/your/videos
+   ```
+
+   Optionally configure other settings:
+   - `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` - For headless deployments (e.g., Unraid)
+   - `AUTH_ENABLED=false` - Only if behind external authentication (VPN, reverse proxy)
+   - `LOG_LEVEL` - Set to `debug` for troubleshooting, `warn` for production
+
+4. **Start with Docker Compose**:
+   ```bash
+   docker compose up -d
+   ```
+
+5. **Access the web interface**:
+   - Navigate to `http://localhost:3087`
+   - If you set preset credentials in .env, use those to log in
+   - If not, you'll create your admin account on first access from localhost
+   - Configure Plex and other settings from the Configuration page
+   - When launched this way, the Configuration screen shows the download directory as a read-only “Docker Volume” because Docker Compose owns the mapping. To change it later, update the volume path in docker-compose and restart.
+
+> **Important**: Ensure the path you assign to `YOUTUBE_OUTPUT_DIR` already exists on the host and is writable before starting the stack. Otherwise Docker will create it as root-owned and the container may not be able to write downloads.
+
+This method is **functionally equivalent** to using the setup.sh + start.sh scripts, but gives you direct control over environment variables. It's the preferred approach for any Docker-native workflow.
 
 ## Authentication
 

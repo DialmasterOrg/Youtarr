@@ -123,19 +123,20 @@ mkdir -p /volume1/docker/Youtarr/data/youtube
 
 #### Create .env file
 
-Create a `.env` file in the Youtarr directory:
+Youtarr includes a `.env.example` template that you can use as a starting point:
 
 ```bash
 cd /volume1/docker/Youtarr
+cp .env.example .env
 vi .env
 ```
 
 > **Tip**: Synology DSM ships with the BusyBox `vi` editor. If you have installed `nano` separately and prefer it, you can run `nano .env` instead of `vi .env`.
 
-Add the following content (adjust the path to match your video output directory):
+Edit the file to configure your settings. At minimum, set the `YOUTUBE_OUTPUT_DIR` to match your video storage location:
 
 ```bash
-# Required: Set this to your video output directory
+# Required: Set this to your video output directory (adjust to match your path)
 YOUTUBE_OUTPUT_DIR=/volume1/media/youtube
 
 # Optional: Set initial admin credentials (highly recommended for headless setup)
@@ -145,6 +146,8 @@ AUTH_PRESET_PASSWORD=YourSecurePassword123
 # Optional: Logging level (warn, info, debug)
 LOG_LEVEL=warn
 ```
+
+The `.env.example` file contains detailed comments explaining each variable - refer to it for all available options.
 
 **Save the file**:
 - Press `Esc`, then type `:wq` and press `Enter` (for `vi`)
@@ -170,23 +173,23 @@ Ensure `YOUTUBE_OUTPUT_DIR` matches the directory you created in Step 4.
 
 ### Step 6: Start Youtarr
 
-Start the containers using docker-compose:
+Start the containers using docker compose:
 
-> **Compose command on Synology**: DSM 7 installs Docker Compose v2, which uses the space-separated syntax (`docker compose`). The examples below use `docker-compose`; substitute `docker compose` if that is what your system provides.
+> **Compose command on Synology**: DSM 7 installs Docker Compose v2, which uses the space-separated syntax (`docker compose`). If your environment still uses the legacy v1 binary, substitute `docker-compose` in the examples below.
 
 ```bash
 cd /volume1/docker/Youtarr
-docker-compose up -d
+docker compose up -d
 ```
 
 **Monitor the startup**:
 
 ```bash
 # Check container status
-docker-compose ps
+docker compose ps
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Press Ctrl+C to exit log viewing
 ```
@@ -252,7 +255,7 @@ sudo chown -R yourusername:users database config jobs server
 - `3087`: Web UI and API
 - `3321`: MariaDB (exposed on the NAS because `docker-compose.yml` maps `3321:3321`; lock it down with your firewall or remove the port mapping if you only need in-container access)
 
-> **Security tip**: If you do not need MariaDB reachable from the NAS host, remove the `ports` block for `youtarr-db` from `docker-compose.yml` and redeploy (`docker-compose down && docker-compose up -d`). The `youtarr` container will still connect over the internal Docker network.
+> **Security tip**: If you do not need MariaDB reachable from the NAS host, remove the `ports` block for `youtarr-db` from `docker-compose.yml` and redeploy (`docker compose down && docker compose up -d`). The `youtarr` container will still connect over the internal Docker network.
 
 **Firewall**:
 - Ensure port 3087 is accessible on your local network
@@ -308,11 +311,11 @@ cd /volume1/docker/Youtarr
 git pull
 
 # Pull latest Docker images and restart
-docker-compose pull
-docker-compose up -d
+docker compose pull
+docker compose up -d
 
 # View logs to verify update
-docker-compose logs -f
+docker compose logs -f
 ```
 
 ---
@@ -322,19 +325,19 @@ docker-compose logs -f
 **Stop Youtarr**:
 ```bash
 cd /volume1/docker/Youtarr
-docker-compose down
+docker compose down
 ```
 
 **Start Youtarr**:
 ```bash
 cd /volume1/docker/Youtarr
-docker-compose up -d
+docker compose up -d
 ```
 
 **Restart Youtarr**:
 ```bash
 cd /volume1/docker/Youtarr
-docker-compose restart
+docker compose restart
 ```
 
 ---
@@ -349,7 +352,7 @@ docker-compose restart
 1. Verify `.env` file exists: `cat /volume1/docker/Youtarr/.env`
 2. Verify it contains: `YOUTUBE_OUTPUT_DIR=/your/path`
 3. Ensure no extra spaces or quotes around the path
-4. Restart containers: `docker-compose down && docker-compose up -d`
+4. Restart containers: `docker compose down && docker compose up -d`
 
 ### "ffmpeg-location undefined does not exist" Error
 
@@ -361,7 +364,7 @@ docker-compose restart
 1. Verify `YOUTUBE_OUTPUT_DIR` in `.env` file matches a real directory
 2. Verify directory exists: `ls -la /volume1/media/youtube`
 3. Check directory permissions: `ls -ld /volume1/media/youtube`
-4. Restart containers: `docker-compose restart`
+4. Restart containers: `docker compose restart`
 
 ### "'NoneType' object has no attribute 'lower'" Error
 
@@ -379,12 +382,12 @@ docker-compose restart
 ```bash
 cd /volume1/docker/Youtarr
 mkdir -p database config jobs server/images
-docker-compose up -d
+docker compose up -d
 ```
 
 ### "Permission denied" on Docker Commands
 
-**Symptom**: `docker` or `docker-compose` commands fail with permission errors.
+**Symptom**: `docker` or `docker compose` commands fail with permission errors.
 
 **Solution**:
 ```bash
@@ -411,13 +414,13 @@ docker ps
 
 1. **Check container status**:
    ```bash
-   docker-compose ps
+   docker compose ps
    # Both containers should be running
    ```
 
 2. **Check logs for errors**:
    ```bash
-   docker-compose logs
+   docker compose logs
    ```
 
 3. **Verify port is listening**:
@@ -452,8 +455,8 @@ AUTH_PRESET_USERNAME=admin
 AUTH_PRESET_PASSWORD=YourSecurePassword123
 
 # Restart to apply
-docker-compose down
-docker-compose up -d
+docker compose down
+docker compose up -d
 ```
 
 > **Tip**: If you prefer `nano` and have installed it, replace `vi` with `nano` in the command above. In `vi`, press `Esc`, type `:wq`, then press `Enter` to save and exit.
@@ -474,28 +477,28 @@ ssh -L 3087:localhost:3087 yourusername@your-nas-ip
 **Solution**:
 1. Check database container health:
    ```bash
-   docker-compose ps
+   docker compose ps
    # youtarr-db should show "healthy"
    ```
 
 2. View database logs:
    ```bash
-   docker-compose logs youtarr-db
+   docker compose logs youtarr-db
    ```
 
 3. Restart database:
    ```bash
-   docker-compose restart youtarr-db
+   docker compose restart youtarr-db
    # Wait 30 seconds for health check
-   docker-compose restart youtarr
+   docker compose restart youtarr
    ```
 
 4. If issues persist, reset database:
    ```bash
    # WARNING: This deletes all data!
-   docker-compose down
+   docker compose down
    rm -rf database/*
-   docker-compose up -d
+   docker compose up -d
    ```
 
 ### High CPU Usage
@@ -548,9 +551,9 @@ cp -r /volume1/docker/Youtarr/config /volume1/backups/youtarr/config-$(date +%Y%
 docker exec youtarr-db mysqldump -u root -p123qweasd youtarr > /volume1/backups/youtarr/database-$(date +%Y%m%d).sql
 
 # Or backup database directory (stop containers first)
-docker-compose down
+docker compose down
 cp -r /volume1/docker/Youtarr/database /volume1/backups/youtarr/database-$(date +%Y%m%d)
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Restore from Backup
@@ -558,7 +561,7 @@ docker-compose up -d
 ```bash
 # Stop containers
 cd /volume1/docker/Youtarr
-docker-compose down
+docker compose down
 
 # Restore configuration
 rm -rf config
@@ -569,7 +572,7 @@ rm -rf database
 cp -r /volume1/backups/youtarr/database-YYYYMMDD database
 
 # Start containers
-docker-compose up -d
+docker compose up -d
 ```
 
 ---
@@ -610,7 +613,7 @@ services:
 
 Apply changes:
 ```bash
-docker-compose down && docker-compose up -d
+docker compose down && docker compose up -d
 ```
 
 ### Use SSD Cache (If Available)
@@ -635,7 +638,7 @@ To completely remove Youtarr:
 ```bash
 # Stop and remove containers
 cd /volume1/docker/Youtarr
-docker-compose down -v
+docker compose down -v
 
 # Remove application files
 cd /volume1/docker
@@ -663,7 +666,7 @@ If you encounter issues not covered in this guide:
 
 1. **Check the logs**:
    ```bash
-   docker-compose logs -f
+   docker compose logs -f
    ```
 
 2. **Search existing issues**: [GitHub Issues](https://github.com/dialmaster/Youtarr/issues)
@@ -671,8 +674,8 @@ If you encounter issues not covered in this guide:
 3. **Create a new issue** with:
    - Your Synology model and DSM version
    - Contents of `.env` file (redact passwords)
-   - Output of `docker-compose ps`
-   - Relevant logs from `docker-compose logs`
+   - Output of `docker compose ps`
+   - Relevant logs from `docker compose logs`
 
 ---
 
