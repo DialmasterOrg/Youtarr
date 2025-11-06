@@ -61,11 +61,11 @@ https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
 
 ### Installation
 
-> ⚠️ **IMPORTANT**: Always use `./start.sh` to start Youtarr (not `docker compose up` directly). The start script configures required environment variables from your config.json.
+Choose your preferred installation method:
 
-**Platform-Specific Instructions**:
-- **Synology NAS** (DSM 7+): See the [Synology NAS Guide](docs/SYNOLOGY.md) for optimized installation steps
-- **Custom Docker Setup**: See the [Docker documentation](docs/DOCKER.md) for advanced configuration
+#### Method 1: Quick Setup with Scripts (Recommended for Beginners)
+
+Perfect for users who want automated setup with minimal configuration:
 
 1. **Clone the repository**:
    ```bash
@@ -73,10 +73,11 @@ https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
    cd Youtarr
    ```
 
-2. **Run setup**:
+2. **Run the setup script**:
    ```bash
-   ./setup.sh  # Select your YouTube download directory
+   ./setup.sh
    ```
+   This will guide you through selecting your YouTube download directory and optionally configuring Plex.
 
 3. **Start Youtarr**:
    ```bash
@@ -88,10 +89,47 @@ https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
 4. **Access the web interface**:
    - Navigate to `http://localhost:3087`
    - Create your admin account on first access
-   - If you want automatic Plex integration with library refresh, then configure your Plex connection
-     - The app works fine without Plex integration and will still download videos from YouTube automatically and
-       allow you to add and browse YouTube channels
-   - If containers don’t start or the app isn’t reachable, see [Troubleshooting](docs/TROUBLESHOOTING.md)
+   - Configure Plex (optional) and other settings from the Configuration page
+   - If containers don't start or the app isn't reachable, see [Troubleshooting](docs/TROUBLESHOOTING.md)
+
+#### Method 2: Standard Docker Compose (For Docker-Native Setups)
+
+Eg. for Portainer, TrueNAS, or any Docker-native workflow:
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/dialmaster/Youtarr.git
+   cd Youtarr
+   ```
+
+2. **Create environment configuration**:
+   ```bash
+   cp .env.example .env
+   nano .env  # or use your preferred editor
+   ```
+   Set `YOUTUBE_OUTPUT_DIR` to your video storage location:
+   ```bash
+   YOUTUBE_OUTPUT_DIR=/path/to/your/videos
+   ```
+   Make sure this directory already exists on the host and is writable before starting the containers—Docker will otherwise create it as root-owned and Youtarr may not have access.
+   Optionally configure authentication and logging settings (see .env.example for details).
+
+3. **Start with Docker Compose**:
+   ```bash
+   docker compose up -d
+   ```
+
+4. **Access the web interface**:
+   - Navigate to `http://localhost:3087`
+   - Create your admin account on first access (or use preset credentials if configured in .env)
+   - Configure Plex (optional) and other settings from the Configuration page
+   - When you launch via `.env`, the Configuration screen will show the download directory as a read-only “Docker Volume” because the location is managed by your compose file. To change it later, update the volume mapping and restart. See [Docker documentation](docs/DOCKER.md) for details.
+
+**Platform-Specific Guides**:
+- **Synology NAS** (DSM 7+): See the [Synology NAS Guide](docs/SYNOLOGY.md) for optimized installation steps
+- **Unraid**: See the [Unraid section](#deploying-on-unraid) below for template-based installation
+- **Portainer/TrueNAS**: Use Method 2 above, or see [Docker documentation](docs/DOCKER.md) for stack configurations
+- **Advanced Docker Setup**: See the [Docker documentation](docs/DOCKER.md) for detailed configuration options
 
 ### Using an External Database
 - Already running MariaDB/MySQL elsewhere? Copy `config/external-db.env.example` to `config/external-db.env`, fill in your connection details, then either:
