@@ -3,15 +3,9 @@
 These instructions are meant to explain how to do local development.
 They will show you how to run a local server with hot reload for both the Node.js server and the React client, as well as how to run database migrations.
 
-## Architecture Changes
-
-Youtarr now uses Docker Compose with separate containers:
-- **youtarr**: Node.js application container (~600MB, down from 1.5GB)
+Youtarr uses Docker Compose with separate containers:
+- **youtarr**: Node.js application container
 - **youtarr-db**: MariaDB 10.3 database container
-
-## Running the DB, server and client with hot reload for development
-
-### Option 1: Using Docker Compose (Recommended)
 
 1. Build and start the development environment:
    ```bash
@@ -28,28 +22,6 @@ Youtarr now uses Docker Compose with separate containers:
 3. Stop the development environment:
    ```bash
    ./scripts/stop-dev.sh
-   ```
-
-### Option 2: Local development with hot reload
-
-1. First run the database in Docker:
-   ```bash
-   npm run start:db
-   ```
-
-2. Then run the client/server with hot reload:
-   ```bash
-   npm run dev
-   ```
-
-3. Running migrations with this setup:
-   ```bash
-   ./scripts/db-migrate.sh
-   ```
-
-4. Create a new migration file (to be filled in):
-   ```bash
-   ./scripts/db-create-migration.sh
    ```
 
 ## Building and Testing
@@ -91,7 +63,7 @@ The release process is now automated via GitHub Actions:
 - `docker-compose.dev.yml` - Development configuration
 - `Dockerfile` - Multi-stage build for optimized image size
 
-### Key Changes from Single Container
+### DB details
 - MariaDB runs separately (port 3321)
 - Application connects via `DB_HOST` environment variable
 - Database data persists in `./database` directory
@@ -116,7 +88,7 @@ docker compose exec youtarr-db mysql -p123qweasd
 
 ## Environment Variables
 
-The application now uses these environment variables for database connection:
+The application uses these environment variables for database connection:
 - `DB_HOST` - Database host (default: localhost, docker-compose sets to youtarr-db)
 - `DB_PORT` - Database port (default: 3321)
 - `DB_USER` - Database user (default: root)
