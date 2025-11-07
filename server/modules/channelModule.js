@@ -973,6 +973,11 @@ class ChannelModule {
         plainVideoObject.fileSize = null;
       }
 
+      // Replace thumbnail with template format (unless video is removed from YouTube)
+      if (!plainVideoObject.youtube_removed) {
+        plainVideoObject.thumbnail = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+      }
+
       return plainVideoObject;
     });
   }
