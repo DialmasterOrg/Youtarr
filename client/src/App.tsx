@@ -1,6 +1,6 @@
 import './App.css';
 import packageJson from '../package.json';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import toplogo from './Youtarr_text.png';
 import axios from 'axios';
 import {
@@ -50,6 +50,9 @@ import StorageStatus from './components/StorageStatus';
 import ErrorBoundary from './components/ErrorBoundary';
 import DatabaseErrorOverlay from './components/DatabaseErrorOverlay';
 
+// Event name for database error detection
+const DB_ERROR_EVENT = 'db-error-detected';
+
 function AppContent() {
   const [token, setToken] = useState<string | null>(
     localStorage.getItem('authToken') // Only use the new authToken, no fallback to plexAuthToken
@@ -64,6 +67,8 @@ function AppContent() {
   const [platformName, setPlatformName] = useState<string | null>(null);
   const [dbStatus, setDbStatus] = useState<'checking' | 'healthy' | 'error'>('checking');
   const [dbErrors, setDbErrors] = useState<string[]>([]);
+  const [dbRecovered, setDbRecovered] = useState(false);
+  const [countdown, setCountdown] = useState(15);
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -80,6 +85,50 @@ function AppContent() {
     // Reload the page to re-check database status
     window.location.reload();
   };
+
+  // Override global fetch to automatically detect database errors
+  useEffect(() => {
+    // Skip fetch override in test environment to preserve Jest mock functionality
+    if (process.env.NODE_ENV === 'test') {
+      return;
+    }
+
+    const originalFetch = window.fetch;
+
+    window.fetch = async function(...args: Parameters<typeof fetch>): Promise<Response> {
+      const response = await originalFetch(...args);
+
+      // Check for database error (503 with requiresDbFix flag)
+      if (response.status === 503) {
+        // Clone the response so we can read it without consuming the original
+        const clonedResponse = response.clone();
+
+        try {
+          const data = await clonedResponse.json();
+
+          if (data.requiresDbFix === true) {
+            // Dispatch custom event to notify App.tsx
+            const event = new CustomEvent(DB_ERROR_EVENT, {
+              detail: {
+                errors: data.details || [data.message],
+                message: data.message,
+              },
+            });
+            window.dispatchEvent(event);
+          }
+        } catch (jsonError) {
+          // Response wasn't JSON or couldn't be parsed - ignore
+        }
+      }
+
+      return response;
+    };
+
+    // Restore original fetch on cleanup
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
 
   // Check database status on initial load
   useEffect(() => {
@@ -99,6 +148,101 @@ function AppContent() {
         setDbStatus('healthy');
       });
   }, []);
+
+  // Setup axios interceptor to catch database errors from any API call
+  useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        // Check if this is a database error (503 with requiresDbFix flag)
+        if (
+          error.response?.status === 503 &&
+          error.response?.data?.requiresDbFix === true
+        ) {
+          console.error('Database error detected from API call:', error.response.data);
+          setDbStatus('error');
+          setDbErrors(error.response.data.details || ['Database connection error']);
+          setDbRecovered(false);
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    // Cleanup interceptor on unmount
+    return () => {
+      axios.interceptors.response.eject(interceptor);
+    };
+  }, []);
+
+  // Setup global event listener for database errors from fetch calls
+  useEffect(() => {
+    const handleDbError = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.error('Database error detected from fetch call:', customEvent.detail);
+      setDbStatus('error');
+      setDbErrors(customEvent.detail.errors || ['Database connection error']);
+      setDbRecovered(false);
+    };
+
+    window.addEventListener(DB_ERROR_EVENT, handleDbError);
+
+    // Cleanup listener on unmount
+    return () => {
+      window.removeEventListener(DB_ERROR_EVENT, handleDbError);
+    };
+  }, []);
+
+  // Smart conditional polling - only poll when database is in error state
+  const countdownRef = useRef(15);
+
+  useEffect(() => {
+    if (dbStatus !== 'error') {
+      return; // Don't poll if database is healthy
+    }
+
+    console.log('Database in error state, starting polling...');
+    countdownRef.current = 15;
+    setCountdown(15);
+
+    // Check database status every 15 seconds
+    const checkInterval = setInterval(async () => {
+      try {
+        const response = await fetch('/api/db-status');
+        const data = await response.json();
+
+        if (data.status === 'healthy') {
+          console.log('Database recovered!');
+          setDbStatus('healthy');
+          setDbRecovered(true); // Show recovery message
+          setDbErrors([]);
+        } else {
+          // Still unhealthy, update errors
+          setDbErrors(data.database?.errors || ['Unknown database error']);
+        }
+      } catch (error) {
+        console.error('Error polling database status:', error);
+      }
+
+      // Reset countdown
+      countdownRef.current = 15;
+      setCountdown(15);
+    }, 15000);
+
+    // Countdown ticker for UI feedback (updates every second)
+    const ticker = setInterval(() => {
+      countdownRef.current = countdownRef.current - 1;
+      if (countdownRef.current < 0) {
+        countdownRef.current = 15;
+      }
+      setCountdown(countdownRef.current);
+    }, 1000);
+
+    // Cleanup on unmount or when dbStatus changes
+    return () => {
+      clearInterval(checkInterval);
+      clearInterval(ticker);
+    };
+  }, [dbStatus]);
 
   // Check configuration for temp directory warning
   useEffect(() => {
@@ -209,9 +353,14 @@ function AppContent() {
 
   return (
     <>
-      {/* Database Error Overlay - shows when database is unavailable */}
-      {dbStatus === 'error' && (
-        <DatabaseErrorOverlay errors={dbErrors} onRetry={handleDatabaseRetry} />
+      {/* Database Error Overlay - shows when database is unavailable or recovered */}
+      {(dbStatus === 'error' || dbRecovered) && (
+        <DatabaseErrorOverlay
+          errors={dbErrors}
+          onRetry={handleDatabaseRetry}
+          recovered={dbRecovered}
+          countdown={countdown}
+        />
       )}
 
       <AppBar

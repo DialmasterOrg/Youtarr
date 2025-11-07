@@ -156,9 +156,126 @@ function isDatabaseHealthy() {
   return startupHealthStatus.database.connected && startupHealthStatus.database.schemaValid;
 }
 
+/**
+ * Background health monitor that periodically checks database health
+ * and attempts reconnection if unhealthy
+ */
+let healthMonitorInterval = null;
+let consecutiveFailures = 0;
+let sequelizeInstance = null;
+let isRunningHealthCheck = false;
+
+function startHealthMonitor(reinitializeDatabase, sequelize) {
+  if (healthMonitorInterval) {
+    logger.warn('Health monitor already running');
+    return;
+  }
+
+  // Store sequelize instance for active health checks
+  sequelizeInstance = sequelize;
+
+  logger.info('Starting database health monitor');
+
+  const runHealthCheck = async () => {
+    // Prevent concurrent health checks
+    if (isRunningHealthCheck) {
+      logger.debug('Health check already in progress, skipping');
+      return;
+    }
+
+    isRunningHealthCheck = true;
+
+    try {
+      let isHealthy = isDatabaseHealthy();
+
+      // If cached status says healthy, actively probe database to verify
+      if (isHealthy && sequelizeInstance) {
+        try {
+          await sequelizeInstance.authenticate();
+          logger.debug('Active database health check passed');
+        } catch (error) {
+          logger.error({ err: error }, 'Active database health check failed - updating status');
+          // Update health status to unhealthy
+          setStartupHealth(false, false, [`Database connection lost: ${error.message}`]);
+          isHealthy = false;
+        }
+      }
+
+      if (!isHealthy) {
+        consecutiveFailures++;
+
+        // Use exponential backoff: 15s, 15s, 30s, 60s
+        const checkInterval = consecutiveFailures <= 2 ? 15000 :
+          consecutiveFailures <= 3 ? 30000 : 60000;
+
+        logger.info(
+          { consecutiveFailures, nextCheckIn: checkInterval / 1000 },
+          'Database unhealthy, attempting reconnection'
+        );
+
+        try {
+          const result = await reinitializeDatabase();
+
+          if (result.connected && result.schemaValid) {
+            logger.info('Database reconnection successful');
+            consecutiveFailures = 0; // Reset failure counter
+          } else {
+            logger.warn(
+              { connected: result.connected, schemaValid: result.schemaValid },
+              'Database reconnection attempt completed but still unhealthy'
+            );
+          }
+        } catch (error) {
+          logger.error({ err: error }, 'Error during database reconnection attempt');
+        }
+
+        // Reschedule with appropriate interval
+        if (healthMonitorInterval) {
+          clearInterval(healthMonitorInterval);
+          healthMonitorInterval = setInterval(runHealthCheck, checkInterval);
+        }
+      } else {
+      // Database is healthy, keep checking every 15 seconds
+        if (consecutiveFailures > 0) {
+          logger.info('Database returned to healthy state');
+          consecutiveFailures = 0;
+
+          // Reset to normal interval
+          if (healthMonitorInterval) {
+            clearInterval(healthMonitorInterval);
+            healthMonitorInterval = setInterval(runHealthCheck, 15000);
+          }
+        }
+      }
+    } finally {
+      // Always reset the flag to allow next health check
+      isRunningHealthCheck = false;
+    }
+  };
+
+  // Start checking every 15 seconds
+  healthMonitorInterval = setInterval(runHealthCheck, 15000);
+
+  // Also run an immediate check
+  runHealthCheck();
+}
+
+/**
+ * Stops the background health monitor
+ */
+function stopHealthMonitor() {
+  if (healthMonitorInterval) {
+    clearInterval(healthMonitorInterval);
+    healthMonitorInterval = null;
+    logger.info('Database health monitor stopped');
+  }
+}
+
 module.exports = {
   validateDatabaseSchema,
   setStartupHealth,
   getStartupHealth,
   isDatabaseHealthy,
+  startHealthMonitor,
+  stopHealthMonitor,
 };

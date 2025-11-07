@@ -136,6 +136,11 @@ const initialize = async () => {
     // Wait for the database to initialize
     await db.initializeDatabase();
 
+    // Start background health monitor to handle database reconnection (skip in tests)
+    if (process.env.NODE_ENV !== 'test') {
+      databaseHealth.startHealthMonitor(db.reinitializeDatabase, db.sequelize);
+    }
+
     const configModule = require('./modules/configModule');
     const channelModule = require('./modules/channelModule');
     const plexModule = require('./modules/plexModule');
@@ -1558,6 +1563,20 @@ const initialize = async () => {
 
 if (process.env.NODE_ENV !== 'test') {
   initialize();
+
+  // Graceful shutdown handlers
+  const gracefulShutdown = (signal) => {
+    logger.info({ signal }, 'Received shutdown signal, cleaning up...');
+
+    // Stop health monitor
+    databaseHealth.stopHealthMonitor();
+
+    // Exit process
+    process.exit(0);
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }
 
 module.exports = {

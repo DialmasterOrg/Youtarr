@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import App from './App';
@@ -9,6 +9,16 @@ import { useMediaQuery } from '@mui/material';
 jest.mock('axios', () => ({
   get: jest.fn(),
   post: jest.fn(),
+  interceptors: {
+    request: {
+      use: jest.fn(),
+      eject: jest.fn(),
+    },
+    response: {
+      use: jest.fn(() => 0), // Return mock interceptor ID
+      eject: jest.fn(),
+    },
+  },
 }));
 
 const axios = require('axios');
@@ -84,11 +94,23 @@ jest.mock('./components/ErrorBoundary', () => {
 });
 
 jest.mock('./components/DatabaseErrorOverlay', () => {
-  return function DatabaseErrorOverlay({ errors, onRetry }: { errors: string[]; onRetry: () => void }) {
+  return function DatabaseErrorOverlay({
+    errors,
+    onRetry,
+    recovered = false,
+    countdown = 15
+  }: {
+    errors: string[];
+    onRetry: () => void;
+    recovered?: boolean;
+    countdown?: number;
+  }) {
     return (
       <div data-testid="database-error-overlay">
-        Database Error Overlay
+        {recovered ? 'Database Recovered' : 'Database Error Overlay'}
         <div data-testid="error-count">{errors.length} errors</div>
+        <div data-testid="countdown">Countdown: {countdown}</div>
+        <div data-testid="recovered-status">{recovered ? 'recovered' : 'error'}</div>
         <button onClick={onRetry}>Retry</button>
       </div>
     );
@@ -663,6 +685,154 @@ describe('App Component', () => {
       });
 
       expect(screen.getByTestId('error-count')).toHaveTextContent('1 errors');
+    });
+
+    test('starts polling when database is in error state', async () => {
+      jest.useFakeTimers();
+      try {
+        (global.fetch as jest.Mock).mockImplementation(createFetchMock({
+          '/api/db-status': {
+            ok: true,
+            json: async () => ({
+              status: 'error',
+              database: {
+                errors: ['Connection error']
+              }
+            }),
+          }
+        }));
+
+        render(<App />);
+
+        // Wait for initial error state
+        await waitFor(() => {
+          expect(screen.getByTestId('database-error-overlay')).toBeInTheDocument();
+        });
+
+        // Fast-forward 15 seconds to trigger polling
+        act(() => {
+          jest.advanceTimersByTime(15000);
+        });
+
+        // Should have made another call to /api/db-status
+        await waitFor(() => {
+          expect(fetch).toHaveBeenCalledTimes(3); // initial mount, setup check, and one poll
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    test('shows recovery state when database becomes healthy', async () => {
+      jest.useFakeTimers();
+      try {
+        let callCount = 0;
+
+        (global.fetch as jest.Mock).mockImplementation((url) => {
+          if (url === '/api/db-status') {
+            callCount++;
+            if (callCount === 1) {
+              // First call: error
+              return Promise.resolve({
+                ok: true,
+                json: async () => ({
+                  status: 'error',
+                  database: { errors: ['Connection error'] }
+                }),
+              });
+            } else {
+              // Subsequent calls: healthy
+              return Promise.resolve({
+                ok: true,
+                json: async () => ({ status: 'healthy' }),
+              });
+            }
+          }
+          if (url === '/setup/status') {
+            return Promise.resolve({
+              ok: true,
+              json: async () => ({ requiresSetup: false }),
+            });
+          }
+          return Promise.resolve({
+            ok: true,
+            json: jest.fn().mockResolvedValue({})
+          });
+        });
+
+        render(<App />);
+
+        // Wait for initial error state
+        await waitFor(() => {
+          expect(screen.getByTestId('recovered-status')).toHaveTextContent('error');
+        });
+
+        // Fast-forward to trigger polling and recovery
+        act(() => {
+          jest.advanceTimersByTime(15000);
+        });
+
+        // Should show recovery state
+        await waitFor(() => {
+          expect(screen.getByTestId('recovered-status')).toHaveTextContent('recovered');
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    test('axios interceptor is registered on mount', async () => {
+      render(<App />);
+
+      // Wait for app to load
+      await waitFor(() => {
+        expect(screen.getByAltText('Youtarr')).toBeInTheDocument();
+      });
+
+      // Verify interceptor was registered
+      const mockAxios = require('axios');
+      expect(mockAxios.interceptors.response.use).toHaveBeenCalled();
+    });
+
+    test('countdown updates during polling', async () => {
+      jest.useFakeTimers();
+      try {
+        (global.fetch as jest.Mock).mockImplementation(createFetchMock({
+          '/api/db-status': {
+            ok: true,
+            json: async () => ({
+              status: 'error',
+              database: {
+                errors: ['Connection error']
+              }
+            }),
+          }
+        }));
+
+        render(<App />);
+
+        // Wait for overlay to appear first
+        await waitFor(() => {
+          expect(screen.getByTestId('database-error-overlay')).toBeInTheDocument();
+        });
+
+        // Then check initial countdown
+        await waitFor(() => {
+          expect(screen.getByTestId('countdown')).toHaveTextContent('Countdown: 15');
+        });
+
+        // Advance by 5 seconds
+        act(() => {
+          jest.advanceTimersByTime(5000);
+        });
+
+        // Countdown should decrease
+        await waitFor(() => {
+          expect(screen.getByTestId('countdown')).toHaveTextContent('Countdown: 10');
+        });
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 });

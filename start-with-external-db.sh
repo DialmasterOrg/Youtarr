@@ -175,7 +175,6 @@ RUN_ARGS+=(
   -v "${ROOT_DIR}/config:/app/config"
   -v "${ROOT_DIR}/jobs:/app/jobs"
   -v "${ROOT_DIR}/server/images:/app/server/images"
-  -v "${ROOT_DIR}/migrations:/app/migrations"
   "$IMAGE"
 )
 

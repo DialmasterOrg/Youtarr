@@ -96,6 +96,14 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
 
   jest.doMock('../db', () => ({
     initializeDatabase: jest.fn().mockResolvedValue(),
+    reinitializeDatabase: jest.fn().mockResolvedValue({
+      connected: true,
+      schemaValid: true,
+      errors: []
+    }),
+    sequelize: {
+      authenticate: jest.fn().mockResolvedValue(true)
+    },
     Session: {
       findOne: jest.fn().mockResolvedValue(null),
       destroy: jest.fn().mockResolvedValue(0)
