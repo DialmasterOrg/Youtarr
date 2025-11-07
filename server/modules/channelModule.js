@@ -973,6 +973,11 @@ class ChannelModule {
         plainVideoObject.fileSize = null;
       }
 
+      // Replace thumbnail with template format (unless video is removed from YouTube)
+      if (!plainVideoObject.youtube_removed) {
+        plainVideoObject.thumbnail = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+      }
+
       return plainVideoObject;
     });
   }
@@ -1068,6 +1073,7 @@ class ChannelModule {
           paginatedVideos[i].added = checkedVideos[i].added;
           paginatedVideos[i].removed = checkedVideos[i].removed;
           paginatedVideos[i].fileSize = checkedVideos[i].fileSize;
+          paginatedVideos[i].thumbnail = checkedVideos[i].thumbnail;
         }
         // If a video is removed from YouTube, fallback to using the locally stored thumbnail if available
         if (paginatedVideos[i].youtube_removed) {

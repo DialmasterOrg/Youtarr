@@ -101,6 +101,14 @@ const createServerModule = ({
 
         const dbMock = {
           initializeDatabase: jest.fn().mockResolvedValue(),
+          reinitializeDatabase: jest.fn().mockResolvedValue({
+            connected: true,
+            schemaValid: true,
+            errors: []
+          }),
+          sequelize: {
+            authenticate: jest.fn().mockResolvedValue(true)
+          },
           Session: {
             findOne: jest.fn().mockImplementation(() => Promise.resolve(effectiveSession)),
             create: jest.fn().mockResolvedValue({
