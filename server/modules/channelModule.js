@@ -1073,6 +1073,7 @@ class ChannelModule {
           paginatedVideos[i].added = checkedVideos[i].added;
           paginatedVideos[i].removed = checkedVideos[i].removed;
           paginatedVideos[i].fileSize = checkedVideos[i].fileSize;
+          paginatedVideos[i].thumbnail = checkedVideos[i].thumbnail;
         }
         // If a video is removed from YouTube, fallback to using the locally stored thumbnail if available
         if (paginatedVideos[i].youtube_removed) {
