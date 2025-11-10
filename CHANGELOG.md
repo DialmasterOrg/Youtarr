@@ -1,5 +1,37 @@
 # Changelog
 
+## [v1.49.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.49.0) - 2025-11-10
+
+## [1.49.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.48.0...v1.49.0) (2025-11-10)
+
+
+### Features
+
+* add database health check and error overlay ([935b181](https://github.com/DialmasterOrg/Youtarr/commit/935b181104bf734204f543535340658c570aa35c))
+* enhance database error handling with auto-recovery and improved UX ([1c37193](https://github.com/DialmasterOrg/Youtarr/commit/1c37193ab00dadfa9d13e3cfaff67689b1eb9424))
+
+
+### Bug Fixes
+
+* Use canonical channel thumbs part 2 ([58930ee](https://github.com/DialmasterOrg/Youtarr/commit/58930ee9e071fe2937a88923d6e7b0a8ac42d7e2))
+* Use canonical YT URL for channel video thumbs ([339e52c](https://github.com/DialmasterOrg/Youtarr/commit/339e52c3e1281e72e8bd8c2fdcbd66f2f707a7bb))
+
+
+### Code Refactoring
+
+* startup scripts, infra, documentation ([b02316f](https://github.com/DialmasterOrg/Youtarr/commit/b02316fbf880481cfd58c408df7266b947089273))
+
+
+### Documentation
+
+* improve Docker Compose installation documentation ([690dba6](https://github.com/DialmasterOrg/Youtarr/commit/690dba6ac00d200cf68421af947d1ae2fca07788))
+* streamline development documentation and remove deprecated scripts ([cf2418a](https://github.com/DialmasterOrg/Youtarr/commit/cf2418ad13093f07d1f1ce259cbaadbee7329522))
+* update CHANGELOG for v1.48.0 [skip ci] ([e9ca9dc](https://github.com/DialmasterOrg/Youtarr/commit/e9ca9dc0c3bd19c9d0d65845dc4e413fdb45f54f))
+
+
+
+
+
 ## [v1.48.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.48.0) - 2025-11-05
 
 ## [1.48.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.47.1...v1.48.0) (2025-11-05)
