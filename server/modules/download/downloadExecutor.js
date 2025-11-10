@@ -502,10 +502,7 @@ class DownloadExecutor {
         env: {
           ...process.env,
           YOUTARR_JOB_ID: jobId,
-          // Set TMPDIR to writable location (especially critical for Elfhosted)
-          TMPDIR: tempPathManager.isEnabled()
-            ? tempPathManager.getTempBasePath()
-            : (process.env.TMPDIR || '/tmp')
+          TMPDIR: '/tmp'
         }
       });
 

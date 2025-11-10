@@ -113,7 +113,12 @@ class ChannelModule {
       }
     }
 
-    const ytDlp = spawn('yt-dlp', finalArgs);
+    const ytDlp = spawn('yt-dlp', finalArgs, {
+      env: {
+        ...process.env,
+        TMPDIR: '/tmp'
+      }
+    });
 
     if (outputFile) {
       const writeStream = fs.createWriteStream(outputFile);
