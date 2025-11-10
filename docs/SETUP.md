@@ -11,24 +11,21 @@ Before setting up Youtarr, ensure you have:
 3. **Git** to clone the repository
 4. Access to your **Plex Media Server** (Youtarr just needs network reachability; running on the same machine is optional)
 
-### First-Time Installation
+### First-Time Installation via `./start.sh` helper
 
 1. **Clone the repository**:
    ```bash
    git clone https://github.com/dialmaster/Youtarr.git
    cd Youtarr
    ```
-
-2. **Run the setup script**:
-   ```bash
-   ./setup.sh
-   ```
-   This will prompt you to select the root directory where YouTube videos will be stored.
-
-3. **Start Youtarr**:
+2. **Start Youtarr**:
    ```bash
    ./start.sh
    ```
+   If this is a first time run:
+   - You will be prompted to setup your output directory for videos (defaults to `./downloads`)
+   - You will be prompted to set your username and password for login if not using --no-auth
+
    This starts both the Youtarr application and MariaDB database containers.
 
 4. **Access the web interface**:
@@ -56,7 +53,7 @@ If you prefer to use standard `docker compose up` commands (eg. for Portainer, T
 
 3. **Edit the .env file**:
    ```bash
-   nano .env  # or use your preferred editor
+   vim .env  # or use your preferred editor
    ```
 
    Set the required `YOUTUBE_OUTPUT_DIR` variable to your video storage location:
@@ -83,7 +80,7 @@ If you prefer to use standard `docker compose up` commands (eg. for Portainer, T
 
 > **Important**: Ensure the path you assign to `YOUTUBE_OUTPUT_DIR` already exists on the host and is writable before starting the stack. Otherwise Docker will create it as root-owned and the container may not be able to write downloads.
 
-This method is **functionally equivalent** to using the setup.sh + start.sh scripts, but gives you direct control over environment variables. It's the preferred approach for any Docker-native workflow.
+This method is **functionally equivalent** to using the start.sh script, but gives you direct control over environment variables. It's the preferred approach for any Docker-native workflow.
 
 ## Authentication
 
@@ -105,7 +102,7 @@ After logging in, configure Youtarr through the Configuration page:
 ### Required Settings
 
 **Download Directory**:
-- This is set by the initial setup via `./setup.sh`.
+- This is set by the initial setup via `./start.sh` in `.env`
 - Videos will be organized in subdirectories by channel name
 - After changing this, restart Youtarr (`./stop.sh` then `./start.sh`)
 

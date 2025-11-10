@@ -24,25 +24,15 @@ class ConfigModule extends EventEmitter {
     this.lastConfigContent = null;
 
     this.directoryPath = '';
-    if (process.env.IN_DOCKER_CONTAINER) {
-      // Allow custom data path via environment variable (for Elfhosted compatibility)
-      // Falls back to default /usr/src/app/data for backward compatibility
-      this.directoryPath = process.env.DATA_PATH || '/usr/src/app/data';
-      this.ffmpegPath = '/usr/bin/ffmpeg';
+    // Allow custom data path via environment variable (for Elfhosted compatibility)
+    // Falls back to default /usr/src/app/data for backward compatibility
+    this.directoryPath = process.env.DATA_PATH || '/usr/src/app/data';
+    this.ffmpegPath = '/usr/bin/ffmpeg';
 
-      // IMPORTANT: If DATA_PATH is set, it ALWAYS overrides config.json
-      if (process.env.DATA_PATH) {
-        this.config.youtubeOutputDirectory = process.env.DATA_PATH;
-      }
-
-      // Override temp download settings for Elfhosted platform
-      if (this.isElfhostedPlatform()) {
-        this.config.useTmpForDownloads = true;
-        this.config.tmpFilePath = '/app/config/temp_downloads';
-      }
-    } else {
-      this.ffmpegPath = this.config.devffmpegPath;
-      this.directoryPath = this.config.devYoutubeOutputDirectory;
+    // Override temp download settings for Elfhosted platform
+    if (this.isElfhostedPlatform()) {
+      this.config.useTmpForDownloads = true;
+      this.config.tmpFilePath = '/app/config/temp_downloads';
     }
 
     let configModified = false;
@@ -311,14 +301,6 @@ class ConfigModule extends EventEmitter {
       };
     }
 
-    // Set the container's data path for Docker without DATA_PATH
-    // This path is where the Docker volume is mounted inside the container
-    defaultConfig.youtubeOutputDirectory = '/usr/src/app/data';
-
-    // Mark that this config was auto-created by the container
-    // This helps us know the user didn't use setup.sh
-    defaultConfig.dockerAutoCreated = true;
-
     // Generate UUID
     defaultConfig.uuid = uuidv4();
 
@@ -379,11 +361,6 @@ class ConfigModule extends EventEmitter {
   updateConfig(newConfig) {
     this.config = newConfig;
 
-    // IMPORTANT: If DATA_PATH is set, it ALWAYS overrides config.json
-    if (process.env.IN_DOCKER_CONTAINER && process.env.DATA_PATH) {
-      this.config.youtubeOutputDirectory = process.env.DATA_PATH;
-    }
-
     // Override temp download settings for Elfhosted platform
     if (this.isElfhostedPlatform()) {
       this.config.useTmpForDownloads = true;
@@ -399,13 +376,11 @@ class ConfigModule extends EventEmitter {
     // Create a copy of the config to save
     const configToSave = { ...this.config };
 
-    // Don't save the DATA_PATH override to the config file
-    // This allows the config.json to maintain its own value
-    // while DATA_PATH always overrides at runtime
-    if (process.env.IN_DOCKER_CONTAINER && process.env.DATA_PATH) {
-      // Remove the runtime override before saving
-      delete configToSave.youtubeOutputDirectory;
-    }
+    // Deprecated -- remove from saved config
+    delete configToSave.youtubeOutputDirectory;
+
+    // Internal use only
+    delete configToSave.envAuthApplied;
 
     // Don't save Elfhosted temp download overrides to config file
     if (this.isElfhostedPlatform()) {
@@ -435,8 +410,6 @@ class ConfigModule extends EventEmitter {
 
     // Create default config for platform deployments
     const defaultConfig = {
-      // Essential settings
-      youtubeOutputDirectory: process.env.DATA_PATH,
       channelFilesToDownload: 3,
       preferredResolution: '1080',
       videoCodec: 'default',
@@ -560,11 +533,6 @@ class ConfigModule extends EventEmitter {
 
             if (needsMigrationSave) {
               this.saveConfig();
-            }
-
-            // IMPORTANT: If DATA_PATH is set, it ALWAYS overrides config.json
-            if (process.env.IN_DOCKER_CONTAINER && process.env.DATA_PATH) {
-              this.config.youtubeOutputDirectory = process.env.DATA_PATH;
             }
 
             // Override temp download settings for Elfhosted platform

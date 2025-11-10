@@ -147,7 +147,6 @@ describe('JobModule', () => {
       });
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
 
       JobModule = require('../jobModule');
@@ -179,7 +178,6 @@ describe('JobModule', () => {
         // Return config for configModule
         return JSON.stringify({
           plexApiKey: 'test-key',
-          youtubeOutputDirectory: '/test/output'
         });
       });
 
@@ -200,7 +198,6 @@ describe('JobModule', () => {
       });
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
 
       const mockDbJobs = [
@@ -221,7 +218,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
 
       JobModule = require('../jobModule');
@@ -233,7 +229,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       fsPromises.readFile.mockRejectedValue({ code: 'ENOENT' });
 
@@ -259,7 +254,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
 
       JobModule = require('../jobModule');
@@ -325,7 +319,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
 
       JobVideoDownload.findAll.mockResolvedValue([]);
@@ -357,7 +350,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
 
       JobVideoDownload.findAll.mockResolvedValue([]);
@@ -381,7 +373,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
 
       JobVideoDownload.findAll.mockRejectedValue(new Error('DB Error'));
@@ -406,7 +397,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
 
       JobVideoDownload.findAll.mockResolvedValue([]);
@@ -456,7 +446,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
 
       JobVideoDownload.findAll.mockResolvedValue([]);
@@ -486,7 +475,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
       JobVideoDownload = require('../../models/jobvideodownload');
@@ -585,7 +573,7 @@ describe('JobModule', () => {
     });
 
     test('should skip videos with missing info.json files', async () => {
-      
+
       JobVideoDownload.findAll.mockResolvedValue([
         { job_id: 'job-1', youtube_id: 'video-1', status: 'completed' }
       ]);
@@ -714,7 +702,7 @@ describe('JobModule', () => {
     });
 
     test('should handle errors for individual videos gracefully', async () => {
-      
+
       JobVideoDownload.findAll.mockResolvedValue([
         { job_id: 'job-1', youtube_id: 'video-1', status: 'completed' },
         { job_id: 'job-1', youtube_id: 'video-2', status: 'completed' }
@@ -756,7 +744,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
     });
@@ -788,7 +775,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
     });
@@ -901,7 +887,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
       JobModule.addJob = jest.fn().mockResolvedValue('new-job-id');
@@ -966,7 +951,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
       JobModule.saveJobs = jest.fn().mockResolvedValue();
@@ -996,7 +980,7 @@ describe('JobModule', () => {
 
     test('should handle save errors', async () => {
       Job.create.mockRejectedValue(new Error('Save failed'));
-      
+
       const jobData = { jobType: 'download' };
       await expect(JobModule.addJob(jobData)).rejects.toThrow('Save failed');
 
@@ -1010,7 +994,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
       JobModule.saveJobs = jest.fn().mockResolvedValue();
@@ -1267,7 +1250,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
       JobModule.saveJobs = jest.fn().mockResolvedValue();
@@ -1292,7 +1274,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
     });
@@ -1320,14 +1301,13 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
     });
 
     test('should return empty array when no jobs', () => {
       JobModule.jobs = null;
-      
+
       const result = JobModule.getRunningJobs();
 
       expect(result).toEqual([]);
@@ -1379,7 +1359,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
     });
@@ -1401,7 +1380,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
     });
@@ -1528,7 +1506,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
     });
@@ -1761,7 +1738,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
     });
@@ -1790,7 +1766,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
     });
@@ -1881,7 +1856,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
     });
@@ -1947,7 +1921,7 @@ describe('JobModule', () => {
     });
 
     test('should cap backfill to 300 items per run', async () => {
-      
+
       // Create 350 video IDs
       const videoIds = Array.from({ length: 350 }, (_, i) => `youtube video-${i}`).join('\n');
       fsPromises.readFile.mockImplementation(async (path) => {
@@ -1992,7 +1966,7 @@ describe('JobModule', () => {
     });
 
     test('should handle missing info.json files', async () => {
-            
+
       fsPromises.readFile.mockImplementation(async (path) => {
         if (path.includes('complete.list')) {
           return 'youtube video-1\nyoutube video-2\n';
@@ -2020,7 +1994,7 @@ describe('JobModule', () => {
     });
 
     test('should skip already existing videos', async () => {
-      
+
       fsPromises.readFile.mockImplementation(async (path) => {
         if (path.includes('complete.list')) {
           return 'youtube existing-video\nyoutube new-video\n';
@@ -2059,7 +2033,7 @@ describe('JobModule', () => {
     });
 
     test('should include file metadata when video file exists', async () => {
-      
+
       fsPromises.readFile.mockImplementation(async (path) => {
         if (path.includes('complete.list')) {
           return 'youtube video-1\n';
@@ -2100,7 +2074,7 @@ describe('JobModule', () => {
     });
 
     test('should update existing video with file metadata if not already set', async () => {
-      
+
       fsPromises.readFile.mockImplementation(async (path) => {
         if (path.includes('complete.list')) {
           return 'youtube video-1\n';
@@ -2147,7 +2121,7 @@ describe('JobModule', () => {
     });
 
     test('should try alternative video extensions when mp4 not found', async () => {
-      
+
       fsPromises.readFile.mockImplementation(async (path) => {
         if (path.includes('complete.list')) {
           return 'youtube video-1\n';
@@ -2201,13 +2175,12 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
     });
 
     test('should schedule cron job for daily backfill', () => {
-      
+
       JobModule.scheduleDailyBackfill();
 
       expect(cron.schedule).toHaveBeenCalledWith('20 2 * * *', expect.any(Function));
@@ -2232,7 +2205,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
     });
@@ -2293,7 +2265,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
     });
@@ -2373,7 +2344,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
       JobModule.saveJobs = jest.fn().mockResolvedValue();
@@ -2397,7 +2367,6 @@ describe('JobModule', () => {
       fs.existsSync.mockReturnValue(false);
       fs.readFileSync.mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output'
       }));
       JobModule = require('../jobModule');
     });

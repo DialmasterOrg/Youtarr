@@ -4,7 +4,7 @@ This guide provides Synology-specific installation instructions for Youtarr. Syn
 
 ## Why Synology Needs Special Instructions
 
-The standard `./setup.sh` and `./start.sh` scripts work well on most Linux systems but may encounter issues on Synology DSM:
+The standard `./start.sh` scripts work well on most Linux systems but may encounter issues on Synology DSM:
 - Shell compatibility differences in DSM
 - Directory permissions and path structures specific to Synology
 - Container Manager environment variables handling
@@ -139,7 +139,8 @@ Edit the file to configure your settings. At minimum, set the `YOUTUBE_OUTPUT_DI
 # Required: Set this to your video output directory (adjust to match your path)
 YOUTUBE_OUTPUT_DIR=/volume1/media/youtube
 
-# Optional: Set initial admin credentials (highly recommended for headless setup)
+# Optional: Set initial admin credentials
+# Recommended for headless setup since you must otherwise set your initial login credentials via localhost
 AUTH_PRESET_USERNAME=admin
 AUTH_PRESET_PASSWORD=YourSecurePassword123
 
@@ -153,7 +154,7 @@ The `.env.example` file contains detailed comments explaining each variable - re
 - Press `Esc`, then type `:wq` and press `Enter` (for `vi`)
 - If using `nano`, press `Ctrl+O`, `Enter`, then `Ctrl+X`
 
-**Security Note**: The preset credentials are only used on first boot to create your admin account. You can change them later via the Youtarr UI. If you skip setting them, you'll need to complete initial setup from localhost (requires SSH port forwarding).
+**Security Note**: Preset credentials via `AUTH_PRESET` persist. If you use them, you will not be able to chage your username or password in the UI.
 
 #### Verify .env file
 
@@ -163,10 +164,8 @@ cat .env
 
 Ensure `YOUTUBE_OUTPUT_DIR` matches the directory you created in Step 4.
 
-**Note about config.json**: You don't need to manually create or edit `config/config.json`. When running in Docker:
+**Note about config.json**: You don't need to manually create or edit `config/config.json`:
 - If config.json doesn't exist, it will be auto-created on first startup with correct defaults
-- The `youtubeOutputDirectory` setting in config.json is ignored in favor of the `/usr/src/app/data` path inside the container
-- This path is automatically mounted to your `YOUTUBE_OUTPUT_DIR` via the volume mapping
 - You can configure Plex and other settings later through the web UI
 
 ---
@@ -241,13 +240,24 @@ While SSH is recommended for initial setup, you can also manage Youtarr through 
 
 ### File Permissions
 
-Youtarr runs as root inside the container, which should work with Synology's default permissions. If you encounter permission issues:
+Youtarr runs as root by default inside the container, which should work with Synology's default permissions. If you encounter permission issues:
 
+First stop Youtarr.
+
+Then fix file ownership:
 ```bash
 # Fix ownership (from SSH)
 cd /volume1/docker/Youtarr
-sudo chown -R yourusername:users database config jobs server
+sudo chown -R 1000:1000 database config jobs server
 ```
+
+Set the UID/GID in your .env file:
+```
+YOUTARR_UID=1000
+YOUTARR_GID=1000
+```
+
+Then restart Youtarr
 
 ### Network Access
 
@@ -350,9 +360,8 @@ docker compose restart
 
 **Solution**:
 1. Verify `.env` file exists: `cat /volume1/docker/Youtarr/.env`
-2. Verify it contains: `YOUTUBE_OUTPUT_DIR=/your/path`
-3. Ensure no extra spaces or quotes around the path
-4. Restart containers: `docker compose down && docker compose up -d`
+2. Verify it contains: `YOUTUBE_OUTPUT_DIR="/your/path"`
+3. Restart containers: `docker compose down && docker compose up -d`
 
 ### "ffmpeg-location undefined does not exist" Error
 

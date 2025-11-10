@@ -72,7 +72,9 @@ const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
 const userNameMaxLength = 32;
+const userNameMinLength = 3;
 const passwordMaxLength = 64;
+const passwordMinLength = 8;
 
 // Configure multer for cookie file upload
 const cookieUpload = multer({
@@ -114,6 +116,33 @@ function isLocalhostIP(ip) {
   return isLocal;
 }
 
+// Helper function to validate ENV auth credentials
+function validateEnvAuthCredentials() {
+  const presetUsername = process.env.AUTH_PRESET_USERNAME;
+  const presetPassword = process.env.AUTH_PRESET_PASSWORD;
+
+  // Both must be set
+  if (!presetUsername || !presetPassword) {
+    return false;
+  }
+
+  // Username validation
+  const trimmedUsername = presetUsername.trim();
+  if (!trimmedUsername) {
+    return false;
+  }
+  if (trimmedUsername.length < userNameMinLength || trimmedUsername.length > userNameMaxLength) {
+    return false;
+  }
+
+  // Password validation (NOT trimmed)
+  if (presetPassword.length < passwordMinLength || presetPassword.length > passwordMaxLength) {
+    return false;
+  }
+
+  return true;
+}
+
 const isWslEnvironment = (() => {
   if (process.platform !== 'linux') {
     return false;
@@ -149,34 +178,22 @@ const initialize = async () => {
     const videosModule = require('./modules/videosModule');
     const archiveModule = require('./modules/archiveModule');
 
-    const presetUsername = process.env.AUTH_PRESET_USERNAME;
-    const presetPassword = process.env.AUTH_PRESET_PASSWORD;
+    // Apply ENV auth credentials if valid
+    if (validateEnvAuthCredentials()) {
+      const presetUsername = process.env.AUTH_PRESET_USERNAME;
+      const presetPassword = process.env.AUTH_PRESET_PASSWORD;
+      const trimmedUsername = presetUsername.trim();
+      const config = configModule.getConfig();
 
-    if (presetUsername || presetPassword) {
-      if (!presetUsername || !presetPassword) {
-        logger.warn('Ignoring preset credentials because both AUTH_PRESET_USERNAME and AUTH_PRESET_PASSWORD must be set');
-      } else {
-        const trimmedUsername = presetUsername.trim();
-        const config = configModule.getConfig();
-
-        if (config.username && config.passwordHash) {
-          logger.info('Existing credentials found in config; preset environment values were ignored');
-        } else if (!trimmedUsername) {
-          logger.warn('Ignoring preset credentials because AUTH_PRESET_USERNAME is empty after trimming');
-        } else if (trimmedUsername.length > userNameMaxLength) {
-          logger.warn({ maxLength: userNameMaxLength }, 'Ignoring preset credentials because username exceeds maximum length');
-        } else if (presetPassword.length < 8) {
-          logger.warn('Ignoring preset credentials because password must be at least 8 characters');
-        } else if (presetPassword.length > passwordMaxLength) {
-          logger.warn({ maxLength: passwordMaxLength }, 'Ignoring preset credentials because password exceeds maximum length');
-        } else {
-          const passwordHash = await bcrypt.hash(presetPassword, 10);
-          config.username = trimmedUsername;
-          config.passwordHash = passwordHash;
-          configModule.updateConfig(config);
-          logger.info('Applied preset credentials from environment variables');
-        }
-      }
+      const passwordHash = await bcrypt.hash(presetPassword, 10);
+      config.username = trimmedUsername;
+      config.passwordHash = passwordHash;
+      config.envAuthApplied = true;
+      configModule.updateConfig(config);
+      logger.info('Applied ENV AUTH credentials and saved to config.json');
+    } else if (process.env.AUTH_PRESET_USERNAME || process.env.AUTH_PRESET_PASSWORD) {
+      // Credentials were provided but failed validation
+      logger.warn('Ignoring ENV AUTH credentials: both AUTH_PRESET_USERNAME and AUTH_PRESET_PASSWORD must be set and meet requirements (username: 3-32 chars, password: 8-64 chars)');
     }
 
     channelModule.subscribe();
@@ -465,7 +482,7 @@ const initialize = async () => {
       delete safeConfig.username;
 
       safeConfig.isPlatformManaged = {
-        youtubeOutputDirectory: !!process.env.DATA_PATH,
+        youtubeOutputDirectory: !!process.env.DATA_PATH, // For display on client side only
         plexUrl: !!process.env.PLEX_URL,
         authEnabled: process.env.AUTH_ENABLED === 'false' ? false : true,
         useTmpForDownloads: configModule.isElfhostedPlatform()
@@ -473,11 +490,13 @@ const initialize = async () => {
 
       // Add deployment environment information
       safeConfig.deploymentEnvironment = {
-        inDocker: !!process.env.IN_DOCKER_CONTAINER,
-        dockerAutoCreated: !!safeConfig.dockerAutoCreated,
         platform: process.env.PLATFORM || null,
         isWsl: isWslEnvironment
       };
+
+      // These are both just for display purposes on the client side
+      safeConfig.envAuthApplied = validateEnvAuthCredentials();
+      safeConfig.youtubeOutputDirectory = process.env.YOUTUBE_OUTPUT_DIR || process.env.DATA_PATH || null;
 
       res.json(safeConfig);
     });

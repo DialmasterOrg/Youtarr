@@ -59,6 +59,8 @@ https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
 - Bash shell (Git Bash for Windows)
 - Plex Media Server (optional - only if you want automatic library refresh)
 
+> **Heads up:** Youtarr runs exclusively via Docker; direct `npm start`/Node deployments are unsupported.
+
 ### Installation
 
 Choose your preferred installation method:
@@ -73,22 +75,24 @@ Perfect for users who want automated setup with minimal configuration:
    cd Youtarr
    ```
 
-2. **Run the setup script**:
-   ```bash
-   ./setup.sh
-   ```
-   This will guide you through selecting your YouTube download directory and optionally configuring Plex.
-
-3. **Start Youtarr**:
+2. **Start Youtarr with built-in DB**:
    ```bash
    ./start.sh
    ```
-   - Optional: run `./start.sh --no-auth` only when Youtarr sits behind your own authentication layer (Cloudflare Tunnel, OAuth proxy, VPN, etc.)
-   - ⚠️ Never expose Youtarr directly to the internet when using `--no-auth`; always require upstream authentication
+   On first run, this will allow you to select your YouTube download directory and create a `.env` file from `.env.example`.
+   The default download directory is `./downloads` but can be overridden during initial ./start.sh or via `.env`
+   You will be required to set your auth credentials via UI on localhost for first time setup, and your credentials will be saved in `./config/config.json`
 
-4. **Access the web interface**:
+   - Optional flags:
+     - `--no-auth`: Completely disable auth. Never expose Youtarr directly to the internet in this manner, only use if you have your own authentication layer (Cloudflare Tunnel, OAuth Proxy, etc)
+     - `--headless-auth`: Set auth credentials in `.env`, bypassing the need to setup credentials in the UI (as that may be difficult to do over localhost for headless setups)
+     - `--pull-latest`: Pull latest code from Github and latest image from DockerHub
+     - `--debug`: Set log level to debug
+
+
+3. **Access the web interface**:
    - Navigate to `http://localhost:3087`
-   - Create your admin account on first access
+   - Create your admin account on first access if you did not pass `--no-auth` or `--headless-auth`
    - Configure Plex (optional) and other settings from the Configuration page
    - If containers don't start or the app isn't reachable, see [Troubleshooting](docs/TROUBLESHOOTING.md)
 
@@ -105,13 +109,15 @@ Eg. for Portainer, TrueNAS, or any Docker-native workflow:
 2. **Create environment configuration**:
    ```bash
    cp .env.example .env
-   nano .env  # or use your preferred editor
+   vim .env  # or use your preferred editor
    ```
    Set `YOUTUBE_OUTPUT_DIR` to your video storage location:
    ```bash
-   YOUTUBE_OUTPUT_DIR=/path/to/your/videos
+   YOUTUBE_OUTPUT_DIR="/mnt/c/Youtarr Videos" # This path is just an example
    ```
-   Make sure this directory already exists on the host and is writable before starting the containers—Docker will otherwise create it as root-owned and Youtarr may not have access.
+   Make sure this directory already exists on the host and is writable before starting the containers.
+   Docker will otherwise create it as root-owned (if YOUTARR_UID and YOUTARR_GID are not set in .env)
+
    Optionally configure authentication and logging settings (see .env.example for details).
 
 3. **Start with Docker Compose**:
@@ -121,9 +127,9 @@ Eg. for Portainer, TrueNAS, or any Docker-native workflow:
 
 4. **Access the web interface**:
    - Navigate to `http://localhost:3087`
-   - Create your admin account on first access (or use preset credentials if configured in .env)
+   - If `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` are set in `.env`, login with those credentials
+   - Otherwise you must set your login credentials in UI via localhost on first run and they will be saved to `./config/config.json`
    - Configure Plex (optional) and other settings from the Configuration page
-   - When you launch via `.env`, the Configuration screen will show the download directory as a read-only “Docker Volume” because the location is managed by your compose file. To change it later, update the volume mapping and restart. See [Docker documentation](docs/DOCKER.md) for details.
 
 **Platform-Specific Guides**:
 - **Synology NAS** (DSM 7+): See the [Synology NAS Guide](docs/SYNOLOGY.md) for optimized installation steps
@@ -132,18 +138,13 @@ Eg. for Portainer, TrueNAS, or any Docker-native workflow:
 - **Advanced Docker Setup**: See the [Docker documentation](docs/DOCKER.md) for detailed configuration options
 
 ### Using an External Database
-- Already running MariaDB/MySQL elsewhere? Copy `config/external-db.env.example` to `config/external-db.env`, fill in your connection details, then either:
-  - Run `./start.sh --external-db` (Docker Compose helper) or
-  - Run `./start-with-external-db.sh` (single-container helper for platforms like UNRAID)
-- Full walkthrough (including local testing steps) lives in [docs/EXTERNAL_DB.md](docs/EXTERNAL_DB.md)
+- Already running MariaDB/MySQL elsewhere and do not want to use bundled internal DB?
+- See [docs/EXTERNAL_DB.md](docs/EXTERNAL_DB.md)
 
 ### Deploying on Unraid
-- Requires a running MariaDB instance reachable from the container. You can run MariaDB directly on Unraid or point to an existing server.
-- Install the Community Applications plugin (if you have not already), then add the template repo URL `https://github.com/DialmasterOrg/unraid-templates` under **Apps → Settings → Manage Template Repositories**.
-- Search for **Youtarr** under the Apps tab and launch the template. The XML lives at `https://github.com/DialmasterOrg/unraid-templates/blob/main/Youtarr/Youtarr.xml` for reference.
-- Until the template is accepted into the main Community Applications feed, it is available directly from this repository.
-- Map your persistent paths (for example `/mnt/user/appdata/youtarr/config` for `/app/config` and `/mnt/user/media/youtube` for `/data`) and supply the MariaDB connection variables before deploying.
-- Set both `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` so the container boots with working credentials. Leaving them blank requires completing the setup wizard from the Unraid host's localhost (e.g., via SSH port forwarding), which most headless installs won't have handy. You can change the credentials later from the Youtarr UI.
+
+See [docs/UNRAID.md](docs/UNRAID.md) for instructions on Unraid setup.
+
 
 ## 📋 Usage Examples
 

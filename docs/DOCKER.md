@@ -48,7 +48,7 @@ volumes:
 
 If your automation creates a migrations directory, remove it from both directory creation and volume mounts.
 
-**Note:** `docker-compose.dev.yml` mounts migrations for development convenience only.
+**Note:** In development mode (using `start-dev.sh`), migrations are mounted for convenience.
 
 ## Configuration Setup
 
@@ -58,16 +58,16 @@ Starting with version 1.23.0, Youtarr now **automatically creates** a `config/co
 
 #### Two Setup Methods
 
-1. **Using setup.sh + start.sh (Recommended)**
-   - Run `./setup.sh` to configure your YouTube video directory
-   - Script creates `config.json` with your chosen host path
+1. **Using start.sh (Recommended)**
    - Use `./start.sh` to start containers (reads path from config and sets volume mount)
+     - On first run, this script will allow you to select your video output directory
+     - `.env` will automatically be created for you on first run
+     - `./config/config.json` will be created with defaults if one does not exist on first run
    - If no admin credentials exist, `./start.sh` prompts for an initial username/password and exports them as `AUTH_PRESET_USERNAME` / `AUTH_PRESET_PASSWORD` for the upcoming container boot
    - Use `./stop.sh` to stop containers
    - **UI Behavior**: YouTube Output Directory field is **editable** - changes require restart via `./start.sh`
 
 2. **Manual Docker Configuration (docker-compose directly)**
-   - Skip setup.sh entirely for Docker-native platforms (Portainer, TrueNAS, etc)
    - **Create a .env file** to configure environment variables:
      ```bash
      cp .env.example .env
@@ -85,32 +85,17 @@ Starting with version 1.23.0, Youtarr now **automatically creates** a `config/co
 
    Using a .env file is **recommended** for manual Docker setups as it keeps configuration separate from the compose file and makes upgrades easier.
 
-#### How Volume Mounts Work
-
-The actual storage location depends on your setup method:
-
-| Setup Method | Volume Mount Source | Config Value | UI Behavior |
-|--------------|-------------------|--------------|-------------|
-| setup.sh + start.sh | `${YOUTUBE_OUTPUT_DIR}` from config.json | Your host path (e.g., `/mnt/videos`) | Editable |
-| Manual docker-compose | Hardcoded in docker-compose.yml | `/usr/src/app/data` (container path) | Read-only |
-
 #### What You'll See in the UI
 
-**If you used setup.sh:**
-- YouTube Output Directory field is editable
-- Shows your actual host path
-- Can be changed (requires restart with `./start.sh`)
-
-**If you manually configured docker-compose.yml:**
 - YouTube Output Directory field shows "Docker Volume" chip
-- Field is disabled (read-only) showing `/usr/src/app/data`
-- Helper text: "This path is configured by your Docker volume mount. To change where videos are saved, update the volume mount in your docker-compose.yml file."
+- Field is disabled (read-only) showing the host mount location
+- Helper text: "This path is configured by your platform deployment and cannot be changed here"
 
 ### Setup Script for Network Storage
 
-The `setup.sh` script validates that your chosen directory exists and is accessible. When using network storage:
+The `start.sh` script validates that your chosen directory exists and is accessible. When using network storage:
 
-1. **Mount your network storage BEFORE running setup.sh**
+1. **Mount your network storage BEFORE running start.sh**
 2. **Enter the full path to the mounted directory** when prompted
 3. **The script will verify the directory exists** and is writable
 
@@ -122,21 +107,17 @@ Examples:
 
 If you need to change the directory later:
 ```bash
-# Re-run setup to change directory
-./setup.sh
-
-# Or manually edit config/config.json
-# Update "youtubeOutputDirectory" value
+vim ./env # Or your editor of choice
+# Change your YOUTUBE_OUTPUT_DIR
 ```
 
 ## Using an External Database
 
-Some users prefer to supply their own MariaDB/MySQL instance instead of the bundled `youtarr-db` container. You now have two helper scripts:
+Some users prefer to supply their own MariaDB/MySQL instance instead of the bundled `youtarr-db` container. This is easily supported by setting up your external DB config in .env and then running
+Youtarr without the bundled DB via:
 
-- Copy `config/external-db.env.example` to `config/external-db.env` and enter your credentials
-- Run `./start.sh --external-db` to launch only the application container via Docker Compose (uses `docker-compose.external-db.yml`)
-- Run `./start-with-external-db.sh` to launch a single container (should work for UNRAID or plain `docker run` workflows)
-- Follow the full walkthrough (including a local test harness) in [docs/EXTERNAL_DB.md](EXTERNAL_DB.md)
+- `./start-with-external-db.sh`
+- See [docs/EXTERNAL_DB.md](EXTERNAL_DB.md)
 
 Both helpers automatically run migrations against the external database on boot, so no manual schema management is required once connectivity is in place.
 
@@ -242,25 +223,13 @@ You can configure environment variables in three ways:
 | `AUTH_PRESET_PASSWORD` | Initial admin password for headless deployments | (empty) |
 | `AUTH_ENABLED` | Set to `false` to disable authentication | `true` |
 | `LOG_LEVEL` | Logging verbosity: `warn`, `info`, or `debug` | `warn` |
+| `DB_HOST` | Set to external IP when using external DB | `youtarr-db` (internal DB container) |
+| `DB_PORT` | Database port | `3321` |
+| `DB_USER` | Youtarr DB user | `root` |
+| `DB_NAME` | Youtarr DB name | `youtarr` |
+| `DB_PASSWORD` | Youtarr DB user password | `123qweasd` |
 
 See `.env.example` for detailed documentation of each variable.
-
-### Variables Set in docker-compose.yml
-
-These are hardcoded in the compose file and don't need configuration:
-
-```yaml
-environment:
-  - IN_DOCKER_CONTAINER=1
-  - DB_HOST=youtarr-db
-  - DB_PORT=3321
-  - DB_USER=root
-  - DB_PASSWORD=123qweasd
-  - DB_NAME=youtarr
-  - YOUTUBE_OUTPUT_DIR=${YOUTUBE_OUTPUT_DIR}
-  # Optional: Custom data path (for Elfhosted or similar platforms)
-  # - DATA_PATH=/storage/rclone/storagebox/youtube
-```
 
 ### Platform Deployment Configuration
 
@@ -270,9 +239,9 @@ Youtarr supports platform-managed deployments (Elfhosted, Kubernetes, etc.) with
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `DATA_PATH` | Video storage path inside container | `/storage/rclone/storagebox/youtube` |
+| `DATA_PATH` | Video storage path inside container (only really needed for Elfhosted) | `/storage/rclone/storagebox/youtube` |
 | `AUTH_ENABLED` | Set to `false` to bypass internal authentication | `false` |
-| `PLEX_URL` | Pre-configured Plex server URL | `http://plex:32400` |
+| `PLEX_URL` | Pre-configured Plex server URL, overrides plexIp and plexPort from config.json | `http://plex:32400` |
 
 ### Preset Credentials for Headless Deployments
 
@@ -288,40 +257,21 @@ If only one variable is present, or the values fall outside the validation rules
 #### What Happens in Platform Mode
 
 When `DATA_PATH` is set:
-1. **Auto-Configuration**: If no config.json exists, one is created automatically with:
-   - Video output directory set to `DATA_PATH` value
-   - Plex URL set to `PLEX_URL` if provided
-   - Sensible defaults for all other settings
-   - **Note**: This platform behavior is unchanged - DATA_PATH deployments continue to work exactly as before
-
-2. **Consolidated Storage**: All persistent data is stored under `/app/config/`:
+1. **Consolidated Storage**: All persistent data is stored under `/app/config/`:
    - `/app/config/config.json` - Configuration file
    - `/app/config/images/` - Channel and video thumbnails
    - `/app/config/jobs/` - Job state and metadata
 
-3. **Protected Settings**: In the web UI:
-   - YouTube Output Directory field is disabled (shows "Platform Managed")
+2. **Protected Settings**: In the web UI:
    - Plex URL field is disabled if `PLEX_URL` is set
    - Users can still configure Plex API key and other settings
 
 When `AUTH_ENABLED=false`:
-- No login required - authentication handled by platform (OAuth, Authelia, etc.)
+- No login required - authentication handled by platform (OAuth, Authelia, Cloudflared, etc...)
 - Login/logout buttons hidden in UI
 - All API endpoints accessible without token
 
-#### Standard vs Platform Deployments
-
-| Aspect | Standard Docker | Platform Deployment |
-|--------|----------------|---------------------|
-| Config creation | Manual via setup.sh | Auto-created if DATA_PATH set |
-| Video storage | Volume mount to host | Platform-managed path |
-| Authentication | Built-in password | Optional (AUTH_ENABLED) |
-| Storage paths | Separate mounts | Consolidated under /app/config |
-| Plex URL | User configured | Can be pre-configured |
-
-**Note**: Standard Docker users don't need these variables. They're only for platform deployments that can't use traditional Docker volume mounts.
-
-#### Example Kubernetes Deployment
+#### Example Kubernetes Deployment (not verified!)
 
 ```yaml
 apiVersion: apps/v1
@@ -335,7 +285,7 @@ spec:
       - name: youtarr
         image: dialmaster/youtarr:latest
         env:
-        - name: DATA_PATH
+        - name: DATA_PATH # INTERNAL path used in the container for writing videos
           value: "/storage/youtube"
         - name: AUTH_ENABLED
           value: "false"  # Platform handles auth
@@ -361,7 +311,7 @@ spec:
 
 - **Database**: `./database` directory
 - **Config**: `./config` directory
-- **Videos**: User-specified directory (set via setup.sh)
+- **Videos**: User-specified directory (set via start.sh or .env)
 - **Images/Jobs**: `./server/images` and `./jobs` directories
 
 ### Network Storage (NAS) Configuration
@@ -410,7 +360,7 @@ sudo mount -t cifs //nas-server/youtube /mnt/nas/youtube -o credentials=~/.smbcr
 # Map network drive in Windows
 net use Z: \\nas-server\youtube /persistent:yes
 
-# Use the mapped drive path in setup.sh
+# Use the mapped drive path in .env or during initial ./start.sh setup
 # Enter: Z:/Youtube_videos
 ```
 
@@ -420,7 +370,7 @@ net use Z: \\nas-server\youtube /persistent:yes
 mkdir ~/nas-youtube
 mount_smbfs //username@nas-server/youtube ~/nas-youtube
 
-# Use the mount path in setup.sh
+# Use the mount path in .env or during initial ./start.sh setup
 # Enter: /Users/username/nas-youtube
 ```
 
@@ -538,30 +488,6 @@ docker exec youtarr curl -I http://your-plex-server:32400/web
 # Should return HTTP 200 or 301
 ```
 
-## Upgrading
-
-### From Single Container to Compose (v1.15.0+)
-
-If upgrading from older single-container setup:
-
-1. Stop old container:
-   ```bash
-   docker stop youtarr
-   docker rm youtarr
-   ```
-
-2. Pull latest code:
-   ```bash
-   git pull
-   ```
-
-3. Start with new setup:
-   ```bash
-   ./start.sh
-   ```
-
-Your database in `./database` directory is automatically migrated.
-
 ### Updating to Latest Version
 
 ```bash
@@ -570,6 +496,9 @@ Your database in `./database` directory is automatically migrated.
 
 # Pull latest images
 docker compose pull
+
+# Git pull to get any script updates or updates to docker-compose files, etc...
+git pull
 
 # Start with new images
 ./start.sh
@@ -664,13 +593,25 @@ Containers communicate on isolated network. External access only through explici
 
 ### Running as Non-Root
 
-For enhanced security on Linux, configure user in docker-compose.yml:
+For enhanced security on Linux, configure user in .env:
 ```yaml
-services:
-  youtarr:
-    user: "1000:1000"
+YOUTARR_UID=1000
+YOUTARR_GID=1000
 ```
 
+** WARNING, if previously running as root, you will need to MANUALLY change ownership of your YOUTUBE_OUTPUT_DIR as well as: **
+```
+config/*
+jobs/*
+server/images/*
+```
+
+If adjusting these settings, stop Youtarr, then fix ownership, then update .env, then restart.
+
+Example to fix ownership (example YOUTUBE_OUTPUT_DIR given)
+```
+sudo chown -R 1000:1000 /mnt/c/my_youtarr_videos ./config ./jobs ./server/images
+```
 ## Development with Docker
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for running Youtarr in development mode with Docker.

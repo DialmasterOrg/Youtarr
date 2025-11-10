@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   youtarr-db:
@@ -6,44 +5,45 @@ services:
     container_name: youtarr-db
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: 123qweasd
-      MYSQL_DATABASE: youtarr
-      MYSQL_TCP_PORT: 3321
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-123qweasd}
+      MYSQL_DATABASE: ${DB_NAME:-youtarr}
+      MYSQL_TCP_PORT: ${DB_PORT:-3321}
       # Set utf8mb4 as default for new installations
+      # Previously youtarr always used root, so keeping this default for backwards compatibility
+      MYSQL_USER: ${DB_USER:-root}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-123qweasd}
       MYSQL_CHARSET: utf8mb4
       MYSQL_COLLATION: utf8mb4_unicode_ci
     ports:
-      - "3321:3321"
+      - "${DB_PORT:-3321}:${DB_PORT:-3321}"
     volumes:
       - ./database:/var/lib/mysql
       - ./config/mariadb.cnf:/etc/mysql/conf.d/charset.cnf:ro
-    command: --port=3321 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    command: --port=${DB_PORT:-3321} --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-P", "3321", "-p123qweasd"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-P", "${DB_PORT:-3321}", "-p${DB_PASSWORD:-123qweasd}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
 
   youtarr:
-    # IMPORTANT: YOUTUBE_OUTPUT_DIR must be set before running 'docker compose up'
-    # Option 1 (recommended): Use ./start.sh which reads config.json and sets the env var
-    # Option 2 (manual): Export YOUTUBE_OUTPUT_DIR=/your/path before running docker compose
-    # Option 3 (manual): Edit this file to hardcode your path instead of ${YOUTUBE_OUTPUT_DIR}
-    # Without one of these, you'll get: "empty section between colons" error
-    image: dialmaster/youtarr:latest
+    image: ${YOUTARR_IMAGE:-dialmaster/youtarr:latest}
     container_name: youtarr
     restart: unless-stopped
+    # Optional: Run as specific UID:GID for security (defaults to root if not set per previous behavior)
+    user: "${YOUTARR_UID:-0}:${YOUTARR_GID:-0}"
     depends_on:
       youtarr-db:
         condition: service_healthy
     environment:
+      # DEPRECATED but retained for backwards compatibility with old images for now
       IN_DOCKER_CONTAINER: 1
-      DB_HOST: youtarr-db
-      DB_PORT: 3321
-      DB_USER: root
-      DB_PASSWORD: 123qweasd
-      DB_NAME: youtarr
+      DB_HOST: ${DB_HOST:-youtarr-db}
+      DB_PORT: ${DB_PORT:-3321}
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-123qweasd}
+      DB_NAME: ${DB_NAME:-youtarr}
       # Optional: Disable authentication (for platforms with external auth like Elfhosted)
       AUTH_ENABLED: ${AUTH_ENABLED:-}
       # Optional: Seed initial admin credentials for headless deployments
@@ -51,12 +51,15 @@ services:
       AUTH_PRESET_PASSWORD: ${AUTH_PRESET_PASSWORD:-}
       # Logging configuration
       LOG_LEVEL: ${LOG_LEVEL:-warn}
+      # This is just informational and lets the app know where the videos will be stored on the host
+      YOUTUBE_OUTPUT_DIR: ${YOUTUBE_OUTPUT_DIR}
       # Optional: Custom data path for platforms like Elfhosted (defaults to /usr/src/app/data)
+      # This is the internal path where videos download inside the container and is not needed for most users
       # DATA_PATH: /storage/rclone/storagebox/youtube
+
     ports:
       - "3087:3011"
     volumes:
-      # YOUTUBE_OUTPUT_DIR must be set before running compose
       - ${YOUTUBE_OUTPUT_DIR}:/usr/src/app/data
       - ./server/images:/app/server/images
       - ./config:/app/config

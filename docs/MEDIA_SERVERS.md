@@ -29,7 +29,7 @@ Youtarr generates two types of metadata:
 | Tags/Keywords | ✅ | ✅ | Video tags (up to 10) |
 | Runtime | ❌ | ✅ | Video duration in minutes |
 | YouTube ID | ❌ | ✅ | Original video ID for reference |
-| Thumbnail | File | Reference | poster.jpg in video folder |
+| Thumbnail | File | Reference | `<video name>.jpg` in video folder |
 
 ## Multi-Library Organization with Subfolders
 

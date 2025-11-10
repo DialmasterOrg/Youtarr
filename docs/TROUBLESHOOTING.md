@@ -8,8 +8,8 @@
 
 **Solution**:
 - Initial setup must be done from the same machine running Youtarr unless you seed credentials via environment variables
-- Run `./start.sh` (or `./start.sh --external-db`) – if no credentials exist you will be prompted for an initial admin username/password and the script will export the required `AUTH_PRESET_USERNAME` / `AUTH_PRESET_PASSWORD` values automatically
-- Alternatively, pass both preset variables yourself when launching the container (e.g. through Docker Compose, Unraid template's environment, or other orchestration tools)
+- For headless/remote setups, run `./start.sh --headless-auth` which will prompt for credentials and save them to your `.env` file
+- Alternatively, manually add `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` to your `.env` file before first startup
 - If you prefer to use the UI wizard, access the setup using `http://localhost:3087` (not the machine's IP address)
 - When running in Docker, make sure you browse from the host machine or forward the port securely as described below
 
@@ -40,14 +40,17 @@ This creates a secure tunnel between your local machine's port 3087 and the serv
 **Problem**: Cannot log in because you've forgotten the admin password.
 
 **Solution**:
+
+**Method 1: Using Environment Variables (Recommended)**
 1. Stop Youtarr:
    ```bash
    ./stop.sh
    ```
 
-2. Delete the following line in your `./config/config.json`:
-   ```
-   passwordHash": "YOUR_CURRENT_HASH",
+2. Edit your `.env` file and set new credentials:
+   ```bash
+   AUTH_PRESET_USERNAME=admin
+   AUTH_PRESET_PASSWORD=your-new-password
    ```
 
 3. Start Youtarr:
@@ -55,7 +58,24 @@ This creates a secure tunnel between your local machine's port 3087 and the serv
    ./start.sh
    ```
 
-4. Access `http://localhost:3087` to set up a new admin password
+4. Log in with the new credentials. Once logged in, you can remove these variables from `.env` if desired (credentials will persist in `config/config.json`)
+
+**Method 2: Reset via config.json (Requires localhost access)**
+1. Stop Youtarr:
+   ```bash
+   ./stop.sh
+   ```
+
+2. Edit `./config/config.json` and delete both the `username` and `passwordHash` lines
+
+3. Start Youtarr:
+   ```bash
+   ./start.sh
+   ```
+
+4. Access `http://localhost:3087` to create new credentials via the UI setup wizard
+   - **Important**: This must be done from localhost (or via SSH port forwarding as described above)
+   - You will be prompted to create a new admin account on first access
 
 ### Session Expired
 
@@ -213,22 +233,47 @@ This is a known Docker Desktop issue on Windows where mount points become corrup
 
 **Problem**: Errors like `Incorrect string value: '\\xF0\\x9F\\xA7\\xA1'` when channel names or video titles contain emojis.
 
-**Solution** for existing installations:
-1. Check your database character set:
-   ```bash
-   ./scripts/check-database-charset.sh
-   ```
+By default Youtarr creates the database and tables as utf8mb4, so this shouldn't happen
+unless you are using an external DB. If so, see [docs/EXTERNAL_DB.md](docs/EXTERNAL_DB.md)
+for how to create your DB with the correct character set.
 
-2. If not using utf8mb4, backup your database and run the migration
+**How to** ensure that your DB is using the correct character set:
+1. Check your database character set by connecting to the DB and then running:
+```bash
+    -- Database Character Set
+    SELECT 'DATABASE' as Object_Type, 'youtarr' as Name, DEFAULT_CHARACTER_SET_NAME as   Charset, DEFAULT_COLLATION_NAME as Collation
+    FROM information_schema.SCHEMATA
+    WHERE SCHEMA_NAME = 'youtarr';
 
-New installations automatically support full UTF-8 (utf8mb4).
+    -- Table Character Sets (excluding Sequelize metadata)
+    SELECT 'TABLE' as Object_Type, TABLE_NAME as Name,
+    IFNULL(CCSA.CHARACTER_SET_NAME, '') as Charset,
+    TABLE_COLLATION as Collation
+    FROM information_schema.tables t
+    LEFT JOIN information_schema.COLLATION_CHARACTER_SET_APPLICABILITY CCSA
+    ON t.TABLE_COLLATION = CCSA.COLLATION_NAME
+    WHERE TABLE_SCHEMA = 'youtarr'
+    AND TABLE_TYPE = 'BASE TABLE'
+    AND TABLE_NAME != 'SequelizeMeta'
+    ORDER BY TABLE_NAME;
+```
+*It doesn't matter if the SequelizeMeta table is not utf8mb4**
+
+**Solution**
+Either:
+1. Recreate your DB with the correct character set (**THIS WILL CAUSE LOSS OF ALL DB DATA**)
+or
+2. Backup your DB and then alter your existing DB to the correct character set using:
+```
+  ALTER DATABASE youtarr CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+```
 
 ### Database Connection Failed
 
 **Problem**: Cannot connect to database errors.
 
 **Solution**:
-1. Ensure the database container is running:
+1. Ensure the database container is running (the commands below only applies if using the bundled DB):
    ```bash
    docker ps | grep youtarr-db
    ```
@@ -261,7 +306,7 @@ New installations automatically support full UTF-8 (utf8mb4).
 **Problem**: yt-dlp fails to download videos.
 
 **Solution**:
-- Youtarr's Docker image includes yt-dlp which auto-updates
+- Youtarr's Docker image includes yt-dlp which auto-updates on every release.
 - For persistent issues, rebuild the container:
   ```bash
   ./stop.sh
@@ -307,14 +352,13 @@ New installations automatically support full UTF-8 (utf8mb4).
 **Problem**: Youtarr consuming excessive resources.
 
 **Solution**:
-1. Check for stuck download jobs
-2. Limit concurrent downloads in configuration
-3. Restart containers:
+1. Check for stuck download jobs (these can be cleared by restarting Youtarr)
+2. Restart containers:
    ```bash
    ./stop.sh
    ./start.sh
    ```
-4. Check disk space - low space can cause performance issues
+3. Check disk space - low space can cause performance issues
 
 ## Network Access Issues
 

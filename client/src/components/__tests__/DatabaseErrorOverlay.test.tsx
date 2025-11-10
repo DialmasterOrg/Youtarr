@@ -6,13 +6,15 @@ import DatabaseErrorOverlay from '../DatabaseErrorOverlay';
 
 describe('DatabaseErrorOverlay', () => {
   const mockOnRetry = jest.fn();
+  const DB_PORT = process.env.DB_PORT || '3321';
+  const DB_HOST = process.env.DB_HOST || 'localhost';
 
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   test('renders overlay with connection error', () => {
-    const errors = ['Cannot connect to database at localhost:3321. Error: Connection refused'];
+    const errors = [`Cannot connect to database at ${DB_HOST}:${DB_PORT}. Error: Connection refused`];
 
     render(<DatabaseErrorOverlay errors={errors} onRetry={mockOnRetry} />);
 
@@ -26,7 +28,7 @@ describe('DatabaseErrorOverlay', () => {
 
   test('renders all provided errors', () => {
     const errors = [
-      'Cannot connect to database at localhost:3321',
+      `Cannot connect to database at ${DB_HOST}:${DB_PORT}. Error: Connection refused`,
       'Table "channels" is missing column "new_field"',
       'Table "videos" is missing column "metadata"',
     ];
@@ -118,12 +120,12 @@ describe('DatabaseErrorOverlay', () => {
   });
 
   test('renders error details section when errors exist', () => {
-    const errors = ['Database connection failed', 'Port 3321 is not accessible'];
+    const errors = ['Database connection failed', `Port ${DB_PORT} is not accessible`];
 
     render(<DatabaseErrorOverlay errors={errors} onRetry={mockOnRetry} />);
 
     expect(screen.getByText('Specific Errors:')).toBeInTheDocument();
     expect(screen.getByText('Database connection failed')).toBeInTheDocument();
-    expect(screen.getByText('Port 3321 is not accessible')).toBeInTheDocument();
+    expect(screen.getByText(`Port ${DB_PORT} is not accessible`)).toBeInTheDocument();
   });
 });
