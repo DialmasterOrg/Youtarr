@@ -37,7 +37,11 @@ class YtDlpRunner {
 
       const ytDlpProcess = spawn('yt-dlp', finalArgs, {
         shell: false,
-        timeout: timeoutMs
+        timeout: timeoutMs,
+        env: {
+          ...process.env,
+          TMPDIR: '/tmp'
+        }
       });
 
       let stdout = '';
