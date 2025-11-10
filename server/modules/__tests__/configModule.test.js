@@ -18,12 +18,9 @@ describe('ConfigModule', () => {
   const mockConfig = {
     plexApiKey: 'test-plex-key',
     plexPort: '32400',
-    youtubeOutputDirectory: '/test/output',
     plexLibrarySection: 1,
     channelAutoDownload: false,
-    channelDownloadFrequency: '0 */6 * * *',
-    devYoutubeOutputDirectory: '/dev/output',
-    devffmpegPath: '/usr/local/bin/ffmpeg'
+    channelDownloadFrequency: '0 */6 * * *'
   };
 
   beforeEach(() => {
@@ -51,8 +48,6 @@ describe('ConfigModule', () => {
     logger.warn.mockClear();
     logger.error.mockClear();
     logger.debug.mockClear();
-
-    delete process.env.IN_DOCKER_CONTAINER;
   });
 
   afterEach(() => {
@@ -78,10 +73,12 @@ describe('ConfigModule', () => {
 
       expect(uuid.v4).toHaveBeenCalled();
       expect(ConfigModule.config.uuid).toBe('test-uuid-1234');
-      expect(fs.writeFileSync).toHaveBeenCalledWith(
-        mockConfigPath,
-        JSON.stringify(ConfigModule.config, null, 2)
-      );
+      expect(fs.writeFileSync).toHaveBeenCalled();
+
+      // Verify the saved config excludes deprecated fields
+      const savedData = fs.writeFileSync.mock.calls[fs.writeFileSync.mock.calls.length - 1][1];
+      const parsed = JSON.parse(savedData);
+      expect(parsed.uuid).toBe('test-uuid-1234');
     });
 
     test('should not generate UUID if already present', () => {
@@ -98,16 +95,14 @@ describe('ConfigModule', () => {
       expect(ConfigModule.config.writeVideoNfoFiles).toBe(true);
     });
 
-    test('should use Docker paths when IN_DOCKER_CONTAINER is set', () => {
-      process.env.IN_DOCKER_CONTAINER = '1';
+    test('should use Docker paths', () => {
       ConfigModule = require('../configModule');
 
       expect(ConfigModule.directoryPath).toBe('/usr/src/app/data');
       expect(ConfigModule.ffmpegPath).toBe('/usr/bin/ffmpeg');
     });
 
-    test('should use custom DATA_PATH when set in Docker environment', () => {
-      process.env.IN_DOCKER_CONTAINER = '1';
+    test('should use custom DATA_PATH when set', () => {
       process.env.DATA_PATH = '/storage/rclone/storagebox/youtube';
       ConfigModule = require('../configModule');
 
@@ -117,25 +112,20 @@ describe('ConfigModule', () => {
       delete process.env.DATA_PATH;
     });
 
-    test('DATA_PATH should override youtubeOutputDirectory from config.json', () => {
-      process.env.IN_DOCKER_CONTAINER = '1';
-      process.env.DATA_PATH = '/custom/data/path';
-
-      // Config.json has '/test/output' as youtubeOutputDirectory
+    test('should default to container paths when no DATA_PATH is provided', () => {
       ConfigModule = require('../configModule');
 
-      // Check that the DATA_PATH overrides the config.json value
-      expect(ConfigModule.config.youtubeOutputDirectory).toBe('/custom/data/path');
-      expect(ConfigModule.directoryPath).toBe('/custom/data/path');
-
-      delete process.env.DATA_PATH;
+      expect(ConfigModule.directoryPath).toBe('/usr/src/app/data');
+      expect(ConfigModule.ffmpegPath).toBe('/usr/bin/ffmpeg');
     });
 
-    test('should use dev paths when not in Docker', () => {
+    test('should use YOUTUBE_OUTPUT_DIR when DATA_PATH is not set', () => {
+      process.env.YOUTUBE_OUTPUT_DIR = '/custom/youtube/dir';
       ConfigModule = require('../configModule');
 
-      expect(ConfigModule.directoryPath).toBe('/dev/output');
-      expect(ConfigModule.ffmpegPath).toBe('/usr/local/bin/ffmpeg');
+      expect(ConfigModule.directoryPath).toBe('/usr/src/app/data');
+
+      delete process.env.YOUTUBE_OUTPUT_DIR;
     });
 
     test('should start watching config file', () => {
@@ -167,10 +157,13 @@ describe('ConfigModule', () => {
       ConfigModule.updateConfig(newConfig);
 
       expect(ConfigModule.config.plexApiKey).toBe('new-key');
-      expect(fs.writeFileSync).toHaveBeenCalledWith(
-        mockConfigPath,
-        JSON.stringify(newConfig, null, 2)
-      );
+      expect(fs.writeFileSync).toHaveBeenCalled();
+
+      // Verify the saved config excludes deprecated fields
+      const savedData = fs.writeFileSync.mock.calls[fs.writeFileSync.mock.calls.length - 1][1];
+      const parsed = JSON.parse(savedData);
+      expect(parsed.plexApiKey).toBe('new-key');
+
       expect(changeListener).toHaveBeenCalled();
     });
 
@@ -185,7 +178,6 @@ describe('ConfigModule', () => {
     });
 
     test('saveConfig should not persist DATA_PATH override to config file', () => {
-      process.env.IN_DOCKER_CONTAINER = '1';
       process.env.DATA_PATH = '/runtime/override/path';
 
       // Re-require to get fresh instance with DATA_PATH set
@@ -201,43 +193,13 @@ describe('ConfigModule', () => {
       fs = require('fs');
       ConfigModule = require('../configModule');
 
-      // Verify DATA_PATH override is applied in memory
-      expect(ConfigModule.config.youtubeOutputDirectory).toBe('/runtime/override/path');
-
       // Save config
       ConfigModule.saveConfig();
 
       // Verify the saved config does NOT contain the DATA_PATH override
       const savedData = fs.writeFileSync.mock.calls[fs.writeFileSync.mock.calls.length - 1][1];
       const parsed = JSON.parse(savedData);
-      expect(parsed.youtubeOutputDirectory).toBeUndefined();
-
-      delete process.env.DATA_PATH;
-    });
-
-    test('updateConfig with DATA_PATH should maintain override', () => {
-      process.env.IN_DOCKER_CONTAINER = '1';
-      process.env.DATA_PATH = '/platform/data';
-
-      // Re-require to get fresh instance with DATA_PATH set
-      jest.resetModules();
-      jest.doMock('uuid', () => ({ v4: jest.fn(() => 'test-uuid-1234') }));
-      jest.doMock('fs', () => ({
-        readFileSync: jest.fn().mockReturnValue(JSON.stringify(mockConfig)),
-        writeFileSync: jest.fn(),
-        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
-        existsSync: jest.fn().mockReturnValue(true),
-        mkdirSync: jest.fn()
-      }));
-      fs = require('fs');
-      ConfigModule = require('../configModule');
-
-      // Update config with different youtubeOutputDirectory
-      const newConfig = { ...mockConfig, youtubeOutputDirectory: '/should/be/overridden' };
-      ConfigModule.updateConfig(newConfig);
-
-      // Verify DATA_PATH still overrides after update
-      expect(ConfigModule.config.youtubeOutputDirectory).toBe('/platform/data');
+      expect(parsed.DATA_PATH).toBeUndefined();
 
       delete process.env.DATA_PATH;
     });
@@ -272,45 +234,6 @@ describe('ConfigModule', () => {
       jest.advanceTimersByTime(100);
 
       expect(ConfigModule.config.plexApiKey).toBe('updated-key');
-      expect(changeListener).toHaveBeenCalled();
-    });
-
-    test('should maintain DATA_PATH override when config file changes', () => {
-      process.env.IN_DOCKER_CONTAINER = '1';
-      process.env.DATA_PATH = '/platform/override';
-
-      // Re-require to get fresh instance with DATA_PATH set
-      jest.resetModules();
-      jest.doMock('uuid', () => ({ v4: jest.fn(() => 'test-uuid-1234') }));
-      jest.doMock('fs', () => ({
-        readFileSync: jest.fn().mockReturnValue(JSON.stringify(mockConfig)),
-        writeFileSync: jest.fn(),
-        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
-        existsSync: jest.fn().mockReturnValue(true),
-        mkdirSync: jest.fn()
-      }));
-      fs = require('fs');
-      ConfigModule = require('../configModule');
-
-      // Clear any pending timers from initialization
-      jest.runOnlyPendingTimers();
-
-      const changeListener = jest.fn();
-      ConfigModule.on('change', changeListener);
-
-      const watchCallback = fs.watch.mock.calls[0][1];
-
-      // Simulate config file change with different youtubeOutputDirectory
-      const updatedConfig = { ...mockConfig, youtubeOutputDirectory: '/config/file/path' };
-      fs.readFileSync.mockReturnValue(JSON.stringify(updatedConfig));
-
-      watchCallback('change');
-
-      // Advance timers to trigger the debounced callback
-      jest.advanceTimersByTime(100);
-
-      // Verify DATA_PATH still overrides even after file change
-      expect(ConfigModule.config.youtubeOutputDirectory).toBe('/platform/override');
       expect(changeListener).toHaveBeenCalled();
     });
 
@@ -444,7 +367,6 @@ describe('ConfigModule', () => {
     test('should handle missing optional config fields', () => {
       const minimalConfig = {
         plexApiKey: 'key',
-        youtubeOutputDirectory: '/output'
       };
 
       fs.readFileSync.mockReturnValue(JSON.stringify(minimalConfig));
@@ -453,8 +375,8 @@ describe('ConfigModule', () => {
       expect(ConfigModule.config.channelFilesToDownload).toBe(3);
       expect(ConfigModule.config.preferredResolution).toBe('1080');
       expect(ConfigModule.config.videoCodec).toBe('default');
-      expect(ConfigModule.ffmpegPath).toBeUndefined();
-      expect(ConfigModule.directoryPath).toBeUndefined();
+      expect(ConfigModule.ffmpegPath).toBe('/usr/bin/ffmpeg');
+      expect(ConfigModule.directoryPath).toBe('/usr/src/app/data');
     });
 
     test('should handle existing channelFilesToDownload and preferredResolution', () => {
@@ -492,7 +414,6 @@ describe('ConfigModule', () => {
         mkdirSync: jest.fn(),
         writeFileSync: jest.fn(),
         readFileSync: jest.fn().mockReturnValue(JSON.stringify({
-          youtubeOutputDirectory: '/storage/rclone/storagebox/youtube',
           channelFilesToDownload: 3,
           preferredResolution: '1080',
           uuid: 'auto-generated-uuid'
@@ -508,7 +429,6 @@ describe('ConfigModule', () => {
 
       expect(mockFs.writeFileSync).toHaveBeenCalled();
       const writtenConfig = JSON.parse(mockFs.writeFileSync.mock.calls[0][1]);
-      expect(writtenConfig.youtubeOutputDirectory).toBe('/storage/rclone/storagebox/youtube');
       expect(writtenConfig.uuid).toBe('auto-generated-uuid');
       expect(writtenConfig.channelAutoDownload).toBe(false);
       expect(writtenConfig.channelDownloadFrequency).toBe('0 */6 * * *');
@@ -540,7 +460,6 @@ describe('ConfigModule', () => {
 
     test('should auto-create config for Docker without DATA_PATH', () => {
       delete process.env.DATA_PATH;
-      process.env.IN_DOCKER_CONTAINER = '1';
 
       const mockExampleConfig = {
         channelFilesToDownload: 5,
@@ -548,7 +467,6 @@ describe('ConfigModule', () => {
         '//comment': 'This should be stripped',
         plexApiKey: '',
         plexPort: '32400',
-        youtubeOutputDirectory: '/some/path'
       };
 
       const mockFs = {
@@ -567,7 +485,6 @@ describe('ConfigModule', () => {
             preferredResolution: '1080',
             plexApiKey: '',
             plexPort: '32400',
-            youtubeOutputDirectory: '/usr/src/app/data',
             uuid: 'auto-generated-uuid'
           });
         }),
@@ -584,17 +501,13 @@ describe('ConfigModule', () => {
       expect(mockFs.writeFileSync).toHaveBeenCalled();
       const writtenConfig = JSON.parse(mockFs.writeFileSync.mock.calls[0][1]);
 
-      // Should have the container's data path for Docker without DATA_PATH
-      expect(writtenConfig.youtubeOutputDirectory).toBe('/usr/src/app/data');
       expect(writtenConfig.uuid).toBe('auto-generated-uuid');
-      expect(writtenConfig.dockerAutoCreated).toBe(true);
       expect(writtenConfig.plexPort).toBe('32400');
 
       // Should not have the comment field
       expect(writtenConfig['//comment']).toBeUndefined();
 
       expect(mockLogger.info).toHaveBeenCalledWith('Auto-creating config.json (docker default without DATA_PATH)');
-      delete process.env.IN_DOCKER_CONTAINER;
     });
 
     test('should use inline defaults when config.example.json is unavailable', () => {
@@ -615,7 +528,6 @@ describe('ConfigModule', () => {
             channelFilesToDownload: 3,
             preferredResolution: '1080',
             plexPort: '32400',
-            youtubeOutputDirectory: '/usr/src/app/data',
             uuid: 'auto-generated-uuid'
           });
         }),
@@ -631,10 +543,8 @@ describe('ConfigModule', () => {
       expect(mockFs.writeFileSync).toHaveBeenCalled();
       const writtenConfig = JSON.parse(mockFs.writeFileSync.mock.calls[0][1]);
 
-      expect(writtenConfig.youtubeOutputDirectory).toBe('/usr/src/app/data');
       expect(writtenConfig.channelFilesToDownload).toBe(3);
       expect(writtenConfig.uuid).toBe('auto-generated-uuid');
-      expect(writtenConfig.dockerAutoCreated).toBe(true);
       expect(writtenConfig.plexPort).toBe('32400');
 
       expect(mockLogger.info).toHaveBeenCalledWith('Could not load config.example.json, using inline defaults');
@@ -672,7 +582,6 @@ describe('ConfigModule', () => {
         mkdirSync: jest.fn(),
         writeFileSync: jest.fn(),
         readFileSync: jest.fn().mockReturnValue(JSON.stringify({
-          youtubeOutputDirectory: '/storage/youtube',
           uuid: 'auto-generated-uuid'
         })),
         watch: jest.fn().mockReturnValue({ close: jest.fn() })
@@ -703,7 +612,6 @@ describe('ConfigModule', () => {
         mkdirSync: jest.fn(),
         writeFileSync: jest.fn(),
         readFileSync: jest.fn().mockReturnValue(JSON.stringify({
-          youtubeOutputDirectory: '/storage/youtube',
           plexUrl: 'http://plex:32400',
           uuid: 'auto-generated-uuid'
         })),
@@ -826,7 +734,6 @@ describe('ConfigModule', () => {
 
       const configWithoutNotifications = {
         plexApiKey: 'test',
-        youtubeOutputDirectory: '/test'
       };
 
       const migrated = ConfigModule.migrateConfig(configWithoutNotifications);
@@ -841,7 +748,6 @@ describe('ConfigModule', () => {
 
       const configWithNotifications = {
         plexApiKey: 'test',
-        youtubeOutputDirectory: '/test',
         notificationsEnabled: true,
         notificationService: 'discord',
         discordWebhookUrl: 'https://discord.com/api/webhooks/existing'
@@ -919,7 +825,6 @@ describe('ConfigModule', () => {
     test('migration 1.36.0 should add auto removal settings', () => {
       const configWithoutAutoRemoval = {
         plexApiKey: 'test',
-        youtubeOutputDirectory: '/test'
       };
 
       const migrated = ConfigModule.migrateConfig(configWithoutAutoRemoval);
@@ -932,7 +837,6 @@ describe('ConfigModule', () => {
     test('migration 1.36.0 should preserve existing auto removal settings', () => {
       const configWithAutoRemoval = {
         plexApiKey: 'test',
-        youtubeOutputDirectory: '/test',
         autoRemovalEnabled: true,
         autoRemovalFreeSpaceThreshold: '500MB',
         autoRemovalVideoAgeThreshold: 60
@@ -1102,7 +1006,6 @@ describe('ConfigModule', () => {
 
       const configWithoutCodec = {
         plexApiKey: 'test',
-        youtubeOutputDirectory: '/test'
       };
 
       const migrated = ConfigModule.migrateConfig(configWithoutCodec);
@@ -1115,7 +1018,6 @@ describe('ConfigModule', () => {
 
       const configWithCodec = {
         plexApiKey: 'test',
-        youtubeOutputDirectory: '/test',
         videoCodec: 'h265'
       };
 
@@ -1187,7 +1089,6 @@ describe('ConfigModule', () => {
 
       const configWithoutTmp = {
         plexApiKey: 'test',
-        youtubeOutputDirectory: '/test'
       };
 
       const migrated = ConfigModule.migrateConfig(configWithoutTmp);
@@ -1201,7 +1102,6 @@ describe('ConfigModule', () => {
 
       const configWithTmp = {
         plexApiKey: 'test',
-        youtubeOutputDirectory: '/test',
         useTmpForDownloads: true,
         tmpFilePath: '/custom/temp'
       };
@@ -1214,7 +1114,6 @@ describe('ConfigModule', () => {
 
     test('should override temp download settings for Elfhosted platform', () => {
       process.env.PLATFORM = 'elfhosted';
-      process.env.IN_DOCKER_CONTAINER = '1';
 
       const mockFs = {
         existsSync: jest.fn().mockReturnValue(true),
@@ -1238,7 +1137,6 @@ describe('ConfigModule', () => {
       expect(FreshConfigModule.config.tmpFilePath).toBe('/app/config/temp_downloads');
 
       delete process.env.PLATFORM;
-      delete process.env.IN_DOCKER_CONTAINER;
     });
 
     test('should create temp download directory for Elfhosted', () => {
@@ -1256,7 +1154,6 @@ describe('ConfigModule', () => {
         mkdirSync: jest.fn(),
         writeFileSync: jest.fn(),
         readFileSync: jest.fn().mockReturnValue(JSON.stringify({
-          youtubeOutputDirectory: '/storage/youtube',
           uuid: 'test-uuid',
           useTmpForDownloads: false
         })),

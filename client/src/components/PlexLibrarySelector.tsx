@@ -9,8 +9,6 @@ import {
   Card,
   Box,
   IconButton,
-  Alert,
-  Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import useMediaQuery from "@mui/material/useMediaQuery";
@@ -22,7 +20,6 @@ interface PlexLibrarySelectorProps {
   setLibraryId: (selection: {
     libraryId: string;
     libraryTitle: string;
-    selectedPath: string;
   }) => void;
   token: string | null;
 }
@@ -30,10 +27,6 @@ interface PlexLibrarySelectorProps {
 interface PlexLibrary {
   id: string;
   title: string;
-  locations: {
-    id: string;
-    path: string;
-  }[];
 }
 
 function PlexLibrarySelector({
@@ -44,10 +37,6 @@ function PlexLibrarySelector({
 }: PlexLibrarySelectorProps) {
   const [libraries, setLibraries] = useState<PlexLibrary[]>([]);
   const [selectedLibrary, setSelectedLibrary] = useState<string>("");
-  const [selectedPath, setSelectedPath] = useState<string>("");
-  const [locations, setLocations] = useState<{ id: string; path: string }[]>(
-    []
-  );
   const [plexError, setPlexError] = useState<boolean>(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -89,26 +78,12 @@ function PlexLibrarySelector({
   useEffect(() => {
     if (!open) {
       setSelectedLibrary("");
-      setSelectedPath("");
-      setLocations([]);
     }
   }, [open]);
 
   const handleLibraryChange = (event: SelectChangeEvent<string>) => {
     const libraryId = event.target.value as string;
     setSelectedLibrary(libraryId);
-    setSelectedPath("");
-
-    const library = libraries.find((lib) => lib.id === libraryId);
-    if (library) {
-      setLocations(library.locations);
-    } else {
-      setLocations([]);
-    }
-  };
-
-  const handlePathChange = (event: SelectChangeEvent<string>) => {
-    setSelectedPath(event.target.value);
   };
 
   const handleSaveSelection = () => {
@@ -116,11 +91,8 @@ function PlexLibrarySelector({
     setLibraryId({
       libraryId: selectedLibrary,
       libraryTitle: library?.title || '',
-      selectedPath: selectedPath || '',
     });
     setSelectedLibrary("");
-    setSelectedPath("");
-    setLocations([]);
   };
 
   return (
@@ -188,37 +160,6 @@ function PlexLibrarySelector({
           )}
           {!plexError && (
             <>
-              <Box sx={{ mt: 3, mb: 2 }}>
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  <Typography variant="body2">
-                    <strong>Optional:</strong> Select a path below to automatically update your YouTube output directory.
-                    If you don't select a path, your current output directory will remain unchanged.
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 1 }}>
-                    Paths are shown exactly as Plex reports them. If Youtarr runs inside Docker or WSL, you may need to translate the path (for example, <code>C:\\Media</code> → <code>/mnt/c/Media</code>) before using it.
-                  </Typography>
-                </Alert>
-                <InputLabel id="select-plex-path">
-                  Select a Path
-                </InputLabel>
-                <Select
-                  fullWidth
-                  value={selectedPath}
-                  onChange={handlePathChange}
-                  label="Select a Path"
-                  labelId="select-plex-path"
-                  displayEmpty
-                >
-                  <MenuItem value="">
-                    <em>Keep current YouTube output directory</em>
-                  </MenuItem>
-                  {locations.map((location) => (
-                    <MenuItem value={location.path} key={location.id}>
-                      {location.path}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </Box>
               <Box style={{ marginTop: "16px" }}>
                 <Button
                   variant="contained"

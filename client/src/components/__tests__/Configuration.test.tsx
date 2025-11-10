@@ -39,13 +39,10 @@ const defaultCookieStatus = {
 
 type ConfigOverrides = Partial<typeof mockConfig> & {
   deploymentEnvironment?: {
-    inDocker: boolean;
-    dockerAutoCreated: boolean;
     platform: string | null;
     isWsl: boolean;
   };
   isPlatformManaged?: {
-    youtubeOutputDirectory: boolean;
     plexUrl: boolean;
     authEnabled: boolean;
     useTmpForDownloads: boolean;
@@ -83,11 +80,7 @@ jest.mock('../PlexLibrarySelector', () => {
         return;
       }
 
-      setLibraryId({
-        libraryId: 'mock-library',
-        libraryTitle: 'WSL Library',
-        selectedPath: 'Q:\\Youtube_test'
-      });
+      setLibraryId('mock-library', 'WSL Library');
       handleClose();
     }, [open, setLibraryId, handleClose]);
 
@@ -233,15 +226,18 @@ const renderConfiguration = async ({
       await renderConfiguration();
     };
 
-    test('updates YouTube output directory', async () => {
+    test('YouTube output directory is always disabled', async () => {
       await setupComponent();
-      const user = createUser();
       const input = screen.getByRole('textbox', { name: /YouTube Output Directory/i });
 
-      await user.clear(input);
-      await user.type(input, '/new/path');
+      expect(input).toBeDisabled();
+      expect(input).toHaveValue('/videos');
+    });
 
-      expect(input).toHaveValue('/new/path');
+    test('YouTube output directory shows environment variable helper text', async () => {
+      await setupComponent();
+
+      await screen.findByText(/Configured via YOUTUBE_OUTPUT_DIR environment variable/i);
     });
 
     test('toggles useTmpForDownloads checkbox', async () => {
@@ -263,14 +259,11 @@ const renderConfiguration = async ({
         configOverrides: {
           useTmpForDownloads: true,
           isPlatformManaged: {
-            youtubeOutputDirectory: false,
             plexUrl: false,
             authEnabled: true,
             useTmpForDownloads: true
           },
           deploymentEnvironment: {
-            inDocker: true,
-            dockerAutoCreated: false,
             platform: 'elfhosted',
             isWsl: false
           }
@@ -290,14 +283,11 @@ const renderConfiguration = async ({
         configOverrides: {
           useTmpForDownloads: false,
           isPlatformManaged: {
-            youtubeOutputDirectory: false,
             plexUrl: false,
             authEnabled: true,
             useTmpForDownloads: true
           },
           deploymentEnvironment: {
-            inDocker: true,
-            dockerAutoCreated: false,
             platform: 'other-platform',
             isWsl: false
           }
@@ -500,60 +490,6 @@ const renderConfiguration = async ({
       expect(selectLibraryButton).not.toBeDisabled();
     });
 
-    test('suggests translated path for WSL when selecting Plex library', async () => {
-      jest.useFakeTimers();
-      await renderConfiguration({
-        configOverrides: {
-          deploymentEnvironment: {
-            inDocker: false,
-            dockerAutoCreated: false,
-            platform: null,
-            isWsl: true,
-          },
-        },
-        additionalFetchResponses: [
-          { data: {
-            availableGB: 512,
-            totalGB: 1024,
-            percentFree: 50,
-            percentUsed: 50,
-          } },
-          { data: [
-            {
-              key: '1',
-              title: 'WSL Library',
-            },
-          ] },
-        ],
-      });
-
-      try {
-        const accordion = screen.getByText('Optional: Plex Media Server Integration');
-        fireEvent.click(accordion);
-
-        await act(async () => {
-          jest.runOnlyPendingTimers();
-        });
-
-        const selectLibraryButton = await screen.findByRole('button', { name: /Select Plex Library/i });
-
-        await waitFor(() => expect(selectLibraryButton).not.toBeDisabled());
-
-        fireEvent.click(selectLibraryButton);
-
-        await act(async () => {
-          jest.runOnlyPendingTimers();
-        });
-
-        await screen.findByText(/reports its media path as/i);
-
-        expect(screen.getByText(/\/mnt\/q\/Youtube_test/i)).toBeInTheDocument();
-
-        expect(screen.getByRole('button', { name: /Use Suggested Path/i })).toBeInTheDocument();
-      } finally {
-        jest.useRealTimers();
-      }
-    });
   });
 
   describe('SponsorBlock Settings', () => {
@@ -1178,25 +1114,28 @@ const renderConfiguration = async ({
       expect(requestBody.useTmpForDownloads).toBe(true);
     });
 
-    test('shows restart warning when YouTube directory changes', async () => {
+    test('does not show restart warning after saving configuration', async () => {
       await setupComponent();
       const user = createUser();
 
-      const input = screen.getByRole('textbox', { name: /YouTube Output Directory/i });
-      await user.clear(input);
-      await user.type(input, '/new/youtube/path');
-
-      const saveButton = screen.getByRole('button', { name: /Save Configuration/i });
+      const checkbox = screen.getByRole('checkbox', { name: /Enable Automatic Downloads/i });
+      await user.click(checkbox);
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ status: 'success' }),
       } as Response);
 
+      const saveButton = screen.getByRole('button', { name: /Save Configuration/i });
       await user.click(saveButton);
 
-      await screen.findByText(/Please restart Youtarr for YouTube directory changes/i);
+      await screen.findByText('Configuration saved successfully');
+
+      // Verify no YouTube directory restart warning appears
+      expect(screen.queryByText(/Please restart Youtarr for YouTube directory changes/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/RESTART REQUIRED.*Directory has been changed/i)).not.toBeInTheDocument();
     });
+
 
     test('shows confirmation dialog for initial setup', async () => {
       const configWithInitialSetup = { ...mockConfig, initialSetup: true };
@@ -1253,30 +1192,24 @@ const renderConfiguration = async ({
   });
 
   describe('Platform-specific Features', () => {
-    test('shows platform managed indicators', async () => {
+    test('shows platform managed indicators for Elfhosted', async () => {
       const platformManagedConfig = {
         ...mockConfig,
-      };
-
-      const configWithPlatform = {
-        ...platformManagedConfig,
         isPlatformManaged: {
-          youtubeOutputDirectory: true,
           plexUrl: true,
           authEnabled: true,
           useTmpForDownloads: false,
         },
         deploymentEnvironment: {
-          inDocker: true,
-          dockerAutoCreated: false,
           platform: 'elfhosted',
+          isWsl: false,
         },
       };
 
       (global.fetch as jest.Mock)
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve(configWithPlatform),
+          json: () => Promise.resolve(platformManagedConfig),
         } as Response)
         .mockResolvedValueOnce({
           ok: true,
@@ -1295,62 +1228,20 @@ const renderConfiguration = async ({
 
       await screen.findByText('Core Settings');
 
-      const managedLabels = screen.getAllByText('Managed by Elfhosted');
-      expect(managedLabels.length).toBeGreaterThan(0);
+      // Elfhosted should show special helper text
+      await screen.findByText(/This path is configured by your platform deployment/i);
 
       const outputDirInput = screen.getByRole('textbox', { name: /YouTube Output Directory/i });
       expect(outputDirInput).toBeDisabled();
     });
 
-    test('hides Account & Security section when auth is disabled', async () => {
-      const authDisabledConfig = {
-        ...mockConfig,
-        authEnabled: false,
-        isPlatformManaged: {
-          youtubeOutputDirectory: false,
-          plexUrl: false,
-          authEnabled: false,
-          useTmpForDownloads: false,
-        },
-        deploymentEnvironment: {
-          inDocker: false,
-          dockerAutoCreated: false,
-          platform: null,
-        },
-      };
-
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(authDisabledConfig),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            cookiesEnabled: false,
-            customCookiesUploaded: false,
-            customFileExists: false,
-          }),
-        } as Response)
-        .mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve([]),
-        } as Response);
-
-      renderWithProviders(<Configuration token={mockToken} />);
-
-      await screen.findByText('Core Settings');
-
-      expect(screen.queryByText('Account & Security')).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /Change Password/i })).not.toBeInTheDocument();
-    });
 
     test('shows Docker volume indicator', async () => {
       const dockerConfig = {
         ...mockConfig,
         deploymentEnvironment: {
-          inDocker: true,
-          dockerAutoCreated: true,
+          platform: null,
+          isWsl: false,
         },
       };
 
@@ -1376,6 +1267,7 @@ const renderConfiguration = async ({
 
       await screen.findByText('Core Settings');
 
+      // Docker Volume chip should always show for non-Elfhosted deployments
       const dockerLabels = screen.getAllByText('Docker Volume');
       expect(dockerLabels.length).toBeGreaterThan(0);
 

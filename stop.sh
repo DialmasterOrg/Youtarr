@@ -14,14 +14,12 @@ get_compose_command() {
 echo "Stopping Youtarr..."
 
 # First, try to stop and remove the old single-container version if it exists
+# (Legacy for users who were running a single container before Docker Compose was introduced)
 if docker ps -a --format '{{.Names}}' | grep -q '^youtarr$'; then
-    echo "Found old single-container Youtarr, stopping and removing it..."
     docker stop youtarr 2>/dev/null
     docker rm youtarr 2>/dev/null
-    echo "Old single-container Youtarr has been removed."
 fi
 
-# Now handle the docker-compose version
 COMPOSE_CMD=$(get_compose_command)
 
 if [ -n "$COMPOSE_CMD" ]; then

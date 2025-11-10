@@ -10,7 +10,6 @@ jest.mock('../configModule', () => {
   mockConfigModule.getConfig = jest.fn().mockReturnValue({
     preferredResolution: '1080',
     channelFilesToDownload: 3,
-    youtubeOutputDirectory: '/mock/output/dir'
   });
   mockConfigModule.config = {
     preferredResolution: '1080',
@@ -146,7 +145,6 @@ describe('DownloadModule', () => {
       expect(downloadModule.config).toEqual({
         preferredResolution: '1080',
         channelFilesToDownload: 3,
-        youtubeOutputDirectory: '/mock/output/dir'
       });
       expect(downloadModule.downloadExecutor).toBeDefined();
     });
@@ -157,7 +155,6 @@ describe('DownloadModule', () => {
       const newConfig = {
         preferredResolution: '720',
         channelFilesToDownload: 5,
-        youtubeOutputDirectory: '/new/output/dir'
       };
 
       downloadModule.handleConfigChange(newConfig);

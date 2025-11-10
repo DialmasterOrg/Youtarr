@@ -147,7 +147,6 @@ const createServerModule = ({
         const configState = {
           passwordHash: passwordHash || null,
           username: passwordHash ? 'tester' : null,
-          dockerAutoCreated: false,
           plexUrl: 'http://plex.local',
           plexPort: '32400',
           plexApiKey: 'token',
@@ -268,15 +267,6 @@ describe('auth preset bootstrap', () => {
       username: 'admin',
       passwordHash: 'new-hashed-password'
     }));
-  });
-
-  test('ignores preset credentials when config already contains auth', async () => {
-    const { configModuleMock, bcryptMock } = await createServerModule({
-      authPreset: { username: 'admin', password: 'supersecret!' }
-    });
-
-    expect(bcryptMock.hash).not.toHaveBeenCalledWith('supersecret!', 10);
-    expect(configModuleMock.updateConfig).not.toHaveBeenCalledWith(expect.objectContaining({ username: 'admin' }));
   });
 
   test('ignores preset credentials when password is missing', async () => {

@@ -9,7 +9,6 @@
   "plexPort": "32400",
   "plexApiKey": "",
   "plexYoutubeLibraryId": "",
-  "youtubeOutputDirectory": "",
   "downloadSocketTimeoutSeconds": 30,
   "downloadThrottledRate": "100K",
   "downloadRetryCount": 2,
@@ -28,8 +27,5 @@
   "autoRemovalEnabled": false,
   "autoRemovalFreeSpaceThreshold": null,
   "autoRemovalVideoAgeThreshold": null,
-  "uuid": "",
-  "//comment": "DEV ONLY -- These paths are only used for development on Windows",
-  "devYoutubeOutputDirectory": "Q:\\\\Youtube_test",
-  "devffmpegPath": "C:\\\\ffmpeg-6.0\\\\bin\\\\ffmpeg.exe"
+  "uuid": ""
 }

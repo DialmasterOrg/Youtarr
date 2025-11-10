@@ -103,7 +103,6 @@ describe('DownloadExecutor', () => {
     // Setup default mocks
     configModule.getConfig.mockReturnValue({
       enableStallDetection: false,
-      youtubeOutputDirectory: '/mock/output'
     });
 
     // Create mock process

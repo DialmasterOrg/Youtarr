@@ -43,15 +43,6 @@ interface ConfigurationProps {
   token: string | null;
 }
 
-interface PlexPathSuggestionState {
-  libraryTitle: string;
-  originalPath: string;
-  suggestedPath?: string;
-  note: string;
-  canApply: boolean;
-  severity: 'info' | 'warning';
-}
-
 interface AutoRemovalDryRunVideoSummary {
   id: number;
   youtubeId: string;
@@ -145,25 +136,21 @@ function Configuration({ token }: ConfigurationProps) {
     tmpFilePath: '/tmp/youtarr-downloads',
     subtitlesEnabled: false,
     subtitleLanguage: 'en',
+    envAuthApplied: false,
   });
   const [openPlexLibrarySelector, setOpenPlexLibrarySelector] = useState(false);
   const [openPlexAuthDialog, setOpenPlexAuthDialog] = useState(false);
   const [openConfirmDialog, setOpenConfirmDialog] = useState(false);
   const [plexConnectionStatus, setPlexConnectionStatus] = useState<'connected' | 'not_connected' | 'not_tested' | 'testing'>('not_tested');
   const [isPlatformManaged, setIsPlatformManaged] = useState({
-    youtubeOutputDirectory: false,
     plexUrl: false,
     authEnabled: true,
     useTmpForDownloads: false
   });
   const [deploymentEnvironment, setDeploymentEnvironment] = useState<{
-    inDocker: boolean;
-    dockerAutoCreated: boolean;
     platform?: string | null;
     isWsl: boolean;
   }>({
-    inDocker: false,
-    dockerAutoCreated: false,
     platform: null,
     isWsl: false,
   });
@@ -171,8 +158,6 @@ function Configuration({ token }: ConfigurationProps) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [initialConfig, setInitialConfig] = useState<typeof config | null>(null);
   const [didInitialPlexCheck, setDidInitialPlexCheck] = useState(false);
-  const [youtubeDirectoryChanged, setYoutubeDirectoryChanged] = useState(false);
-  const [originalYoutubeDirectory, setOriginalYoutubeDirectory] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -202,14 +187,7 @@ function Configuration({ token }: ConfigurationProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const hasPlexServerConfigured = isPlatformManaged.plexUrl || Boolean(config.plexIP);
-  const [plexPathSuggestion, setPlexPathSuggestion] = useState<PlexPathSuggestionState | null>(null);
-  const canApplyPlexSuggestion = !!(
-    plexPathSuggestion &&
-    plexPathSuggestion.canApply &&
-    !isPlatformManaged.youtubeOutputDirectory &&
-    !deploymentEnvironment.dockerAutoCreated
-  );
-  const showAccountSection = isPlatformManaged.authEnabled !== false;
+  const showAccountSection = isPlatformManaged.authEnabled !== false && !config.envAuthApplied;
   const autoRemovalHasStrategy = Boolean(config.autoRemovalFreeSpaceThreshold) || Boolean(config.autoRemovalVideoAgeThreshold);
 
   useEffect(() => {
@@ -232,16 +210,12 @@ function Configuration({ token }: ConfigurationProps) {
         if (data.deploymentEnvironment) {
           const env = data.deploymentEnvironment;
           setDeploymentEnvironment({
-            inDocker: !!env.inDocker,
-            dockerAutoCreated: !!env.dockerAutoCreated,
             platform: env.platform ?? null,
             isWsl: !!env.isWsl
           });
           delete data.deploymentEnvironment;
         } else {
           setDeploymentEnvironment({
-            inDocker: false,
-            dockerAutoCreated: false,
             platform: null,
             isWsl: false
           });
@@ -253,8 +227,6 @@ function Configuration({ token }: ConfigurationProps) {
           plexPort: data.plexPort ? String(data.plexPort) : '32400'
         };
         setConfig(resolvedConfig);
-        setPlexPathSuggestion(null);
-        setOriginalYoutubeDirectory(resolvedConfig.youtubeOutputDirectory || '');
         setInitialConfig(resolvedConfig);
         setIsLoading(false);
       })
@@ -453,140 +425,18 @@ function Configuration({ token }: ConfigurationProps) {
     setOpenPlexLibrarySelector(false);
   };
 
-  const createPlexPathSuggestion = (
-    libraryTitle: string,
-    selectedPath: string
-  ): PlexPathSuggestionState | null => {
-    const trimmed = selectedPath.trim();
-    if (!trimmed) {
-      return null;
-    }
-
-    const baseSuggestion: PlexPathSuggestionState = {
-      libraryTitle,
-      originalPath: trimmed,
-      suggestedPath: undefined,
-      note: '',
-      canApply: false,
-      severity: 'info'
-    };
-
-    if (/^\\\\/.test(trimmed)) {
-      return {
-        ...baseSuggestion,
-        note: 'Plex reported a network share (UNC) path. Mount this share inside Youtarr and update the YouTube output directory manually.',
-        severity: 'warning'
-      };
-    }
-
-    const windowsDriveMatch = /^[A-Za-z]:\\/.test(trimmed);
-    if (windowsDriveMatch) {
-      const drive = trimmed[0].toLowerCase();
-      const rest = trimmed.slice(2).replace(/\\/g, '/').replace(/^\/+/, '');
-      const wslPath = `/mnt/${drive}/${rest}`;
-      const dockerHostPath = `/host_mnt/${drive}/${rest}`;
-
-      if (deploymentEnvironment.isWsl) {
-        return {
-          ...baseSuggestion,
-          suggestedPath: wslPath,
-          note: 'Converted Windows drive path for WSL. Ensure the drive is mounted (e.g., /mnt/q) before applying.',
-          canApply: true,
-          severity: 'info'
-        };
-      }
-
-      if (deploymentEnvironment.inDocker) {
-        return {
-          ...baseSuggestion,
-          suggestedPath: dockerHostPath,
-          note: 'Plex reported a Windows drive path. Docker Desktop usually mounts drives under /host_mnt/<drive>/. Adjust the path if your bind mount differs before applying.',
-          canApply: true,
-          severity: 'warning'
-        };
-      }
-
-      return {
-        ...baseSuggestion,
-        suggestedPath: trimmed,
-        note: 'Plex reported a Windows path. If Youtarr runs directly on Windows you can apply it as-is; otherwise translate it to the mount that Youtarr can reach.',
-        canApply: true,
-        severity: 'warning'
-      };
-    }
-
-    if (trimmed.includes('\\')) {
-      return {
-        ...baseSuggestion,
-        note: 'Plex returned a Windows-style path. Replace backslashes with the path visible to Youtarr before saving.',
-        severity: 'warning'
-      };
-    }
-
-    if (trimmed.startsWith('/')) {
-      return {
-        ...baseSuggestion,
-        suggestedPath: trimmed,
-        note: 'Plex returned a Unix-style path. Ensure this folder exists inside Youtarr before applying.',
-        canApply: true,
-        severity: 'info'
-      };
-    }
-
-    return {
-      ...baseSuggestion,
-      note: 'Plex returned an unrecognized path format. Update the YouTube output directory manually after selecting the library.',
-      severity: 'warning'
-    };
-  };
-
   const setLibraryId = ({
     libraryId,
-    libraryTitle,
-    selectedPath
   }: {
     libraryId: string;
     libraryTitle: string;
-    selectedPath: string;
   }) => {
     setConfig((prev) => ({
       ...prev,
       plexYoutubeLibraryId: libraryId,
     }));
 
-    if (selectedPath) {
-      setPlexPathSuggestion(
-        createPlexPathSuggestion(libraryTitle, selectedPath)
-      );
-    } else {
-      setPlexPathSuggestion(null);
-    }
-
     closeLibrarySelector();
-  };
-
-  const applyPlexPathSuggestion = () => {
-    if (!plexPathSuggestion || !plexPathSuggestion.suggestedPath) {
-      setPlexPathSuggestion(null);
-      return;
-    }
-
-    const targetPath = plexPathSuggestion.suggestedPath;
-    setConfig((prev) => ({
-      ...prev,
-      youtubeOutputDirectory: targetPath
-    }));
-    setYoutubeDirectoryChanged(targetPath !== originalYoutubeDirectory);
-    setPlexPathSuggestion(null);
-    setSnackbar({
-      open: true,
-      message: `Updated YouTube directory to ${targetPath}`,
-      severity: 'success'
-    });
-  };
-
-  const dismissPlexPathSuggestion = () => {
-    setPlexPathSuggestion(null);
   };
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -609,17 +459,6 @@ function Configuration({ token }: ConfigurationProps) {
       ...config,
       [name]: parsedValue as any,
     });
-
-    // Track YouTube directory changes
-    if (name === 'youtubeOutputDirectory' && value !== originalYoutubeDirectory) {
-      setYoutubeDirectoryChanged(true);
-    } else if (name === 'youtubeOutputDirectory' && value === originalYoutubeDirectory) {
-      setYoutubeDirectoryChanged(false);
-    }
-
-    if (name === 'youtubeOutputDirectory' && plexPathSuggestion) {
-      setPlexPathSuggestion(null);
-    }
 
     // Mark Plex connection as not tested if IP or API key changes
     if (name === 'plexIP' || name === 'plexApiKey' || name === 'plexPort') {
@@ -709,22 +548,11 @@ function Configuration({ token }: ConfigurationProps) {
         // Update initial snapshot to current config so unsaved flag resets
         setInitialConfig(config);
 
-        // Show different message if YouTube directory changed
-        if (youtubeDirectoryChanged) {
-          setSnackbar({
-            open: true,
-            message: 'Configuration saved! Please restart Youtarr for YouTube directory changes to take effect.',
-            severity: 'warning'
-          });
-          setYoutubeDirectoryChanged(false);
-          setOriginalYoutubeDirectory(config.youtubeOutputDirectory);
-        } else {
-          setSnackbar({
-            open: true,
-            message: 'Configuration saved successfully',
-            severity: 'success'
-          });
-        }
+        setSnackbar({
+          open: true,
+          message: 'Configuration saved successfully',
+          severity: 'success'
+        });
 
         // Re-check Plex connection if IP changed
         if (hasPlexServerConfigured) {
@@ -944,7 +772,6 @@ function Configuration({ token }: ConfigurationProps) {
       'preferredResolution',
       'videoCodec',
       'plexApiKey',
-      'youtubeOutputDirectory',
       'plexYoutubeLibraryId',
       'plexIP',
       'plexPort',
@@ -1128,78 +955,23 @@ function Configuration({ token }: ConfigurationProps) {
                 label={
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     YouTube Output Directory
-                    {isPlatformManaged.youtubeOutputDirectory ? (
-                      <Chip
-                        label={deploymentEnvironment.platform?.toLowerCase() === "elfhosted" ? "Managed by Elfhosted" : "Platform Managed"}
-                        size="small"
-                        sx={{ ml: 1 }}
-                      />
-                    ) : deploymentEnvironment.dockerAutoCreated ? (
                       <Chip
                         label="Docker Volume"
                         size="small"
                         sx={{ ml: 1 }}
                       />
-                    ) : (
-                      getInfoIcon('The directory path to your Plex Youtube library. If you update this you must restart your docker container. Manually update this field at your own risk!')
-                    )}
                   </Box>
                 }
                 name="youtubeOutputDirectory"
                 value={config.youtubeOutputDirectory}
                 onChange={handleInputChange}
-                disabled={isPlatformManaged.youtubeOutputDirectory || deploymentEnvironment.dockerAutoCreated}
+                disabled={true}
                 helperText={
-                  isPlatformManaged.youtubeOutputDirectory
-                    ? "This path is configured by your platform deployment and cannot be changed here"
-                    : deploymentEnvironment.dockerAutoCreated
-                      ? "This path is configured by your Docker volume mount. To change where videos are saved, update the volume mount in your docker-compose.yml file."
-                      : youtubeDirectoryChanged
-                        ? "⚠️ RESTART REQUIRED after saving - Directory has been changed!"
-                        : "Path where YouTube videos will be saved"
+                    deploymentEnvironment.platform?.toLowerCase() === "elfhosted"
+                      ? "This path is configured by your platform deployment and cannot be changed here."
+                      : "Configured via YOUTUBE_OUTPUT_DIR environment variable. Edit .env and restart to change."
                 }
               />
-              {plexPathSuggestion && (
-                <Alert severity={plexPathSuggestion.severity} sx={{ mt: 2 }}>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    Plex library
-                    {plexPathSuggestion.libraryTitle
-                      ? ` "${plexPathSuggestion.libraryTitle}"`
-                      : ''} reports its media path as{' '}
-                    <code>{plexPathSuggestion.originalPath}</code>.
-                  </Typography>
-                  {plexPathSuggestion.suggestedPath && (
-                    <Typography variant="body2" sx={{ mb: 1 }}>
-                      Suggested path for Youtarr:{' '}
-                      <code>{plexPathSuggestion.suggestedPath}</code>
-                    </Typography>
-                  )}
-                  <Typography variant="body2">{plexPathSuggestion.note}</Typography>
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 2 }}>
-                    {canApplyPlexSuggestion && (
-                      <Button
-                        variant="contained"
-                        size="small"
-                        onClick={applyPlexPathSuggestion}
-                      >
-                        Use Suggested Path
-                      </Button>
-                    )}
-                    <Button
-                      variant="text"
-                      size="small"
-                      onClick={dismissPlexPathSuggestion}
-                    >
-                      Dismiss
-                    </Button>
-                  </Box>
-                  {plexPathSuggestion.canApply && !canApplyPlexSuggestion && (
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                      Output directory changes are managed outside this UI. Update your platform or Docker volume configuration to apply the suggested path.
-                    </Typography>
-                  )}
-                </Alert>
-              )}
             </Grid>
 
             <Grid item xs={12} md={6}>
@@ -2354,7 +2126,7 @@ function Configuration({ token }: ConfigurationProps) {
         </AccordionDetails>
       </Accordion>
 
-      {showAccountSection && (
+      {showAccountSection ? (
         <Card elevation={8} sx={{ mb: 2 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -2430,10 +2202,25 @@ function Configuration({ token }: ConfigurationProps) {
             </Box>
           </CardContent>
         </Card>
+      ) : (
+        <Card elevation={8} sx={{ mb: 2 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Account & Security
+            </Typography>
+
+            <Alert severity="info" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+            Username and password authentication is managed by your platform deployment or environment configuration.
+            To change your login credentials, update the authentication settings in your platform's configuration or .env file.
+              </Typography>
+            </Alert>
+          </CardContent>
+        </Card>
       )}
 
       {/* Spacer to prevent content from being hidden behind the fixed save bar */}
-      <Box sx={{ height: youtubeDirectoryChanged ? { xs: 160, sm: 120 } : { xs: 88, sm: 80 } }} />
+      <Box sx={{ height: { xs: 88, sm: 80 } }} />
 
       {/* Fixed bottom save bar */}
       <Box
@@ -2449,12 +2236,6 @@ function Configuration({ token }: ConfigurationProps) {
           zIndex: (theme) => theme.zIndex.drawer + 2,
         }}
       >
-        {youtubeDirectoryChanged && (
-          <Alert severity="warning" sx={{ mb: 1 }}>
-            <AlertTitle>Restart Required</AlertTitle>
-            YouTube output directory has been changed. After saving your configuration, you will need to RESTART Youtarr for the changes to take effect!
-          </Alert>
-        )}
         <Button
           variant="contained"
           color={hasUnsavedChanges ? 'warning' : 'primary'}

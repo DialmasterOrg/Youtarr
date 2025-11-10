@@ -12,7 +12,6 @@ describe('Cookie Module Integration Tests', () => {
     jest.doMock('fs', () => ({
       readFileSync: jest.fn().mockReturnValue(JSON.stringify({
         plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output',
         cookiesEnabled: false,
         customCookiesUploaded: false
       })),
