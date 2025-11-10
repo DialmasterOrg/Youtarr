@@ -1,5 +1,24 @@
 # Changelog
 
+## [v1.49.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.49.1) - 2025-11-10
+
+### [1.49.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.49.0...v1.49.1) (2025-11-10)
+
+
+### Bug Fixes
+
+* Fix for yt-dlp temp directory behavior on elfhosted ([d2f68a4](https://github.com/DialmasterOrg/Youtarr/commit/d2f68a4863480309978c1c25ea5603cab43a9f47))
+* Set TMPDIR for all yt-dlp invocations ([dfee084](https://github.com/DialmasterOrg/Youtarr/commit/dfee084cd732c8a95c26668b5831be343d16bf8a))
+
+
+### Documentation
+
+* update CHANGELOG for v1.49.0 [skip ci] ([8e18cda](https://github.com/DialmasterOrg/Youtarr/commit/8e18cda81ef38131187b0b10140b64264436a0b2))
+
+
+
+
+
 ## [v1.49.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.49.0) - 2025-11-10
 
 ## [1.49.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.48.0...v1.49.0) (2025-11-10)
