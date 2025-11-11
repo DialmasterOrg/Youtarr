@@ -58,6 +58,11 @@ class ConfigModule extends EventEmitter {
       configModified = true;
     }
 
+    if (this.config.plexViaHttps === undefined) {
+      this.config.plexViaHttps = false;
+      configModified = true;
+    }
+
     // Initialize channel auto-download settings if not present
     if (this.config.channelAutoDownload === undefined) {
       this.config.channelAutoDownload = false;
@@ -266,6 +271,7 @@ class ConfigModule extends EventEmitter {
         channelDownloadFrequency: '0 */6 * * *',
         plexApiKey: '',
         plexPort: '32400',
+        plexViaHttps: false,
         plexLibrarySection: '',
         youtubeApiKey: '',
         sponsorblockEnabled: false,
@@ -421,6 +427,7 @@ class ConfigModule extends EventEmitter {
       // Plex settings - use PLEX_URL if provided
       plexApiKey: '',
       plexPort: '32400',
+      plexViaHttps: false,
       plexLibrarySection: ''
     };
 
@@ -695,6 +702,16 @@ class ConfigModule extends EventEmitter {
         }
         if (!migrated.subtitleLanguage) {
           migrated.subtitleLanguage = 'en';
+        }
+
+        return migrated;
+      },
+      '1.49.1': (cfg) => {
+        const migrated = { ...cfg };
+
+        // Add HTTPS support for Plex connections
+        if (migrated.plexViaHttps === undefined) {
+          migrated.plexViaHttps = false;
         }
 
         return migrated;

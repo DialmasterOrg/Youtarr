@@ -1252,7 +1252,8 @@ describe('server routes - getplexlibraries with test params', () => {
     expect(plexModuleMock.getLibrariesWithParams).toHaveBeenCalledWith(
       '192.168.1.200',
       'test-api-key',
-      '32400'
+      '32400',
+      false
     );
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual([
@@ -1307,7 +1308,8 @@ describe('server routes - getplexlibraries with test params', () => {
     expect(plexModuleMock.getLibrariesWithParams).toHaveBeenCalledWith(
       '192.168.1.200',
       'test-api-key',
-      '32400'
+      '32400',
+      false
     );
   });
 

@@ -433,6 +433,7 @@ const initialize = async () => {
         const testIP = req.query.testIP;
         const testApiKey = req.query.testApiKey;
         const testPortRaw = req.query.testPort;
+        const testUseHttps = req.query.testUseHttps === 'true';
         const hasTestCredentials = typeof testApiKey === 'string' && testApiKey.length > 0;
         let testPort;
         if (typeof testPortRaw === 'string' && testPortRaw.trim().length > 0) {
@@ -443,7 +444,7 @@ const initialize = async () => {
         let libraries;
         if (hasTestCredentials || typeof testIP === 'string') {
           // Use provided test values instead of saved config
-          libraries = await plexModule.getLibrariesWithParams(testIP, testApiKey, testPort);
+          libraries = await plexModule.getLibrariesWithParams(testIP, testApiKey, testPort, testUseHttps);
 
           // If test was successful (got libraries), auto-save the credentials
           if (libraries && libraries.length > 0 && hasTestCredentials) {
@@ -453,6 +454,9 @@ const initialize = async () => {
             }
             if (testPort) {
               currentConfig.plexPort = testPort;
+            }
+            if (req.query.testUseHttps !== undefined) {
+              currentConfig.plexViaHttps = testUseHttps;
             }
             currentConfig.plexApiKey = testApiKey;
             configModule.updateConfig(currentConfig);
