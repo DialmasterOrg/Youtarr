@@ -1274,6 +1274,144 @@ describe('ConfigModule', () => {
     });
   });
 
+  describe('plexViaHttps configuration', () => {
+    beforeEach(() => {
+      ConfigModule = require('../configModule');
+    });
+
+    test('should initialize plexViaHttps to false when missing', () => {
+      const configWithoutHttps = { ...mockConfig };
+      delete configWithoutHttps.plexViaHttps;
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithoutHttps));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithoutHttps)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.plexViaHttps).toBe(false);
+    });
+
+    test('should preserve existing plexViaHttps setting when true', () => {
+      const configWithHttps = {
+        ...mockConfig,
+        plexViaHttps: true
+      };
+
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithHttps));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithHttps)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.plexViaHttps).toBe(true);
+    });
+
+    test('should preserve existing plexViaHttps setting when false', () => {
+      const configWithHttps = {
+        ...mockConfig,
+        plexViaHttps: false
+      };
+
+      fs.readFileSync.mockReturnValue(JSON.stringify(configWithHttps));
+
+      jest.resetModules();
+      jest.doMock('fs', () => ({
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify(configWithHttps)),
+        writeFileSync: jest.fn(),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() }),
+        existsSync: jest.fn().mockReturnValue(true),
+        mkdirSync: jest.fn()
+      }));
+      jest.doMock('uuid', () => ({
+        v4: jest.fn(() => 'test-uuid-1234')
+      }));
+
+      const FreshConfigModule = require('../configModule');
+
+      expect(FreshConfigModule.config.plexViaHttps).toBe(false);
+    });
+
+    test('migration 1.49.1 should add plexViaHttps setting', () => {
+      const configWithoutHttps = {
+        plexApiKey: 'test',
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithoutHttps);
+
+      expect(migrated.plexViaHttps).toBe(false);
+    });
+
+    test('migration 1.49.1 should preserve existing plexViaHttps setting when true', () => {
+      const configWithHttps = {
+        plexApiKey: 'test',
+        plexViaHttps: true
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithHttps);
+
+      expect(migrated.plexViaHttps).toBe(true);
+    });
+
+    test('migration 1.49.1 should preserve existing plexViaHttps setting when false', () => {
+      const configWithHttps = {
+        plexApiKey: 'test',
+        plexViaHttps: false
+      };
+
+      const migrated = ConfigModule.migrateConfig(configWithHttps);
+
+      expect(migrated.plexViaHttps).toBe(false);
+    });
+
+    test('should include plexViaHttps in auto-created config', () => {
+      process.env.DATA_PATH = '/storage/youtube';
+
+      const mockFs = {
+        existsSync: jest.fn()
+          .mockReturnValueOnce(false)
+          .mockReturnValue(true),
+        mkdirSync: jest.fn(),
+        writeFileSync: jest.fn(),
+        readFileSync: jest.fn().mockReturnValue(JSON.stringify({
+          plexViaHttps: false,
+          uuid: 'auto-generated-uuid'
+        })),
+        watch: jest.fn().mockReturnValue({ close: jest.fn() })
+      };
+
+      jest.resetModules();
+      jest.doMock('fs', () => mockFs);
+      jest.doMock('uuid', () => ({ v4: jest.fn(() => 'auto-generated-uuid') }));
+
+      require('../configModule');
+
+      const writtenConfig = JSON.parse(mockFs.writeFileSync.mock.calls[0][1]);
+      expect(writtenConfig.plexViaHttps).toBe(false);
+
+      delete process.env.DATA_PATH;
+    });
+  });
+
   describe('cookie functionality', () => {
     beforeEach(() => {
       jest.resetModules();

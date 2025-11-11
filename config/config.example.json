@@ -7,6 +7,7 @@
   "videoCodec": "default",
   "plexIP": "",
   "plexPort": "32400",
+  "plexViaHttps": false,
   "plexApiKey": "",
   "plexYoutubeLibraryId": "",
   "downloadSocketTimeoutSeconds": 30,

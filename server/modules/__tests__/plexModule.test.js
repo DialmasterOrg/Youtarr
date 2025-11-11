@@ -113,6 +113,36 @@ describe('plexModule', () => {
       const result = plexModule.getBaseUrl('192.168.1.10', undefined, '8080');
       expect(result).toBe('http://192.168.1.10:8080');
     });
+
+    test('uses https when plexViaHttps is true in config', () => {
+      config.plexViaHttps = true;
+      const result = plexModule.getBaseUrl('192.168.1.10', config, '8080');
+      expect(result).toBe('https://192.168.1.10:8080');
+    });
+
+    test('uses http when plexViaHttps is false in config', () => {
+      config.plexViaHttps = false;
+      const result = plexModule.getBaseUrl('192.168.1.10', config, '8080');
+      expect(result).toBe('http://192.168.1.10:8080');
+    });
+
+    test('uses http when plexViaHttps is undefined in config', () => {
+      config.plexViaHttps = undefined;
+      const result = plexModule.getBaseUrl('192.168.1.10', config, '8080');
+      expect(result).toBe('http://192.168.1.10:8080');
+    });
+
+    test('preferredUseHttps parameter overrides config', () => {
+      config.plexViaHttps = false;
+      const result = plexModule.getBaseUrl('192.168.1.10', config, '8080', true);
+      expect(result).toBe('https://192.168.1.10:8080');
+    });
+
+    test('preferredUseHttps false overrides config true', () => {
+      config.plexViaHttps = true;
+      const result = plexModule.getBaseUrl('192.168.1.10', config, '8080', false);
+      expect(result).toBe('http://192.168.1.10:8080');
+    });
   });
 
   describe('refreshLibrary', () => {
@@ -226,6 +256,36 @@ describe('plexModule', () => {
         }
       ]);
     });
+
+    test('uses https when config has plexViaHttps enabled', async () => {
+      config.plexViaHttps = true;
+      axios.get.mockResolvedValue({
+        data: {
+          MediaContainer: {
+            Directory: [
+              {
+                key: '1',
+                title: 'YouTube',
+                Location: [{ id: 1, path: '/data/youtube' }]
+              }
+            ]
+          }
+        }
+      });
+
+      const result = await plexModule.getLibraries();
+
+      expect(axios.get).toHaveBeenCalledWith(
+        'https://127.0.0.1:32400/library/sections?X-Plex-Token=existing-token'
+      );
+      expect(result).toEqual([
+        {
+          id: '1',
+          title: 'YouTube',
+          locations: [{ id: 1, path: '/data/youtube' }]
+        }
+      ]);
+    });
   });
 
   describe('getLibrariesWithParams', () => {
@@ -272,9 +332,8 @@ describe('plexModule', () => {
 
       const result = await plexModule.getLibrariesWithParams('192.168.1.10', 'token', '8080');
 
-      expect(logger.debug).toHaveBeenCalledWith(
-        { baseUrl: 'http://192.168.1.10:8080' },
-        'Fetching Plex libraries'
+      expect(logger.info).toHaveBeenCalledWith(
+        'Attempting to fetch Plex libraries via URL: http://192.168.1.10:8080'
       );
       expect(axios.get).toHaveBeenCalledWith(
         'http://192.168.1.10:8080/library/sections?X-Plex-Token=token'
@@ -347,6 +406,85 @@ describe('plexModule', () => {
 
       expect(result).toEqual([]);
       expect(logger.warn).toHaveBeenCalledWith('Missing Plex API key');
+    });
+
+    test('uses https when plexViaHttps is true', async () => {
+      axios.get.mockResolvedValue({
+        data: {
+          MediaContainer: {
+            Directory: [
+              {
+                key: '1',
+                title: 'Movies',
+                Location: [{ id: 1, path: '/movies' }]
+              }
+            ]
+          }
+        }
+      });
+
+      const result = await plexModule.getLibrariesWithParams('192.168.1.10', 'token', '8080', true);
+
+      expect(logger.info).toHaveBeenCalledWith(
+        'Attempting to fetch Plex libraries via URL: https://192.168.1.10:8080'
+      );
+      expect(axios.get).toHaveBeenCalledWith(
+        'https://192.168.1.10:8080/library/sections?X-Plex-Token=token'
+      );
+      expect(result).toHaveLength(1);
+    });
+
+    test('uses http when plexViaHttps is false', async () => {
+      axios.get.mockResolvedValue({
+        data: {
+          MediaContainer: {
+            Directory: [
+              {
+                key: '1',
+                title: 'Movies',
+                Location: [{ id: 1, path: '/movies' }]
+              }
+            ]
+          }
+        }
+      });
+
+      const result = await plexModule.getLibrariesWithParams('192.168.1.10', 'token', '8080', false);
+
+      expect(logger.info).toHaveBeenCalledWith(
+        'Attempting to fetch Plex libraries via URL: http://192.168.1.10:8080'
+      );
+      expect(axios.get).toHaveBeenCalledWith(
+        'http://192.168.1.10:8080/library/sections?X-Plex-Token=token'
+      );
+      expect(result).toHaveLength(1);
+    });
+
+    test('uses config plexViaHttps when parameter not provided', async () => {
+      config.plexViaHttps = true;
+      axios.get.mockResolvedValue({
+        data: {
+          MediaContainer: {
+            Directory: [
+              {
+                key: '1',
+                title: 'Movies',
+                Location: [{ id: 1, path: '/movies' }]
+              }
+            ]
+          }
+        }
+      });
+
+      const result = await plexModule.getLibrariesWithParams('192.168.1.10', 'token', '8080');
+
+      expect(logger.info).toHaveBeenCalledWith(
+        'Attempting to fetch Plex libraries via URL: https://192.168.1.10:8080'
+      );
+      expect(axios.get).toHaveBeenCalledWith(
+        'https://192.168.1.10:8080/library/sections?X-Plex-Token=token'
+      );
+      expect(result).toHaveLength(1);
     });
   });
 

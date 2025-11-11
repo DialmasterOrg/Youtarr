@@ -5,7 +5,7 @@ const logger = require('../logger');
 class PlexModule {
   constructor() {}
 
-  getBaseUrl(preferredIp, config, preferredPort) {
+  getBaseUrl(preferredIp, config, preferredPort, preferredUseHttps) {
     const resolvedConfig = config || configModule.getConfig();
     const managedUrl = (process.env.PLEX_URL || resolvedConfig.plexUrl || '').trim();
 
@@ -25,7 +25,9 @@ class PlexModule {
     const numericPort = String(rawPort).replace(/[^0-9]/g, '');
     const port = numericPort || '32400';
 
-    return `http://${ip}:${port}`;
+    const useHttps = preferredUseHttps !== undefined ? preferredUseHttps : resolvedConfig.plexViaHttps;
+    const protocol = useHttps ? 'https' : 'http';
+    return `${protocol}://${ip}:${port}`;
   }
 
   async refreshLibrary() {
@@ -33,7 +35,7 @@ class PlexModule {
     // Example GET http://[plexIP]:[plexPort]/library/sections/[plexYoutubeLibraryId]/refresh?X-Plex-Token=[plexApiKey]
     try {
       const config = configModule.getConfig();
-      const baseUrl = this.getBaseUrl(config.plexIP, config, config.plexPort);
+      const baseUrl = this.getBaseUrl(config.plexIP, config, config.plexPort, config.plexViaHttps);
 
       if (!baseUrl || !config.plexYoutubeLibraryId || !config.plexApiKey) {
         logger.warn('Skipping Plex refresh - missing server details or credentials');
@@ -57,10 +59,10 @@ class PlexModule {
 
   async getLibraries() {
     const config = configModule.getConfig();
-    return this.getLibrariesWithParams(config.plexIP, config.plexApiKey, config.plexPort);
+    return this.getLibrariesWithParams(config.plexIP, config.plexApiKey, config.plexPort, config.plexViaHttps);
   }
 
-  async getLibrariesWithParams(plexIP, plexApiKey, plexPort) {
+  async getLibrariesWithParams(plexIP, plexApiKey, plexPort, plexViaHttps) {
     try {
       if (!plexApiKey) {
         logger.warn('Missing Plex API key');
@@ -68,13 +70,14 @@ class PlexModule {
       }
 
       const config = configModule.getConfig();
-      const baseUrl = this.getBaseUrl(plexIP, config, plexPort);
+      const baseUrl = this.getBaseUrl(plexIP, config, plexPort, plexViaHttps);
 
       if (!baseUrl) {
         logger.warn('Missing Plex server URL');
         return [];
       }
-      logger.debug({ baseUrl }, 'Fetching Plex libraries');
+
+      logger.info(`Attempting to fetch Plex libraries via URL: ${baseUrl}`);
 
       const response = await axios.get(
         `${baseUrl}/library/sections?X-Plex-Token=${plexApiKey}`
@@ -164,7 +167,7 @@ class PlexModule {
       // Verify authToken against your Plex server
       try {
         const config = configModule.getConfig();
-        const baseUrl = this.getBaseUrl(config.plexIP, config, config.plexPort);
+        const baseUrl = this.getBaseUrl(config.plexIP, config, config.plexPort, config.plexViaHttps);
 
         if (!baseUrl) {
           throw new Error('Missing Plex server URL');

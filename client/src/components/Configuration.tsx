@@ -102,6 +102,7 @@ function Configuration({ token }: ConfigurationProps) {
     plexYoutubeLibraryId: '',
     plexIP: '',
     plexPort: '32400',
+    plexViaHttps: false,
     uuid: '',
     sponsorblockEnabled: false,
     sponsorblockAction: 'remove' as 'remove' | 'mark',
@@ -377,6 +378,7 @@ function Configuration({ token }: ConfigurationProps) {
       }
 
       params.set('testPort', normalizedPort);
+      params.set('testUseHttps', String(config.plexViaHttps));
 
       const response = await fetch(`/getplexlibraries?${params}`, {
         headers: {
@@ -390,7 +392,7 @@ function Configuration({ token }: ConfigurationProps) {
         // Plex credentials are auto-saved. Update initial snapshot for those fields.
         setInitialConfig((prev) => (
           prev
-            ? { ...prev, plexIP: config.plexIP, plexApiKey: config.plexApiKey, plexPort: normalizedPort }
+            ? { ...prev, plexIP: config.plexIP, plexApiKey: config.plexApiKey, plexPort: normalizedPort, plexViaHttps: config.plexViaHttps }
             : { ...config, plexPort: normalizedPort }
         ));
         setSnackbar({
@@ -493,6 +495,11 @@ function Configuration({ token }: ConfigurationProps) {
       ...config,
       [event.target.name]: event.target.checked,
     });
+
+    // Mark Plex connection as not tested if plexViaHttps changes
+    if (event.target.name === 'plexViaHttps') {
+      setPlexConnectionStatus('not_tested');
+    }
   };
 
   const runAutoRemovalDryRun = async () => {
@@ -775,6 +782,7 @@ function Configuration({ token }: ConfigurationProps) {
       'plexYoutubeLibraryId',
       'plexIP',
       'plexPort',
+      'plexViaHttps',
       'sponsorblockEnabled',
       'sponsorblockAction',
       'sponsorblockCategories',
@@ -1228,7 +1236,7 @@ function Configuration({ token }: ConfigurationProps) {
               />
             </Grid>
 
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={2}>
               <TextField
                 fullWidth
                 type="number"
@@ -1247,6 +1255,32 @@ function Configuration({ token }: ConfigurationProps) {
                   ? 'Plex port is configured by your platform deployment'
                   : 'Default: 32400'}
               />
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      name="plexViaHttps"
+                      checked={isPlatformManaged.plexUrl ? false : config.plexViaHttps}
+                      onChange={handleCheckboxChange}
+                      disabled={isPlatformManaged.plexUrl}
+                    />
+                  }
+                  label="Use HTTPS"
+                />
+                {getInfoIcon(
+                  isPlatformManaged.plexUrl
+                    ? 'HTTPS setting managed by platform'
+                    : 'Enable if your Plex server uses HTTPS (e.g., via reverse proxy with SSL/TLS)'
+                )}
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ ml: 4, display: 'block' }}>
+                {isPlatformManaged.plexUrl
+                  ? 'Protocol managed by platform'
+                  : 'Default: HTTP'}
+              </Typography>
             </Grid>
 
             <Grid item xs={12} md={4}>
