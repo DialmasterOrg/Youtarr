@@ -1,5 +1,24 @@
 # Changelog
 
+## [v1.50.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.50.0) - 2025-11-11
+
+## [1.50.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.49.1...v1.50.0) (2025-11-11)
+
+
+### Features
+
+* add HTTPS support for Plex server connections ([30e5b75](https://github.com/DialmasterOrg/Youtarr/commit/30e5b7510dcba95a91c58c7d980b56a6eddd9d90))
+* improve update instructions and add colorized console output ([99187b6](https://github.com/DialmasterOrg/Youtarr/commit/99187b616ffb6b5eade16de0eb72875e77155ecd))
+
+
+### Documentation
+
+* update CHANGELOG for v1.49.1 [skip ci] ([b2d8db0](https://github.com/DialmasterOrg/Youtarr/commit/b2d8db08cc802128515b704b0adedcd9ec4fcb87))
+
+
+
+
+
 ## [v1.49.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.49.1) - 2025-11-10
 
 ### [1.49.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.49.0...v1.49.1) (2025-11-10)
