@@ -192,6 +192,35 @@ See [docs/UNRAID.md](docs/UNRAID.md) for instructions on Unraid setup.
 3. Select videos to re-download with your preferred resolution
 4. Videos will be queued for download while preserving metadata
 
+## 🔄 Updating Youtarr
+
+Youtarr does not automatically update. When you run `./start.sh` or `docker compose up -d`, it uses your currently installed version.
+
+### To Update to the Latest Version
+
+**If using start.sh (Method 1 from Quick Start):**
+```bash
+./start.sh --pull-latest
+```
+
+**If using docker compose directly (Method 2 from Quick Start):**
+```bash
+git pull
+docker compose pull
+docker compose up -d
+```
+
+The `--pull-latest` flag (or manual git/docker pull commands) does two things:
+1. Pulls the latest code from the GitHub repository
+2. Pulls the latest Docker image from DockerHub
+
+**Important**: Simply restarting Youtarr without pulling updates will restart the same version you currently have installed. If you're wondering why you don't see new features after a restart, you likely need to run the update commands above.
+
+### Checking for Updates
+
+- View release notes and changelog: [GitHub Releases](https://github.com/DialmasterOrg/Youtarr/releases)
+- Check current version: Look in the footer of the Youtarr web interface
+
 ## 📖 Documentation
 
 - **[Setup Guide](docs/SETUP.md)** - Detailed installation and configuration instructions
