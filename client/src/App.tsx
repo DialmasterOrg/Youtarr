@@ -721,8 +721,7 @@ function AppContent() {
         <Typography variant='subtitle1' color='textSecondary'>
           {serverVersion && serverVersion !== clientVersion && platformName?.toLowerCase() !== 'elfhosted' && (
             <Typography color='error'>
-              New version ({serverVersion}) available! Please restart the app to
-              update.
+              New version ({serverVersion}) available! Please shut down and pull the latest image and files to update.
             </Typography>
           )}
         </Typography>

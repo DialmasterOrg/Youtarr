@@ -93,6 +93,12 @@ if [ "$PULL_LATEST" = true ]; then
   git pull
   yt_info "Pulling latest Docker images."
   $COMPOSE_CMD pull
+else
+  yt_section "Updates"
+  yt_warn "Starting with current version (no updates pulled)."
+  yt_info "To update Youtarr to the latest version, use:"
+  yt_detail "$START_SCRIPT_NAME --pull-latest"
+  yt_detail "This pulls the latest code and Docker images before starting."
 fi
 
 # Run the create-env script to ensure .env and config are setup
