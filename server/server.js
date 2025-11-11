@@ -132,11 +132,15 @@ function validateEnvAuthCredentials() {
     return false;
   }
   if (trimmedUsername.length < userNameMinLength || trimmedUsername.length > userNameMaxLength) {
+    logger.error('AUTH_PRESET_USERNAME does not meet length requirements');
+    logger.error(`AUTH_PRESET_USERNAME must be between ${userNameMinLength} and ${userNameMaxLength} characters`);
     return false;
   }
 
   // Password validation (NOT trimmed)
   if (presetPassword.length < passwordMinLength || presetPassword.length > passwordMaxLength) {
+    logger.error('AUTH_PRESET_PASSWORD does not meet length requirements');
+    logger.error(`AUTH_PRESET_PASSWORD must be between ${passwordMinLength} and ${passwordMaxLength} characters`);
     return false;
   }
 

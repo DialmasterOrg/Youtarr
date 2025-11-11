@@ -120,6 +120,10 @@ Eg. for Portainer, TrueNAS, or any Docker-native workflow:
 
    Optionally configure authentication and logging settings (see .env.example for details).
 
+   > **Note:** Changes to `.env` require a complete container restart to take effect:
+   > - Using scripts: `./stop.sh` then `./start.sh`
+   > - Using Docker Compose: `docker compose down` then `docker compose up -d`
+
 3. **Start with Docker Compose**:
    ```bash
    docker compose up -d
@@ -128,6 +132,9 @@ Eg. for Portainer, TrueNAS, or any Docker-native workflow:
 4. **Access the web interface**:
    - Navigate to `http://localhost:3087`
    - If `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` are set in `.env`, login with those credentials
+     - These must meet length criteria or they will be ignored:
+       - `AUTH_PRESET_USERNAME`: 3-32 characters
+       - `AUTH_PRESET_PASSWORD`: 8-64 characters
    - Otherwise you must set your login credentials in UI via localhost on first run and they will be saved to `./config/config.json`
    - Configure Plex (optional) and other settings from the Configuration page
 
