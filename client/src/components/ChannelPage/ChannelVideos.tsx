@@ -157,14 +157,22 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     };
 
     const enabledTabs = channelAutoDownloadTabs.split(',').map(t => t.trim());
-    const status: Record<string, boolean> = {};
 
-    availableTabs.forEach(tabType => {
-      const mediaType = mediaTypeMap[tabType];
-      status[tabType] = mediaType ? enabledTabs.includes(mediaType) : false;
+    // Only update tabs that don't already have a value in the state
+    // This preserves local changes made via handleAutoDownloadChange
+    setTabAutoDownloadStatus(prevStatus => {
+      const newStatus: Record<string, boolean> = { ...prevStatus };
+
+      availableTabs.forEach(tabType => {
+        // Only initialize tabs that haven't been set yet
+        if (!(tabType in newStatus)) {
+          const mediaType = mediaTypeMap[tabType];
+          newStatus[tabType] = mediaType ? enabledTabs.includes(mediaType) : false;
+        }
+      });
+
+      return newStatus;
     });
-
-    setTabAutoDownloadStatus(status);
   }, [channelAutoDownloadTabs, availableTabs]);
 
   // Use custom hooks for data fetching

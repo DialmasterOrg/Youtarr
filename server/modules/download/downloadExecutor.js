@@ -994,6 +994,18 @@ class DownloadExecutor {
             ? manualReason
             : (shutdownReason || 'Download terminated due to timeout');
 
+          // Persist videos to DB BEFORE calling updateJob
+          // This ensures videos are in DB before updateJob reloads from DB
+          if (videoData && videoData.length > 0) {
+            const currentJob = jobModule.getJob(jobId);
+            if (currentJob) {
+              currentJob.data = currentJob.data || {};
+              currentJob.data.videos = videoData;
+              currentJob.data.failedVideos = failedVideosList || [];
+              await jobModule.saveJobOnly(jobId, currentJob);
+            }
+          }
+
           await jobModule.updateJob(jobId, {
             status: status,
             endDate: Date.now(),
