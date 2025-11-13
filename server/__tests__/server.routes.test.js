@@ -283,6 +283,10 @@ const createServerModule = ({
           unlink: jest.fn((path, cb) => cb(null))
         };
 
+        const childProcessMock = {
+          execSync: jest.fn(() => '2025.09.23')
+        };
+
         const httpsMock = {
           get: jest.fn((url, callback) => {
             const mockResp = {
@@ -301,6 +305,8 @@ const createServerModule = ({
 
         const cronMock = { schedule: jest.fn() };
         const rateLimitMiddleware = jest.fn(() => (req, res, next) => next());
+        // Mock ipKeyGenerator to normalize IPv6 addresses
+        rateLimitMiddleware.ipKeyGenerator = jest.fn((ip) => ip);
         const multerSingleMock = jest.fn(() => (req, res, next) => {
           if (req.path === '/cookies/upload' && req.body.simulateFile) {
             req.file = { buffer: Buffer.from('cookie-content') };
@@ -321,12 +327,13 @@ const createServerModule = ({
         jest.doMock('../modules/channelSettingsModule', () => channelSettingsModuleMock);
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => cronMock);
-        jest.doMock('express-rate-limit', () => rateLimitMiddleware);
+        jest.doMock('express-rate-limit', () => Object.assign(rateLimitMiddleware, { ipKeyGenerator: rateLimitMiddleware.ipKeyGenerator }));
         jest.doMock('multer', () => multerMock);
         jest.doMock('https', () => httpsMock);
         jest.doMock('bcrypt', () => bcryptMock);
         jest.doMock('uuid', () => uuidMock);
         jest.doMock('fs', () => fsMock);
+        jest.doMock('child_process', () => childProcessMock);
 
         const serverModule = require('../server');
 
@@ -347,6 +354,7 @@ const createServerModule = ({
         state.uuidMock = uuidMock;
         state.httpsMock = httpsMock;
         state.fsMock = fsMock;
+        state.childProcessMock = childProcessMock;
         state.rateLimitMiddleware = rateLimitMiddleware;
         state.sessionUpdateMock = effectiveSession?.update || defaultSessionUpdate;
 
@@ -1620,7 +1628,23 @@ describe('server routes - version', () => {
     await versionHandler(req, res);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual({ version: 'v1.0.0' });
+    expect(res.body).toEqual({ version: 'v1.0.0', ytDlpVersion: '2025.09.23' });
+  });
+
+  test('GET /getCurrentReleaseVersion reuses cached yt-dlp version', async () => {
+    const { app, childProcessMock } = await createServerModule();
+
+    const handlers = findRouteHandlers(app, 'get', '/getCurrentReleaseVersion');
+    const versionHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({});
+    const res = createMockResponse();
+    const resSecond = createMockResponse();
+
+    await versionHandler(req, res);
+    await versionHandler(req, resSecond);
+
+    expect(childProcessMock.execSync).toHaveBeenCalledTimes(1);
   });
 
   test('GET /getCurrentReleaseVersion handles error', async () => {

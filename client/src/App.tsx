@@ -59,6 +59,7 @@ function AppContent() {
   );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [serverVersion, setServerVersion] = useState('');
+  const [ytDlpVersion, setYtDlpVersion] = useState('');
   const [requiresSetup, setRequiresSetup] = useState<boolean | null>(null);
   const [checkingSetup, setCheckingSetup] = useState(true);
   const [isPlatformManaged, setIsPlatformManaged] = useState(false);
@@ -345,6 +346,9 @@ function AppContent() {
       .get('/getCurrentReleaseVersion')
       .then((response) => {
         setServerVersion(response.data.version);
+        if (response.data.ytDlpVersion) {
+          setYtDlpVersion(response.data.ytDlpVersion);
+        }
       })
       .catch((err) => {
         console.error('Failed to fetch server version:', err);
@@ -422,13 +426,32 @@ function AppContent() {
               YouTube Video Manager
             </Typography>
           </div>
-          <Typography
-            fontSize='small'
-            color={'textSecondary'}
-            style={{ position: 'absolute', top: 5, right: 10 }}
+          <Box
+            style={{
+              position: 'absolute',
+              top: 5,
+              right: 10,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end'
+            }}
           >
-            {clientVersion}
-          </Typography>
+            <Typography
+              fontSize='small'
+              color={'textSecondary'}
+            >
+              {clientVersion}
+            </Typography>
+            {ytDlpVersion && (
+              <Typography
+                fontSize='x-small'
+                color={'textSecondary'}
+                style={{ opacity: 0.7 }}
+              >
+                yt-dlp: {ytDlpVersion}
+              </Typography>
+            )}
+          </Box>
           {/* This is the matching invisible IconButton */}
           <IconButton
             color='inherit'

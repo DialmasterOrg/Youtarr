@@ -190,6 +190,8 @@ const createServerModule = ({
         const cronMock = { schedule: jest.fn() };
         const cronJobsMock = { initialize: jest.fn() };
         const rateLimitMiddleware = jest.fn(() => (req, res, next) => next());
+        // Mock ipKeyGenerator to normalize IPv6 addresses
+        rateLimitMiddleware.ipKeyGenerator = jest.fn((ip) => ip);
         const multerSingleMock = jest.fn(() => (req, res, next) => next());
         const multerMock = jest.fn(() => ({ single: multerSingleMock }));
 
@@ -209,7 +211,7 @@ const createServerModule = ({
         jest.doMock('../modules/cronJobs', () => cronJobsMock);
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => cronMock);
-        jest.doMock('express-rate-limit', () => rateLimitMiddleware);
+        jest.doMock('express-rate-limit', () => Object.assign(rateLimitMiddleware, { ipKeyGenerator: rateLimitMiddleware.ipKeyGenerator }));
         jest.doMock('multer', () => multerMock);
         jest.doMock('https', () => ({ get: jest.fn(() => ({ on: jest.fn() })) }));
 
