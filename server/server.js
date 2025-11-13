@@ -1,5 +1,6 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = require('express-rate-limit');
 const logger = require('./logger');
 const pinoHttp = require('pino-http');
 const app = express();
@@ -64,6 +65,7 @@ app.use(pinoHttp({
 app.use(express.json());
 const path = require('path');
 const fs = require('fs');
+const { execSync } = require('child_process');
 const db = require('./db');
 const databaseHealth = require('./modules/databaseHealthModule');
 const https = require('https');
@@ -147,6 +149,31 @@ function validateEnvAuthCredentials() {
   return true;
 }
 
+let cachedYtDlpVersion = null;
+let ytDlpVersionInitialized = false;
+
+// Helper function to refresh cached yt-dlp version
+function refreshYtDlpVersionCache() {
+  try {
+    cachedYtDlpVersion = execSync('yt-dlp --version', { encoding: 'utf8' }).trim();
+  } catch (error) {
+    logger.warn({ err: error }, 'Failed to get yt-dlp version');
+    cachedYtDlpVersion = null;
+  } finally {
+    ytDlpVersionInitialized = true;
+  }
+
+  return cachedYtDlpVersion;
+}
+
+function getCachedYtDlpVersion() {
+  if (!ytDlpVersionInitialized) {
+    return refreshYtDlpVersionCache();
+  }
+
+  return cachedYtDlpVersion;
+}
+
 const isWslEnvironment = (() => {
   if (process.platform !== 'linux') {
     return false;
@@ -181,6 +208,9 @@ const initialize = async () => {
     const jobModule = require('./modules/jobModule');
     const videosModule = require('./modules/videosModule');
     const archiveModule = require('./modules/archiveModule');
+
+    // Cache yt-dlp version once during startup to keep the version endpoint fast
+    refreshYtDlpVersionCache();
 
     // Apply ENV auth credentials if valid
     if (validateEnvAuthCredentials()) {
@@ -349,8 +379,10 @@ const initialize = async () => {
       },
       keyGenerator: (req) => {
         // Use IP + username combination for more granular rate limiting
+        // ipKeyGenerator normalizes IPv6 addresses to prevent bypass
+        const normalizedIp = ipKeyGenerator(req.ip);
         const username = req.body.username || 'unknown';
-        return `${req.ip}:${username}`;
+        return `${normalizedIp}:${username}`;
       },
       handler: (req, res) => {
         res.status(429).json({
@@ -397,6 +429,9 @@ const initialize = async () => {
 
     app.get('/getCurrentReleaseVersion', async (req, res) => {
       try {
+        // Get cached yt-dlp version
+        const ytDlpVersion = getCachedYtDlpVersion();
+
         https
           .get(
             'https://registry.hub.docker.com/v2/repositories/dialmaster/youtarr/tags',
@@ -412,7 +447,13 @@ const initialize = async () => {
                 const latestVersion = dockerData.results.filter(
                   (tag) => tag.name !== 'latest'
                 )[0].name; // Filter out 'latest' tag and get the first non-'latest' tag
-                res.json({ version: latestVersion });
+
+                // Include yt-dlp version in response
+                const response = { version: latestVersion };
+                if (ytDlpVersion) {
+                  response.ytDlpVersion = ytDlpVersion;
+                }
+                res.json(response);
               });
             }
           )

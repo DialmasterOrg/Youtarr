@@ -324,6 +324,16 @@ describe('App Component', () => {
     });
   });
 
+  test('displays yt-dlp version when provided by server', async () => {
+    axios.get.mockResolvedValue({ data: { version: 'v1.2.0', ytDlpVersion: '2025.09.23' } });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/yt-dlp: 2025.09.23/)).toBeInTheDocument();
+    });
+  });
+
   test('displays version mismatch warning when server version differs', async () => {
     axios.get.mockResolvedValue({ data: { version: 'v2.0.0' } });
     localStorageMock.getItem.mockReturnValue('test-token');
