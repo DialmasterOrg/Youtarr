@@ -1,5 +1,24 @@
 # Changelog
 
+## [v1.50.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.50.1) - 2025-11-13
+
+### [1.50.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.50.0...v1.50.1) (2025-11-13)
+
+
+### Bug Fixes
+
+* terminated download history and Channel UI ([748d46e](https://github.com/DialmasterOrg/Youtarr/commit/748d46ed0082c9a43b7f3d1a5b443552b0aa16a3))
+
+
+### Documentation
+
+* improve AUTH_PRESET credential documentation and validation feedback ([b372829](https://github.com/DialmasterOrg/Youtarr/commit/b3728297fe1755c29fb6d1cbbb1e1be0540ad91e))
+* update CHANGELOG for v1.50.0 [skip ci] ([e823431](https://github.com/DialmasterOrg/Youtarr/commit/e823431a25bc6a8e5ce6dbb00f16b8c6c6568bfa))
+
+
+
+
+
 ## [v1.50.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.50.0) - 2025-11-11
 
 ## [1.50.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.49.1...v1.50.0) (2025-11-11)
