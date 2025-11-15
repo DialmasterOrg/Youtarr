@@ -30,6 +30,8 @@
   "enableStallDetection": true,
   "stallDetectionWindowSeconds": 30,
   "stallDetectionRateThreshold": "100K",
+  "sleepRequests": 1,
+  "proxy": "",
   "useTmpForDownloads": false,
   "tmpFilePath": "/tmp/youtarr-downloads",
   "cookiesEnabled": false,

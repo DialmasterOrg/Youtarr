@@ -61,6 +61,10 @@ export const CONFIG_FIELDS = {
   stallDetectionWindowSeconds: { default: 30, trackChanges: true },
   stallDetectionRateThreshold: { default: '100K', trackChanges: true },
 
+  // Advanced settings
+  sleepRequests: { default: 1, trackChanges: true },
+  proxy: { default: '', trackChanges: true },
+
   // Cookies
   cookiesEnabled: { default: false, trackChanges: true },
   customCookiesUploaded: { default: false, trackChanges: true },
@@ -126,6 +130,8 @@ export const DEFAULT_CONFIG: ConfigState = {
   enableStallDetection: CONFIG_FIELDS.enableStallDetection.default,
   stallDetectionWindowSeconds: CONFIG_FIELDS.stallDetectionWindowSeconds.default,
   stallDetectionRateThreshold: CONFIG_FIELDS.stallDetectionRateThreshold.default,
+  sleepRequests: CONFIG_FIELDS.sleepRequests.default,
+  proxy: CONFIG_FIELDS.proxy.default,
   cookiesEnabled: CONFIG_FIELDS.cookiesEnabled.default,
   customCookiesUploaded: CONFIG_FIELDS.customCookiesUploaded.default,
   writeChannelPosters: CONFIG_FIELDS.writeChannelPosters.default,

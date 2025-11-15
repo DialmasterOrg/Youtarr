@@ -21,10 +21,10 @@ if [ "$DEV_MODE" == "true" ]; then
   fi
 else
   export YOUTARR_IMAGE=dialmaster/youtarr:latest
-  export LOG_LEVEL=warn
+  export LOG_LEVEL=info
   yt_info "Running in production mode."
   yt_detail "Docker image : $YOUTARR_IMAGE"
-  yt_detail "Log level    : warn"
+  yt_detail "Log level    : info"
 fi
 
 # shellcheck source=scripts/_shared_start_tasks.sh

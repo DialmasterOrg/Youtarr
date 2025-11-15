@@ -64,7 +64,7 @@ If you prefer to use standard `docker compose up` commands (eg. for Portainer, T
    Optionally configure other settings:
    - `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` - For headless deployments (e.g., Unraid)
    - `AUTH_ENABLED=false` - Only if behind external authentication (VPN, reverse proxy)
-   - `LOG_LEVEL` - Set to `debug` for troubleshooting, `warn` for production
+   - `LOG_LEVEL` - Set to `debug` for troubleshooting, `info` for normal/production use (default), `warn` for minimal logging
 
 4. **Start with Docker Compose**:
    ```bash

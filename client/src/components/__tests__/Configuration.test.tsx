@@ -2,76 +2,83 @@ import React from 'react';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import Configuration from '../../Configuration';
-import { renderWithProviders } from '../../../test-utils';
-import { DEFAULT_CONFIG } from '../../../config/configSchema';
-import { ConfigState } from '../types';
+import Configuration from '../Configuration';
+import { renderWithProviders } from '../../test-utils';
+import { DEFAULT_CONFIG } from '../../config/configSchema';
+import { ConfigState } from '../Configuration/types';
 
 // Mock all section components
-jest.mock('../sections/CoreSettingsSection', () => ({
+jest.mock('../Configuration/sections/CoreSettingsSection', () => ({
   CoreSettingsSection: function MockCoreSettingsSection(props: any) {
     const React = require('react');
     return React.createElement('div', { 'data-testid': 'core-settings-section' }, 'CoreSettingsSection');
   }
 }));
 
-jest.mock('../sections/PlexIntegrationSection', () => ({
+jest.mock('../Configuration/sections/PlexIntegrationSection', () => ({
   PlexIntegrationSection: function MockPlexIntegrationSection(props: any) {
     const React = require('react');
     return React.createElement('div', { 'data-testid': 'plex-integration-section' }, 'PlexIntegrationSection');
   }
 }));
 
-jest.mock('../sections/SponsorBlockSection', () => ({
+jest.mock('../Configuration/sections/SponsorBlockSection', () => ({
   SponsorBlockSection: function MockSponsorBlockSection(props: any) {
     const React = require('react');
     return React.createElement('div', { 'data-testid': 'sponsorblock-section' }, 'SponsorBlockSection');
   }
 }));
 
-jest.mock('../sections/KodiCompatibilitySection', () => ({
+jest.mock('../Configuration/sections/KodiCompatibilitySection', () => ({
   KodiCompatibilitySection: function MockKodiCompatibilitySection(props: any) {
     const React = require('react');
     return React.createElement('div', { 'data-testid': 'kodi-compatibility-section' }, 'KodiCompatibilitySection');
   }
 }));
 
-jest.mock('../sections/CookieConfigSection', () => ({
+jest.mock('../Configuration/sections/CookieConfigSection', () => ({
   CookieConfigSection: function MockCookieConfigSection(props: any) {
     const React = require('react');
     return React.createElement('div', { 'data-testid': 'cookie-config-section' }, 'CookieConfigSection');
   }
 }));
 
-jest.mock('../sections/NotificationsSection', () => ({
+jest.mock('../Configuration/sections/NotificationsSection', () => ({
   NotificationsSection: function MockNotificationsSection(props: any) {
     const React = require('react');
     return React.createElement('div', { 'data-testid': 'notifications-section' }, 'NotificationsSection');
   }
 }));
 
-jest.mock('../sections/DownloadPerformanceSection', () => ({
+jest.mock('../Configuration/sections/DownloadPerformanceSection', () => ({
   DownloadPerformanceSection: function MockDownloadPerformanceSection(props: any) {
     const React = require('react');
     return React.createElement('div', { 'data-testid': 'download-performance-section' }, 'DownloadPerformanceSection');
   }
 }));
 
-jest.mock('../sections/AutoRemovalSection', () => ({
+jest.mock('../Configuration/sections/AdvancedSettingsSection', () => ({
+  AdvancedSettingsSection: function MockAdvancedSettingsSection(props: any) {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'advanced-settings-section' }, 'AdvancedSettingsSection');
+  }
+}));
+
+jest.mock('../Configuration/sections/AutoRemovalSection', () => ({
   AutoRemovalSection: function MockAutoRemovalSection(props: any) {
     const React = require('react');
     return React.createElement('div', { 'data-testid': 'auto-removal-section' }, 'AutoRemovalSection');
   }
 }));
 
-jest.mock('../sections/AccountSecuritySection', () => ({
+jest.mock('../Configuration/sections/AccountSecuritySection', () => ({
   AccountSecuritySection: function MockAccountSecuritySection(props: any) {
     const React = require('react');
     return React.createElement('div', { 'data-testid': 'account-security-section' }, 'AccountSecuritySection');
   }
 }));
 
-jest.mock('../sections/SaveBar', () => ({
+jest.mock('../Configuration/sections/SaveBar', () => ({
   SaveBar: function MockSaveBar(props: any) {
     const React = require('react');
     return React.createElement('div', { 'data-testid': 'save-bar' },
@@ -85,7 +92,7 @@ jest.mock('../sections/SaveBar', () => ({
 }));
 
 // Mock PlexLibrarySelector
-jest.mock('../../PlexLibrarySelector', () => ({
+jest.mock('../PlexLibrarySelector', () => ({
   __esModule: true,
   default: function MockPlexLibrarySelector(props: any) {
     const React = require('react');
@@ -96,7 +103,7 @@ jest.mock('../../PlexLibrarySelector', () => ({
 }));
 
 // Mock PlexAuthDialog
-jest.mock('../../PlexAuthDialog', () => ({
+jest.mock('../PlexAuthDialog', () => ({
   __esModule: true,
   default: function MockPlexAuthDialog(props: any) {
     const React = require('react');
@@ -107,7 +114,7 @@ jest.mock('../../PlexAuthDialog', () => ({
 }));
 
 // Mock ConfigurationSkeleton
-jest.mock('../common/ConfigurationSkeleton', () => ({
+jest.mock('../Configuration/common/ConfigurationSkeleton', () => ({
   __esModule: true,
   default: function MockConfigurationSkeleton() {
     const React = require('react');
@@ -121,16 +128,16 @@ const mockUsePlexConnection = jest.fn();
 const mockUseConfigSave = jest.fn();
 const mockUseStorageStatus = jest.fn();
 
-jest.mock('../../../hooks/useConfig', () => ({
+jest.mock('../../hooks/useConfig', () => ({
   useConfig: (...args: any[]) => mockUseConfig(...args)
 }));
 
-jest.mock('../hooks', () => ({
+jest.mock('../Configuration/hooks', () => ({
   usePlexConnection: (...args: any[]) => mockUsePlexConnection(...args),
   useConfigSave: (...args: any[]) => mockUseConfigSave(...args)
 }));
 
-jest.mock('../../../hooks/useStorageStatus', () => ({
+jest.mock('../../hooks/useStorageStatus', () => ({
   useStorageStatus: (...args: any[]) => mockUseStorageStatus(...args)
 }));
 
@@ -218,6 +225,7 @@ describe('Configuration Component', () => {
       expect(screen.getByTestId('cookie-config-section')).toBeInTheDocument();
       expect(screen.getByTestId('notifications-section')).toBeInTheDocument();
       expect(screen.getByTestId('download-performance-section')).toBeInTheDocument();
+      expect(screen.getByTestId('advanced-settings-section')).toBeInTheDocument();
       expect(screen.getByTestId('auto-removal-section')).toBeInTheDocument();
       expect(screen.getByTestId('account-security-section')).toBeInTheDocument();
       expect(screen.getByTestId('save-bar')).toBeInTheDocument();
@@ -428,26 +436,27 @@ describe('Configuration Component', () => {
     });
   });
 
-  describe('Auto-Removal Validation', () => {
-    test('prevents save when auto-removal enabled without thresholds', () => {
-      const saveConfig = jest.fn();
-      mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
-      mockUseConfig.mockReturnValue(createMockUseConfig({
-        config: createConfig({
-          autoRemovalEnabled: true,
-          autoRemovalFreeSpaceThreshold: '',
-          autoRemovalVideoAgeThreshold: '',
-        }),
-      }));
+  describe('Validation', () => {
+    describe('Auto-Removal Validation', () => {
+      test('prevents save when auto-removal enabled without thresholds', () => {
+        const saveConfig = jest.fn();
+        mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+        mockUseConfig.mockReturnValue(createMockUseConfig({
+          config: createConfig({
+            autoRemovalEnabled: true,
+            autoRemovalFreeSpaceThreshold: '',
+            autoRemovalVideoAgeThreshold: '',
+          }),
+        }));
 
-      renderWithProviders(<Configuration token="test-token" />);
+        renderWithProviders(<Configuration token="test-token" />);
 
-      const saveButton = screen.getByTestId('save-button');
+        const saveButton = screen.getByTestId('save-button');
 
-      // Button should be disabled due to validation error
-      expect(saveButton).toBeDisabled();
-      expect(saveConfig).not.toHaveBeenCalled();
-    });
+        // Button should be disabled due to validation error
+        expect(saveButton).toBeDisabled();
+        expect(saveConfig).not.toHaveBeenCalled();
+      });
 
     test('prevents save from confirmation dialog when auto-removal enabled without thresholds', async () => {
       const saveConfig = jest.fn();
@@ -540,6 +549,137 @@ describe('Configuration Component', () => {
 
       await waitFor(() => {
         expect(saveConfig).toHaveBeenCalledTimes(1);
+      });
+    });
+    });
+
+    describe('Proxy Validation', () => {
+      test('prevents save when proxy URL is invalid', () => {
+        const saveConfig = jest.fn();
+        mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+        mockUseConfig.mockReturnValue(createMockUseConfig({
+          config: createConfig({
+            proxy: 'invalid-proxy-url',
+          }),
+        }));
+
+        renderWithProviders(<Configuration token="test-token" />);
+
+        const saveButton = screen.getByTestId('save-button');
+
+        // Button should be disabled due to validation error
+        expect(saveButton).toBeDisabled();
+        expect(saveConfig).not.toHaveBeenCalled();
+      });
+
+      test('allows save when proxy URL is valid HTTP', async () => {
+        const user = userEvent.setup();
+        const saveConfig = jest.fn();
+        mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+        mockUseConfig.mockReturnValue(createMockUseConfig({
+          config: createConfig({
+            proxy: 'http://proxy.example.com:8080',
+          }),
+        }));
+
+        renderWithProviders(<Configuration token="test-token" />);
+
+        const saveButton = screen.getByTestId('save-button');
+        await user.click(saveButton);
+
+        const confirmButton = await screen.findByRole('button', { name: /save configuration/i });
+        await user.click(confirmButton);
+
+        await waitFor(() => {
+          expect(saveConfig).toHaveBeenCalledTimes(1);
+        });
+      });
+
+      test('allows save when proxy URL is valid SOCKS5 with authentication', async () => {
+        const user = userEvent.setup();
+        const saveConfig = jest.fn();
+        mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+        mockUseConfig.mockReturnValue(createMockUseConfig({
+          config: createConfig({
+            proxy: 'socks5://user:pass@127.0.0.1:1080',
+          }),
+        }));
+
+        renderWithProviders(<Configuration token="test-token" />);
+
+        const saveButton = screen.getByTestId('save-button');
+        await user.click(saveButton);
+
+        const confirmButton = await screen.findByRole('button', { name: /save configuration/i });
+        await user.click(confirmButton);
+
+        await waitFor(() => {
+          expect(saveConfig).toHaveBeenCalledTimes(1);
+        });
+      });
+
+      test('allows save when proxy is empty', async () => {
+        const user = userEvent.setup();
+        const saveConfig = jest.fn();
+        mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+        mockUseConfig.mockReturnValue(createMockUseConfig({
+          config: createConfig({
+            proxy: '',
+          }),
+        }));
+
+        renderWithProviders(<Configuration token="test-token" />);
+
+        const saveButton = screen.getByTestId('save-button');
+        await user.click(saveButton);
+
+        const confirmButton = await screen.findByRole('button', { name: /save configuration/i });
+        await user.click(confirmButton);
+
+        await waitFor(() => {
+          expect(saveConfig).toHaveBeenCalledTimes(1);
+        });
+      });
+
+      test('allows save when proxy is undefined', async () => {
+        const user = userEvent.setup();
+        const saveConfig = jest.fn();
+        mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+        mockUseConfig.mockReturnValue(createMockUseConfig({
+          config: createConfig({
+            proxy: undefined,
+          }),
+        }));
+
+        renderWithProviders(<Configuration token="test-token" />);
+
+        const saveButton = screen.getByTestId('save-button');
+        await user.click(saveButton);
+
+        const confirmButton = await screen.findByRole('button', { name: /save configuration/i });
+        await user.click(confirmButton);
+
+        await waitFor(() => {
+          expect(saveConfig).toHaveBeenCalledTimes(1);
+        });
+      });
+
+      test('prevents save when proxy URL has invalid protocol', () => {
+        const saveConfig = jest.fn();
+        mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+        mockUseConfig.mockReturnValue(createMockUseConfig({
+          config: createConfig({
+            proxy: 'ftp://proxy.example.com:8080',
+          }),
+        }));
+
+        renderWithProviders(<Configuration token="test-token" />);
+
+        const saveButton = screen.getByTestId('save-button');
+
+        // Button should be disabled due to validation error
+        expect(saveButton).toBeDisabled();
+        expect(saveConfig).not.toHaveBeenCalled();
       });
     });
   });

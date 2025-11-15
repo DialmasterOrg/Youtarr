@@ -51,7 +51,7 @@ services:
       AUTH_PRESET_USERNAME: ${AUTH_PRESET_USERNAME:-}
       AUTH_PRESET_PASSWORD: ${AUTH_PRESET_PASSWORD:-}
       # Logging configuration
-      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       # This is just informational and lets the app know where the videos will be stored on the host
       YOUTUBE_OUTPUT_DIR: ${YOUTUBE_OUTPUT_DIR}
       # Optional: Custom data path for platforms like Elfhosted (defaults to /usr/src/app/data)

@@ -4,6 +4,7 @@ const { execSync, spawnSync } = require('child_process');
 const configModule = require('./configModule');
 const nfoGenerator = require('./nfoGenerator');
 const tempPathManager = require('./download/tempPathManager');
+const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { JobVideoDownload } = require('../models');
 const logger = require('../logger');
 
@@ -80,19 +81,24 @@ async function downloadChannelThumbnailIfMissing(channelId) {
       // Build the channel URL from the channel ID
       const channelUrl = `https://www.youtube.com/channel/${channelId}`;
 
-      // Build yt-dlp command with cookies if configured
-      let ytdlpCmd = 'yt-dlp';
-      const cookiesPath = configModule.getCookiesPath();
-      if (cookiesPath) {
-        ytdlpCmd += ` --cookies "${cookiesPath}"`;
-      }
-      ytdlpCmd += ` --skip-download --write-thumbnail --playlist-end 1 --playlist-items 0 --convert-thumbnails jpg -o "channelthumb-%(channel_id)s.jpg" "${channelUrl}"`;
+      // Build yt-dlp command using centralized helper so proxy/sleep/cookies are respected
+      const ytdlpArgs = YtdlpCommandBuilder.buildThumbnailDownloadArgs(channelUrl, channelThumbPath);
 
-      // Download the thumbnail using yt-dlp
-      execSync(ytdlpCmd, {
-        cwd: configModule.getImagePath(),
-        stdio: 'pipe'
+      const result = spawnSync('yt-dlp', ytdlpArgs, {
+        env: {
+          ...process.env,
+          TMPDIR: '/tmp'
+        },
+        encoding: 'utf8'
       });
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      if (result.status !== 0) {
+        throw new Error(result.stderr || `yt-dlp exited with code ${result.status}`);
+      }
 
       // Resize the thumbnail to make it smaller
       if (fs.existsSync(channelThumbPath)) {

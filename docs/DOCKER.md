@@ -222,7 +222,7 @@ You can configure environment variables in three ways:
 | `AUTH_PRESET_USERNAME` | Initial admin username for headless deployments | (empty) |
 | `AUTH_PRESET_PASSWORD` | Initial admin password for headless deployments | (empty) |
 | `AUTH_ENABLED` | Set to `false` to disable authentication | `true` |
-| `LOG_LEVEL` | Logging verbosity: `warn`, `info`, or `debug` | `warn` |
+| `LOG_LEVEL` | Logging verbosity: `warn`, `info`, or `debug` | `info` |
 | `DB_HOST` | Set to external IP when using external DB | `youtarr-db` (internal DB container) |
 | `DB_PORT` | Database port | `3321` |
 | `DB_USER` | Youtarr DB user | `root` |
