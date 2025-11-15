@@ -11,6 +11,7 @@ import {
   AlertTitle,
   Divider,
   Chip,
+  useTheme,
 } from '@mui/material';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -18,6 +19,7 @@ import StorageIcon from '@mui/icons-material/Storage';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import { getCustomColors } from '../theme';
 
 interface DatabaseErrorOverlayProps {
   errors: string[];
@@ -42,6 +44,8 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
   recovered = false,
   countdown = 15
 }) => {
+  const theme = useTheme();
+  const customColors = getCustomColors(theme.palette.mode);
   const hasConnectionError = errors.some(e => categorizeError(e) === 'connection');
   const hasSchemaError = errors.some(e => categorizeError(e) === 'schema');
 
@@ -53,7 +57,7 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
         left: 0,
         width: '100vw',
         height: '100vh',
-        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+        backgroundColor: customColors.errorOverlayBackdrop,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -72,7 +76,7 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
           maxHeight: '90vh',
           overflow: 'auto',
           borderRadius: 2,
-          backgroundColor: '#fff',
+          bgcolor: 'background.paper',
         }}
       >
         {/* Header */}
@@ -177,8 +181,8 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
                 maxHeight: 300,
                 overflow: 'auto',
                 p: 2,
-                backgroundColor: '#fef6f6',
-                border: '1px solid #ffcdd2',
+                backgroundColor: customColors.errorListBackground,
+                borderColor: customColors.errorListBorder,
               }}
             >
               <List dense>
@@ -207,7 +211,7 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
                         '& .MuiListItemText-primary': {
                           fontFamily: 'monospace',
                           fontSize: '0.9rem',
-                          color: '#d32f2f',
+                          color: customColors.errorText,
                           wordBreak: 'break-word',
                         },
                       }}
@@ -226,13 +230,13 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
               How to Fix This:
             </Typography>
           {hasConnectionError ? (
-            <Paper sx={{ p: 2, backgroundColor: '#f5f5f5' }}>
+            <Paper sx={{ p: 2, backgroundColor: customColors.codeBlockBackground }}>
               <List>
                 <ListItem>
                   <ListItemText
                     primary={<Typography fontWeight="bold">1. Check database container status</Typography>}
                     secondary={
-                      <Box component="code" sx={{ display: 'block', mt: 1, p: 1, backgroundColor: '#fff', borderRadius: 1 }}>
+                      <Box component="code" sx={{ display: 'block', mt: 1, p: 1, backgroundColor: customColors.codeBlockInner, borderRadius: 1 }}>
                         docker compose ps
                       </Box>
                     }
@@ -242,7 +246,7 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
                   <ListItemText
                     primary={<Typography fontWeight="bold">2. Start the database if it's not running</Typography>}
                     secondary={
-                      <Box component="code" sx={{ display: 'block', mt: 1, p: 1, backgroundColor: '#fff', borderRadius: 1 }}>
+                      <Box component="code" sx={{ display: 'block', mt: 1, p: 1, backgroundColor: customColors.codeBlockInner, borderRadius: 1 }}>
                         docker compose up -d youtarr-db
                       </Box>
                     }
@@ -252,7 +256,7 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
                   <ListItemText
                     primary={<Typography fontWeight="bold">3. Check database logs for errors</Typography>}
                     secondary={
-                      <Box component="code" sx={{ display: 'block', mt: 1, p: 1, backgroundColor: '#fff', borderRadius: 1 }}>
+                      <Box component="code" sx={{ display: 'block', mt: 1, p: 1, backgroundColor: customColors.codeBlockInner, borderRadius: 1 }}>
                         docker compose logs -f youtarr-db
                       </Box>
                     }
@@ -261,7 +265,7 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
               </List>
             </Paper>
           ) : hasSchemaError ? (
-            <Paper sx={{ p: 2, backgroundColor: '#fff8e1' }}>
+            <Paper sx={{ p: 2, backgroundColor: customColors.warningBackground }}>
               <List>
                 <ListItem>
                   <ListItemText
@@ -283,7 +287,7 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
                         <Typography variant="body2" sx={{ mt: 1 }}>
                           Look for migration errors or schema validation messages:
                         </Typography>
-                        <Box component="code" sx={{ display: 'block', mt: 1, p: 1, backgroundColor: '#fff', borderRadius: 1 }}>
+                        <Box component="code" sx={{ display: 'block', mt: 1, p: 1, backgroundColor: customColors.codeBlockInner, borderRadius: 1 }}>
                           docker compose logs -f youtarr
                         </Box>
                       </>
@@ -303,13 +307,13 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
               </List>
             </Paper>
           ) : (
-            <Paper sx={{ p: 2, backgroundColor: '#f5f5f5' }}>
+            <Paper sx={{ p: 2, backgroundColor: customColors.codeBlockBackground }}>
               <List>
                 <ListItem>
                   <ListItemText
                     primary={<Typography fontWeight="bold">Check the application logs for details</Typography>}
                     secondary={
-                      <Box component="code" sx={{ display: 'block', mt: 1, p: 1, backgroundColor: '#fff', borderRadius: 1 }}>
+                      <Box component="code" sx={{ display: 'block', mt: 1, p: 1, backgroundColor: customColors.codeBlockInner, borderRadius: 1 }}>
                         docker compose logs -f youtarr
                       </Box>
                     }

@@ -438,7 +438,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             <Accordion
               elevation={0}
               sx={{
-                backgroundColor: 'rgba(0, 0, 0, 0.02)',
+                bgcolor: 'action.hover',
                 '&:before': { display: 'none' },
                 borderRadius: 1,
               }}
@@ -634,7 +634,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                 sx={{
                   height: 32,
                   borderRadius: 1,
-                  backgroundColor: 'rgba(0,0,0,0.1)',
+                  bgcolor: 'action.hover',
                   '& .MuiLinearProgress-bar': {
                     backgroundColor: progressColor,
                     transition: 'background-color 0.3s ease'
@@ -730,7 +730,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                 alignItems: 'center',
                 mt: 1,
                 p: 1,
-                backgroundColor: 'rgba(0, 0, 0, 0.03)',
+                bgcolor: 'action.hover',
                 borderRadius: 1
               }}>
                 <Typography variant="body2" color="text.secondary">
