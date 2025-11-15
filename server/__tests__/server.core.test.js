@@ -194,7 +194,12 @@ const createServerModule = ({
         rateLimitMiddleware.ipKeyGenerator = jest.fn((ip) => ip);
         const multerSingleMock = jest.fn(() => (req, res, next) => next());
         const multerMock = jest.fn(() => ({ single: multerSingleMock }));
+        const childProcessMock = {
+          execSync: jest.fn(() => '2025.09.23')
+        };
+        const pinoHttpMock = jest.fn(() => (req, res, next) => next());
 
+        jest.doMock('../logger', () => loggerMock);
         jest.doMock('../db', () => dbMock);
         jest.doMock('../modules/configModule', () => configModuleMock);
         jest.doMock('../modules/channelModule', () => channelModuleMock);
@@ -214,6 +219,8 @@ const createServerModule = ({
         jest.doMock('express-rate-limit', () => Object.assign(rateLimitMiddleware, { ipKeyGenerator: rateLimitMiddleware.ipKeyGenerator }));
         jest.doMock('multer', () => multerMock);
         jest.doMock('https', () => ({ get: jest.fn(() => ({ on: jest.fn() })) }));
+        jest.doMock('child_process', () => childProcessMock);
+        jest.doMock('pino-http', () => pinoHttpMock);
 
         const serverModule = require('../server');
 

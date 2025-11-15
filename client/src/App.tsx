@@ -29,6 +29,7 @@ import {
   Alert,
   Box,
 } from '@mui/material';
+import { grey } from '@mui/material/colors';
 import CloseIcon from '@mui/icons-material/Close';
 import MenuIcon from '@mui/icons-material/Menu';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -47,6 +48,7 @@ import LocalLogin from './components/LocalLogin';
 import InitialSetup from './components/InitialSetup';
 import ChannelPage from './components/ChannelPage';
 import StorageStatus from './components/StorageStatus';
+import { useConfig } from './hooks/useConfig';
 import ErrorBoundary from './components/ErrorBoundary';
 import DatabaseErrorOverlay from './components/DatabaseErrorOverlay';
 
@@ -74,6 +76,9 @@ function AppContent() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const drawerWidth = isMobile ? '50%' : 240; // specify your drawer width
+
+  // Use config hook for global configuration access
+  const { config: appConfig, deploymentEnvironment } = useConfig(token);
   const { version } = packageJson;
   const clientVersion = `v${version}`; // Create a version with 'v' prefix for comparison
   const tmpDirectory = '/tmp';
@@ -247,29 +252,19 @@ function AppContent() {
 
   // Check configuration for temp directory warning
   useEffect(() => {
-    console.log('Useeffect for temp directory warning');
-    if (token && !checkingSetup) {
-      fetch('/getconfig', {
-        headers: {
-          'x-access-token': token,
-        },
-      })
-        .then((response) => response.json())
-        .then((data) => {
-          const dataPath = data.youtubeOutputDirectory;
-          if (dataPath && dataPath.toLowerCase().includes(tmpDirectory.toLowerCase())) {
-            setShouldShowWarning(true);
-            setShowTmpWarning(true);
-          }
-
-          // Check for platform from deployment environment
-          if (data.deploymentEnvironment?.platform) {
-            setPlatformName(data.deploymentEnvironment.platform);
-          }
-        })
-        .catch((error) => console.error('Failed to fetch config for tmp check:', error));
+    if (token && !checkingSetup && appConfig.youtubeOutputDirectory) {
+      const dataPath = appConfig.youtubeOutputDirectory;
+      if (dataPath && dataPath.toLowerCase().includes(tmpDirectory.toLowerCase())) {
+        setShouldShowWarning(true);
+        setShowTmpWarning(true);
+      }
     }
-  }, [token, checkingSetup]);
+
+    // Check for platform from deployment environment
+    if (deploymentEnvironment.platform) {
+      setPlatformName(deploymentEnvironment.platform);
+    }
+  }, [token, checkingSetup, appConfig.youtubeOutputDirectory, deploymentEnvironment.platform]);
 
   // Reset warning visibility on route change
   useEffect(() => {
@@ -370,7 +365,7 @@ function AppContent() {
       <AppBar
         position="fixed"
         style={{
-          backgroundColor: '#DDD',
+          backgroundColor: grey[200],
           width: '100%',
           margin: 0,
           padding: 0,
@@ -394,7 +389,7 @@ function AppContent() {
           >
             <MenuIcon fontSize='large' />
           </IconButton>
-          <StorageStatus token={token} />
+          {!requiresSetup && token && <StorageStatus token={token} />}
           <div
             style={{
               marginTop: '8px',
@@ -479,7 +474,7 @@ function AppContent() {
             PaperProps={{
               style: {
                 width: drawerWidth,
-                backgroundColor: '#CCC',
+                backgroundColor: grey[100],
                 maxWidth: '50vw',
                 marginTop: isMobile ? '0' : '100px',
               },
@@ -737,7 +732,7 @@ function AppContent() {
           position: 'fixed',
           bottom: 0,
           width: '100%',
-          backgroundColor: '#DDD',
+          backgroundColor: grey[200],
           textAlign: 'center',
         }}
       >

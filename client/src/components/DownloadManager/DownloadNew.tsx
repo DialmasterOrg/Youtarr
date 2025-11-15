@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Button,
   Card,
@@ -13,6 +13,7 @@ import ManualDownload from './ManualDownload/ManualDownload';
 import DownloadSettingsDialog from './ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from './ManualDownload/types';
 import ErrorBoundary from '../ErrorBoundary';
+import { useConfig } from '../../hooks/useConfig';
 
 interface DownloadNewProps {
   videoUrls: string;
@@ -30,9 +31,12 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
   downloadInitiatedRef,
 }) => {
   const [tabValue, setTabValue] = useState(0);
-  const [defaultResolution, setDefaultResolution] = useState<string>('1080');
-  const [defaultVideoCount, setDefaultVideoCount] = useState<number>(3);
   const [showChannelSettingsDialog, setShowChannelSettingsDialog] = useState(false);
+
+  // Use config hook to get default resolution and video count
+  const { config } = useConfig(token);
+  const defaultResolution = config.preferredResolution || '1080';
+  const defaultVideoCount = config.channelFilesToDownload || 3;
 
   const handleOpenChannelSettings = () => {
     setShowChannelSettingsDialog(true);
@@ -87,29 +91,6 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
 
     setTimeout(fetchRunningJobs, 1000);
   }, [token, fetchRunningJobs, downloadInitiatedRef]);
-
-  // Fetch config to get default resolution
-  useEffect(() => {
-    if (token) {
-      fetch('/getconfig', {
-        headers: {
-          'x-access-token': token,
-        },
-      })
-        .then((response) => response.json())
-        .then((data) => {
-          if (data.preferredResolution) {
-            setDefaultResolution(data.preferredResolution);
-          }
-          if (data.channelFilesToDownload) {
-            setDefaultVideoCount(data.channelFilesToDownload);
-          }
-        })
-        .catch((error) => {
-          console.error('Error fetching config:', error);
-        });
-    }
-  }, [token]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);

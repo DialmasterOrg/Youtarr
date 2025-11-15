@@ -39,6 +39,7 @@ services:
     environment:
       # DEPRECATED but retained for backwards compatibility with old images for now
       IN_DOCKER_CONTAINER: 1
+      TZ: ${TZ:-UTC}
       DB_HOST: ${DB_HOST:-youtarr-db}
       DB_PORT: ${DB_PORT:-3321}
       DB_USER: ${DB_USER:-root}

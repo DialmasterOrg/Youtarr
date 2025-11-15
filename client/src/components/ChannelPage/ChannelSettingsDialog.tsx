@@ -26,6 +26,7 @@ import {
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import InfoIcon from '@mui/icons-material/Info';
+import { useConfig } from '../../hooks/useConfig';
 
 interface ChannelSettings {
   sub_folder: string | null;
@@ -80,11 +81,14 @@ function ChannelSettingsDialog({
     title_filter_regex: null
   });
   const [subfolders, setSubfolders] = useState<string[]>([]);
-  const [globalQuality, setGlobalQuality] = useState('1080');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Use config hook to get global quality setting
+  const { config, refetch: refetchConfig } = useConfig(token);
+  const globalQuality = config.preferredResolution || '1080';
 
   // Duration input state (in minutes for UI convenience)
   const [minDurationMinutes, setMinDurationMinutes] = useState<string>('');
@@ -108,6 +112,13 @@ function ChannelSettingsDialog({
     { value: '1440', label: '1440p (2K)' },
     { value: '2160', label: '2160p (4K)' }
   ];
+
+  useEffect(() => {
+    if (open) {
+      // Ensure we have the latest saved global defaults whenever dialog opens
+      refetchConfig().catch((err) => console.error('Failed to refresh config for channel settings dialog:', err));
+    }
+  }, [open, refetchConfig]);
 
   useEffect(() => {
     if (!open) {
@@ -167,22 +178,6 @@ function ChannelSettingsDialog({
           }
         } catch (err) {
           console.error('Failed to load subfolders:', err);
-        }
-
-        // Load global quality (non-critical)
-        try {
-          const configResponse = await fetch('/getconfig', {
-            headers: {
-              'x-access-token': token || ''
-            }
-          });
-
-          if (configResponse.ok) {
-            const configData = await configResponse.json();
-            setGlobalQuality(configData.preferredResolution || '1080');
-          }
-        } catch (err) {
-          console.error('Failed to load global quality:', err);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load settings');

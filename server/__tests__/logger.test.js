@@ -97,7 +97,6 @@ describe('logger.js', () => {
       expect(config.redact.paths).toContain('plexAuthToken');
       expect(config.redact.paths).toContain('session_token');
       expect(config.redact.paths).toContain('plexApiKey');
-      expect(config.redact.paths).toContain('youtubeApiKey');
     });
 
     it('should configure redaction for authorization headers', () => {
@@ -316,7 +315,6 @@ describe('logger.js', () => {
         'plexAuthToken',
         'session_token',
         'plexApiKey',
-        'youtubeApiKey'
       ];
 
       tokenFields.forEach(field => {

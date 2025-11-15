@@ -93,7 +93,14 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
     getAuthUrl: jest.fn().mockResolvedValue({ url: 'https://plex.example/auth' }),
     checkPin: jest.fn().mockResolvedValue({ authenticated: true })
   };
+  const childProcessMock = {
+    execSync: jest.fn(() => '2025.09.23')
+  };
+  const pinoHttpMock = jest.fn(() => (req, res, next) => next());
 
+  jest.doMock('../logger', () => loggerMock);
+  jest.doMock('child_process', () => childProcessMock);
+  jest.doMock('pino-http', () => pinoHttpMock);
   jest.doMock('../db', () => ({
     initializeDatabase: jest.fn().mockResolvedValue(),
     reinitializeDatabase: jest.fn().mockResolvedValue({

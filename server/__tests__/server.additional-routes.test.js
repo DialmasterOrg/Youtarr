@@ -232,8 +232,13 @@ const createServerModule = ({
           compare: jest.fn().mockResolvedValue(true),
           hash: jest.fn().mockResolvedValue('new-hashed-password')
         };
+        const childProcessMock = {
+          execSync: jest.fn(() => '2025.09.23')
+        };
+        const pinoHttpMock = jest.fn(() => (req, res, next) => next());
 
         // Add required mocks
+        jest.doMock('../logger', () => loggerMock);
         jest.doMock('../db', () => dbMock);
         jest.doMock('../modules/configModule', () => configModuleMock);
         jest.doMock('../modules/channelModule', () => channelModuleMock);
@@ -255,6 +260,8 @@ const createServerModule = ({
         jest.doMock('bcrypt', () => bcryptMock);
         jest.doMock('uuid', () => ({ v4: jest.fn(() => 'test-uuid') }));
         jest.doMock('fs', () => ({ readFileSync: jest.fn(() => '') }));
+        jest.doMock('child_process', () => childProcessMock);
+        jest.doMock('pino-http', () => pinoHttpMock);
 
         const serverModule = require('../server');
 

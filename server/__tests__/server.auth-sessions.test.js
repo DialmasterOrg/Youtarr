@@ -185,6 +185,10 @@ const createServerModule = ({
           unlink: jest.fn((path, cb) => cb(null))
         };
 
+        const childProcessMock = {
+          execSync: jest.fn(() => '2025.09.23')
+        };
+
         const multerSingleMock = jest.fn(() => (req, res, next) => {
           if (req.path === '/cookies/upload' && req.body.simulateFile) {
             req.file = { buffer: Buffer.from('cookie-content') };
@@ -192,8 +196,13 @@ const createServerModule = ({
           next();
         });
         const multerMock = jest.fn(() => ({ single: multerSingleMock }));
+        const pinoHttpMock = jest.fn(() => (req, res, next) => next());
 
         // Add required mocks for server initialization
+        jest.doMock('../logger', () => loggerMock);
+        jest.doMock('child_process', () => childProcessMock);
+        jest.doMock('pino-http', () => pinoHttpMock);
+
         jest.doMock('../modules/channelModule', () => ({
           subscribe: jest.fn(),
           readChannels: jest.fn().mockResolvedValue([])

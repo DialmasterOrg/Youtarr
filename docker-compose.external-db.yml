@@ -16,6 +16,7 @@ services:
       IN_DOCKER_CONTAINER: 1
       # Override DB connection settings for external database
       # Enforced for external DB usage
+      TZ: ${TZ:-UTC}
       DB_HOST: ${DB_HOST:?Set DB_HOST in .env or environment}
       DB_PORT: ${DB_PORT:-3306}
       DB_USER: ${DB_USER:?Set DB_USER in .env or environment}
