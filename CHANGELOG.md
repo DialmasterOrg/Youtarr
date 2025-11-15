@@ -1,5 +1,29 @@
 # Changelog
 
+## [v1.51.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.51.0) - 2025-11-15
+
+## [1.51.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.50.1...v1.51.0) (2025-11-15)
+
+
+### Features
+
+* add advanced settings section with proxy and rate limiting ([21c4a01](https://github.com/DialmasterOrg/Youtarr/commit/21c4a01be541b2fc677507357240d8215d9f43f1))
+* surface yt-dlp version and normalize rate-limit IP ([b94cd6a](https://github.com/DialmasterOrg/Youtarr/commit/b94cd6a74dd9e98fdd89938f5f6990bc0b54bd57))
+
+
+### Code Refactoring
+
+* Configuration ([8e41f97](https://github.com/DialmasterOrg/Youtarr/commit/8e41f97ba0bf45a9f26097beb1ddb1b02b843697))
+
+
+### Documentation
+
+* update CHANGELOG for v1.50.1 [skip ci] ([dd19493](https://github.com/DialmasterOrg/Youtarr/commit/dd194936cee8340b8142cd4aff926ed90ca4fd01))
+
+
+
+
+
 ## [v1.50.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.50.1) - 2025-11-13
 
 ### [1.50.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.50.0...v1.50.1) (2025-11-13)
