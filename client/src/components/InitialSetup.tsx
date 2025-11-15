@@ -105,16 +105,17 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
         <Typography variant="h4" gutterBottom>
           Welcome to Youtarr Setup
         </Typography>
-        
+
         <Alert severity="info" sx={{ mb: 3 }}>
-          <AlertTitle>Important Changes</AlertTitle>
+          <AlertTitle>Important</AlertTitle>
           <Typography variant="body2" paragraph>
-            Youtarr now uses local authentication, making Plex optional.
+            Youtarr uses local authentication by default. Plex is optional.
           </Typography>
           <Typography variant="body2">
-            ✓ Your existing settings are preserved<br />
-            ✓ Plex integration still works if configured<br />
-            ✓ You can change these credentials later in Configuration
+            Initial setup requires access via localhost<br />
+            If you do not have access to the app via localhost, you should stop the application<br />
+            and set AUTH_PRESET_USERNAME and AUTH_PRESET_PASSWORD environment variables instead,<br />
+            then restart the application.
           </Typography>
         </Alert>
 
@@ -128,7 +129,7 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
             required
             helperText="Choose a username for login"
           />
-          
+
           <TextField
             fullWidth
             label="Password"
@@ -139,7 +140,7 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
             required
             helperText={`Password strength: ${password ? passwordStrength(password) : 'Enter password'}`}
           />
-          
+
           <TextField
             fullWidth
             label="Confirm Password"
@@ -165,7 +166,7 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
           >
             {loading ? 'Setting up...' : 'Complete Setup'}
           </Button>
-          
+
           {loading && <LinearProgress sx={{ mt: 2 }} />}
         </Box>
 

@@ -616,8 +616,8 @@ function VideosPage({ token }: VideosPageProps) {
                                   }}
                                 >
                                   <ErrorOutlineIcon
-                                    style={{
-                                      color: '#f44336',
+                                    sx={{
+                                      color: 'error.main',
                                       fontSize: '3rem',
                                       filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))'
                                     }}
@@ -841,8 +841,8 @@ function VideosPage({ token }: VideosPageProps) {
                                   }}
                                 >
                                   <ErrorOutlineIcon
-                                    style={{
-                                      color: '#f44336',
+                                    sx={{
+                                      color: 'error.main',
                                       fontSize: '4rem',
                                       filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))'
                                     }}

@@ -75,7 +75,7 @@ function ChannelPage({ token }: ChannelPageProps) {
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
         <FolderIcon sx={{ fontSize: isMobile ? '0.75rem' : '0.85rem', color: 'text.secondary' }} />
-        <Typography sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem', color: subFolder ? '#555' : '#888', fontStyle: subFolder ? 'normal' : 'italic' }}>
+        <Typography sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem', color: 'text.secondary', fontStyle: subFolder ? 'normal' : 'italic' }}>
           {displayText}
         </Typography>
       </Box>
@@ -192,7 +192,7 @@ function ChannelPage({ token }: ChannelPageProps) {
                 variant="body2"
                 sx={{
                   fontFamily: 'monospace',
-                  backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                  bgcolor: 'action.hover',
                   p: 1,
                   borderRadius: 1,
                   wordBreak: 'break-all',
@@ -213,7 +213,7 @@ function ChannelPage({ token }: ChannelPageProps) {
                 variant="body2"
                 sx={{
                   fontFamily: 'monospace',
-                  backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                  bgcolor: 'action.hover',
                   p: 1,
                   borderRadius: 1,
                   wordBreak: 'break-all',
@@ -241,12 +241,13 @@ function ChannelPage({ token }: ChannelPageProps) {
                 paddingX={isMobile ? '0px' : 3}
                 maxWidth={isMobile ? '75%' : 'auto'}
                 marginX={isMobile ? 'auto' : 3}>
-                <img
+                <Box
+                  component="img"
                   src={channel ? `/images/channelthumb-${channel_id}.jpg` : ''}
                   alt='Channel thumbnail'
                   width={isMobile ? '100%' : 'auto'}
                   height={isMobile ? 'auto' : '285px'}
-                  style={{ border: '1px solid grey' }}
+                  sx={{ border: 1, borderColor: 'divider' }}
                 />
               </Box>
             </Grid>
@@ -286,9 +287,10 @@ function ChannelPage({ token }: ChannelPageProps) {
                   maxHeight: isMobile ? '84px' : '172px',
                   minHeight: isMobile ? '16px' : '172px',
                   overflowY: 'scroll',
-                  border: '1px solid grey',
+                  border: 1,
+                  borderColor: 'divider',
                   padding: isMobile ? '12px' : '24px',
-                  borderRadius: '4px'
+                  borderRadius: 1
                 }}
               >
                 <Typography variant={isMobile ? 'body2' : 'body1'} align='center' color='text.secondary'>

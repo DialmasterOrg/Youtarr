@@ -356,7 +356,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
         <FolderIcon sx={{ fontSize: isMobile ? '0.75rem' : '0.85rem', color: 'text.secondary' }} />
-        <Typography sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem', color: subFolder ? '#555' : '#888', fontStyle: subFolder ? 'normal' : 'italic' }}>
+        <Typography sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem', color: 'text.secondary', fontStyle: subFolder ? 'normal' : 'italic' }}>
           {displayText}
         </Typography>
       </Box>
@@ -413,9 +413,9 @@ function ChannelManager({ token }: ChannelManagerProps) {
     if (available.length === 0) {
       return (
         <Box sx={{ mt: 0.5, textAlign: 'center' }}>
-          <span style={{ fontSize: isMobile ? '0.65rem' : '0.75rem', color: '#888' }}>
+          <Typography sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem', color: 'text.secondary' }}>
             No tabs detected
-          </span>
+          </Typography>
         </Box>
       );
     }
@@ -613,7 +613,8 @@ function ChannelManager({ token }: ChannelManagerProps) {
               sx={{
                 flex: 1,
                 overflow: 'auto',
-                border: '1px solid #DDE',
+                border: 1,
+                borderColor: 'divider',
                 borderTop: 'none'
               }}>
               {/* Column Headers */}
@@ -621,8 +622,9 @@ function ChannelManager({ token }: ChannelManagerProps) {
                 sx={{
                   position: 'sticky',
                   top: 0,
-                  backgroundColor: '#f5f5f5',
-                  borderBottom: '2px solid #999',
+                  bgcolor: 'background.default',
+                  borderBottom: 2,
+                  borderColor: 'divider',
                   zIndex: 10,
                   py: 1,
                   px: 2
@@ -653,11 +655,13 @@ function ChannelManager({ token }: ChannelManagerProps) {
               {channels.map((channel, index) => (
                 <ListItem
                   key={channel.channel_id || channel.url}
-                  style={
-                    unsavedChannels.includes(channel.url)
-                      ? { backgroundColor: '#b8ffef' }
-                      : { backgroundColor: index % 2 === 0 ? 'white' : '#DDE' }
-                  }
+                  sx={{
+                    bgcolor: unsavedChannels.includes(channel.url)
+                      ? 'success.light'
+                      : index % 2 === 0
+                      ? 'background.paper'
+                      : 'action.hover'
+                  }}
                   data-state={
                     unsavedChannels.includes(channel.url)
                       ? 'new'
@@ -753,9 +757,10 @@ function ChannelManager({ token }: ChannelManagerProps) {
         </Card>
       </Box>
       <Box sx={{
-        borderTop: '2px solid #e0e0e0',
+        borderTop: 2,
+        borderColor: 'divider',
         pt: 2,
-        backgroundColor: 'background.paper'
+        bgcolor: 'background.paper'
       }}>
         <Grid container spacing={2}>
           <Grid item xs={11}>
@@ -931,7 +936,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
             variant="body2"
             sx={{
               fontFamily: 'monospace',
-              backgroundColor: 'rgba(0, 0, 0, 0.05)',
+              bgcolor: 'action.hover',
               p: 1,
               borderRadius: 1,
               wordBreak: 'break-all',
@@ -950,7 +955,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
             variant="body2"
             sx={{
               fontFamily: 'monospace',
-              backgroundColor: 'rgba(0, 0, 0, 0.05)',
+              bgcolor: 'action.hover',
               p: 1,
               borderRadius: 1,
               wordBreak: 'break-all',

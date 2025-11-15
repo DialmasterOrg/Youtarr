@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.51.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.51.1) - 2025-11-15
+
+### [1.51.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.51.0...v1.51.1) (2025-11-15)
+
+
+### Bug Fixes
+
+* relocate config.example.json to /app/server for Elfhosted compatibility ([0db5ade](https://github.com/DialmasterOrg/Youtarr/commit/0db5adeb78fd3dafd57ef60e5b462be6138e0686))
+
+
+### Documentation
+
+* update CHANGELOG for v1.51.0 [skip ci] ([0182737](https://github.com/DialmasterOrg/Youtarr/commit/01827370268c5ccc64ba81d412a92b242874f219))
+
+
+
+
+
 ## [v1.51.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.51.0) - 2025-11-15
 
 ## [1.51.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.50.1...v1.51.0) (2025-11-15)

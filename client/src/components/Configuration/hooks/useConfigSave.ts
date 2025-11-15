@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { ConfigState, SnackbarState } from '../types';
+import { CONFIG_UPDATED_EVENT } from '../../../hooks/useConfig';
 
 interface UseConfigSaveParams {
   token: string | null;
@@ -32,6 +33,13 @@ export const useConfigSave = ({
       if (response.ok) {
         // Update initial snapshot to current config so unsaved flag resets
         setInitialConfig(config);
+
+        if (typeof window !== 'undefined') {
+          const configUpdatedEvent = new CustomEvent<ConfigState>(CONFIG_UPDATED_EVENT, {
+            detail: config,
+          });
+          window.dispatchEvent(configUpdatedEvent);
+        }
 
         setSnackbar({
           open: true,
