@@ -81,8 +81,8 @@ class ConfigModule extends EventEmitter {
       return volumePath;
     }
 
-    // Fall back to image built-in template
-    const templatePath = '/app/config-templates/config.example.json';
+    // Fall back to image built-in template (guaranteed to exist in /app/server/)
+    const templatePath = path.join(__dirname, '../config.example.json');
     if (fs.existsSync(templatePath)) {
       logger.info({ path: templatePath }, 'Using config.example.json from image template');
       return templatePath;
