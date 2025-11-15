@@ -286,6 +286,7 @@ const createServerModule = ({
         const childProcessMock = {
           execSync: jest.fn(() => '2025.09.23')
         };
+        const pinoHttpMock = jest.fn(() => (req, res, next) => next());
 
         const httpsMock = {
           get: jest.fn((url, callback) => {
@@ -315,6 +316,7 @@ const createServerModule = ({
         });
         const multerMock = jest.fn(() => ({ single: multerSingleMock }));
 
+        jest.doMock('../logger', () => loggerMock);
         jest.doMock('../db', () => dbMock);
         jest.doMock('../modules/configModule', () => configModuleMock);
         jest.doMock('../modules/channelModule', () => channelModuleMock);
@@ -334,6 +336,7 @@ const createServerModule = ({
         jest.doMock('uuid', () => uuidMock);
         jest.doMock('fs', () => fsMock);
         jest.doMock('child_process', () => childProcessMock);
+        jest.doMock('pino-http', () => pinoHttpMock);
 
         const serverModule = require('../server');
 
@@ -587,8 +590,8 @@ describe('server routes - configuration', () => {
 
       const req = createMockRequest({
         body: {
-          plexLibrarySection: 'new-section',
-          youtubeApiKey: 'new-key'
+          plexYoutubeLibraryId: '22',
+          plexApiKey: 'new-key'
         }
       });
       const res = createMockResponse();
@@ -597,8 +600,8 @@ describe('server routes - configuration', () => {
 
       expect(configModuleMock.updateConfig).toHaveBeenCalledWith(
         expect.objectContaining({
-          plexLibrarySection: 'new-section',
-          youtubeApiKey: 'new-key'
+          plexYoutubeLibraryId: '22',
+          plexApiKey: 'new-key'
         })
       );
       expect(res.statusCode).toBe(200);
@@ -613,7 +616,7 @@ describe('server routes - configuration', () => {
 
       const req = createMockRequest({
         body: {
-          plexLibrarySection: 123 // Will be accepted as is
+          plexYoutubeLibraryId: 25 // Will be accepted as is
         }
       });
       const res = createMockResponse();

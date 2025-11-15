@@ -60,6 +60,183 @@ prompt_with_label() {
   printf "%-42s: " "$label"
 }
 
+DEFAULT_TIMEZONE="UTC"
+COMMON_TIMEZONES=(
+  "UTC"
+  "America/New_York"
+  "America/Chicago"
+  "America/Denver"
+  "America/Los_Angeles"
+  "Europe/London"
+  "Europe/Paris"
+  "Europe/Berlin"
+  "Europe/Moscow"
+  "Asia/Singapore"
+  "Asia/Tokyo"
+  "Australia/Sydney"
+)
+TIMEZONE_LIST_INITIALIZED=false
+TIMEZONE_SEARCH_AVAILABLE=false
+AVAILABLE_TIMEZONES=()
+
+load_available_timezones() {
+  if [ "$TIMEZONE_LIST_INITIALIZED" = true ]; then
+    return
+  fi
+  TIMEZONE_LIST_INITIALIZED=true
+
+  if command -v timedatectl >/dev/null 2>&1; then
+    while IFS= read -r tz; do
+      [ -n "$tz" ] && AVAILABLE_TIMEZONES+=("$tz")
+    done < <(timedatectl list-timezones 2>/dev/null || true)
+  elif [ -f /usr/share/zoneinfo/zone1970.tab ]; then
+    while IFS= read -r tz; do
+      [ -n "$tz" ] && AVAILABLE_TIMEZONES+=("$tz")
+    done < <(grep -v '^[[:space:]]*#' /usr/share/zoneinfo/zone1970.tab | awk -F'\t' '{print $3}' | tr ' ' '\n' | grep -v '^$' | sort -u)
+  elif [ -f /usr/share/zoneinfo/zone.tab ]; then
+    while IFS= read -r tz; do
+      [ -n "$tz" ] && AVAILABLE_TIMEZONES+=("$tz")
+    done < <(grep -v '^[[:space:]]*#' /usr/share/zoneinfo/zone.tab | awk -F'\t' '{print $3}' | tr ' ' '\n' | grep -v '^$' | sort -u)
+  fi
+
+  if [ ${#AVAILABLE_TIMEZONES[@]} -gt 0 ]; then
+    TIMEZONE_SEARCH_AVAILABLE=true
+  fi
+}
+
+timezone_exists_in_list() {
+  local target="$1"
+  if [ ${#AVAILABLE_TIMEZONES[@]} -eq 0 ]; then
+    return 1
+  fi
+  if printf '%s\n' "${AVAILABLE_TIMEZONES[@]}" | grep -Fxq "$target"; then
+    return 0
+  fi
+  return 1
+}
+
+show_timezone_suggestions() {
+  local filter="$1"
+  load_available_timezones
+  if [ "$TIMEZONE_SEARCH_AVAILABLE" != true ]; then
+    yt_warn "Timezone search is unavailable on this system. Refer to https://en.wikipedia.org/wiki/List_of_tz_database_time_zones for valid values."
+    return
+  fi
+
+  local match_count=0
+  if [ -n "$filter" ]; then
+    while IFS= read -r zone; do
+      yt_detail "$zone"
+      match_count=$((match_count + 1))
+    done < <(printf '%s\n' "${AVAILABLE_TIMEZONES[@]}" | grep -iF "$filter" | head -n 20)
+  else
+    while IFS= read -r zone; do
+      yt_detail "$zone"
+      match_count=$((match_count + 1))
+    done < <(printf '%s\n' "${AVAILABLE_TIMEZONES[@]}" | head -n 20)
+  fi
+
+  if [ $match_count -eq 0 ]; then
+    yt_warn "No timezone matches found for '$filter'."
+  elif [ $match_count -eq 20 ]; then
+    yt_detail "(showing first 20 matches - refine with '? keyword')"
+  fi
+}
+
+validate_timezone_value() {
+  local tz="$1"
+  if [ -z "$tz" ]; then
+    return 1
+  fi
+
+  load_available_timezones
+  if timezone_exists_in_list "$tz"; then
+    return 0
+  fi
+
+  if [ -f "/usr/share/zoneinfo/$tz" ]; then
+    return 0
+  fi
+
+  return 1
+}
+
+display_common_timezones() {
+  yt_info "Common timezone options:"
+  local idx=1
+  for tz in "${COMMON_TIMEZONES[@]}"; do
+    yt_detail "$idx) $tz"
+    idx=$((idx + 1))
+  done
+  if [ "$TIMEZONE_SEARCH_AVAILABLE" = true ]; then
+    yt_detail "Type '? <keyword>' to search all supported timezones."
+  else
+    yt_detail "Enter a timezone like Region/City (example: Europe/Paris)."
+  fi
+}
+
+prompt_timezone_configuration() {
+  local current_default
+  current_default=$(grep -E '^[[:space:]]*TZ[[:space:]]*=' "$ENV_FILE" | tail -n 1 | sed 's/^[[:space:]]*TZ[[:space:]]*=[[:space:]]*//' | sed 's/[[:space:]]*#.*$//' | sed 's/^"\(.*\)"$/\1/')
+  current_default=$(echo "$current_default" | xargs)
+  if [ -z "$current_default" ]; then
+    current_default="$DEFAULT_TIMEZONE"
+  fi
+
+  load_available_timezones
+
+  yt_section "Timezone"
+  yt_info "Timezone controls when scheduled jobs and nightly cleanup tasks run."
+  yt_info "Choose the timezone that matches your deployment. Press Enter to accept '$current_default'."
+  yt_detail "Enter a number from the list, type the timezone name (e.g., Europe/London), or type '? tokyo' to search."
+  display_common_timezones
+
+  local timezone_choice
+  local selected_timezone
+  while true; do
+    prompt_with_label "Timezone [$current_default]"
+    read -r timezone_choice
+    timezone_choice=$(echo "$timezone_choice" | xargs)
+
+    if [ -z "$timezone_choice" ]; then
+      selected_timezone="$current_default"
+      break
+    fi
+
+    if [[ "$timezone_choice" =~ ^\?[[:space:]]*(.*)$ ]]; then
+      local search_term="${BASH_REMATCH[1]}"
+      show_timezone_suggestions "$search_term"
+      continue
+    fi
+
+    if [[ "$timezone_choice" =~ ^[0-9]+$ ]]; then
+      local index=$((timezone_choice - 1))
+      if [ $index -ge 0 ] && [ $index -lt ${#COMMON_TIMEZONES[@]} ]; then
+        selected_timezone="${COMMON_TIMEZONES[$index]}"
+        break
+      else
+        yt_error "Invalid selection. Choose a number between 1 and ${#COMMON_TIMEZONES[@]}."
+        continue
+      fi
+    fi
+
+    if validate_timezone_value "$timezone_choice"; then
+      selected_timezone="$timezone_choice"
+      break
+    else
+      yt_error "Timezone '$timezone_choice' is not recognized."
+      if [ "$TIMEZONE_SEARCH_AVAILABLE" = true ]; then
+        yt_detail "Type '? keyword' (example: '? denver') to search supported entries."
+      else
+        yt_detail "Refer to the IANA timezone database list for valid options."
+      fi
+    fi
+  done
+
+  update_env_var "TZ" "$(quote_env_value "$selected_timezone")" "$ENV_FILE"
+  yt_success "Timezone set to $selected_timezone."
+}
+
 # Check for old external-db.env and migrate to .env if needed
 EXTERNAL_DB_ENV_FILE="./config/external-db.env"
 if [ "$USE_EXTERNAL_DB" = "true" ] && [ -f "$EXTERNAL_DB_ENV_FILE" ]; then
@@ -133,6 +310,7 @@ fi
 # Create .env from .env.example
 cp "$ENV_EXAMPLE_FILE" "$ENV_FILE"
 yt_success "Created .env from .env.example."
+prompt_timezone_configuration
 
 # Load from .env to check AUTH_ENABLED / HEADLESS_AUTH
 set -a

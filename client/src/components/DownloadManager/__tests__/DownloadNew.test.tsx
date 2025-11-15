@@ -7,6 +7,12 @@ import DownloadNew from '../DownloadNew';
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
+// Mock useConfig hook
+const mockUseConfig = jest.fn();
+jest.mock('../../../hooks/useConfig', () => ({
+  useConfig: (token: string | null) => mockUseConfig(token),
+}));
+
 jest.mock('../ManualDownload/ManualDownload', () => ({
   __esModule: true,
   default: function MockManualDownload({ onStartDownload, token, defaultResolution }: any) {
@@ -75,13 +81,28 @@ describe('DownloadNew', () => {
     jest.clearAllMocks();
     mockDownloadInitiatedRef.current = false;
     jest.useFakeTimers();
-    // Default mock for fetch to handle config requests
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: jest.fn().mockResolvedValueOnce({
+
+    // Default mock for useConfig hook
+    mockUseConfig.mockReturnValue({
+      config: {
         preferredResolution: '1080',
         channelFilesToDownload: 3,
-      }),
+      },
+      initialConfig: null,
+      isPlatformManaged: {
+        plexUrl: false,
+        authEnabled: true,
+        useTmpForDownloads: false
+      },
+      deploymentEnvironment: {
+        platform: null,
+        isWsl: false,
+      },
+      loading: false,
+      error: null,
+      refetch: jest.fn(),
+      setConfig: jest.fn(),
+      setInitialConfig: jest.fn(),
     });
   });
 
@@ -119,53 +140,71 @@ describe('DownloadNew', () => {
     expect(screen.queryByRole('button', { name: 'Download new from all channels' })).not.toBeInTheDocument();
   });
 
-  test('fetches config on mount and sets default values', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValueOnce({
+  test('uses config from useConfig hook', async () => {
+    mockUseConfig.mockReturnValue({
+      config: {
         preferredResolution: '720',
         channelFilesToDownload: 10,
-      }),
+      },
+      initialConfig: null,
+      isPlatformManaged: {
+        plexUrl: false,
+        authEnabled: true,
+        useTmpForDownloads: false
+      },
+      deploymentEnvironment: {
+        platform: null,
+        isWsl: false,
+      },
+      loading: false,
+      error: null,
+      refetch: jest.fn(),
+      setConfig: jest.fn(),
+      setInitialConfig: jest.fn(),
     });
 
     render(<DownloadNew {...defaultProps} />);
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/getconfig', {
-        headers: { 'x-access-token': mockToken },
-      });
+      expect(mockUseConfig).toHaveBeenCalledWith(mockToken);
     });
 
-    await waitFor(() => {
-      expect(screen.getByText('Resolution: 720')).toBeInTheDocument();
-    });
+    expect(screen.getByText('Resolution: 720')).toBeInTheDocument();
   });
 
-  test('handles config fetch error gracefully', async () => {
-    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
-    mockFetch.mockRejectedValueOnce(new Error('Network error'));
+  test('handles config errors by falling back to defaults', async () => {
+    mockUseConfig.mockReturnValue({
+      config: {
+        preferredResolution: '1080',
+        channelFilesToDownload: 3,
+      },
+      initialConfig: null,
+      isPlatformManaged: {
+        plexUrl: false,
+        authEnabled: true,
+        useTmpForDownloads: false
+      },
+      deploymentEnvironment: {
+        platform: null,
+        isWsl: false,
+      },
+      loading: false,
+      error: new Error('Network error'),
+      refetch: jest.fn(),
+      setConfig: jest.fn(),
+      setInitialConfig: jest.fn(),
+    });
 
     render(<DownloadNew {...defaultProps} />);
 
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('/getconfig', {
-        headers: { 'x-access-token': mockToken },
-      });
-    });
-
-    await waitFor(() => {
-      expect(consoleError).toHaveBeenCalledWith('Error fetching config:', expect.any(Error));
-    });
-
+    // Should still render with default values despite error
     expect(screen.getByText('Resolution: 1080')).toBeInTheDocument();
-
-    consoleError.mockRestore();
   });
 
-  test('does not fetch config when token is null', () => {
+  test('calls useConfig with null token when token is null', () => {
     render(<DownloadNew {...defaultProps} token={null} />);
 
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockUseConfig).toHaveBeenCalledWith(null);
   });
 
   test('opens channel settings dialog when button is clicked', async () => {
@@ -258,14 +297,9 @@ describe('DownloadNew', () => {
   test('shows alert when channel download already running', async () => {
     const user = userEvent.setup({ delay: null });
     const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
-    mockFetch.mockReset();
+
+    // Mock the fetch to return 400 status for the channel download endpoint
     mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValueOnce({
-        preferredResolution: '1080',
-        channelFilesToDownload: 3,
-      }),
-    }).mockResolvedValueOnce({
       ok: false,
       status: 400,
       json: jest.fn().mockResolvedValueOnce({}),
@@ -400,14 +434,27 @@ describe('DownloadNew', () => {
     });
   });
 
-  test('updates default resolution from fetched config', async () => {
-    mockFetch.mockReset();
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValueOnce({
+  test('updates default resolution from config', async () => {
+    mockUseConfig.mockReturnValue({
+      config: {
         preferredResolution: '4K',
         channelFilesToDownload: 15,
-      }),
+      },
+      initialConfig: null,
+      isPlatformManaged: {
+        plexUrl: false,
+        authEnabled: true,
+        useTmpForDownloads: false
+      },
+      deploymentEnvironment: {
+        platform: null,
+        isWsl: false,
+      },
+      loading: false,
+      error: null,
+      refetch: jest.fn(),
+      setConfig: jest.fn(),
+      setInitialConfig: jest.fn(),
     });
 
     const user = userEvent.setup({ delay: null });
@@ -442,13 +489,27 @@ describe('DownloadNew', () => {
     expect(screen.getByRole('button', { name: 'Download new from all channels' })).toBeInTheDocument();
   });
 
-  test('handles partial config response', async () => {
-    mockFetch.mockReset();
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: jest.fn().mockResolvedValueOnce({
+  test('handles partial config response with defaults', async () => {
+    mockUseConfig.mockReturnValue({
+      config: {
         preferredResolution: '480',
-      }),
+        // channelFilesToDownload not provided, should use default
+      },
+      initialConfig: null,
+      isPlatformManaged: {
+        plexUrl: false,
+        authEnabled: true,
+        useTmpForDownloads: false
+      },
+      deploymentEnvironment: {
+        platform: null,
+        isWsl: false,
+      },
+      loading: false,
+      error: null,
+      refetch: jest.fn(),
+      setConfig: jest.fn(),
+      setInitialConfig: jest.fn(),
     });
 
     render(<DownloadNew {...defaultProps} />);
@@ -465,6 +526,7 @@ describe('DownloadNew', () => {
     await user.click(downloadButton);
 
     expect(screen.getByText('Resolution: 480')).toBeInTheDocument();
+    // Should use default value of 3 since channelFilesToDownload is undefined
     expect(screen.getByText('Video Count: 3')).toBeInTheDocument();
   });
 });

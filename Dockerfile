@@ -45,6 +45,10 @@ COPY --from=build /app/server ./server
 COPY --from=build /app/client/build ./client/build
 COPY --from=build /app/migrations ./migrations
 
+# Copy config.example.json to template directory (won't be shadowed by volume mounts)
+RUN mkdir -p /app/config-templates
+COPY config/config.example.json /app/config-templates/config.example.json
+
 # Copy the new simplified entrypoint script
 COPY scripts/docker-entrypoint-simple.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

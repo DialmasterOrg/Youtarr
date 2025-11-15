@@ -1,7 +1,7 @@
 # Youtarr
 
-![Backend Coverage](https://img.shields.io/badge/Backend_Coverage-85%25-brightgreen)
-![Frontend Coverage](https://img.shields.io/badge/Frontend_Coverage-79%25-yellow)
+![Backend Coverage](https://img.shields.io/badge/Backend_Coverage-84%25-brightgreen)
+![Frontend Coverage](https://img.shields.io/badge/Frontend_Coverage-84%25-brightgreen)
 ![CI Status](https://github.com/DialmasterOrg/Youtarr/workflows/CI%20-%20Lint%20and%20Test/badge.svg)
 
 Youtarr is a self-hosted YouTube downloader that automatically downloads videos from your favorite channels or specific URLs. With optional Plex integration, it can refresh your media library for a seamless, ad-free viewing experience.
@@ -81,6 +81,7 @@ Perfect for users who want automated setup with minimal configuration:
    ```
    On first run, this will allow you to select your YouTube download directory and create a `.env` file from `.env.example`.
    The default download directory is `./downloads` but can be overridden during initial ./start.sh or via `.env`
+   During the bootstrap you'll also choose your timezone (default `UTC`), which drives scheduled downloads and nightly cleanup jobs.
    You will be required to set your auth credentials via UI on localhost for first time setup, and your credentials will be saved in `./config/config.json`
 
    - Optional flags:
@@ -119,6 +120,7 @@ Eg. for Portainer, TrueNAS, or any Docker-native workflow:
    Docker will otherwise create it as root-owned (if YOUTARR_UID and YOUTARR_GID are not set in .env)
 
    Optionally configure authentication and logging settings (see .env.example for details).
+   Set the `TZ` variable to your local timezone (IANA format such as `Europe/Paris` or `America/Chicago`). This controls when scheduled downloads and the nightly cleanup job run. If unsure, leave it as `UTC`.
 
    > **Note:** Changes to `.env` require a complete container restart to take effect:
    > - Using scripts: `./stop.sh` then `./start.sh`
@@ -137,6 +139,10 @@ Eg. for Portainer, TrueNAS, or any Docker-native workflow:
        - `AUTH_PRESET_PASSWORD`: 8-64 characters
    - Otherwise you must set your login credentials in UI via localhost on first run and they will be saved to `./config/config.json`
    - Configure Plex (optional) and other settings from the Configuration page
+
+### Timezone (TZ) Configuration
+
+Youtarr reads the `TZ` environment variable to determine when cron-based downloads and nightly cleanup run. The start scripts prompt for this value on first launch (defaulting to `UTC`) and validate it against the system timezone database. To change it later, edit `TZ` in `.env`, set it to a valid [IANA timezone](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) such as `America/New_York`, then restart the stack so Docker picks up the new schedule.
 
 **Platform-Specific Guides**:
 - **Synology NAS** (DSM 7+): See the [Synology NAS Guide](docs/SYNOLOGY.md) for optimized installation steps
