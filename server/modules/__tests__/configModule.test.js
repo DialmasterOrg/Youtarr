@@ -421,7 +421,8 @@ describe('ConfigModule', () => {
       // Arrange
       fs.existsSync.mockImplementation((path) => {
         if (path.includes('config.json') && !path.includes('example')) return false;
-        if (path.includes('/app/config-templates/config.example.json')) return true;
+        // The template path is relative to __dirname (server/modules)
+        if (path.includes('server/config.example.json')) return true;
         return false;
       });
       fs.readFileSync.mockReturnValue(JSON.stringify(defaultTemplate));
@@ -431,7 +432,7 @@ describe('ConfigModule', () => {
 
       // Assert
       expect(logger.info).toHaveBeenCalledWith(
-        expect.objectContaining({ path: '/app/config-templates/config.example.json' }),
+        expect.objectContaining({ path: expect.stringContaining('server/config.example.json') }),
         'Using config.example.json from image template'
       );
     });
