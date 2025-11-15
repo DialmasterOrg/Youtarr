@@ -29,199 +29,166 @@ class ConfigModule extends EventEmitter {
     this.directoryPath = process.env.DATA_PATH || '/usr/src/app/data';
     this.ffmpegPath = '/usr/bin/ffmpeg';
 
+    // Merge with template to add any missing fields
+    const mergeResult = this.mergeWithTemplate(this.config);
+    this.config = mergeResult.config;
+
+    // Handle legacy field name (cronSchedule → channelDownloadFrequency)
+    // This is a one-time migration for old configs
+    let legacyMigrationNeeded = false;
+    if (this.config.cronSchedule && !this.config.channelDownloadFrequency) {
+      this.config.channelDownloadFrequency = this.config.cronSchedule;
+      delete this.config.cronSchedule;
+      legacyMigrationNeeded = true;
+      logger.info('Migrated legacy cronSchedule field to channelDownloadFrequency');
+    }
+
+    // Handle plexPort type conversion (ensure it's a string)
+    if (this.config.plexPort !== undefined && typeof this.config.plexPort !== 'string') {
+      this.config.plexPort = String(this.config.plexPort);
+      legacyMigrationNeeded = true;
+      logger.info('Converted plexPort to string type');
+    }
+
     // Override temp download settings for Elfhosted platform
     if (this.isElfhostedPlatform()) {
       this.config.useTmpForDownloads = true;
       this.config.tmpFilePath = '/app/config/temp_downloads';
+      // Don't save these overrides - they're runtime only
     }
 
-    let configModified = false;
-
-    if (!this.config.channelFilesToDownload) {
-      this.config.channelFilesToDownload = 3;
-    }
-
-    if (!this.config.preferredResolution) {
-      this.config.preferredResolution = '1080';
-    }
-
-    if (!this.config.videoCodec) {
-      this.config.videoCodec = 'default';
-      configModified = true;
-    }
-
-    if (this.config.plexPort === undefined || this.config.plexPort === null || this.config.plexPort === '') {
-      this.config.plexPort = '32400';
-      configModified = true;
-    } else if (typeof this.config.plexPort !== 'string') {
-      this.config.plexPort = String(this.config.plexPort);
-      configModified = true;
-    }
-
-    if (this.config.plexViaHttps === undefined) {
-      this.config.plexViaHttps = false;
-      configModified = true;
-    }
-
-    // Initialize channel auto-download settings if not present
-    if (this.config.channelAutoDownload === undefined) {
-      this.config.channelAutoDownload = false;
-      configModified = true;
-    }
-
-    if (!this.config.channelDownloadFrequency) {
-      // Check if cronSchedule exists (backward compatibility for misconfigured files)
-      if (this.config.cronSchedule) {
-        this.config.channelDownloadFrequency = this.config.cronSchedule;
-        delete this.config.cronSchedule; // Remove the incorrect field
-        configModified = true;
-      } else {
-        this.config.channelDownloadFrequency = '0 */6 * * *'; // Default: every 6 hours
-        configModified = true;
-      }
-    }
-
-    // Initialize Sponsorblock settings if not present
-    if (this.config.sponsorblockEnabled === undefined) {
-      this.config.sponsorblockEnabled = false;
-    }
-
-    if (!this.config.sponsorblockAction) {
-      this.config.sponsorblockAction = 'remove'; // 'remove' or 'mark'
-    }
-
-    if (!this.config.sponsorblockCategories) {
-      this.config.sponsorblockCategories = {
-        sponsor: true,
-        intro: false,
-        outro: false,
-        selfpromo: true,
-        preview: false,
-        filler: false,
-        interaction: false,
-        music_offtopic: false
-      };
-    }
-
-    // sponsorblockApiUrl is optional, defaults to empty string (uses default API)
-    if (this.config.sponsorblockApiUrl === undefined) {
-      this.config.sponsorblockApiUrl = '';
-    }
-
-    // Initialize download performance settings if not present
-    if (this.config.downloadSocketTimeoutSeconds === undefined) {
-      this.config.downloadSocketTimeoutSeconds = 30;
-    }
-
-    if (!this.config.downloadThrottledRate) {
-      this.config.downloadThrottledRate = '100K';
-    }
-
-    if (this.config.downloadRetryCount === undefined) {
-      this.config.downloadRetryCount = 2;
-    }
-
-    if (this.config.enableStallDetection === undefined) {
-      this.config.enableStallDetection = true;
-    }
-
-    if (this.config.stallDetectionWindowSeconds === undefined) {
-      this.config.stallDetectionWindowSeconds = 30;
-    }
-
-    if (!this.config.stallDetectionRateThreshold) {
-      this.config.stallDetectionRateThreshold = this.config.downloadThrottledRate || '100K';
-    }
-
-    // Initialize cookie configuration if not present
-    if (this.config.cookiesEnabled === undefined) {
-      this.config.cookiesEnabled = false;
-    }
-
-    if (this.config.customCookiesUploaded === undefined) {
-      this.config.customCookiesUploaded = false;
-    }
-
-    if (this.config.writeChannelPosters === undefined) {
-      this.config.writeChannelPosters = true;
-      configModified = true;
-    }
-
-    if (this.config.writeVideoNfoFiles === undefined) {
-      this.config.writeVideoNfoFiles = true;
-      configModified = true;
-    }
-
-    // Initialize notification settings if not present
-    if (this.config.notificationsEnabled === undefined) {
-      this.config.notificationsEnabled = false;
-      configModified = true;
-    }
-
-    if (!this.config.notificationService) {
-      this.config.notificationService = 'discord';
-      configModified = true;
-    }
-
-    if (this.config.discordWebhookUrl === undefined) {
-      this.config.discordWebhookUrl = '';
-      configModified = true;
-    }
-
-    // Initialize automatic video removal settings if not present
-    if (this.config.autoRemovalEnabled === undefined) {
-      this.config.autoRemovalEnabled = false;
-      configModified = true;
-    }
-
-    if (this.config.autoRemovalFreeSpaceThreshold === undefined) {
-      this.config.autoRemovalFreeSpaceThreshold = null;
-      configModified = true;
-    }
-
-    if (this.config.autoRemovalVideoAgeThreshold === undefined) {
-      this.config.autoRemovalVideoAgeThreshold = null;
-      configModified = true;
-    }
-
-    // Initialize temp download settings if not present
-    if (this.config.useTmpForDownloads === undefined) {
-      this.config.useTmpForDownloads = false;
-      configModified = true;
-    }
-
-    if (!this.config.tmpFilePath) {
-      this.config.tmpFilePath = '/tmp/youtarr-downloads';
-      configModified = true;
-    }
-
-    // Initialize subtitle settings if not present
-    if (this.config.subtitlesEnabled === undefined) {
-      this.config.subtitlesEnabled = false;
-      configModified = true;
-    }
-
-    if (!this.config.subtitleLanguage) {
-      this.config.subtitleLanguage = 'en';
-      configModified = true;
-    }
-
-    // Check if a UUID exists in the config
-    if (!this.config.uuid) {
-      // Generate a new UUID
-      this.config.uuid = uuidv4();
-      configModified = true;
-    }
-
-    // Save config if any defaults were added
-    if (configModified) {
+    // Save config if modified by merge or legacy migrations
+    if (mergeResult.modified || legacyMigrationNeeded) {
       this.saveConfig();
     }
 
-    // Apply migrations after loading and initializing defaults
-    this.config = this.migrateConfig(this.config);
-
     this.watchConfig();
+  }
+
+  /**
+   * Get the path to config.example.json
+   * Checks mounted volume first, then falls back to image built-in template
+   * @returns {string} Path to config.example.json
+   * @throws {Error} If config.example.json not found in either location
+   */
+  getConfigExamplePath() {
+    const configDir = path.dirname(this.configPath);
+
+    // First check mounted volume (user's custom config.example.json)
+    const volumePath = path.join(configDir, 'config.example.json');
+    if (fs.existsSync(volumePath)) {
+      logger.info({ path: volumePath }, 'Using config.example.json from mounted volume');
+      return volumePath;
+    }
+
+    // Fall back to image built-in template
+    const templatePath = '/app/config-templates/config.example.json';
+    if (fs.existsSync(templatePath)) {
+      logger.info({ path: templatePath }, 'Using config.example.json from image template');
+      return templatePath;
+    }
+
+    // Error - config.example.json is required
+    const error = new Error(
+      'config.example.json not found in either mounted volume or image template. ' +
+      'This file is required for configuration initialization.'
+    );
+    logger.error({ volumePath, templatePath }, 'config.example.json not found');
+    throw error;
+  }
+
+  /**
+   * Deep merge two objects, preserving existing values and adding missing ones from template
+   * Handles nested objects recursively
+   * @param {object} template - Template object with all possible fields
+   * @param {object} existing - Existing object with user values
+   * @param {string} path - Current path for logging (used in recursion)
+   * @returns {object} Object with { merged, fieldsAdded: string[] }
+   */
+  deepMerge(template, existing, path = '') {
+    const merged = {};
+    const fieldsAdded = [];
+
+    // First, copy all template keys
+    for (const key in template) {
+      if (key === '//comment') continue; // Skip comment keys
+
+      const templateValue = template[key];
+      const existingValue = existing[key];
+      const fieldPath = path ? `${path}.${key}` : key;
+
+      if (!(key in existing)) {
+        // Key missing from existing - add from template
+        merged[key] = templateValue;
+        fieldsAdded.push(fieldPath);
+      } else if (typeof templateValue === 'object' && templateValue !== null && !Array.isArray(templateValue)) {
+        // Template value is an object - existing should be too
+        if (typeof existingValue === 'object' && existingValue !== null && !Array.isArray(existingValue)) {
+          // Both are objects - recurse to merge nested fields
+          const result = this.deepMerge(templateValue, existingValue, fieldPath);
+          merged[key] = result.merged;
+          fieldsAdded.push(...result.fieldsAdded);
+        } else {
+          // Type mismatch - template is object but existing is not
+          // Fix corrupted data by using template value
+          merged[key] = templateValue;
+          fieldsAdded.push(fieldPath);
+          logger.warn(
+            { field: fieldPath, expectedType: 'object', actualType: typeof existingValue },
+            'Config field has incorrect type, replacing with template value'
+          );
+        }
+      } else {
+        // Primitive or array - use existing value
+        merged[key] = existingValue;
+      }
+    }
+
+    // Copy any keys from existing that aren't in template (preserve extra user fields)
+    for (const key in existing) {
+      if (!(key in merged)) {
+        merged[key] = existing[key];
+      }
+    }
+
+    return { merged, fieldsAdded };
+  }
+
+  /**
+   * Merge existing config with template to add missing fields
+   * @param {object} existingConfig - Current config object
+   * @returns {object} Object with { config: mergedConfig, modified: boolean }
+   */
+  mergeWithTemplate(existingConfig) {
+    const examplePath = this.getConfigExamplePath();
+    const templateContent = fs.readFileSync(examplePath, 'utf8');
+    const templateConfig = JSON.parse(templateContent);
+
+    // Remove comment-only keys from template
+    delete templateConfig['//comment'];
+
+    // Deep merge to handle nested objects
+    const mergeResult = this.deepMerge(templateConfig, existingConfig);
+    const mergedConfig = mergeResult.merged;
+    const modified = mergeResult.fieldsAdded.length > 0;
+
+    // Log all fields that were added
+    if (modified) {
+      mergeResult.fieldsAdded.forEach(fieldPath => {
+        logger.info({ field: fieldPath }, 'Adding missing config field from template');
+      });
+    }
+
+    // Preserve UUID if it exists, generate if not
+    if (existingConfig.uuid) {
+      mergedConfig.uuid = existingConfig.uuid;
+    } else {
+      mergedConfig.uuid = uuidv4();
+      logger.info({ uuid: mergedConfig.uuid }, 'Generated new UUID for config');
+      // Don't set modified=true here since UUID is expected to be missing on first run
+    }
+
+    return { config: mergedConfig, modified };
   }
 
   ensureConfigExists() {
@@ -230,88 +197,35 @@ class ConfigModule extends EventEmitter {
       return;
     }
 
-    // Handle platform deployments with DATA_PATH
-    if (process.env.DATA_PATH) {
-      logger.info('Platform deployment detected (DATA_PATH is set). Auto-creating config.json...');
-      this.createDefaultConfig();
-      return;
-    }
-
-    // Handle Docker deployments without DATA_PATH
-    logger.info('Auto-creating config.json (docker default without DATA_PATH)');
+    logger.info('Auto-creating config.json from config.example.json template');
 
     // Ensure config directory exists
     const configDir = path.dirname(this.configPath);
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true });
+      logger.info({ path: configDir }, 'Created config directory');
     }
 
-    let defaultConfig;
+    // Load config.example.json (will throw if not found - which is required)
+    const examplePath = this.getConfigExamplePath();
+    const exampleContent = fs.readFileSync(examplePath, 'utf8');
+    const defaultConfig = JSON.parse(exampleContent);
 
-    // Try to load from config.example.json first
-    try {
-      const examplePath = path.join(configDir, 'config.example.json');
-      const exampleContent = fs.readFileSync(examplePath, 'utf8');
-      const exampleConfig = JSON.parse(exampleContent);
+    // Remove comment-only keys
+    delete defaultConfig['//comment'];
 
-      // Remove comment-only keys
-      delete exampleConfig['//comment'];
-
-      // Use example as base
-      defaultConfig = exampleConfig;
-    } catch (error) {
-      logger.info('Could not load config.example.json, using inline defaults');
-
-      // Fallback to minimal defaults if example file unavailable
-      defaultConfig = {
-        channelFilesToDownload: 3,
-        preferredResolution: '1080',
-        videoCodec: 'default',
-        channelAutoDownload: false,
-        channelDownloadFrequency: '0 */6 * * *',
-        plexApiKey: '',
-        plexPort: '32400',
-        plexViaHttps: false,
-        plexLibrarySection: '',
-        youtubeApiKey: '',
-        sponsorblockEnabled: false,
-        sponsorblockAction: 'remove',
-        sponsorblockCategories: {
-          sponsor: true,
-          intro: false,
-          outro: false,
-          selfpromo: true,
-          preview: false,
-          filler: false,
-          interaction: false,
-          music_offtopic: false
-        },
-        sponsorblockApiUrl: '',
-        downloadSocketTimeoutSeconds: 30,
-        downloadThrottledRate: '100K',
-        downloadRetryCount: 2,
-        enableStallDetection: true,
-        stallDetectionWindowSeconds: 30,
-        stallDetectionRateThreshold: '100K',
-        cookiesEnabled: false,
-        customCookiesUploaded: false,
-        writeChannelPosters: true,
-        writeVideoNfoFiles: true,
-        notificationsEnabled: false,
-        notificationService: 'discord',
-        discordWebhookUrl: '',
-        useTmpForDownloads: false,
-        tmpFilePath: '/tmp/youtarr-downloads',
-        subtitlesEnabled: false,
-        subtitleLanguage: 'en'
-      };
-    }
-
-    // Generate UUID
+    // Generate UUID for this instance
     defaultConfig.uuid = uuidv4();
+
+    // Apply platform-specific environment variable overrides
+    if (process.env.PLEX_URL) {
+      defaultConfig.plexUrl = process.env.PLEX_URL;
+      logger.info({ plexUrl: process.env.PLEX_URL }, 'Applied PLEX_URL from environment');
+    }
 
     // Write the config file
     fs.writeFileSync(this.configPath, JSON.stringify(defaultConfig, null, 2));
+    logger.info({ configPath: this.configPath }, 'Created config.json from template');
   }
 
   getConfig() {
@@ -406,93 +320,6 @@ class ConfigModule extends EventEmitter {
     }, 200);
   }
 
-  createDefaultConfig() {
-    // Ensure the config directory exists
-    const configDir = path.dirname(this.configPath);
-    if (!fs.existsSync(configDir)) {
-      fs.mkdirSync(configDir, { recursive: true });
-      logger.info({ path: configDir }, 'Created config directory');
-    }
-
-    // Create default config for platform deployments
-    const defaultConfig = {
-      channelFilesToDownload: 3,
-      preferredResolution: '1080',
-      videoCodec: 'default',
-
-      // Channel auto-download settings
-      channelAutoDownload: false,
-      channelDownloadFrequency: '0 */6 * * *', // Default: every 6 hours
-
-      // Plex settings - use PLEX_URL if provided
-      plexApiKey: '',
-      plexPort: '32400',
-      plexViaHttps: false,
-      plexLibrarySection: ''
-    };
-
-    // Add Plex URL if provided by platform
-    if (process.env.PLEX_URL) {
-      defaultConfig.plexUrl = process.env.PLEX_URL;
-    }
-
-    // YouTube API - optional, for browsing channels
-    defaultConfig.youtubeApiKey = '';
-
-    // SponsorBlock settings - disabled by default
-    defaultConfig.sponsorblockEnabled = false;
-    defaultConfig.sponsorblockAction = 'remove';
-    defaultConfig.sponsorblockCategories = {
-      sponsor: true,
-      intro: false,
-      outro: false,
-      selfpromo: true,
-      preview: false,
-      filler: false,
-      interaction: false,
-      music_offtopic: false
-    };
-    defaultConfig.sponsorblockApiUrl = '';
-
-    // Download performance settings - defaults for new installs
-    defaultConfig.downloadSocketTimeoutSeconds = 30;
-    defaultConfig.downloadThrottledRate = '100K';
-    defaultConfig.downloadRetryCount = 2;
-    defaultConfig.enableStallDetection = true;
-    defaultConfig.stallDetectionWindowSeconds = 30;
-    defaultConfig.stallDetectionRateThreshold = '100K';
-
-    // Cookie configuration - disabled by default
-    defaultConfig.cookiesEnabled = false;
-    defaultConfig.customCookiesUploaded = false;
-
-    // Media server compatibility features enabled by default
-    defaultConfig.writeChannelPosters = true;
-    defaultConfig.writeVideoNfoFiles = true;
-
-    // Notification settings - disabled by default
-    defaultConfig.notificationsEnabled = false;
-    defaultConfig.notificationService = 'discord';
-    defaultConfig.discordWebhookUrl = '';
-
-    // Temp download settings - disabled by default
-    defaultConfig.useTmpForDownloads = false;
-    defaultConfig.tmpFilePath = '/tmp/youtarr-downloads';
-
-    // Subtitle settings - disabled by default
-    defaultConfig.subtitlesEnabled = false;
-    defaultConfig.subtitleLanguage = 'en';
-
-    // Generate UUID for instance identification
-    defaultConfig.uuid = uuidv4();
-
-    // Write the config file
-    defaultConfig.plexPort = '32400';
-
-    fs.writeFileSync(this.configPath, JSON.stringify(defaultConfig, null, 2));
-    logger.info({ configPath: this.configPath }, 'Auto-created config.json with default settings');
-  }
-
   watchConfig() {
     // Watch the config file for changes
     this.configWatcher = fs.watch(this.configPath, (event) => {
@@ -525,20 +352,20 @@ class ConfigModule extends EventEmitter {
             // Load the new config file
             this.config = JSON.parse(fileContent);
 
-            // Migrate cronSchedule to channelDownloadFrequency if needed
-            if (!this.config.channelDownloadFrequency && this.config.cronSchedule) {
+            // Merge with template to add any new fields
+            const mergeResult = this.mergeWithTemplate(this.config);
+            this.config = mergeResult.config;
+
+            // Handle legacy field name (cronSchedule → channelDownloadFrequency)
+            let legacyMigrationNeeded = false;
+            if (this.config.cronSchedule && !this.config.channelDownloadFrequency) {
               this.config.channelDownloadFrequency = this.config.cronSchedule;
               delete this.config.cronSchedule;
-              // Save the corrected config
-              this.saveConfig();
+              legacyMigrationNeeded = true;
             }
 
-            // Apply configuration migrations to ensure new defaults exist
-            const migratedConfig = this.migrateConfig(this.config);
-            const needsMigrationSave = JSON.stringify(migratedConfig) !== JSON.stringify(this.config);
-            this.config = migratedConfig;
-
-            if (needsMigrationSave) {
+            // Save config if modified by merge or legacy migrations
+            if (mergeResult.modified || legacyMigrationNeeded) {
               this.saveConfig();
             }
 
@@ -572,158 +399,6 @@ class ConfigModule extends EventEmitter {
 
   onConfigChange(callback) {
     this.on('change', callback);
-  }
-
-  migrateConfig(config) {
-    // Migration function to add new fields to existing configs
-    const migrations = {
-      '1.23.0': (cfg) => {
-        const migrated = { ...cfg };
-
-        // Add download performance settings if they don't exist
-        if (migrated.downloadSocketTimeoutSeconds === undefined) {
-          migrated.downloadSocketTimeoutSeconds = 30;
-        }
-        if (!migrated.downloadThrottledRate) {
-          migrated.downloadThrottledRate = '100K';
-        }
-        if (migrated.downloadRetryCount === undefined) {
-          migrated.downloadRetryCount = 2;
-        }
-        if (migrated.enableStallDetection === undefined) {
-          migrated.enableStallDetection = true;
-        }
-        if (migrated.stallDetectionWindowSeconds === undefined) {
-          migrated.stallDetectionWindowSeconds = 30;
-        }
-        if (!migrated.stallDetectionRateThreshold) {
-          migrated.stallDetectionRateThreshold = migrated.downloadThrottledRate || '100K';
-        }
-
-        return migrated;
-      },
-      '1.24.0': (cfg) => {
-        const migrated = { ...cfg };
-
-        // Add cookie configuration if it doesn't exist
-        if (migrated.cookiesEnabled === undefined) {
-          migrated.cookiesEnabled = false;
-        }
-        if (migrated.customCookiesUploaded === undefined) {
-          migrated.customCookiesUploaded = false;
-        }
-
-        return migrated;
-      },
-      '1.25.0': (cfg) => {
-        const migrated = { ...cfg };
-
-        if (migrated.writeChannelPosters === undefined) {
-          migrated.writeChannelPosters = true;
-        }
-
-        if (migrated.writeVideoNfoFiles === undefined) {
-          migrated.writeVideoNfoFiles = true;
-        }
-
-        return migrated;
-      },
-      '1.26.0': (cfg) => {
-        const migrated = { ...cfg };
-
-        if (migrated.plexPort === undefined || migrated.plexPort === null || migrated.plexPort === '') {
-          migrated.plexPort = '32400';
-        } else if (typeof migrated.plexPort !== 'string') {
-          migrated.plexPort = String(migrated.plexPort);
-        }
-
-        return migrated;
-      },
-      '1.35.0': (cfg) => {
-        const migrated = { ...cfg };
-
-        // Add notification settings
-        if (migrated.notificationsEnabled === undefined) {
-          migrated.notificationsEnabled = false;
-        }
-        if (!migrated.notificationService) {
-          migrated.notificationService = 'discord';
-        }
-        if (migrated.discordWebhookUrl === undefined) {
-          migrated.discordWebhookUrl = '';
-        }
-
-        return migrated;
-      },
-      '1.36.0': (cfg) => {
-        const migrated = { ...cfg };
-
-        // Add automatic video removal settings
-        if (migrated.autoRemovalEnabled === undefined) {
-          migrated.autoRemovalEnabled = false;
-        }
-        if (migrated.autoRemovalFreeSpaceThreshold === undefined) {
-          migrated.autoRemovalFreeSpaceThreshold = null;
-        }
-        if (migrated.autoRemovalVideoAgeThreshold === undefined) {
-          migrated.autoRemovalVideoAgeThreshold = null;
-        }
-        return migrated;
-      },
-      '1.38.0': (cfg) => {
-        const migrated = { ...cfg };
-
-        // Add video codec preference setting
-        if (!migrated.videoCodec) {
-          migrated.videoCodec = 'default';
-        }
-
-        return migrated;
-      },
-      '1.42.0': (cfg) => {
-        const migrated = { ...cfg };
-
-        // Add temp download settings
-        if (migrated.useTmpForDownloads === undefined) {
-          migrated.useTmpForDownloads = false;
-        }
-        if (!migrated.tmpFilePath) {
-          migrated.tmpFilePath = '/tmp/youtarr-downloads';
-        }
-
-        return migrated;
-      },
-      '1.43.0': (cfg) => {
-        const migrated = { ...cfg };
-
-        // Add subtitle settings
-        if (migrated.subtitlesEnabled === undefined) {
-          migrated.subtitlesEnabled = false;
-        }
-        if (!migrated.subtitleLanguage) {
-          migrated.subtitleLanguage = 'en';
-        }
-
-        return migrated;
-      },
-      '1.49.1': (cfg) => {
-        const migrated = { ...cfg };
-
-        // Add HTTPS support for Plex connections
-        if (migrated.plexViaHttps === undefined) {
-          migrated.plexViaHttps = false;
-        }
-
-        return migrated;
-      }
-    };
-
-    let migrated = { ...config };
-    Object.values(migrations).forEach(migration => {
-      migrated = migration(migrated);
-    });
-
-    return migrated;
   }
 
   // Cookie helper methods

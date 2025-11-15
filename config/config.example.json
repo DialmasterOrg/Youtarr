@@ -1,5 +1,5 @@
 {
-  "initialSetup": true,
+  "//comment": "This file serves as the template for creating config.json on initial startup and for adding missing fields to existing configs. It is the single source of truth for all default configuration values.",
   "channelFilesToDownload": 5,
   "channelAutoDownload": false,
   "channelDownloadFrequency": "0 * * * *",
@@ -10,6 +10,20 @@
   "plexViaHttps": false,
   "plexApiKey": "",
   "plexYoutubeLibraryId": "",
+  "plexUrl": "",
+  "sponsorblockEnabled": false,
+  "sponsorblockAction": "remove",
+  "sponsorblockCategories": {
+    "sponsor": true,
+    "intro": false,
+    "outro": false,
+    "selfpromo": true,
+    "preview": false,
+    "filler": false,
+    "interaction": false,
+    "music_offtopic": false
+  },
+  "sponsorblockApiUrl": "",
   "downloadSocketTimeoutSeconds": 30,
   "downloadThrottledRate": "100K",
   "downloadRetryCount": 2,
@@ -28,5 +42,7 @@
   "autoRemovalEnabled": false,
   "autoRemovalFreeSpaceThreshold": null,
   "autoRemovalVideoAgeThreshold": null,
+  "subtitlesEnabled": false,
+  "subtitleLanguage": "en",
   "uuid": ""
 }

@@ -36,7 +36,8 @@ get_compose_command() {
 COMPOSE_CMD=$(get_compose_command)
 
 yt_section "Configuration"
-yt_warn "Most runtime configuration now comes from .env."
+yt_warn "Runtime configuration now comes from .env and config/config.json files."
+yt_warn "config/config.json is created from config/config.example.json if missing."
 yt_info "Docker compose command: $COMPOSE_CMD"
 
 while [[ $# -gt 0 ]]; do
