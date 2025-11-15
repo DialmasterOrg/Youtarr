@@ -91,6 +91,9 @@ export const CONFIG_FIELDS = {
   subtitlesEnabled: { default: false, trackChanges: true },
   subtitleLanguage: { default: 'en', trackChanges: true },
 
+  // Appearance
+  darkModeEnabled: { default: false, trackChanges: true },
+
   // System/internal fields (not tracked for changes)
   youtubeOutputDirectory: { default: '', trackChanges: false },
   uuid: { default: '', trackChanges: false },
@@ -146,6 +149,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   tmpFilePath: CONFIG_FIELDS.tmpFilePath.default,
   subtitlesEnabled: CONFIG_FIELDS.subtitlesEnabled.default,
   subtitleLanguage: CONFIG_FIELDS.subtitleLanguage.default,
+  darkModeEnabled: CONFIG_FIELDS.darkModeEnabled.default,
   youtubeOutputDirectory: CONFIG_FIELDS.youtubeOutputDirectory.default,
   uuid: CONFIG_FIELDS.uuid.default,
   envAuthApplied: CONFIG_FIELDS.envAuthApplied.default,

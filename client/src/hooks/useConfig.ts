@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { ConfigState, PlatformManagedState, DeploymentEnvironment } from '../components/Configuration/types';
 import { DEFAULT_CONFIG } from '../config/configSchema';
 
+export const CONFIG_UPDATED_EVENT = 'config-updated';
+
 // Simple type for components that only need basic config fields
 export interface AppConfig {
   preferredResolution?: string;
@@ -95,6 +97,32 @@ export function useConfig(token: string | null): UseConfigResult {
 
   useEffect(() => {
     fetchConfig();
+  }, [fetchConfig]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleConfigUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<ConfigState | undefined>;
+      const updatedConfig = customEvent.detail;
+
+      if (updatedConfig) {
+        setConfig(updatedConfig);
+        setInitialConfig(updatedConfig);
+        setLoading(false);
+        setError(null);
+      } else {
+        fetchConfig();
+      }
+    };
+
+    window.addEventListener(CONFIG_UPDATED_EVENT, handleConfigUpdated);
+
+    return () => {
+      window.removeEventListener(CONFIG_UPDATED_EVENT, handleConfigUpdated);
+    };
   }, [fetchConfig]);
 
   return {

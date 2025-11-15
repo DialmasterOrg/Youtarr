@@ -3,6 +3,7 @@ import '@testing-library/jest-dom';
 import { useConfigSave } from '../useConfigSave';
 import { ConfigState } from '../../types';
 import { DEFAULT_CONFIG } from '../../../../config/configSchema';
+import { CONFIG_UPDATED_EVENT } from '../../../../hooks/useConfig';
 
 // Mock fetch globally
 global.fetch = jest.fn();
@@ -25,6 +26,10 @@ describe('useConfigSave', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   describe('Hook Initialization', () => {
@@ -232,6 +237,38 @@ describe('useConfigSave', () => {
       });
 
       expect(mockCheckPlexConnection).not.toHaveBeenCalled();
+    });
+
+    test('dispatches config updated event when save succeeds', async () => {
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValueOnce({}),
+      } as any);
+
+      const dispatchEventSpy = jest.spyOn(window, 'dispatchEvent');
+
+      const { result } = renderHook(() =>
+        useConfigSave({
+          token: mockToken,
+          config: mockConfig,
+          setInitialConfig: mockSetInitialConfig,
+          setSnackbar: mockSetSnackbar,
+          hasPlexServerConfigured: false,
+          checkPlexConnection: mockCheckPlexConnection,
+        })
+      );
+
+      await result.current.saveConfig();
+
+      await waitFor(() => {
+        expect(dispatchEventSpy).toHaveBeenCalled();
+      });
+
+      const dispatchedEvent = dispatchEventSpy.mock.calls[0][0] as CustomEvent<ConfigState>;
+      expect(dispatchedEvent.type).toBe(CONFIG_UPDATED_EVENT);
+      expect(dispatchedEvent.detail).toEqual(mockConfig);
     });
   });
 
@@ -1002,6 +1039,40 @@ describe('useConfigSave', () => {
       // Verify new config was sent
       const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
       expect(callBody.plexIP).toBe('10.0.0.1');
+    });
+
+    test('does not dispatch config updated event on failure', async () => {
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: jest.fn().mockResolvedValueOnce({}),
+      } as any);
+
+      const dispatchEventSpy = jest.spyOn(window, 'dispatchEvent');
+
+      const { result } = renderHook(() =>
+        useConfigSave({
+          token: mockToken,
+          config: mockConfig,
+          setInitialConfig: mockSetInitialConfig,
+          setSnackbar: mockSetSnackbar,
+          hasPlexServerConfigured: false,
+          checkPlexConnection: mockCheckPlexConnection,
+        })
+      );
+
+      await result.current.saveConfig();
+
+      await waitFor(() => {
+        expect(mockSetSnackbar).toHaveBeenCalledWith({
+          open: true,
+          message: 'Failed to save configuration',
+          severity: 'error',
+        });
+      });
+
+      expect(dispatchEventSpy).not.toHaveBeenCalled();
     });
   });
 });

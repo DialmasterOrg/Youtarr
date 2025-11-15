@@ -59,7 +59,7 @@ describe('webSocketServer', () => {
 
     connectionHandler(wsClient);
 
-    expect(logger.info).toHaveBeenCalledWith('WebSocket client connected');
+    expect(logger.debug).toHaveBeenCalledWith('WebSocket client connected');
     expect(mockGetLastMessages).toHaveBeenCalledTimes(1);
     expect(wsClient.send).toHaveBeenCalledTimes(2);
     expect(wsClient.send).toHaveBeenNthCalledWith(1, JSON.stringify(cachedMessages[0]));
@@ -85,7 +85,7 @@ describe('webSocketServer', () => {
 
     connectionHandler(wsClient);
 
-    expect(logger.info).toHaveBeenCalledWith('WebSocket client connected');
+    expect(logger.debug).toHaveBeenCalledWith('WebSocket client connected');
     expect(mockGetLastMessages).toHaveBeenCalledTimes(1);
     expect(wsClient.send).not.toHaveBeenCalled();
     expect(wsClient.on).toHaveBeenCalledWith('close', expect.any(Function));
@@ -116,6 +116,6 @@ describe('webSocketServer', () => {
     logger.info.mockClear();
     closeHandler();
 
-    expect(logger.info).toHaveBeenCalledWith('WebSocket client disconnected');
+    expect(logger.debug).toHaveBeenCalledWith('WebSocket client disconnected');
   });
 });

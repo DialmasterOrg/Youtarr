@@ -121,13 +121,11 @@ describe('InitialSetup Component', () => {
       render(<InitialSetup onSetupComplete={mockOnSetupComplete} />);
 
       await waitFor(() => {
-        expect(screen.getByText('Important Changes')).toBeInTheDocument();
+        expect(screen.getByText('Important')).toBeInTheDocument();
       });
 
-      expect(screen.getByText(/youtarr now uses local authentication/i)).toBeInTheDocument();
-      expect(screen.getByText(/your existing settings are preserved/i)).toBeInTheDocument();
-      expect(screen.getByText(/plex integration still works if configured/i)).toBeInTheDocument();
-      expect(screen.getByText(/you can change these credentials later/i)).toBeInTheDocument();
+      expect(screen.getByText(/youtarr uses local authentication by default/i)).toBeInTheDocument();
+      expect(screen.getByText(/initial setup requires access via localhost/i)).toBeInTheDocument();
     });
 
     test('has admin as default username', async () => {

@@ -6,7 +6,7 @@ module.exports = (server) => {
   const wss = new WebSocket.Server({ server });
 
   wss.on('connection', (ws) => {
-    logger.info('WebSocket client connected');
+    logger.debug('WebSocket client connected');
     // Send last downloadProgress messages to new client
     messageEmitter.getLastMessages().forEach(message => {
       if (ws.readyState === WebSocket.OPEN) {
@@ -15,7 +15,7 @@ module.exports = (server) => {
     });
 
     ws.on('close', () => {
-      logger.info('WebSocket client disconnected');
+      logger.debug('WebSocket client disconnected');
     });
   });
 

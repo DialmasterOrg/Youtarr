@@ -1,6 +1,6 @@
 import './App.css';
 import packageJson from '../package.json';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import toplogo from './Youtarr_text.png';
 import axios from 'axios';
 import {
@@ -28,8 +28,9 @@ import {
   Snackbar,
   Alert,
   Box,
+  CssBaseline,
 } from '@mui/material';
-import { grey } from '@mui/material/colors';
+import { ThemeProvider } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
 import MenuIcon from '@mui/icons-material/Menu';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -51,6 +52,7 @@ import StorageStatus from './components/StorageStatus';
 import { useConfig } from './hooks/useConfig';
 import ErrorBoundary from './components/ErrorBoundary';
 import DatabaseErrorOverlay from './components/DatabaseErrorOverlay';
+import { lightTheme, darkTheme } from './theme';
 
 // Event name for database error detection
 const DB_ERROR_EVENT = 'db-error-detected';
@@ -82,6 +84,11 @@ function AppContent() {
   const { version } = packageJson;
   const clientVersion = `v${version}`; // Create a version with 'v' prefix for comparison
   const tmpDirectory = '/tmp';
+
+  // Select theme based on darkModeEnabled config
+  const selectedTheme = useMemo(() => {
+    return appConfig.darkModeEnabled ? darkTheme : lightTheme;
+  }, [appConfig.darkModeEnabled]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -351,21 +358,23 @@ function AppContent() {
   }, []);
 
   return (
-    <>
-      {/* Database Error Overlay - shows when database is unavailable or recovered */}
-      {(dbStatus === 'error' || dbRecovered) && (
-        <DatabaseErrorOverlay
-          errors={dbErrors}
-          onRetry={handleDatabaseRetry}
-          recovered={dbRecovered}
-          countdown={countdown}
-        />
-      )}
+    <ThemeProvider theme={selectedTheme}>
+      <CssBaseline />
+      <>
+        {/* Database Error Overlay - shows when database is unavailable or recovered */}
+        {(dbStatus === 'error' || dbRecovered) && (
+          <DatabaseErrorOverlay
+            errors={dbErrors}
+            onRetry={handleDatabaseRetry}
+            recovered={dbRecovered}
+            countdown={countdown}
+          />
+        )}
 
       <AppBar
         position="fixed"
-        style={{
-          backgroundColor: grey[200],
+        sx={{
+          bgcolor: 'background.paper',
           width: '100%',
           margin: 0,
           padding: 0,
@@ -385,15 +394,16 @@ function AppContent() {
               mx: 0.25,
               mt: 1,
               visibility: isMobile ? 'visible' : 'hidden',
+              color: 'text.primary',
             }}
           >
             <MenuIcon fontSize='large' />
           </IconButton>
           {!requiresSetup && token && <StorageStatus token={token} />}
-          <div
-            style={{
+          <Box
+            sx={{
               marginTop: '8px',
-              color: '#000',
+              color: 'text.primary',
               flexGrow: 1,
               display: 'flex',
               flexDirection: 'column',
@@ -420,7 +430,7 @@ function AppContent() {
             >
               YouTube Video Manager
             </Typography>
-          </div>
+          </Box>
           <Box
             style={{
               position: 'absolute',
@@ -452,7 +462,7 @@ function AppContent() {
             color='inherit'
             aria-label='menu space'
             edge='start'
-            sx={{ mx: 0.25, visibility: 'hidden' }}
+            sx={{ mx: 0.25, visibility: 'hidden', color: 'text.primary' }}
           >
             <MenuIcon fontSize='large' />
           </IconButton>
@@ -472,9 +482,9 @@ function AppContent() {
             onClose={handleDrawerToggle}
             style={{ width: drawerWidth }}
             PaperProps={{
-              style: {
+              sx: {
                 width: drawerWidth,
-                backgroundColor: grey[100],
+                bgcolor: 'background.default',
                 maxWidth: '50vw',
                 marginTop: isMobile ? '0' : '100px',
               },
@@ -499,16 +509,16 @@ function AppContent() {
                 to='/configuration'
                 onClick={handleDrawerToggle}
                 sx={{
-                  backgroundColor: location.pathname === '/configuration' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
-                  borderLeft: location.pathname === '/configuration' ? '4px solid #1976d2' : 'none',
+                  bgcolor: location.pathname === '/configuration' ? 'action.selected' : 'transparent',
+                  borderLeft: location.pathname === '/configuration' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
                   '&:hover': {
-                    backgroundColor: location.pathname === '/configuration' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
+                    bgcolor: location.pathname === '/configuration' ? 'action.hover' : 'action.hover',
                   },
                   paddingX: isMobile ? '8px' : '16px'
                 }}
               >
                 <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                  <SettingsIcon sx={{ color: location.pathname === '/configuration' ? '#1976d2' : 'inherit' }} />
+                  <SettingsIcon sx={{ color: location.pathname === '/configuration' ? 'primary.main' : 'inherit' }} />
                 </ListItemIcon>
                 <ListItemText
                   primaryTypographyProps={{
@@ -524,16 +534,16 @@ function AppContent() {
                 to='/channels'
                 onClick={handleDrawerToggle}
                 sx={{
-                  backgroundColor: location.pathname === '/channels' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
-                  borderLeft: location.pathname === '/channels' ? '4px solid #1976d2' : 'none',
+                  bgcolor: location.pathname === '/channels' ? 'action.selected' : 'transparent',
+                  borderLeft: location.pathname === '/channels' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
                   '&:hover': {
-                    backgroundColor: location.pathname === '/channels' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
+                    bgcolor: 'action.hover',
                   },
                   paddingX: isMobile ? '8px' : '16px'
                 }}
               >
                 <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                  <SubscriptionsIcon sx={{ color: location.pathname === '/channels' ? '#1976d2' : 'inherit' }} />
+                  <SubscriptionsIcon sx={{ color: location.pathname === '/channels' ? 'primary.main' : 'inherit' }} />
                 </ListItemIcon>
                 <ListItemText
                   primaryTypographyProps={{
@@ -549,16 +559,16 @@ function AppContent() {
                 to='/downloads'
                 onClick={handleDrawerToggle}
                 sx={{
-                  backgroundColor: location.pathname === '/downloads' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
-                  borderLeft: location.pathname === '/downloads' ? '4px solid #1976d2' : 'none',
+                  bgcolor: location.pathname === '/downloads' ? 'action.selected' : 'transparent',
+                  borderLeft: location.pathname === '/downloads' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
                   '&:hover': {
-                    backgroundColor: location.pathname === '/downloads' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
+                    bgcolor: 'action.hover',
                   },
                   paddingX: isMobile ? '8px' : '16px'
                 }}
               >
                 <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                  <DownloadIcon sx={{ color: location.pathname === '/downloads' ? '#1976d2' : 'inherit' }} />
+                  <DownloadIcon sx={{ color: location.pathname === '/downloads' ? 'primary.main' : 'inherit' }} />
                 </ListItemIcon>
                 <ListItemText
                   primaryTypographyProps={{
@@ -574,16 +584,16 @@ function AppContent() {
                 to='/videos'
                 onClick={handleDrawerToggle}
                 sx={{
-                  backgroundColor: location.pathname === '/videos' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
-                  borderLeft: location.pathname === '/videos' ? '4px solid #1976d2' : 'none',
+                  bgcolor: location.pathname === '/videos' ? 'action.selected' : 'transparent',
+                  borderLeft: location.pathname === '/videos' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
                   '&:hover': {
-                    backgroundColor: location.pathname === '/videos' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
+                    bgcolor: 'action.hover',
                   },
                   paddingX: isMobile ? '8px' : '16px'
                 }}
               >
                 <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                  <VideoLibraryIcon sx={{ color: location.pathname === '/videos' ? '#1976d2' : 'inherit' }} />
+                  <VideoLibraryIcon sx={{ color: location.pathname === '/videos' ? 'primary.main' : 'inherit' }} />
                 </ListItemIcon>
                 <ListItemText
                   primaryTypographyProps={{
@@ -600,16 +610,16 @@ function AppContent() {
                   to='/login'
                   onClick={handleDrawerToggle}
                   sx={{
-                    backgroundColor: location.pathname === '/login' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
-                    borderLeft: location.pathname === '/login' ? '4px solid #1976d2' : 'none',
+                    bgcolor: location.pathname === '/login' ? 'action.selected' : 'transparent',
+                    borderLeft: location.pathname === '/login' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
                     '&:hover': {
-                      backgroundColor: location.pathname === '/login' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
+                      bgcolor: 'action.hover',
                     },
                     paddingX: isMobile ? '8px' : '16px'
                   }}
                 >
                   <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                    <LoginIcon sx={{ color: location.pathname === '/login' ? '#1976d2' : 'inherit' }} />
+                    <LoginIcon sx={{ color: location.pathname === '/login' ? 'primary.main' : 'inherit' }} />
                   </ListItemIcon>
                   <ListItemText
                     primaryTypographyProps={{
@@ -645,7 +655,7 @@ function AppContent() {
               {isPlatformManaged && (
                 <ListItem sx={{ paddingX: isMobile ? '8px' : '16px' }}>
                   <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                    <ShieldIcon sx={{ color: '#4caf50' }} />
+                    <ShieldIcon sx={{ color: 'success.main' }} />
                   </ListItemIcon>
                   <ListItemText
                     primary="Platform Authentication"
@@ -727,12 +737,13 @@ function AppContent() {
           </Container>
         </Grid>
       </Grid>
-      <footer
-        style={{
+      <Box
+        component="footer"
+        sx={{
           position: 'fixed',
           bottom: 0,
           width: '100%',
-          backgroundColor: grey[200],
+          bgcolor: 'background.paper',
           textAlign: 'center',
         }}
       >
@@ -743,7 +754,7 @@ function AppContent() {
             </Typography>
           )}
         </Typography>
-      </footer>
+      </Box>
 
       {/* Persistent warning for temp directory */}
       <Snackbar
@@ -783,7 +794,8 @@ function AppContent() {
           </Box>
         </Alert>
       </Snackbar>
-    </>
+      </>
+    </ThemeProvider>
   );
 }
 

@@ -11,6 +11,7 @@ import {
   Grid,
   Box,
   Chip,
+  Switch,
 } from '@mui/material';
 import { ConfigurationCard } from '../common/ConfigurationCard';
 import { InfoTooltip } from '../common/InfoTooltip';
@@ -282,6 +283,21 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
             </Box>
           </Grid>
         )}
+
+        <Grid item xs={12} md={6}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  name="darkModeEnabled"
+                  checked={config.darkModeEnabled}
+                  onChange={handleCheckboxChange}
+                />
+              }
+              label="Dark Mode"
+            />
+          </Box>
+        </Grid>
       </Grid>
     </ConfigurationCard>
   );
