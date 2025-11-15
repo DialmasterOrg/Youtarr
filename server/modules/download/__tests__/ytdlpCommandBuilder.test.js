@@ -568,8 +568,9 @@ describe('YtdlpCommandBuilder', () => {
     it('should include cookies args when cookies are available', () => {
       configModule.getCookiesPath.mockReturnValue('/path/to/cookies.txt');
       const result = YtdlpCommandBuilder.getBaseCommandArgs();
-      expect(result[0]).toBe('--cookies');
-      expect(result[1]).toBe('/path/to/cookies.txt');
+      const cookiesIndex = result.indexOf('--cookies');
+      expect(cookiesIndex).toBeGreaterThan(-1);
+      expect(result[cookiesIndex + 1]).toBe('/path/to/cookies.txt');
     });
 
     it('should include sponsorblock args when configured', () => {
@@ -781,8 +782,9 @@ describe('YtdlpCommandBuilder', () => {
     it('should include cookies args when available', () => {
       configModule.getCookiesPath.mockReturnValue('/cookies/file.txt');
       const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload();
-      expect(result[0]).toBe('--cookies');
-      expect(result[1]).toBe('/cookies/file.txt');
+      const cookiesIndex = result.indexOf('--cookies');
+      expect(cookiesIndex).toBeGreaterThan(-1);
+      expect(result[cookiesIndex + 1]).toBe('/cookies/file.txt');
     });
 
     it('should include sponsorblock args when configured', () => {

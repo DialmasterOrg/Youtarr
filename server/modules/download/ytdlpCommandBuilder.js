@@ -119,6 +119,98 @@ class YtdlpCommandBuilder {
     return [];
   }
 
+  /**
+   * Build arguments that ALWAYS apply to any yt-dlp invocation
+   * Includes: IPv4 enforcement, proxy, sleep-requests, and cookies
+   * @param {Object} config - Configuration object
+   * @returns {string[]} - Array of common arguments
+   */
+  static buildCommonArgs(config) {
+    const args = [];
+
+    // Always use IPv4
+    // Note, I have found that this greatly improves reliability downloading from YouTube
+    args.push('-4');
+
+    // Add proxy if configured
+    if (config.proxy && config.proxy.trim()) {
+      args.push('--proxy', config.proxy.trim());
+    }
+
+    // Add sleep between requests (configurable)
+    const sleepRequests = config.sleepRequests ?? 1;
+    if (sleepRequests > 0) {
+      args.push('--sleep-requests', String(sleepRequests));
+    }
+
+    // Add cookies if configured
+    const cookiesPath = configModule.getCookiesPath();
+    if (cookiesPath) {
+      args.push('--cookies', cookiesPath);
+    }
+
+    return args;
+  }
+
+  /**
+   * Build arguments for fetching metadata (channel info, video info, etc.)
+   * @param {string} url - URL to fetch
+   * @param {Object} options - Options object
+   * @param {boolean} options.flatPlaylist - Fetch flat playlist info
+   * @param {number} options.playlistEnd - Limit playlist items
+   * @param {string} options.playlistItems - Specific playlist items
+   * @param {string} options.extractorArgs - Extractor arguments
+   * @returns {string[]} - Complete args array
+   */
+  static buildMetadataFetchArgs(url, options = {}) {
+    const config = configModule.getConfig();
+    const args = [...this.buildCommonArgs(config)];
+
+    args.push('--skip-download', '--dump-single-json');
+
+    if (options.flatPlaylist) {
+      args.push('--flat-playlist');
+    }
+
+    if (options.playlistEnd !== undefined && options.playlistEnd !== null) {
+      args.push('--playlist-end', String(options.playlistEnd));
+    }
+
+    if (options.playlistItems !== undefined && options.playlistItems !== null) {
+      args.push('--playlist-items', String(options.playlistItems));
+    }
+
+    if (options.extractorArgs) {
+      args.push('--extractor-args', options.extractorArgs);
+    }
+
+    args.push(url);
+    return args;
+  }
+
+  /**
+   * Build arguments for downloading thumbnails
+   * @param {string} url - URL to fetch
+   * @param {string} outputPath - Output path for thumbnail
+   * @returns {string[]} - Complete args array
+   */
+  static buildThumbnailDownloadArgs(url, outputPath) {
+    const config = configModule.getConfig();
+    const args = [...this.buildCommonArgs(config)];
+
+    args.push(
+      '--skip-download',
+      '--write-thumbnail',
+      '--playlist-end', '1',
+      '--playlist-items', '0',
+      '--convert-thumbnails', 'jpg',
+      '-o', outputPath,
+      url
+    );
+
+    return args;
+  }
+
   // Build subtitle args based on configuration
   static buildSubtitleArgs(config) {
     const args = [];
@@ -206,11 +298,9 @@ class YtdlpCommandBuilder {
     const outputPath = this.buildOutputPath(subFolder);
     const thumbnailPath = this.buildThumbnailPath(subFolder);
 
-    // Add cookies args first if enabled
-    const cookiesArgs = this.buildCookiesArgs();
+    // Start with common args (includes -4, proxy, sleep-requests, cookies)
     const args = [
-      ...cookiesArgs,
-      '-4',
+      ...this.buildCommonArgs(config),
       '--windows-filenames',  // Sanitize filenames for Windows/Plex compatibility
       '--ffmpeg-location', configModule.ffmpegPath,
       '--socket-timeout', String(config.downloadSocketTimeoutSeconds || 30),
@@ -219,7 +309,6 @@ class YtdlpCommandBuilder {
       '--fragment-retries', String(config.downloadRetryCount || 2),
       '--extractor-retries', '3',  // Retry subtitle/metadata extraction (helps with 429 errors)
       '--retry-sleep', 'http:5',   // Sleep 5s on HTTP errors like 429 before retrying
-      '--sleep-requests', '1',     // Add 1 second delay between all YouTube API requests to avoid rate limiting
       '--newline',
       '--progress',
       '--progress-template',
@@ -275,11 +364,9 @@ class YtdlpCommandBuilder {
     const outputPath = this.buildOutputPath(null);
     const thumbnailPath = this.buildThumbnailPath(null);
 
-    // Add cookies args first if enabled
-    const cookiesArgs = this.buildCookiesArgs();
+    // Start with common args (includes -4, proxy, sleep-requests, cookies)
     const args = [
-      ...cookiesArgs,
-      '-4',
+      ...this.buildCommonArgs(config),
       '--windows-filenames',  // Sanitize filenames for Windows/Plex compatibility
       '--ffmpeg-location', configModule.ffmpegPath,
       '--socket-timeout', String(config.downloadSocketTimeoutSeconds || 30),
@@ -288,7 +375,6 @@ class YtdlpCommandBuilder {
       '--fragment-retries', String(config.downloadRetryCount || 2),
       '--extractor-retries', '3',  // Retry subtitle/metadata extraction (helps with 429 errors)
       '--retry-sleep', 'http:5',   // Sleep 5s on HTTP errors like 429 before retrying
-      '--sleep-requests', '1',     // Add 1 second delay between all YouTube API requests to avoid rate limiting
       '--newline',
       '--progress',
       '--progress-template',

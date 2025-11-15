@@ -145,7 +145,7 @@ AUTH_PRESET_USERNAME=admin
 AUTH_PRESET_PASSWORD=YourSecurePassword123
 
 # Optional: Logging level (warn, info, debug)
-LOG_LEVEL=warn
+LOG_LEVEL=info
 ```
 
 The `.env.example` file contains detailed comments explaining each variable - refer to it for all available options.

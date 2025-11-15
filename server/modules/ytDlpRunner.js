@@ -9,25 +9,16 @@ class YtDlpRunner {
 
   /**
    * Run yt-dlp with specified arguments
-   * @param {string[]} args - Array of arguments to pass to yt-dlp
+   * NOTE: Args should be pre-built using ytdlpCommandBuilder methods which include
+   * common arguments (cookies, proxy, sleep-requests, etc.)
+   * @param {string[]} args - Pre-built arguments to pass to yt-dlp
    * @param {Object} options - Options for execution
    * @param {number} options.timeoutMs - Timeout in milliseconds (default: 10000)
    * @param {string} options.pipeToFile - Optional file path to pipe output to
-   * @param {boolean} options.useCookies - Whether to use cookies if configured (default: true)
    * @returns {Promise<string>} - stdout output or empty string if piped to file
    */
   async run(args, options = {}) {
-    const { timeoutMs = this.defaultTimeout, pipeToFile, useCookies = true } = options;
-
-    // Add cookies if configured and requested
-    let finalArgs = [...args];
-    if (useCookies) {
-      const configModule = require('./configModule');
-      const cookiesPath = configModule.getCookiesPath();
-      if (cookiesPath) {
-        finalArgs = ['--cookies', cookiesPath, ...args];
-      }
-    }
+    const { timeoutMs = this.defaultTimeout, pipeToFile } = options;
 
     return new Promise((resolve, reject) => {
       if (!Array.isArray(args)) {
@@ -35,7 +26,7 @@ class YtDlpRunner {
         return;
       }
 
-      const ytDlpProcess = spawn('yt-dlp', finalArgs, {
+      const ytDlpProcess = spawn('yt-dlp', args, {
         shell: false,
         timeout: timeoutMs,
         env: {
@@ -129,12 +120,8 @@ class YtDlpRunner {
    * @returns {Promise<Object>} - Parsed JSON metadata
    */
   async fetchMetadata(url, timeoutMs = 10000) {
-    const args = [
-      '--skip-download',
-      '--dump-single-json',
-      '-4',
-      url
-    ];
+    const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
+    const args = YtdlpCommandBuilder.buildMetadataFetchArgs(url);
 
     try {
       const stdout = await this.run(args, { timeoutMs });

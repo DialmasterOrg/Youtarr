@@ -2,6 +2,7 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { usePlexConnection } from '../usePlexConnection';
 import { ConfigState } from '../../types';
+import { DEFAULT_CONFIG } from '../../../../config/configSchema';
 
 // Mock fetch globally
 global.fetch = jest.fn();
@@ -13,52 +14,13 @@ describe('usePlexConnection', () => {
   const mockSetSnackbar = jest.fn();
 
   const mockConfig: ConfigState = {
-    channelAutoDownload: false,
-    channelDownloadFrequency: '6',
-    channelFilesToDownload: 3,
-    preferredResolution: '1080',
-    videoCodec: 'default',
+    ...DEFAULT_CONFIG,
+    youtubeOutputDirectory: '/videos',
     plexApiKey: 'test-plex-key',
     plexYoutubeLibraryId: '1',
     plexIP: '192.168.1.100',
     plexPort: '32400',
-    plexViaHttps: false,
-    sponsorblockEnabled: true,
-    sponsorblockAction: 'remove',
-    sponsorblockCategories: {
-      sponsor: true,
-      intro: false,
-      outro: false,
-      selfpromo: true,
-      preview: false,
-      filler: false,
-      interaction: false,
-      music_offtopic: false,
-    },
-    sponsorblockApiUrl: '',
-    downloadSocketTimeoutSeconds: 30,
-    downloadThrottledRate: '100K',
-    downloadRetryCount: 2,
-    enableStallDetection: true,
-    stallDetectionWindowSeconds: 30,
-    stallDetectionRateThreshold: '100K',
-    cookiesEnabled: false,
-    customCookiesUploaded: false,
-    writeChannelPosters: true,
-    writeVideoNfoFiles: true,
-    notificationsEnabled: false,
-    notificationService: 'discord',
-    discordWebhookUrl: '',
-    autoRemovalEnabled: false,
-    autoRemovalFreeSpaceThreshold: '',
-    autoRemovalVideoAgeThreshold: '',
-    useTmpForDownloads: false,
-    tmpFilePath: '/tmp/youtarr-downloads',
-    subtitlesEnabled: false,
-    subtitleLanguage: 'en',
-    youtubeOutputDirectory: '/videos',
     uuid: 'test-uuid',
-    envAuthApplied: false,
   };
 
   beforeEach(() => {

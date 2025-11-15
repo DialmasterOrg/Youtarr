@@ -18,6 +18,7 @@ import { KodiCompatibilitySection } from './Configuration/sections/KodiCompatibi
 import { CookieConfigSection } from './Configuration/sections/CookieConfigSection';
 import { NotificationsSection } from './Configuration/sections/NotificationsSection';
 import { DownloadPerformanceSection } from './Configuration/sections/DownloadPerformanceSection';
+import { AdvancedSettingsSection } from './Configuration/sections/AdvancedSettingsSection';
 import { AutoRemovalSection } from './Configuration/sections/AutoRemovalSection';
 import { AccountSecuritySection } from './Configuration/sections/AccountSecuritySection';
 import { SaveBar } from './Configuration/sections/SaveBar';
@@ -33,6 +34,7 @@ import {
   ConfigState,
   SnackbarState,
 } from './Configuration/types';
+import { validateConfig } from './Configuration/utils/configValidation';
 
 const isDeepEqual = (a: any, b: any): boolean => {
   if (a === b) {
@@ -93,15 +95,8 @@ function Configuration({ token }: ConfigurationProps) {
 
   const { available: storageAvailable } = useStorageStatus(token, { checkOnly: true });
 
-  // Validate auto-removal configuration
-  const hasAutoRemovalConfigError =
-    config.autoRemovalEnabled &&
-    !config.autoRemovalFreeSpaceThreshold &&
-    !config.autoRemovalVideoAgeThreshold;
-
-  const validationError = hasAutoRemovalConfigError
-    ? 'Cannot save: Automatic removal is enabled but no thresholds are configured'
-    : null;
+  // Centralized configuration validation
+  const validationError = validateConfig(config);
 
   const {
     plexConnectionStatus,
@@ -141,10 +136,10 @@ function Configuration({ token }: ConfigurationProps) {
     setOpenConfirmDialog(false);
 
     // Failsafe: check validation before saving
-    if (hasAutoRemovalConfigError) {
+    if (validationError) {
       setSnackbar({
         open: true,
-        message: 'Cannot save: Automatic removal is enabled but no thresholds are configured',
+        message: validationError,
         severity: 'error'
       });
       return;
@@ -155,10 +150,10 @@ function Configuration({ token }: ConfigurationProps) {
 
   const handleSave = () => {
     // Failsafe: check validation before saving
-    if (hasAutoRemovalConfigError) {
+    if (validationError) {
       setSnackbar({
         open: true,
-        message: 'Cannot save: Automatic removal is enabled but no thresholds are configured',
+        message: validationError,
         severity: 'error'
       });
       return;
@@ -247,6 +242,12 @@ function Configuration({ token }: ConfigurationProps) {
       />
 
       <DownloadPerformanceSection
+        config={config}
+        onConfigChange={handleConfigChange}
+        onMobileTooltipClick={setMobileTooltip}
+      />
+
+      <AdvancedSettingsSection
         config={config}
         onConfigChange={handleConfigChange}
         onMobileTooltipClick={setMobileTooltip}

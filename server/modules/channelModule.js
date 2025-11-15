@@ -97,23 +97,14 @@ class ChannelModule {
 
   /**
    * Execute yt-dlp command with promise-based handling
-   * @param {Array} args - Arguments for yt-dlp command
+   * NOTE: Args should be pre-built using ytdlpCommandBuilder methods which include
+   * common arguments (cookies, proxy, sleep-requests, etc.)
+   * @param {Array} args - Pre-built arguments for yt-dlp command
    * @param {string|null} outputFile - Optional output file path
-   * @param {boolean} useCookies - Whether to include cookies if configured
    * @returns {Promise<string>} - Output content if outputFile provided
    */
-  async executeYtDlpCommand(args, outputFile = null, useCookies = true) {
-    // Add cookies if configured and requested
-    const configModule = require('./configModule');
-    let finalArgs = [...args];
-    if (useCookies) {
-      const cookiesPath = configModule.getCookiesPath();
-      if (cookiesPath) {
-        finalArgs = ['--cookies', cookiesPath, ...args];
-      }
-    }
-
-    const ytDlp = spawn('yt-dlp', finalArgs, {
+  async executeYtDlpCommand(args, outputFile = null) {
+    const ytDlp = spawn('yt-dlp', args, {
       env: {
         ...process.env,
         TMPDIR: '/tmp'
@@ -459,17 +450,13 @@ class ChannelModule {
    * @returns {Promise<Object>} - Channel metadata
    */
   async fetchChannelMetadata(channelUrl) {
+    const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
     return await this.withTempFile('channel', async (outputFilePath) => {
-      const content = await this.executeYtDlpCommand([
-        '--skip-download',
-        '--dump-single-json',
-        '-4',
-        '--playlist-end',
-        '1',
-        '--playlist-items',
-        '0',
-        channelUrl,
-      ], outputFilePath);
+      const args = YtdlpCommandBuilder.buildMetadataFetchArgs(channelUrl, {
+        playlistEnd: 1,
+        playlistItems: 0
+      });
+      const content = await this.executeYtDlpCommand(args, outputFilePath);
 
       return JSON.parse(content);
     });
@@ -481,25 +468,15 @@ class ChannelModule {
    * @returns {Promise<void>}
    */
   async downloadChannelThumbnail(channelUrl) {
+    const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
     const imageDir = configModule.getImagePath();
     const imagePath = path.join(
       imageDir,
       'channelthumb-%(channel_id)s.jpg'
     );
 
-    await this.executeYtDlpCommand([
-      '--skip-download',
-      '--write-thumbnail',
-      '--playlist-end',
-      '1',
-      '--playlist-items',
-      '0',
-      '--convert-thumbnails',
-      'jpg',
-      '-o',
-      `${imagePath}`,
-      channelUrl,
-    ]);
+    const args = YtdlpCommandBuilder.buildThumbnailDownloadArgs(channelUrl, imagePath);
+    await this.executeYtDlpCommand(args);
   }
 
   /**
@@ -1281,15 +1258,14 @@ class ChannelModule {
     // This ensures stability even when channel handles change
     const canonicalUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
 
+    const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
     return await this.withTempFile('channel-videos', async (outputFilePath) => {
-      const content = await this.executeYtDlpCommand([
-        '--flat-playlist',
-        '--dump-single-json',
-        '--extractor-args', 'youtubetab:approximate_date',  // Get approximate timestamps for videos
-        '--playlist-end', String(videoCount), // Fetch dynamic number of videos
-        '-4',
-        canonicalUrl,
-      ], outputFilePath);
+      const args = YtdlpCommandBuilder.buildMetadataFetchArgs(canonicalUrl, {
+        flatPlaylist: true,
+        extractorArgs: 'youtubetab:approximate_date',
+        playlistEnd: videoCount
+      });
+      const content = await this.executeYtDlpCommand(args, outputFilePath);
 
       const jsonOutput = JSON.parse(content);
 
@@ -1377,19 +1353,18 @@ class ChannelModule {
 
     logger.info({ channelId, channelTitle: channel.title }, 'Detecting available tabs for channel');
 
+    const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
     for (const tabType of tabTypesToTest) {
       try {
         const tabUrl = `${canonicalChannelUrl}/${tabType}`;
 
         // Test if the tab exists by trying to fetch just 1 video
         await this.withTempFile(`tab-test-${tabType}`, async (outputFilePath) => {
-          await this.executeYtDlpCommand([
-            '--flat-playlist',
-            '--dump-single-json',
-            '--playlist-end', '1',
-            '-4',
-            tabUrl,
-          ], outputFilePath);
+          const args = YtdlpCommandBuilder.buildMetadataFetchArgs(tabUrl, {
+            flatPlaylist: true,
+            playlistEnd: 1
+          });
+          await this.executeYtDlpCommand(args, outputFilePath);
         });
 
         // If we got here without error, the tab exists
@@ -1694,14 +1669,13 @@ class ChannelModule {
         // Fetch ALL videos from YouTube (no --playlist-end parameter)
         const canonicalUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
 
+        const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
         const result = await this.withTempFile('channel-all-videos', async (outputFilePath) => {
-          const content = await this.executeYtDlpCommand([
-            '--flat-playlist',
-            '--dump-single-json',
-            '--extractor-args', 'youtubetab:approximate_date',
-            '-4',
-            canonicalUrl,
-          ], outputFilePath);
+          const args = YtdlpCommandBuilder.buildMetadataFetchArgs(canonicalUrl, {
+            flatPlaylist: true,
+            extractorArgs: 'youtubetab:approximate_date'
+          });
+          const content = await this.executeYtDlpCommand(args, outputFilePath);
 
           const jsonOutput = JSON.parse(content);
           const videos = this.extractVideosFromYtDlpResponse(jsonOutput);
