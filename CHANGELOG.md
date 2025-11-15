@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.52.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.52.0) - 2025-11-15
+
+## [1.52.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.51.1...v1.52.0) (2025-11-15)
+
+
+### Features
+
+* add dark mode theme support with toggle in configuration ([2a4cf68](https://github.com/DialmasterOrg/Youtarr/commit/2a4cf681cb5651dee538ed08bcd48ab7ab9d49b2))
+
+
+### Documentation
+
+* update CHANGELOG for v1.51.1 [skip ci] ([c3efa2d](https://github.com/DialmasterOrg/Youtarr/commit/c3efa2d02c16e905ca393ef72cf176dfa8f5764a))
+
+
+
+
+
 ## [v1.51.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.51.1) - 2025-11-15
 
 ### [1.51.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.51.0...v1.51.1) (2025-11-15)
