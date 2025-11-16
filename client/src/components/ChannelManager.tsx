@@ -756,18 +756,21 @@ function ChannelManager({ token }: ChannelManagerProps) {
             </Box>
         </Card>
       </Box>
-      <Box sx={{
-        borderTop: 2,
-        borderColor: 'divider',
-        pt: 2,
-        bgcolor: 'background.paper'
-      }}>
-        <Grid container spacing={2}>
-          <Grid item xs={11}>
+      <Box
+        sx={{
+          borderTop: 2,
+          borderColor: 'divider',
+          pt: { xs: 1, sm: 2 },
+          px: { xs: 1, sm: 2 },
+          pb: { xs: 1, sm: 2 },
+          bgcolor: 'background.paper',
+        }}
+      >
+        <Grid container spacing={2} sx={{ alignItems: { xs: 'stretch', md: 'flex-end' } }}>
+          <Grid item xs={10} md={11}>
             <Box sx={{ display: 'flex', alignItems: 'flex-end' }}>
               <TextField
                 label='Add a new channel'
-                padding-right={isMobile ? '8px' : '0px'}
                 value={newChannel.url}
                 onChange={(e) =>
                   setNewChannel({ url: e.target.value, uploader: '' })
@@ -779,6 +782,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
                   }
                 }}
                 fullWidth
+                size={isMobile ? 'small' : 'medium'}
                 InputProps={{
                   style: { fontSize: isMobile ? 'small' : 'medium' },
                 }}
@@ -786,35 +790,35 @@ function ChannelManager({ token }: ChannelManagerProps) {
               />
             </Box>
           </Grid>
-        <Grid
-          item
-          xs={1}
-          style={{
-            paddingLeft: isMobile ? '8px' : '0px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: isMobile ? '70px' : '80px',
-          }}
-        >
-          <Tooltip placement='top' title={isAddingChannel ? 'Adding channel...' : 'Add a new channel to the list above'}>
-            <span>
-              <IconButton
-                onClick={handleAdd}
-                color='primary'
-                data-testid='add-channel-button'
-                disabled={isAddingChannel || isSaving || !newChannel.url.trim()}
-              >
-                {isAddingChannel ? (
-                  <CircularProgress size={28} />
-                ) : (
-                  <AddIcon fontSize='large' />
-                )}
-              </IconButton>
-            </span>
-          </Tooltip>
-        </Grid>
-          <Grid item xs={6}>
+          <Grid
+            item
+            xs={2}
+            md={1}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: { xs: 'flex-start', md: 'center' },
+            }}
+          >
+            <Tooltip placement='top' title={isAddingChannel ? 'Adding channel...' : 'Add a new channel to the list above'}>
+              <span>
+                <IconButton
+                  onClick={handleAdd}
+                  color='primary'
+                  data-testid='add-channel-button'
+                  disabled={isAddingChannel || isSaving || !newChannel.url.trim()}
+                  sx={{ mt: { xs: -3, md: -10 }, ml: { xs: -2, md: -2 } }}
+                >
+                  {isAddingChannel ? (
+                    <CircularProgress size={28} />
+                  ) : (
+                    <AddIcon fontSize='large' />
+                  )}
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Grid>
+          <Grid item xs={6} sm={6}>
             <Tooltip placement='top' title='Revert unsaved changes'>
             <span>
               <Button
@@ -832,7 +836,7 @@ function ChannelManager({ token }: ChannelManagerProps) {
             </span>
           </Tooltip>
           </Grid>
-          <Grid item xs={6}>
+          <Grid item xs={6} sm={6}>
             <Tooltip
               placement='top'
               title='Save your changes and make them active'
