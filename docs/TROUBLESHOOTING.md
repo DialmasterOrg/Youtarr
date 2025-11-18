@@ -285,6 +285,41 @@ or
 
 3. Verify database credentials in environment
 
+### Apple Silicon: `Incorrect information in file` errors
+
+**Problem**: On Apple Silicon (M1/M2/M3/M4) running Docker Desktop, MariaDB logs errors like:
+```
+ERROR 1033 (HY000): Incorrect information in file: './youtarr/videos.frm'
+```
+This happens whenever MariaDB touches tables stored on a bind-mounted host directory (our default `./database:/var/lib/mysql`). Docker Desktop shares bind mounts over `virtiofs`, and MariaDB 10.3 cannot reliably reopen InnoDB tables on that filesystem ([MariaDB issue #447](https://github.com/MariaDB/mariadb-docker/issues/447), [#481](https://github.com/MariaDB/mariadb-docker/issues/481)). Linux and WSL users are unaffected.
+
+**Solution** (switch to a named Docker volume):
+1. Stop the stack: `./stop.sh` or `docker compose down`.
+2. Remove the old host directory (`./database`) so MariaDB can recreate a clean datadir inside the named volume:
+   ```bash
+   sudo rm -rf ./database
+   ```
+3. Edit `docker-compose.yml`:
+   ```yaml
+   services:
+     youtarr-db:
+       # Comment out the default bind mount line:
+       # - ./database:/var/lib/mysql
+       # And enable the named volume instead:
+       - youtarr-db-data:/var/lib/mysql
+       - ./config/mariadb.cnf:/etc/mysql/conf.d/charset.cnf:ro
+
+   volumes:
+     youtarr-db-data:
+   ```
+4. Start Youtarr again (`./start.sh`). MariaDB will initialize inside `youtarr-db-data`, avoiding virtiofs entirely.
+
+**Alternatives**:
+- Point Youtarr at an external MariaDB/MySQL instance via `./start-with-external-db.sh`.
+- Run the stack on Linux/WSL, which uses a native filesystem for bind mounts.
+
+Once migrated, back up the database using `mysqldump` or `docker cp` instead of copying files from `./database`, since the named volume lives inside Docker’s VM.
+
 ## Download Issues
 
 ### Videos Not Downloading
