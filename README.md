@@ -154,6 +154,8 @@ Youtarr reads the `TZ` environment variable to determine when cron-based downloa
 - Already running MariaDB/MySQL elsewhere and do not want to use bundled internal DB?
 - See [docs/EXTERNAL_DB.md](docs/EXTERNAL_DB.md)
 
+> **Apple Silicon note:** Docker Desktop’s `virtiofs` bind mounts can corrupt MariaDB’s bundled database and cause `Incorrect information in file: './youtarr/videos.frm'` errors. See [Troubleshooting → Apple Silicon](docs/TROUBLESHOOTING.md#apple-silicon-incorrect-information-in-file-errors) for the named-volume workaround.
+
 ### Deploying on Unraid
 
 See [docs/UNRAID.md](docs/UNRAID.md) for instructions on Unraid setup.

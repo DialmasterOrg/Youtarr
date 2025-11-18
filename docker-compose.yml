@@ -18,6 +18,8 @@ services:
       - "${DB_PORT:-3321}:${DB_PORT:-3321}"
     volumes:
       - ./database:/var/lib/mysql
+      # macOS (Apple Silicon): comment the line above and use the named volume example below to avoid the MariaDB+virtiofs bug (see README/Troubleshooting)
+      # - youtarr-db-data:/var/lib/mysql
       - ./config/mariadb.cnf:/etc/mysql/conf.d/charset.cnf:ro
     command: --port=${DB_PORT:-3321} --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     healthcheck:
@@ -75,3 +77,8 @@ services:
 networks:
   default:
     name: youtarr-network
+
+# When switching the DB service to a named volume (Apple Silicon workaround),
+# remember to define it here:
+# volumes:
+#   youtarr-db-data:
