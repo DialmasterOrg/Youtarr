@@ -422,7 +422,7 @@ describe('VideoValidationModule', () => {
       const result = await videoValidationModule.fetchVideoMetadata(url);
 
       expect(result).toEqual(mockMetadata);
-      expect(ytDlpRunner.fetchMetadata).toHaveBeenCalledWith(url, 10000);
+      expect(ytDlpRunner.fetchMetadata).toHaveBeenCalledWith(url, 60000);
     });
 
     it('should log error and rethrow when fetch fails', async () => {

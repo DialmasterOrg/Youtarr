@@ -79,7 +79,7 @@ class VideoValidationModule {
    * @returns {Promise<Object>} - Video metadata
    */
   async fetchVideoMetadata(url, options = {}) {
-    const { timeoutMs = 10000 } = options;
+    const { timeoutMs = 60000 } = options;
 
     try {
       const metadata = await ytDlpRunner.fetchMetadata(url, timeoutMs);
@@ -238,7 +238,7 @@ class VideoValidationModule {
       }
 
       logger.debug({ videoId }, 'Fetching metadata for video');
-      const metadata = await this.fetchVideoMetadata(canonicalUrl, { timeoutMs: 10000 });
+      const metadata = await this.fetchVideoMetadata(canonicalUrl, { timeoutMs: 60000 });
 
       const isDuplicateVideo = await this.isDuplicate(videoId);
 
