@@ -1,6 +1,6 @@
 import './App.css';
 import packageJson from '../package.json';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import toplogo from './Youtarr_text.png';
 import axios from 'axios';
 import {
@@ -28,7 +28,9 @@ import {
   Snackbar,
   Alert,
   Box,
+  CssBaseline,
 } from '@mui/material';
+import { ThemeProvider } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
 import MenuIcon from '@mui/icons-material/Menu';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -47,7 +49,13 @@ import LocalLogin from './components/LocalLogin';
 import InitialSetup from './components/InitialSetup';
 import ChannelPage from './components/ChannelPage';
 import StorageStatus from './components/StorageStatus';
+import { useConfig } from './hooks/useConfig';
 import ErrorBoundary from './components/ErrorBoundary';
+import DatabaseErrorOverlay from './components/DatabaseErrorOverlay';
+import { lightTheme, darkTheme } from './theme';
+
+// Event name for database error detection
+const DB_ERROR_EVENT = 'db-error-detected';
 
 function AppContent() {
   const [token, setToken] = useState<string | null>(
@@ -55,49 +63,215 @@ function AppContent() {
   );
   const [mobileOpen, setMobileOpen] = useState(false);
   const [serverVersion, setServerVersion] = useState('');
+  const [ytDlpVersion, setYtDlpVersion] = useState('');
   const [requiresSetup, setRequiresSetup] = useState<boolean | null>(null);
   const [checkingSetup, setCheckingSetup] = useState(true);
   const [isPlatformManaged, setIsPlatformManaged] = useState(false);
   const [showTmpWarning, setShowTmpWarning] = useState(false);
   const [shouldShowWarning, setShouldShowWarning] = useState(false);
   const [platformName, setPlatformName] = useState<string | null>(null);
+  const [dbStatus, setDbStatus] = useState<'checking' | 'healthy' | 'error'>('checking');
+  const [dbErrors, setDbErrors] = useState<string[]>([]);
+  const [dbRecovered, setDbRecovered] = useState(false);
+  const [countdown, setCountdown] = useState(15);
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const drawerWidth = isMobile ? '50%' : 240; // specify your drawer width
+
+  // Use config hook for global configuration access
+  const { config: appConfig, deploymentEnvironment } = useConfig(token);
   const { version } = packageJson;
   const clientVersion = `v${version}`; // Create a version with 'v' prefix for comparison
   const tmpDirectory = '/tmp';
+
+  // Select theme based on darkModeEnabled config
+  const selectedTheme = useMemo(() => {
+    return appConfig.darkModeEnabled ? darkTheme : lightTheme;
+  }, [appConfig.darkModeEnabled]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
 
+  const handleDatabaseRetry = () => {
+    // Reload the page to re-check database status
+    window.location.reload();
+  };
+
+  // Override global fetch to automatically detect database errors
+  useEffect(() => {
+    // Skip fetch override in test environment to preserve Jest mock functionality
+    if (process.env.NODE_ENV === 'test') {
+      return;
+    }
+
+    const originalFetch = window.fetch;
+
+    window.fetch = async function(...args: Parameters<typeof fetch>): Promise<Response> {
+      const response = await originalFetch(...args);
+
+      // Check for database error (503 with requiresDbFix flag)
+      if (response.status === 503) {
+        // Clone the response so we can read it without consuming the original
+        const clonedResponse = response.clone();
+
+        try {
+          const data = await clonedResponse.json();
+
+          if (data.requiresDbFix === true) {
+            // Dispatch custom event to notify App.tsx
+            const event = new CustomEvent(DB_ERROR_EVENT, {
+              detail: {
+                errors: data.details || [data.message],
+                message: data.message,
+              },
+            });
+            window.dispatchEvent(event);
+          }
+        } catch (jsonError) {
+          // Response wasn't JSON or couldn't be parsed - ignore
+        }
+      }
+
+      return response;
+    };
+
+    // Restore original fetch on cleanup
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
+
+  // Check database status on initial load
+  useEffect(() => {
+    fetch('/api/db-status')
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.status === 'healthy') {
+          setDbStatus('healthy');
+        } else {
+          setDbStatus('error');
+          setDbErrors(data.database?.errors || ['Unknown database error']);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to check database status:', error);
+        // If we can't reach the endpoint, assume healthy and let other errors surface naturally
+        setDbStatus('healthy');
+      });
+  }, []);
+
+  // Setup axios interceptor to catch database errors from any API call
+  useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        // Check if this is a database error (503 with requiresDbFix flag)
+        if (
+          error.response?.status === 503 &&
+          error.response?.data?.requiresDbFix === true
+        ) {
+          console.error('Database error detected from API call:', error.response.data);
+          setDbStatus('error');
+          setDbErrors(error.response.data.details || ['Database connection error']);
+          setDbRecovered(false);
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    // Cleanup interceptor on unmount
+    return () => {
+      axios.interceptors.response.eject(interceptor);
+    };
+  }, []);
+
+  // Setup global event listener for database errors from fetch calls
+  useEffect(() => {
+    const handleDbError = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.error('Database error detected from fetch call:', customEvent.detail);
+      setDbStatus('error');
+      setDbErrors(customEvent.detail.errors || ['Database connection error']);
+      setDbRecovered(false);
+    };
+
+    window.addEventListener(DB_ERROR_EVENT, handleDbError);
+
+    // Cleanup listener on unmount
+    return () => {
+      window.removeEventListener(DB_ERROR_EVENT, handleDbError);
+    };
+  }, []);
+
+  // Smart conditional polling - only poll when database is in error state
+  const countdownRef = useRef(15);
+
+  useEffect(() => {
+    if (dbStatus !== 'error') {
+      return; // Don't poll if database is healthy
+    }
+
+    console.log('Database in error state, starting polling...');
+    countdownRef.current = 15;
+    setCountdown(15);
+
+    // Check database status every 15 seconds
+    const checkInterval = setInterval(async () => {
+      try {
+        const response = await fetch('/api/db-status');
+        const data = await response.json();
+
+        if (data.status === 'healthy') {
+          console.log('Database recovered!');
+          setDbStatus('healthy');
+          setDbRecovered(true); // Show recovery message
+          setDbErrors([]);
+        } else {
+          // Still unhealthy, update errors
+          setDbErrors(data.database?.errors || ['Unknown database error']);
+        }
+      } catch (error) {
+        console.error('Error polling database status:', error);
+      }
+
+      // Reset countdown
+      countdownRef.current = 15;
+      setCountdown(15);
+    }, 15000);
+
+    // Countdown ticker for UI feedback (updates every second)
+    const ticker = setInterval(() => {
+      countdownRef.current = countdownRef.current - 1;
+      if (countdownRef.current < 0) {
+        countdownRef.current = 15;
+      }
+      setCountdown(countdownRef.current);
+    }, 1000);
+
+    // Cleanup on unmount or when dbStatus changes
+    return () => {
+      clearInterval(checkInterval);
+      clearInterval(ticker);
+    };
+  }, [dbStatus]);
+
   // Check configuration for temp directory warning
   useEffect(() => {
-    console.log('Useeffect for temp directory warning');
-    if (token && !checkingSetup) {
-      fetch('/getconfig', {
-        headers: {
-          'x-access-token': token,
-        },
-      })
-        .then((response) => response.json())
-        .then((data) => {
-          const dataPath = data.youtubeOutputDirectory;
-          if (dataPath && dataPath.toLowerCase().includes(tmpDirectory.toLowerCase())) {
-            setShouldShowWarning(true);
-            setShowTmpWarning(true);
-          }
-
-          // Check for platform from deployment environment
-          if (data.deploymentEnvironment?.platform) {
-            setPlatformName(data.deploymentEnvironment.platform);
-          }
-        })
-        .catch((error) => console.error('Failed to fetch config for tmp check:', error));
+    if (token && !checkingSetup && appConfig.youtubeOutputDirectory) {
+      const dataPath = appConfig.youtubeOutputDirectory;
+      if (dataPath && dataPath.toLowerCase().includes(tmpDirectory.toLowerCase())) {
+        setShouldShowWarning(true);
+        setShowTmpWarning(true);
+      }
     }
-  }, [token, checkingSetup]);
+
+    // Check for platform from deployment environment
+    if (deploymentEnvironment.platform) {
+      setPlatformName(deploymentEnvironment.platform);
+    }
+  }, [token, checkingSetup, appConfig.youtubeOutputDirectory, deploymentEnvironment.platform]);
 
   // Reset warning visibility on route change
   useEffect(() => {
@@ -174,6 +348,9 @@ function AppContent() {
       .get('/getCurrentReleaseVersion')
       .then((response) => {
         setServerVersion(response.data.version);
+        if (response.data.ytDlpVersion) {
+          setYtDlpVersion(response.data.ytDlpVersion);
+        }
       })
       .catch((err) => {
         console.error('Failed to fetch server version:', err);
@@ -181,11 +358,23 @@ function AppContent() {
   }, []);
 
   return (
-    <>
+    <ThemeProvider theme={selectedTheme}>
+      <CssBaseline />
+      <>
+        {/* Database Error Overlay - shows when database is unavailable or recovered */}
+        {(dbStatus === 'error' || dbRecovered) && (
+          <DatabaseErrorOverlay
+            errors={dbErrors}
+            onRetry={handleDatabaseRetry}
+            recovered={dbRecovered}
+            countdown={countdown}
+          />
+        )}
+
       <AppBar
         position="fixed"
-        style={{
-          backgroundColor: '#DDD',
+        sx={{
+          bgcolor: 'background.paper',
           width: '100%',
           margin: 0,
           padding: 0,
@@ -205,15 +394,16 @@ function AppContent() {
               mx: 0.25,
               mt: 1,
               visibility: isMobile ? 'visible' : 'hidden',
+              color: 'text.primary',
             }}
           >
             <MenuIcon fontSize='large' />
           </IconButton>
-          <StorageStatus token={token} />
-          <div
-            style={{
+          {!requiresSetup && token && <StorageStatus token={token} />}
+          <Box
+            sx={{
               marginTop: '8px',
-              color: '#000',
+              color: 'text.primary',
               flexGrow: 1,
               display: 'flex',
               flexDirection: 'column',
@@ -240,20 +430,39 @@ function AppContent() {
             >
               YouTube Video Manager
             </Typography>
-          </div>
-          <Typography
-            fontSize='small'
-            color={'textSecondary'}
-            style={{ position: 'absolute', top: 5, right: 10 }}
+          </Box>
+          <Box
+            style={{
+              position: 'absolute',
+              top: 5,
+              right: 10,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end'
+            }}
           >
-            {clientVersion}
-          </Typography>
+            <Typography
+              fontSize='small'
+              color={'textSecondary'}
+            >
+              {clientVersion}
+            </Typography>
+            {ytDlpVersion && (
+              <Typography
+                fontSize='x-small'
+                color={'textSecondary'}
+                style={{ opacity: 0.7 }}
+              >
+                yt-dlp: {ytDlpVersion}
+              </Typography>
+            )}
+          </Box>
           {/* This is the matching invisible IconButton */}
           <IconButton
             color='inherit'
             aria-label='menu space'
             edge='start'
-            sx={{ mx: 0.25, visibility: 'hidden' }}
+            sx={{ mx: 0.25, visibility: 'hidden', color: 'text.primary' }}
           >
             <MenuIcon fontSize='large' />
           </IconButton>
@@ -273,9 +482,9 @@ function AppContent() {
             onClose={handleDrawerToggle}
             style={{ width: drawerWidth }}
             PaperProps={{
-              style: {
+              sx: {
                 width: drawerWidth,
-                backgroundColor: '#CCC',
+                bgcolor: 'background.default',
                 maxWidth: '50vw',
                 marginTop: isMobile ? '0' : '100px',
               },
@@ -300,16 +509,16 @@ function AppContent() {
                 to='/configuration'
                 onClick={handleDrawerToggle}
                 sx={{
-                  backgroundColor: location.pathname === '/configuration' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
-                  borderLeft: location.pathname === '/configuration' ? '4px solid #1976d2' : 'none',
+                  bgcolor: location.pathname === '/configuration' ? 'action.selected' : 'transparent',
+                  borderLeft: location.pathname === '/configuration' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
                   '&:hover': {
-                    backgroundColor: location.pathname === '/configuration' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
+                    bgcolor: location.pathname === '/configuration' ? 'action.hover' : 'action.hover',
                   },
                   paddingX: isMobile ? '8px' : '16px'
                 }}
               >
                 <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                  <SettingsIcon sx={{ color: location.pathname === '/configuration' ? '#1976d2' : 'inherit' }} />
+                  <SettingsIcon sx={{ color: location.pathname === '/configuration' ? 'primary.main' : 'inherit' }} />
                 </ListItemIcon>
                 <ListItemText
                   primaryTypographyProps={{
@@ -325,16 +534,16 @@ function AppContent() {
                 to='/channels'
                 onClick={handleDrawerToggle}
                 sx={{
-                  backgroundColor: location.pathname === '/channels' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
-                  borderLeft: location.pathname === '/channels' ? '4px solid #1976d2' : 'none',
+                  bgcolor: location.pathname === '/channels' ? 'action.selected' : 'transparent',
+                  borderLeft: location.pathname === '/channels' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
                   '&:hover': {
-                    backgroundColor: location.pathname === '/channels' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
+                    bgcolor: 'action.hover',
                   },
                   paddingX: isMobile ? '8px' : '16px'
                 }}
               >
                 <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                  <SubscriptionsIcon sx={{ color: location.pathname === '/channels' ? '#1976d2' : 'inherit' }} />
+                  <SubscriptionsIcon sx={{ color: location.pathname === '/channels' ? 'primary.main' : 'inherit' }} />
                 </ListItemIcon>
                 <ListItemText
                   primaryTypographyProps={{
@@ -350,16 +559,16 @@ function AppContent() {
                 to='/downloads'
                 onClick={handleDrawerToggle}
                 sx={{
-                  backgroundColor: location.pathname === '/downloads' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
-                  borderLeft: location.pathname === '/downloads' ? '4px solid #1976d2' : 'none',
+                  bgcolor: location.pathname === '/downloads' ? 'action.selected' : 'transparent',
+                  borderLeft: location.pathname === '/downloads' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
                   '&:hover': {
-                    backgroundColor: location.pathname === '/downloads' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
+                    bgcolor: 'action.hover',
                   },
                   paddingX: isMobile ? '8px' : '16px'
                 }}
               >
                 <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                  <DownloadIcon sx={{ color: location.pathname === '/downloads' ? '#1976d2' : 'inherit' }} />
+                  <DownloadIcon sx={{ color: location.pathname === '/downloads' ? 'primary.main' : 'inherit' }} />
                 </ListItemIcon>
                 <ListItemText
                   primaryTypographyProps={{
@@ -375,16 +584,16 @@ function AppContent() {
                 to='/videos'
                 onClick={handleDrawerToggle}
                 sx={{
-                  backgroundColor: location.pathname === '/videos' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
-                  borderLeft: location.pathname === '/videos' ? '4px solid #1976d2' : 'none',
+                  bgcolor: location.pathname === '/videos' ? 'action.selected' : 'transparent',
+                  borderLeft: location.pathname === '/videos' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
                   '&:hover': {
-                    backgroundColor: location.pathname === '/videos' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
+                    bgcolor: 'action.hover',
                   },
                   paddingX: isMobile ? '8px' : '16px'
                 }}
               >
                 <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                  <VideoLibraryIcon sx={{ color: location.pathname === '/videos' ? '#1976d2' : 'inherit' }} />
+                  <VideoLibraryIcon sx={{ color: location.pathname === '/videos' ? 'primary.main' : 'inherit' }} />
                 </ListItemIcon>
                 <ListItemText
                   primaryTypographyProps={{
@@ -401,16 +610,16 @@ function AppContent() {
                   to='/login'
                   onClick={handleDrawerToggle}
                   sx={{
-                    backgroundColor: location.pathname === '/login' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
-                    borderLeft: location.pathname === '/login' ? '4px solid #1976d2' : 'none',
+                    bgcolor: location.pathname === '/login' ? 'action.selected' : 'transparent',
+                    borderLeft: location.pathname === '/login' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
                     '&:hover': {
-                      backgroundColor: location.pathname === '/login' ? 'rgba(0, 0, 0, 0.12)' : 'rgba(0, 0, 0, 0.04)',
+                      bgcolor: 'action.hover',
                     },
                     paddingX: isMobile ? '8px' : '16px'
                   }}
                 >
                   <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                    <LoginIcon sx={{ color: location.pathname === '/login' ? '#1976d2' : 'inherit' }} />
+                    <LoginIcon sx={{ color: location.pathname === '/login' ? 'primary.main' : 'inherit' }} />
                   </ListItemIcon>
                   <ListItemText
                     primaryTypographyProps={{
@@ -446,7 +655,7 @@ function AppContent() {
               {isPlatformManaged && (
                 <ListItem sx={{ paddingX: isMobile ? '8px' : '16px' }}>
                   <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                    <ShieldIcon sx={{ color: '#4caf50' }} />
+                    <ShieldIcon sx={{ color: 'success.main' }} />
                   </ListItemIcon>
                   <ListItemText
                     primary="Platform Authentication"
@@ -484,7 +693,16 @@ function AppContent() {
                   setRequiresSetup(false);
                   window.location.href = '/configuration';
                 }} />} />
-                <Route path='/login' element={<LocalLogin setToken={setToken} />} />
+                <Route
+                  path='/login'
+                  element={
+                    isPlatformManaged ? (
+                      <Navigate to='/configuration' replace />
+                    ) : (
+                      <LocalLogin setToken={setToken} />
+                    )
+                  }
+                />
                 {token ? (
                   <>
                     <Route
@@ -519,24 +737,24 @@ function AppContent() {
           </Container>
         </Grid>
       </Grid>
-      <footer
-        style={{
+      <Box
+        component="footer"
+        sx={{
           position: 'fixed',
           bottom: 0,
           width: '100%',
-          backgroundColor: '#DDD',
+          bgcolor: 'background.paper',
           textAlign: 'center',
         }}
       >
         <Typography variant='subtitle1' color='textSecondary'>
           {serverVersion && serverVersion !== clientVersion && platformName?.toLowerCase() !== 'elfhosted' && (
             <Typography color='error'>
-              New version ({serverVersion}) available! Please restart the app to
-              update.
+              New version ({serverVersion}) available! Please shut down and pull the latest image and files to update.
             </Typography>
           )}
         </Typography>
-      </footer>
+      </Box>
 
       {/* Persistent warning for temp directory */}
       <Snackbar
@@ -576,7 +794,8 @@ function AppContent() {
           </Box>
         </Alert>
       </Snackbar>
-    </>
+      </>
+    </ThemeProvider>
   );
 }
 

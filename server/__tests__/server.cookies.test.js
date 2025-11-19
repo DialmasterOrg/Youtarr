@@ -9,16 +9,25 @@ describe('Cookie Module Integration Tests', () => {
     jest.resetModules();
     jest.clearAllMocks();
 
+    const mockConfig = {
+      uuid: 'test-uuid-1234',
+      plexApiKey: 'test-key',
+      plexPort: '32400',
+      cookiesEnabled: false,
+      customCookiesUploaded: false,
+      channelDownloadFrequency: '0 */6 * * *',
+      videoResolution: '1080',
+      sponsorBlock: { enabled: false, categories: [] },
+      useTmpForDownloads: false,
+      tmpFilePath: '/tmp',
+      autoRemoval: { enabled: false, minDaysOld: 30 }
+    };
+
     jest.doMock('fs', () => ({
-      readFileSync: jest.fn().mockReturnValue(JSON.stringify({
-        plexApiKey: 'test-key',
-        youtubeOutputDirectory: '/test/output',
-        cookiesEnabled: false,
-        customCookiesUploaded: false
-      })),
+      readFileSync: jest.fn().mockReturnValue(JSON.stringify(mockConfig)),
       writeFileSync: jest.fn(),
       watch: jest.fn().mockReturnValue({ close: jest.fn() }),
-      existsSync: jest.fn().mockReturnValue(false),
+      existsSync: jest.fn().mockReturnValue(true),
       mkdirSync: jest.fn(),
       chmodSync: jest.fn(),
       unlinkSync: jest.fn()

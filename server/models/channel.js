@@ -31,14 +31,50 @@ Channel.init(
       type: DataTypes.STRING,
       allowNull: true,
     },
-    lastFetched: {
-      type: DataTypes.DATE,
+    lastFetchedByTab: {
+      type: DataTypes.TEXT,
       allowNull: true,
+      defaultValue: null,
     },
     enabled: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
+    },
+    available_tabs: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      defaultValue: null,
+    },
+    auto_download_enabled_tabs: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+      defaultValue: 'video',
+    },
+    sub_folder: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      defaultValue: null,
+    },
+    video_quality: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      defaultValue: null,
+    },
+    min_duration: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: null,
+    },
+    max_duration: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: null,
+    },
+    title_filter_regex: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      defaultValue: null,
     },
   },
   {

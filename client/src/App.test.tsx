@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import App from './App';
@@ -9,6 +9,16 @@ import { useMediaQuery } from '@mui/material';
 jest.mock('axios', () => ({
   get: jest.fn(),
   post: jest.fn(),
+  interceptors: {
+    request: {
+      use: jest.fn(),
+      eject: jest.fn(),
+    },
+    response: {
+      use: jest.fn(() => 0), // Return mock interceptor ID
+      eject: jest.fn(),
+    },
+  },
 }));
 
 const axios = require('axios');
@@ -83,6 +93,30 @@ jest.mock('./components/ErrorBoundary', () => {
   };
 });
 
+jest.mock('./components/DatabaseErrorOverlay', () => {
+  return function DatabaseErrorOverlay({
+    errors,
+    onRetry,
+    recovered = false,
+    countdown = 15
+  }: {
+    errors: string[];
+    onRetry: () => void;
+    recovered?: boolean;
+    countdown?: number;
+  }) {
+    return (
+      <div data-testid="database-error-overlay">
+        {recovered ? 'Database Recovered' : 'Database Error Overlay'}
+        <div data-testid="error-count">{errors.length} errors</div>
+        <div data-testid="countdown">Countdown: {countdown}</div>
+        <div data-testid="recovered-status">{recovered ? 'recovered' : 'error'}</div>
+        <button onClick={onRetry}>Retry</button>
+      </div>
+    );
+  };
+});
+
 // Mock window.location with proper URL
 delete (window as any).location;
 window.location = {
@@ -148,15 +182,53 @@ jest.mock('@mui/material', () => ({
 }));
 
 describe('App Component', () => {
+  // Helper function to create a standard fetch mock with common endpoints
+  const createFetchMock = (overrides: Record<string, any> = {}) => {
+    return (url: string, options?: any) => {
+      // Check for overrides first
+      if (overrides[url]) {
+        return Promise.resolve(overrides[url]);
+      }
+
+      // Default responses
+      if (url === '/api/db-status') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: 'healthy' }),
+        });
+      }
+      if (url === '/setup/status') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ requiresSetup: false }),
+        });
+      }
+      if (url === '/auth/validate') {
+        return Promise.resolve({
+          ok: true,
+          json: jest.fn().mockResolvedValue({}),
+        });
+      }
+      if (url === '/getconfig') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ youtubeOutputDirectory: '/data/videos' }),
+        });
+      }
+      // Default fallback
+      return Promise.resolve({
+        ok: true,
+        json: jest.fn().mockResolvedValue({})
+      });
+    };
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     window.location.href = 'http://localhost/';
     window.location.pathname = '/';
     localStorageMock.getItem.mockReturnValue(null);
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: async () => ({ requiresSetup: false }),
-    });
+    (global.fetch as jest.Mock).mockImplementation(createFetchMock());
     axios.get.mockResolvedValue({ data: { version: 'v1.0.0' } });
   });
 
@@ -175,11 +247,6 @@ describe('App Component', () => {
   });
 
   test('shows login link when not authenticated', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ requiresSetup: false }),
-    });
-
     render(<App />);
 
     await waitFor(() => {
@@ -189,18 +256,6 @@ describe('App Component', () => {
 
   test('shows logout button when authenticated', async () => {
     localStorageMock.getItem.mockReturnValue('test-token');
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ requiresSetup: false }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ youtubeOutputDirectory: '/data/videos' }),
-      });
 
     render(<App />);
 
@@ -212,18 +267,6 @@ describe('App Component', () => {
   test('handles logout action', async () => {
     const user = userEvent.setup();
     localStorageMock.getItem.mockReturnValue('test-token');
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ requiresSetup: false }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ youtubeOutputDirectory: '/data/videos' }),
-      });
 
     render(<App />);
 
@@ -244,18 +287,6 @@ describe('App Component', () => {
 
   test('validates auth token on mount', async () => {
     localStorageMock.getItem.mockReturnValue('test-token');
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ requiresSetup: false }),
-      })
-      .mockResolvedValueOnce({
-        ok: true, // Valid token
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ youtubeOutputDirectory: '/data/videos' }),
-      });
 
     render(<App />);
 
@@ -270,14 +301,11 @@ describe('App Component', () => {
 
   test('removes invalid auth token', async () => {
     localStorageMock.getItem.mockReturnValue('invalid-token');
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ requiresSetup: false }),
-      })
-      .mockResolvedValueOnce({
+    (global.fetch as jest.Mock).mockImplementation(createFetchMock({
+      '/auth/validate': {
         ok: false, // Invalid token
-      });
+      }
+    }));
 
     render(<App />);
 
@@ -296,21 +324,19 @@ describe('App Component', () => {
     });
   });
 
+  test('displays yt-dlp version when provided by server', async () => {
+    axios.get.mockResolvedValue({ data: { version: 'v1.2.0', ytDlpVersion: '2025.09.23' } });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/yt-dlp: 2025.09.23/)).toBeInTheDocument();
+    });
+  });
+
   test('displays version mismatch warning when server version differs', async () => {
     axios.get.mockResolvedValue({ data: { version: 'v2.0.0' } });
     localStorageMock.getItem.mockReturnValue('test-token');
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ requiresSetup: false }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ youtubeOutputDirectory: '/data/videos' }),
-      });
 
     render(<App />);
 
@@ -321,18 +347,12 @@ describe('App Component', () => {
 
   test('shows warning when output directory is in /tmp', async () => {
     localStorageMock.getItem.mockReturnValue('test-token');
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ requiresSetup: false }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-      })
-      .mockResolvedValueOnce({
+    (global.fetch as jest.Mock).mockImplementation(createFetchMock({
+      '/getconfig': {
         ok: true,
         json: async () => ({ youtubeOutputDirectory: '/tmp/videos' }),
-      });
+      }
+    }));
 
     render(<App />);
 
@@ -342,13 +362,15 @@ describe('App Component', () => {
   });
 
   test('handles platform managed authentication', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        requiresSetup: false,
-        platformManaged: true
-      }),
-    });
+    (global.fetch as jest.Mock).mockImplementation(createFetchMock({
+      '/setup/status': {
+        ok: true,
+        json: async () => ({
+          requiresSetup: false,
+          platformManaged: true
+        }),
+      }
+    }));
 
     render(<App />);
 
@@ -361,21 +383,15 @@ describe('App Component', () => {
 
   test('displays ElfHosted branding when platform is elfhosted', async () => {
     localStorageMock.getItem.mockReturnValue('test-token');
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ requiresSetup: false }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-      })
-      .mockResolvedValueOnce({
+    (global.fetch as jest.Mock).mockImplementation(createFetchMock({
+      '/getconfig': {
         ok: true,
         json: async () => ({
           youtubeOutputDirectory: '/data/videos',
           deploymentEnvironment: { platform: 'elfhosted' }
         }),
-      });
+      }
+    }));
 
     render(<App />);
 
@@ -386,18 +402,6 @@ describe('App Component', () => {
 
   test('renders authenticated pages when user has token', async () => {
     localStorageMock.getItem.mockReturnValue('test-token');
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ requiresSetup: false }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ youtubeOutputDirectory: '/data/videos' }),
-      });
 
     render(<App />);
 
@@ -438,12 +442,27 @@ describe('App Component', () => {
 
   test('handles auth validation failure gracefully', async () => {
     localStorageMock.getItem.mockReturnValue('test-token');
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
+    (global.fetch as jest.Mock).mockImplementation((url) => {
+      if (url === '/api/db-status') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: 'healthy' }),
+        });
+      }
+      if (url === '/setup/status') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ requiresSetup: false }),
+        });
+      }
+      if (url === '/auth/validate') {
+        return Promise.reject(new Error('Auth validation failed'));
+      }
+      return Promise.resolve({
         ok: true,
-        json: async () => ({ requiresSetup: false }),
-      })
-      .mockRejectedValueOnce(new Error('Auth validation failed'));
+        json: jest.fn().mockResolvedValue({})
+      });
+    });
 
     render(<App />);
 
@@ -455,21 +474,15 @@ describe('App Component', () => {
   test('does not show version warning for elfhosted platform', async () => {
     axios.get.mockResolvedValue({ data: { version: 'v2.0.0' } });
     localStorageMock.getItem.mockReturnValue('test-token');
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ requiresSetup: false }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-      })
-      .mockResolvedValueOnce({
+    (global.fetch as jest.Mock).mockImplementation(createFetchMock({
+      '/getconfig': {
         ok: true,
         json: async () => ({
           youtubeOutputDirectory: '/data/videos',
           deploymentEnvironment: { platform: 'elfhosted' }
         }),
-      });
+      }
+    }));
 
     render(<App />);
 
@@ -482,18 +495,6 @@ describe('App Component', () => {
 
   test('displays storage status component', async () => {
     localStorageMock.getItem.mockReturnValue('test-token');
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ requiresSetup: false }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ youtubeOutputDirectory: '/data/videos' }),
-      });
 
     render(<App />);
 
@@ -514,18 +515,12 @@ describe('App Component', () => {
   test('closes tmp warning snackbar when dismissed', async () => {
     const user = userEvent.setup();
     localStorageMock.getItem.mockReturnValue('test-token');
-    (global.fetch as jest.Mock)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ requiresSetup: false }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-      })
-      .mockResolvedValueOnce({
+    (global.fetch as jest.Mock).mockImplementation(createFetchMock({
+      '/getconfig': {
         ok: true,
         json: async () => ({ youtubeOutputDirectory: '/tmp/videos' }),
-      });
+      }
+    }));
 
     render(<App />);
 
@@ -543,6 +538,311 @@ describe('App Component', () => {
 
     await waitFor(() => {
       expect(screen.queryByText(/Your video directory is mounted to \/tmp/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Database Error Handling', () => {
+    test('calls /api/db-status on mount', async () => {
+      render(<App />);
+
+      await waitFor(() => {
+        expect(fetch).toHaveBeenCalledWith('/api/db-status');
+      });
+    });
+
+    test('does not show overlay when database is healthy', async () => {
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.getByAltText('Youtarr')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId('database-error-overlay')).not.toBeInTheDocument();
+    });
+
+    test('shows overlay when database has errors', async () => {
+      (global.fetch as jest.Mock).mockImplementation(createFetchMock({
+        '/api/db-status': {
+          ok: true,
+          json: async () => ({
+            status: 'error',
+            database: {
+              errors: ['Connection refused', 'Failed to connect to database']
+            }
+          }),
+        }
+      }));
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('database-error-overlay')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('error-count')).toHaveTextContent('2 errors');
+    });
+
+    test('extracts errors correctly from response', async () => {
+      (global.fetch as jest.Mock).mockImplementation(createFetchMock({
+        '/api/db-status': {
+          ok: true,
+          json: async () => ({
+            status: 'error',
+            database: {
+              errors: ['Test error 1', 'Test error 2', 'Test error 3']
+            }
+          }),
+        }
+      }));
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('error-count')).toHaveTextContent('3 errors');
+      });
+    });
+
+    test('shows unknown error when errors array is missing', async () => {
+      (global.fetch as jest.Mock).mockImplementation(createFetchMock({
+        '/api/db-status': {
+          ok: true,
+          json: async () => ({
+            status: 'error',
+            database: {}
+          }),
+        }
+      }));
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('database-error-overlay')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('error-count')).toHaveTextContent('1 errors');
+    });
+
+    test('retry button calls window.location.reload', async () => {
+      const user = userEvent.setup();
+      (global.fetch as jest.Mock).mockImplementation(createFetchMock({
+        '/api/db-status': {
+          ok: true,
+          json: async () => ({
+            status: 'error',
+            database: {
+              errors: ['Connection error']
+            }
+          }),
+        }
+      }));
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('database-error-overlay')).toBeInTheDocument();
+      });
+
+      const retryButton = screen.getByText('Retry');
+      await user.click(retryButton);
+
+      expect(window.location.reload).toHaveBeenCalled();
+    });
+
+    test('gracefully handles fetch failure by assuming healthy database', async () => {
+      (global.fetch as jest.Mock).mockImplementation((url) => {
+        if (url === '/api/db-status') {
+          return Promise.reject(new Error('Network error'));
+        }
+        if (url === '/setup/status') {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ requiresSetup: false }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: jest.fn().mockResolvedValue({})
+        });
+      });
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.getByAltText('Youtarr')).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId('database-error-overlay')).not.toBeInTheDocument();
+    });
+
+    test('shows overlay when status is not healthy (including checking)', async () => {
+      // Current implementation treats any non-"healthy" status as an error
+      (global.fetch as jest.Mock).mockImplementation(createFetchMock({
+        '/api/db-status': {
+          ok: true,
+          json: async () => ({
+            status: 'checking',
+            database: {
+              errors: ['Database is still initializing']
+            }
+          }),
+        }
+      }));
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('database-error-overlay')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('error-count')).toHaveTextContent('1 errors');
+    });
+
+    test('starts polling when database is in error state', async () => {
+      jest.useFakeTimers();
+      try {
+        (global.fetch as jest.Mock).mockImplementation(createFetchMock({
+          '/api/db-status': {
+            ok: true,
+            json: async () => ({
+              status: 'error',
+              database: {
+                errors: ['Connection error']
+              }
+            }),
+          }
+        }));
+
+        render(<App />);
+
+        // Wait for initial error state
+        await waitFor(() => {
+          expect(screen.getByTestId('database-error-overlay')).toBeInTheDocument();
+        });
+
+        // Fast-forward 15 seconds to trigger polling
+        act(() => {
+          jest.advanceTimersByTime(15000);
+        });
+
+        // Should have made another call to /api/db-status
+        await waitFor(() => {
+          expect(fetch).toHaveBeenCalledTimes(3); // initial mount, setup check, and one poll
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    test('shows recovery state when database becomes healthy', async () => {
+      jest.useFakeTimers();
+      try {
+        let callCount = 0;
+
+        (global.fetch as jest.Mock).mockImplementation((url) => {
+          if (url === '/api/db-status') {
+            callCount++;
+            if (callCount === 1) {
+              // First call: error
+              return Promise.resolve({
+                ok: true,
+                json: async () => ({
+                  status: 'error',
+                  database: { errors: ['Connection error'] }
+                }),
+              });
+            } else {
+              // Subsequent calls: healthy
+              return Promise.resolve({
+                ok: true,
+                json: async () => ({ status: 'healthy' }),
+              });
+            }
+          }
+          if (url === '/setup/status') {
+            return Promise.resolve({
+              ok: true,
+              json: async () => ({ requiresSetup: false }),
+            });
+          }
+          return Promise.resolve({
+            ok: true,
+            json: jest.fn().mockResolvedValue({})
+          });
+        });
+
+        render(<App />);
+
+        // Wait for initial error state
+        await waitFor(() => {
+          expect(screen.getByTestId('recovered-status')).toHaveTextContent('error');
+        });
+
+        // Fast-forward to trigger polling and recovery
+        act(() => {
+          jest.advanceTimersByTime(15000);
+        });
+
+        // Should show recovery state
+        await waitFor(() => {
+          expect(screen.getByTestId('recovered-status')).toHaveTextContent('recovered');
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    test('axios interceptor is registered on mount', async () => {
+      render(<App />);
+
+      // Wait for app to load
+      await waitFor(() => {
+        expect(screen.getByAltText('Youtarr')).toBeInTheDocument();
+      });
+
+      // Verify interceptor was registered
+      const mockAxios = require('axios');
+      expect(mockAxios.interceptors.response.use).toHaveBeenCalled();
+    });
+
+    test('countdown updates during polling', async () => {
+      jest.useFakeTimers();
+      try {
+        (global.fetch as jest.Mock).mockImplementation(createFetchMock({
+          '/api/db-status': {
+            ok: true,
+            json: async () => ({
+              status: 'error',
+              database: {
+                errors: ['Connection error']
+              }
+            }),
+          }
+        }));
+
+        render(<App />);
+
+        // Wait for overlay to appear first
+        await waitFor(() => {
+          expect(screen.getByTestId('database-error-overlay')).toBeInTheDocument();
+        });
+
+        // Then check initial countdown
+        await waitFor(() => {
+          expect(screen.getByTestId('countdown')).toHaveTextContent('Countdown: 15');
+        });
+
+        // Advance by 5 seconds
+        act(() => {
+          jest.advanceTimersByTime(5000);
+        });
+
+        // Countdown should decrease
+        await waitFor(() => {
+          expect(screen.getByTestId('countdown')).toHaveTextContent('Countdown: 10');
+        });
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 });

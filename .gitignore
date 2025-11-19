@@ -10,8 +10,11 @@ config/jobs.json
 config/config.json
 config/config.json.*
 config/cookies.user.txt
+config/*.env
 database
 server/images
+
+.env
 
 # Local dev exclusion
 ffmpeg.exe
@@ -34,6 +37,8 @@ config/images/*
 .env.development.local
 .env.test.local
 .env.production.local
+.env.bak
+config/external-db.env.bak
 
 npm-debug.log*
 yarn-debug.log*
@@ -41,3 +46,8 @@ yarn-error.log*
 
 # Platform deployment testing
 docker-compose.override.*
+.vscode/*
+
+# Default video download directory and README, all other files excluded
+downloads/*
+!downloads/README.md

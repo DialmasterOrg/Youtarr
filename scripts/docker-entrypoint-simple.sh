@@ -1,28 +1,24 @@
 #!/bin/bash
 
-# Simple entrypoint script for Youtarr application container
-# This version doesn't need to manage MariaDB since it's in a separate container
-
 # Trap signals for graceful shutdown
 trap 'handle_shutdown' SIGTERM SIGINT
 
-# Function to handle shutdown gracefully
 handle_shutdown() {
     echo "Received shutdown signal, stopping Node.js server gracefully..."
-    
+
     # Stop Node.js server if it's running
     if [ ! -z "$NODE_PID" ]; then
         echo "Stopping Node.js server (PID: $NODE_PID)..."
         kill -TERM "$NODE_PID" 2>/dev/null
         wait "$NODE_PID" 2>/dev/null
     fi
-    
+
     echo "Shutdown complete."
     exit 0
 }
 
-# Wait for database to be ready
 echo "Waiting for database to be ready..."
+
 MAX_TRIES=30
 TRIES=0
 while [ $TRIES -lt $MAX_TRIES ]; do
@@ -44,18 +40,17 @@ while [ $TRIES -lt $MAX_TRIES ]; do
         echo "Database is ready!"
         break
     fi
-    
+
     TRIES=$((TRIES + 1))
     if [ $TRIES -eq $MAX_TRIES ]; then
         echo "Failed to connect to database after $MAX_TRIES attempts"
         exit 1
     fi
-    
+
     echo "Waiting for database... (attempt $TRIES/$MAX_TRIES)"
     sleep 2
 done
 
-# Start Node.js server
 echo "Starting Node.js server..."
 node /app/server/server.js &
 NODE_PID=$!

@@ -70,9 +70,19 @@ describe('YtDlpRunner', () => {
     jest.doMock('fs', () => fsMock);
 
     configModuleMock = {
-      getCookiesPath: jest.fn(() => '/mock/cookies.txt')
+      getCookiesPath: jest.fn(() => '/mock/cookies.txt'),
+      getConfig: jest.fn(() => ({
+        sleepRequests: 1,
+        proxy: ''
+      }))
     };
     jest.doMock('../configModule', () => configModuleMock);
+
+    // Mock ytdlpCommandBuilder
+    const ytdlpCommandBuilderMock = {
+      buildMetadataFetchArgs: jest.fn((url) => ['--skip-download', '--dump-single-json', '-4', '--cookies', '/mock/cookies.txt', url])
+    };
+    jest.doMock('../download/ytdlpCommandBuilder', () => ytdlpCommandBuilderMock);
 
     loadModule();
   });
@@ -85,11 +95,13 @@ describe('YtDlpRunner', () => {
   it('rejects when args are not an array', async () => {
     await expect(ytDlpRunner.run('not-array', { timeoutMs: 0 })).rejects.toThrow('Arguments must be provided as an array');
     expect(spawnMock).not.toHaveBeenCalled();
-    expect(configModuleMock.getCookiesPath).toHaveBeenCalledTimes(1);
+    // No longer calls getCookiesPath - args should be pre-built
+    expect(configModuleMock.getCookiesPath).not.toHaveBeenCalled();
   });
 
-  it('runs yt-dlp with cookies by default and resolves stdout', async () => {
-    const runPromise = ytDlpRunner.run(['--version'], { timeoutMs: 0 });
+  it('runs yt-dlp with pre-built args and resolves stdout', async () => {
+    // Args should be pre-built (e.g., using ytdlpCommandBuilder.buildMetadataFetchArgs())
+    const runPromise = ytDlpRunner.run(['--cookies', '/mock/cookies.txt', '--version'], { timeoutMs: 0 });
     const proc = getLastProcess();
     emitDataAndClose(proc, { stdout: 'version 1.0' });
 
@@ -99,10 +111,12 @@ describe('YtDlpRunner', () => {
       ['--cookies', '/mock/cookies.txt', '--version'],
       expect.objectContaining({ shell: false, timeout: 0 })
     );
+    // No longer calls getCookiesPath - args should be pre-built
+    expect(configModuleMock.getCookiesPath).not.toHaveBeenCalled();
   });
 
-  it('skips cookies when useCookies is false', async () => {
-    const runPromise = ytDlpRunner.run(['-F'], { timeoutMs: 0, useCookies: false });
+  it('uses args as-is without modification', async () => {
+    const runPromise = ytDlpRunner.run(['-F'], { timeoutMs: 0 });
     const proc = getLastProcess();
     emitDataAndClose(proc);
 
@@ -233,14 +247,15 @@ describe('YtDlpRunner', () => {
     await expect(runPromise).resolves.toBe('done');
   });
 
-  it('fetchMetadata parses yt-dlp output', async () => {
+  it('fetchMetadata parses yt-dlp output using builder', async () => {
     const metadata = { id: 'abc123' };
     const runSpy = jest.spyOn(ytDlpRunner, 'run').mockResolvedValueOnce(JSON.stringify(metadata));
 
     const result = await ytDlpRunner.fetchMetadata('https://example.com', 321);
 
+    // Args should be built by ytdlpCommandBuilder.buildMetadataFetchArgs()
     expect(runSpy).toHaveBeenCalledWith(
-      ['--skip-download', '--dump-single-json', '-4', 'https://example.com'],
+      ['--skip-download', '--dump-single-json', '-4', '--cookies', '/mock/cookies.txt', 'https://example.com'],
       { timeoutMs: 321 }
     );
     expect(result).toEqual(metadata);

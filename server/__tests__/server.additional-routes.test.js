@@ -1,4 +1,5 @@
 /* eslint-env jest */
+const loggerMock = require('../__mocks__/logger');
 
 const findRouteHandlers = (app, method, routePath) => {
   const stack = app?._router?.stack || [];
@@ -20,6 +21,7 @@ const createMockRequest = (overrides = {}) => ({
   ip: '127.0.0.1',
   connection: { remoteAddress: '127.0.0.1' },
   socket: { remoteAddress: '127.0.0.1' },
+  log: loggerMock,
   ...overrides
 });
 
@@ -99,6 +101,14 @@ const createServerModule = ({
 
         const dbMock = {
           initializeDatabase: jest.fn().mockResolvedValue(),
+          reinitializeDatabase: jest.fn().mockResolvedValue({
+            connected: true,
+            schemaValid: true,
+            errors: []
+          }),
+          sequelize: {
+            authenticate: jest.fn().mockResolvedValue(true)
+          },
           Session: {
             findOne: jest.fn().mockImplementation(() => Promise.resolve(effectiveSession)),
             create: jest.fn().mockResolvedValue({
@@ -151,6 +161,7 @@ const createServerModule = ({
             customFileExists: false
           })),
           getStorageStatus: jest.fn().mockResolvedValue({ total: 1, free: 1 }),
+          isElfhostedPlatform: jest.fn(() => false),
           config: configState,
           stopWatchingConfig: jest.fn()
         };
@@ -221,8 +232,13 @@ const createServerModule = ({
           compare: jest.fn().mockResolvedValue(true),
           hash: jest.fn().mockResolvedValue('new-hashed-password')
         };
+        const childProcessMock = {
+          execSync: jest.fn(() => '2025.09.23')
+        };
+        const pinoHttpMock = jest.fn(() => (req, res, next) => next());
 
         // Add required mocks
+        jest.doMock('../logger', () => loggerMock);
         jest.doMock('../db', () => dbMock);
         jest.doMock('../modules/configModule', () => configModuleMock);
         jest.doMock('../modules/channelModule', () => channelModuleMock);
@@ -230,6 +246,12 @@ const createServerModule = ({
         jest.doMock('../modules/downloadModule', () => downloadModuleMock);
         jest.doMock('../modules/jobModule', () => jobModuleMock);
         jest.doMock('../modules/videosModule', () => videosModuleMock);
+        jest.doMock('../modules/channelSettingsModule', () => ({
+          getChannelSettings: jest.fn(),
+          updateChannelSettings: jest.fn(),
+          getAllSubFolders: jest.fn()
+        }));
+        jest.doMock('../modules/cronJobs', () => ({ initialize: jest.fn() }));
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => ({ schedule: jest.fn() }));
         jest.doMock('express-rate-limit', () => jest.fn(() => (req, res, next) => next()));
@@ -238,6 +260,8 @@ const createServerModule = ({
         jest.doMock('bcrypt', () => bcryptMock);
         jest.doMock('uuid', () => ({ v4: jest.fn(() => 'test-uuid') }));
         jest.doMock('fs', () => ({ readFileSync: jest.fn(() => '') }));
+        jest.doMock('child_process', () => childProcessMock);
+        jest.doMock('pino-http', () => pinoHttpMock);
 
         const serverModule = require('../server');
 
@@ -565,6 +589,655 @@ describe('server routes - validateToken', () => {
   });
 });
 
+describe('server routes - auto-removal dry run', () => {
+  test('performs dry run with boolean autoRemovalEnabled', async () => {
+    const { app } = await createServerModule();
+
+    const videoDeletionModuleMock = {
+      performAutomaticCleanup: jest.fn().mockResolvedValue({
+        success: true,
+        dryRun: true,
+        totalDeleted: 0,
+        deletedByAge: 0,
+        deletedBySpace: 0,
+        freedBytes: 0,
+        errors: [],
+        plan: {
+          ageStrategy: { enabled: true, candidateCount: 5 },
+          spaceStrategy: { enabled: false, candidateCount: 0 }
+        },
+        simulationTotals: { byAge: 5, bySpace: 0, total: 5, estimatedFreedBytes: 1024000 }
+      })
+    };
+
+    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+
+    const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
+    const dryRunHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({
+      body: {
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: 30,
+        autoRemovalFreeSpaceThreshold: '10GB'
+      }
+    });
+    const res = createMockResponse();
+
+    await dryRunHandler(req, res);
+
+    expect(videoDeletionModuleMock.performAutomaticCleanup).toHaveBeenCalledWith({
+      dryRun: true,
+      overrides: {
+        autoRemovalEnabled: true,
+        autoRemovalVideoAgeThreshold: 30,
+        autoRemovalFreeSpaceThreshold: '10GB'
+      }
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.dryRun).toBe(true);
+  });
+
+  test('performs dry run with string "true" autoRemovalEnabled', async () => {
+    const { app } = await createServerModule();
+
+    const videoDeletionModuleMock = {
+      performAutomaticCleanup: jest.fn().mockResolvedValue({
+        success: true,
+        dryRun: true,
+        totalDeleted: 0,
+        errors: []
+      })
+    };
+
+    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+
+    const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
+    const dryRunHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({
+      body: {
+        autoRemovalEnabled: 'true'
+      }
+    });
+    const res = createMockResponse();
+
+    await dryRunHandler(req, res);
+
+    expect(videoDeletionModuleMock.performAutomaticCleanup).toHaveBeenCalledWith({
+      dryRun: true,
+      overrides: {
+        autoRemovalEnabled: true
+      }
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  test('performs dry run with string "false" autoRemovalEnabled', async () => {
+    const { app } = await createServerModule();
+
+    const videoDeletionModuleMock = {
+      performAutomaticCleanup: jest.fn().mockResolvedValue({
+        success: true,
+        dryRun: true,
+        totalDeleted: 0,
+        errors: []
+      })
+    };
+
+    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+
+    const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
+    const dryRunHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({
+      body: {
+        autoRemovalEnabled: 'false'
+      }
+    });
+    const res = createMockResponse();
+
+    await dryRunHandler(req, res);
+
+    expect(videoDeletionModuleMock.performAutomaticCleanup).toHaveBeenCalledWith({
+      dryRun: true,
+      overrides: {
+        autoRemovalEnabled: false
+      }
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  test('performs dry run with numeric autoRemovalEnabled (truthy)', async () => {
+    const { app } = await createServerModule();
+
+    const videoDeletionModuleMock = {
+      performAutomaticCleanup: jest.fn().mockResolvedValue({
+        success: true,
+        dryRun: true,
+        totalDeleted: 0,
+        errors: []
+      })
+    };
+
+    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+
+    const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
+    const dryRunHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({
+      body: {
+        autoRemovalEnabled: 1
+      }
+    });
+    const res = createMockResponse();
+
+    await dryRunHandler(req, res);
+
+    expect(videoDeletionModuleMock.performAutomaticCleanup).toHaveBeenCalledWith({
+      dryRun: true,
+      overrides: {
+        autoRemovalEnabled: true
+      }
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  test('performs dry run with only threshold values', async () => {
+    const { app } = await createServerModule();
+
+    const videoDeletionModuleMock = {
+      performAutomaticCleanup: jest.fn().mockResolvedValue({
+        success: true,
+        dryRun: true,
+        totalDeleted: 0,
+        errors: []
+      })
+    };
+
+    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+
+    const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
+    const dryRunHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({
+      body: {
+        autoRemovalVideoAgeThreshold: 60,
+        autoRemovalFreeSpaceThreshold: '5GB'
+      }
+    });
+    const res = createMockResponse();
+
+    await dryRunHandler(req, res);
+
+    expect(videoDeletionModuleMock.performAutomaticCleanup).toHaveBeenCalledWith({
+      dryRun: true,
+      overrides: {
+        autoRemovalVideoAgeThreshold: 60,
+        autoRemovalFreeSpaceThreshold: '5GB'
+      }
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  test('performs dry run with empty body', async () => {
+    const { app } = await createServerModule();
+
+    const videoDeletionModuleMock = {
+      performAutomaticCleanup: jest.fn().mockResolvedValue({
+        success: true,
+        dryRun: true,
+        totalDeleted: 0,
+        errors: []
+      })
+    };
+
+    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+
+    const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
+    const dryRunHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({
+      body: {}
+    });
+    const res = createMockResponse();
+
+    await dryRunHandler(req, res);
+
+    expect(videoDeletionModuleMock.performAutomaticCleanup).toHaveBeenCalledWith({
+      dryRun: true,
+      overrides: {}
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  test('handles error during dry run', async () => {
+    const { app } = await createServerModule();
+
+    const videoDeletionModuleMock = {
+      performAutomaticCleanup: jest.fn().mockRejectedValue(new Error('Cleanup failed'))
+    };
+
+    jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
+
+    const handlers = findRouteHandlers(app, 'post', '/api/auto-removal/dry-run');
+    const dryRunHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({
+      body: {
+        autoRemovalEnabled: true
+      }
+    });
+    const res = createMockResponse();
+
+    await dryRunHandler(req, res);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toBe('Cleanup failed');
+  });
+});
+
+describe('server routes - channel video ignore operations', () => {
+  describe('POST /api/channels/:channelId/videos/:youtubeId/ignore', () => {
+    test('ignores a channel video successfully', async () => {
+      const mockChannelVideo = {
+        channel_id: 'UCtest123',
+        youtube_id: 'video123',
+        update: jest.fn().mockResolvedValue()
+      };
+
+      const ChannelVideoMock = {
+        findOne: jest.fn().mockResolvedValue(mockChannelVideo)
+      };
+
+      const archiveModuleMock = {
+        addVideoToArchive: jest.fn().mockResolvedValue(true)
+      };
+
+      jest.doMock('../models/channelvideo', () => ChannelVideoMock);
+      jest.doMock('../modules/archiveModule', () => archiveModuleMock);
+
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/:youtubeId/ignore');
+      const ignoreHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'UCtest123', youtubeId: 'video123' }
+      });
+      const res = createMockResponse();
+
+      await ignoreHandler(req, res);
+
+      expect(ChannelVideoMock.findOne).toHaveBeenCalledWith({
+        where: { channel_id: 'UCtest123', youtube_id: 'video123' }
+      });
+      expect(mockChannelVideo.update).toHaveBeenCalledWith({
+        ignored: true,
+        ignored_at: expect.any(Date)
+      });
+      expect(archiveModuleMock.addVideoToArchive).toHaveBeenCalledWith('video123');
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({
+        success: true,
+        message: 'Video marked as ignored'
+      });
+    });
+
+    test('returns 404 when channel video not found', async () => {
+      const ChannelVideoMock = {
+        findOne: jest.fn().mockResolvedValue(null)
+      };
+
+      jest.doMock('../models/channelvideo', () => ChannelVideoMock);
+
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/:youtubeId/ignore');
+      const ignoreHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'UCtest123', youtubeId: 'video123' }
+      });
+      const res = createMockResponse();
+
+      await ignoreHandler(req, res);
+
+      expect(res.statusCode).toBe(404);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'Channel video not found'
+      });
+    });
+
+    test('handles error during ignore operation', async () => {
+      const ChannelVideoMock = {
+        findOne: jest.fn().mockRejectedValue(new Error('Database error'))
+      };
+
+      jest.doMock('../models/channelvideo', () => ChannelVideoMock);
+
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/:youtubeId/ignore');
+      const ignoreHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'UCtest123', youtubeId: 'video123' }
+      });
+      const res = createMockResponse();
+
+      await ignoreHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'Failed to ignore video',
+        message: 'Database error'
+      });
+    });
+  });
+
+  describe('POST /api/channels/:channelId/videos/:youtubeId/unignore', () => {
+    test('unignores a channel video successfully', async () => {
+      const mockChannelVideo = {
+        channel_id: 'UCtest123',
+        youtube_id: 'video123',
+        update: jest.fn().mockResolvedValue()
+      };
+
+      const ChannelVideoMock = {
+        findOne: jest.fn().mockResolvedValue(mockChannelVideo)
+      };
+
+      const archiveModuleMock = {
+        removeVideoFromArchive: jest.fn().mockResolvedValue(true)
+      };
+
+      jest.doMock('../models/channelvideo', () => ChannelVideoMock);
+      jest.doMock('../modules/archiveModule', () => archiveModuleMock);
+
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/:youtubeId/unignore');
+      const unignoreHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'UCtest123', youtubeId: 'video123' }
+      });
+      const res = createMockResponse();
+
+      await unignoreHandler(req, res);
+
+      expect(ChannelVideoMock.findOne).toHaveBeenCalledWith({
+        where: { channel_id: 'UCtest123', youtube_id: 'video123' }
+      });
+      expect(mockChannelVideo.update).toHaveBeenCalledWith({
+        ignored: false,
+        ignored_at: null
+      });
+      expect(archiveModuleMock.removeVideoFromArchive).toHaveBeenCalledWith('video123');
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({
+        success: true,
+        message: 'Video unmarked as ignored'
+      });
+    });
+
+    test('returns 404 when channel video not found', async () => {
+      const ChannelVideoMock = {
+        findOne: jest.fn().mockResolvedValue(null)
+      };
+
+      jest.doMock('../models/channelvideo', () => ChannelVideoMock);
+
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/:youtubeId/unignore');
+      const unignoreHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'UCtest123', youtubeId: 'video123' }
+      });
+      const res = createMockResponse();
+
+      await unignoreHandler(req, res);
+
+      expect(res.statusCode).toBe(404);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'Channel video not found'
+      });
+    });
+
+    test('handles error during unignore operation', async () => {
+      const ChannelVideoMock = {
+        findOne: jest.fn().mockRejectedValue(new Error('Database error'))
+      };
+
+      jest.doMock('../models/channelvideo', () => ChannelVideoMock);
+
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/:youtubeId/unignore');
+      const unignoreHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'UCtest123', youtubeId: 'video123' }
+      });
+      const res = createMockResponse();
+
+      await unignoreHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'Failed to unignore video',
+        message: 'Database error'
+      });
+    });
+  });
+
+  describe('POST /api/channels/:channelId/videos/bulk-ignore', () => {
+    test('bulk ignores multiple channel videos successfully', async () => {
+      const mockChannelVideo1 = {
+        channel_id: 'UCtest123',
+        youtube_id: 'video1',
+        update: jest.fn().mockResolvedValue()
+      };
+      const mockChannelVideo2 = {
+        channel_id: 'UCtest123',
+        youtube_id: 'video2',
+        update: jest.fn().mockResolvedValue()
+      };
+
+      const ChannelVideoMock = {
+        findOne: jest.fn()
+          .mockResolvedValueOnce(mockChannelVideo1)
+          .mockResolvedValueOnce(mockChannelVideo2)
+      };
+
+      const archiveModuleMock = {
+        addVideoToArchive: jest.fn().mockResolvedValue(true)
+      };
+
+      jest.doMock('../models/channelvideo', () => ChannelVideoMock);
+      jest.doMock('../modules/archiveModule', () => archiveModuleMock);
+
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/bulk-ignore');
+      const bulkIgnoreHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'UCtest123' },
+        body: { youtubeIds: ['video1', 'video2'] }
+      });
+      const res = createMockResponse();
+
+      await bulkIgnoreHandler(req, res);
+
+      expect(ChannelVideoMock.findOne).toHaveBeenCalledTimes(2);
+      expect(mockChannelVideo1.update).toHaveBeenCalledWith({
+        ignored: true,
+        ignored_at: expect.any(Date)
+      });
+      expect(mockChannelVideo2.update).toHaveBeenCalledWith({
+        ignored: true,
+        ignored_at: expect.any(Date)
+      });
+      expect(archiveModuleMock.addVideoToArchive).toHaveBeenCalledWith('video1');
+      expect(archiveModuleMock.addVideoToArchive).toHaveBeenCalledWith('video2');
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({
+        success: true,
+        message: 'Successfully ignored 2 of 2 videos',
+        results: [
+          { youtubeId: 'video1', success: true },
+          { youtubeId: 'video2', success: true }
+        ]
+      });
+    });
+
+    test('handles partial success when some videos are not found', async () => {
+      const mockChannelVideo1 = {
+        channel_id: 'UCtest123',
+        youtube_id: 'video1',
+        update: jest.fn().mockResolvedValue()
+      };
+
+      const ChannelVideoMock = {
+        findOne: jest.fn()
+          .mockResolvedValueOnce(mockChannelVideo1)
+          .mockResolvedValueOnce(null)
+      };
+
+      const archiveModuleMock = {
+        addVideoToArchive: jest.fn().mockResolvedValue(true)
+      };
+
+      jest.doMock('../models/channelvideo', () => ChannelVideoMock);
+      jest.doMock('../modules/archiveModule', () => archiveModuleMock);
+
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/bulk-ignore');
+      const bulkIgnoreHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'UCtest123' },
+        body: { youtubeIds: ['video1', 'video2'] }
+      });
+      const res = createMockResponse();
+
+      await bulkIgnoreHandler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({
+        success: true,
+        message: 'Successfully ignored 1 of 2 videos',
+        results: [
+          { youtubeId: 'video1', success: true },
+          { youtubeId: 'video2', success: false, reason: 'not found' }
+        ]
+      });
+    });
+
+    test('returns 400 when youtubeIds is missing', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/bulk-ignore');
+      const bulkIgnoreHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'UCtest123' },
+        body: {}
+      });
+      const res = createMockResponse();
+
+      await bulkIgnoreHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'youtubeIds must be a non-empty array'
+      });
+    });
+
+    test('returns 400 when youtubeIds is empty array', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/bulk-ignore');
+      const bulkIgnoreHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'UCtest123' },
+        body: { youtubeIds: [] }
+      });
+      const res = createMockResponse();
+
+      await bulkIgnoreHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'youtubeIds must be a non-empty array'
+      });
+    });
+
+    test('returns 400 when youtubeIds is not an array', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/bulk-ignore');
+      const bulkIgnoreHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'UCtest123' },
+        body: { youtubeIds: 'video123' }
+      });
+      const res = createMockResponse();
+
+      await bulkIgnoreHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'youtubeIds must be a non-empty array'
+      });
+    });
+
+    test('handles error during bulk ignore operation', async () => {
+      const ChannelVideoMock = {
+        findOne: jest.fn().mockRejectedValue(new Error('Database error'))
+      };
+
+      jest.doMock('../models/channelvideo', () => ChannelVideoMock);
+
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/bulk-ignore');
+      const bulkIgnoreHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'UCtest123' },
+        body: { youtubeIds: ['video1'] }
+      });
+      const res = createMockResponse();
+
+      await bulkIgnoreHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'Failed to bulk ignore videos',
+        message: 'Database error'
+      });
+    });
+  });
+});
+
 describe('server routes - getplexlibraries with test params', () => {
   test('tests Plex connection with provided parameters', async () => {
     const { app, plexModuleMock } = await createServerModule();
@@ -586,7 +1259,8 @@ describe('server routes - getplexlibraries with test params', () => {
     expect(plexModuleMock.getLibrariesWithParams).toHaveBeenCalledWith(
       '192.168.1.200',
       'test-api-key',
-      '32400'
+      '32400',
+      false
     );
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual([
@@ -641,7 +1315,8 @@ describe('server routes - getplexlibraries with test params', () => {
     expect(plexModuleMock.getLibrariesWithParams).toHaveBeenCalledWith(
       '192.168.1.200',
       'test-api-key',
-      '32400'
+      '32400',
+      false
     );
   });
 

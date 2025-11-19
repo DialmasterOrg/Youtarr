@@ -16,19 +16,18 @@ jest.mock('../messageEmitter.js', () => ({
   getLastMessages: mockGetLastMessages
 }));
 
+jest.mock('../../logger');
+
 const initializeWebSocketServer = require('../webSocketServer');
+const logger = require('../../logger');
 
 describe('webSocketServer', () => {
-  let consoleLogSpy;
-
   beforeEach(() => {
     jest.clearAllMocks();
     delete global.wss;
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
   });
 
   afterEach(() => {
-    consoleLogSpy.mockRestore();
     delete global.wss;
   });
 
@@ -60,6 +59,7 @@ describe('webSocketServer', () => {
 
     connectionHandler(wsClient);
 
+    expect(logger.debug).toHaveBeenCalledWith('WebSocket client connected');
     expect(mockGetLastMessages).toHaveBeenCalledTimes(1);
     expect(wsClient.send).toHaveBeenCalledTimes(2);
     expect(wsClient.send).toHaveBeenNthCalledWith(1, JSON.stringify(cachedMessages[0]));
@@ -85,8 +85,37 @@ describe('webSocketServer', () => {
 
     connectionHandler(wsClient);
 
+    expect(logger.debug).toHaveBeenCalledWith('WebSocket client connected');
     expect(mockGetLastMessages).toHaveBeenCalledTimes(1);
     expect(wsClient.send).not.toHaveBeenCalled();
     expect(wsClient.on).toHaveBeenCalledWith('close', expect.any(Function));
+  });
+
+  test('logs when a client disconnects', () => {
+    initializeWebSocketServer({});
+
+    const connectionCall = mockServerInstance.on.mock.calls.find(([eventName]) => eventName === 'connection');
+    expect(connectionCall).toBeDefined();
+
+    const [, connectionHandler] = connectionCall;
+    const wsClient = {
+      readyState: 1,
+      send: jest.fn(),
+      on: jest.fn()
+    };
+
+    connectionHandler(wsClient);
+
+    // Get the close handler that was registered
+    const closeCall = wsClient.on.mock.calls.find(([eventName]) => eventName === 'close');
+    expect(closeCall).toBeDefined();
+
+    const [, closeHandler] = closeCall;
+
+    // Clear previous logger calls and trigger the close handler
+    logger.info.mockClear();
+    closeHandler();
+
+    expect(logger.debug).toHaveBeenCalledWith('WebSocket client disconnected');
   });
 });

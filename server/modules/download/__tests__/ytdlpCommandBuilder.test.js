@@ -8,8 +8,15 @@ jest.mock('../../configModule', () => ({
   getCookiesPath: jest.fn()
 }));
 
+// Mock tempPathManager
+jest.mock('../tempPathManager', () => ({
+  isEnabled: jest.fn(),
+  getTempBasePath: jest.fn()
+}));
+
 const YtdlpCommandBuilder = require('../ytdlpCommandBuilder');
 const configModule = require('../../configModule');
+const tempPathManager = require('../tempPathManager');
 
 describe('YtdlpCommandBuilder', () => {
   let mockConfig;
@@ -31,6 +38,10 @@ describe('YtdlpCommandBuilder', () => {
 
     configModule.getConfig.mockReturnValue(mockConfig);
     configModule.getCookiesPath.mockReturnValue(null);
+
+    // Default tempPathManager behavior - disabled
+    tempPathManager.isEnabled.mockReturnValue(false);
+    tempPathManager.getTempBasePath.mockReturnValue(null);
   });
 
   describe('buildSponsorblockArgs', () => {
@@ -127,6 +138,149 @@ describe('YtdlpCommandBuilder', () => {
     });
   });
 
+  describe('buildFormatString', () => {
+    it('should build default format string with no codec preference', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('1080', 'default');
+      expect(result).toBe('bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should build default format string when codec is undefined', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('1080');
+      expect(result).toBe('bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should build H.264 format string with avc codec preference', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('1080', 'h264');
+      expect(result).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should build H.265 format string with hevc codec preference', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('1080', 'h265');
+      expect(result).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should handle 720p resolution with h264', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('720', 'h264');
+      expect(result).toBe('bestvideo[height<=720][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should handle 720p resolution with h265', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('720', 'h265');
+      expect(result).toBe('bestvideo[height<=720][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should handle 4K resolution with default codec', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('2160', 'default');
+      expect(result).toBe('bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should use default resolution (1080) when resolution is null', () => {
+      const result = YtdlpCommandBuilder.buildFormatString(null, 'h264');
+      expect(result).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should use default resolution (1080) when resolution is undefined', () => {
+      const result = YtdlpCommandBuilder.buildFormatString(undefined, 'h265');
+      expect(result).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should handle unknown codec as default', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('1080', 'unknown-codec');
+      expect(result).toBe('bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should include fallback to best mp4 and ultimate fallback', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('1080', 'h264');
+      // Should have multiple fallback options separated by /
+      expect(result).toContain('best[ext=mp4]');
+      expect(result).toMatch(/\/best$/); // Should end with ultimate fallback
+    });
+  });
+
+  describe('buildOutputPath', () => {
+    it('should build path using configModule.directoryPath when temp path disabled', () => {
+      tempPathManager.isEnabled.mockReturnValue(false);
+      const result = YtdlpCommandBuilder.buildOutputPath();
+      expect(result).toContain('/mock/youtube/output');
+      expect(result).toContain('%(uploader,channel,uploader_id)s');
+      expect(result).toContain('%(title).76s');
+      expect(result).toContain('%(id)s');
+      expect(result).toContain('%(ext)s');
+    });
+
+    it('should build path using temp path when enabled', () => {
+      tempPathManager.isEnabled.mockReturnValue(true);
+      tempPathManager.getTempBasePath.mockReturnValue('/tmp/youtarr-temp');
+      const result = YtdlpCommandBuilder.buildOutputPath();
+      expect(result).toContain('/tmp/youtarr-temp');
+      expect(result).toContain('%(uploader,channel,uploader_id)s');
+    });
+
+    it('should include subfolder when provided', () => {
+      const result = YtdlpCommandBuilder.buildOutputPath('TechChannel');
+      expect(result).toContain('/mock/youtube/output');
+      expect(result).toContain('TechChannel');
+      expect(result).toContain('%(uploader,channel,uploader_id)s');
+    });
+
+    it('should not include subfolder when null', () => {
+      const result = YtdlpCommandBuilder.buildOutputPath(null);
+      expect(result).toContain('/mock/youtube/output');
+      expect(result).toContain('%(uploader,channel,uploader_id)s');
+    });
+
+    it('should use temp path with subfolder', () => {
+      tempPathManager.isEnabled.mockReturnValue(true);
+      tempPathManager.getTempBasePath.mockReturnValue('/tmp/downloads');
+      const result = YtdlpCommandBuilder.buildOutputPath('GameChannel');
+      expect(result).toContain('/tmp/downloads');
+      expect(result).toContain('GameChannel');
+    });
+  });
+
+  describe('buildThumbnailPath', () => {
+    it('should build thumbnail path using configModule.directoryPath when temp path disabled', () => {
+      tempPathManager.isEnabled.mockReturnValue(false);
+      const result = YtdlpCommandBuilder.buildThumbnailPath();
+      expect(result).toContain('/mock/youtube/output');
+      expect(result).toContain('%(uploader,channel,uploader_id)s');
+      expect(result).toContain('%(title).76s');
+      expect(result).toContain('[%(id)s]');
+      // Should NOT contain extension since yt-dlp adds .jpg
+      expect(result).not.toMatch(/\.%(ext)s$/);
+    });
+
+    it('should build thumbnail path using temp path when enabled', () => {
+      tempPathManager.isEnabled.mockReturnValue(true);
+      tempPathManager.getTempBasePath.mockReturnValue('/tmp/youtarr-temp');
+      const result = YtdlpCommandBuilder.buildThumbnailPath();
+      expect(result).toContain('/tmp/youtarr-temp');
+      expect(result).toContain('%(uploader,channel,uploader_id)s');
+    });
+
+    it('should include subfolder when provided', () => {
+      const result = YtdlpCommandBuilder.buildThumbnailPath('NewsChannel');
+      expect(result).toContain('/mock/youtube/output');
+      expect(result).toContain('NewsChannel');
+      expect(result).toContain('%(uploader,channel,uploader_id)s');
+    });
+
+    it('should not include subfolder when null', () => {
+      const result = YtdlpCommandBuilder.buildThumbnailPath(null);
+      expect(result).toContain('/mock/youtube/output');
+      expect(result).toContain('%(uploader,channel,uploader_id)s');
+    });
+
+    it('should match video filename pattern without extension', () => {
+      const outputPath = YtdlpCommandBuilder.buildOutputPath();
+      const thumbnailPath = YtdlpCommandBuilder.buildThumbnailPath();
+
+      // Thumbnail should have the same pattern as video file but without the .%(ext)s
+      expect(outputPath).toContain('%(uploader,channel,uploader_id)s - %(title).76s [%(id)s].%(ext)s');
+      expect(thumbnailPath).toContain('%(uploader,channel,uploader_id)s - %(title).76s [%(id)s]');
+    });
+  });
+
   describe('buildCookiesArgs', () => {
     it('should return empty array when no cookies path exists', () => {
       configModule.getCookiesPath.mockReturnValue(null);
@@ -138,6 +292,215 @@ describe('YtdlpCommandBuilder', () => {
       configModule.getCookiesPath.mockReturnValue('/path/to/cookies.txt');
       const result = YtdlpCommandBuilder.buildCookiesArgs();
       expect(result).toEqual(['--cookies', '/path/to/cookies.txt']);
+    });
+  });
+
+  describe('buildSubtitleArgs', () => {
+    it('should return empty array when subtitles disabled', () => {
+      const config = { subtitlesEnabled: false };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(result).toEqual([]);
+    });
+
+    it('should include subtitle args when enabled with default language', () => {
+      const config = { subtitlesEnabled: true };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(result).toEqual([
+        '--write-sub',
+        '--write-auto-sub',
+        '--sub-langs', 'en',
+        '--convert-subs', 'srt',
+        '--sleep-subtitles', '2'
+      ]);
+    });
+
+    it('should use custom subtitle language when specified', () => {
+      const config = {
+        subtitlesEnabled: true,
+        subtitleLanguage: 'es'
+      };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(result).toEqual([
+        '--write-sub',
+        '--write-auto-sub',
+        '--sub-langs', 'es',
+        '--convert-subs', 'srt',
+        '--sleep-subtitles', '2'
+      ]);
+    });
+
+    it('should use custom subtitle language for multiple languages', () => {
+      const config = {
+        subtitlesEnabled: true,
+        subtitleLanguage: 'en,es,fr'
+      };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(result).toEqual([
+        '--write-sub',
+        '--write-auto-sub',
+        '--sub-langs', 'en,es,fr',
+        '--convert-subs', 'srt',
+        '--sleep-subtitles', '2'
+      ]);
+    });
+
+    it('should default to en when language is not specified', () => {
+      const config = {
+        subtitlesEnabled: true,
+        subtitleLanguage: null
+      };
+      const result = YtdlpCommandBuilder.buildSubtitleArgs(config);
+      expect(result).toContain('--sub-langs');
+      const langIndex = result.indexOf('--sub-langs');
+      expect(result[langIndex + 1]).toBe('en');
+    });
+  });
+
+  describe('buildMatchFilters', () => {
+    it('should return base filters when no filter config provided', () => {
+      const result = YtdlpCommandBuilder.buildMatchFilters();
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');
+    });
+
+    it('should return base filters when filter config is null', () => {
+      const result = YtdlpCommandBuilder.buildMatchFilters(null);
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');
+    });
+
+    it('should return base filters when filterConfig.hasFilters is false', () => {
+      const filterConfig = { hasFilters: false };
+      const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');
+    });
+
+    it('should return base filters when filterConfig.hasFilters() returns false', () => {
+      const filterConfig = { hasFilters: () => false };
+      const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');
+    });
+
+    it('should add minimum duration filter when specified', () => {
+      const filterConfig = {
+        hasFilters: true,
+        minDuration: 300 // 5 minutes
+      };
+      const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & duration >= 300');
+    });
+
+    it('should add maximum duration filter when specified', () => {
+      const filterConfig = {
+        hasFilters: true,
+        maxDuration: 600 // 10 minutes
+      };
+      const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
+      // Max duration should add 59 seconds to include the full minute
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & duration <= 659');
+    });
+
+    it('should add both min and max duration filters when specified', () => {
+      const filterConfig = {
+        hasFilters: true,
+        minDuration: 60, // 1 minute
+        maxDuration: 1800 // 30 minutes
+      };
+      const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & duration >= 60 & duration <= 1859');
+    });
+
+    it('should add title regex filter when specified', () => {
+      const filterConfig = {
+        hasFilters: true,
+        titleFilterRegex: 'tutorial'
+      };
+      const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & title ~= \'tutorial\'');
+    });
+
+    it('should escape backslashes in title regex', () => {
+      const filterConfig = {
+        hasFilters: true,
+        titleFilterRegex: '\\d+' // Match one or more digits
+      };
+      const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & title ~= \'\\\\d+\'');
+    });
+
+    it('should escape single quotes in title regex', () => {
+      const filterConfig = {
+        hasFilters: true,
+        titleFilterRegex: 'Let\'s Go'
+      };
+      const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & title ~= \'Let\\\'s Go\'');
+    });
+
+    it('should escape both backslashes and quotes in complex regex', () => {
+      const filterConfig = {
+        hasFilters: true,
+        titleFilterRegex: 'Part \\d+: It\'s Here'
+      };
+      const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & title ~= \'Part \\\\d+: It\\\'s Here\'');
+    });
+
+    it('should combine all filters when specified', () => {
+      const filterConfig = {
+        hasFilters: true,
+        minDuration: 120,
+        maxDuration: 900,
+        titleFilterRegex: 'review'
+      };
+      const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & duration >= 120 & duration <= 959 & title ~= \'review\'');
+    });
+
+    it('should handle zero as minimum duration', () => {
+      const filterConfig = {
+        hasFilters: true,
+        minDuration: 0
+      };
+      const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & duration >= 0');
+    });
+
+    it('should handle zero as maximum duration', () => {
+      const filterConfig = {
+        hasFilters: true,
+        maxDuration: 0
+      };
+      const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & duration <= 59');
+    });
+
+    it('should ignore null minimum duration', () => {
+      const filterConfig = {
+        hasFilters: true,
+        minDuration: null,
+        maxDuration: 600
+      };
+      const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & duration <= 659');
+    });
+
+    it('should ignore undefined maximum duration', () => {
+      const filterConfig = {
+        hasFilters: true,
+        minDuration: 180,
+        maxDuration: undefined
+      };
+      const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & duration >= 180');
+    });
+
+    it('should handle empty string title regex as no filter', () => {
+      const filterConfig = {
+        hasFilters: true,
+        titleFilterRegex: '',
+        minDuration: 60
+      };
+      const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
+      expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & duration >= 60');
     });
   });
 
@@ -174,10 +537,9 @@ describe('YtdlpCommandBuilder', () => {
       expect(result).toContain('--embed-metadata');
       expect(result).toContain('--write-info-json');
 
-      // Check filter for duration
+      // Check filter for availability and live videos
       const filterIndex = result.indexOf('--match-filter');
-      expect(result[filterIndex + 1]).toContain('duration>70');
-      expect(result[filterIndex + 1]).toContain('availability!=subscriber_only');
+      expect(result[filterIndex + 1]).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');
 
       // Check output paths
       expect(result).toContain('-o');
@@ -206,8 +568,9 @@ describe('YtdlpCommandBuilder', () => {
     it('should include cookies args when cookies are available', () => {
       configModule.getCookiesPath.mockReturnValue('/path/to/cookies.txt');
       const result = YtdlpCommandBuilder.getBaseCommandArgs();
-      expect(result[0]).toBe('--cookies');
-      expect(result[1]).toBe('/path/to/cookies.txt');
+      const cookiesIndex = result.indexOf('--cookies');
+      expect(cookiesIndex).toBeGreaterThan(-1);
+      expect(result[cookiesIndex + 1]).toBe('/path/to/cookies.txt');
     });
 
     it('should include sponsorblock args when configured', () => {
@@ -235,7 +598,7 @@ describe('YtdlpCommandBuilder', () => {
       const mainOutput = result[outputIndices[0] + 1];
       expect(mainOutput).toContain('/mock/youtube/output');
       expect(mainOutput).toContain('%(uploader,channel,uploader_id)s');
-      expect(mainOutput).toContain('%(title)s');
+      expect(mainOutput).toContain('%(title).76s');
       expect(mainOutput).toContain('%(id)s');
       expect(mainOutput).toContain('%(ext)s');
 
@@ -243,7 +606,8 @@ describe('YtdlpCommandBuilder', () => {
       const thumbOutput = result[outputIndices[1] + 1];
       expect(thumbOutput).toContain('thumbnail:');
       expect(thumbOutput).toContain('/mock/youtube/output');
-      expect(thumbOutput).toContain('/poster');
+      // Thumbnail should use same filename as video (without extension)
+      expect(thumbOutput).toContain('%(uploader,channel,uploader_id)s - %(title).76s [%(id)s]');
 
       // Check playlist thumbnail is disabled
       const plThumbOutput = result[outputIndices[2] + 1];
@@ -276,16 +640,122 @@ describe('YtdlpCommandBuilder', () => {
       expect(result).toContain('--fragment-retries');
       expect(result).toContain('5');
     });
+
+    it('should use default videoCodec when not configured', () => {
+      const result = YtdlpCommandBuilder.getBaseCommandArgs();
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      // Default codec should not include vcodec filters
+      expect(formatString).toBe('bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should use h264 videoCodec when configured', () => {
+      mockConfig.videoCodec = 'h264';
+      const result = YtdlpCommandBuilder.getBaseCommandArgs();
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      expect(formatString).toContain('[vcodec^=avc]');
+      expect(formatString).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should use h265 videoCodec when configured', () => {
+      mockConfig.videoCodec = 'h265';
+      const result = YtdlpCommandBuilder.getBaseCommandArgs();
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      expect(formatString).toContain('[vcodec^=hev]');
+      expect(formatString).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should combine custom resolution with h264 codec', () => {
+      mockConfig.videoCodec = 'h264';
+      const result = YtdlpCommandBuilder.getBaseCommandArgs('720');
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      expect(formatString).toBe('bestvideo[height<=720][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should combine custom resolution with h265 codec', () => {
+      mockConfig.videoCodec = 'h265';
+      const result = YtdlpCommandBuilder.getBaseCommandArgs('2160');
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      expect(formatString).toBe('bestvideo[height<=2160][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should use base match filters when no filterConfig provided', () => {
+      const result = YtdlpCommandBuilder.getBaseCommandArgs('1080', false, null, null);
+      const filterIndex = result.indexOf('--match-filter');
+      expect(result[filterIndex + 1]).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');
+    });
+
+    it('should apply filterConfig with minimum duration', () => {
+      const filterConfig = {
+        hasFilters: true,
+        minDuration: 300
+      };
+      const result = YtdlpCommandBuilder.getBaseCommandArgs('1080', false, null, filterConfig);
+      const filterIndex = result.indexOf('--match-filter');
+      expect(result[filterIndex + 1]).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & duration >= 300');
+    });
+
+    it('should apply filterConfig with maximum duration', () => {
+      const filterConfig = {
+        hasFilters: true,
+        maxDuration: 900
+      };
+      const result = YtdlpCommandBuilder.getBaseCommandArgs('1080', false, null, filterConfig);
+      const filterIndex = result.indexOf('--match-filter');
+      expect(result[filterIndex + 1]).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & duration <= 959');
+    });
+
+    it('should apply filterConfig with title regex', () => {
+      const filterConfig = {
+        hasFilters: true,
+        titleFilterRegex: 'gameplay'
+      };
+      const result = YtdlpCommandBuilder.getBaseCommandArgs('1080', false, null, filterConfig);
+      const filterIndex = result.indexOf('--match-filter');
+      expect(result[filterIndex + 1]).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & title ~= \'gameplay\'');
+    });
+
+    it('should apply filterConfig with all filters combined', () => {
+      const filterConfig = {
+        hasFilters: true,
+        minDuration: 60,
+        maxDuration: 600,
+        titleFilterRegex: 'tutorial'
+      };
+      const result = YtdlpCommandBuilder.getBaseCommandArgs('720', false, null, filterConfig);
+      const filterIndex = result.indexOf('--match-filter');
+      expect(result[filterIndex + 1]).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & duration >= 60 & duration <= 659 & title ~= \'tutorial\'');
+    });
+
+    it('should work with subfolder and filterConfig together', () => {
+      const filterConfig = {
+        hasFilters: true,
+        minDuration: 120
+      };
+      const result = YtdlpCommandBuilder.getBaseCommandArgs('1080', false, 'MyChannel', filterConfig);
+
+      // Check that subfolder is in output path
+      const outputIndex = result.indexOf('-o');
+      const mainOutput = result[outputIndex + 1];
+      expect(mainOutput).toContain('MyChannel');
+
+      // Check that filter is applied
+      const filterIndex = result.indexOf('--match-filter');
+      expect(result[filterIndex + 1]).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming & duration >= 120');
+    });
   });
 
   describe('getBaseCommandArgsForManualDownload', () => {
     it('should build command args without duration filter', () => {
       const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload();
 
-      // Check that duration filter is NOT included
+      // Check that duration filter is NOT included, but live video filtering is
       const filterIndex = result.indexOf('--match-filter');
-      expect(result[filterIndex + 1]).toBe('availability!=subscriber_only');
-      expect(result[filterIndex + 1]).not.toContain('duration>70');
+      expect(result[filterIndex + 1]).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');
     });
 
     it('should otherwise be identical to regular command args', () => {
@@ -312,8 +782,9 @@ describe('YtdlpCommandBuilder', () => {
     it('should include cookies args when available', () => {
       configModule.getCookiesPath.mockReturnValue('/cookies/file.txt');
       const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload();
-      expect(result[0]).toBe('--cookies');
-      expect(result[1]).toBe('/cookies/file.txt');
+      const cookiesIndex = result.indexOf('--cookies');
+      expect(cookiesIndex).toBeGreaterThan(-1);
+      expect(result[cookiesIndex + 1]).toBe('/cookies/file.txt');
     });
 
     it('should include sponsorblock args when configured', () => {
@@ -352,6 +823,47 @@ describe('YtdlpCommandBuilder', () => {
       const formatIndex = result.indexOf('-f');
       expect(result[formatIndex + 1]).toMatch(/bestvideo\[height<=360\]/);
     });
+
+    it('should use default videoCodec when not configured', () => {
+      const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload();
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      expect(formatString).toBe('bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should use h264 videoCodec when configured', () => {
+      mockConfig.videoCodec = 'h264';
+      const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload();
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      expect(formatString).toContain('[vcodec^=avc]');
+      expect(formatString).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should use h265 videoCodec when configured', () => {
+      mockConfig.videoCodec = 'h265';
+      const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload();
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      expect(formatString).toContain('[vcodec^=hev]');
+      expect(formatString).toBe('bestvideo[height<=1080][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should combine custom resolution with h264 codec', () => {
+      mockConfig.videoCodec = 'h264';
+      const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload('480');
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      expect(formatString).toBe('bestvideo[height<=480][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should combine custom resolution with h265 codec', () => {
+      mockConfig.videoCodec = 'h265';
+      const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload('1440');
+      const formatIndex = result.indexOf('-f');
+      const formatString = result[formatIndex + 1];
+      expect(formatString).toBe('bestvideo[height<=1440][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=1440][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
   });
 
   describe('Template Constants', () => {
@@ -367,10 +879,10 @@ describe('YtdlpCommandBuilder', () => {
       expect(mainOutput).toContain('%(uploader,channel,uploader_id)s');
 
       // Folder should have channel - title - id format
-      expect(mainOutput).toContain('%(uploader,channel,uploader_id)s - %(title)s - %(id)s');
+      expect(mainOutput).toContain('%(uploader,channel,uploader_id)s - %(title).76s - %(id)s');
 
       // File should have channel - title [id].ext format
-      expect(mainOutput).toContain('%(uploader,channel,uploader_id)s - %(title)s  [%(id)s].%(ext)s');
+      expect(mainOutput).toContain('%(uploader,channel,uploader_id)s - %(title).76s [%(id)s].%(ext)s');
     });
   });
 

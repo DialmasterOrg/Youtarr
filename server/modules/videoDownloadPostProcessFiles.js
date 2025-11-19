@@ -3,6 +3,12 @@ const path = require('path');
 const { execSync, spawnSync } = require('child_process');
 const configModule = require('./configModule');
 const nfoGenerator = require('./nfoGenerator');
+const tempPathManager = require('./download/tempPathManager');
+const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
+const { JobVideoDownload } = require('../models');
+const logger = require('../logger');
+
+const activeJobId = process.env.YOUTARR_JOB_ID;
 
 const videoPath = process.argv[2]; // get the video file path
 const parsedPath = path.parse(videoPath);
@@ -15,7 +21,8 @@ const jsonPath = path.format({
 });
 
 const videoDirectory = path.dirname(videoPath);
-const imagePath = path.join(videoDirectory, 'poster.jpg'); // assume the image thumbnail is named 'poster.jpg'
+// Poster image uses same filename as video but with .jpg extension
+const imagePath = path.join(videoDirectory, parsedPath.name + '.jpg');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -46,7 +53,7 @@ async function safeRemove(filePath) {
     await fs.remove(filePath);
   } catch (err) {
     if (err && err.code !== 'ENOENT') {
-      console.log(`Error deleting temp file ${filePath}: ${err.message}`);
+      logger.warn({ err, filePath }, 'Error deleting temp file');
     }
   }
 }
@@ -74,31 +81,36 @@ async function downloadChannelThumbnailIfMissing(channelId) {
       // Build the channel URL from the channel ID
       const channelUrl = `https://www.youtube.com/channel/${channelId}`;
 
-      // Build yt-dlp command with cookies if configured
-      let ytdlpCmd = 'yt-dlp';
-      const cookiesPath = configModule.getCookiesPath();
-      if (cookiesPath) {
-        ytdlpCmd += ` --cookies "${cookiesPath}"`;
-      }
-      ytdlpCmd += ` --skip-download --write-thumbnail --playlist-end 1 --playlist-items 0 --convert-thumbnails jpg -o "channelthumb-%(channel_id)s.jpg" "${channelUrl}"`;
+      // Build yt-dlp command using centralized helper so proxy/sleep/cookies are respected
+      const ytdlpArgs = YtdlpCommandBuilder.buildThumbnailDownloadArgs(channelUrl, channelThumbPath);
 
-      // Download the thumbnail using yt-dlp
-      execSync(ytdlpCmd, {
-        cwd: configModule.getImagePath(),
-        stdio: 'pipe'
+      const result = spawnSync('yt-dlp', ytdlpArgs, {
+        env: {
+          ...process.env,
+          TMPDIR: '/tmp'
+        },
+        encoding: 'utf8'
       });
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      if (result.status !== 0) {
+        throw new Error(result.stderr || `yt-dlp exited with code ${result.status}`);
+      }
 
       // Resize the thumbnail to make it smaller
       if (fs.existsSync(channelThumbPath)) {
         const tempPath = channelThumbPath + '.temp';
         execSync(
-          `${configModule.ffmpegPath} -y -i "${channelThumbPath}" -vf "scale=iw*0.4:ih*0.4" "${tempPath}"`,
+          `${configModule.ffmpegPath} -loglevel error -y -i "${channelThumbPath}" -vf "scale=iw*0.4:ih*0.4" -q:v 2 "${tempPath}"`,
           { stdio: 'pipe' }
         );
         fs.renameSync(tempPath, channelThumbPath);
       }
     } catch (err) {
-      console.log(`Error downloading channel thumbnail: ${err.message}`);
+      logger.warn({ err }, 'Error downloading channel thumbnail');
     }
   }
 }
@@ -123,11 +135,11 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
 
       if (fs.existsSync(channelThumbPath)) {
         fs.copySync(channelThumbPath, channelPosterPath);
-        console.log(`Channel poster.jpg created in ${channelFolderPath}`);
+        logger.info({ channelFolderPath }, 'Channel poster.jpg created');
       }
     }
   } catch (err) {
-    console.log(`Error copying channel poster: ${err.message}`);
+    logger.warn({ err }, 'Error copying channel poster');
   }
 }
 
@@ -149,11 +161,11 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
 
         // Check if the date is valid
         if (isNaN(uploadDate.getTime())) {
-          console.log(`Invalid upload_date format: ${jsonData.upload_date}`);
+          logger.warn({ uploadDate: jsonData.upload_date }, 'Invalid upload_date format');
           uploadDate = null;
         }
       } catch (err) {
-        console.log(`Error parsing upload_date: ${err.message}`);
+        logger.warn({ err, uploadDate: jsonData.upload_date }, 'Error parsing upload_date');
         uploadDate = null;
       }
     }
@@ -169,10 +181,71 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     fs.ensureDirSync(directoryPath); // ensures that the directory exists, if it doesn't it will create it
     const newJsonPath = path.join(directoryPath, `${id}.info.json`); // define the new path
 
+    // Phase 1: Early subfolder detection
+    // Determine target channel folder (with subfolder if applicable) BEFORE any moves
+    let targetChannelFolder = null;
+    let channelSubFolder = null;
+
+    if (jsonData.channel_id) {
+      try {
+        const Channel = require('../models/channel');
+        const channel = await Channel.findOne({
+          where: { channel_id: jsonData.channel_id },
+          attributes: ['sub_folder', 'uploader']
+        });
+
+        if (channel && channel.sub_folder) {
+          channelSubFolder = channel.sub_folder;
+          const baseDir = configModule.directoryPath;
+          const channelName = jsonData.uploader || jsonData.channel || channel.uploader;
+          // Add __ prefix for namespace safety
+          targetChannelFolder = path.join(baseDir, `__${channel.sub_folder}`, channelName);
+          console.log(`[Post-Process] Channel has subfolder setting: ${channel.sub_folder}`);
+        }
+      } catch (err) {
+        console.error(`[Post-Process] Error checking channel subfolder: ${err.message}`);
+      }
+    }
+
+    // Phase 2: Calculate the final path for _actual_filepath with subfolder if applicable
+    // If temp downloads are enabled, we need to store the FINAL path, not the temp path
+    let finalVideoPathForJson;
+
+    if (tempPathManager.isEnabled() && tempPathManager.isTempPath(videoPath)) {
+      // Temp downloads enabled
+      if (targetChannelFolder) {
+        // Channel has subfolder - calculate path with subfolder included
+        const videoDirectoryName = path.basename(videoDirectory);
+        const videoFileName = path.basename(videoPath);
+        finalVideoPathForJson = path.join(targetChannelFolder, videoDirectoryName, videoFileName);
+      } else {
+        // No subfolder - use standard temp-to-final conversion
+        finalVideoPathForJson = tempPathManager.convertTempToFinal(videoPath);
+      }
+    } else {
+      // Not using temp downloads
+      if (targetChannelFolder) {
+        // Channel has subfolder - calculate expected path with subfolder
+        const currentChannelFolder = path.dirname(videoDirectory);
+        const channelName = path.basename(currentChannelFolder);
+        const videoDirectoryName = path.basename(videoDirectory);
+        const videoFileName = path.basename(videoPath);
+        const baseDir = configModule.directoryPath;
+        finalVideoPathForJson = path.join(baseDir, channelSubFolder, channelName, videoDirectoryName, videoFileName);
+      } else {
+        // No subfolder - use current path
+        finalVideoPathForJson = videoPath;
+      }
+    }
+
+    // Add the actual video filepath to the JSON data before moving it
+    // IMPORTANT: This should always be the final path, never the temp path
+    jsonData._actual_filepath = finalVideoPathForJson;
+    fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 2));
+
     fs.moveSync(jsonPath, newJsonPath, { overwrite: true }); // move the file
 
     // Generate NFO file for Jellyfin/Kodi/Emby compatibility if enabled
-    console.log(`Should write video NFO files: ${shouldWriteVideoNfoFiles()}`);
     if (shouldWriteVideoNfoFiles()) {
       nfoGenerator.writeVideoNfoFile(videoPath, jsonData);
     }
@@ -196,7 +269,7 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       }
 
       // Add studio/network (channel name)
-      const channelName = jsonData.uploader || jsonData.channel || '';
+      const channelName = jsonData.uploader || jsonData.channel || jsonData.uploader_id || '';
       if (channelName) {
         ffmpegArgs.push('-metadata', `network=${channelName}`);
         ffmpegArgs.push('-metadata', `studio=${channelName}`);
@@ -211,13 +284,26 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         ffmpegArgs.push('-metadata', `keywords=${keywords}`);
       }
 
+      // Add release date for Plex/mp4 embedded metadata
+      // Good lord Plex is finicky
+      if (jsonData.upload_date) {
+        const year = jsonData.upload_date.substring(0, 4);
+        const month = jsonData.upload_date.substring(4, 6);
+        const day = jsonData.upload_date.substring(6, 8);
+        const releaseDate = `${year}-${month}-${day}`;
+        ffmpegArgs.push('-metadata', `release_date=${releaseDate}`);
+        ffmpegArgs.push('-metadata', `date=${releaseDate}`);
+        ffmpegArgs.push('-metadata', `year=${year}`);
+        ffmpegArgs.push('-metadata', `originaldate=${releaseDate}`);
+      }
+
       // Add media type hint for Plex (9 = Home Video)
       ffmpegArgs.push('-metadata', 'media_type=9');
 
       // Output file
       ffmpegArgs.push('-y', tempPath);
 
-      console.log('Adding additional metadata for Plex...');
+      logger.info('Adding additional metadata for Plex');
       const result = spawnSync(configModule.ffmpegPath, ffmpegArgs, {
         stdio: 'pipe',
         maxBuffer: 10 * 1024 * 1024
@@ -251,31 +337,23 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         if (sizeCheckPassed) {
           try {
             await moveWithRetries(tempPath, videoPath);
-            console.log('Successfully added additional metadata to video file');
+            logger.info('Successfully added additional metadata to video file');
           } catch (moveErr) {
-            console.log(`Note: Could not replace video with metadata-enhanced version: ${moveErr.message}`);
+            logger.warn({ err: moveErr }, 'Could not replace video with metadata-enhanced version');
             await safeRemove(tempPath);
           }
         } else {
-          console.log('Skipped metadata update due to file size mismatch');
+          logger.warn('Skipped metadata update due to file size mismatch');
           await safeRemove(tempPath);
         }
       }
     } catch (err) {
-      console.log(`Note: Could not add additional metadata: ${err.message}`);
+      logger.warn({ err }, 'Could not add additional metadata');
       // Clean up temp file if exists
       const tempPath = videoPath + '.metadata_temp.mp4';
       if (await fs.pathExists(tempPath)) {
         await safeRemove(tempPath);
       }
-    }
-
-    // Channel folder is one level up from videoDirectory
-    const channelFolderPath = path.dirname(videoDirectory);
-
-    // Copy channel thumbnail as poster.jpg to channel folder if needed
-    if (jsonData.channel_id) {
-      await copyChannelPosterIfNeeded(jsonData.channel_id, channelFolderPath);
     }
 
     if (fs.existsSync(imagePath)) {
@@ -295,9 +373,9 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
           { stdio: 'inherit' }
         );
         fs.rename(newImageFullPathSmall, newImageFullPath);
-        console.log('Image resized successfully');
+        logger.info('Image resized successfully');
       } catch (err) {
-        console.log(`Error resizing image: ${err}`);
+        logger.error({ err }, 'Error resizing image');
       }
     }
 
@@ -307,9 +385,9 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       if (fs.existsSync(videoPath)) {
         try {
           fs.utimesSync(videoPath, uploadDate, uploadDate);
-          console.log(`Set video timestamp to ${uploadDate.toISOString()}`);
+          logger.info({ timestamp: uploadDate.toISOString() }, 'Set video timestamp');
         } catch (err) {
-          console.log(`Error setting video timestamp: ${err.message}`);
+          logger.warn({ err }, 'Error setting video timestamp');
         }
       }
 
@@ -317,9 +395,9 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       if (fs.existsSync(imagePath)) {
         try {
           fs.utimesSync(imagePath, uploadDate, uploadDate);
-          console.log(`Set thumbnail timestamp to ${uploadDate.toISOString()}`);
+          logger.info({ timestamp: uploadDate.toISOString() }, 'Set thumbnail timestamp');
         } catch (err) {
-          console.log(`Error setting thumbnail timestamp: ${err.message}`);
+          logger.warn({ err }, 'Error setting thumbnail timestamp');
         }
       }
 
@@ -327,15 +405,212 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       if (fs.existsSync(videoDirectory)) {
         try {
           fs.utimesSync(videoDirectory, uploadDate, uploadDate);
-          console.log(`Set directory timestamp to ${uploadDate.toISOString()}`);
+          logger.info({ timestamp: uploadDate.toISOString() }, 'Set directory timestamp');
         } catch (err) {
-          console.log(`Error setting directory timestamp: ${err.message}`);
+          logger.warn({ err }, 'Error setting directory timestamp');
         }
       }
     }
+
+    // Phase 3: If temp downloads are enabled, move files from temp to final location
+    // This now handles subfolder routing atomically (one move instead of two)
+    let finalVideoPath = videoPath;
+    let currentChannelFolder = path.dirname(videoDirectory);
+
+    if (tempPathManager.isEnabled() && tempPathManager.isTempPath(videoPath)) {
+      logger.info('[Post-Process] Temp downloads enabled, moving files to final location');
+
+      // Calculate target video directory based on subfolder setting
+      const videoDirectoryName = path.basename(videoDirectory);
+      const videoFileName = path.basename(videoPath);
+      let targetVideoDirectory;
+      let targetChannelFolderForMove;
+
+      if (targetChannelFolder) {
+        // Channel has subfolder - move directly to subfolder location (atomic move)
+        targetVideoDirectory = path.join(targetChannelFolder, videoDirectoryName);
+        targetChannelFolderForMove = targetChannelFolder;
+        console.log(`[Post-Process] Moving to subfolder location: ${channelSubFolder}`);
+      } else {
+        // No subfolder - move to standard location
+        const standardFinalPath = tempPathManager.convertTempToFinal(videoPath);
+        const standardChannelFolder = path.dirname(path.dirname(standardFinalPath));
+        targetVideoDirectory = path.join(standardChannelFolder, videoDirectoryName);
+        targetChannelFolderForMove = standardChannelFolder;
+      }
+
+      logger.info({ from: videoDirectory, to: targetVideoDirectory }, '[Post-Process] Moving video directory');
+
+      try {
+        // Ensure parent channel directory exists
+        await fs.ensureDir(targetChannelFolderForMove);
+
+        // Check if target video directory already exists (rare, but handle gracefully)
+        const targetExists = await fs.pathExists(targetVideoDirectory);
+
+        if (targetExists) {
+          logger.warn({ targetVideoDirectory }, '[Post-Process] Target directory already exists, removing before move');
+          await fs.remove(targetVideoDirectory);
+        }
+
+        // Move the entire video directory from temp to final location (atomic move)
+        await fs.move(videoDirectory, targetVideoDirectory);
+
+        // Update paths to reflect final locations
+        finalVideoPath = path.join(targetVideoDirectory, videoFileName);
+        currentChannelFolder = targetChannelFolderForMove;
+
+        logger.info({ targetVideoDirectory }, '[Post-Process] Successfully moved to final location');
+
+        // Verify the final file exists
+        if (!fs.existsSync(finalVideoPath)) {
+          logger.error({ finalVideoPath }, '[Post-Process] Final video file doesn\'t exist after move');
+          process.exit(1);
+        }
+
+      } catch (error) {
+        logger.error({ error, videoDirectory }, '[Post-Process] ERROR during move operation');
+        logger.error({ videoDirectory }, '[Post-Process] Files remain in temp location');
+        process.exit(1);
+      }
+    }
+
+    // Phase 4: Check if channel has a subfolder setting and move if needed
+    // This only runs when NOT using temp downloads (temp downloads handle subfolder atomically above)
+    if (!tempPathManager.isEnabled() || !tempPathManager.isTempPath(videoPath)) {
+      if (jsonData.channel_id) {
+        try {
+          const Channel = require('../models/channel');
+          const channel = await Channel.findOne({
+            where: { channel_id: jsonData.channel_id },
+            attributes: ['sub_folder', 'uploader']
+          });
+
+          if (channel && channel.sub_folder) {
+            const baseDir = configModule.directoryPath;
+            const channelName = jsonData.uploader || jsonData.channel || channel.uploader;
+            // Add __ prefix for namespace safety
+            const expectedPath = path.join(baseDir, `__${channel.sub_folder}`, channelName);
+
+            // Check if we're not already in the correct subfolder
+            if (currentChannelFolder !== expectedPath) {
+              logger.info({ subFolder: channel.sub_folder }, '[Post-Process] Channel has subfolder setting');
+              logger.info({ from: currentChannelFolder, to: expectedPath }, '[Post-Process] Moving channel folder to subfolder');
+
+              // Ensure the subfolder parent directory exists with __ prefix
+              const subfolderParent = path.join(baseDir, `__${channel.sub_folder}`);
+              await fs.ensureDir(subfolderParent);
+
+              // Check if destination exists
+              const destExists = await fs.pathExists(expectedPath);
+
+              if (destExists) {
+                // Destination exists - merge contents
+                logger.info('[Post-Process] Destination exists, merging contents');
+
+                // Get all items in the source channel folder
+                const items = await fs.readdir(currentChannelFolder);
+
+                for (const item of items) {
+                  const sourcePath = path.join(currentChannelFolder, item);
+                  const destPath = path.join(expectedPath, item);
+
+                  try {
+                    const destItemExists = await fs.pathExists(destPath);
+
+                    if (destItemExists) {
+                      // Item already exists at destination
+                      if (item === 'poster.jpg') {
+                        // Poster already exists, just remove source
+                        await fs.remove(sourcePath);
+                        logger.debug({ item }, '[Post-Process] Skipped (already exists)');
+                      } else {
+                        // For other items (shouldn't happen for video folders), log warning
+                        logger.warn({ item }, '[Post-Process] Item already exists at destination, skipping');
+                        await fs.remove(sourcePath);
+                      }
+                    } else {
+                      // Move the item
+                      await fs.move(sourcePath, destPath);
+                      logger.debug({ item }, '[Post-Process] Moved item');
+                    }
+                  } catch (itemErr) {
+                    logger.error({ err: itemErr, item }, '[Post-Process] Error moving item');
+                    // Try to remove source item anyway to clean up
+                    try {
+                      await fs.remove(sourcePath);
+                    } catch (removeErr) {
+                      // Ignore cleanup errors
+                    }
+                  }
+                }
+
+                // Remove the now-empty source channel folder
+                await fs.remove(currentChannelFolder);
+              } else {
+                // Destination doesn't exist - move entire folder
+                await fs.move(currentChannelFolder, expectedPath);
+              }
+
+              // Update the final video path to reflect the new location
+              const relativePath = path.relative(currentChannelFolder, finalVideoPath);
+              finalVideoPath = path.join(expectedPath, relativePath);
+
+              logger.info({ expectedPath, finalVideoPath }, '[Post-Process] Successfully moved to subfolder');
+            }
+          }
+        } catch (err) {
+          logger.error({ err }, '[Post-Process] Error moving to subfolder');
+          // Don't fail the entire post-processing if subfolder move fails
+          // The video is still downloaded and accessible, just not in the ideal location
+        }
+      }
+    }
+
+    // Update the JSON file with the final path (after all moves are complete)
+    // This ensures videoMetadataProcessor gets the correct location
+    try {
+      jsonData._actual_filepath = finalVideoPath;
+      fs.writeFileSync(newJsonPath, JSON.stringify(jsonData, null, 2));
+      logger.info({ finalVideoPath }, '[Post-Process] Updated _actual_filepath in JSON');
+    } catch (jsonErr) {
+      logger.error({ err: jsonErr }, '[Post-Process] Error updating JSON file with final path');
+      // Don't fail the process, but log the error
+    }
+
+    // Copy channel thumbnail as poster.jpg to channel folder (must be done AFTER all moves)
+    // Calculate the final channel folder path based on the final video path
+    const finalChannelFolderPath = path.dirname(path.dirname(finalVideoPath));
+    if (jsonData.channel_id) {
+      await copyChannelPosterIfNeeded(jsonData.channel_id, finalChannelFolderPath);
+    }
+
+    // Mark this video as completed in the JobVideoDownload tracking table
+    // IMPORTANT: Always use final path in database, never temp path
+    if (activeJobId) {
+      try {
+        const [updatedCount] = await JobVideoDownload.update(
+          { status: 'completed', file_path: finalVideoPath },
+          {
+            where: {
+              job_id: activeJobId,
+              youtube_id: id
+            }
+          }
+        );
+        if (updatedCount > 0) {
+          logger.info({ id, activeJobId, finalVideoPath }, 'Marked video as completed in tracking');
+        }
+      } catch (err) {
+        logger.error({ err, id }, 'Error updating JobVideoDownload status');
+        // Don't fail the entire post-processing if this fails
+      }
+    } else {
+      logger.warn({ id }, 'Job ID not available while marking video as completed; skipping tracking update');
+    }
   }
 })().catch(err => {
-  console.error('Error in post-processing:', err);
+  logger.error({ err }, 'Error in post-processing');
   process.exit(1);
 });
 

@@ -3,11 +3,13 @@
 // Mock fs-extra module before any imports
 jest.mock('fs-extra');
 jest.mock('../configModule');
+jest.mock('../../logger');
 
 describe('Channel Poster Functionality', () => {
   let channelModule;
   let fs;
   let configModule;
+  let logger;
 
   beforeEach(() => {
     jest.resetModules();
@@ -61,6 +63,7 @@ describe('Channel Poster Functionality', () => {
     fs = require('fs-extra');
     channelModule = require('../channelModule');
     configModule = require('../configModule');
+    logger = require('../../logger');
   });
 
   describe('backfillChannelPosters', () => {
@@ -167,16 +170,19 @@ describe('Channel Poster Functionality', () => {
         return false;
       });
 
+      const testError = new Error('Permission denied');
       fs.copySync.mockImplementation(() => {
-        throw new Error('Permission denied');
+        throw testError;
       });
-
-      console.log = jest.fn();
 
       await channelModule.backfillChannelPosters(channels);
 
-      expect(console.log).toHaveBeenCalledWith(
-        'Error backfilling poster for Test Channel: Permission denied'
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          err: testError,
+          channelUploader: 'Test Channel'
+        }),
+        'Error backfilling poster for channel'
       );
     });
 

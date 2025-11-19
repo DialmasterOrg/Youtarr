@@ -1,6 +1,7 @@
 import React from 'react';
 import { render } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
 import WebSocketContext from './contexts/WebSocketContext';
 
 type WebSocketValue = {
@@ -22,12 +23,27 @@ export function renderWithProviders(
   opts?: { websocketValue?: WebSocketValue }
 ) {
   const value = opts?.websocketValue ?? createMockWebSocketContext();
+  const theme = createTheme({
+    transitions: {
+      duration: {
+        shortest: 0,
+        shorter: 0,
+        short: 0,
+        standard: 0,
+        complex: 0,
+        enteringScreen: 0,
+        leavingScreen: 0,
+      },
+    },
+  });
+
   return render(
-    <BrowserRouter>
-      <WebSocketContext.Provider value={value}>
-        {ui}
-      </WebSocketContext.Provider>
-    </BrowserRouter>
+    <MemoryRouter>
+      <ThemeProvider theme={theme}>
+        <WebSocketContext.Provider value={value}>
+          {ui}
+        </WebSocketContext.Provider>
+      </ThemeProvider>
+    </MemoryRouter>
   );
 }
-

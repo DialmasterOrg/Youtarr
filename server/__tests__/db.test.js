@@ -12,18 +12,29 @@ describe('db.js', () => {
   let mockGetQueryInterface;
   let mockUmzugInstance;
   let mockUmzugUp;
-  let consoleLogSpy;
-  let consoleErrorSpy;
+  let loggerInfoSpy;
+  let loggerErrorSpy;
+  let loggerDebugSpy;
   let SequelizeMock;
   let UmzugMock;
+  let mockLogger;
 
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
 
-    // Setup console spies
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+    // Setup logger mock
+    mockLogger = {
+      info: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+      warn: jest.fn()
+    };
+    loggerInfoSpy = mockLogger.info;
+    loggerErrorSpy = mockLogger.error;
+    loggerDebugSpy = mockLogger.debug;
+
+    jest.doMock('../logger', () => mockLogger);
 
     // Setup Sequelize mocks
     mockAuthenticate = jest.fn().mockResolvedValue();
@@ -68,11 +79,11 @@ describe('db.js', () => {
     delete process.env.DB_PASSWORD;
     delete process.env.DB_HOST;
     delete process.env.DB_PORT;
+    delete process.env.LOG_SQL;
   });
 
   afterEach(() => {
-    consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
+    // No need to restore spies since we're using jest.fn()
   });
 
   describe('Sequelize initialization', () => {
@@ -88,6 +99,15 @@ describe('db.js', () => {
           dialect: 'mysql',
           port: 3321,
           logging: false,
+          pool: {
+            max: 10,
+            min: 0,
+            acquire: 30000,
+            idle: 10000
+          },
+          retry: {
+            max: 3
+          },
           dialectOptions: {
             charset: 'utf8mb4',
             supportBigNumbers: true,
@@ -139,6 +159,33 @@ describe('db.js', () => {
       expect(db.sequelize).toBe(mockSequelizeInstance);
       expect(db.Sequelize).toBe(SequelizeMock);
     });
+
+    it('should enable SQL logging when LOG_SQL is true', () => {
+      process.env.LOG_SQL = 'true';
+
+      jest.resetModules();
+      db = require('../db');
+
+      const loggingOption = SequelizeMock.mock.calls[0][3].logging;
+      expect(typeof loggingOption).toBe('function');
+
+      // Test the logging function
+      loggingOption('SELECT * FROM users', 123);
+      expect(loggerDebugSpy).toHaveBeenCalledWith(
+        { sql: 'SELECT * FROM users', timing: 123 },
+        'SQL query'
+      );
+    });
+
+    it('should disable SQL logging when LOG_SQL is not true', () => {
+      delete process.env.LOG_SQL;
+
+      jest.resetModules();
+      db = require('../db');
+
+      const loggingOption = SequelizeMock.mock.calls[0][3].logging;
+      expect(loggingOption).toBe(false);
+    });
   });
 
   describe('initializeDatabase', () => {
@@ -150,7 +197,7 @@ describe('db.js', () => {
       await db.initializeDatabase();
 
       expect(mockAuthenticate).toHaveBeenCalled();
-      expect(consoleLogSpy).toHaveBeenCalledWith('Connection has been established successfully.');
+      expect(loggerInfoSpy).toHaveBeenCalledWith('Database connection established successfully');
     });
 
     it('should set UTF8MB4 character set', async () => {
@@ -184,28 +231,63 @@ describe('db.js', () => {
       });
     });
 
-    it('should handle authentication errors', async () => {
+    it('should handle authentication errors gracefully', async () => {
       const authError = new Error('Authentication failed');
+      authError.name = 'SequelizeConnectionError';
       mockAuthenticate.mockRejectedValue(authError);
 
-      await expect(db.initializeDatabase()).rejects.toThrow('Authentication failed');
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Unable to initialize the database:', authError);
+      // Should not throw - errors are captured in health status
+      await db.initializeDatabase();
+
+      expect(loggerErrorSpy).toHaveBeenCalledWith(
+        { err: authError },
+        'Failed to initialize database'
+      );
+
+      // Verify health status was set with error
+      const databaseHealth = require('../modules/databaseHealthModule');
+      expect(databaseHealth.getStartupHealth().database.connected).toBe(false);
+      expect(databaseHealth.getStartupHealth().database.errors.length).toBeGreaterThan(0);
     });
 
-    it('should handle migration errors', async () => {
+    it('should handle migration errors gracefully', async () => {
       const migrationError = new Error('Migration failed');
       mockUmzugUp.mockRejectedValue(migrationError);
 
-      await expect(db.initializeDatabase()).rejects.toThrow('Migration failed');
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Unable to initialize the database:', migrationError);
+      // Should not throw - errors are captured in health status
+      await db.initializeDatabase();
+
+      expect(loggerErrorSpy).toHaveBeenCalledWith(
+        { err: migrationError },
+        'Failed to initialize database'
+      );
+
+      // Verify health status was set with error
+      // Note: connected=true because authentication succeeded, but migration failed
+      const databaseHealth = require('../modules/databaseHealthModule');
+      expect(databaseHealth.getStartupHealth().database.connected).toBe(true);
+      expect(databaseHealth.getStartupHealth().database.schemaValid).toBe(false);
+      expect(databaseHealth.getStartupHealth().database.errors.length).toBeGreaterThan(0);
     });
 
-    it('should handle query errors when setting charset', async () => {
+    it('should handle query errors when setting charset gracefully', async () => {
       const queryError = new Error('Query failed');
       mockQuery.mockRejectedValue(queryError);
 
-      await expect(db.initializeDatabase()).rejects.toThrow('Query failed');
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Unable to initialize the database:', queryError);
+      // Should not throw - errors are captured in health status
+      await db.initializeDatabase();
+
+      expect(loggerErrorSpy).toHaveBeenCalledWith(
+        { err: queryError },
+        'Failed to initialize database'
+      );
+
+      // Verify health status was set with error
+      // Note: connected=true because authentication succeeded, but charset query failed
+      const databaseHealth = require('../modules/databaseHealthModule');
+      expect(databaseHealth.getStartupHealth().database.connected).toBe(true);
+      expect(databaseHealth.getStartupHealth().database.schemaValid).toBe(false);
+      expect(databaseHealth.getStartupHealth().database.errors.length).toBeGreaterThan(0);
     });
 
     it('should complete initialization in correct order', async () => {
@@ -262,12 +344,13 @@ describe('db.js', () => {
 
     it('should handle missing models gracefully', async () => {
       jest.resetModules();
+      jest.doMock('../logger', () => mockLogger);
       jest.doMock('../models', () => ({}));
 
       const dbNew = require('../db');
       await dbNew.initializeDatabase();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('Connection has been established successfully.');
+      expect(loggerInfoSpy).toHaveBeenCalledWith('Database connection established successfully');
     });
 
     it('should properly configure Umzug with sequelize storage', async () => {

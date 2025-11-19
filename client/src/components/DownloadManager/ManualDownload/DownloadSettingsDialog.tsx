@@ -28,9 +28,11 @@ interface DownloadSettingsDialogProps {
   onClose: () => void;
   onConfirm: (settings: DownloadSettings | null) => void;
   videoCount?: number; // For manual downloads
+  missingVideoCount?: number; // Number of videos that were previously downloaded but are now missing
   defaultResolution?: string;
   defaultVideoCount?: number; // For channel downloads
   mode?: 'manual' | 'channel'; // To differentiate between modes
+  defaultResolutionSource?: 'channel' | 'global';
 }
 
 const RESOLUTION_OPTIONS = [
@@ -47,43 +49,45 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   onClose,
   onConfirm,
   videoCount,
+  missingVideoCount = 0,
   defaultResolution = '1080',
   defaultVideoCount = 3,
-  mode = 'manual'
+  mode = 'manual',
+  defaultResolutionSource = 'global'
 }) => {
   const [useCustomSettings, setUseCustomSettings] = useState(false);
   const [resolution, setResolution] = useState(defaultResolution);
   const [channelVideoCount, setChannelVideoCount] = useState(defaultVideoCount);
+  const [allowRedownload, setAllowRedownload] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
 
-  // Load last used settings from localStorage
+  const selectedDefaultOption = RESOLUTION_OPTIONS.find((option) => option.value === defaultResolution);
+  const defaultQualityLabel = selectedDefaultOption
+    ? selectedDefaultOption.label
+    : `${defaultResolution}p`;
+  const qualitySourceLabel = defaultResolutionSource === 'channel' ? 'channel override' : 'global default';
+
+  // Auto-detect re-download need
   useEffect(() => {
     if (open && !hasUserInteracted) {
-      try {
-        const storageKey = mode === 'channel' ? 'youtarr_channel_settings' : 'youtarr_download_settings';
-        const savedSettings = localStorage.getItem(storageKey);
-        if (savedSettings) {
-          try {
-            const parsed = JSON.parse(savedSettings);
-            if (parsed.useCustom !== undefined) {
-              setUseCustomSettings(parsed.useCustom);
-            }
-            if (parsed.resolution) {
-              setResolution(parsed.resolution);
-            }
-            if (mode === 'channel' && parsed.videoCount !== undefined) {
-              setChannelVideoCount(parsed.videoCount);
-            }
-          } catch (e) {
-            console.error('Failed to parse saved settings:', e);
-          }
-        }
-      } catch (e) {
-        // localStorage might not be available
-        console.error('Failed to access localStorage:', e);
+      setResolution(defaultResolution);
+      setChannelVideoCount(defaultVideoCount);
+      // Auto-check re-download if there are missing videos or previously downloaded videos in manual mode
+      if (missingVideoCount > 0) {
+        setAllowRedownload(true);
+      } else {
+        setAllowRedownload(false);
       }
     }
-  }, [open, hasUserInteracted, mode]);
+  }, [open, hasUserInteracted, mode, missingVideoCount, defaultResolution, defaultVideoCount]);
+
+  useEffect(() => {
+    if (!open) {
+      setHasUserInteracted(false);
+      setUseCustomSettings(false);
+      setAllowRedownload(false);
+    }
+  }, [open]);
 
   const handleUseCustomToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
     setUseCustomSettings(event.target.checked);
@@ -124,7 +128,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       const storageKey = mode === 'channel' ? 'youtarr_channel_settings' : 'youtarr_download_settings';
       const settingsToSave: any = {
         useCustom: useCustomSettings,
-        resolution: resolution
+        resolution: resolution,
+        allowRedownload: allowRedownload
       };
 
       if (mode === 'channel') {
@@ -137,10 +142,11 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       console.error('Failed to save settings to localStorage:', e);
     }
 
-    if (useCustomSettings) {
+    if (useCustomSettings || allowRedownload) {
       onConfirm({
-        resolution,
-        videoCount: mode === 'channel' ? channelVideoCount : 0
+        resolution: useCustomSettings ? resolution : defaultResolution,
+        videoCount: mode === 'channel' ? (useCustomSettings ? channelVideoCount : defaultVideoCount) : 0,
+        allowRedownload
       });
     } else {
       onConfirm(null); // Use defaults
@@ -168,15 +174,46 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
 
       <DialogContent>
         <Box sx={{ pt: 1 }}>
-          <Alert severity="info" sx={{ mb: 3 }}>
+          <Alert severity="info" sx={{ mb: 2 }}>
             <Typography variant="body2">
               {mode === 'channel'
-                ? 'This will download any new videos from all channels.'
+                ? 'Downloading new videos from auto-download enabled channels/tabs. Channel settings and filters will be applied per channel.'
                 : videoCount === 1
                 ? 'You are about to download 1 video.'
                 : `You are about to download ${videoCount} videos.`}
             </Typography>
           </Alert>
+
+          {missingVideoCount > 0 && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              <Typography variant="body2">
+                {mode === 'manual' ? (
+                  missingVideoCount === 1
+                    ? '1 video was previously downloaded.'
+                    : `${missingVideoCount} videos were previously downloaded.`
+                ) : (
+                  missingVideoCount === 1
+                    ? 'Re-downloading 1 previously downloaded video.'
+                    : `Re-downloading ${missingVideoCount} previously downloaded videos.`
+                )}
+              </Typography>
+            </Alert>
+          )}
+
+          <FormControlLabel
+            control={
+              <Switch
+                checked={allowRedownload}
+                onChange={(e) => {
+                  setAllowRedownload(e.target.checked);
+                  setHasUserInteracted(true);
+                }}
+                color="primary"
+              />
+            }
+            label="Allow re-downloading previously fetched videos"
+            sx={{ mb: 2 }}
+          />
 
           <FormControlLabel
             control={
@@ -184,18 +221,24 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                 checked={useCustomSettings}
                 onChange={handleUseCustomToggle}
                 color="primary"
-              />
-            }
-            label="Use custom settings for this download"
-            sx={{ mb: 3 }}
           />
+        }
+        label="Use custom settings for this download"
+        sx={{ mb: 2 }}
+      />
 
-          <Divider sx={{ mb: 3 }} />
+      <Divider sx={{ mb: 2 }} />
 
-          <Box sx={{ opacity: useCustomSettings ? 1 : 0.5, transition: 'opacity 0.3s' }} data-testid="custom-settings-section">
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>
-              Video Quality
-            </Typography>
+      <Alert severity="info" sx={{ mb: 2 }}>
+        <Typography variant="body2">
+          Current automatic setting: {defaultQualityLabel} ({qualitySourceLabel}).
+        </Typography>
+      </Alert>
+
+      <Box sx={{ opacity: useCustomSettings ? 1 : 0.5, transition: 'opacity 0.3s' }} data-testid="custom-settings-section">
+        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>
+          Custom Video Quality
+        </Typography>
 
             <FormControl fullWidth disabled={!useCustomSettings}>
               <InputLabel id="resolution-select-label">Maximum Resolution</InputLabel>
@@ -216,7 +259,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
 
             {mode === 'channel' && (
               <>
-                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2, mt: 3 }}>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2, mt: 2 }}>
                   Videos Per Channel
                 </Typography>
 
@@ -244,15 +287,6 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
               </>
             )}
 
-            {!useCustomSettings && (
-              <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1, p: 1.5, bgcolor: 'primary.main', borderRadius: 1, color: 'primary.contrastText' }}>
-                <InfoIcon fontSize="small" />
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  Using default settings{mode === 'channel' ? `: ${defaultVideoCount} videos per channel at ` : ': '}{RESOLUTION_OPTIONS.find(r => r.value === defaultResolution)?.label || `${defaultResolution}p`}
-                </Typography>
-              </Box>
-            )}
-
             {useCustomSettings && resolution === '2160' && (
               <Alert severity="warning" sx={{ mt: 2 }}>
                 <Typography variant="body2">
@@ -262,7 +296,16 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
             )}
           </Box>
 
-          <Box sx={{ mt: 3, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+          {!useCustomSettings && (
+            <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1, p: 1.5, bgcolor: 'primary.main', borderRadius: 1, color: 'primary.contrastText' }}>
+              <InfoIcon fontSize="small" />
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                Using default settings{mode === 'channel' ? `: ${defaultVideoCount} videos per channel at ` : ': '}{RESOLUTION_OPTIONS.find(r => r.value === defaultResolution)?.label || `${defaultResolution}p`}
+              </Typography>
+            </Box>
+          )}
+
+          <Box sx={{ mt: 2, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
             <Typography variant="caption" color="text.secondary">
               <strong>Note:</strong> YouTube will provide the best available quality up to your selected resolution.
             </Typography>

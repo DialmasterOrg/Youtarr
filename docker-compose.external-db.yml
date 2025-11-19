@@ -1,0 +1,54 @@
+
+services:
+  youtarr:
+    image: ${YOUTARR_IMAGE:-dialmaster/youtarr:latest}
+    container_name: youtarr
+    restart: unless-stopped
+    # Optional: Run as specific UID:GID for security (defaults to root if not set per previous behavior)
+    user: "${YOUTARR_UID:-0}:${YOUTARR_GID:-0}"
+
+    # Add extra_hosts for connecting to external DB on host
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    environment:
+      # DEPRECATED but retained for backwards compatibility with old images for now
+      IN_DOCKER_CONTAINER: 1
+      # Override DB connection settings for external database
+      # Enforced for external DB usage
+      TZ: ${TZ:-UTC}
+      DB_HOST: ${DB_HOST:?Set DB_HOST in .env or environment}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USER: ${DB_USER:?Set DB_USER in .env or environment}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env or environment}
+      DB_NAME: ${DB_NAME:-youtarr}
+      # Optional: Disable authentication (for platforms with external auth like Elfhosted)
+      AUTH_ENABLED: ${AUTH_ENABLED:-}
+      # Optional: Seed initial admin credentials for headless deployments
+      AUTH_PRESET_USERNAME: ${AUTH_PRESET_USERNAME:-}
+      AUTH_PRESET_PASSWORD: ${AUTH_PRESET_PASSWORD:-}
+      # Logging configuration
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # This is just informational and lets the app know where the videos will be stored on the host
+      YOUTUBE_OUTPUT_DIR: ${YOUTUBE_OUTPUT_DIR}
+      # Optional: Custom data path for platforms like Elfhosted (defaults to /usr/src/app/data)
+      # This is the internal path where videos download inside the container and is not needed for most users
+      # DATA_PATH: /storage/rclone/storagebox/youtube
+
+    ports:
+      - "3087:3011"
+    volumes:
+      - ${YOUTUBE_OUTPUT_DIR}:/usr/src/app/data
+      - ./server/images:/app/server/images
+      - ./config:/app/config
+      - ./jobs:/app/jobs
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--output", "/dev/null", "http://localhost:3011/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  default:
+    name: youtarr-network

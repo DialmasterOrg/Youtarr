@@ -15,6 +15,7 @@ RUN npm ci
 # Copy server code and built React app
 COPY server/ ./server/
 COPY client/build/ ./client/build/
+COPY migrations/ ./migrations/
 
 # ---- Release ----
 FROM node:20-slim AS release
@@ -25,6 +26,7 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
     unzip \
+    python3-minimal \
     && rm -rf /var/lib/apt/lists/*
 
 # Download the latest yt-dlp release directly from GitHub
@@ -41,6 +43,10 @@ COPY --from=dependencies /app/node_modules ./node_modules
 # Copy application files
 COPY --from=build /app/server ./server
 COPY --from=build /app/client/build ./client/build
+COPY --from=build /app/migrations ./migrations
+
+# Copy config.example.json to server directory (guaranteed to exist and accessible)
+COPY config/config.example.json /app/server/config.example.json
 
 # Copy the new simplified entrypoint script
 COPY scripts/docker-entrypoint-simple.sh /usr/local/bin/docker-entrypoint.sh
@@ -50,8 +56,8 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 EXPOSE 3011
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3011/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl --fail --silent --show-error --output /dev/null http://localhost:3011/api/health || exit 1
 
 # Use the entrypoint script
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

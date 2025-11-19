@@ -1,3 +1,5 @@
+const logger = require('../../logger');
+
 // Progress monitoring class for detecting stalled downloads
 class DownloadProgressMonitor {
   constructor(jobId, jobType = '') {
@@ -18,10 +20,15 @@ class DownloadProgressMonitor {
       skipped: 0,
       skippedThisChannel: 0
     };
-    this.isChannelDownload = jobType === 'Channel Downloads';
+    this.isChannelDownload = jobType.includes('Channel Downloads');
     this.currentChannelName = '';
     this.currentVideoCompleted = false; // Track if current video is done
     this.channelNameJustSet = false; // Track when channel name is newly set
+    // Exponential Moving Average smoothing for speed and ETA (reduce jitter in UI)
+    this.smoothedSpeed = null; // null until first value received
+    this.smoothedEta = null; // null until first value received
+    this.speedSmoothingAlpha = 0.15; // 15% new value, 85% historical (heavily smoothed to handle volatile yt-dlp speeds)
+    this.etaSmoothingAlpha = 0.05; // 5% new value, 95% historical (VERY heavily smoothed - ETA is extremely volatile)
   }
 
   normalizeChannelName(name) {
@@ -63,6 +70,39 @@ class DownloadProgressMonitor {
     } catch (err) {
       return null;
     }
+  }
+
+  applySpeedSmoothing(newValue) {
+    if (this.smoothedSpeed === null || this.smoothedSpeed === 0) {
+      // First value or reset - use directly
+      this.smoothedSpeed = newValue;
+    } else {
+      // EMA formula: smoothed = alpha * new + (1 - alpha) * old
+      this.smoothedSpeed = this.speedSmoothingAlpha * newValue + (1 - this.speedSmoothingAlpha) * this.smoothedSpeed;
+    }
+    return this.smoothedSpeed;
+  }
+
+  applyEtaSmoothing(newEta) {
+    if (this.smoothedEta === null || newEta === 0) {
+      // First value or ETA is 0 (download complete) - use directly
+      this.smoothedEta = newEta;
+    } else {
+      // EMA formula with very heavy smoothing for ETA
+      this.smoothedEta = this.etaSmoothingAlpha * newEta + (1 - this.etaSmoothingAlpha) * this.smoothedEta;
+    }
+    return Math.round(this.smoothedEta);
+  }
+
+  calculateRawEta(downloadedBytes, totalBytes, smoothedSpeed) {
+    if (!totalBytes || totalBytes === 0 || !smoothedSpeed || smoothedSpeed === 0) {
+      return 0;
+    }
+    const bytesRemaining = totalBytes - downloadedBytes;
+    if (bytesRemaining <= 0) {
+      return 0;
+    }
+    return bytesRemaining / smoothedSpeed;
   }
 
   isStalled(progress, config) {
@@ -123,6 +163,9 @@ class DownloadProgressMonitor {
     this.lastPercent = 0;
     this.lastUpdateTimestamp = Date.now();
     this.stallRaised = false;
+    // Reset smoothed values for new video
+    this.smoothedSpeed = null;
+    this.smoothedEta = null;
   }
 
   snapshot(stateOverride, videoInfoOverride) {
@@ -221,13 +264,44 @@ class DownloadProgressMonitor {
   }
 
   determineState(line) {
+    // Detect metadata fetching phase (before actual downloads start)
+    if (line.includes('[youtube] Extracting URL:') && !line.includes('[youtube:tab]')) {
+      return 'preparing';
+    }
+    if (line.match(/\[youtube\] [^:]+: Downloading webpage/)) {
+      return 'preparing';
+    }
+    if (line.match(/\[youtube\] [^:]+: Downloading (tv|web|android|ios) (client config|player API|safari player)/)) {
+      return 'preparing';
+    }
+    if (line.match(/\[youtube\] [^:]+: Downloading player/)) {
+      return 'preparing';
+    }
+    if (line.match(/\[youtube\] [^:]+: Downloading m3u8 information/)) {
+      return 'preparing';
+    }
+
+    // Detect subtitle download announcement (not the actual download)
+    if (line.match(/\[info\] [^:]+: Downloading subtitles:/)) {
+      return 'preparing_subtitles';
+    }
+
     // Detect download type from file extension
     if (line.includes('[download] Destination:')) {
       const path = line.split('Destination:')[1].trim();
+      // Detect subtitle file downloads
+      if (path.match(/\.(vtt|srt)$/i)) return 'downloading_subtitles';
       if (path.match(/\.f\d+\.mp4$/)) return 'downloading_video';
       if (path.match(/\.f\d+\.m4a$/)) return 'downloading_audio';
       if (path.includes('poster') || path.includes('thumbnail')) return 'downloading_thumbnail';
     }
+
+    // Detect thumbnail and metadata operations
+    if (line.includes('[info] Downloading video thumbnail')) return 'processing_metadata';
+    if (line.includes('[info] Writing video thumbnail')) return 'processing_metadata';
+    if (line.includes('[info] Writing video metadata')) return 'processing_metadata';
+    if (line.includes('[SubtitlesConvertor]')) return 'processing_metadata';
+    if (line.includes('[ThumbnailsConvertor]')) return 'processing_metadata';
 
     // Detect processing stages
     if (line.includes('[Merger]')) return 'merging';
@@ -263,7 +337,7 @@ class DownloadProgressMonitor {
       // Reset current video count when starting a new channel BUT ONLY IN CHANNEL DOWNLOADS
       if (this.isChannelDownload) {
         if (this.currentChannelName && this.currentChannelName !== newChannelName) {
-          console.log(`Starting new channel: ${newChannelName}, resetting counts`);
+          logger.debug({ jobId: this.jobId, newChannelName, oldChannelName: this.currentChannelName }, 'Starting new channel, resetting counts');
           this.videoCount.current = 1;
           this.videoCount.skippedThisChannel = 0;
           this.currentVideoCompleted = false;
@@ -290,7 +364,7 @@ class DownloadProgressMonitor {
 
       // Reset current video count when startng a new channel
       if (this.currentChannelName && this.currentChannelName !== newChannelName) {
-        console.log(`Starting new channel: ${newChannelName}, resetting all counts`);
+        logger.debug({ jobId: this.jobId, newChannelName, oldChannelName: this.currentChannelName }, 'Starting new channel, resetting all counts');
         // These don't reset because they are tracking the FULL TOTALS for this job
         // this.videoCount.completed = 0;
         this.videoCount.skippedThisChannel = 0;
@@ -308,7 +382,6 @@ class DownloadProgressMonitor {
     // Check if item was skipped (already in archive or does not pass filter (subscribers only))
     // If so, increment the skipped count for the current channel AND the total skipped count.
     if (line.includes('has already been recorded in the archive') || line.includes('does not pass filter')) {
-      console.log(`Already in archive or does not pass filter and currentVideoCompleted is ${this.currentVideoCompleted} and videoCount.current is ${this.videoCount.current}`);
       // Only increment skipped once per video
       if (!this.currentVideoCompleted) {
         this.videoCount.skipped++;
@@ -318,7 +391,11 @@ class DownloadProgressMonitor {
           this.videoCount.current++;
         }
         // this.currentVideoCompleted = true; // Mark as "completed" so we don't count it again
-        console.log(`Video ${this.videoCount.current} was skipped (already archived). Total skipped: ${this.videoCount.skipped}`);
+        logger.debug({
+          jobId: this.jobId,
+          current: this.videoCount.current,
+          totalSkipped: this.videoCount.skipped
+        }, 'Video skipped (already archived or does not pass filter)');
       }
       return true;
     }
@@ -329,22 +406,26 @@ class DownloadProgressMonitor {
     // This only matches on channel downloads
     const itemMatch = line.match(/\[download\] Downloading item (\d+) of (\d+)/);
     if (itemMatch) {
-      console.log(`Downloading item ${itemMatch[1]} of ${itemMatch[2]}`);
       const newCurrent = parseInt(itemMatch[1], 10);
       this.videoCount.total = parseInt(itemMatch[2], 10);
 
-      // Starting a new item, reset completion flag
+      // Starting a new item, reset completion flag and state
       this.currentVideoCompleted = false;
       this.videoCount.current = newCurrent;
+      this.currentState = 'initiating';
       this.resetProgressTracking();
-      console.log(`Starting download of item ${newCurrent} of ${this.videoCount.total}`);
+      logger.debug({
+        jobId: this.jobId,
+        current: newCurrent,
+        total: this.videoCount.total
+      }, 'Starting download of item');
       return true;
     }
 
     // Track individual video extractions for manual URLs
     if (line.includes('[youtube] Extracting URL:') && !line.includes('[youtube:tab]')) {
       if (this.jobType === 'Manually Added Urls') {
-        // Starting a new video, reset completion flag
+        // Starting a new video, reset completion flag and state
         this.currentVideoCompleted = false;
         // If this is the first URL, set total if not already set
         if (this.videoCount.total === 0) {
@@ -353,12 +434,14 @@ class DownloadProgressMonitor {
         if (this.videoCount.completed > 0) {
           this.videoCount.current++;
         }
+        this.currentState = 'initiating';
         this.resetProgressTracking();
       } else if (this.videoCount.total === 0) {
         // Single video download (not manual URLs)
         this.videoCount.current = 1;
         this.videoCount.total = 1;
         this.currentVideoCompleted = false;
+        this.currentState = 'initiating';
         this.resetProgressTracking();
       }
       return true;
@@ -368,9 +451,9 @@ class DownloadProgressMonitor {
     // A video is complete when we see various completion indicators
     if (line.includes('Deleting original file')) {
       const lowerLine = line.toLowerCase();
-      const isThumbnailCleanup = ['.webp', '.jpg', '.jpeg', '.png']
+      const isNonVideoCleanup = ['.webp', '.jpg', '.jpeg', '.png', '.vtt', '.srt']
         .some(ext => lowerLine.includes(ext));
-      if (isThumbnailCleanup) {
+      if (isNonVideoCleanup) {
         return true;
       }
     }
@@ -386,13 +469,15 @@ class DownloadProgressMonitor {
     const isCompleted = completionIndicators.some(indicator => line.includes(indicator));
 
     if (isCompleted) {
-      console.log(`Completed indicator found: ${line}`);
       // Only increment completed once per video and after the first video
       if (!this.currentVideoCompleted) {
-        console.log(`Incrementing completed from from ${this.videoCount.completed} to ${this.videoCount.completed + 1}`);
         this.videoCount.completed++;
         this.currentVideoCompleted = true;
-        console.log(`Video ${this.videoCount.current} downloaded successfully. Total completed: ${this.videoCount.completed}`);
+        logger.debug({
+          jobId: this.jobId,
+          current: this.videoCount.current,
+          totalCompleted: this.videoCount.completed
+        }, 'Video downloaded successfully');
       }
       return true;
     }
@@ -408,11 +493,28 @@ class DownloadProgressMonitor {
       this.currentState = newState;
     }
 
+    // Fix race condition: If we're receiving actual download progress while in 'initiating' state,
+    // automatically transition to downloading state. This handles cases where JSON progress
+    // appears before the [download] Destination line.
+    if (!newState && this.currentState === 'initiating' && parsed && parsed.percent > 0) {
+      this.currentState = 'downloading_video';
+    }
+
     // Parse video count information and update counts.
     this.parseAndUpdateVideoCounts(rawLine);
 
     // Extract video info if available
-    const videoInfo = this.extractVideoInfo(rawLine);
+    let videoInfo = this.extractVideoInfo(rawLine);
+
+    // Clear video title ONLY when preparing the next video (between videos)
+    // Keep title during subtitle/metadata processing - those are for a specific video
+    if (this.currentState === 'preparing') {
+      videoInfo = {
+        channel: videoInfo?.channel || this.currentChannelName || '',
+        title: '',
+        displayTitle: ''
+      };
+    }
 
     const videoInfoChanged = !!videoInfo && (
       !this.lastParsed?.videoInfo ||
@@ -436,14 +538,21 @@ class DownloadProgressMonitor {
 
     const stalled = this.isStalled(parsed, config);
 
+    // Apply exponential smoothing to speed to reduce UI jitter
+    const smoothedSpeed = this.applySpeedSmoothing(parsed.speed);
+
+    // Calculate raw ETA from smoothed speed, then apply heavy smoothing to ETA itself
+    const rawEta = this.calculateRawEta(parsed.downloaded, parsed.total, smoothedSpeed);
+    const smoothedEta = this.applyEtaSmoothing(rawEta);
+
     const structuredPayload = {
       jobId: this.jobId,
       progress: {
         percent: parsed.percent,
         downloadedBytes: parsed.downloaded,
         totalBytes: parsed.total,
-        speedBytesPerSecond: parsed.speed,
-        etaSeconds: parsed.etaSeconds
+        speedBytesPerSecond: smoothedSpeed,
+        etaSeconds: smoothedEta
       },
       stalled,
       state: stalled ? 'stalled' : this.currentState,

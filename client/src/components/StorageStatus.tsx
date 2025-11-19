@@ -1,52 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Chip, Tooltip, CircularProgress, useTheme, useMediaQuery, Snackbar, Alert } from '@mui/material';
 import StorageIcon from '@mui/icons-material/Storage';
-import axios from 'axios';
+import { useStorageStatus } from '../hooks/useStorageStatus';
 
 interface StorageStatusProps {
   token: string | null;
 }
 
-interface StorageData {
-  availableGB: string;
-  percentFree: number;
-  totalGB: string;
-}
-
 const StorageStatus: React.FC<StorageStatusProps> = ({ token }) => {
-  const [storageData, setStorageData] = useState<StorageData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const { data: storageData, loading, error } = useStorageStatus(token, {
+    poll: true,
+    pollInterval: 120000
+  });
   const [mobileSnackbar, setMobileSnackbar] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-
-  const fetchStorageStatus = async () => {
-    if (!token) return;
-
-    try {
-      const response = await axios.get('/storage-status', {
-        headers: {
-          'x-access-token': token,
-        },
-      });
-      setStorageData(response.data);
-      setError(false);
-    } catch (err) {
-      console.error('Failed to fetch storage status:', err);
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchStorageStatus();
-    // Refresh every 120 seconds
-    const interval = setInterval(fetchStorageStatus, 120000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
 
   if (!token || error) return null;
 

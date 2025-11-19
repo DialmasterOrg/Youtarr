@@ -1,4 +1,5 @@
 /* eslint-env jest */
+const loggerMock = require('../__mocks__/logger');
 
 const findRouteHandlers = (app, method, routePath) => {
   const stack = app?._router?.stack || [];
@@ -20,6 +21,7 @@ const createMockRequest = (overrides = {}) => ({
   ip: '127.0.0.1',
   connection: { remoteAddress: '127.0.0.1' },
   socket: { remoteAddress: '127.0.0.1' },
+  log: loggerMock,
   ...overrides
 });
 
@@ -99,6 +101,14 @@ const createServerModule = ({
 
         const dbMock = {
           initializeDatabase: jest.fn().mockResolvedValue(),
+          reinitializeDatabase: jest.fn().mockResolvedValue({
+            connected: true,
+            schemaValid: true,
+            errors: []
+          }),
+          sequelize: {
+            authenticate: jest.fn().mockResolvedValue(true)
+          },
           Session: {
             findOne: jest.fn().mockImplementation(() => Promise.resolve(effectiveSession)),
             create: jest.fn().mockResolvedValue({
@@ -159,6 +169,7 @@ const createServerModule = ({
             used: 50000000000,
             percentUsed: 50
           }),
+          isElfhostedPlatform: jest.fn(() => false),
           config: configState,
           stopWatchingConfig: jest.fn()
         };
@@ -172,7 +183,14 @@ const createServerModule = ({
             videos: [{ id: 'video-1', title: 'Video 1' }],
             videoFail: false
           }),
-          deleteChannel: jest.fn().mockResolvedValue({ success: true })
+          fetchAllChannelVideos: jest.fn().mockResolvedValue({
+            success: true,
+            message: 'Fetching videos in progress',
+            videos: [{ id: 'video-1', title: 'Video 1' }]
+          }),
+          deleteChannel: jest.fn().mockResolvedValue({ success: true }),
+          getChannelAvailableTabs: jest.fn().mockResolvedValue(['videos', 'shorts', 'streams']),
+          updateAutoDownloadForTab: jest.fn().mockResolvedValue()
         };
 
         const plexModuleMock = {
@@ -203,7 +221,33 @@ const createServerModule = ({
             { id: 'video-1', title: 'Video 1' },
             { id: 'video-2', title: 'Video 2' }
           ]),
-          deleteVideos: jest.fn().mockResolvedValue({ deletedCount: 2 })
+          getVideosPaginated: jest.fn().mockResolvedValue({
+            videos: [
+              { id: 'video-1', title: 'Video 1' },
+              { id: 'video-2', title: 'Video 2' }
+            ],
+            pagination: {
+              page: 1,
+              limit: 12,
+              total: 2,
+              totalPages: 1
+            }
+          }),
+          deleteVideos: jest.fn().mockResolvedValue({ deletedCount: 2 }),
+          backfillVideoMetadata: jest.fn().mockResolvedValue({ processed: 0, errors: 0 })
+        };
+
+        const videoDeletionModuleMock = {
+          deleteVideos: jest.fn().mockResolvedValue({
+            success: true,
+            deleted: [1, 2],
+            failed: []
+          }),
+          deleteVideosByYoutubeIds: jest.fn().mockResolvedValue({
+            success: true,
+            deleted: ['vid1', 'vid2'],
+            failed: []
+          })
         };
 
         const videoValidationModuleMock = {
@@ -211,6 +255,18 @@ const createServerModule = ({
             isValidUrl: true,
             metadata: { title: 'Test Video' }
           })
+        };
+
+        const channelSettingsModuleMock = {
+          getChannelSettings: jest.fn().mockResolvedValue({
+            sub_folder: null,
+            video_quality: null
+          }),
+          updateChannelSettings: jest.fn().mockResolvedValue({
+            success: true,
+            folderMoved: false
+          }),
+          getAllSubFolders: jest.fn().mockResolvedValue([])
         };
 
         const bcryptMock = {
@@ -226,6 +282,11 @@ const createServerModule = ({
           readFileSync: jest.fn(() => ''),
           unlink: jest.fn((path, cb) => cb(null))
         };
+
+        const childProcessMock = {
+          execSync: jest.fn(() => '2025.09.23')
+        };
+        const pinoHttpMock = jest.fn(() => (req, res, next) => next());
 
         const httpsMock = {
           get: jest.fn((url, callback) => {
@@ -245,6 +306,8 @@ const createServerModule = ({
 
         const cronMock = { schedule: jest.fn() };
         const rateLimitMiddleware = jest.fn(() => (req, res, next) => next());
+        // Mock ipKeyGenerator to normalize IPv6 addresses
+        rateLimitMiddleware.ipKeyGenerator = jest.fn((ip) => ip);
         const multerSingleMock = jest.fn(() => (req, res, next) => {
           if (req.path === '/cookies/upload' && req.body.simulateFile) {
             req.file = { buffer: Buffer.from('cookie-content') };
@@ -253,6 +316,7 @@ const createServerModule = ({
         });
         const multerMock = jest.fn(() => ({ single: multerSingleMock }));
 
+        jest.doMock('../logger', () => loggerMock);
         jest.doMock('../db', () => dbMock);
         jest.doMock('../modules/configModule', () => configModuleMock);
         jest.doMock('../modules/channelModule', () => channelModuleMock);
@@ -260,15 +324,19 @@ const createServerModule = ({
         jest.doMock('../modules/downloadModule', () => downloadModuleMock);
         jest.doMock('../modules/jobModule', () => jobModuleMock);
         jest.doMock('../modules/videosModule', () => videosModuleMock);
+        jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
         jest.doMock('../modules/videoValidationModule', () => videoValidationModuleMock);
+        jest.doMock('../modules/channelSettingsModule', () => channelSettingsModuleMock);
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => cronMock);
-        jest.doMock('express-rate-limit', () => rateLimitMiddleware);
+        jest.doMock('express-rate-limit', () => Object.assign(rateLimitMiddleware, { ipKeyGenerator: rateLimitMiddleware.ipKeyGenerator }));
         jest.doMock('multer', () => multerMock);
         jest.doMock('https', () => httpsMock);
         jest.doMock('bcrypt', () => bcryptMock);
         jest.doMock('uuid', () => uuidMock);
         jest.doMock('fs', () => fsMock);
+        jest.doMock('child_process', () => childProcessMock);
+        jest.doMock('pino-http', () => pinoHttpMock);
 
         const serverModule = require('../server');
 
@@ -282,11 +350,14 @@ const createServerModule = ({
         state.downloadModuleMock = downloadModuleMock;
         state.jobModuleMock = jobModuleMock;
         state.videosModuleMock = videosModuleMock;
+        state.videoDeletionModuleMock = videoDeletionModuleMock;
         state.videoValidationModuleMock = videoValidationModuleMock;
+        state.channelSettingsModuleMock = channelSettingsModuleMock;
         state.bcryptMock = bcryptMock;
         state.uuidMock = uuidMock;
         state.httpsMock = httpsMock;
         state.fsMock = fsMock;
+        state.childProcessMock = childProcessMock;
         state.rateLimitMiddleware = rateLimitMiddleware;
         state.sessionUpdateMock = effectiveSession?.update || defaultSessionUpdate;
 
@@ -470,6 +541,44 @@ describe('server routes - configuration', () => {
       expect(res.body.isPlatformManaged).toBeDefined();
       expect(res.body.deploymentEnvironment).toBeDefined();
     });
+
+    test('includes useTmpForDownloads in isPlatformManaged when not elfhosted', async () => {
+      const { app, configModuleMock } = await createServerModule();
+      configModuleMock.isElfhostedPlatform.mockReturnValue(false);
+
+      const handlers = findRouteHandlers(app, 'get', '/getconfig');
+      const getConfigHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        username: 'tester'
+      });
+      const res = createMockResponse();
+
+      await getConfigHandler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.isPlatformManaged).toBeDefined();
+      expect(res.body.isPlatformManaged.useTmpForDownloads).toBe(false);
+    });
+
+    test('includes useTmpForDownloads in isPlatformManaged when elfhosted', async () => {
+      const { app, configModuleMock } = await createServerModule();
+      configModuleMock.isElfhostedPlatform.mockReturnValue(true);
+
+      const handlers = findRouteHandlers(app, 'get', '/getconfig');
+      const getConfigHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        username: 'tester'
+      });
+      const res = createMockResponse();
+
+      await getConfigHandler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.isPlatformManaged).toBeDefined();
+      expect(res.body.isPlatformManaged.useTmpForDownloads).toBe(true);
+    });
   });
 
   describe('POST /updateconfig', () => {
@@ -481,8 +590,8 @@ describe('server routes - configuration', () => {
 
       const req = createMockRequest({
         body: {
-          plexLibrarySection: 'new-section',
-          youtubeApiKey: 'new-key'
+          plexYoutubeLibraryId: '22',
+          plexApiKey: 'new-key'
         }
       });
       const res = createMockResponse();
@@ -491,8 +600,8 @@ describe('server routes - configuration', () => {
 
       expect(configModuleMock.updateConfig).toHaveBeenCalledWith(
         expect.objectContaining({
-          plexLibrarySection: 'new-section',
-          youtubeApiKey: 'new-key'
+          plexYoutubeLibraryId: '22',
+          plexApiKey: 'new-key'
         })
       );
       expect(res.statusCode).toBe(200);
@@ -507,7 +616,7 @@ describe('server routes - configuration', () => {
 
       const req = createMockRequest({
         body: {
-          plexLibrarySection: 123 // Will be accepted as is
+          plexYoutubeLibraryId: 25 // Will be accepted as is
         }
       });
       const res = createMockResponse();
@@ -544,21 +653,159 @@ describe('server routes - configuration', () => {
 });
 
 describe('server routes - channels', () => {
-  describe('GET /getchannelvideos/:channelId', () => {
-    test('returns channel videos successfully', async () => {
+  describe('GET /api/channels/:channelId/tabs', () => {
+    test('returns available tabs for a channel', async () => {
       const { app, channelModuleMock } = await createServerModule();
 
-      const handlers = findRouteHandlers(app, 'get', '/getchannelvideos/:channelId');
-      const getVideosHandler = handlers[handlers.length - 1];
+      const handlers = findRouteHandlers(app, 'get', '/api/channels/:channelId/tabs');
+      const getTabsHandler = handlers[handlers.length - 1];
 
       const req = createMockRequest({
         params: { channelId: 'channel-1' }
       });
       const res = createMockResponse();
 
+      await getTabsHandler(req, res);
+
+      expect(channelModuleMock.getChannelAvailableTabs).toHaveBeenCalledWith('channel-1');
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({
+        availableTabs: ['videos', 'shorts', 'streams']
+      });
+    });
+
+    test('handles error when getting available tabs', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      channelModuleMock.getChannelAvailableTabs.mockRejectedValueOnce(new Error('Failed to fetch tabs'));
+
+      const handlers = findRouteHandlers(app, 'get', '/api/channels/:channelId/tabs');
+      const getTabsHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' }
+      });
+      const res = createMockResponse();
+
+      await getTabsHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({
+        error: 'Failed to get available tabs',
+        message: 'Failed to fetch tabs'
+      });
+    });
+  });
+
+  describe('PATCH /api/channels/:channelId/tabs/:tabType/auto-download', () => {
+    test('updates auto-download setting successfully', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'patch', '/api/channels/:channelId/tabs/:tabType/auto-download');
+      const updateHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1', tabType: 'shorts' },
+        body: { enabled: true }
+      });
+      const res = createMockResponse();
+
+      await updateHandler(req, res);
+
+      expect(channelModuleMock.updateAutoDownloadForTab).toHaveBeenCalledWith('channel-1', 'shorts', true);
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({ success: true });
+    });
+
+    test('validates enabled parameter is boolean', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'patch', '/api/channels/:channelId/tabs/:tabType/auto-download');
+      const updateHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1', tabType: 'shorts' },
+        body: { enabled: 'yes' }
+      });
+      const res = createMockResponse();
+
+      await updateHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        error: 'Bad request',
+        message: 'enabled must be a boolean value'
+      });
+    });
+
+    test('handles missing enabled parameter', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'patch', '/api/channels/:channelId/tabs/:tabType/auto-download');
+      const updateHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1', tabType: 'shorts' },
+        body: {}
+      });
+      const res = createMockResponse();
+
+      await updateHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        error: 'Bad request',
+        message: 'enabled must be a boolean value'
+      });
+    });
+
+    test('handles error during update', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      channelModuleMock.updateAutoDownloadForTab.mockRejectedValueOnce(new Error('Database error'));
+
+      const handlers = findRouteHandlers(app, 'patch', '/api/channels/:channelId/tabs/:tabType/auto-download');
+      const updateHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1', tabType: 'shorts' },
+        body: { enabled: false }
+      });
+      const res = createMockResponse();
+
+      await updateHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({
+        error: 'Failed to update auto download setting',
+        message: 'Database error'
+      });
+    });
+  });
+
+  describe('GET /getchannelvideos/:channelId', () => {
+    test('returns channel videos successfully with default parameters', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'get', '/getchannelvideos/:channelId');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' },
+        query: {}
+      });
+      const res = createMockResponse();
+
       await getVideosHandler(req, res);
 
-      expect(channelModuleMock.getChannelVideos).toHaveBeenCalledWith('channel-1');
+      expect(channelModuleMock.getChannelVideos).toHaveBeenCalledWith(
+        'channel-1',
+        1,    // default page
+        50,   // default pageSize
+        false, // default hideDownloaded
+        '',   // default searchQuery
+        'date', // default sortBy
+        'desc', // default sortOrder
+        'videos' // default tabType
+      );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
         videos: [{ id: 'video-1', title: 'Video 1' }],
@@ -576,7 +823,8 @@ describe('server routes - channels', () => {
       const getVideosHandler = handlers[handlers.length - 1];
 
       const req = createMockRequest({
-        params: { channelId: 'channel-1' }
+        params: { channelId: 'channel-1' },
+        query: {}
       });
       const res = createMockResponse();
 
@@ -586,6 +834,211 @@ describe('server routes - channels', () => {
       expect(res.body).toEqual({
         videos: [{ id: 'video-1', title: 'Video 1' }],
         videoFail: false
+      });
+    });
+
+    test('passes pagination and filter parameters to channel module', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'get', '/getchannelvideos/:channelId');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' },
+        query: {
+          page: '2',
+          pageSize: '25',
+          hideDownloaded: 'true',
+          searchQuery: 'test search',
+          sortBy: 'title',
+          sortOrder: 'asc'
+        }
+      });
+      const res = createMockResponse();
+
+      await getVideosHandler(req, res);
+
+      expect(channelModuleMock.getChannelVideos).toHaveBeenCalledWith(
+        'channel-1',
+        2,
+        25,
+        true,
+        'test search',
+        'title',
+        'asc',
+        'videos' // default tabType
+      );
+      expect(res.statusCode).toBe(200);
+    });
+
+    test('passes tabType parameter to channel module when provided', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'get', '/getchannelvideos/:channelId');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' },
+        query: {
+          page: '1',
+          pageSize: '50',
+          hideDownloaded: 'false',
+          searchQuery: '',
+          sortBy: 'date',
+          sortOrder: 'desc',
+          tabType: 'shorts'
+        }
+      });
+      const res = createMockResponse();
+
+      await getVideosHandler(req, res);
+
+      expect(channelModuleMock.getChannelVideos).toHaveBeenCalledWith(
+        'channel-1',
+        1,
+        50,
+        false,
+        '',
+        'date',
+        'desc',
+        'shorts'
+      );
+      expect(res.statusCode).toBe(200);
+    });
+  });
+
+  describe('POST /fetchallchannelvideos/:channelId', () => {
+    test('fetches all channel videos successfully with default parameters', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/fetchallchannelvideos/:channelId');
+      const fetchHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' },
+        query: {}
+      });
+      const res = createMockResponse();
+
+      await fetchHandler(req, res);
+
+      expect(channelModuleMock.fetchAllChannelVideos).toHaveBeenCalledWith(
+        'channel-1',
+        1,    // default page
+        50,   // default pageSize
+        false, // default hideDownloaded
+        'videos' // default tabType
+      );
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({
+        success: true,
+        message: 'Fetching videos in progress',
+        videos: [{ id: 'video-1', title: 'Video 1' }]
+      });
+    });
+
+    test('passes pagination parameters when provided', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/fetchallchannelvideos/:channelId');
+      const fetchHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' },
+        query: {
+          page: '3',
+          pageSize: '100',
+          hideDownloaded: 'true'
+        }
+      });
+      const res = createMockResponse();
+
+      await fetchHandler(req, res);
+
+      expect(channelModuleMock.fetchAllChannelVideos).toHaveBeenCalledWith(
+        'channel-1',
+        3,
+        100,
+        true,
+        'videos' // default tabType
+      );
+      expect(res.statusCode).toBe(200);
+    });
+
+    test('passes tabType parameter when provided', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/fetchallchannelvideos/:channelId');
+      const fetchHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' },
+        query: {
+          page: '1',
+          pageSize: '50',
+          hideDownloaded: 'false',
+          tabType: 'streams'
+        }
+      });
+      const res = createMockResponse();
+
+      await fetchHandler(req, res);
+
+      expect(channelModuleMock.fetchAllChannelVideos).toHaveBeenCalledWith(
+        'channel-1',
+        1,
+        50,
+        false,
+        'streams'
+      );
+      expect(res.statusCode).toBe(200);
+    });
+
+    test('handles concurrency error with 409 status', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      const concurrencyError = new Error('A fetch operation is already in progress for this channel');
+      channelModuleMock.fetchAllChannelVideos.mockRejectedValueOnce(concurrencyError);
+
+      const handlers = findRouteHandlers(app, 'post', '/fetchallchannelvideos/:channelId');
+      const fetchHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' },
+        query: {}
+      });
+      const res = createMockResponse();
+
+      await fetchHandler(req, res);
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'FETCH_IN_PROGRESS',
+        message: 'A fetch operation is already in progress for this channel'
+      });
+    });
+
+    test('handles general error with 500 status', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      const generalError = new Error('Database connection failed');
+      channelModuleMock.fetchAllChannelVideos.mockRejectedValueOnce(generalError);
+
+      const handlers = findRouteHandlers(app, 'post', '/fetchallchannelvideos/:channelId');
+      const fetchHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        params: { channelId: 'channel-1' },
+        query: {}
+      });
+      const res = createMockResponse();
+
+      await fetchHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'Failed to fetch all channel videos',
+        message: 'Database connection failed'
       });
     });
   });
@@ -613,7 +1066,7 @@ describe('server routes - channels', () => {
 
 describe('server routes - videos', () => {
   describe('GET /getVideos', () => {
-    test('returns videos successfully', async () => {
+    test('returns videos with default pagination', async () => {
       const { app, videosModuleMock } = await createServerModule();
 
       const handlers = findRouteHandlers(app, 'get', '/getVideos');
@@ -624,17 +1077,69 @@ describe('server routes - videos', () => {
 
       await getVideosHandler(req, res);
 
-      expect(videosModuleMock.getVideos).toHaveBeenCalled();
+      expect(videosModuleMock.getVideosPaginated).toHaveBeenCalledWith({
+        page: 1,
+        limit: 12,
+        search: '',
+        dateFrom: null,
+        dateTo: null,
+        sortBy: 'added',
+        sortOrder: 'desc',
+        channelFilter: ''
+      });
       expect(res.statusCode).toBe(200);
-      expect(res.body).toEqual([
-        { id: 'video-1', title: 'Video 1' },
-        { id: 'video-2', title: 'Video 2' }
-      ]);
+      expect(res.body).toEqual({
+        videos: [
+          { id: 'video-1', title: 'Video 1' },
+          { id: 'video-2', title: 'Video 2' }
+        ],
+        pagination: {
+          page: 1,
+          limit: 12,
+          total: 2,
+          totalPages: 1
+        }
+      });
+    });
+
+    test('accepts pagination and filter parameters', async () => {
+      const { app, videosModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'get', '/getVideos');
+      const getVideosHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        query: {
+          page: '2',
+          limit: '24',
+          search: 'test video',
+          dateFrom: '2024-01-01',
+          dateTo: '2024-12-31',
+          sortBy: 'title',
+          sortOrder: 'asc',
+          channelFilter: 'channel123'
+        }
+      });
+      const res = createMockResponse();
+
+      await getVideosHandler(req, res);
+
+      expect(videosModuleMock.getVideosPaginated).toHaveBeenCalledWith({
+        page: 2,
+        limit: 24,
+        search: 'test video',
+        dateFrom: '2024-01-01',
+        dateTo: '2024-12-31',
+        sortBy: 'title',
+        sortOrder: 'asc',
+        channelFilter: 'channel123'
+      });
+      expect(res.statusCode).toBe(200);
     });
 
     test('handles error when fetching videos', async () => {
       const { app, videosModuleMock } = await createServerModule();
-      videosModuleMock.getVideos.mockRejectedValueOnce(new Error('Database error'));
+      videosModuleMock.getVideosPaginated.mockRejectedValueOnce(new Error('Database error'));
 
       const handlers = findRouteHandlers(app, 'get', '/getVideos');
       const getVideosHandler = handlers[handlers.length - 1];
@@ -642,10 +1147,7 @@ describe('server routes - videos', () => {
       const req = createMockRequest({});
       const res = createMockResponse();
 
-      getVideosHandler(req, res);
-
-      // Wait for the promise to settle
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await getVideosHandler(req, res);
 
       expect(res.statusCode).toBe(500);
       expect(res.body).toEqual({ error: 'Database error' });
@@ -713,6 +1215,194 @@ describe('server routes - videos', () => {
       expect(res.body).toEqual({
         isValidUrl: false,
         error: 'Internal server error'
+      });
+    });
+  });
+
+  describe('DELETE /api/videos', () => {
+    test('deletes videos by database IDs successfully', async () => {
+      const { app, videoDeletionModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'delete', '/api/videos');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { videoIds: [1, 2, 3] }
+      });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(videoDeletionModuleMock.deleteVideos).toHaveBeenCalledWith([1, 2, 3]);
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({
+        success: true,
+        deleted: [1, 2],
+        failed: []
+      });
+    });
+
+    test('deletes videos by YouTube IDs successfully', async () => {
+      const { app, videoDeletionModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'delete', '/api/videos');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { youtubeIds: ['vid1', 'vid2'] }
+      });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(videoDeletionModuleMock.deleteVideosByYoutubeIds).toHaveBeenCalledWith(['vid1', 'vid2']);
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({
+        success: true,
+        deleted: ['vid1', 'vid2'],
+        failed: []
+      });
+    });
+
+    test('prefers youtubeIds over videoIds when both provided', async () => {
+      const { app, videoDeletionModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'delete', '/api/videos');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: {
+          videoIds: [1, 2],
+          youtubeIds: ['vid1', 'vid2']
+        }
+      });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(videoDeletionModuleMock.deleteVideosByYoutubeIds).toHaveBeenCalledWith(['vid1', 'vid2']);
+      expect(videoDeletionModuleMock.deleteVideos).not.toHaveBeenCalled();
+      expect(res.statusCode).toBe(200);
+    });
+
+    test('returns 400 when videoIds is not an array', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'delete', '/api/videos');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { videoIds: 'not-an-array' }
+      });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'videoIds or youtubeIds array is required'
+      });
+    });
+
+    test('returns 400 when youtubeIds is not an array', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'delete', '/api/videos');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { youtubeIds: 123 }
+      });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'videoIds or youtubeIds array is required'
+      });
+    });
+
+    test('returns 400 when videoIds array is empty', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'delete', '/api/videos');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { videoIds: [] }
+      });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'videoIds or youtubeIds array is required'
+      });
+    });
+
+    test('returns 400 when youtubeIds array is empty', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'delete', '/api/videos');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { youtubeIds: [] }
+      });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'videoIds or youtubeIds array is required'
+      });
+    });
+
+    test('returns 400 when neither videoIds nor youtubeIds provided', async () => {
+      const { app } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'delete', '/api/videos');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: {}
+      });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'videoIds or youtubeIds array is required'
+      });
+    });
+
+    test('returns 500 when deletion module throws error', async () => {
+      const { app, videoDeletionModuleMock } = await createServerModule();
+      videoDeletionModuleMock.deleteVideos.mockRejectedValueOnce(new Error('Database error'));
+
+      const handlers = findRouteHandlers(app, 'delete', '/api/videos');
+      const deleteHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { videoIds: [1, 2] }
+      });
+      const res = createMockResponse();
+
+      await deleteHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({
+        success: false,
+        error: 'Database error'
       });
     });
   });
@@ -941,7 +1631,23 @@ describe('server routes - version', () => {
     await versionHandler(req, res);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual({ version: 'v1.0.0' });
+    expect(res.body).toEqual({ version: 'v1.0.0', ytDlpVersion: '2025.09.23' });
+  });
+
+  test('GET /getCurrentReleaseVersion reuses cached yt-dlp version', async () => {
+    const { app, childProcessMock } = await createServerModule();
+
+    const handlers = findRouteHandlers(app, 'get', '/getCurrentReleaseVersion');
+    const versionHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({});
+    const res = createMockResponse();
+    const resSecond = createMockResponse();
+
+    await versionHandler(req, res);
+    await versionHandler(req, resSecond);
+
+    expect(childProcessMock.execSync).toHaveBeenCalledTimes(1);
   });
 
   test('GET /getCurrentReleaseVersion handles error', async () => {

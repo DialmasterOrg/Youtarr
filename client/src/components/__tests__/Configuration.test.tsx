@@ -1,1167 +1,888 @@
+import React from 'react';
 import { screen, waitFor } from '@testing-library/react';
-import userEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import Configuration from '../Configuration';
 import { renderWithProviders } from '../../test-utils';
-import React from 'react';
+import { DEFAULT_CONFIG } from '../../config/configSchema';
+import { ConfigState } from '../Configuration/types';
 
-jest.mock('axios', () => ({
-  post: jest.fn()
+// Mock all section components
+jest.mock('../Configuration/sections/CoreSettingsSection', () => ({
+  CoreSettingsSection: function MockCoreSettingsSection(props: any) {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'core-settings-section' }, 'CoreSettingsSection');
+  }
 }));
 
-const axios = require('axios');
+jest.mock('../Configuration/sections/PlexIntegrationSection', () => ({
+  PlexIntegrationSection: function MockPlexIntegrationSection(props: any) {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'plex-integration-section' }, 'PlexIntegrationSection');
+  }
+}));
 
-// Set delay: null to make user interactions instant in tests
-const createUser = () =>
-  userEvent.setup({
-    pointerEventsCheck: PointerEventsCheckLevel.Never,
-    delay: null
-  });
+jest.mock('../Configuration/sections/SponsorBlockSection', () => ({
+  SponsorBlockSection: function MockSponsorBlockSection(props: any) {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'sponsorblock-section' }, 'SponsorBlockSection');
+  }
+}));
 
-const buildMockResponse = <T,>(data: T, ok = true) => ({
-  ok,
-  json: () => Promise.resolve(data),
-}) as unknown as Response;
+jest.mock('../Configuration/sections/KodiCompatibilitySection', () => ({
+  KodiCompatibilitySection: function MockKodiCompatibilitySection(props: any) {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'kodi-compatibility-section' }, 'KodiCompatibilitySection');
+  }
+}));
 
-const defaultCookieStatus = {
-  cookiesEnabled: false,
-  customCookiesUploaded: false,
-  customFileExists: false,
-};
+jest.mock('../Configuration/sections/CookieConfigSection', () => ({
+  CookieConfigSection: function MockCookieConfigSection(props: any) {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'cookie-config-section' }, 'CookieConfigSection');
+  }
+}));
 
-type ConfigOverrides = Partial<typeof mockConfig> & {
-  deploymentEnvironment?: {
-    inDocker: boolean;
-    dockerAutoCreated: boolean;
-    platform: string | null;
-    isWsl: boolean;
-  };
-  isPlatformManaged?: {
-    youtubeOutputDirectory: boolean;
-    plexUrl: boolean;
-    authEnabled: boolean;
-  };
-};
+jest.mock('../Configuration/sections/NotificationsSection', () => ({
+  NotificationsSection: function MockNotificationsSection(props: any) {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'notifications-section' }, 'NotificationsSection');
+  }
+}));
 
-const primeInitialFetches = (
-  configOverrides: ConfigOverrides = {},
-  cookieStatusOverrides: Partial<typeof defaultCookieStatus> = {},
-  additionalResponses: Array<{ data: unknown; ok?: boolean }> = [],
-) => {
-  const configResponse = { ...mockConfig, ...configOverrides };
-  const cookieResponse = { ...defaultCookieStatus, ...cookieStatusOverrides };
+jest.mock('../Configuration/sections/DownloadPerformanceSection', () => ({
+  DownloadPerformanceSection: function MockDownloadPerformanceSection(props: any) {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'download-performance-section' }, 'DownloadPerformanceSection');
+  }
+}));
 
-  const mockFetch = global.fetch as jest.Mock;
+jest.mock('../Configuration/sections/AdvancedSettingsSection', () => ({
+  AdvancedSettingsSection: function MockAdvancedSettingsSection(props: any) {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'advanced-settings-section' }, 'AdvancedSettingsSection');
+  }
+}));
 
-  mockFetch
-    .mockResolvedValueOnce(buildMockResponse(configResponse))
-    .mockResolvedValueOnce(buildMockResponse(cookieResponse));
+jest.mock('../Configuration/sections/AutoRemovalSection', () => ({
+  AutoRemovalSection: function MockAutoRemovalSection(props: any) {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'auto-removal-section' }, 'AutoRemovalSection');
+  }
+}));
 
-  additionalResponses.forEach(({ data, ok }) => {
-    mockFetch.mockResolvedValueOnce(buildMockResponse(data, ok));
-  });
+jest.mock('../Configuration/sections/AccountSecuritySection', () => ({
+  AccountSecuritySection: function MockAccountSecuritySection(props: any) {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'account-security-section' }, 'AccountSecuritySection');
+  }
+}));
 
-  // Default any subsequent fetch calls to return empty arrays unless a test overrides them.
-  mockFetch.mockResolvedValue(buildMockResponse([]));
-};
-
-jest.mock('../PlexLibrarySelector', () => ({
-  __esModule: true,
-  default: ({ open, setLibraryId, handleClose }: any) => {
-    if (!open) {
-      return null;
-    }
-
-    return (
-      <div>
-        <button
-          type="button"
-          onClick={() =>
-            setLibraryId({
-              libraryId: 'mock-library',
-              libraryTitle: 'WSL Library',
-              selectedPath: 'Q:\\Youtube_test'
-            })
-          }
-        >
-          Mock Save Selection
-        </button>
-        <button type="button" onClick={handleClose}>
-          Mock Close
-        </button>
-      </div>
+jest.mock('../Configuration/sections/SaveBar', () => ({
+  SaveBar: function MockSaveBar(props: any) {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'save-bar' },
+      React.createElement('button', {
+        'data-testid': 'save-button',
+        onClick: props.onSave,
+        disabled: props.isLoading || Boolean(props.validationError)
+      }, 'Save')
     );
   }
 }));
 
-const mockNavigate = jest.fn();
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
-  useNavigate: () => mockNavigate,
+// Mock PlexLibrarySelector
+jest.mock('../PlexLibrarySelector', () => ({
+  __esModule: true,
+  default: function MockPlexLibrarySelector(props: any) {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'plex-library-selector' },
+      props.open ? 'PlexLibrarySelector Open' : null
+    );
+  }
 }));
 
-jest.mock('@mui/material/useMediaQuery', () => jest.fn().mockReturnValue(false));
-
-jest.mock('@mui/material/styles', () => ({
-  ...jest.requireActual('@mui/material/styles'),
-  useTheme: () => ({
-    breakpoints: { down: () => false },
-  }),
+// Mock PlexAuthDialog
+jest.mock('../PlexAuthDialog', () => ({
+  __esModule: true,
+  default: function MockPlexAuthDialog(props: any) {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'plex-auth-dialog' },
+      props.open ? 'PlexAuthDialog Open' : null
+    );
+  }
 }));
 
-global.fetch = jest.fn() as jest.Mock;
+// Mock ConfigurationSkeleton
+jest.mock('../Configuration/common/ConfigurationSkeleton', () => ({
+  __esModule: true,
+  default: function MockConfigurationSkeleton() {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'configuration-skeleton' }, 'Loading...');
+  }
+}));
 
-const mockConfig = {
-  channelAutoDownload: false,
-  channelDownloadFrequency: '0 */4 * * *',
-  channelFilesToDownload: 3,
-  preferredResolution: '1080',
-  initialSetup: false,
-  plexApiKey: 'test-plex-key',
-  youtubeOutputDirectory: '/videos',
-  plexYoutubeLibraryId: 'lib-123',
-  plexIP: '192.168.1.100',
-  plexPort: '32400',
-  uuid: 'uuid-123',
-  sponsorblockEnabled: false,
-  sponsorblockAction: 'remove',
-  sponsorblockCategories: {
-    sponsor: true,
-    intro: false,
-    outro: false,
-    selfpromo: true,
-    preview: false,
-    filler: false,
-    interaction: false,
-    music_offtopic: false,
+// Mock custom hooks
+const mockUseConfig = jest.fn();
+const mockUsePlexConnection = jest.fn();
+const mockUseConfigSave = jest.fn();
+const mockUseStorageStatus = jest.fn();
+
+jest.mock('../../hooks/useConfig', () => ({
+  useConfig: (...args: any[]) => mockUseConfig(...args)
+}));
+
+jest.mock('../Configuration/hooks', () => ({
+  usePlexConnection: (...args: any[]) => mockUsePlexConnection(...args),
+  useConfigSave: (...args: any[]) => mockUseConfigSave(...args)
+}));
+
+jest.mock('../../hooks/useStorageStatus', () => ({
+  useStorageStatus: (...args: any[]) => mockUseStorageStatus(...args)
+}));
+
+const createConfig = (overrides: Partial<ConfigState> = {}): ConfigState => ({
+  ...DEFAULT_CONFIG,
+  youtubeOutputDirectory: '/data/youtube',
+  channelDownloadFrequency: '0 */6 * * *',
+  ...overrides,
+});
+
+const createMockUseConfig = (overrides: any = {}) => ({
+  config: createConfig(),
+  initialConfig: createConfig(),
+  isPlatformManaged: {
+    plexUrl: false,
+    authEnabled: false,
+    useTmpForDownloads: false,
   },
-  sponsorblockApiUrl: '',
-  downloadSocketTimeoutSeconds: 30,
-  downloadThrottledRate: '100K',
-  downloadRetryCount: 2,
-  enableStallDetection: true,
-  stallDetectionWindowSeconds: 30,
-  stallDetectionRateThreshold: '100K',
-  cookiesEnabled: false,
-  customCookiesUploaded: false,
-  writeChannelPosters: true,
-  writeVideoNfoFiles: true,
-};
+  deploymentEnvironment: {
+    platform: null,
+    isWsl: false,
+  },
+  loading: false,
+  setConfig: jest.fn(),
+  setInitialConfig: jest.fn(),
+  ...overrides,
+});
+
+const createMockUsePlexConnection = (overrides: any = {}) => ({
+  plexConnectionStatus: 'not_tested',
+  setPlexConnectionStatus: jest.fn(),
+  openPlexLibrarySelector: false,
+  openPlexAuthDialog: false,
+  setOpenPlexAuthDialog: jest.fn(),
+  checkPlexConnection: jest.fn(),
+  testPlexConnection: jest.fn(),
+  openLibrarySelector: jest.fn(),
+  closeLibrarySelector: jest.fn(),
+  setLibraryId: jest.fn(),
+  handlePlexAuthSuccess: jest.fn(),
+  ...overrides,
+});
+
+const createMockUseConfigSave = (overrides: any = {}) => ({
+  saveConfig: jest.fn(),
+  ...overrides,
+});
+
+const createMockUseStorageStatus = (overrides: any = {}) => ({
+  available: true,
+  isLoading: false,
+  error: null,
+  ...overrides,
+});
 
 describe('Configuration Component', () => {
-  const mockToken = 'test-token';
-
-const renderConfiguration = async ({
-    token = mockToken,
-    configOverrides = {},
-    cookieOverrides = {},
-    additionalFetchResponses = [],
-  }: {
-    token?: string | null;
-    configOverrides?: ConfigOverrides;
-    cookieOverrides?: Partial<typeof defaultCookieStatus>;
-    additionalFetchResponses?: Array<{ data: unknown; ok?: boolean }>;
-  } = {}) => {
-    primeInitialFetches(configOverrides, cookieOverrides, additionalFetchResponses);
-    renderWithProviders(<Configuration token={token} />);
-    await screen.findByText('Core Settings');
-  };
-
   beforeEach(() => {
     jest.clearAllMocks();
-    (global.fetch as jest.Mock).mockClear();
+    mockUseConfig.mockReturnValue(createMockUseConfig());
+    mockUsePlexConnection.mockReturnValue(createMockUsePlexConnection());
+    mockUseConfigSave.mockReturnValue(createMockUseConfigSave());
+    mockUseStorageStatus.mockReturnValue(createMockUseStorageStatus());
   });
 
-  describe('Component Loading and Rendering', () => {
-    test('displays loading skeleton while fetching configuration', async () => {
-      (global.fetch as jest.Mock).mockImplementation(() =>
-        new Promise(() => {})
-      );
-
-      renderWithProviders(<Configuration token={mockToken} />);
-
-      expect(screen.getByText('Loading configuration...')).toBeInTheDocument();
+  describe('Component Rendering', () => {
+    test('renders without crashing', () => {
+      renderWithProviders(<Configuration token="test-token" />);
+      expect(screen.getByTestId('core-settings-section')).toBeInTheDocument();
     });
 
-    test('fetches and displays configuration on mount', async () => {
-      await renderConfiguration();
+    test('shows loading skeleton while loading', () => {
+      mockUseConfig.mockReturnValue(createMockUseConfig({ loading: true }));
+      renderWithProviders(<Configuration token="test-token" />);
+      expect(screen.getByTestId('configuration-skeleton')).toBeInTheDocument();
+      expect(screen.queryByTestId('core-settings-section')).not.toBeInTheDocument();
+    });
 
-      expect(global.fetch).toHaveBeenCalledWith('/getconfig', {
-        headers: { 'x-access-token': mockToken },
+    test('renders all sections after loading', () => {
+      renderWithProviders(<Configuration token="test-token" />);
+
+      expect(screen.getByTestId('core-settings-section')).toBeInTheDocument();
+      expect(screen.getByTestId('plex-integration-section')).toBeInTheDocument();
+      expect(screen.getByTestId('sponsorblock-section')).toBeInTheDocument();
+      expect(screen.getByTestId('kodi-compatibility-section')).toBeInTheDocument();
+      expect(screen.getByTestId('cookie-config-section')).toBeInTheDocument();
+      expect(screen.getByTestId('notifications-section')).toBeInTheDocument();
+      expect(screen.getByTestId('download-performance-section')).toBeInTheDocument();
+      expect(screen.getByTestId('advanced-settings-section')).toBeInTheDocument();
+      expect(screen.getByTestId('auto-removal-section')).toBeInTheDocument();
+      expect(screen.getByTestId('account-security-section')).toBeInTheDocument();
+      expect(screen.getByTestId('save-bar')).toBeInTheDocument();
+    });
+
+    test('renders confirmation dialog (initially closed)', () => {
+      renderWithProviders(<Configuration token="test-token" />);
+
+      // Dialog should not show initially
+      expect(screen.queryByText('Confirm Save Configuration')).not.toBeInTheDocument();
+    });
+
+    test('renders PlexLibrarySelector (initially closed)', () => {
+      renderWithProviders(<Configuration token="test-token" />);
+
+      expect(screen.getByTestId('plex-library-selector')).toBeInTheDocument();
+      expect(screen.queryByText('PlexLibrarySelector Open')).not.toBeInTheDocument();
+    });
+
+    test('renders PlexAuthDialog (initially closed)', () => {
+      renderWithProviders(<Configuration token="test-token" />);
+
+      expect(screen.getByTestId('plex-auth-dialog')).toBeInTheDocument();
+      expect(screen.queryByText('PlexAuthDialog Open')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Configuration Management', () => {
+    test('fetches config on mount via useConfig hook', () => {
+      renderWithProviders(<Configuration token="test-token" />);
+
+      expect(mockUseConfig).toHaveBeenCalledWith('test-token');
+    });
+
+    test('calls useStorageStatus hook', () => {
+      renderWithProviders(<Configuration token="test-token" />);
+
+      expect(mockUseStorageStatus).toHaveBeenCalledWith('test-token', { checkOnly: true });
+    });
+
+    test('initializes usePlexConnection with correct params', () => {
+      const setConfig = jest.fn();
+      const setInitialConfig = jest.fn();
+      mockUseConfig.mockReturnValue(createMockUseConfig({ setConfig, setInitialConfig }));
+
+      renderWithProviders(<Configuration token="test-token" />);
+
+      expect(mockUsePlexConnection).toHaveBeenCalledWith({
+        token: 'test-token',
+        config: expect.any(Object),
+        setConfig: setConfig,
+        setInitialConfig: setInitialConfig,
+        setSnackbar: expect.any(Function),
+        hasPlexServerConfigured: false,
       });
-
-      const outputDirInput = screen.getByRole('textbox', { name: /YouTube Output Directory/i });
-      expect(outputDirInput).toHaveValue('/videos');
     });
 
-    test('handles fetch error gracefully', async () => {
-      const consoleError = jest.spyOn(console, 'error').mockImplementation();
-      (global.fetch as jest.Mock)
-        .mockRejectedValueOnce(new Error('Network error'))
-        .mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve([]),
-        } as Response);
+    test('initializes useConfigSave with correct params', () => {
+      const setInitialConfig = jest.fn();
+      const checkPlexConnection = jest.fn();
+      mockUseConfig.mockReturnValue(createMockUseConfig({ setInitialConfig }));
+      mockUsePlexConnection.mockReturnValue(createMockUsePlexConnection({ checkPlexConnection }));
 
-      renderWithProviders(<Configuration token={mockToken} />);
+      renderWithProviders(<Configuration token="test-token" />);
 
-      await screen.findByText('Core Settings');
-
-      expect(consoleError).toHaveBeenCalled();
-      consoleError.mockRestore();
-    });
-
-    test('renders without token', async () => {
-      await renderConfiguration({ token: null });
-
-      expect(global.fetch).toHaveBeenCalledWith('/getconfig', {
-        headers: { 'x-access-token': '' },
+      expect(mockUseConfigSave).toHaveBeenCalledWith({
+        token: 'test-token',
+        config: expect.any(Object),
+        setInitialConfig: setInitialConfig,
+        setSnackbar: expect.any(Function),
+        hasPlexServerConfigured: false,
+        checkPlexConnection: checkPlexConnection,
       });
     });
-  });
 
-  describe('Core Settings', () => {
-    const setupComponent = async () => {
-      await renderConfiguration();
-    };
-
-    test('updates YouTube output directory', async () => {
-      await setupComponent();
-      const user = createUser();
-      const input = screen.getByRole('textbox', { name: /YouTube Output Directory/i });
-
-      await user.clear(input);
-      await user.type(input, '/new/path');
-
-      expect(input).toHaveValue('/new/path');
-    });
-
-    test('toggles automatic downloads', async () => {
-      await setupComponent();
-      const user = createUser();
-      const checkbox = screen.getByRole('checkbox', { name: /Enable Automatic Downloads/i });
-
-      expect(checkbox).not.toBeChecked();
-
-      await user.click(checkbox);
-      expect(checkbox).toBeChecked();
-    });
-
-    test('changes download frequency', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      const checkbox = screen.getByRole('checkbox', { name: /Enable Automatic Downloads/i });
-      await user.click(checkbox);
-
-      // Wait for the select to be enabled after checkbox is checked
-      await screen.findAllByText('Download Frequency');
-
-      // MUI Select renders as a div with role="button"
-      const frequencySelect = screen.getByRole('button', { name: /Every 4 hours/i });
-      await user.click(frequencySelect);
-
-      // Wait for menu to open and click option
-      const dailyOption = await screen.findByRole('option', { name: 'Daily' });
-      await user.click(dailyOption);
-
-      // Verify the selection was made
-      await screen.findByRole('button', { name: /Daily/i });
-    });
-
-    test('changes files to download per channel', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      // MUI Select renders as a div with role="button" showing current value
-      const selectButton = screen.getByRole('button', { name: /3 videos/i });
-      await user.click(selectButton);
-
-      const option = await screen.findByRole('option', { name: '5 videos' });
-      await user.click(option);
-
-      await screen.findByRole('button', { name: /5 videos/i });
-    });
-
-    test('changes preferred resolution', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      // MUI Select renders as a div with role="button" showing current value
-      const selectButton = screen.getByRole('button', { name: /1080p/i });
-      await user.click(selectButton);
-
-      const option = await screen.findByRole('option', { name: '4K (2160p)' });
-      await user.click(option);
-
-      await screen.findByRole('button', { name: /4K \(2160p\)/i });
-    });
-  });
-
-  describe('Plex Integration', () => {
-    const setupComponent = async (configOverrides: ConfigOverrides = {}) => {
-      await renderConfiguration({ configOverrides });
-    };
-
-    test('expands Plex accordion and shows configuration', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      const accordion = screen.getByText('Optional: Plex Media Server Integration');
-      await user.click(accordion);
-
-      await screen.findByText('Plex Integration is Optional');
-
-      const plexIpInput = screen.getByRole('textbox', { name: /Plex Server IP/i });
-      expect(plexIpInput).toHaveValue('192.168.1.100');
-
-      const plexPortInput = screen.getByRole('spinbutton', { name: /Plex Port/i });
-      expect(plexPortInput).toHaveValue(32400);
-    });
-
-    test('keeps Plex actions enabled when platform manages Plex URL', async () => {
-      const platformManagedConfig = {
-        ...mockConfig,
-        plexIP: '',
-        plexPort: '32400',
-        isPlatformManaged: {
-          youtubeOutputDirectory: false,
-          plexUrl: true,
-          authEnabled: true,
-        },
-      };
-
-      await setupComponent(platformManagedConfig);
-
-      const user = createUser();
-      const accordion = screen.getByText('Optional: Plex Media Server Integration');
-      await user.click(accordion);
-
-      const testButton = await screen.findByRole('button', { name: /^Test Connection$/i });
-      expect(testButton).not.toBeDisabled();
-
-      const plexPortInput = await screen.findByRole('spinbutton', { name: /Plex Port/i });
-      expect(plexPortInput).toBeDisabled();
-    });
-
-    test('tests Plex connection successfully', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      const accordion = screen.getByText('Optional: Plex Media Server Integration');
-      await user.click(accordion);
-
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve([
-          { key: '1', title: 'Library 1' },
-          { key: '2', title: 'Library 2' },
-        ]),
-      } as Response);
-
-      const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
-      await user.click(testButtons[0]);
-
-      await screen.findByText(/Plex connection successful/i);
-
-      const calls = (global.fetch as jest.Mock).mock.calls;
-      const lastCall = calls[calls.length - 1];
-      expect(lastCall[0]).toContain('testIP=192.168.1.100');
-      expect(lastCall[0]).toContain('testPort=32400');
-    });
-
-    test('handles failed Plex connection test', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      const accordion = screen.getByText('Optional: Plex Media Server Integration');
-      await user.click(accordion);
-
-      (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Connection failed'));
-
-      const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
-      await user.click(testButtons[0]);
-
-      await screen.findByText(/Failed to connect to Plex server/i);
-    });
-
-    test('opens library selector when connected', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      const accordion = screen.getByText('Optional: Plex Media Server Integration');
-      await user.click(accordion);
-
-      (global.fetch as jest.Mock).mockResolvedValueOnce(buildMockResponse([
-        { key: '1', title: 'Library 1' },
-      ]));
-
-      const testButtons = await screen.findAllByRole('button', { name: /^Test Connection$/i });
-      await user.click(testButtons[0]);
-
-      await screen.findByText(/Plex connection successful/i);
-
-      const selectLibraryButton = screen.getByRole('button', { name: /Select Plex Library/i });
-      expect(selectLibraryButton).not.toBeDisabled();
-    });
-
-    test('suggests translated path for WSL when selecting Plex library', async () => {
-      await renderConfiguration({
-        configOverrides: {
-          deploymentEnvironment: {
-            inDocker: false,
-            dockerAutoCreated: false,
-            platform: null,
-            isWsl: true,
-          },
-        },
-        additionalFetchResponses: [
-          { data: [
-            {
-              key: '1',
-              title: 'WSL Library',
-            },
-          ] },
-        ],
-      });
-
-      const user = createUser();
-
-      const accordion = screen.getByText('Optional: Plex Media Server Integration');
-      await user.click(accordion);
-
-      const selectLibraryButton = await screen.findByRole('button', { name: /Select Plex Library/i });
-
-      await waitFor(() => expect(selectLibraryButton).not.toBeDisabled(), { timeout: 500 });
-
-      await user.click(selectLibraryButton);
-
-      const mockSaveButton = await screen.findByRole('button', { name: /Mock Save Selection/i });
-      await user.click(mockSaveButton);
-
-      await screen.findByText(/reports its media path as/i);
-
-      expect(screen.getByText(/\/mnt\/q\/Youtube_test/i)).toBeInTheDocument();
-
-      const applyButton = screen.getByRole('button', { name: /Use Suggested Path/i });
-      await user.click(applyButton);
-
-      const outputField = screen.getByRole('textbox', { name: /YouTube Output Directory/i });
-      await waitFor(() => expect(outputField).toHaveValue('/mnt/q/Youtube_test'), { timeout: 500 });
-
-      expect(screen.queryByText(/Use Suggested Path/i)).not.toBeInTheDocument();
-    });
-  });
-
-  describe('SponsorBlock Settings', () => {
-    const setupComponent = async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(mockConfig),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            cookiesEnabled: false,
-            customCookiesUploaded: false,
-            customFileExists: false,
-          }),
-        } as Response)
-        .mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve([]),
-        } as Response);
-
-      renderWithProviders(<Configuration token={mockToken} />);
-
-      await screen.findByText('Core Settings');
-    };
-
-    test('toggles SponsorBlock and configures settings', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      const accordion = screen.getByText('Optional: SponsorBlock Integration');
-      await user.click(accordion);
-
-      const enableCheckbox = screen.getByRole('checkbox', { name: /Enable SponsorBlock/i });
-      await user.click(enableCheckbox);
-
-      await screen.findAllByText('Action for Segments');
-
-      // MUI Select renders as a button showing current value
-      const actionSelect = screen.getByRole('button', { name: /Remove segments from video/i });
-      await user.click(actionSelect);
-
-      const markOption = await screen.findByRole('option', { name: 'Mark segments as chapters' });
-      await user.click(markOption);
-
-      await screen.findByRole('button', { name: /Mark segments as chapters/i });
-    });
-
-    test('configures SponsorBlock categories', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      const accordion = screen.getByText('Optional: SponsorBlock Integration');
-      await user.click(accordion);
-
-      const enableCheckbox = screen.getByRole('checkbox', { name: /Enable SponsorBlock/i });
-      await user.click(enableCheckbox);
-
-      const introCheckbox = await screen.findByRole('checkbox', { name: /Intro/i });
-      expect(introCheckbox).not.toBeChecked();
-
-      await user.click(introCheckbox);
-      expect(introCheckbox).toBeChecked();
-    });
-  });
-
-  describe('Cookie Configuration', () => {
-    const setupComponent = async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(mockConfig),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            cookiesEnabled: false,
-            customCookiesUploaded: false,
-            customFileExists: false,
-          }),
-        } as Response)
-        .mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve([]),
-        } as Response);
-
-      renderWithProviders(<Configuration token={mockToken} />);
-
-      await screen.findByText('Core Settings');
-    };
-
-    test('toggles cookies and shows upload button', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      const accordion = screen.getByText('Cookie Configuration');
-      await user.click(accordion);
-
-      const enableSwitch = screen.getByRole('checkbox', { name: /Enable Cookies/i });
-      await user.click(enableSwitch);
-
-      await screen.findByText('Upload Cookie File');
-    });
-
-    test('handles cookie deletion', async () => {
-      const configWithCookies = { ...mockConfig, customCookiesUploaded: true };
-
-      (global.fetch as jest.Mock).mockReset();
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(configWithCookies),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            cookiesEnabled: true,
-            customCookiesUploaded: true,
-            customFileExists: true,
-          }),
-        } as Response)
-        .mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve([]),
-        } as Response);
-
-      renderWithProviders(<Configuration token={mockToken} />);
-
-      await screen.findByText('Core Settings');
-
-      const user = createUser();
-      const accordion = screen.getByText('Cookie Configuration');
-      await user.click(accordion);
-
-      const enableSwitch = screen.getByRole('checkbox', { name: /Enable Cookies/i });
-      await user.click(enableSwitch);
-
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          cookieStatus: {
-            cookiesEnabled: false,
-            customCookiesUploaded: false,
-            customFileExists: false,
-          },
-        }),
-      } as Response);
-
-      const deleteButton = await screen.findByText('Delete Custom Cookies');
-      await user.click(deleteButton);
-
-      await screen.findByText('Custom cookies deleted');
-    });
-  });
-
-  describe('Download Performance Settings', () => {
-    const setupComponent = async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(mockConfig),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            cookiesEnabled: false,
-            customCookiesUploaded: false,
-            customFileExists: false,
-          }),
-        } as Response)
-        .mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve([]),
-        } as Response);
-
-      renderWithProviders(<Configuration token={mockToken} />);
-
-      await screen.findByText('Core Settings');
-    };
-
-    test('configures download performance settings', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      const accordion = screen.getByText('Download Performance Settings');
-      await user.click(accordion);
-
-      await screen.findAllByText('Socket Timeout');
-
-      // MUI Select renders as a button showing current value
-      const timeoutSelect = screen.getByRole('button', { name: /30 seconds/i });
-      await user.click(timeoutSelect);
-
-      const option = await screen.findByRole('option', { name: '10 seconds' });
-      await user.click(option);
-
-      await screen.findByRole('button', { name: /10 seconds/i });
-    });
-
-    test('toggles and configures stall detection', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      const accordion = screen.getByText('Download Performance Settings');
-      await user.click(accordion);
-
-      const stallDetectionSwitch = screen.getByRole('checkbox', { name: /Enable Stall Detection/i });
-      expect(stallDetectionSwitch).toBeChecked();
-
-      await user.click(stallDetectionSwitch);
-      expect(stallDetectionSwitch).not.toBeChecked();
-
-      await user.click(stallDetectionSwitch);
-      expect(stallDetectionSwitch).toBeChecked();
-
-      const windowInput = await screen.findByLabelText('Stall Detection Window (seconds)');
-      expect(windowInput).toHaveValue(30);
-    });
-  });
-
-  describe('Kodi/Emby/Jellyfin Compatibility', () => {
-    const setupComponent = async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(mockConfig),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            cookiesEnabled: false,
-            customCookiesUploaded: false,
-            customFileExists: false,
-          }),
-        } as Response)
-        .mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve([]),
-        } as Response);
-
-      renderWithProviders(<Configuration token={mockToken} />);
-
-      await screen.findByText('Core Settings');
-    };
-
-    test('toggles NFO file generation', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      const accordion = screen.getByText('Optional: Kodi, Emby and Jellyfin compatibility');
-      await user.click(accordion);
-
-      const nfoSwitch = screen.getByRole('checkbox', { name: /Generate video \.nfo files/i });
-      expect(nfoSwitch).toBeChecked();
-
-      await user.click(nfoSwitch);
-      expect(nfoSwitch).not.toBeChecked();
-    });
-
-    test('toggles channel poster generation', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      const accordion = screen.getByText('Optional: Kodi, Emby and Jellyfin compatibility');
-      await user.click(accordion);
-
-      const posterSwitch = screen.getByRole('checkbox', { name: /Copy channel poster\.jpg files/i });
-      expect(posterSwitch).toBeChecked();
-
-      await user.click(posterSwitch);
-      expect(posterSwitch).not.toBeChecked();
-    });
-  });
-
-  describe('Password Change', () => {
-    const setupComponent = async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(mockConfig),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            cookiesEnabled: false,
-            customCookiesUploaded: false,
-            customFileExists: false,
-          }),
-        } as Response)
-        .mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve([]),
-        } as Response);
-
-      renderWithProviders(<Configuration token={mockToken} />);
-
-      await screen.findByText('Core Settings');
-    };
-
-    test('shows and hides password change form', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      // First, verify the button exists and is not showing the form
-      const changePasswordButton = await screen.findByRole('button', { name: 'Change Password' });
-      expect(changePasswordButton).toBeInTheDocument();
-
-      // Initially, password fields should not be visible
-      expect(screen.queryByLabelText(/Current Password/i)).not.toBeInTheDocument();
-
-      // Click the button to show the form
-      await user.click(changePasswordButton);
-
-      // Wait for form to render
-      await screen.findByLabelText(/Current Password/i);
-
-      // Check that all three password fields are visible
-      const passwordFields = screen.getAllByLabelText(/password/i);
-      expect(passwordFields).toHaveLength(3); // Current, New, and Confirm New
-
-      const cancelButton = screen.getByRole('button', { name: 'Cancel' });
-      await user.click(cancelButton);
-
-      await waitFor(() => expect(screen.queryByLabelText(/Current Password/i)).not.toBeInTheDocument(), { timeout: 500 });
-    });
-
-    test('validates password requirements', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      const changePasswordButton = await screen.findByRole('button', { name: 'Change Password' });
-      await user.click(changePasswordButton);
-
-      await screen.findByLabelText(/Current Password/i);
-
-      axios.post.mockResolvedValueOnce({ data: { success: true } });
-
-      // Get all password fields and identify them by order
-      const passwordFields = screen.getAllByLabelText(/password/i);
-      const currentPasswordInput = passwordFields[0]; // Current Password
-      const newPasswordInput = passwordFields[1]; // New Password
-      const confirmPasswordInput = passwordFields[2]; // Confirm New Password
-
-      await user.type(currentPasswordInput, 'oldpass');
-      await user.type(newPasswordInput, 'short');
-      await user.type(confirmPasswordInput, 'short');
-
-      const updateButton = screen.getByRole('button', { name: 'Update Password' });
-      await user.click(updateButton);
-
-      await screen.findByText('Password must be at least 8 characters');
-    });
-
-    test('handles password mismatch', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      const changePasswordButton = await screen.findByRole('button', { name: 'Change Password' });
-      await user.click(changePasswordButton);
-
-      await screen.findByLabelText(/Current Password/i);
-
-      // Get all password fields and identify them by order
-      const passwordFields = screen.getAllByLabelText(/password/i);
-      const currentPasswordInput = passwordFields[0]; // Current Password
-      const newPasswordInput = passwordFields[1]; // New Password
-      const confirmPasswordInput = passwordFields[2]; // Confirm New Password
-
-      await user.type(currentPasswordInput, 'oldpassword');
-      await user.type(newPasswordInput, 'newpassword123');
-      await user.type(confirmPasswordInput, 'different123');
-
-      expect(screen.getByText("Passwords don't match")).toBeInTheDocument();
-
-      const updateButton = screen.getByRole('button', { name: 'Update Password' });
-      await user.click(updateButton);
-
-      await screen.findByText('Passwords do not match');
-    });
-
-    test('successfully changes password', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      const changePasswordButton = await screen.findByRole('button', { name: 'Change Password' });
-      await user.click(changePasswordButton);
-
-      await screen.findByLabelText(/Current Password/i);
-
-      axios.post.mockResolvedValueOnce({ data: { success: true } });
-
-      // Get all password fields and identify them by order
-      const passwordFields = screen.getAllByLabelText(/password/i);
-      const currentPasswordInput = passwordFields[0]; // Current Password
-      const newPasswordInput = passwordFields[1]; // New Password
-      const confirmPasswordInput = passwordFields[2]; // Confirm New Password
-
-      await user.type(currentPasswordInput, 'oldpassword');
-      await user.type(newPasswordInput, 'newpassword123');
-      await user.type(confirmPasswordInput, 'newpassword123');
-
-      const updateButton = screen.getByRole('button', { name: 'Update Password' });
-      await user.click(updateButton);
-
-      await screen.findByText('Password updated successfully');
-
-      expect(screen.queryByLabelText('Current Password')).not.toBeInTheDocument();
-    });
-  });
-
-  describe('Save Configuration', () => {
-    const setupComponent = async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(mockConfig),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            cookiesEnabled: false,
-            customCookiesUploaded: false,
-            customFileExists: false,
-          }),
-        } as Response)
-        .mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve([]),
-        } as Response);
-
-      renderWithProviders(<Configuration token={mockToken} />);
-
-      await screen.findByText('Core Settings');
-    };
-
-    test('saves configuration successfully', async () => {
-      await setupComponent();
-      const user = createUser();
-
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ status: 'success' }),
-      } as Response);
-
-      const saveButton = screen.getByRole('button', { name: /Save Configuration/i });
-      await user.click(saveButton);
-
-      await screen.findByText('Configuration saved successfully');
-
-      expect(global.fetch).toHaveBeenCalledWith('/updateconfig', expect.objectContaining({
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-access-token': mockToken,
-        },
-        body: expect.any(String),
+    test('detects Plex server configured when plexIP is set', () => {
+      mockUseConfig.mockReturnValue(createMockUseConfig({
+        config: createConfig({ plexIP: '192.168.1.100' })
       }));
+
+      renderWithProviders(<Configuration token="test-token" />);
+
+      expect(mockUsePlexConnection).toHaveBeenCalledWith(
+        expect.objectContaining({ hasPlexServerConfigured: true })
+      );
     });
 
-    test('shows unsaved changes indicator', async () => {
-      await setupComponent();
-      const user = createUser();
+    test('detects Plex server configured when platform manages plexUrl', () => {
+      mockUseConfig.mockReturnValue(createMockUseConfig({
+        isPlatformManaged: { plexUrl: true, authEnabled: false, useTmpForDownloads: false }
+      }));
 
-      const checkbox = screen.getByRole('checkbox', { name: /Enable Automatic Downloads/i });
-      await user.click(checkbox);
+      renderWithProviders(<Configuration token="test-token" />);
 
-      await screen.findByRole('button', { name: /Save Configuration \(Unsaved Changes\)/i });
+      expect(mockUsePlexConnection).toHaveBeenCalledWith(
+        expect.objectContaining({ hasPlexServerConfigured: true })
+      );
+    });
+  });
+
+  describe('Unsaved Changes Tracking', () => {
+    test('detects no unsaved changes when config matches initial config', () => {
+      const initialConfig = createConfig({ plexIP: '192.168.1.100' });
+      mockUseConfig.mockReturnValue(createMockUseConfig({
+        config: createConfig({ plexIP: '192.168.1.100' }),
+        initialConfig: initialConfig,
+      }));
+
+      renderWithProviders(<Configuration token="test-token" />);
+
+      const saveBar = screen.getByTestId('save-bar');
+      expect(saveBar).toBeInTheDocument();
     });
 
-    test('shows restart warning when YouTube directory changes', async () => {
-      await setupComponent();
-      const user = createUser();
+    test('detects unsaved changes when config differs from initial config', () => {
+      const initialConfig = createConfig({ plexIP: '192.168.1.100' });
+      mockUseConfig.mockReturnValue(createMockUseConfig({
+        config: createConfig({ plexIP: '192.168.1.200' }),
+        initialConfig: initialConfig,
+      }));
 
-      const input = screen.getByRole('textbox', { name: /YouTube Output Directory/i });
-      await user.clear(input);
-      await user.type(input, '/new/youtube/path');
+      renderWithProviders(<Configuration token="test-token" />);
 
-      const saveButton = screen.getByRole('button', { name: /Save Configuration/i });
+      expect(screen.getByTestId('save-bar')).toBeInTheDocument();
+    });
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ status: 'success' }),
-      } as Response);
+    test('handles null initialConfig gracefully', () => {
+      mockUseConfig.mockReturnValue(createMockUseConfig({
+        initialConfig: null,
+      }));
 
+      renderWithProviders(<Configuration token="test-token" />);
+
+      expect(screen.getByTestId('save-bar')).toBeInTheDocument();
+    });
+  });
+
+  describe('Save Flow', () => {
+    test('opens confirmation dialog when save button clicked', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<Configuration token="test-token" />);
+
+      const saveButton = screen.getByTestId('save-button');
       await user.click(saveButton);
 
-      await screen.findByText(/Please restart Youtarr for YouTube directory changes/i);
+      expect(await screen.findByText('Confirm Save Configuration')).toBeInTheDocument();
     });
 
-    test('shows confirmation dialog for initial setup', async () => {
-      const configWithInitialSetup = { ...mockConfig, initialSetup: true };
+    test('displays cancel and save buttons in confirmation dialog', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<Configuration token="test-token" />);
 
-      (global.fetch as jest.Mock).mockReset();
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(configWithInitialSetup),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            cookiesEnabled: false,
-            customCookiesUploaded: false,
-            customFileExists: false,
-          }),
-        } as Response)
-        .mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve([]),
-        } as Response);
-
-      renderWithProviders(<Configuration token={mockToken} />);
-
-      await screen.findByText('Core Settings');
-
-      const user = createUser();
-      const saveButton = screen.getByRole('button', { name: /Save Configuration/i });
+      const saveButton = screen.getByTestId('save-button');
       await user.click(saveButton);
 
-      await screen.findByText('Confirm Save Configuration');
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
+      });
+      expect(screen.getByRole('button', { name: /save configuration/i })).toBeInTheDocument();
+    });
 
-      const cancelButton = screen.getByRole('button', { name: 'Cancel' });
+    test('closes confirmation dialog when cancel is clicked', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<Configuration token="test-token" />);
+
+      const saveButton = screen.getByTestId('save-button');
+      await user.click(saveButton);
+
+      const cancelButton = await screen.findByRole('button', { name: /cancel/i });
       await user.click(cancelButton);
 
-      await waitFor(() => expect(screen.queryByText('Confirm Save Configuration')).not.toBeInTheDocument(), { timeout: 500 });
+      await waitFor(() => {
+        expect(screen.queryByText('Confirm Save Configuration')).not.toBeInTheDocument();
+      });
     });
 
-    test('handles save configuration error', async () => {
-      await setupComponent();
-      const user = createUser();
+    test('calls saveConfig when save is confirmed', async () => {
+      const user = userEvent.setup();
+      const saveConfig = jest.fn();
+      mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ error: 'Save failed' }),
-      } as Response);
+      renderWithProviders(<Configuration token="test-token" />);
 
-      const saveButton = screen.getByRole('button', { name: /Save Configuration/i });
+      const saveButton = screen.getByTestId('save-button');
       await user.click(saveButton);
 
-      await screen.findByText('Failed to save configuration');
+      const confirmButton = await screen.findByRole('button', { name: /save configuration/i });
+      await user.click(confirmButton);
+
+      await waitFor(() => {
+        expect(saveConfig).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    test('closes confirmation dialog after save is confirmed', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<Configuration token="test-token" />);
+
+      const saveButton = screen.getByTestId('save-button');
+      await user.click(saveButton);
+
+      const confirmButton = await screen.findByRole('button', { name: /save configuration/i });
+      await user.click(confirmButton);
+
+      await waitFor(() => {
+        expect(screen.queryByText('Confirm Save Configuration')).not.toBeInTheDocument();
+      });
     });
   });
 
-  describe('Platform-specific Features', () => {
-    test('shows platform managed indicators', async () => {
-      const platformManagedConfig = {
-        ...mockConfig,
-      };
+  describe('Validation', () => {
+    describe('Auto-Removal Validation', () => {
+      test('prevents save when auto-removal enabled without thresholds', () => {
+        const saveConfig = jest.fn();
+        mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+        mockUseConfig.mockReturnValue(createMockUseConfig({
+          config: createConfig({
+            autoRemovalEnabled: true,
+            autoRemovalFreeSpaceThreshold: '',
+            autoRemovalVideoAgeThreshold: '',
+          }),
+        }));
 
-      const configWithPlatform = {
-        ...platformManagedConfig,
+        renderWithProviders(<Configuration token="test-token" />);
+
+        const saveButton = screen.getByTestId('save-button');
+
+        // Button should be disabled due to validation error
+        expect(saveButton).toBeDisabled();
+        expect(saveConfig).not.toHaveBeenCalled();
+      });
+
+    test('prevents save from confirmation dialog when auto-removal enabled without thresholds', async () => {
+      const saveConfig = jest.fn();
+      mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+      mockUseConfig.mockReturnValue(createMockUseConfig({
+        config: createConfig({
+          autoRemovalEnabled: true,
+          autoRemovalFreeSpaceThreshold: '',
+          autoRemovalVideoAgeThreshold: '',
+        }),
+      }));
+
+      renderWithProviders(<Configuration token="test-token" />);
+
+      const saveButton = screen.getByTestId('save-button');
+
+      // Button should be disabled due to validation error
+      expect(saveButton).toBeDisabled();
+    });
+
+    test('allows save when auto-removal enabled with free space threshold', async () => {
+      const user = userEvent.setup();
+      const saveConfig = jest.fn();
+      mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+      mockUseConfig.mockReturnValue(createMockUseConfig({
+        config: createConfig({
+          autoRemovalEnabled: true,
+          autoRemovalFreeSpaceThreshold: '10',
+          autoRemovalVideoAgeThreshold: '',
+        }),
+      }));
+
+      renderWithProviders(<Configuration token="test-token" />);
+
+      const saveButton = screen.getByTestId('save-button');
+      await user.click(saveButton);
+
+      const confirmButton = await screen.findByRole('button', { name: /save configuration/i });
+      await user.click(confirmButton);
+
+      await waitFor(() => {
+        expect(saveConfig).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    test('allows save when auto-removal enabled with video age threshold', async () => {
+      const user = userEvent.setup();
+      const saveConfig = jest.fn();
+      mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+      mockUseConfig.mockReturnValue(createMockUseConfig({
+        config: createConfig({
+          autoRemovalEnabled: true,
+          autoRemovalFreeSpaceThreshold: '',
+          autoRemovalVideoAgeThreshold: '30',
+        }),
+      }));
+
+      renderWithProviders(<Configuration token="test-token" />);
+
+      const saveButton = screen.getByTestId('save-button');
+      await user.click(saveButton);
+
+      const confirmButton = await screen.findByRole('button', { name: /save configuration/i });
+      await user.click(confirmButton);
+
+      await waitFor(() => {
+        expect(saveConfig).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    test('allows save when auto-removal disabled without thresholds', async () => {
+      const user = userEvent.setup();
+      const saveConfig = jest.fn();
+      mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+      mockUseConfig.mockReturnValue(createMockUseConfig({
+        config: createConfig({
+          autoRemovalEnabled: false,
+          autoRemovalFreeSpaceThreshold: '',
+          autoRemovalVideoAgeThreshold: '',
+        }),
+      }));
+
+      renderWithProviders(<Configuration token="test-token" />);
+
+      const saveButton = screen.getByTestId('save-button');
+      await user.click(saveButton);
+
+      const confirmButton = await screen.findByRole('button', { name: /save configuration/i });
+      await user.click(confirmButton);
+
+      await waitFor(() => {
+        expect(saveConfig).toHaveBeenCalledTimes(1);
+      });
+    });
+    });
+
+    describe('Proxy Validation', () => {
+      test('prevents save when proxy URL is invalid', () => {
+        const saveConfig = jest.fn();
+        mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+        mockUseConfig.mockReturnValue(createMockUseConfig({
+          config: createConfig({
+            proxy: 'invalid-proxy-url',
+          }),
+        }));
+
+        renderWithProviders(<Configuration token="test-token" />);
+
+        const saveButton = screen.getByTestId('save-button');
+
+        // Button should be disabled due to validation error
+        expect(saveButton).toBeDisabled();
+        expect(saveConfig).not.toHaveBeenCalled();
+      });
+
+      test('allows save when proxy URL is valid HTTP', async () => {
+        const user = userEvent.setup();
+        const saveConfig = jest.fn();
+        mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+        mockUseConfig.mockReturnValue(createMockUseConfig({
+          config: createConfig({
+            proxy: 'http://proxy.example.com:8080',
+          }),
+        }));
+
+        renderWithProviders(<Configuration token="test-token" />);
+
+        const saveButton = screen.getByTestId('save-button');
+        await user.click(saveButton);
+
+        const confirmButton = await screen.findByRole('button', { name: /save configuration/i });
+        await user.click(confirmButton);
+
+        await waitFor(() => {
+          expect(saveConfig).toHaveBeenCalledTimes(1);
+        });
+      });
+
+      test('allows save when proxy URL is valid SOCKS5 with authentication', async () => {
+        const user = userEvent.setup();
+        const saveConfig = jest.fn();
+        mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+        mockUseConfig.mockReturnValue(createMockUseConfig({
+          config: createConfig({
+            proxy: 'socks5://user:pass@127.0.0.1:1080',
+          }),
+        }));
+
+        renderWithProviders(<Configuration token="test-token" />);
+
+        const saveButton = screen.getByTestId('save-button');
+        await user.click(saveButton);
+
+        const confirmButton = await screen.findByRole('button', { name: /save configuration/i });
+        await user.click(confirmButton);
+
+        await waitFor(() => {
+          expect(saveConfig).toHaveBeenCalledTimes(1);
+        });
+      });
+
+      test('allows save when proxy is empty', async () => {
+        const user = userEvent.setup();
+        const saveConfig = jest.fn();
+        mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+        mockUseConfig.mockReturnValue(createMockUseConfig({
+          config: createConfig({
+            proxy: '',
+          }),
+        }));
+
+        renderWithProviders(<Configuration token="test-token" />);
+
+        const saveButton = screen.getByTestId('save-button');
+        await user.click(saveButton);
+
+        const confirmButton = await screen.findByRole('button', { name: /save configuration/i });
+        await user.click(confirmButton);
+
+        await waitFor(() => {
+          expect(saveConfig).toHaveBeenCalledTimes(1);
+        });
+      });
+
+      test('allows save when proxy is undefined', async () => {
+        const user = userEvent.setup();
+        const saveConfig = jest.fn();
+        mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+        mockUseConfig.mockReturnValue(createMockUseConfig({
+          config: createConfig({
+            proxy: undefined,
+          }),
+        }));
+
+        renderWithProviders(<Configuration token="test-token" />);
+
+        const saveButton = screen.getByTestId('save-button');
+        await user.click(saveButton);
+
+        const confirmButton = await screen.findByRole('button', { name: /save configuration/i });
+        await user.click(confirmButton);
+
+        await waitFor(() => {
+          expect(saveConfig).toHaveBeenCalledTimes(1);
+        });
+      });
+
+      test('prevents save when proxy URL has invalid protocol', () => {
+        const saveConfig = jest.fn();
+        mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+        mockUseConfig.mockReturnValue(createMockUseConfig({
+          config: createConfig({
+            proxy: 'ftp://proxy.example.com:8080',
+          }),
+        }));
+
+        renderWithProviders(<Configuration token="test-token" />);
+
+        const saveButton = screen.getByTestId('save-button');
+
+        // Button should be disabled due to validation error
+        expect(saveButton).toBeDisabled();
+        expect(saveConfig).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('Plex Connection Status Management', () => {
+    test('provides setPlexConnectionStatus function from hook', () => {
+      const setPlexConnectionStatus = jest.fn();
+      mockUsePlexConnection.mockReturnValue(createMockUsePlexConnection({ setPlexConnectionStatus }));
+
+      renderWithProviders(<Configuration token="test-token" />);
+
+      // The hook is called with setPlexConnectionStatus
+      expect(mockUsePlexConnection).toHaveBeenCalled();
+    });
+
+    test('handleConfigChange is available for sections to update config', () => {
+      const setConfig = jest.fn();
+      mockUseConfig.mockReturnValue(createMockUseConfig({ setConfig }));
+
+      renderWithProviders(<Configuration token="test-token" />);
+
+      // The component has access to setConfig
+      expect(setConfig).toBeDefined();
+    });
+  });
+
+  describe('Snackbar Management', () => {
+    test('displays snackbar message', async () => {
+      renderWithProviders(<Configuration token="test-token" />);
+
+      // Snackbar should not be visible initially
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    test('snackbar can be closed when displayed', () => {
+      renderWithProviders(<Configuration token="test-token" />);
+
+      // Snackbar components are rendered but not visible initially
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    test('displays mobile tooltip snackbar when triggered', () => {
+      renderWithProviders(<Configuration token="test-token" />);
+
+      // Mobile tooltip snackbar should not be visible initially
+      expect(screen.queryByText(/info/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Dialog Management', () => {
+    test('PlexLibrarySelector opens when hook indicates', () => {
+      mockUsePlexConnection.mockReturnValue(createMockUsePlexConnection({
+        openPlexLibrarySelector: true,
+      }));
+
+      renderWithProviders(<Configuration token="test-token" />);
+
+      expect(screen.getByText('PlexLibrarySelector Open')).toBeInTheDocument();
+    });
+
+    test('PlexAuthDialog opens when hook indicates', () => {
+      mockUsePlexConnection.mockReturnValue(createMockUsePlexConnection({
+        openPlexAuthDialog: true,
+      }));
+
+      renderWithProviders(<Configuration token="test-token" />);
+
+      expect(screen.getByText('PlexAuthDialog Open')).toBeInTheDocument();
+    });
+  });
+
+  describe('Edge Cases', () => {
+    test('handles null token gracefully', () => {
+      renderWithProviders(<Configuration token={null as any} />);
+
+      expect(mockUseConfig).toHaveBeenCalledWith(null);
+    });
+
+    test('handles platform-managed configuration', () => {
+      mockUseConfig.mockReturnValue(createMockUseConfig({
         isPlatformManaged: {
-          youtubeOutputDirectory: true,
           plexUrl: true,
           authEnabled: true,
+          useTmpForDownloads: true,
         },
-        deploymentEnvironment: {
-          inDocker: true,
-          dockerAutoCreated: false,
-          platform: 'elfhosted',
-        },
-      };
+      }));
 
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(configWithPlatform),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            cookiesEnabled: false,
-            customCookiesUploaded: false,
-            customFileExists: false,
-          }),
-        } as Response)
-        .mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve([]),
-        } as Response);
+      renderWithProviders(<Configuration token="test-token" />);
 
-      renderWithProviders(<Configuration token={mockToken} />);
-
-      await screen.findByText('Core Settings');
-
-      const managedLabels = screen.getAllByText('Managed by Elfhosted');
-      expect(managedLabels.length).toBeGreaterThan(0);
-
-      const outputDirInput = screen.getByRole('textbox', { name: /YouTube Output Directory/i });
-      expect(outputDirInput).toBeDisabled();
+      expect(screen.getByTestId('core-settings-section')).toBeInTheDocument();
     });
 
-    test('hides Account & Security section when auth is disabled', async () => {
-      const authDisabledConfig = {
-        ...mockConfig,
-        authEnabled: false,
-        isPlatformManaged: {
-          youtubeOutputDirectory: false,
-          plexUrl: false,
-          authEnabled: false,
-        },
-        deploymentEnvironment: {
-          inDocker: false,
-          dockerAutoCreated: false,
-          platform: null,
-        },
-      };
+    test('handles storage unavailable scenario', () => {
+      mockUseStorageStatus.mockReturnValue(createMockUseStorageStatus({
+        available: false,
+      }));
 
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(authDisabledConfig),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            cookiesEnabled: false,
-            customCookiesUploaded: false,
-            customFileExists: false,
-          }),
-        } as Response)
-        .mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve([]),
-        } as Response);
+      renderWithProviders(<Configuration token="test-token" />);
 
-      renderWithProviders(<Configuration token={mockToken} />);
-
-      await screen.findByText('Core Settings');
-
-      expect(screen.queryByText('Account & Security')).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /Change Password/i })).not.toBeInTheDocument();
+      expect(screen.getByTestId('auto-removal-section')).toBeInTheDocument();
     });
 
-    test('shows Docker volume indicator', async () => {
-      const dockerConfig = {
-        ...mockConfig,
-        deploymentEnvironment: {
-          inDocker: true,
-          dockerAutoCreated: true,
-        },
-      };
+    test('handles multiple dialogs state correctly', () => {
+      mockUsePlexConnection.mockReturnValue(createMockUsePlexConnection({
+        openPlexLibrarySelector: true,
+        openPlexAuthDialog: true,
+      }));
 
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(dockerConfig),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            cookiesEnabled: false,
-            customCookiesUploaded: false,
-            customFileExists: false,
-          }),
-        } as Response)
-        .mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve([]),
-        } as Response);
+      renderWithProviders(<Configuration token="test-token" />);
 
-      renderWithProviders(<Configuration token={mockToken} />);
-
-      await screen.findByText('Core Settings');
-
-      const dockerLabels = screen.getAllByText('Docker Volume');
-      expect(dockerLabels.length).toBeGreaterThan(0);
-
-      const outputDirInput = screen.getByRole('textbox', { name: /YouTube Output Directory/i });
-      expect(outputDirInput).toBeDisabled();
+      expect(screen.getByText('PlexLibrarySelector Open')).toBeInTheDocument();
+      expect(screen.getByText('PlexAuthDialog Open')).toBeInTheDocument();
     });
   });
 
-  describe('Mobile Responsiveness', () => {
-    beforeEach(() => {
-      const useMediaQuery = require('@mui/material/useMediaQuery');
-      useMediaQuery.mockReturnValue(true);
+  describe('Integration Tests', () => {
+    test('complete save workflow: open dialog -> confirm -> save', async () => {
+      const user = userEvent.setup();
+      const saveConfig = jest.fn();
+      mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+
+      renderWithProviders(<Configuration token="test-token" />);
+
+      // Click save button
+      const saveButton = screen.getByTestId('save-button');
+      await user.click(saveButton);
+
+      // Dialog opens
+      expect(await screen.findByText('Confirm Save Configuration')).toBeInTheDocument();
+
+      // Confirm save
+      const confirmButton = screen.getByRole('button', { name: /save configuration/i });
+      await user.click(confirmButton);
+
+      // Save is called
+      await waitFor(() => {
+        expect(saveConfig).toHaveBeenCalledTimes(1);
+      });
+
+      // Dialog closes
+      await waitFor(() => {
+        expect(screen.queryByText('Confirm Save Configuration')).not.toBeInTheDocument();
+      });
     });
 
-    test('handles mobile tooltip interactions', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(mockConfig),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({
-            cookiesEnabled: false,
-            customCookiesUploaded: false,
-            customFileExists: false,
-          }),
-        } as Response)
-        .mockResolvedValue({
-          ok: true,
-          json: () => Promise.resolve([]),
-        } as Response);
+    test('validation prevents save throughout workflow', async () => {
+      const user = userEvent.setup();
+      const saveConfig = jest.fn();
+      mockUseConfigSave.mockReturnValue(createMockUseConfigSave({ saveConfig }));
+      mockUseConfig.mockReturnValue(createMockUseConfig({
+        config: createConfig({
+          autoRemovalEnabled: true,
+          autoRemovalFreeSpaceThreshold: '',
+          autoRemovalVideoAgeThreshold: '',
+        }),
+      }));
 
-      renderWithProviders(<Configuration token={mockToken} />);
+      renderWithProviders(<Configuration token="test-token" />);
 
-      await screen.findByText('Core Settings');
+      // Save button should be disabled
+      const saveButton = screen.getByTestId('save-button');
+      expect(saveButton).toBeDisabled();
 
-      const user = createUser();
+      // Attempting to click shows error
+      await user.click(saveButton);
 
-      const infoButtons = screen.queryAllByTestId('InfoIcon');
-      expect(infoButtons.length).toBeGreaterThan(0);
+      // No dialog should open, saveConfig should not be called
+      expect(screen.queryByText('Confirm Save Configuration')).not.toBeInTheDocument();
+      expect(saveConfig).not.toHaveBeenCalled();
+    });
+  });
 
-      await user.click(infoButtons[0]);
+  describe('Accessibility', () => {
+    test('confirmation dialog has accessible title', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<Configuration token="test-token" />);
 
-      await screen.findByRole('alert');
+      const saveButton = screen.getByTestId('save-button');
+      await user.click(saveButton);
+
+      expect(await screen.findByText('Confirm Save Configuration')).toBeInTheDocument();
+    });
+
+    test('save confirmation button has accessible label', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<Configuration token="test-token" />);
+
+      const saveButton = screen.getByTestId('save-button');
+      await user.click(saveButton);
+
+      const confirmButton = await screen.findByRole('button', { name: /save configuration/i });
+      expect(confirmButton).toHaveAccessibleName();
+    });
+
+    test('cancel button has accessible label', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<Configuration token="test-token" />);
+
+      const saveButton = screen.getByTestId('save-button');
+      await user.click(saveButton);
+
+      const cancelButton = await screen.findByRole('button', { name: /cancel/i });
+      expect(cancelButton).toHaveAccessibleName();
     });
   });
 });

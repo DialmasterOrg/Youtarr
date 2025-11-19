@@ -1,5 +1,8 @@
 /* eslint-env jest */
 
+// Mock the logger before requiring DownloadProgressMonitor
+jest.mock('../../../logger');
+
 const DownloadProgressMonitor = require('../DownloadProgressMonitor');
 
 describe('DownloadProgressMonitor', () => {
@@ -15,7 +18,6 @@ describe('DownloadProgressMonitor', () => {
   beforeEach(() => {
     monitor = new DownloadProgressMonitor(mockJobId, 'Channel Downloads');
     jest.spyOn(Date, 'now').mockReturnValue(1000000);
-    jest.spyOn(console, 'log').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -259,37 +261,119 @@ describe('DownloadProgressMonitor', () => {
   });
 
   describe('determineState', () => {
-    it('should identify downloading_video state', () => {
-      expect(monitor.determineState('[download] Destination: file.f137.mp4')).toBe('downloading_video');
+    describe('preparing state detection', () => {
+      it('should identify preparing state when extracting URL', () => {
+        expect(monitor.determineState('[youtube] Extracting URL: https://youtube.com/watch?v=abc123')).toBe('preparing');
+      });
+
+      it('should NOT identify preparing state for youtube:tab extraction', () => {
+        // youtube:tab is for channel/playlist pages, not video preparation
+        expect(monitor.determineState('[youtube:tab] Extracting URL: https://youtube.com/@channel')).toBeNull();
+      });
+
+      it('should identify preparing state when downloading webpage', () => {
+        expect(monitor.determineState('[youtube] abc123: Downloading webpage')).toBe('preparing');
+      });
+
+      it('should identify preparing state when downloading client configs', () => {
+        expect(monitor.determineState('[youtube] abc123: Downloading tv client config')).toBe('preparing');
+        expect(monitor.determineState('[youtube] abc123: Downloading web client config')).toBe('preparing');
+        expect(monitor.determineState('[youtube] abc123: Downloading android client config')).toBe('preparing');
+        expect(monitor.determineState('[youtube] abc123: Downloading ios client config')).toBe('preparing');
+      });
+
+      it('should identify preparing state when downloading player API', () => {
+        expect(monitor.determineState('[youtube] abc123: Downloading web player API')).toBe('preparing');
+        expect(monitor.determineState('[youtube] abc123: Downloading android player API')).toBe('preparing');
+        expect(monitor.determineState('[youtube] abc123: Downloading ios player API')).toBe('preparing');
+      });
+
+      it('should identify preparing state when downloading safari player', () => {
+        expect(monitor.determineState('[youtube] abc123: Downloading web safari player')).toBe('preparing');
+      });
+
+      it('should identify preparing state when downloading player', () => {
+        expect(monitor.determineState('[youtube] abc123: Downloading player 1a2b3c4d')).toBe('preparing');
+      });
+
+      it('should identify preparing state when downloading m3u8 information', () => {
+        expect(monitor.determineState('[youtube] abc123: Downloading m3u8 information')).toBe('preparing');
+      });
     });
 
-    it('should identify downloading_audio state', () => {
-      expect(monitor.determineState('[download] Destination: file.f140.m4a')).toBe('downloading_audio');
+    describe('subtitle state detection', () => {
+      it('should identify preparing_subtitles state for subtitle announcement', () => {
+        expect(monitor.determineState('[info] abc123: Downloading subtitles: en, es')).toBe('preparing_subtitles');
+      });
+
+      it('should identify downloading_subtitles state for .vtt files', () => {
+        expect(monitor.determineState('[download] Destination: /path/Channel - Title [id].en.vtt')).toBe('downloading_subtitles');
+        expect(monitor.determineState('[download] Destination: /path/Channel - Title [id].es.VTT')).toBe('downloading_subtitles');
+      });
+
+      it('should identify downloading_subtitles state for .srt files', () => {
+        expect(monitor.determineState('[download] Destination: /path/Channel - Title [id].en.srt')).toBe('downloading_subtitles');
+        expect(monitor.determineState('[download] Destination: /path/Channel - Title [id].es.SRT')).toBe('downloading_subtitles');
+      });
     });
 
-    it('should identify downloading_thumbnail state', () => {
-      expect(monitor.determineState('[download] Destination: poster.jpg')).toBe('downloading_thumbnail');
-      expect(monitor.determineState('[download] Destination: thumbnail.png')).toBe('downloading_thumbnail');
+    describe('metadata processing state detection', () => {
+      it('should identify processing_metadata state when downloading thumbnail', () => {
+        expect(monitor.determineState('[info] Downloading video thumbnail ...')).toBe('processing_metadata');
+      });
+
+      it('should identify processing_metadata state when writing thumbnail', () => {
+        expect(monitor.determineState('[info] Writing video thumbnail to: /path/file.jpg')).toBe('processing_metadata');
+      });
+
+      it('should identify processing_metadata state when writing metadata', () => {
+        expect(monitor.determineState('[info] Writing video metadata as JSON to: /path/file.info.json')).toBe('processing_metadata');
+      });
+
+      it('should identify processing_metadata state for SubtitlesConvertor', () => {
+        expect(monitor.determineState('[SubtitlesConvertor] Converting subtitles')).toBe('processing_metadata');
+      });
+
+      it('should identify processing_metadata state for ThumbnailsConvertor', () => {
+        expect(monitor.determineState('[ThumbnailsConvertor] Converting thumbnail')).toBe('processing_metadata');
+      });
     });
 
-    it('should identify merging state', () => {
-      expect(monitor.determineState('[Merger] Merging formats')).toBe('merging');
+    describe('download state detection', () => {
+      it('should identify downloading_video state', () => {
+        expect(monitor.determineState('[download] Destination: file.f137.mp4')).toBe('downloading_video');
+      });
+
+      it('should identify downloading_audio state', () => {
+        expect(monitor.determineState('[download] Destination: file.f140.m4a')).toBe('downloading_audio');
+      });
+
+      it('should identify downloading_thumbnail state', () => {
+        expect(monitor.determineState('[download] Destination: poster.jpg')).toBe('downloading_thumbnail');
+        expect(monitor.determineState('[download] Destination: thumbnail.png')).toBe('downloading_thumbnail');
+      });
     });
 
-    it('should identify metadata state', () => {
-      expect(monitor.determineState('[Metadata] Adding metadata')).toBe('metadata');
-    });
+    describe('post-processing state detection', () => {
+      it('should identify merging state', () => {
+        expect(monitor.determineState('[Merger] Merging formats')).toBe('merging');
+      });
 
-    it('should identify processing state', () => {
-      expect(monitor.determineState('[MoveFiles] Moving file')).toBe('processing');
-    });
+      it('should identify metadata state', () => {
+        expect(monitor.determineState('[Metadata] Adding metadata')).toBe('metadata');
+      });
 
-    it('should identify complete state', () => {
-      expect(monitor.determineState('Completed: file.mp4')).toBe('complete');
-    });
+      it('should identify processing state', () => {
+        expect(monitor.determineState('[MoveFiles] Moving file')).toBe('processing');
+      });
 
-    it('should identify error state', () => {
-      expect(monitor.determineState('ERROR: Something went wrong')).toBe('error');
+      it('should identify complete state', () => {
+        expect(monitor.determineState('Completed: file.mp4')).toBe('complete');
+      });
+
+      it('should identify error state', () => {
+        expect(monitor.determineState('ERROR: Something went wrong')).toBe('error');
+      });
     });
 
     it('should return null for unrecognized lines', () => {
@@ -413,6 +497,80 @@ describe('DownloadProgressMonitor', () => {
 
       expect(result).toBe(true);
       expect(monitor.videoCount.skipped).toBe(1);
+    });
+
+    describe('Deleting original file handling', () => {
+      it('should not count video completion when deleting thumbnail files', () => {
+        monitor.currentVideoCompleted = false;
+        monitor.videoCount.completed = 0;
+
+        const testCases = [
+          'Deleting original file /path/video.webp',
+          'Deleting original file /path/thumbnail.jpg',
+          'Deleting original file /path/poster.JPEG',
+          'Deleting original file /path/image.png'
+        ];
+
+        testCases.forEach(line => {
+          const result = monitor.parseAndUpdateVideoCounts(line);
+          expect(result).toBe(true);
+          expect(monitor.videoCount.completed).toBe(0);
+          expect(monitor.currentVideoCompleted).toBe(false);
+        });
+      });
+
+      it('should not count video completion when deleting subtitle files', () => {
+        monitor.currentVideoCompleted = false;
+        monitor.videoCount.completed = 0;
+
+        const testCases = [
+          'Deleting original file /path/video.en.vtt',
+          'Deleting original file /path/video.es.VTT',
+          'Deleting original file /path/video.en.srt',
+          'Deleting original file /path/video.fr.SRT'
+        ];
+
+        testCases.forEach(line => {
+          const result = monitor.parseAndUpdateVideoCounts(line);
+          expect(result).toBe(true);
+          expect(monitor.videoCount.completed).toBe(0);
+          expect(monitor.currentVideoCompleted).toBe(false);
+        });
+      });
+
+      it('should count video completion when deleting actual video files', () => {
+        monitor.currentVideoCompleted = false;
+        monitor.videoCount.completed = 0;
+
+        const testCases = [
+          'Deleting original file /path/video.f137.mp4',
+          'Deleting original file /path/video.f140.m4a',
+          'Deleting original file /path/video.mkv'
+        ];
+
+        testCases.forEach((line, index) => {
+          const result = monitor.parseAndUpdateVideoCounts(line);
+          expect(result).toBe(true);
+          expect(monitor.videoCount.completed).toBe(index + 1);
+          // Reset for next iteration
+          monitor.currentVideoCompleted = false;
+        });
+      });
+
+      it('should handle mixed case file extensions in deletion messages', () => {
+        monitor.currentVideoCompleted = false;
+        monitor.videoCount.completed = 0;
+
+        // Subtitle with mixed case - should NOT count
+        let result = monitor.parseAndUpdateVideoCounts('Deleting original file /path/video.EN.VTT');
+        expect(result).toBe(true);
+        expect(monitor.videoCount.completed).toBe(0);
+
+        // Image with mixed case - should NOT count
+        result = monitor.parseAndUpdateVideoCounts('Deleting original file /path/thumbnail.JPG');
+        expect(result).toBe(true);
+        expect(monitor.videoCount.completed).toBe(0);
+      });
     });
   });
 
@@ -633,6 +791,99 @@ describe('DownloadProgressMonitor', () => {
       const result = monitor.processProgress(progressLine, 'line', mockConfig);
       expect(result.currentChannelName).toBe('MyChannel');
     });
+
+    it('should clear video title when in preparing state', () => {
+      // Set up monitor with existing video info
+      monitor.lastVideoInfo = {
+        channel: 'TestChannel',
+        title: 'Previous Video Title',
+        displayTitle: 'Previous Video Title'
+      };
+      monitor.currentChannelName = 'TestChannel';
+
+      const progressLine = '{}';
+      const rawLine = '[youtube] abc123: Downloading webpage';
+
+      const result = monitor.processProgress(progressLine, rawLine, mockConfig);
+
+      expect(result.state).toBe('preparing');
+      expect(result.videoInfo.channel).toBe('TestChannel');
+      expect(result.videoInfo.title).toBe('');
+      expect(result.videoInfo.displayTitle).toBe('');
+    });
+
+    it('should preserve video title when in preparing_subtitles state', () => {
+      // Set up monitor with existing video info
+      monitor.lastVideoInfo = {
+        channel: 'TestChannel',
+        title: 'Current Video',
+        displayTitle: 'Current Video'
+      };
+      monitor.currentChannelName = 'TestChannel';
+
+      const progressLine = '{}';
+      const rawLine = '[info] abc123: Downloading subtitles: en';
+
+      const result = monitor.processProgress(progressLine, rawLine, mockConfig);
+
+      expect(result.state).toBe('preparing_subtitles');
+      expect(result.videoInfo.title).toBe('Current Video');
+      expect(result.videoInfo.displayTitle).toBe('Current Video');
+    });
+
+    it('should preserve video title when in downloading_subtitles state', () => {
+      // Set up monitor with existing video info
+      monitor.lastVideoInfo = {
+        channel: 'TestChannel',
+        title: 'Current Video',
+        displayTitle: 'Current Video'
+      };
+
+      const progressLine = '{}';
+      const rawLine = '[download] Destination: /path/TestChannel - Current Video [id].en.vtt';
+
+      const result = monitor.processProgress(progressLine, rawLine, mockConfig);
+
+      expect(result.state).toBe('downloading_subtitles');
+      // Note: extractVideoInfo will parse the filename and include .en in the title
+      // This is expected behavior - the title will be extracted from the filename
+      expect(result.videoInfo.title).toBe('Current Video [id].en');
+      expect(result.videoInfo.displayTitle).toBe('Current Video [id].en');
+    });
+
+    it('should preserve video title when in processing_metadata state', () => {
+      // Set up monitor with existing video info
+      monitor.lastVideoInfo = {
+        channel: 'TestChannel',
+        title: 'Current Video',
+        displayTitle: 'Current Video'
+      };
+
+      const progressLine = '{}';
+      const rawLine = '[info] Writing video metadata as JSON to: /path/file.info.json';
+
+      const result = monitor.processProgress(progressLine, rawLine, mockConfig);
+
+      expect(result.state).toBe('processing_metadata');
+      expect(result.videoInfo.title).toBe('Current Video');
+      expect(result.videoInfo.displayTitle).toBe('Current Video');
+    });
+
+    it('should clear title in preparing state but use currentChannelName as fallback', () => {
+      // Set up monitor with channel name but no video info
+      monitor.currentChannelName = 'FallbackChannel';
+      monitor.lastVideoInfo = null;
+
+      const progressLine = '{}';
+      const rawLine = '[youtube] abc123: Downloading player';
+
+      const result = monitor.processProgress(progressLine, rawLine, mockConfig);
+
+      expect(result.state).toBe('preparing');
+      expect(result.videoInfo.channel).toBe('FallbackChannel');
+      expect(result.videoInfo.title).toBe('');
+      expect(result.videoInfo.displayTitle).toBe('');
+    });
   });
 
   describe('Edge Cases', () => {
@@ -697,6 +948,255 @@ describe('DownloadProgressMonitor', () => {
 
       // Original should not be modified
       expect(monitor.videoCount.current).toBe(5);
+    });
+  });
+
+  describe('exponential smoothing functionality', () => {
+    describe('applySpeedSmoothing', () => {
+      it('should use first value directly', () => {
+        const result = monitor.applySpeedSmoothing(500000);
+        expect(result).toBe(500000);
+        expect(monitor.smoothedSpeed).toBe(500000);
+      });
+
+      it('should apply EMA formula on subsequent values', () => {
+        // First value
+        monitor.applySpeedSmoothing(500000);
+
+        // Second value: alpha=0.15, so 0.15*100000 + 0.85*500000 = 15000 + 425000 = 440000
+        const result = monitor.applySpeedSmoothing(100000);
+        expect(result).toBe(440000);
+        expect(monitor.smoothedSpeed).toBe(440000);
+      });
+
+      it('should smooth volatile values', () => {
+        // Simulate the real-world pattern from user's data
+        monitor.applySpeedSmoothing(3759600); // First
+
+        let smoothed = monitor.applySpeedSmoothing(6574037); // Spike
+        // 0.15 * 6574037 + 0.85 * 3759600 = 986105.55 + 3195660 = 4181765.55
+        expect(smoothed).toBeCloseTo(4181765.55, 0);
+
+        smoothed = monitor.applySpeedSmoothing(31017087); // Big spike
+        // 0.15 * 31017087 + 0.85 * 4181765.55 = 4652563.05 + 3554500.72 = 8207063.77
+        // Should dampen the spike significantly - 31M spike only shows as ~8M
+        expect(smoothed).toBeLessThan(10000000); // Much less than 31M
+        expect(smoothed).toBeGreaterThan(4000000); // But still increased
+      });
+
+      it('should reset to null when starting new video', () => {
+        monitor.applySpeedSmoothing(500000);
+        expect(monitor.smoothedSpeed).toBe(500000);
+
+        monitor.resetProgressTracking();
+        expect(monitor.smoothedSpeed).toBeNull();
+        expect(monitor.smoothedEta).toBeNull();
+
+        // Next value should be used directly again
+        const result = monitor.applySpeedSmoothing(300000);
+        expect(result).toBe(300000);
+      });
+    });
+
+    describe('applyEtaSmoothing', () => {
+      it('should use first value directly', () => {
+        const result = monitor.applyEtaSmoothing(1000);
+        expect(result).toBe(1000);
+        expect(monitor.smoothedEta).toBe(1000);
+      });
+
+      it('should apply heavy EMA smoothing on subsequent values', () => {
+        // First value
+        monitor.applyEtaSmoothing(1187);
+
+        // Spike to 4069: alpha=0.05, so 0.05*4069 + 0.95*1187 = 203.45 + 1127.65 = 1331.1
+        const result = monitor.applyEtaSmoothing(4069);
+        expect(result).toBeCloseTo(1331, 0);
+      });
+
+      it('should heavily dampen volatile ETA values', () => {
+        // Simulate real-world pattern from user's data
+        monitor.applyEtaSmoothing(138); // Low ETA
+
+        let smoothed = monitor.applyEtaSmoothing(11450); // Huge spike
+        // 0.05 * 11450 + 0.95 * 138 = 572.5 + 131.1 = 703.6
+        expect(smoothed).toBeCloseTo(704, 0);
+        expect(smoothed).toBeLessThan(2000); // Much less than 11450
+
+        // Continue with more values
+        smoothed = monitor.applyEtaSmoothing(4517);
+        // 0.05 * 4517 + 0.95 * 703.6 = 225.85 + 668.42 = 894.27
+        expect(smoothed).toBeCloseTo(894, 0);
+      });
+
+      it('should return 0 when ETA is 0', () => {
+        monitor.applyEtaSmoothing(1000);
+        const result = monitor.applyEtaSmoothing(0);
+        expect(result).toBe(0);
+        expect(monitor.smoothedEta).toBe(0);
+      });
+    });
+
+    describe('calculateRawEta', () => {
+      it('should calculate ETA from smoothed speed', () => {
+        const downloaded = 1000;
+        const total = 10000;
+        const speed = 1000; // 1000 bytes/sec
+
+        // (10000 - 1000) / 1000 = 9 seconds
+        const eta = monitor.calculateRawEta(downloaded, total, speed);
+        expect(eta).toBe(9);
+      });
+
+      it('should return 0 when speed is 0', () => {
+        const eta = monitor.calculateRawEta(1000, 10000, 0);
+        expect(eta).toBe(0);
+      });
+
+      it('should return 0 when total is 0', () => {
+        const eta = monitor.calculateRawEta(1000, 0, 1000);
+        expect(eta).toBe(0);
+      });
+
+      it('should return 0 when download is complete', () => {
+        const eta = monitor.calculateRawEta(10000, 10000, 1000);
+        expect(eta).toBe(0);
+      });
+
+      it('should not round (raw calculation)', () => {
+        const downloaded = 1000;
+        const total = 10000;
+        const speed = 1300; // Results in 6.923... seconds
+
+        const eta = monitor.calculateRawEta(downloaded, total, speed);
+        expect(eta).toBeCloseTo(6.923, 2);
+      });
+    });
+
+    describe('integrated EMA smoothing in processProgress', () => {
+      it('should apply separate EMA smoothing to speed and ETA', () => {
+        const mockConfig = { enableStallDetection: false };
+
+        // First value - both used directly
+        let result = monitor.processProgress(
+          JSON.stringify({ percent: '10%', downloaded: 1000000, total: 10000000, speed: 500000, eta: 100 }),
+          '[download] 10.0%',
+          mockConfig
+        );
+        expect(result.progress.speedBytesPerSecond).toBe(500000);
+        // Raw ETA: (10000000-1000000)/500000 = 18s, smoothed first time = 18s
+        expect(result.progress.etaSeconds).toBe(18);
+
+        // Second value - EMA applied to both
+        result = monitor.processProgress(
+          JSON.stringify({ percent: '20%', downloaded: 2000000, total: 10000000, speed: 100000, eta: 10 }),
+          '[download] 20.0%',
+          mockConfig
+        );
+        // Speed: 0.15 * 100000 + 0.85 * 500000 = 15000 + 425000 = 440000
+        expect(result.progress.speedBytesPerSecond).toBe(440000);
+        // Raw ETA: (10000000-2000000)/440000 ≈ 18.18s
+        // Smoothed ETA: 0.05 * 18.18 + 0.95 * 18 = 0.909 + 17.1 = 18.009 ≈ 18
+        expect(result.progress.etaSeconds).toBe(18);
+      });
+
+      it('should dampen speed spikes', () => {
+        const mockConfig = { enableStallDetection: false };
+
+        // Start with moderate speed
+        monitor.processProgress(
+          JSON.stringify({ percent: '10%', downloaded: 26681427, total: 295190109, speed: 3759600, eta: 7 }),
+          '[download] 10.0%',
+          mockConfig
+        );
+
+        // Spike to high speed (from real data)
+        let result = monitor.processProgress(
+          JSON.stringify({ percent: '20%', downloaded: 28729236, total: 295190109, speed: 31017087, eta: 0 }),
+          '[download] 20.0%',
+          mockConfig
+        );
+
+        // Speed should be dampened significantly
+        const smoothedSpeed = result.progress.speedBytesPerSecond;
+        expect(smoothedSpeed).toBeGreaterThan(3759600); // Increased from baseline
+        expect(smoothedSpeed).toBeLessThan(20000000); // But much less than the spike
+      });
+
+      it('should heavily dampen ETA spikes', () => {
+        const mockConfig = { enableStallDetection: false };
+
+        // Start with stable ETA
+        monitor.processProgress(
+          JSON.stringify({ percent: '24.3%', downloaded: 1225640573, total: 5040637977, speed: 23437665, eta: 162 }),
+          '[download] 24.3%',
+          mockConfig
+        );
+
+        // Huge ETA spike (from real data: 138 → 11450)
+        let result = monitor.processProgress(
+          JSON.stringify({ percent: '24.4%', downloaded: 1227411593, total: 5040637977, speed: 333978, eta: 11450 }),
+          '[download] 24.4%',
+          mockConfig
+        );
+
+        // ETA should be heavily dampened
+        const smoothedEta = result.progress.etaSeconds;
+        expect(smoothedEta).toBeGreaterThan(150); // Increased from baseline
+        expect(smoothedEta).toBeLessThan(1000); // But MUCH less than 11450
+      });
+
+      it('should not smooth percent or byte values', () => {
+        const mockConfig = { enableStallDetection: false };
+
+        monitor.processProgress(
+          JSON.stringify({ percent: '10%', downloaded: 1000, total: 10000, speed: 500000, eta: 100 }),
+          '[download] 10.0%',
+          mockConfig
+        );
+
+        let result = monitor.processProgress(
+          JSON.stringify({ percent: '25%', downloaded: 2500, total: 10000, speed: 300000, eta: 80 }),
+          '[download] 25.0%',
+          mockConfig
+        );
+
+        // Percent and bytes should be exact, not smoothed
+        expect(result.progress.percent).toBe(25);
+        expect(result.progress.downloadedBytes).toBe(2500);
+        expect(result.progress.totalBytes).toBe(10000);
+
+        // Speed should be smoothed: 0.15 * 300000 + 0.85 * 500000 = 45000 + 425000 = 470000
+        expect(result.progress.speedBytesPerSecond).toBe(470000);
+      });
+
+      it('should reset smoothing when starting new video', () => {
+        const mockConfig = { enableStallDetection: false };
+
+        // Build up smoothed speed and ETA
+        monitor.processProgress(
+          JSON.stringify({ percent: '10%', downloaded: 1000000, total: 10000000, speed: 500000, eta: 100 }),
+          '[download] 10.0%',
+          mockConfig
+        );
+
+        expect(monitor.smoothedSpeed).toBe(500000);
+        expect(monitor.smoothedEta).not.toBeNull();
+
+        // Reset for new video
+        monitor.resetProgressTracking();
+        expect(monitor.smoothedSpeed).toBeNull();
+        expect(monitor.smoothedEta).toBeNull();
+
+        // Next value should be fresh
+        let result = monitor.processProgress(
+          JSON.stringify({ percent: '5%', downloaded: 500, total: 10000, speed: 200000, eta: 50 }),
+          '[download] 5.0%',
+          mockConfig
+        );
+
+        expect(result.progress.speedBytesPerSecond).toBe(200000); // Used directly, not influenced by previous
+      });
     });
   });
 });

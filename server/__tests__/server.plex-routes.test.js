@@ -1,4 +1,5 @@
 /* eslint-env jest */
+const loggerMock = require('../__mocks__/logger');
 
 const findRouteHandler = (app, method, routePath) => {
   const stack = app?._router?.stack || [];
@@ -20,6 +21,7 @@ const createMockRequest = (overrides = {}) => ({
   ip: '127.0.0.1',
   connection: { remoteAddress: '127.0.0.1' },
   socket: { remoteAddress: '127.0.0.1' },
+  log: loggerMock,
   ...overrides
 });
 
@@ -79,6 +81,7 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
     writeCustomCookiesFile: jest.fn(),
     deleteCustomCookiesFile: jest.fn(),
     getStorageStatus: jest.fn().mockResolvedValue({ total: 1, free: 1 }),
+    isElfhostedPlatform: jest.fn(() => false),
     config: fakeConfig,
     stopWatchingConfig: jest.fn()
   };
@@ -90,9 +93,24 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
     getAuthUrl: jest.fn().mockResolvedValue({ url: 'https://plex.example/auth' }),
     checkPin: jest.fn().mockResolvedValue({ authenticated: true })
   };
+  const childProcessMock = {
+    execSync: jest.fn(() => '2025.09.23')
+  };
+  const pinoHttpMock = jest.fn(() => (req, res, next) => next());
 
+  jest.doMock('../logger', () => loggerMock);
+  jest.doMock('child_process', () => childProcessMock);
+  jest.doMock('pino-http', () => pinoHttpMock);
   jest.doMock('../db', () => ({
     initializeDatabase: jest.fn().mockResolvedValue(),
+    reinitializeDatabase: jest.fn().mockResolvedValue({
+      connected: true,
+      schemaValid: true,
+      errors: []
+    }),
+    sequelize: {
+      authenticate: jest.fn().mockResolvedValue(true)
+    },
     Session: {
       findOne: jest.fn().mockResolvedValue(null),
       destroy: jest.fn().mockResolvedValue(0)
@@ -119,6 +137,11 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
   }));
   jest.doMock('../modules/videosModule', () => ({
     getVideos: jest.fn().mockResolvedValue([])
+  }));
+  jest.doMock('../modules/channelSettingsModule', () => ({
+    getChannelSettings: jest.fn(),
+    updateChannelSettings: jest.fn(),
+    getAllSubFolders: jest.fn()
   }));
   jest.doMock('../modules/webSocketServer.js', () => jest.fn());
 
@@ -224,7 +247,7 @@ describe('Plex authentication routes', () => {
 
     await handler(req, res);
 
-    expect(plexModuleMock.getLibrariesWithParams).toHaveBeenCalledWith('', 'fresh-token', undefined);
+    expect(plexModuleMock.getLibrariesWithParams).toHaveBeenCalledWith('', 'fresh-token', undefined, false);
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual([{ id: 'lib' }]);
 
@@ -248,11 +271,77 @@ describe('Plex authentication routes', () => {
 
     await handler(req, res);
 
-    expect(plexModuleMock.getLibrariesWithParams).toHaveBeenCalledWith('192.168.1.10', 'fresh-token', '23456');
+    expect(plexModuleMock.getLibrariesWithParams).toHaveBeenCalledWith('192.168.1.10', 'fresh-token', '23456', false);
     expect(configModuleMock.updateConfig).toHaveBeenCalledTimes(1);
     const updatedConfig = configModuleMock.updateConfig.mock.calls[0][0];
     expect(updatedConfig.plexIP).toBe('192.168.1.10');
     expect(updatedConfig.plexApiKey).toBe('fresh-token');
     expect(updatedConfig.plexPort).toBe('23456');
+  });
+
+  test('auto-saves plexViaHttps when testUseHttps=true', async () => {
+    const { app, configModuleMock, plexModuleMock } = await setupServer({ authEnabled: 'false', passwordHash: 'hash' });
+    plexModuleMock.getLibrariesWithParams.mockResolvedValue([{ id: 'lib' }]);
+
+    const handler = findRouteHandler(app, 'get', '/getplexlibraries');
+    const req = createMockRequest({
+      path: '/getplexlibraries',
+      query: { testIP: '192.168.1.10', testApiKey: 'fresh-token', testPort: '32400', testUseHttps: 'true' }
+    });
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(plexModuleMock.getLibrariesWithParams).toHaveBeenCalledWith('192.168.1.10', 'fresh-token', '32400', true);
+    expect(configModuleMock.updateConfig).toHaveBeenCalledTimes(1);
+    const updatedConfig = configModuleMock.updateConfig.mock.calls[0][0];
+    expect(updatedConfig.plexIP).toBe('192.168.1.10');
+    expect(updatedConfig.plexApiKey).toBe('fresh-token');
+    expect(updatedConfig.plexPort).toBe('32400');
+    expect(updatedConfig.plexViaHttps).toBe(true);
+  });
+
+  test('auto-saves plexViaHttps when testUseHttps=false', async () => {
+    const { app, configModuleMock, plexModuleMock } = await setupServer({ authEnabled: 'false', passwordHash: 'hash' });
+    plexModuleMock.getLibrariesWithParams.mockResolvedValue([{ id: 'lib' }]);
+
+    const handler = findRouteHandler(app, 'get', '/getplexlibraries');
+    const req = createMockRequest({
+      path: '/getplexlibraries',
+      query: { testIP: '192.168.1.10', testApiKey: 'fresh-token', testPort: '32400', testUseHttps: 'false' }
+    });
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(plexModuleMock.getLibrariesWithParams).toHaveBeenCalledWith('192.168.1.10', 'fresh-token', '32400', false);
+    expect(configModuleMock.updateConfig).toHaveBeenCalledTimes(1);
+    const updatedConfig = configModuleMock.updateConfig.mock.calls[0][0];
+    expect(updatedConfig.plexIP).toBe('192.168.1.10');
+    expect(updatedConfig.plexApiKey).toBe('fresh-token');
+    expect(updatedConfig.plexPort).toBe('32400');
+    expect(updatedConfig.plexViaHttps).toBe(false);
+  });
+
+  test('does not auto-save plexViaHttps when testUseHttps is undefined', async () => {
+    const { app, configModuleMock, plexModuleMock } = await setupServer({ authEnabled: 'false', passwordHash: 'hash' });
+    plexModuleMock.getLibrariesWithParams.mockResolvedValue([{ id: 'lib' }]);
+
+    const handler = findRouteHandler(app, 'get', '/getplexlibraries');
+    const req = createMockRequest({
+      path: '/getplexlibraries',
+      query: { testIP: '192.168.1.10', testApiKey: 'fresh-token', testPort: '32400' }
+    });
+    const res = createMockResponse();
+
+    await handler(req, res);
+
+    expect(plexModuleMock.getLibrariesWithParams).toHaveBeenCalledWith('192.168.1.10', 'fresh-token', '32400', false);
+    expect(configModuleMock.updateConfig).toHaveBeenCalledTimes(1);
+    const updatedConfig = configModuleMock.updateConfig.mock.calls[0][0];
+    expect(updatedConfig.plexIP).toBe('192.168.1.10');
+    expect(updatedConfig.plexApiKey).toBe('fresh-token');
+    expect(updatedConfig.plexPort).toBe('32400');
+    expect(updatedConfig.plexViaHttps).toBeUndefined();
   });
 });

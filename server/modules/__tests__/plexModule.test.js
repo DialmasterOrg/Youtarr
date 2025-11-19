@@ -1,11 +1,13 @@
 /* eslint-env jest */
 
 jest.mock('axios');
+jest.mock('../../logger');
 
 describe('plexModule', () => {
   let axios;
   let configModule;
   let plexModule;
+  let logger;
   let config;
 
   beforeEach(() => {
@@ -13,6 +15,9 @@ describe('plexModule', () => {
     axios = require('axios');
     axios.get = jest.fn();
     axios.post = jest.fn();
+
+    logger = require('../../logger');
+    jest.clearAllMocks();
 
     config = {
       plexIP: '127.0.0.1',
@@ -108,13 +113,42 @@ describe('plexModule', () => {
       const result = plexModule.getBaseUrl('192.168.1.10', undefined, '8080');
       expect(result).toBe('http://192.168.1.10:8080');
     });
+
+    test('uses https when plexViaHttps is true in config', () => {
+      config.plexViaHttps = true;
+      const result = plexModule.getBaseUrl('192.168.1.10', config, '8080');
+      expect(result).toBe('https://192.168.1.10:8080');
+    });
+
+    test('uses http when plexViaHttps is false in config', () => {
+      config.plexViaHttps = false;
+      const result = plexModule.getBaseUrl('192.168.1.10', config, '8080');
+      expect(result).toBe('http://192.168.1.10:8080');
+    });
+
+    test('uses http when plexViaHttps is undefined in config', () => {
+      config.plexViaHttps = undefined;
+      const result = plexModule.getBaseUrl('192.168.1.10', config, '8080');
+      expect(result).toBe('http://192.168.1.10:8080');
+    });
+
+    test('preferredUseHttps parameter overrides config', () => {
+      config.plexViaHttps = false;
+      const result = plexModule.getBaseUrl('192.168.1.10', config, '8080', true);
+      expect(result).toBe('https://192.168.1.10:8080');
+    });
+
+    test('preferredUseHttps false overrides config true', () => {
+      config.plexViaHttps = true;
+      const result = plexModule.getBaseUrl('192.168.1.10', config, '8080', false);
+      expect(result).toBe('http://192.168.1.10:8080');
+    });
   });
 
   describe('refreshLibrary', () => {
     test('successfully refreshes library', async () => {
       const mockResponse = { status: 200, data: 'success' };
       axios.get.mockResolvedValue(mockResponse);
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
 
       const result = await plexModule.refreshLibrary();
 
@@ -122,77 +156,63 @@ describe('plexModule', () => {
         'http://127.0.0.1:32400/library/sections/1/refresh?X-Plex-Token=existing-token'
       );
       expect(result).toBe(mockResponse);
-      expect(consoleSpy).toHaveBeenCalledWith('Refreshing library in Plex');
-      expect(consoleSpy).toHaveBeenCalledWith('Plex library refresh initiated successfully');
-
-      consoleSpy.mockRestore();
+      expect(logger.info).toHaveBeenCalledWith('Refreshing Plex library');
+      expect(logger.info).toHaveBeenCalledWith(
+        { libraryId: '1' },
+        'Plex library refresh initiated successfully'
+      );
     });
 
     test('skips refresh when missing baseUrl', async () => {
       config.plexIP = '';
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
 
       const result = await plexModule.refreshLibrary();
 
       expect(axios.get).not.toHaveBeenCalled();
       expect(result).toBeNull();
-      expect(consoleSpy).toHaveBeenCalledWith('Skipping Plex refresh - missing server details or credentials');
-
-      consoleSpy.mockRestore();
+      expect(logger.warn).toHaveBeenCalledWith('Skipping Plex refresh - missing server details or credentials');
     });
 
     test('skips refresh when missing API key', async () => {
       config.plexApiKey = '';
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
 
       const result = await plexModule.refreshLibrary();
 
       expect(axios.get).not.toHaveBeenCalled();
       expect(result).toBeNull();
-      expect(consoleSpy).toHaveBeenCalledWith('Skipping Plex refresh - missing server details or credentials');
-
-      consoleSpy.mockRestore();
+      expect(logger.warn).toHaveBeenCalledWith('Skipping Plex refresh - missing server details or credentials');
     });
 
     test('skips refresh when missing library ID', async () => {
       config.plexYoutubeLibraryId = null;
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
 
       const result = await plexModule.refreshLibrary();
 
       expect(axios.get).not.toHaveBeenCalled();
       expect(result).toBeNull();
-      expect(consoleSpy).toHaveBeenCalledWith('Skipping Plex refresh - missing server details or credentials');
-
-      consoleSpy.mockRestore();
+      expect(logger.warn).toHaveBeenCalledWith('Skipping Plex refresh - missing server details or credentials');
     });
 
     test('handles connection refused error', async () => {
       const error = new Error('Connection refused');
       error.code = 'ECONNREFUSED';
       axios.get.mockRejectedValue(error);
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
 
       const result = await plexModule.refreshLibrary();
 
       expect(result).toBeNull();
-      expect(consoleSpy).toHaveBeenCalledWith('Error refreshing library in Plex: Connection refused');
-      expect(consoleSpy).toHaveBeenCalledWith('Could not connect to Plex server - continuing without refresh');
-
-      consoleSpy.mockRestore();
+      expect(logger.error).toHaveBeenCalledWith({ err: error }, 'Failed to refresh Plex library');
+      expect(logger.warn).toHaveBeenCalledWith('Could not connect to Plex server - continuing without refresh');
     });
 
     test('handles generic error', async () => {
       const error = new Error('Network error');
       axios.get.mockRejectedValue(error);
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
 
       const result = await plexModule.refreshLibrary();
 
       expect(result).toBeNull();
-      expect(consoleSpy).toHaveBeenCalledWith('Error refreshing library in Plex: Network error');
-
-      consoleSpy.mockRestore();
+      expect(logger.error).toHaveBeenCalledWith({ err: error }, 'Failed to refresh Plex library');
     });
 
     test('uses PLEX_URL from environment when available', async () => {
@@ -236,36 +256,58 @@ describe('plexModule', () => {
         }
       ]);
     });
+
+    test('uses https when config has plexViaHttps enabled', async () => {
+      config.plexViaHttps = true;
+      axios.get.mockResolvedValue({
+        data: {
+          MediaContainer: {
+            Directory: [
+              {
+                key: '1',
+                title: 'YouTube',
+                Location: [{ id: 1, path: '/data/youtube' }]
+              }
+            ]
+          }
+        }
+      });
+
+      const result = await plexModule.getLibraries();
+
+      expect(axios.get).toHaveBeenCalledWith(
+        'https://127.0.0.1:32400/library/sections?X-Plex-Token=existing-token'
+      );
+      expect(result).toEqual([
+        {
+          id: '1',
+          title: 'YouTube',
+          locations: [{ id: 1, path: '/data/youtube' }]
+        }
+      ]);
+    });
   });
 
   describe('getLibrariesWithParams', () => {
     test('returns empty array when API key missing', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-
       const result = await plexModule.getLibrariesWithParams('192.168.1.10', '', '32400');
 
       expect(result).toEqual([]);
       expect(axios.get).not.toHaveBeenCalled();
-      expect(consoleSpy).toHaveBeenCalledWith('Missing Plex API key');
-
-      consoleSpy.mockRestore();
+      expect(logger.warn).toHaveBeenCalledWith('Missing Plex API key');
     });
 
     test('returns empty array when baseUrl missing', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       config.plexIP = '';
 
       const result = await plexModule.getLibrariesWithParams('', 'token', '32400');
 
       expect(result).toEqual([]);
       expect(axios.get).not.toHaveBeenCalled();
-      expect(consoleSpy).toHaveBeenCalledWith('Missing Plex server URL');
-
-      consoleSpy.mockRestore();
+      expect(logger.warn).toHaveBeenCalledWith('Missing Plex server URL');
     });
 
     test('successfully retrieves libraries', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       axios.get.mockResolvedValue({
         data: {
           MediaContainer: {
@@ -290,7 +332,9 @@ describe('plexModule', () => {
 
       const result = await plexModule.getLibrariesWithParams('192.168.1.10', 'token', '8080');
 
-      expect(consoleSpy).toHaveBeenCalledWith('Using baseUrl for getting libraries: http://192.168.1.10:8080');
+      expect(logger.info).toHaveBeenCalledWith(
+        'Attempting to fetch Plex libraries via URL: http://192.168.1.10:8080'
+      );
       expect(axios.get).toHaveBeenCalledWith(
         'http://192.168.1.10:8080/library/sections?X-Plex-Token=token'
       );
@@ -309,12 +353,9 @@ describe('plexModule', () => {
           locations: [{ id: 3, path: '/tv' }]
         }
       ]);
-
-      consoleSpy.mockRestore();
     });
 
     test('handles connection refused error', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       const error = new Error('Connection refused');
       error.code = 'ECONNREFUSED';
       axios.get.mockRejectedValue(error);
@@ -322,23 +363,18 @@ describe('plexModule', () => {
       const result = await plexModule.getLibrariesWithParams('192.168.1.10', 'token', '32400');
 
       expect(result).toEqual([]);
-      expect(consoleSpy).toHaveBeenCalledWith('Error getting libraries from Plex: Connection refused');
-      expect(consoleSpy).toHaveBeenCalledWith('Could not connect to Plex server - returning empty library list');
-
-      consoleSpy.mockRestore();
+      expect(logger.error).toHaveBeenCalledWith({ err: error }, 'Failed to get Plex libraries');
+      expect(logger.warn).toHaveBeenCalledWith('Could not connect to Plex server - returning empty library list');
     });
 
     test('handles generic error', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       const error = new Error('Network timeout');
       axios.get.mockRejectedValue(error);
 
       const result = await plexModule.getLibrariesWithParams('192.168.1.10', 'token', '32400');
 
       expect(result).toEqual([]);
-      expect(consoleSpy).toHaveBeenCalledWith('Error getting libraries from Plex: Network timeout');
-
-      consoleSpy.mockRestore();
+      expect(logger.error).toHaveBeenCalledWith({ err: error }, 'Failed to get Plex libraries');
     });
 
     test('uses PLEX_URL from environment', async () => {
@@ -359,25 +395,96 @@ describe('plexModule', () => {
     });
 
     test('handles null plexApiKey parameter', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-
       const result = await plexModule.getLibrariesWithParams('192.168.1.10', null, '32400');
 
       expect(result).toEqual([]);
-      expect(consoleSpy).toHaveBeenCalledWith('Missing Plex API key');
-
-      consoleSpy.mockRestore();
+      expect(logger.warn).toHaveBeenCalledWith('Missing Plex API key');
     });
 
     test('handles undefined plexApiKey parameter', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-
       const result = await plexModule.getLibrariesWithParams('192.168.1.10', undefined, '32400');
 
       expect(result).toEqual([]);
-      expect(consoleSpy).toHaveBeenCalledWith('Missing Plex API key');
+      expect(logger.warn).toHaveBeenCalledWith('Missing Plex API key');
+    });
 
-      consoleSpy.mockRestore();
+    test('uses https when plexViaHttps is true', async () => {
+      axios.get.mockResolvedValue({
+        data: {
+          MediaContainer: {
+            Directory: [
+              {
+                key: '1',
+                title: 'Movies',
+                Location: [{ id: 1, path: '/movies' }]
+              }
+            ]
+          }
+        }
+      });
+
+      const result = await plexModule.getLibrariesWithParams('192.168.1.10', 'token', '8080', true);
+
+      expect(logger.info).toHaveBeenCalledWith(
+        'Attempting to fetch Plex libraries via URL: https://192.168.1.10:8080'
+      );
+      expect(axios.get).toHaveBeenCalledWith(
+        'https://192.168.1.10:8080/library/sections?X-Plex-Token=token'
+      );
+      expect(result).toHaveLength(1);
+    });
+
+    test('uses http when plexViaHttps is false', async () => {
+      axios.get.mockResolvedValue({
+        data: {
+          MediaContainer: {
+            Directory: [
+              {
+                key: '1',
+                title: 'Movies',
+                Location: [{ id: 1, path: '/movies' }]
+              }
+            ]
+          }
+        }
+      });
+
+      const result = await plexModule.getLibrariesWithParams('192.168.1.10', 'token', '8080', false);
+
+      expect(logger.info).toHaveBeenCalledWith(
+        'Attempting to fetch Plex libraries via URL: http://192.168.1.10:8080'
+      );
+      expect(axios.get).toHaveBeenCalledWith(
+        'http://192.168.1.10:8080/library/sections?X-Plex-Token=token'
+      );
+      expect(result).toHaveLength(1);
+    });
+
+    test('uses config plexViaHttps when parameter not provided', async () => {
+      config.plexViaHttps = true;
+      axios.get.mockResolvedValue({
+        data: {
+          MediaContainer: {
+            Directory: [
+              {
+                key: '1',
+                title: 'Movies',
+                Location: [{ id: 1, path: '/movies' }]
+              }
+            ]
+          }
+        }
+      });
+
+      const result = await plexModule.getLibrariesWithParams('192.168.1.10', 'token', '8080');
+
+      expect(logger.info).toHaveBeenCalledWith(
+        'Attempting to fetch Plex libraries via URL: https://192.168.1.10:8080'
+      );
+      expect(axios.get).toHaveBeenCalledWith(
+        'https://192.168.1.10:8080/library/sections?X-Plex-Token=token'
+      );
+      expect(result).toHaveLength(1);
     });
   });
 
@@ -409,14 +516,11 @@ describe('plexModule', () => {
     });
 
     test('handles PIN creation error', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       const error = new Error('Network error');
       axios.post.mockRejectedValue(error);
 
       await expect(plexModule.getAuthUrl()).rejects.toThrow('Network error');
-      expect(consoleSpy).toHaveBeenCalledWith('PIN ERROR!!Network error');
-
-      consoleSpy.mockRestore();
+      expect(logger.error).toHaveBeenCalledWith({ err: error }, 'Failed to generate Plex auth URL');
     });
 
     test('uses correct headers', async () => {
@@ -441,7 +545,6 @@ describe('plexModule', () => {
 
   describe('checkPin', () => {
     test('sets token when no existing token', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       config.plexApiKey = '';
 
       axios.get.mockResolvedValueOnce({
@@ -450,7 +553,7 @@ describe('plexModule', () => {
 
       const result = await plexModule.checkPin('pin-123');
 
-      expect(consoleSpy).toHaveBeenCalledWith('Checking pin: pin-123');
+      expect(logger.debug).toHaveBeenCalledWith({ pinId: 'pin-123' }, 'Checking Plex PIN');
       expect(axios.get).toHaveBeenCalledWith(
         'https://plex.tv/api/v2/pins/pin-123',
         {
@@ -465,8 +568,6 @@ describe('plexModule', () => {
         })
       );
       expect(result).toEqual({ authToken: 'new-token-123' });
-
-      consoleSpy.mockRestore();
     });
 
     test('validates token when existing token matches', async () => {
@@ -506,102 +607,89 @@ describe('plexModule', () => {
     });
 
     test('handles PIN check error with response data', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       const error = new Error('API error');
       error.response = { data: 'Error details' };
       axios.get.mockRejectedValue(error);
 
       const result = await plexModule.checkPin('pin-123');
 
-      expect(consoleSpy).toHaveBeenCalledWith('PIN ERROR!!API error');
-      expect(consoleSpy).toHaveBeenCalledWith('Error details');
+      expect(logger.error).toHaveBeenCalledWith({ err: error, pinId: 'pin-123' }, 'Failed to check Plex PIN');
+      expect(logger.error).toHaveBeenCalledWith(
+        { responseData: 'Error details' },
+        'Plex PIN check error response'
+      );
       expect(result).toEqual({ authToken: null });
-
-      consoleSpy.mockRestore();
     });
 
     test('handles PIN check error without response data', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       const error = new Error('Network error');
-      // Note: This test exposes a bug in plexModule.js line 148 where it tries to access
-      // error.response.data without checking if error.response exists. This causes a TypeError.
-      // The module should check if error.response exists before accessing its data property.
       axios.get.mockRejectedValue(error);
 
-      // The current implementation throws an error when error.response is undefined
-      await expect(plexModule.checkPin('pin-123')).rejects.toThrow('Cannot read properties of undefined');
+      const result = await plexModule.checkPin('pin-123');
 
-      consoleSpy.mockRestore();
+      expect(logger.error).toHaveBeenCalledWith({ err: error, pinId: 'pin-123' }, 'Failed to check Plex PIN');
+      // Should NOT call logger.error with responseData since error.response is undefined
+      expect(logger.error).not.toHaveBeenCalledWith(
+        expect.objectContaining({ responseData: expect.anything() }),
+        'Plex PIN check error response'
+      );
+      expect(result).toEqual({ authToken: null });
     });
 
     test('returns null when no auth token', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       axios.get.mockResolvedValueOnce({
         data: { authToken: null }
       });
 
       const result = await plexModule.checkPin('pin-123');
 
-      expect(consoleSpy).toHaveBeenCalledWith('No authToken for this server: null');
+      expect(logger.debug).toHaveBeenCalledWith('No authToken returned from Plex');
       expect(result).toEqual({ authToken: null });
-
-      consoleSpy.mockRestore();
     });
 
     test('returns null when auth token is empty string', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       axios.get.mockResolvedValueOnce({
         data: { authToken: '' }
       });
 
       const result = await plexModule.checkPin('pin-123');
 
-      expect(consoleSpy).toHaveBeenCalledWith('No authToken for this server: ');
+      expect(logger.debug).toHaveBeenCalledWith('No authToken returned from Plex');
       expect(result).toEqual({ authToken: null });
-
-      consoleSpy.mockRestore();
     });
 
     test('throws error when validation fails', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      const error = new Error('Unauthorized');
       axios.get
         .mockResolvedValueOnce({
           data: { authToken: 'existing-token' }
         })
-        .mockRejectedValueOnce(new Error('Unauthorized'));
+        .mockRejectedValueOnce(error);
 
       await expect(plexModule.checkPin('pin-123')).rejects.toThrow('Invalid authToken for this server');
-      expect(consoleSpy).toHaveBeenCalledWith('Invalid authToken for this server: Unauthorized');
-
-      consoleSpy.mockRestore();
+      expect(logger.warn).toHaveBeenCalledWith({ err: error }, 'Invalid authToken for this Plex server');
     });
 
     test('throws error when missing server URL for validation', async () => {
       config.plexIP = '';
+      const error = new Error('Missing Plex server URL');
       axios.get.mockResolvedValueOnce({
         data: { authToken: 'existing-token' }
       });
 
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-
       await expect(plexModule.checkPin('pin-123')).rejects.toThrow('Invalid authToken for this server');
-      expect(consoleSpy).toHaveBeenCalledWith('Invalid authToken for this server: Missing Plex server URL');
-
-      consoleSpy.mockRestore();
+      expect(logger.warn).toHaveBeenCalledWith({ err: error }, 'Invalid authToken for this Plex server');
     });
 
     test('handles undefined auth token', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       axios.get.mockResolvedValueOnce({
         data: {}
       });
 
       const result = await plexModule.checkPin('pin-123');
 
-      expect(consoleSpy).toHaveBeenCalledWith('No authToken for this server: undefined');
+      expect(logger.debug).toHaveBeenCalledWith('No authToken returned from Plex');
       expect(result).toEqual({ authToken: null });
-
-      consoleSpy.mockRestore();
     });
 
     test('uses PLEX_URL for identity check when available', async () => {
@@ -677,7 +765,6 @@ describe('plexModule', () => {
     });
 
     test('handles complete server unavailability', async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
       const error = new Error('Connection refused');
       error.code = 'ECONNREFUSED';
       axios.get.mockRejectedValue(error);
@@ -687,10 +774,8 @@ describe('plexModule', () => {
 
       expect(refreshResult).toBeNull();
       expect(libraries).toEqual([]);
-      expect(consoleSpy).toHaveBeenCalledWith('Could not connect to Plex server - continuing without refresh');
-      expect(consoleSpy).toHaveBeenCalledWith('Could not connect to Plex server - returning empty library list');
-
-      consoleSpy.mockRestore();
+      expect(logger.warn).toHaveBeenCalledWith('Could not connect to Plex server - continuing without refresh');
+      expect(logger.warn).toHaveBeenCalledWith('Could not connect to Plex server - returning empty library list');
     });
   });
 });

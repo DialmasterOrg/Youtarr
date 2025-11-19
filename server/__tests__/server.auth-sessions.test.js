@@ -1,4 +1,5 @@
 /* eslint-env jest */
+const loggerMock = require('../__mocks__/logger');
 
 const findRouteHandlers = (app, method, routePath) => {
   const stack = app?._router?.stack || [];
@@ -20,6 +21,7 @@ const createMockRequest = (overrides = {}) => ({
   ip: '127.0.0.1',
   connection: { remoteAddress: '127.0.0.1' },
   socket: { remoteAddress: '127.0.0.1' },
+  log: loggerMock,
   ...overrides
 });
 
@@ -56,7 +58,8 @@ const createServerModule = ({
   passwordHash = 'hashed-password',
   session,
   skipInitialize = false,
-  configOverrides = {}
+  configOverrides = {},
+  authPreset
 } = {}) => {
   jest.resetModules();
   jest.clearAllMocks();
@@ -71,6 +74,18 @@ const createServerModule = ({
           delete process.env.AUTH_ENABLED;
         } else {
           process.env.AUTH_ENABLED = authEnabled;
+        }
+
+        if (authPreset?.username) {
+          process.env.AUTH_PRESET_USERNAME = authPreset.username;
+        } else {
+          delete process.env.AUTH_PRESET_USERNAME;
+        }
+
+        if (authPreset?.password) {
+          process.env.AUTH_PRESET_PASSWORD = authPreset.password;
+        } else {
+          delete process.env.AUTH_PRESET_PASSWORD;
         }
 
         const defaultSessionUpdate = jest.fn().mockResolvedValue();
@@ -94,6 +109,14 @@ const createServerModule = ({
 
         const dbMock = {
           initializeDatabase: jest.fn().mockResolvedValue(),
+          reinitializeDatabase: jest.fn().mockResolvedValue({
+            connected: true,
+            schemaValid: true,
+            errors: []
+          }),
+          sequelize: {
+            authenticate: jest.fn().mockResolvedValue(true)
+          },
           Session: {
             findOne: jest.fn().mockImplementation(() => Promise.resolve(effectiveSession)),
             create: jest.fn().mockResolvedValue({
@@ -124,7 +147,6 @@ const createServerModule = ({
         const configState = {
           passwordHash: passwordHash || null,
           username: passwordHash ? 'tester' : null,
-          dockerAutoCreated: false,
           plexUrl: 'http://plex.local',
           plexPort: '32400',
           plexApiKey: 'token',
@@ -144,6 +166,7 @@ const createServerModule = ({
           writeCustomCookiesFile: jest.fn().mockResolvedValue(),
           deleteCustomCookiesFile: jest.fn().mockResolvedValue(),
           getStorageStatus: jest.fn().mockResolvedValue({ total: 1, free: 1 }),
+          isElfhostedPlatform: jest.fn(() => false),
           config: configState,
           stopWatchingConfig: jest.fn()
         };
@@ -162,6 +185,10 @@ const createServerModule = ({
           unlink: jest.fn((path, cb) => cb(null))
         };
 
+        const childProcessMock = {
+          execSync: jest.fn(() => '2025.09.23')
+        };
+
         const multerSingleMock = jest.fn(() => (req, res, next) => {
           if (req.path === '/cookies/upload' && req.body.simulateFile) {
             req.file = { buffer: Buffer.from('cookie-content') };
@@ -169,8 +196,13 @@ const createServerModule = ({
           next();
         });
         const multerMock = jest.fn(() => ({ single: multerSingleMock }));
+        const pinoHttpMock = jest.fn(() => (req, res, next) => next());
 
         // Add required mocks for server initialization
+        jest.doMock('../logger', () => loggerMock);
+        jest.doMock('child_process', () => childProcessMock);
+        jest.doMock('pino-http', () => pinoHttpMock);
+
         jest.doMock('../modules/channelModule', () => ({
           subscribe: jest.fn(),
           readChannels: jest.fn().mockResolvedValue([])
@@ -181,6 +213,11 @@ const createServerModule = ({
           getRunningJobs: jest.fn(() => [])
         }));
         jest.doMock('../modules/videosModule', () => ({}));
+        jest.doMock('../modules/channelSettingsModule', () => ({
+          getChannelSettings: jest.fn(),
+          updateChannelSettings: jest.fn(),
+          getAllSubFolders: jest.fn()
+        }));
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => ({ schedule: jest.fn() }));
         jest.doMock('express-rate-limit', () => jest.fn(() => (req, res, next) => next()));
@@ -221,6 +258,36 @@ const createServerModule = ({
 
 afterEach(() => {
   delete process.env.AUTH_ENABLED;
+  delete process.env.AUTH_PRESET_USERNAME;
+  delete process.env.AUTH_PRESET_PASSWORD;
+});
+
+describe('auth preset bootstrap', () => {
+  test('applies preset credentials when config is missing auth', async () => {
+    const presetPassword = 'supersecret!';
+    const { configModuleMock, bcryptMock } = await createServerModule({
+      passwordHash: null,
+      configOverrides: { username: null },
+      authPreset: { username: 'admin', password: presetPassword }
+    });
+
+    expect(bcryptMock.hash).toHaveBeenCalledWith(presetPassword, 10);
+    expect(configModuleMock.updateConfig).toHaveBeenCalledWith(expect.objectContaining({
+      username: 'admin',
+      passwordHash: 'new-hashed-password'
+    }));
+  });
+
+  test('ignores preset credentials when password is missing', async () => {
+    const { configModuleMock, bcryptMock } = await createServerModule({
+      passwordHash: null,
+      configOverrides: { username: null },
+      authPreset: { username: 'admin' }
+    });
+
+    expect(bcryptMock.hash).not.toHaveBeenCalled();
+    expect(configModuleMock.updateConfig).not.toHaveBeenCalledWith(expect.objectContaining({ username: 'admin' }));
+  });
 });
 
 describe('server routes - cookies', () => {

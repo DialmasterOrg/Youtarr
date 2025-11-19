@@ -1,10 +1,11 @@
 const axios = require('axios');
 const configModule = require('./configModule');
+const logger = require('../logger');
 
 class PlexModule {
   constructor() {}
 
-  getBaseUrl(preferredIp, config, preferredPort) {
+  getBaseUrl(preferredIp, config, preferredPort, preferredUseHttps) {
     const resolvedConfig = config || configModule.getConfig();
     const managedUrl = (process.env.PLEX_URL || resolvedConfig.plexUrl || '').trim();
 
@@ -24,30 +25,32 @@ class PlexModule {
     const numericPort = String(rawPort).replace(/[^0-9]/g, '');
     const port = numericPort || '32400';
 
-    return `http://${ip}:${port}`;
+    const useHttps = preferredUseHttps !== undefined ? preferredUseHttps : resolvedConfig.plexViaHttps;
+    const protocol = useHttps ? 'https' : 'http';
+    return `${protocol}://${ip}:${port}`;
   }
 
   async refreshLibrary() {
-    console.log('Refreshing library in Plex');
+    logger.info('Refreshing Plex library');
     // Example GET http://[plexIP]:[plexPort]/library/sections/[plexYoutubeLibraryId]/refresh?X-Plex-Token=[plexApiKey]
     try {
       const config = configModule.getConfig();
-      const baseUrl = this.getBaseUrl(config.plexIP, config, config.plexPort);
+      const baseUrl = this.getBaseUrl(config.plexIP, config, config.plexPort, config.plexViaHttps);
 
       if (!baseUrl || !config.plexYoutubeLibraryId || !config.plexApiKey) {
-        console.log('Skipping Plex refresh - missing server details or credentials');
+        logger.warn('Skipping Plex refresh - missing server details or credentials');
         return null;
       }
 
       const response = await axios.get(
         `${baseUrl}/library/sections/${config.plexYoutubeLibraryId}/refresh?X-Plex-Token=${config.plexApiKey}`
       );
-      console.log('Plex library refresh initiated successfully');
+      logger.info({ libraryId: config.plexYoutubeLibraryId }, 'Plex library refresh initiated successfully');
       return response;
     } catch (error) {
-      console.log('Error refreshing library in Plex: ' + error.message);
+      logger.error({ err: error }, 'Failed to refresh Plex library');
       if (error.code === 'ECONNREFUSED') {
-        console.log('Could not connect to Plex server - continuing without refresh');
+        logger.warn('Could not connect to Plex server - continuing without refresh');
       }
       // Return null or empty response to indicate failure, but don't throw
       return null;
@@ -56,24 +59,25 @@ class PlexModule {
 
   async getLibraries() {
     const config = configModule.getConfig();
-    return this.getLibrariesWithParams(config.plexIP, config.plexApiKey, config.plexPort);
+    return this.getLibrariesWithParams(config.plexIP, config.plexApiKey, config.plexPort, config.plexViaHttps);
   }
 
-  async getLibrariesWithParams(plexIP, plexApiKey, plexPort) {
+  async getLibrariesWithParams(plexIP, plexApiKey, plexPort, plexViaHttps) {
     try {
       if (!plexApiKey) {
-        console.log('Missing Plex API key');
+        logger.warn('Missing Plex API key');
         return [];
       }
 
       const config = configModule.getConfig();
-      const baseUrl = this.getBaseUrl(plexIP, config, plexPort);
+      const baseUrl = this.getBaseUrl(plexIP, config, plexPort, plexViaHttps);
 
       if (!baseUrl) {
-        console.log('Missing Plex server URL');
+        logger.warn('Missing Plex server URL');
         return [];
       }
-      console.log('Using baseUrl for getting libraries: ' + baseUrl);
+
+      logger.info(`Attempting to fetch Plex libraries via URL: ${baseUrl}`);
 
       const response = await axios.get(
         `${baseUrl}/library/sections?X-Plex-Token=${plexApiKey}`
@@ -93,9 +97,9 @@ class PlexModule {
 
       return libraries;
     } catch (error) {
-      console.log('Error getting libraries from Plex: ' + error.message);
+      logger.error({ err: error }, 'Failed to get Plex libraries');
       if (error.code === 'ECONNREFUSED') {
-        console.log('Could not connect to Plex server - returning empty library list');
+        logger.warn('Could not connect to Plex server - returning empty library list');
       }
       // Return empty array instead of throwing to prevent frontend crashes
       return [];
@@ -120,7 +124,7 @@ class PlexModule {
       }&code=${code}&context%5Bdevice%5D%5Bproduct%5D=Youtarr`;
       return { authUrl, pinId: id };
     } catch (error) {
-      console.log('PIN ERROR!!' + error.message);
+      logger.error({ err: error }, 'Failed to generate Plex auth URL');
       throw error;
     }
   }
@@ -134,7 +138,7 @@ class PlexModule {
    * @returns
    */
   async checkPin(pinId) {
-    console.log('Checking pin: ' + pinId);
+    logger.debug({ pinId }, 'Checking Plex PIN');
     let authToken = '';
     try {
       const response = await axios.get(`https://plex.tv/api/v2/pins/${pinId}`, {
@@ -144,8 +148,10 @@ class PlexModule {
       });
       authToken = response.data.authToken;
     } catch (error) {
-      console.log('PIN ERROR!!' + error.message);
-      console.log(error.response.data);
+      logger.error({ err: error, pinId }, 'Failed to check Plex PIN');
+      if (error.response && error.response.data) {
+        logger.error({ responseData: error.response.data }, 'Plex PIN check error response');
+      }
     }
 
     const currentPlexApiKey = configModule.getConfig().plexApiKey;
@@ -161,7 +167,7 @@ class PlexModule {
       // Verify authToken against your Plex server
       try {
         const config = configModule.getConfig();
-        const baseUrl = this.getBaseUrl(config.plexIP, config, config.plexPort);
+        const baseUrl = this.getBaseUrl(config.plexIP, config, config.plexPort, config.plexViaHttps);
 
         if (!baseUrl) {
           throw new Error('Missing Plex server URL');
@@ -178,12 +184,12 @@ class PlexModule {
         }
         return { authToken };
       } catch (error) {
-        console.log('Invalid authToken for this server: ' + error.message);
+        logger.warn({ err: error }, 'Invalid authToken for this Plex server');
         // If the request fails, the authToken is not valid for your server
         throw new Error('Invalid authToken for this server');
       }
     } else {
-      console.log('No authToken for this server: ' + authToken);
+      logger.debug('No authToken returned from Plex');
       return { authToken: null };
     }
   }

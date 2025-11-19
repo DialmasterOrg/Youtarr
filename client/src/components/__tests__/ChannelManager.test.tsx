@@ -7,6 +7,14 @@ import ChannelManager from '../ChannelManager';
 import { BrowserRouter } from 'react-router-dom';
 import { Channel } from '../../types/Channel';
 import { renderWithProviders, createMockWebSocketContext } from '../../test-utils';
+jest.mock('../../hooks/useConfig', () => ({
+  useConfig: () => ({
+    config: { preferredResolution: '1080' },
+    loading: false,
+    error: null,
+    refetch: jest.fn(),
+  }),
+}));
 
 jest.mock('axios', () => {
   const mock = {
@@ -38,9 +46,9 @@ jest.mock('react-router-dom', () => ({
 const mockedAxios = axios as unknown as { get: jest.Mock; post: jest.Mock };
 
 const mockChannels: Channel[] = [
-  { url: 'https://www.youtube.com/@TechChannel/videos', uploader: 'Tech Channel', channel_id: 'UC123456' },
-  { url: 'https://www.youtube.com/@GamingChannel/videos', uploader: 'Gaming Channel', channel_id: 'UC789012' },
-  { url: 'https://www.youtube.com/@CookingChannel/videos', uploader: 'Cooking Channel', channel_id: 'UC345678' },
+  { url: 'https://www.youtube.com/@TechChannel', uploader: 'Tech Channel', channel_id: 'UC123456' },
+  { url: 'https://www.youtube.com/@GamingChannel', uploader: 'Gaming Channel', channel_id: 'UC789012' },
+  { url: 'https://www.youtube.com/@CookingChannel', uploader: 'Cooking Channel', channel_id: 'UC345678' },
 ];
 
 describe('ChannelManager Component', () => {
@@ -156,12 +164,12 @@ describe('ChannelManager Component', () => {
     test('adds a new channel with @ handle format', async () => {
       const user = userEvent.setup();
       mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel/videos', uploader: 'New Channel', channel_id: 'UCnew123' });
+      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel', uploader: 'New Channel', channel_id: 'UCnew123' });
       renderChannelManager();
       await addChannel(user, '@NewChannel');
       await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledWith(
         '/addchannelinfo',
-        { url: 'https://www.youtube.com/@NewChannel/videos' },
+        { url: 'https://www.youtube.com/@NewChannel' },
         { headers: { 'x-access-token': mockToken } }
       ));
     });
@@ -169,12 +177,12 @@ describe('ChannelManager Component', () => {
     test('adds a new channel without @ prefix', async () => {
       const user = userEvent.setup();
       mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel/videos', uploader: 'New Channel', channel_id: 'UCnew123' });
+      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel', uploader: 'New Channel', channel_id: 'UCnew123' });
       renderChannelManager();
       await addChannel(user, 'NewChannel');
       await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledWith(
         '/addchannelinfo',
-        { url: 'https://www.youtube.com/@NewChannel/videos' },
+        { url: 'https://www.youtube.com/@NewChannel' },
         expect.any(Object)
       ));
     });
@@ -182,12 +190,12 @@ describe('ChannelManager Component', () => {
     test('normalizes various YouTube URL formats', async () => {
       const user = userEvent.setup();
       mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@TestChannel/videos', uploader: 'Test Channel', channel_id: 'UCtest' });
+      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UCtest' });
       renderChannelManager();
       await addChannel(user, 'youtube.com/@TestChannel');
       await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledWith(
         '/addchannelinfo',
-        { url: 'https://www.youtube.com/@TestChannel/videos' },
+        { url: 'https://www.youtube.com/@TestChannel' },
         expect.any(Object)
       ));
     });
@@ -195,7 +203,7 @@ describe('ChannelManager Component', () => {
     test('adds channel using Enter key', async () => {
       const user = userEvent.setup();
       mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel/videos', uploader: 'New Channel', channel_id: 'UCnew123' });
+      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel', uploader: 'New Channel', channel_id: 'UCnew123' });
       renderChannelManager();
       const input = await screen.findByLabelText('Add a new channel');
       await user.type(input, '@NewChannel{Enter}');
@@ -227,7 +235,7 @@ describe('ChannelManager Component', () => {
     test('clears input after adding channel', async () => {
       const user = userEvent.setup();
       mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel/videos', uploader: 'New Channel', channel_id: 'UCnew123' });
+      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel', uploader: 'New Channel', channel_id: 'UCnew123' });
       renderChannelManager();
       const input = await screen.findByLabelText('Add a new channel');
       await user.type(input, '@NewChannel');
@@ -238,7 +246,7 @@ describe('ChannelManager Component', () => {
     test('highlights newly added channels', async () => {
       const user = userEvent.setup();
       mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel/videos', uploader: 'New Channel', channel_id: 'UCnew123' });
+      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel', uploader: 'New Channel', channel_id: 'UCnew123' });
       renderChannelManager();
       await addChannel(user, '@NewChannel');
       const listItems = screen.getAllByRole('listitem');
@@ -307,7 +315,7 @@ describe('ChannelManager Component', () => {
     test('immediately removes unsaved channels on delete', async () => {
       const user = userEvent.setup();
       mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel/videos', uploader: 'New Channel', channel_id: 'UCnew123' });
+      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel', uploader: 'New Channel', channel_id: 'UCnew123' });
       renderChannelManager();
       await addChannel(user, '@NewChannel');
       const deleteButtons = screen.getAllByTestId('delete-channel-button');
@@ -345,8 +353,8 @@ describe('ChannelManager Component', () => {
       await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledWith(
         '/updatechannels',
         expect.arrayContaining([
-          'https://www.youtube.com/@GamingChannel/videos',
-          'https://www.youtube.com/@CookingChannel/videos',
+          'https://www.youtube.com/@GamingChannel',
+          'https://www.youtube.com/@CookingChannel',
           // Deleted Tech Channel excluded
         ]),
         { headers: { 'x-access-token': mockToken } }
@@ -518,6 +526,436 @@ describe('ChannelManager Component', () => {
     });
   });
 
+  describe('Auto Download Badges', () => {
+    test('displays video badge for channels with video auto-download enabled', async () => {
+      const channelWithVideoTab: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', available_tabs: 'videos', auto_download_enabled_tabs: 'video' }
+      ];
+      mockGetChannelsOnce(channelWithVideoTab);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.getByText('Videos')).toBeInTheDocument();
+    });
+
+    test('displays shorts badge for channels with shorts auto-download enabled', async () => {
+      const channelWithShortsTab: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', available_tabs: 'shorts', auto_download_enabled_tabs: 'short' }
+      ];
+      mockGetChannelsOnce(channelWithShortsTab);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.getByText('Shorts')).toBeInTheDocument();
+    });
+
+    test('displays live badge for channels with livestream auto-download enabled', async () => {
+      const channelWithLiveTab: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', available_tabs: 'streams', auto_download_enabled_tabs: 'livestream' }
+      ];
+      mockGetChannelsOnce(channelWithLiveTab);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.getByText('Live')).toBeInTheDocument();
+    });
+
+    test('displays multiple badges for channels with multiple tabs enabled', async () => {
+      const channelWithMultipleTabs: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', available_tabs: 'videos,shorts,streams', auto_download_enabled_tabs: 'video,short,livestream' }
+      ];
+      mockGetChannelsOnce(channelWithMultipleTabs);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.getByText('Videos')).toBeInTheDocument();
+      expect(screen.getByText('Shorts')).toBeInTheDocument();
+      expect(screen.getByText('Live')).toBeInTheDocument();
+    });
+
+    test('handles tabs with whitespace in the comma-separated string', async () => {
+      const channelWithSpaces: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', available_tabs: 'videos , shorts , streams', auto_download_enabled_tabs: 'video , short , livestream' }
+      ];
+      mockGetChannelsOnce(channelWithSpaces);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.getByText('Videos')).toBeInTheDocument();
+      expect(screen.getByText('Shorts')).toBeInTheDocument();
+      expect(screen.getByText('Live')).toBeInTheDocument();
+    });
+
+    test('does not render badges when auto_download_enabled_tabs is undefined', async () => {
+      const channelWithoutTabs: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123' }
+      ];
+      mockGetChannelsOnce(channelWithoutTabs);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.queryByText('Videos')).not.toBeInTheDocument();
+      expect(screen.queryByText('Shorts')).not.toBeInTheDocument();
+      expect(screen.queryByText('Live')).not.toBeInTheDocument();
+    });
+
+    test('does not render badges when auto_download_enabled_tabs is empty string', async () => {
+      const channelWithEmptyTabs: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: '' }
+      ];
+      mockGetChannelsOnce(channelWithEmptyTabs);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.queryByText('Videos')).not.toBeInTheDocument();
+      expect(screen.queryByText('Shorts')).not.toBeInTheDocument();
+      expect(screen.queryByText('Live')).not.toBeInTheDocument();
+    });
+
+    test('ignores unknown tab types in the string', async () => {
+      const channelWithUnknownTab: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', available_tabs: 'videos,unknown,shorts', auto_download_enabled_tabs: 'video,unknown,short' }
+      ];
+      mockGetChannelsOnce(channelWithUnknownTab);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.getByText('Videos')).toBeInTheDocument();
+      expect(screen.getByText('Shorts')).toBeInTheDocument();
+      expect(screen.queryByText('unknown')).not.toBeInTheDocument();
+    });
+
+    test('displays download icon only for auto-download enabled tabs', async () => {
+      const channelWithPartialAutoDownload: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', available_tabs: 'videos,shorts', auto_download_enabled_tabs: 'video' }
+      ];
+      mockGetChannelsOnce(channelWithPartialAutoDownload);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+
+      // Both tabs should be displayed
+      expect(screen.getByText('Videos')).toBeInTheDocument();
+      expect(screen.getByText('Shorts')).toBeInTheDocument();
+
+      // Only one download icon should be present (for the video tab which has auto-download enabled)
+      const downloadIcons = screen.queryAllByTestId('FileDownloadIcon');
+      expect(downloadIcons).toHaveLength(1);
+    });
+
+    test('displays tabs without download icons when auto_download_enabled_tabs is empty', async () => {
+      const channelWithNoAutoDownload: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', available_tabs: 'videos,shorts', auto_download_enabled_tabs: '' }
+      ];
+      mockGetChannelsOnce(channelWithNoAutoDownload);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+
+      // Both chips should be present but without download icons
+      expect(screen.getByText('Videos')).toBeInTheDocument();
+      expect(screen.getByText('Shorts')).toBeInTheDocument();
+      expect(screen.queryAllByTestId('FileDownloadIcon')).toHaveLength(0);
+    });
+  });
+
+  describe('Channel Configuration Display', () => {
+    test('displays custom subfolder for channel', async () => {
+      const channelWithSubFolder: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', sub_folder: 'Tech Videos' }
+      ];
+      mockGetChannelsOnce(channelWithSubFolder);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.getByText('__Tech Videos/')).toBeInTheDocument();
+    });
+
+    test('displays default folder when sub_folder is null', async () => {
+      const channelWithoutSubFolder: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', sub_folder: null }
+      ];
+      mockGetChannelsOnce(channelWithoutSubFolder);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.getByText('default')).toBeInTheDocument();
+    });
+
+    test('displays default folder when sub_folder is undefined', async () => {
+      const channelWithoutSubFolder: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123' }
+      ];
+      mockGetChannelsOnce(channelWithoutSubFolder);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.getByText('default')).toBeInTheDocument();
+    });
+
+    test('displays custom video quality with settings icon', async () => {
+      const channelWithCustomQuality: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', video_quality: '720' }
+      ];
+      mockGetChannelsOnce(channelWithCustomQuality);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.getByText('720p')).toBeInTheDocument();
+      // Settings icon indicates channel-specific override
+      expect(screen.getByTestId('SettingsIcon')).toBeInTheDocument();
+    });
+
+    test('displays global video quality without settings icon', async () => {
+      const channelWithoutQuality: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123' }
+      ];
+      mockGetChannelsOnce(channelWithoutQuality);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.getByText('1080p')).toBeInTheDocument();
+      // No settings icon for global default
+      expect(screen.queryByTestId('SettingsIcon')).not.toBeInTheDocument();
+    });
+
+    test('displays folder icon for subfolder display', async () => {
+      const channelWithSubFolder: Channel[] = [
+        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', sub_folder: 'Test' }
+      ];
+      mockGetChannelsOnce(channelWithSubFolder);
+      renderChannelManager();
+      await screen.findByText('Test Channel');
+      expect(screen.getByTestId('FolderIcon')).toBeInTheDocument();
+    });
+  });
+
+  describe('Filter Indicators', () => {
+    describe('Duration Filters', () => {
+      test('displays duration filter chip with min and max values', async () => {
+        const channelWithDuration: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', min_duration: 300, max_duration: 1800 }
+        ];
+        mockGetChannelsOnce(channelWithDuration);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.getByText('5-30 min')).toBeInTheDocument();
+        expect(screen.getByTestId('AccessTimeIcon')).toBeInTheDocument();
+      });
+
+      test('displays duration filter chip with only min value', async () => {
+        const channelWithMinDuration: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', min_duration: 600, max_duration: null }
+        ];
+        mockGetChannelsOnce(channelWithMinDuration);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.getByText('≥10 min')).toBeInTheDocument();
+      });
+
+      test('displays duration filter chip with only max value', async () => {
+        const channelWithMaxDuration: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', min_duration: null, max_duration: 1200 }
+        ];
+        mockGetChannelsOnce(channelWithMaxDuration);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.getByText('≤20 min')).toBeInTheDocument();
+      });
+
+      test('displays shortened duration format in mobile view', async () => {
+        (useMediaQuery as jest.Mock).mockReturnValue(true);
+        const channelWithDuration: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', min_duration: 300, max_duration: 1800 }
+        ];
+        mockGetChannelsOnce(channelWithDuration);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.getByText('5-30m')).toBeInTheDocument();
+      });
+
+      test('does not display duration filter when both values are null', async () => {
+        const channelWithoutDuration: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', min_duration: null, max_duration: null }
+        ];
+        mockGetChannelsOnce(channelWithoutDuration);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.queryByTestId('AccessTimeIcon')).not.toBeInTheDocument();
+      });
+    });
+
+    describe('Title Regex Filters', () => {
+      test('displays title filter chip for desktop', async () => {
+        const channelWithRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: '^Gaming.*' }
+        ];
+        mockGetChannelsOnce(channelWithRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.getByText('Title')).toBeInTheDocument();
+        expect(screen.getByTestId('FilterAltIcon')).toBeInTheDocument();
+      });
+
+      test('displays title filter icon button for mobile', async () => {
+        (useMediaQuery as jest.Mock).mockReturnValue(true);
+        const channelWithRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: '^Gaming.*' }
+        ];
+        mockGetChannelsOnce(channelWithRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.getByTestId('FilterAltIcon')).toBeInTheDocument();
+        expect(screen.queryByText('Title')).not.toBeInTheDocument();
+      });
+
+      test('does not display title filter when regex is null', async () => {
+        const channelWithoutRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: null }
+        ];
+        mockGetChannelsOnce(channelWithoutRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.queryByTestId('FilterAltIcon')).not.toBeInTheDocument();
+      });
+
+      test('does not display title filter when regex is undefined', async () => {
+        const channelWithoutRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123' }
+        ];
+        mockGetChannelsOnce(channelWithoutRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.queryByTestId('FilterAltIcon')).not.toBeInTheDocument();
+      });
+    });
+
+    describe('Combined Filters', () => {
+      test('displays both duration and regex filters together', async () => {
+        const channelWithBothFilters: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', min_duration: 300, max_duration: 1800, title_filter_regex: '^Gaming.*' }
+        ];
+        mockGetChannelsOnce(channelWithBothFilters);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.getByText('5-30 min')).toBeInTheDocument();
+        expect(screen.getByTestId('AccessTimeIcon')).toBeInTheDocument();
+        expect(screen.getByText('Title')).toBeInTheDocument();
+        expect(screen.getByTestId('FilterAltIcon')).toBeInTheDocument();
+      });
+
+      test('does not render filter indicators box when no filters exist', async () => {
+        const channelWithoutFilters: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123' }
+        ];
+        mockGetChannelsOnce(channelWithoutFilters);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+        expect(screen.queryByTestId('AccessTimeIcon')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('FilterAltIcon')).not.toBeInTheDocument();
+      });
+    });
+
+    describe('Regex Popover (Desktop)', () => {
+      test('opens popover when title filter chip is clicked', async () => {
+        const user = userEvent.setup();
+        const channelWithRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: '^Gaming.*' }
+        ];
+        mockGetChannelsOnce(channelWithRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+
+        const titleChip = screen.getByText('Title');
+        await user.click(titleChip);
+
+        expect(await screen.findByText('Title Filter Regex Pattern:')).toBeInTheDocument();
+        expect(screen.getByText('^Gaming.*')).toBeInTheDocument();
+      });
+
+      test('opens and displays popover content correctly', async () => {
+        const user = userEvent.setup();
+        const channelWithRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: '^Gaming.*' }
+        ];
+        mockGetChannelsOnce(channelWithRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+
+        // Verify popover is not initially visible
+        expect(screen.queryByText('Title Filter Regex Pattern:')).not.toBeInTheDocument();
+
+        const titleChip = screen.getByText('Title');
+        await user.click(titleChip);
+
+        // Verify popover opens with correct content
+        await screen.findByText('Title Filter Regex Pattern:');
+        expect(screen.getByText('^Gaming.*')).toBeInTheDocument();
+      });
+
+      test('displays complex regex pattern in popover', async () => {
+        const user = userEvent.setup();
+        const complexRegex = '(?i)^(Gaming|Review|Tutorial).*(?<!Old)$';
+        const channelWithComplexRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: complexRegex }
+        ];
+        mockGetChannelsOnce(channelWithComplexRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+
+        const titleChip = screen.getByText('Title');
+        await user.click(titleChip);
+
+        expect(await screen.findByText(complexRegex)).toBeInTheDocument();
+      });
+    });
+
+    describe('Regex Dialog (Mobile)', () => {
+      beforeEach(() => {
+        (useMediaQuery as jest.Mock).mockReturnValue(true);
+      });
+
+      test('opens dialog when title filter icon is clicked on mobile', async () => {
+        const user = userEvent.setup();
+        const channelWithRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: '^Gaming.*' }
+        ];
+        mockGetChannelsOnce(channelWithRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+
+        const filterButton = screen.getByTestId('regex-filter-button');
+        await user.click(filterButton);
+
+        expect(await screen.findByText('Title Filter Regex Pattern')).toBeInTheDocument();
+        expect(screen.getByText('^Gaming.*')).toBeInTheDocument();
+      });
+
+      test('closes dialog when Close button is clicked', async () => {
+        const user = userEvent.setup();
+        const channelWithRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: '^Gaming.*' }
+        ];
+        mockGetChannelsOnce(channelWithRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+
+        const filterButton = screen.getByTestId('regex-filter-button');
+        await user.click(filterButton);
+
+        await screen.findByText('Title Filter Regex Pattern');
+
+        const closeButton = screen.getByRole('button', { name: /close/i });
+        await user.click(closeButton);
+
+        await waitFor(() => {
+          expect(screen.queryByText('Title Filter Regex Pattern')).not.toBeInTheDocument();
+        });
+      });
+
+      test('displays complex regex pattern in mobile dialog', async () => {
+        const user = userEvent.setup();
+        const complexRegex = '(?i)^(Gaming|Review|Tutorial).*(?<!Old)$';
+        const channelWithComplexRegex: Channel[] = [
+          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: complexRegex }
+        ];
+        mockGetChannelsOnce(channelWithComplexRegex);
+        renderChannelManager();
+        await screen.findByText('Test Channel');
+
+        const filterButton = screen.getByTestId('regex-filter-button');
+        await user.click(filterButton);
+
+        expect(await screen.findByText(complexRegex)).toBeInTheDocument();
+      });
+    });
+  });
+
   describe('Edge Cases', () => {
     test('handles empty channel list', async () => {
       mockGetChannelsOnce([]);
@@ -530,7 +968,7 @@ describe('ChannelManager Component', () => {
     test('displays URL when uploader name is not available', async () => {
       const channelsWithoutUploader = [
         {
-          url: 'https://www.youtube.com/@NoNameChannel/videos',
+          url: 'https://www.youtube.com/@NoNameChannel',
           uploader: '',
           channel_id: 'UCnoname'
         }
@@ -538,7 +976,7 @@ describe('ChannelManager Component', () => {
 
       mockGetChannelsOnce(channelsWithoutUploader as any);
       renderChannelManager();
-      expect(await screen.findByText('https://www.youtube.com/@NoNameChannel/videos')).toBeInTheDocument();
+      expect(await screen.findByText('https://www.youtube.com/@NoNameChannel')).toBeInTheDocument();
     });
 
     test('handles API error when adding channel', async () => {
@@ -569,13 +1007,13 @@ describe('ChannelManager Component', () => {
     });
 
     test.each([
-      ['@New', 'https://www.youtube.com/@New/videos'],
-      ['New', 'https://www.youtube.com/@New/videos'],
-      ['youtube.com/@TestChannel', 'https://www.youtube.com/@TestChannel/videos'],
-      ['m.youtube.com/@MobileChannel', 'https://www.youtube.com/@MobileChannel/videos'],
-      ['https://www.youtube.com/@TestChannel/', 'https://www.youtube.com/@TestChannel/videos'],
-      ['https://www.youtube.com/c/TestChannel', 'https://www.youtube.com/c/TestChannel/videos'],
-      ['https://www.youtube.com/channel/UCtest123', 'https://www.youtube.com/channel/UCtest123/videos'],
+      ['@New', 'https://www.youtube.com/@New'],
+      ['New', 'https://www.youtube.com/@New'],
+      ['youtube.com/@TestChannel', 'https://www.youtube.com/@TestChannel'],
+      ['m.youtube.com/@MobileChannel', 'https://www.youtube.com/@MobileChannel'],
+      ['https://www.youtube.com/@TestChannel/', 'https://www.youtube.com/@TestChannel'],
+      ['https://www.youtube.com/c/TestChannel', 'https://www.youtube.com/c/TestChannel'],
+      ['https://www.youtube.com/channel/UCtest123', 'https://www.youtube.com/channel/UCtest123'],
     ])('normalizes %s to %s and posts', async (inputValue, normalized) => {
       const user = userEvent.setup();
       mockedAxios.get.mockResolvedValueOnce({ data: [] } as any);

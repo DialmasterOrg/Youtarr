@@ -40,6 +40,36 @@ ChannelVideo.init(
       allowNull: true,
       defaultValue: null,
     },
+    media_type: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: 'video',
+    },
+    youtube_removed: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    youtube_removed_checked_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
+    },
+    live_status: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      defaultValue: null,
+    },
+    ignored: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    ignored_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     sequelize,

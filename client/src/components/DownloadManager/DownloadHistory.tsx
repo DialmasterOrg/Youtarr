@@ -220,8 +220,8 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                       videosText = '---';
                     }
                     let formattedJobType = '';
-                    if (job.jobType === 'Channel Downloads') {
-                      formattedJobType = 'Channel';
+                    if (job.jobType.includes('Channel Downloads')) {
+                      formattedJobType = 'Channels';
                     } else if (job.jobType === 'Manually Added Urls') {
                       formattedJobType = 'Manual Videos';
                     }
@@ -298,10 +298,10 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                       }
                                     }}
                                   >
-                                    <div
-                                      style={{
-                                        padding: '8px',
-                                        backgroundColor: '#f5f5f5',
+                                    <Box
+                                      sx={{
+                                        padding: 1,
+                                        bgcolor: 'background.default',
                                         maxWidth: isMobile ? '85vw' : '320px',
                                         wordBreak: 'break-word',
                                       }}
@@ -325,7 +325,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                           </p>
                                         ))}
                                       </Typography>
-                                    </div>
+                                    </Box>
                                   </ClickAwayListener>
                                 </Popover>{' '}
                               </>
