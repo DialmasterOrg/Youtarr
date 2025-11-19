@@ -37,7 +37,7 @@ https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
 - **🔔 Discord Alerts**: Send optional webhook notifications when new videos finish downloading
 - **♻️ Re-download Missing**: Easily identify and re-download videos that were removed from disk
 - **🔐 Secure Access**: Local authentication system with admin controls
-- **☁️ Platform Flexible**: Configurable storage paths for Kubernetes/Elfhosted deployments
+- **☁️ Platform Flexible**: Configurable storage paths for Kubernetes/Selfhosted deployments
 - **🖥️ Unraid Ready**: Community Applications template (via DialmasterOrg repo) with headless-friendly credential presets
 
 ### Optional Plex Integration
