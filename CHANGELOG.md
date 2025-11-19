@@ -1,5 +1,30 @@
 # Changelog
 
+## [v1.53.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.53.0) - 2025-11-19
+
+## [1.53.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.52.0...v1.53.0) (2025-11-19)
+
+
+### Features
+
+* add ARM64 multi-architecture Docker image support ([729384d](https://github.com/DialmasterOrg/Youtarr/commit/729384d22ca49baa40e7289a38f54eddb48e7270))
+
+
+### Bug Fixes
+
+* add crossorigin attribute to manifest link to prevent CORS warnings ([49fd64b](https://github.com/DialmasterOrg/Youtarr/commit/49fd64b238363496881b734d52bf6129f66bc20c))
+* Channel List styling ([9154773](https://github.com/DialmasterOrg/Youtarr/commit/915477324c27ca6f335f158e8c30c4caa6674a03))
+
+
+### Documentation
+
+* add Apple Silicon troubleshooting for MariaDB virtiofs corruption ([b566139](https://github.com/DialmasterOrg/Youtarr/commit/b566139fe364fc654ebbe57ab0f6e2c52b9fe4de))
+* update CHANGELOG for v1.52.0 [skip ci] ([9cfffb7](https://github.com/DialmasterOrg/Youtarr/commit/9cfffb70d7797a20387b8d94b1a292f7482e05ac))
+
+
+
+
+
 ## [v1.52.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.52.0) - 2025-11-15
 
 ## [1.52.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.51.1...v1.52.0) (2025-11-15)
