@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.53.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.53.1) - 2025-11-19
+
+### [1.53.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.53.0...v1.53.1) (2025-11-19)
+
+
+### Bug Fixes
+
+* increase video validation timeout from 10s to 60s ([d5d074c](https://github.com/DialmasterOrg/Youtarr/commit/d5d074c932054dce04a8281eddaee1fc66180207))
+
+
+### Documentation
+
+* update CHANGELOG for v1.53.0 [skip ci] ([66395f6](https://github.com/DialmasterOrg/Youtarr/commit/66395f6dde6019e74a1d60b0c53caeb53534e1da))
+
+
+
+
+
 ## [v1.53.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.53.0) - 2025-11-19
 
 ## [1.53.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.52.0...v1.53.0) (2025-11-19)
