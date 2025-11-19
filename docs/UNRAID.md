@@ -6,7 +6,7 @@ Unraid has not yet been accepted into the Community Templates store, but has bee
 ## Deploying on Unraid
 
 - Install the Community Applications plugin (if you have not already), then add the template repo URL `https://github.com/DialmasterOrg/unraid-templates` under **Apps → Settings → Manage Template Repositories**.
-- Setup your MariaDB instance. See [docs/EXTERNAL_DB.md](docs/EXTERNAL_DB.md) for more information about external DB setup since this uses a DB instance that is not directly bundled with Youtarr.
+- Setup your MariaDB instance. See [docs/EXTERNAL_DB.md](./EXTERNAL_DB.md) for more information about external DB setup since this uses a DB instance that is not directly bundled with Youtarr.
   - The MariaDB Official docker container will work fine for this purpose.
 - Search for **Youtarr** under the Apps tab and launch the template. The XML lives at `https://github.com/DialmasterOrg/unraid-templates/blob/main/Youtarr/Youtarr.xml` for reference.
 - Ensure that your MariaDB instance is setup with a database name, user and password matching what you set in the Youtarr configuration
