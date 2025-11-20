@@ -282,6 +282,62 @@ Youtarr now fully supports platform-managed deployments with automatic configura
 - **Example**: `DATA_PATH=/storage/rclone/storagebox/youtube`
 - **Details**: See [Docker Guide](docs/DOCKER.md#platform-deployment-configuration) for full configuration
 
+## 🔧 Troubleshooting
+
+### Database Errors: Permission Failures or "Duplicate column name"
+
+**Symptoms:**
+- Web UI shows `Database error: Duplicate column name 'duration'`
+- MariaDB container fails to start with permission errors
+- Logs show `InnoDB: Operating system error number 13`
+- Database corruption or connection failures
+
+These errors usually fall into two buckets:
+
+#### 1. Permission / Filesystem Issues (Synology, QNAP, Apple Silicon)
+
+- **Synology/QNAP NAS**: The MariaDB image runs as UID 999 inside the container. Synology often lacks that user, so a bind-mounted `./database` folder is owned by the wrong UID/GID and MariaDB fails with error 13.
+- **macOS Apple Silicon**: Docker Desktop shares bind mounts over `virtiofs`, which MariaDB 10.3 cannot reliably use—tables become corrupt or unreadable.
+
+**Fix: switch the database service to a named Docker volume**
+
+1. Stop the stack:
+   ```bash
+   docker compose down
+   ```
+2. In `docker-compose.yml`, change the `youtarr-db` volumes block to:
+   ```yaml
+   volumes:
+     # - ./database:/var/lib/mysql
+     - youtarr-db-data:/var/lib/mysql
+   ```
+3. Uncomment the `volumes` definition at the bottom of the file:
+   ```yaml
+   volumes:
+     youtarr-db-data:
+   ```
+4. Start the stack again:
+   ```bash
+   docker compose up -d
+   ```
+
+MariaDB will initialize a fresh datadir inside the named volume. Back up `./database` first if you plan to migrate the existing data. Charset and InnoDB settings are now passed directly via the container command.
+
+**Using the bundled DB with the default `root` user:** Leave the `MYSQL_USER` / `MYSQL_PASSWORD` lines commented out in `docker-compose.yml`. Only uncomment them if you set `DB_USER` to a non-root value in `.env`. Otherwise MariaDB’s entrypoint tries to create `root@'%'` twice and fails with `Operation CREATE USER failed for 'root'@'%'`.
+
+#### 2. Duplicate column errors after a crash or manual DB restore
+
+Older community images occasionally lost the `SequelizeMeta` tracking table. When that happens, Sequelize reruns every migration from the beginning. All migrations now check whether their target tables/columns/indexes already exist and skip work that was previously completed, so the stack can repair most “Duplicate column name …” errors automatically on restart.
+
+If you still see duplicate column errors after a restart, you’ll need to either drop the duplicate column manually or restore from backup before re-running the stack. See `docs/TROUBLESHOOTING.md` for backup/restore steps and consider switching to a named volume (above) if filesystem errors caused the corruption.
+
+### Platform-Specific Documentation
+
+For detailed platform-specific guides and troubleshooting:
+- **Synology NAS**: See [docs/SYNOLOGY.md](docs/SYNOLOGY.md)
+- **Docker Desktop (macOS/Windows)**: See [docs/DOCKER.md](docs/DOCKER.md)
+- **General Troubleshooting**: Check logs with `docker compose logs -f`
+
 ## ⚖️ Legal Disclaimer
 
 Youtarr is not affiliated with YouTube or Plex. Users are responsible for ensuring their use complies with YouTube's Terms of Service and applicable copyright laws. This tool is intended for personal use with content you have the right to download.

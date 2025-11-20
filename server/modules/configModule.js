@@ -223,9 +223,27 @@ class ConfigModule extends EventEmitter {
       logger.info({ plexUrl: process.env.PLEX_URL }, 'Applied PLEX_URL from environment');
     }
 
-    // Write the config file
-    fs.writeFileSync(this.configPath, JSON.stringify(defaultConfig, null, 2));
-    logger.info({ configPath: this.configPath }, 'Created config.json from template');
+    // Write the config file and provide actionable guidance if permissions fail
+    try {
+      fs.writeFileSync(this.configPath, JSON.stringify(defaultConfig, null, 2));
+      logger.info({ configPath: this.configPath }, 'Created config.json from template');
+    } catch (error) {
+      if (error.code === 'EACCES') {
+        const uid = typeof process.getuid === 'function' ? process.getuid() : null;
+        const gid = typeof process.getgid === 'function' ? process.getgid() : null;
+        logger.error(
+          {
+            configPath: this.configPath,
+            uid,
+            gid,
+            youtarrUid: process.env.YOUTARR_UID,
+            youtarrGid: process.env.YOUTARR_GID,
+          },
+          'Unable to write config.json because bind-mounted config directory is not writable. Ensure host ownership matches YOUTARR_UID/YOUTARR_GID (see README manual compose instructions).'
+        );
+      }
+      throw error;
+    }
   }
 
   getConfig() {

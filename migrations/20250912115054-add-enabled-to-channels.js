@@ -2,12 +2,13 @@
 
 const fs = require('fs');
 const path = require('path');
+const { addColumnIfMissing } = require('./helpers');
 
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   up: async (queryInterface, Sequelize) => {
     // Add enabled column to channels table
-    await queryInterface.addColumn('channels', 'enabled', {
+    await addColumnIfMissing(queryInterface, 'channels', 'enabled', {
       type: Sequelize.BOOLEAN,
       allowNull: false,
       defaultValue: false,

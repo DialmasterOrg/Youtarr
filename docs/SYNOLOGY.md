@@ -510,6 +510,76 @@ ssh -L 3087:localhost:3087 yourusername@your-nas-ip
    docker compose up -d
    ```
 
+### Database Permission Errors or "Duplicate column name" Errors
+
+**Symptoms**:
+- MariaDB container fails to start with permission errors (error 13)
+- "InnoDB: Operating system error number 13 in a file operation"
+- "Database error: Duplicate column name 'duration'" in web UI
+- Database corruption issues
+
+**Root Cause**:
+- Most Synology failures are straight permission issues: the official MariaDB image runs as UID 999, which often lacks ownership rights on `/volume1/...` bind mounts. MariaDB can’t even open the files and surfaces error 13. Switching to a named volume prevents the problem entirely.
+- If you actually have a duplicate-column error (for example after restoring a database backup), all Youtarr migrations now check for existing schema and skip work they have already performed. A simple restart usually clears the error automatically; if not, drop the duplicate column manually (per the main Troubleshooting guide) and rerun.
+
+**Solution: Use Docker Named Volume Instead of Bind Mount**
+
+Named volumes are managed by Docker internally and don't require host UID/GID matching:
+
+1. **Stop containers**:
+   ```bash
+   cd /volume1/docker/Youtarr
+   docker compose down
+   ```
+
+2. **Edit docker-compose.yml** to use named volume:
+   ```bash
+   vi docker-compose.yml
+   ```
+
+   Find the `youtarr-db` volumes section and change from:
+   ```yaml
+   volumes:
+     - ./database:/var/lib/mysql
+     # Platform-specific issues? See docs for named volume workaround:
+     # ...
+     # - youtarr-db-data:/var/lib/mysql
+   ```
+
+   To:
+   ```yaml
+   volumes:
+     # - ./database:/var/lib/mysql
+     # Platform-specific issues? See docs for named volume workaround:
+     # ...
+     - youtarr-db-data:/var/lib/mysql
+   ```
+
+3. **Uncomment the volumes section** at the bottom of docker-compose.yml:
+   ```yaml
+   # Uncomment this if using named volume for youtarr-db (platform workaround):
+   # volumes:
+   #   youtarr-db-data:
+   ```
+
+   Should become:
+   ```yaml
+   # Uncomment this if using named volume for youtarr-db (platform workaround):
+   volumes:
+     youtarr-db-data:
+   ```
+
+4. **Start containers**:
+   ```bash
+   docker compose up -d
+   ```
+
+**Note**:
+- If you have existing data in `./database/`, this will start with a fresh database
+- To migrate existing data, see the backup/restore section
+- Named volumes work on all platforms (Synology, QNAP, macOS, Linux)
+- The official MariaDB image works perfectly with named volumes
+
 ### High CPU Usage
 
 **Symptom**: NAS CPU usage spikes during video downloads.

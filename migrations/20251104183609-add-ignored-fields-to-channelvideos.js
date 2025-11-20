@@ -1,15 +1,17 @@
 'use strict';
 
+const { addColumnIfMissing, removeColumnIfExists } = require('./helpers');
+
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up (queryInterface, Sequelize) {
-    await queryInterface.addColumn('channelvideos', 'ignored', {
+    await addColumnIfMissing(queryInterface, 'channelvideos', 'ignored', {
       type: Sequelize.BOOLEAN,
       allowNull: false,
       defaultValue: false,
     });
 
-    await queryInterface.addColumn('channelvideos', 'ignored_at', {
+    await addColumnIfMissing(queryInterface, 'channelvideos', 'ignored_at', {
       type: Sequelize.DATE,
       allowNull: true,
       defaultValue: null,
@@ -17,7 +19,7 @@ module.exports = {
   },
 
   async down (queryInterface, Sequelize) {
-    await queryInterface.removeColumn('channelvideos', 'ignored_at');
-    await queryInterface.removeColumn('channelvideos', 'ignored');
+    await removeColumnIfExists(queryInterface, 'channelvideos', 'ignored_at');
+    await removeColumnIfExists(queryInterface, 'channelvideos', 'ignored');
   }
 };

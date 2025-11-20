@@ -285,6 +285,37 @@ or
 
 3. Verify database credentials in environment
 
+### MariaDB init: `Operation CREATE USER failed for 'root'@'%'`
+
+**Problem**: Fresh installs that only use `.env` + `docker-compose.yml` fail during the MariaDB bootstrap with:
+```
+ERROR 1396 (HY000) at line 21: Operation CREATE USER failed for 'root'@'%'
+```
+
+**Cause**: The compose file was configured to set `MYSQL_USER=root`. MariaDB already creates the `root` accounts internally, so trying to create it again aborts initialization and leaves the builtin tables in a crashed state.
+
+**Solution**:
+1. Leave the `MYSQL_USER` / `MYSQL_PASSWORD` lines commented out in `docker-compose.yml` when `DB_USER=root` (the default). Only uncomment them if you explicitly set a non-root `DB_USER` / `DB_PASSWORD` in `.env`.
+2. Remove the broken datadir (`rm -rf ./database` or `docker volume rm youtarr-db-data`, depending on which storage you use).
+3. Run `docker compose up -d` again. MariaDB will initialize cleanly.
+
+### Duplicate Column Errors After Upgrade
+
+**Problem**: MariaDB logs `Duplicate column name 'duration'` (or similar) when the stack starts. The API returns `Database error: Duplicate column name ...`.
+
+**Cause**: The `SequelizeMeta` table was lost or corrupted, so Sequelize re-ran migrations on top of a populated schema. Every migration now checks for existing tables/columns/indexes before mutating anything, so simply restarting the containers lets the stack skip duplicate work automatically in most cases.
+
+**Solution**:
+1. Restart the stack (`docker compose up -d`). If the schema had already been migrated, the rerun will now skip those operations.
+2. If the error persists, check `docker compose logs youtarr` to see which migration is still failing.
+3. Manually reconcile the schema for that migration:
+   - Connect to MariaDB: `docker compose exec youtarr-db mysql -u root -p youtarr`
+   - Drop the duplicate column or table mentioned in the error (for example `ALTER TABLE Videos DROP COLUMN media_type;`), **or** restore a known-good backup.
+   - Exit MySQL and restart the stack.
+4. Once the stack is back online, verify the latest schema under **Configuration → System → Database Health**.
+
+Tip: run with a named volume (see Apple Silicon/Synology sections) so filesystem corruption is less likely to recur.
+
 ### Apple Silicon: `Incorrect information in file` errors
 
 **Problem**: On Apple Silicon (M1/M2/M3/M4) running Docker Desktop, MariaDB logs errors like:
@@ -305,9 +336,8 @@ This happens whenever MariaDB touches tables stored on a bind-mounted host direc
      youtarr-db:
        # Comment out the default bind mount line:
        # - ./database:/var/lib/mysql
-       # And enable the named volume instead:
+       # And enable the named volume instead (charset tuning is built into the container command):
        - youtarr-db-data:/var/lib/mysql
-       - ./config/mariadb.cnf:/etc/mysql/conf.d/charset.cnf:ro
 
    volumes:
      youtarr-db-data:

@@ -1,10 +1,12 @@
 'use strict';
 
+const { addColumnIfMissing, removeColumnIfExists } = require('./helpers');
+
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
     // Add available_tabs column to store which tab types the channel has (videos, shorts, streams)
-    await queryInterface.addColumn('channels', 'available_tabs', {
+    await addColumnIfMissing(queryInterface, 'channels', 'available_tabs', {
       type: Sequelize.TEXT,
       allowNull: true,
       defaultValue: null
@@ -12,7 +14,7 @@ module.exports = {
 
     // Add auto_download_enabled_tabs column to store which tabs to fetch during automated downloads
     // Default to 'video' to maintain current behavior
-    await queryInterface.addColumn('channels', 'auto_download_enabled_tabs', {
+    await addColumnIfMissing(queryInterface, 'channels', 'auto_download_enabled_tabs', {
       type: Sequelize.TEXT,
       allowNull: false,
       defaultValue: 'video'
@@ -25,7 +27,7 @@ module.exports = {
   },
 
   async down(queryInterface, Sequelize) {
-    await queryInterface.removeColumn('channels', 'available_tabs');
-    await queryInterface.removeColumn('channels', 'auto_download_enabled_tabs');
+    await removeColumnIfExists(queryInterface, 'channels', 'available_tabs');
+    await removeColumnIfExists(queryInterface, 'channels', 'auto_download_enabled_tabs');
   }
 };
