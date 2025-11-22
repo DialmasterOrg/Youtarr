@@ -279,6 +279,42 @@ or
 
 3. Verify database credentials in environment
 
+### Access Denied for Custom Database User
+
+**Problem**: After changing `DB_USER` and `DB_PASSWORD` in your `.env` file to use a non-root user, you see access denied errors in the logs:
+```
+youtarr-db  | 2025-11-22  6:28:19 8 [Warning] Access denied for user '<DB_USER>'@'172.25.0.3' (using password: YES)
+```
+
+**Cause**: When using the bundled MariaDB container, you changed `DB_USER` and `DB_PASSWORD` in `.env` but forgot to uncomment the corresponding `MYSQL_USER` and `MYSQL_PASSWORD` environment variables in `docker-compose.yml`. MariaDB needs these variables to create the custom user during initialization.
+
+**Solution**:
+1. Stop Youtarr:
+   `./stop.sh` or `docker compose down`
+
+2. Edit `docker-compose.yml` and uncomment the `MYSQL_USER` and `MYSQL_PASSWORD` lines under the `youtarr-db` service:
+   ```yaml
+   environment:
+     MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+     MYSQL_DATABASE: ${DB_NAME}
+     MYSQL_USER: ${DB_USER}        # Uncomment this line
+     MYSQL_PASSWORD: ${DB_PASSWORD}  # Uncomment this line
+   ```
+
+3. If the database has already been initialized with incorrect credentials, remove the database directory:
+
+   **WARNING: This will completely remove your DB data!**
+   ```bash
+   rm -rf ./database
+   # Or if using a named volume:
+   docker volume rm youtarr-db-data
+   ```
+
+4. Start Youtarr again:
+   `./start.sh` or `docker compose up -d`
+
+**Note**: This only applies when using the bundled MariaDB container. External database setups don't need the `MYSQL_USER`/`MYSQL_PASSWORD` variables.
+
 ### MariaDB init: `Operation CREATE USER failed for 'root'@'%'`
 
 **Problem**: Fresh installs that only use `.env` + `docker-compose.yml` fail during the MariaDB bootstrap with:
