@@ -1,3 +1,18 @@
+# IMPORTANT NOTES:
+# By default the youtarr service runs as ROOT (UID 0, GID 0) for compatibility with existing setups.
+# For improved security, you can set YOUTARR_UID and YOUTARR_GID environment variables to run the container as a non-root user.
+# If you do so, ensure that the following directories to exist on the host with the correct ownership/permissions before
+# starting the container:
+# - ./config
+# - ./jobs
+# - ./server/images
+# - <YOUTUBE_OUTPUT_DIR> (as specified in environment variable)
+# Docker will create these directories as ROOT if they do not exist!
+#
+# To create and set ownership/permissions, you can use the following commands:
+# Example (using example YOUTUBE_OUTPUT_DIR of /path/to/youtube_videos and YOUTARR_UID/GID of 1000/1000):
+# mkdir -p config jobs server/images /path/to/youtube_videos
+# sudo chown -R 1000:1000 config jobs server/images /path/to/youtube_videos
 
 services:
   youtarr:

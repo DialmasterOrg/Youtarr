@@ -1,9 +1,11 @@
-"use strict";
+'use strict';
+
+const { createTableIfNotExists, dropTableIfExists } = require('./helpers');
 
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   up: async (queryInterface, Sequelize) => {
-    await queryInterface.createTable("Videos", {
+    await createTableIfNotExists(queryInterface, 'Videos', {
       id: {
         type: Sequelize.INTEGER,
         primaryKey: true,
@@ -26,6 +28,6 @@ module.exports = {
   },
 
   down: async (queryInterface, Sequelize) => {
-    await queryInterface.dropTable("Videos");
+    await dropTableIfExists(queryInterface, 'Videos');
   },
 };

@@ -1,8 +1,14 @@
 'use strict';
 
+const {
+  createTableIfNotExists,
+  dropTableIfExists,
+  addIndexIfMissing
+} = require('./helpers');
+
 module.exports = {
   up: async (queryInterface, Sequelize) => {
-    await queryInterface.createTable('Sessions', {
+    await createTableIfNotExists(queryInterface, 'Sessions', {
       id: {
         type: Sequelize.INTEGER,
         primaryKey: true,
@@ -52,13 +58,13 @@ module.exports = {
     });
     
     // Add indexes for performance
-    await queryInterface.addIndex('Sessions', ['session_token']);
-    await queryInterface.addIndex('Sessions', ['expires_at']);
-    await queryInterface.addIndex('Sessions', ['username']);
-    await queryInterface.addIndex('Sessions', ['is_active', 'expires_at']);
+    await addIndexIfMissing(queryInterface, 'Sessions', ['session_token']);
+    await addIndexIfMissing(queryInterface, 'Sessions', ['expires_at']);
+    await addIndexIfMissing(queryInterface, 'Sessions', ['username']);
+    await addIndexIfMissing(queryInterface, 'Sessions', ['is_active', 'expires_at']);
   },
 
   down: async (queryInterface, Sequelize) => {
-    await queryInterface.dropTable('Sessions');
+    await dropTableIfExists(queryInterface, 'Sessions');
   }
 };

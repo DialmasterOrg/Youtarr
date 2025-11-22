@@ -1,9 +1,15 @@
 'use strict';
 
+const {
+  createTableIfNotExists,
+  dropTableIfExists,
+  addIndexIfMissing
+} = require('./helpers');
+
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up (queryInterface, Sequelize) {
-    await queryInterface.createTable('JobVideoDownloads', {
+    await createTableIfNotExists(queryInterface, 'JobVideoDownloads', {
       id: {
         type: Sequelize.INTEGER,
         primaryKey: true,
@@ -41,13 +47,14 @@ module.exports = {
     });
 
     // Add index on job_id for faster queries
-    await queryInterface.addIndex('JobVideoDownloads', ['job_id']);
+    await addIndexIfMissing(queryInterface, 'JobVideoDownloads', ['job_id']);
 
     // Add index on status for faster cleanup queries
-    await queryInterface.addIndex('JobVideoDownloads', ['status']);
+    await addIndexIfMissing(queryInterface, 'JobVideoDownloads', ['status']);
 
     // Ensure each job/video pair is unique
-    await queryInterface.addIndex(
+    await addIndexIfMissing(
+      queryInterface,
       'JobVideoDownloads',
       ['job_id', 'youtube_id'],
       {
@@ -58,6 +65,6 @@ module.exports = {
   },
 
   async down (queryInterface, Sequelize) {
-    await queryInterface.dropTable('JobVideoDownloads');
+    await dropTableIfExists(queryInterface, 'JobVideoDownloads');
   }
 };

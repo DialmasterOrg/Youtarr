@@ -1,5 +1,68 @@
 # Changelog
 
+## [v1.53.2](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.53.2) - 2025-11-22
+
+### [1.53.2](https://github.com/DialmasterOrg/Youtarr/compare/vv1.53.1...v1.53.2) (2025-11-22)
+
+
+### Bug Fixes
+
+* improve database resilience and platform compatibility ([974c743](https://github.com/DialmasterOrg/Youtarr/commit/974c7433859cd552a997fa10bbf91ac7c17b482b))
+* **db:** resolve custom user auth issues and improve config clarity ([21b7ada](https://github.com/DialmasterOrg/Youtarr/commit/21b7adac2779608ec0c68231a7be5f9f8bf05eac))
+
+
+### Documentation
+
+* major documentation restructure ([0bc28b6](https://github.com/DialmasterOrg/Youtarr/commit/0bc28b67cc071c154d56b51f04f2c93b1bab926a))
+* update CHANGELOG for v1.53.1 [skip ci] ([aa3c2a6](https://github.com/DialmasterOrg/Youtarr/commit/aa3c2a6d5037e677d651d3ab06d5df1eb45e9897))
+
+
+
+
+
+## [v1.53.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.53.1) - 2025-11-19
+
+### [1.53.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.53.0...v1.53.1) (2025-11-19)
+
+
+### Bug Fixes
+
+* increase video validation timeout from 10s to 60s ([d5d074c](https://github.com/DialmasterOrg/Youtarr/commit/d5d074c932054dce04a8281eddaee1fc66180207))
+
+
+### Documentation
+
+* update CHANGELOG for v1.53.0 [skip ci] ([66395f6](https://github.com/DialmasterOrg/Youtarr/commit/66395f6dde6019e74a1d60b0c53caeb53534e1da))
+
+
+
+
+
+## [v1.53.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.53.0) - 2025-11-19
+
+## [1.53.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.52.0...v1.53.0) (2025-11-19)
+
+
+### Features
+
+* add ARM64 multi-architecture Docker image support ([729384d](https://github.com/DialmasterOrg/Youtarr/commit/729384d22ca49baa40e7289a38f54eddb48e7270))
+
+
+### Bug Fixes
+
+* add crossorigin attribute to manifest link to prevent CORS warnings ([49fd64b](https://github.com/DialmasterOrg/Youtarr/commit/49fd64b238363496881b734d52bf6129f66bc20c))
+* Channel List styling ([9154773](https://github.com/DialmasterOrg/Youtarr/commit/915477324c27ca6f335f158e8c30c4caa6674a03))
+
+
+### Documentation
+
+* add Apple Silicon troubleshooting for MariaDB virtiofs corruption ([b566139](https://github.com/DialmasterOrg/Youtarr/commit/b566139fe364fc654ebbe57ab0f6e2c52b9fe4de))
+* update CHANGELOG for v1.52.0 [skip ci] ([9cfffb7](https://github.com/DialmasterOrg/Youtarr/commit/9cfffb70d7797a20387b8d94b1a292f7482e05ac))
+
+
+
+
+
 ## [v1.52.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.52.0) - 2025-11-15
 
 ## [1.52.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.51.1...v1.52.0) (2025-11-15)

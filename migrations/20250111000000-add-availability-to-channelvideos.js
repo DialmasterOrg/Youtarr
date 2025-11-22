@@ -1,9 +1,11 @@
 'use strict';
 
+const { addColumnIfMissing, removeColumnIfExists } = require('./helpers');
+
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   up: async (queryInterface, Sequelize) => {
-    await queryInterface.addColumn('channelvideos', 'availability', {
+    await addColumnIfMissing(queryInterface, 'channelvideos', 'availability', {
       type: Sequelize.STRING,
       allowNull: true,
       defaultValue: null,
@@ -11,6 +13,6 @@ module.exports = {
   },
 
   down: async (queryInterface, Sequelize) => {
-    await queryInterface.removeColumn('channelvideos', 'availability');
+    await removeColumnIfExists(queryInterface, 'channelvideos', 'availability');
   },
 };

@@ -1,8 +1,14 @@
 'use strict';
 
+const { addIndexIfMissing, removeIndexIfExists, tableExists } = require('./helpers');
+
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
+    if (!(await tableExists(queryInterface, 'Videos'))) {
+      return;
+    }
+
     // Step 1: Remap JobVideos to point to survivor Videos (highest id) for each youtubeId
     // This prevents FK constraint violations when deleting duplicates
     await queryInterface.sequelize.query(`
@@ -28,7 +34,7 @@ module.exports = {
     `);
 
     // Step 3: Add unique constraint on youtubeId
-    await queryInterface.addIndex('Videos', ['youtubeId'], {
+    await addIndexIfMissing(queryInterface, 'Videos', ['youtubeId'], {
       unique: true,
       name: 'videos_youtubeid_unique'
     });
@@ -36,6 +42,6 @@ module.exports = {
 
   async down(queryInterface, Sequelize) {
     // Remove the unique constraint
-    await queryInterface.removeIndex('Videos', 'videos_youtubeid_unique');
+    await removeIndexIfExists(queryInterface, 'Videos', 'videos_youtubeid_unique');
   }
 };

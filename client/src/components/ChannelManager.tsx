@@ -800,7 +800,22 @@ function ChannelManager({ token }: ChannelManagerProps) {
               justifyContent: { xs: 'flex-start', md: 'center' },
             }}
           >
-            <Tooltip placement='top' title={isAddingChannel ? 'Adding channel...' : 'Add a new channel to the list above'}>
+            <Tooltip
+              placement='top'
+              title={isAddingChannel ? 'Adding channel...' : 'Add a new channel to the list above'}
+              // PopperProps are used here to offset the tooltip so it doesn’t sit directly
+              // on top of the trigger button and obscure it when displayed.
+              PopperProps={{
+                modifiers: [
+                  {
+                    name: 'offset',
+                    options: {
+                      offset: [0, 32],
+                    },
+                  },
+                ],
+              }}
+            >
               <span>
                 <IconButton
                   onClick={handleAdd}
