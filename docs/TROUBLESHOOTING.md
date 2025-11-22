@@ -84,7 +84,7 @@ This creates a secure tunnel between your local machine's port 3087 and the serv
 **Solution**:
 - You will be automatically redirected to the login page
 - Simply log back in with your credentials
-- Sessions expire after 7 days of inactivity
+- Sessions expire after 7 days
 - If issues persist, clear browser cache/cookies
 
 ### Plex API Key Issues
@@ -148,7 +148,7 @@ This creates a secure tunnel between your local machine's port 3087 and the serv
 **Solution**:
 - Verify Automatic Video Removal is enabled and at least one threshold (age or free space) is configured on the Configuration page.
 - Run the dry-run preview to see how many videos currently match the thresholds and adjust values if needed (for example, lower the free-space threshold or reduce the age requirement).
-- Check server logs around 2:00 AM for messages prefixed with `[CRON]` or `[Auto-Removal]` to confirm the job is executing (`docker compose logs -f app`).
+- Check server logs around 2:00 AM for messages prefixed with `[CRON]` or `[Auto-Removal]` to confirm the job is executing (`docker compose logs -f youtarr`).
 - If errors appear in the logs (e.g., permission issues deleting files), resolve those first—the cron job will skip files it cannot delete.
 
 ## Docker Issues
@@ -157,10 +157,10 @@ This creates a secure tunnel between your local machine's port 3087 and the serv
 
 **Problem**: Getting error `invalid spec: :/usr/src/app/data: empty section between colons` when trying to start with Docker Compose.
 
-**Cause**: You ran `docker compose up` directly instead of using `./start.sh`. The docker-compose.yml file requires the `YOUTUBE_OUTPUT_DIR` environment variable to be set, which `./start.sh` reads from your config.json.
+**Cause**: You ran `docker compose up` directly instead of using `./start.sh` without creating and configuring your `.env` file. The docker-compose.yml file requires the `YOUTUBE_OUTPUT_DIR` environment variable to be set, which `./start.sh` reads from your config.json.
 
 **Solution**:
-Always use the start script instead of running docker-compose commands directly:
+1. Use the start script instead of running docker-compose commands directly:
 ```bash
 ./start.sh
 ```
@@ -170,7 +170,8 @@ The start script:
 - Exports it as `YOUTUBE_OUTPUT_DIR` environment variable
 - Then runs docker-compose with the correct configuration
 
-**Note**: This is by design to ensure your configured directory in config.json matches the Docker volume mount. Using docker-compose directly would bypass this validation and could result in mismatched storage locations.
+2. Using docker-compose commands:
+- Ensure that you have created your `.env` file from the provided `.env.example` and configured your `YOUTUBE_OUTPUT_DIR` before attempting to run `docker compose up -d`
 
 ### Docker Desktop Mount Path Error (Windows)
 
@@ -220,13 +221,6 @@ This is a known Docker Desktop issue on Windows where mount points become corrup
    netstat -an | grep 3321
    ```
 
-3. Clean restart:
-   ```bash
-   ./stop.sh
-   docker compose down -v  # Warning: This removes volumes
-   ./start.sh
-   ```
-
 ## Database Issues
 
 ### UTF-8 Character Errors
@@ -234,7 +228,7 @@ This is a known Docker Desktop issue on Windows where mount points become corrup
 **Problem**: Errors like `Incorrect string value: '\\xF0\\x9F\\xA7\\xA1'` when channel names or video titles contain emojis.
 
 By default Youtarr creates the database and tables as utf8mb4, so this shouldn't happen
-unless you are using an external DB. If so, see [docs/EXTERNAL_DB.md](docs/EXTERNAL_DB.md)
+unless you are using an external DB. If so, see [External Database Guide](platforms/external-db.md)
 for how to create your DB with the correct character set.
 
 **How to** ensure that your DB is using the correct character set:
@@ -257,7 +251,7 @@ for how to create your DB with the correct character set.
     AND TABLE_NAME != 'SequelizeMeta'
     ORDER BY TABLE_NAME;
 ```
-*It doesn't matter if the SequelizeMeta table is not utf8mb4**
+**It doesn't matter if the SequelizeMeta table is not utf8mb4**
 
 **Solution**
 Either:
@@ -304,6 +298,7 @@ ERROR 1396 (HY000) at line 21: Operation CREATE USER failed for 'root'@'%'
 **Problem**: MariaDB logs `Duplicate column name 'duration'` (or similar) when the stack starts. The API returns `Database error: Duplicate column name ...`.
 
 **Cause**: The `SequelizeMeta` table was lost or corrupted, so Sequelize re-ran migrations on top of a populated schema. Every migration now checks for existing tables/columns/indexes before mutating anything, so simply restarting the containers lets the stack skip duplicate work automatically in most cases.
+**NOTE**: This should not happen anymore, migrations have been updated to be idempotent.
 
 **Solution**:
 1. Restart the stack (`docker compose up -d`). If the schema had already been migrated, the rerun will now skip those operations.
@@ -325,12 +320,9 @@ ERROR 1033 (HY000): Incorrect information in file: './youtarr/videos.frm'
 This happens whenever MariaDB touches tables stored on a bind-mounted host directory (our default `./database:/var/lib/mysql`). Docker Desktop shares bind mounts over `virtiofs`, and MariaDB 10.3 cannot reliably reopen InnoDB tables on that filesystem ([MariaDB issue #447](https://github.com/MariaDB/mariadb-docker/issues/447), [#481](https://github.com/MariaDB/mariadb-docker/issues/481)). Linux and WSL users are unaffected.
 
 **Solution** (switch to a named Docker volume):
-1. Stop the stack: `./stop.sh` or `docker compose down`.
-2. Remove the old host directory (`./database`) so MariaDB can recreate a clean datadir inside the named volume:
-   ```bash
-   sudo rm -rf ./database
-   ```
-3. Edit `docker-compose.yml`:
+**NOTE:** Existing data will *not* be migrated!
+1. Stop the stack and remove the old volume `docker compose down -v`.
+2. Edit `docker-compose.yml`:
    ```yaml
    services:
      youtarr-db:
@@ -339,16 +331,15 @@ This happens whenever MariaDB touches tables stored on a bind-mounted host direc
        # And enable the named volume instead (charset tuning is built into the container command):
        - youtarr-db-data:/var/lib/mysql
 
+   # Ensure that the volume is defined
    volumes:
      youtarr-db-data:
    ```
-4. Start Youtarr again (`./start.sh`). MariaDB will initialize inside `youtarr-db-data`, avoiding virtiofs entirely.
+4. Start Youtarr again (`./start.sh` or `docker compose up -d`). MariaDB will initialize inside `youtarr-db-data`, avoiding virtiofs entirely.
 
 **Alternatives**:
 - Point Youtarr at an external MariaDB/MySQL instance via `./start-with-external-db.sh`.
 - Run the stack on Linux/WSL, which uses a native filesystem for bind mounts.
-
-Once migrated, back up the database using `mysqldump` or `docker cp` instead of copying files from `./database`, since the named volume lives inside Docker’s VM.
 
 ## Download Issues
 
@@ -370,14 +361,30 @@ Once migrated, back up the database using `mysqldump` or `docker cp` instead of 
 
 **Problem**: yt-dlp fails to download videos.
 
-**Solution**:
-- Youtarr's Docker image includes yt-dlp which auto-updates on every release.
-- For persistent issues, rebuild the container:
-  ```bash
-  ./stop.sh
-  docker compose pull
-  ./start.sh
-  ```
+**Solution #1**:
+
+Youtarr's Docker image includes yt-dlp which auto-updates on every release, update to the latest version if behind:
+  - Via docker compose:
+      ```bash
+      docker compose down
+      docker compose pull
+      docker compose up -d
+      ```
+  - Using helper scripts:
+      ```bash
+      ./stop.sh
+      ./start.sh --pull-latest
+      ```
+
+**Solution #2**:
+
+YouTube is blocking your downloads.
+1. Try enabling and uploading cookies in Configuration -> Cookie Configuration
+2. If only some videos are failing, try increasing the "Sleep Between Requests" value in Configuration -> Advanced Settings
+3. Try using a proxy, or switching to a VPN
+
+**NOTE**: In some cases YouTube may temporarily blacklist your IP address if too many requests were happening from your IP. You may just need to wait in order to download again. You can manually test downloading a video from YouTube to rule out Youtarr-specific issues by downloading yt-dlp and attempting to manually download a single video.
+
 
 ## Plex Integration Issues
 
@@ -454,7 +461,7 @@ Once migrated, back up the database using `mysqldump` or `docker cp` instead of 
 #### Kodi/Jellyfin/Emby
 **Solution**:
 - Verify .nfo files exist alongside video files (same name, different extension)
-- Ensure library is configured as "Movies" type
+- Ensure library is configured as "Movies" or "Mixed" type
 - Enable "Nfo" metadata reader in library settings
 - Disable all online metadata scrapers to avoid conflicts
 - Try a full library rescan
@@ -463,6 +470,7 @@ Once migrated, back up the database using `mysqldump` or `docker cp` instead of 
 ### Channel Posters Not Displaying
 
 **Problem**: Channel folders don't show artwork/posters.
+**NOTE:** Plex does not support channel posters, this is only supported on Kodi/Jellyfin/Emby
 
 **Solution**:
 - Verify poster.jpg exists in each channel folder
@@ -499,10 +507,11 @@ Once migrated, back up the database using `mysqldump` or `docker cp` instead of 
 
 If these solutions don't resolve your issue:
 
-1. Check the [GitHub Issues](https://github.com/dialmaster/Youtarr/issues) page
-2. Provide relevant logs when reporting issues:
+1. Check the [GitHub Issues](https://github.com/DialmasterOrg/Youtarr/issues) page
+2. Provide details about your operating system
+3. Provide relevant logs when reporting issues:
    ```bash
    docker compose logs --tail=100 youtarr
    ```
-3. Include your configuration (without sensitive data)
-4. Describe steps to reproduce the problem
+4. Include your configuration (without sensitive data)
+5. Describe steps to reproduce the problem

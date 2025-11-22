@@ -18,7 +18,6 @@ describe('ConfigModule', () => {
     plexApiKey: '',
     plexPort: '32400',
     plexLibrarySection: '',
-    youtubeApiKey: '',
     channelDownloadFrequency: '0 */6 * * *',
     videoResolution: '1080',
     sponsorBlock: {
