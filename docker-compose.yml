@@ -1,3 +1,23 @@
+# IMPORTANT NOTES:
+# 1) UID/GID and folders setup:
+# By default the youtarr service runs as ROOT (UID 0, GID 0) for compatibility with existing setups.
+# For improved security, you can set YOUTARR_UID and YOUTARR_GID environment variables to run the container as a non-root user.
+# If you do so, ensure that the following directories to exist on the host with the correct ownership/permissions before
+# starting the container:
+# - ./config
+# - ./jobs
+# - ./server/images
+# - <YOUTUBE_OUTPUT_DIR> (as specified in environment variable)
+# Docker will create these directories as ROOT if they do not exist!
+#
+# To create and set ownership/permissions, you can use the following commands:
+# Example (using example YOUTUBE_OUTPUT_DIR of /path/to/youtube_videos and YOUTARR_UID/GID of 1000/1000):
+# mkdir -p config jobs server/images /path/to/youtube_videos
+# sudo chown -R 1000:1000 config jobs server/images /path/to/youtube_videos
+#
+# 2) Database setup notes for Synology and Apple Silicon macOS users:
+# There are known issues with using bind mounts for MariaDB data directories due to permission and virtiofs bugs respectively.
+# It is highly recommended to use a named volume for the youtarr-db service instead of the bind mount.
 
 services:
   youtarr-db:
@@ -9,21 +29,21 @@ services:
       MYSQL_DATABASE: ${DB_NAME:-youtarr}
       MYSQL_TCP_PORT: ${DB_PORT:-3321}
       # Set utf8mb4 as default for new installations
-      # Previously youtarr always used root, so keeping this default for backwards compatibility
-      MYSQL_USER: ${DB_USER:-root}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-123qweasd}
+      # Only set MYSQL_USER / MYSQL_PASSWORD if you configure a non-root DB_USER user in .env
+      # MYSQL_USER: ${DB_USER}
+      # MYSQL_PASSWORD: ${DB_PASSWORD}
       MYSQL_CHARSET: utf8mb4
       MYSQL_COLLATION: utf8mb4_unicode_ci
     ports:
       - "${DB_PORT:-3321}:${DB_PORT:-3321}"
     volumes:
       - ./database:/var/lib/mysql
-      # macOS (Apple Silicon): comment the line above and use the named volume example below to avoid the MariaDB+virtiofs bug (see README/Troubleshooting)
+      # Synology and Apple Silicon macOS users:
+      # Uncomment the line below and comment out the line above to use named volume:
       # - youtarr-db-data:/var/lib/mysql
-      - ./config/mariadb.cnf:/etc/mysql/conf.d/charset.cnf:ro
-    command: --port=${DB_PORT:-3321} --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    command: --port=${DB_PORT:-3321} --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --innodb-file-per-table=1 --innodb-large-prefix=ON
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-P", "${DB_PORT:-3321}", "-p${DB_PASSWORD:-123qweasd}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-P", "${DB_PORT:-3321}", "-u", "${DB_USER:-root}", "-p${DB_PASSWORD:-123qweasd}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -33,7 +53,7 @@ services:
     image: ${YOUTARR_IMAGE:-dialmaster/youtarr:latest}
     container_name: youtarr
     restart: unless-stopped
-    # Optional: Run as specific UID:GID for security (defaults to root if not set per previous behavior)
+    # Optional: Run as specific UID:GID for security (defaults to root if not set for backwards compatibility with existing users)
     user: "${YOUTARR_UID:-0}:${YOUTARR_GID:-0}"
     depends_on:
       youtarr-db:
@@ -78,7 +98,7 @@ networks:
   default:
     name: youtarr-network
 
-# When switching the DB service to a named volume (Apple Silicon workaround),
-# remember to define it here:
+# Synology and Apple Silicon macOS users:
+# Uncomment the line below and comment out the line above to use named volume:
 # volumes:
 #   youtarr-db-data:

@@ -38,13 +38,15 @@ Youtarr/
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/dialmaster/Youtarr.git
+git clone https://github.com/DialmasterOrg/Youtarr.git
 cd Youtarr
 ```
 
 ### 2. Build Development Environment
-
 ```bash
+# Install root dependencies
+npm i
+
 # First build (installs dependencies and builds the client)
 ./scripts/build-dev.sh --install-deps
 
@@ -97,6 +99,17 @@ Navigate to http://localhost:3087 and create your admin account.
 ./stop.sh
 ```
 
+## Resetting local development environment
+**!IMPORTANT!**: This COMPLETELY resets your local environment and REMOVES all data except your downloaded videos!
+
+**DATABASE AND CONFIGURATION IS REMOVED AND NOT BACKED UP!**
+
+*This can be useful for local development and testing*
+
+```bash
+./scripts/reset-server-data.sh
+```
+
 ## How Docker Development Works
 
 ### Build-and-Test Workflow
@@ -119,9 +132,9 @@ The development setup mounts these directories only:
 
 ```yaml
 volumes:
-  - ./server/images:/usr/src/app/server/images  # Generated thumbnails
-  - ./config:/usr/src/app/config                # Configuration files
-  - ./jobs:/usr/src/app/jobs                    # Job state
+  - ./server/images:/app/server/images          # Generated thumbnails
+  - ./config:/app/config                        # Configuration files
+  -  ./jobs:/app/jobs                           # Job state
 ```
 
 **Important:** Source code (client/src/, server/*.js) is NOT mounted. This means:
@@ -204,7 +217,7 @@ docker compose exec youtarr-db mysql -u root -p123qweasd youtarr
 
 ### ESLint Configuration
 
-The project uses ESLint for code quality. Configuration is in `.eslintrc.json`.
+The project uses ESLint for code quality. Configuration is in `.eslintrc.js`.
 
 ```bash
 # Lint all code
@@ -223,7 +236,7 @@ npm run lint:ts
 
 ### Pre-commit Hooks
 
-Husky is configured to run linting before commits. To bypass (not recommended):
+Husky is configured to run linting, typescript checks and tests before commits. To bypass (not recommended):
 ```bash
 git commit --no-verify
 ```
@@ -260,14 +273,6 @@ npm test -- --coverage           # With coverage
 npm test -- --watchAll=false     # Run once
 ```
 
-### Test Guidelines
-
-See CLAUDE.md for comprehensive testing guidelines including:
-- React Testing Library best practices
-- Jest mocking patterns
-- Avoiding common linting errors
-- Never skip tests policy
-
 ## Database Development
 
 ### Working with Migrations
@@ -276,24 +281,12 @@ See CLAUDE.md for comprehensive testing guidelines including:
 # Create a new migration
 ./scripts/db-create-migration.sh migration-name
 
-# Or use npm script
-npm run db:create-migration -- --name migration-name
-
 # Migrations run automatically on container startup
-# To run manually inside container:
-docker compose exec youtarr npm run db:migrate
 ```
 
 ### Database Schema
 
-Key tables:
-- `config` - Application configuration
-- `channels` - YouTube channels
-- `videos` - Downloaded videos
-- `jobs` - Background job queue
-- `jobvideos` - Job-video relationships
-- `channelvideos` - Channel-video relationships
-- `sessions` - User sessions
+See [DATABASE.md](DATABASE.md)
 
 ### Backend Debugging
 
@@ -362,6 +355,8 @@ const sequelize = new Sequelize({
 
 ### API Endpoints
 
+See `./server/server.js` for api endpoint/route definitions.
+
 Key endpoints (all require authentication except setup):
 
 - **Setup:** `GET /setup/status`, `POST /setup/create-auth`
@@ -382,7 +377,7 @@ headers: {
 
 ### WebSocket Events
 
-WebSocket shares the HTTP port (3011) and emits:
+WebSocket shares the HTTP port (3011 in container, 3087 on host) and emits:
 - `downloadProgress` - Download progress updates
 - `downloadComplete` - Video download finished
 - `channelsUpdated` - Channel list changed
@@ -427,16 +422,16 @@ Before submitting PR:
 - [ ] No sensitive data in commits
 - [ ] Follows existing code style
 
-## Building for Production
+## Building Images
 
 ### Docker Build
 
 ```bash
-# Build production image
-docker build -t youtarr:local .
+# Build local image
+./scripts/build-dev.sh
 
 # Test locally
-docker compose up -d
+./scripts/start-dev.sh
 ```
 
 ### Release Process
@@ -556,11 +551,3 @@ app.use((req, res, next) => {
 ### Frontend Profiling
 
 Use React DevTools Profiler to identify performance bottlenecks.
-
-## Additional Resources
-
-- **[Setup Guide](SETUP.md)** - User installation instructions
-- **[Synology Guide](SYNOLOGY.md)** - Synology NAS installation
-- **[Media Server Guide](MEDIA_SERVERS.md)** - Plex, Kodi, Jellyfin, Emby setup
-- **[Troubleshooting](TROUBLESHOOTING.md)** - Common user issues
-- **[Docker Guide](DOCKER.md)** - Production Docker configuration

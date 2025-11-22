@@ -24,6 +24,8 @@ This guide provides a manual configuration approach that works reliably on Synol
 
 ## Installation Steps
 
+> **Installation Overview**: This guide walks you through installing Youtarr on Synology. The most critical step for Synology users is **Step 4.5** where you must configure the database volume before first start. Unlike standard installations, Synology requires either named volumes or the LinuxServer MariaDB image to avoid permission issues.
+
 ### Step 1: Enable SSH and Configure Docker Access
 
 1. **Enable SSH** (if not already enabled):
@@ -94,7 +96,7 @@ The docker-compose.yml file expects certain directories to exist. Create them no
 cd /volume1/docker/Youtarr
 
 # These directories are mounted by the containers
-mkdir -p database
+# Note: database directory is NOT needed - see Step 4.5 for database configuration
 mkdir -p config
 mkdir -p jobs
 mkdir -p server/images
@@ -116,6 +118,173 @@ mkdir -p /volume1/docker/Youtarr/data/youtube
 ```
 
 **Important**: Remember this path - you'll need it in the next step.
+
+---
+
+### Step 4.5: Configure Database Volume (IMPORTANT!)
+
+> **Critical for Synology**: The official MariaDB Docker image runs as UID 999, which does not exist on Synology systems. Using a bind mount (like `./database:/var/lib/mysql`) **will fail with permission errors** on Synology. You MUST configure the database volume before starting Youtarr for the first time.
+
+Choose one of the following options:
+
+#### Option 1: Named Volume (RECOMMENDED)
+
+Named volumes are managed by Docker internally and avoid all permission issues. This is the simplest and most reliable option for Synology users.
+
+**Edit docker-compose.yml before first start:**
+
+```bash
+cd /volume1/docker/Youtarr
+vi docker-compose.yml
+```
+
+> **Tip**: If you prefer `nano` and have installed it, use `nano docker-compose.yml` instead.
+
+**Make these changes:**
+
+1. Find the `youtarr-db` service's `volumes:` section (around line 39):
+   ```yaml
+   volumes:
+     - ./database:/var/lib/mysql
+     # Synology and Apple Silicon macOS users:
+     # Uncomment the line below and comment out the line above to use named volume:
+     # - youtarr-db-data:/var/lib/mysql
+   ```
+
+   Change it to:
+   ```yaml
+   volumes:
+     # - ./database:/var/lib/mysql
+     # Synology and Apple Silicon macOS users:
+     # Uncomment the line below and comment out the line above to use named volume:
+     - youtarr-db-data:/var/lib/mysql
+   ```
+
+2. Find the `volumes:` section at the bottom of the file (around line 101):
+   ```yaml
+   # Synology and Apple Silicon macOS users:
+   # Uncomment the line below and comment out the line above to use named volume:
+   # volumes:
+   #   youtarr-db-data:
+   ```
+
+   Change it to:
+   ```yaml
+   # Synology and Apple Silicon macOS users:
+   # Uncomment the line below and comment out the line above to use named volume:
+   volumes:
+     youtarr-db-data:
+   ```
+
+**Save the file**:
+- In `vi`: Press `Esc`, type `:wq`, press `Enter`
+- In `nano`: Press `Ctrl+O`, `Enter`, then `Ctrl+X`
+
+**Benefits of named volumes:**
+- No permission issues - Docker manages all permissions internally
+- Works perfectly with official MariaDB image
+- Portable across all platforms (Synology, QNAP, macOS, Linux)
+- No UID/GID configuration needed
+
+**Note about data location:** The named volume data is stored by Docker in `/volume/@docker/volumes/` on Synology. You can back it up using `docker exec youtarr-db mysqldump` (see Backup section).
+
+---
+
+#### Option 2: LinuxServer MariaDB with Bind Mount (ADVANCED)
+
+If you need direct filesystem access to the database files (for easier backups or migrations), you can use the LinuxServer MariaDB image which respects PUID/PGID environment variables.
+
+** This requires replacing the entire `youtarr-db` service definition in docker-compose.yml:**
+
+**1. Find your Synology user UID/GID**
+
+SSH into your NAS and run:
+
+```bash
+ssh <your-user>@<your-nas-ip>
+id
+```
+You'll see something like:
+```bash
+uid=1026(youruser) gid=100(users) groups=100(users),...
+```
+
+In this example:
+- The PUID would be 1026
+- The PGID would be 100
+
+```bash
+cd /volume1/docker/Youtarr
+vi docker-compose.yml
+```
+
+**2. Replace the entire `youtarr-db` service** (starting around line 17) with:
+
+```yaml
+  youtarr-db:
+    image: linuxserver/mariadb:latest
+    container_name: youtarr-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-123qweasd}
+      MYSQL_DATABASE: ${DB_NAME:-youtarr}
+      MYSQL_TCP_PORT: ${DB_PORT:-3321}
+      MYSQL_USER: ${DB_USER:-root}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-123qweasd}
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+      # Replace these with your own UID/GID from the `id` command
+      PUID: 1026 # Example: Synology default standard user
+      PGID: 100  # Example: Synology default users group
+    ports:
+      - "${DB_PORT:-3321}:${DB_PORT:-3321}"
+    volumes:
+      # Database files will be stored in ./database on the host
+      - ./database:/config
+    command: --port=${DB_PORT:-3321} --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-P", "${DB_PORT:-3321}", "-p${DB_PASSWORD:-123qweasd}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - youtarr-network
+```
+
+**3. Database directory:**
+By default, Docker will automatically create the ./database directory (as root:root) the first time the container starts. The linuxserver/mariadb image will then chown /config to PUID:PGID during its init step, so in most cases you don’t need to do anything extra.
+
+If you prefer to create it explicitly, or if you run into permission errors, you can do:
+```bash
+cd /volume1/docker/Youtarr
+mkdir -p database
+# Optional: If permissions are wrong, you can force ownership:
+# chown <your_uid>:<your_gid> database
+# Eg: chown 1026:100 database
+```
+*Use the same UID/GID here that you set as PUID/PGID in the compose file.*
+
+**Important differences:**
+- Uses `linuxserver/mariadb` image instead of official `mariadb:10.3`
+- Volume mount path is `./database:/config` (NOT `/var/lib/mysql`)
+- PUID=1026 and PGID=100 match typical Synology user permissions
+  - Find your DSM user’s UID/GID by SSHing into the NAS and running id.
+- This image respects those UID/GID settings and will chown the `/config` directory on startup.
+
+**When to use this option:**
+- You need to access database files directly from the host
+- You're migrating from another system with existing database files
+- You want simpler backups via file copy instead of mysqldump
+
+**Drawbacks:**
+- More complex configuration
+- Different image from official documentation
+- Slightly different file structure inside container
+
+---
+
+After configuring the database, proceed to Step 5 to configure environment variables.
 
 ---
 
@@ -154,7 +323,7 @@ The `.env.example` file contains detailed comments explaining each variable - re
 - Press `Esc`, then type `:wq` and press `Enter` (for `vi`)
 - If using `nano`, press `Ctrl+O`, `Enter`, then `Ctrl+X`
 
-**Security Note**: Preset credentials via `AUTH_PRESET` persist. If you use them, you will not be able to chage your username or password in the UI.
+**Security Note**: Preset credentials via `AUTH_PRESET` persist. If you use them, you will not be able to change your username or password in the UI.
 
 #### Verify .env file
 
@@ -171,6 +340,8 @@ Ensure `YOUTUBE_OUTPUT_DIR` matches the directory you created in Step 4.
 ---
 
 ### Step 6: Start Youtarr
+
+> **⚠️ IMPORTANT**: Before starting, ensure you completed **Step 4.5** to configure the database volume! Skipping Step 4.5 will cause MariaDB to fail with permission errors on Synology.
 
 Start the containers using docker compose:
 
@@ -240,24 +411,48 @@ While SSH is recommended for initial setup, you can also manage Youtarr through 
 
 ### File Permissions
 
-Youtarr runs as root by default inside the container, which should work with Synology's default permissions. If you encounter permission issues:
+Youtarr runs as root by default inside the container, which should work with Synology's default permissions. If you encounter permission issues with the **app container** (not database):
 
-First stop Youtarr.
+First stop Youtarr, then:
 
-Then fix file ownership:
+**1. Find your Synology user UID/GID**
+
+SSH into your NAS and run:
+
 ```bash
-# Fix ownership (from SSH)
-cd /volume1/docker/Youtarr
-sudo chown -R 1000:1000 database config jobs server
+ssh <your-user>@<your-nas-ip>
+id
+```
+You'll see something like:
+```bash
+uid=1026(youruser) gid=100(users) groups=100(users),...
 ```
 
-Set the UID/GID in your .env file:
+In this example:
+- The PUID would be 1026
+- The PGID would be 100
+
+**2. Fix ownership for app directories**
+```bash
+# Fix ownership for app directories only (from SSH)
+cd /volume1/docker/Youtarr
+# sudo chown -R <your uid>:<your gid> config jobs server
+# Eg: sudo chown -R 1026:100 config jobs server
 ```
-YOUTARR_UID=1000
-YOUTARR_GID=1000
+
+Set the UID/GID in your `.env` file using your UID/GID, example:
+```
+YOUTARR_UID=1026
+YOUTARR_GID=100
 ```
 
 Then restart Youtarr
+
+**Important**: The `YOUTARR_UID` and `YOUTARR_GID` environment variables only affect the **youtarr app container**, not the database container.
+
+- If you're using **named volumes** (Step 4.5 Option 1), database permissions are handled automatically by Docker
+- If you're using **linuxserver/mariadb** (Step 4.5 Option 2), database permissions are controlled by the `PUID` and `PGID` settings in docker-compose.yml
+- If you have database permission errors with the official MariaDB image, see the "Database Permission Errors" section below
 
 ### Network Access
 
@@ -283,12 +478,8 @@ Then restart Youtarr
 └── .env                          # Environment variables
 
 /volume1/media/youtube/           # Downloaded videos (example)
-├── ChannelName1/
-│   ├── video1 [youtubeid].mp4
-│   └── video1 [youtubeid].nfo
-└── ChannelName2/
-    └── video2 [youtubeid].mp4
 ```
+See [YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md](../YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md) for structure of downloaded videos
 
 ### Integration with Media Servers on Synology
 
@@ -503,12 +694,115 @@ ssh -L 3087:localhost:3087 yourusername@your-nas-ip
    ```
 
 4. If issues persist, reset database:
+   **WARNING: This deletes all data in your database!**
+   #### If using host mounted database
    ```bash
-   # WARNING: This deletes all data!
    docker compose down
    rm -rf database/*
    docker compose up -d
    ```
+
+   #### If using volume mounted database
+   ```bash
+   docker compose down -v # Removes the named volume (defaults to youtarr-db-data)
+   docker compose up -d   # Recreates the volume and initializes a fresh database
+   ```
+
+
+### Database Permission Errors or "Duplicate column name" Errors
+
+**Symptoms**:
+- MariaDB container fails to start with permission errors (error 13)
+- "InnoDB: Operating system error number 13 in a file operation"
+- "Database error: Duplicate column name 'duration'" in web UI
+- Database corruption issues
+
+**Root Cause**:
+- Most Synology failures are straight permission issues: the official MariaDB image runs as UID 999, which often lacks ownership rights on `/volume1/...` bind mounts. MariaDB can't even open the files and surfaces error 13. **This is why Step 4.5 instructs you to configure database volumes BEFORE first start**.
+- If you actually have a duplicate-column error (for example after restoring a database backup), all Youtarr migrations now check for existing schema and skip work they have already performed. A simple restart usually clears the error automatically; if not, drop the duplicate column manually (per the main Troubleshooting guide) and rerun.
+
+**If you already started Youtarr and are seeing permission errors:**
+
+**Option A: Switch to Named Volume (Recommended - Fresh Start)**
+
+If you don't have important data yet or can re-add your channels:
+
+1. **Stop containers**:
+   ```bash
+   cd /volume1/docker/Youtarr
+   docker compose down
+   ```
+
+2. **Follow Step 4.5 Option 1** to edit docker-compose.yml for named volumes
+
+3. **Remove failed bind mount data** (optional cleanup):
+   ```bash
+   # Only if you want to clean up the failed attempt
+   sudo rm -rf database
+   ```
+
+4. **Start containers**:
+   ```bash
+   docker compose up -d
+   ```
+
+**Option B: Switch to LinuxServer MariaDB (Advanced - Keep Bind Mount)**
+
+If you need bind mounts for some reason:
+
+1. **Stop containers**:
+   ```bash
+   cd /volume1/docker/Youtarr
+   docker compose down
+   ```
+
+2. **Follow Step 4.5 Option 2** to replace the youtarr-db service with linuxserver/mariadb
+
+3. **Fix permissions on existing database directory**:
+   ```bash
+   sudo chown -R <your uid>:<your gid> database
+   ```
+
+4. **Start containers**:
+   ```bash
+   docker compose up -d
+   ```
+
+**Option C: Migrate Existing Data to Named Volume**
+
+If you have existing data in `./database/` that you want to preserve:
+
+1. **Backup your database first**:
+
+   ```bash
+   # Try to start just the database temporarily to dump data
+   docker compose up -d youtarr-db
+   sleep 30
+   docker exec youtarr-db mysqldump -u <db_user> -p'<db_password>' <db_name> > /volume1/backups/youtarr-backup.sql
+   # Replace <db_user>, <db_password>, and <db_name> with the values from your .env file (defaults: root / 123qweasd / youtarr).
+   docker compose down
+   ```
+
+2. **Switch to named volume** (follow Option A steps 1-2)
+
+3. **Start containers** to initialize fresh database:
+   ```bash
+   docker compose up -d
+   ```
+
+4. **Restore your data**:
+
+   ```bash
+   # Wait for database to be healthy
+   sleep 30
+   docker exec -i youtarr-db mysql -u <db_user> -p'<db_password>' <db_name> < /volume1/backups/youtarr-backup.sql
+   # Replace <db_user>, <db_password>, and <db_name> with the values from your .env file.
+   docker compose restart youtarr
+   ```
+
+**Prevention for new installations:**
+
+✅ **Always follow Step 4.5** before starting Youtarr for the first time to avoid these issues entirely!
 
 ### High CPU Usage
 
@@ -556,33 +850,66 @@ mkdir -p /volume1/backups/youtarr
 # Backup configuration
 cp -r /volume1/docker/Youtarr/config /volume1/backups/youtarr/config-$(date +%Y%m%d)
 
-# Backup database (with containers running)
-docker exec youtarr-db mysqldump -u root -p123qweasd youtarr > /volume1/backups/youtarr/database-$(date +%Y%m%d).sql
-
-# Or backup database directory (stop containers first)
-docker compose down
-cp -r /volume1/docker/Youtarr/database /volume1/backups/youtarr/database-$(date +%Y%m%d)
-docker compose up -d
+# Backup database (with containers running).
+# Replace <db_user>, <db_password>, and <db_name> with the values from your .env file.
+docker exec youtarr-db mysqldump -u <db_user> -p'<db_password>' <db_name> > /volume1/backups/youtarr/database-$(date +%Y%m%d).sql
 ```
+
+**Optional file-level backups**
+
+- **Bind mount / linuxserver installs**:
+  ```bash
+  docker compose down
+  cp -r /volume1/docker/Youtarr/database /volume1/backups/youtarr/database-$(date +%Y%m%d)
+  docker compose up -d
+  ```
+
+- **Named volume installs** (default volume name is `youtarr-db-data`; adjust if you changed it):
+  ```bash
+  docker run --rm \
+    -v youtarr-db-data:/var/lib/mysql \
+    -v /volume1/backups/youtarr:/backup \
+    busybox sh -c 'cd /var/lib/mysql && tar czf /backup/youtarr-db-$(date +%Y%m%d).tar.gz .'
+  ```
 
 ### Restore from Backup
 
-```bash
-# Stop containers
-cd /volume1/docker/Youtarr
-docker compose down
+1. **Stop containers and restore configuration**
+   ```bash
+   cd /volume1/docker/Youtarr
+   docker compose down
+   rm -rf config
+   cp -r /volume1/backups/youtarr/config-YYYYMMDD config
+   ```
 
-# Restore configuration
-rm -rf config
-cp -r /volume1/backups/youtarr/config-YYYYMMDD config
+2. **Restore the database** – choose the workflow that matches your setup:
 
-# Restore database
-rm -rf database
-cp -r /volume1/backups/youtarr/database-YYYYMMDD database
+   - **From mysqldump (works everywhere)**:
+     ```bash
+     docker compose up -d youtarr-db
+     sleep 30
+     docker exec -i youtarr-db mysql -u <db_user> -p'<db_password>' <db_name> < /volume1/backups/youtarr/database-YYYYMMDD.sql
+     docker compose restart youtarr
+     ```
 
-# Start containers
-docker compose up -d
-```
+   - **Bind mount / linuxserver installs**:
+     ```bash
+     rm -rf database
+     cp -r /volume1/backups/youtarr/database-YYYYMMDD database
+     docker compose up -d
+     ```
+
+   - **Named volume installs**:
+     ```bash
+     docker compose down
+     docker volume rm youtarr-db-data
+     docker run --rm \
+       -v youtarr-db-data:/var/lib/mysql \
+       -v /volume1/backups/youtarr:/backup \
+       busybox sh -c 'cd /var/lib/mysql && tar xzf /backup/youtarr-db-YYYYMMDD.tar.gz'
+     docker compose up -d
+     ```
+     > Replace `youtarr-db-data` if you customized the volume name.
 
 ---
 
@@ -661,11 +988,11 @@ rm -rf Youtarr
 
 ## Additional Resources
 
-- **Main Documentation**: [README.md](../README.md)
-- **Docker Guide**: [DOCKER.md](DOCKER.md)
-- **Media Server Setup**: [MEDIA_SERVERS.md](MEDIA_SERVERS.md)
-- **General Troubleshooting**: [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
-- **GitHub Issues**: [Report problems](https://github.com/dialmaster/Youtarr/issues)
+- **Main Documentation**: [README.md](../../README.md)
+- **Docker Guide**: [DOCKER.md](../DOCKER.md)
+- **Media Server Setup**: [MEDIA_SERVERS.md](../MEDIA_SERVERS.md)
+- **General Troubleshooting**: [TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
+- **GitHub Issues**: [Report problems](https://github.com/DialmasterOrg/Youtarr/issues)
 
 ---
 
@@ -678,7 +1005,7 @@ If you encounter issues not covered in this guide:
    docker compose logs -f
    ```
 
-2. **Search existing issues**: [GitHub Issues](https://github.com/dialmaster/Youtarr/issues)
+2. **Search existing issues**: [GitHub Issues](https://github.com/DialmasterOrg/Youtarr/issues)
 
 3. **Create a new issue** with:
    - Your Synology model and DSM version
@@ -687,5 +1014,3 @@ If you encounter issues not covered in this guide:
    - Relevant logs from `docker compose logs`
 
 ---
-
-**Last Updated**: November 2024

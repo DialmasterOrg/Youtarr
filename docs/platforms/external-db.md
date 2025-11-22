@@ -1,6 +1,6 @@
 # Using Youtarr With an External Database
 
-Youtarr now supports running against an existing MariaDB or MySQL instance. This guide walks you through preparing the database, configuring the container, and testing the setup locally so you can ship a confident experience to users who already manage their own database (including UNRAID deployments).
+Youtarr supports running against an existing MariaDB or MySQL instance. This guide walks you through preparing the database, configuring the container, and testing the setup locally so you can ship a confident experience to users who already manage their own database (including UNRAID deployments).
 
 ## Requirements
 
@@ -47,6 +47,7 @@ To revert to the bundled database, simply run `./start.sh` without the flag.
 
 If you prefer manual Docker Compose commands:
 
+```bash
 # Launch the single-service stack that targets your external database
 docker compose -f docker-compose.external-db.yml up -d
 ```
@@ -63,4 +64,4 @@ This should not normally be needed for most users.
 - **Schema mismatch**: rerun `./start-with-external-db.sh` after clearing out a misconfigured database—the app will apply migrations automatically on startup.
 - **Character-set warnings**: verify the database is created with `utf8mb4` so emoji and YouTube metadata are stored correctly.
 
-See [Troubleshooting](docs/TROUBLESHOOTING.md#database-issues) for database-specific troubleshooting steps.
+See [Troubleshooting](../TROUBLESHOOTING.md#database-issues) for database-specific troubleshooting steps.

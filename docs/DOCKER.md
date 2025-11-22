@@ -48,56 +48,28 @@ volumes:
 
 If your automation creates a migrations directory, remove it from both directory creation and volume mounts.
 
-**Note:** In development mode (using `start-dev.sh`), migrations are mounted for convenience.
-
 ## Configuration Setup
+- **Create a .env file** to configure environment variables:
+    ```bash
+    cp .env.example .env
+    vim .env  # Set YOUTUBE_OUTPUT_DIR to your video storage path
+    ```
+    See: [ENVIRONMENT_VARIABLES](ENVIRONMENT_VARIABLES.md) for more details
+- **Alternative**: Edit `docker-compose.yml` to hardcode your volume mount:
+    ```yaml
+    volumes:
+    - /your/host/path:/usr/src/app/data  # Replace ${YOUTUBE_OUTPUT_DIR} with your path
+    ```
+- Start containers with `docker compose up -d`
+- Container auto-creates `config.json`
+- **UI Behavior**: YouTube Output Directory field is **read-only** - shows "Docker Volume" chip
+- **Host Path Reminder**: Create the `/your/host/path` directory ahead of time and ensure it is writable. Docker will otherwise create it as root-owned!
 
-### Automatic Config Creation (NEW)
+### Network Storage
 
-Starting with version 1.23.0, Youtarr now **automatically creates** a `config/config.json` file on first boot if one doesn't exist. This improves the Docker experience for users who manually configure their containers.
+When using network storage:
 
-#### Two Setup Methods
-
-1. **Using start.sh (Recommended)**
-   - Use `./start.sh` to start containers (reads path from config and sets volume mount)
-     - On first run, this script will allow you to select your video output directory
-     - `.env` will automatically be created for you on first run
-     - `./config/config.json` will be created with defaults if one does not exist on first run
-   - If no admin credentials exist, `./start.sh` prompts for an initial username/password and exports them as `AUTH_PRESET_USERNAME` / `AUTH_PRESET_PASSWORD` for the upcoming container boot
-   - Use `./stop.sh` to stop containers
-   - **UI Behavior**: YouTube Output Directory field is **editable** - changes require restart via `./start.sh`
-
-2. **Manual Docker Configuration (docker-compose directly)**
-   - **Create a .env file** to configure environment variables:
-     ```bash
-     cp .env.example .env
-     nano .env  # Set YOUTUBE_OUTPUT_DIR to your video storage path
-     ```
-   - **Alternative**: Edit `docker-compose.yml` to hardcode your volume mount:
-     ```yaml
-     volumes:
-       - /your/host/path:/usr/src/app/data  # Replace ${YOUTUBE_OUTPUT_DIR} with your path
-     ```
-   - Start containers with `docker compose up -d`
-   - Container auto-creates `config.json` with `/usr/src/app/data` (container's internal path)
-   - **UI Behavior**: YouTube Output Directory field is **read-only** - shows "Docker Volume" chip
-   - **Host Path Reminder**: Create the `/your/host/path` directory ahead of time and ensure it is writable. Docker will otherwise create it as root-owned, which prevents Youtarr from saving videos.
-
-   Using a .env file is **recommended** for manual Docker setups as it keeps configuration separate from the compose file and makes upgrades easier.
-
-#### What You'll See in the UI
-
-- YouTube Output Directory field shows "Docker Volume" chip
-- Field is disabled (read-only) showing the host mount location
-- Helper text: "This path is configured by your platform deployment and cannot be changed here"
-
-### Setup Script for Network Storage
-
-The `start.sh` script validates that your chosen directory exists and is accessible. When using network storage:
-
-1. **Mount your network storage BEFORE running start.sh**
-2. **Enter the full path to the mounted directory** when prompted
-3. **The script will verify the directory exists** and is writable
+1. **Mount your network storage BEFORE starting Youtarr**
 
 Examples:
 - Linux with NFS mount: `/mnt/nas/youtube`
@@ -107,7 +79,7 @@ Examples:
 
 If you need to change the directory later:
 ```bash
-vim ./env # Or your editor of choice
+vim .env # Or your editor of choice
 # Change your YOUTUBE_OUTPUT_DIR
 ```
 
@@ -116,21 +88,258 @@ vim ./env # Or your editor of choice
 Some users prefer to supply their own MariaDB/MySQL instance instead of the bundled `youtarr-db` container. This is easily supported by setting up your external DB config in .env and then running
 Youtarr without the bundled DB via:
 
-- `./start-with-external-db.sh`
-- See [docs/EXTERNAL_DB.md](EXTERNAL_DB.md)
+- `./start-with-external-db.sh` or `docker compose -f docker-compose.external-db.yml up -d`
+- See [External Database Guide](platforms/external-db.md)
 
 Both helpers automatically run migrations against the external database on boot, so no manual schema management is required once connectivity is in place.
 
-## Unraid Community Applications Template
+## Manual Setup Without Git Clone
 
-Youtarr provides a community Unraid Community Applications template that mirrors the `start-with-external-db.sh` flow.
+This section covers setting up Youtarr when you cannot (or prefer not to) clone the full repository—common in Portainer, TrueNAS, and similar Docker-native environments.
 
-- Add the template repository URL `https://github.com/DialmasterOrg/unraid-templates` under **Apps → Settings → Manage Template Repositories** on your Unraid server.
-- Search for **Youtarr** in the Apps tab and install it. The XML source lives at [DialmasterOrg/unraid-templates/Youtarr.xml](https://github.com/DialmasterOrg/unraid-templates/blob/main/Youtarr/Youtarr.xml) if you want to review or fork it.
-- The template is currently distributed from this repository while it awaits inclusion in the main Community Applications feed.
-- The template expects an external MariaDB instance. Supply the connection details and map your persistent host paths before clicking **Apply**.
-- Provide both `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` so the container initializes with working credentials. If you intentionally leave them blank, be ready to complete the setup wizard from the Unraid host's localhost (for example, by SSH tunneling) because remote access is blocked until auth is configured.
-- After installation you can access the UI from the Apps page using the WebUI button (maps to `http://[IP]:[PORT:3011]/` by default).
+### Important Warnings
+
+**This is an advanced installation method with limitations:**
+- No helper scripts (`start.sh`, `stop.sh`, etc.)
+- Manual updates required (can't just `git pull`)
+- No access to development tools
+- More error-prone setup process
+- Community support may be limited for this approach
+
+**We strongly recommend cloning the repository if possible.** If you must proceed, follow these steps carefully.
+
+### Prerequisites
+
+- Docker and Docker Compose installed
+- Terminal/SSH access to your system
+- Basic understanding of Linux file permissions
+
+### Setup Steps
+
+#### 1. Create Working Directory
+
+```bash
+mkdir -p youtarr && cd youtarr
+```
+
+#### 2. Download Required Files
+
+```bash
+# Download docker-compose.yml
+wget https://raw.githubusercontent.com/DialmasterOrg/Youtarr/main/docker-compose.yml
+
+# Download environment template
+wget https://raw.githubusercontent.com/DialmasterOrg/Youtarr/main/.env.example -O .env.example
+```
+
+**Alternative for systems without wget:**
+- Manually copy `docker-compose.yml` from [GitHub](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose.yml)
+- Manually copy `.env.example` from [GitHub](https://github.com/DialmasterOrg/Youtarr/blob/main/.env.example)
+
+#### 3. Configure Environment
+
+```bash
+# Create your environment file
+cp .env.example .env
+
+# Edit configuration
+vim .env  # or nano, or your preferred editor
+```
+
+**Required settings:**
+- `YOUTUBE_OUTPUT_DIR` - Must be set to your video storage path
+- `TZ` - Your timezone (e.g., `America/New_York`, `Europe/London`)
+
+**Optional settings:**
+- `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` - For headless setups
+- See [ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md) for full reference
+
+#### 4. Create Required Directories
+
+Youtarr needs these directories to exist before first start:
+
+```bash
+# Create all required directories
+mkdir -p config jobs server/images
+
+# Create your download directory (adjust path to match YOUTUBE_OUTPUT_DIR in .env)
+mkdir -p downloads  # If using default ./downloads
+# OR
+mkdir -p /path/to/your/custom/location  # If using custom path
+```
+
+#### 5. Set Permissions
+
+**If using UID/GID (1000:1000):**
+```bash
+sudo chown -R 1000:1000 config jobs server/images downloads
+```
+
+**If you configured custom YOUTARR_UID and YOUTARR_GID in .env:**
+```bash
+# Replace 1001:1001 with your configured UID:GID
+sudo chown -R 1001:1001 config jobs server/images downloads
+```
+
+**Permission verification:**
+```bash
+ls -la config jobs server/images downloads
+# All directories should show ownership matching your configured UID:GID
+```
+
+#### 6. Start Containers
+
+```bash
+docker compose up -d
+```
+
+#### 7. Verify Startup
+
+```bash
+# Check container status
+docker compose ps
+
+# Check logs for errors
+docker compose logs -f
+
+# Access web interface
+# Navigate to http://your-server-ip:3087
+```
+
+### What You're Missing
+
+By not cloning the repository, you lose access to:
+
+| Missing Component | Impact |
+|-------------------|--------|
+| `start.sh` / `stop.sh` | Convenient start/stop management |
+| `start-with-external-db.sh` | Easy external database setup |
+| Helper scripts | Database migration tools, reset scripts |
+| Local documentation | Offline access to guides |
+| Development environment | Can't contribute changes easily |
+
+### Updating Youtarr
+
+Without Git, updates require manual steps:
+
+```bash
+# 1. Stop containers
+docker compose down
+
+# 2. Backup your configuration (recommended)
+tar -czf backup-$(date +%Y%m%d).tar.gz config jobs
+
+# 3. Download updated docker-compose.yml
+wget https://raw.githubusercontent.com/DialmasterOrg/Youtarr/main/docker-compose.yml -O docker-compose.yml
+
+# 4. Pull latest images
+docker compose pull
+
+# 5. Start with new version
+docker compose up -d
+
+# 6. Check logs for issues
+docker compose logs -f
+```
+
+**Note**: Check [.env.example](https://github.com/DialmasterOrg/Youtarr/blob/main/.env.example) for new variables after major updates.
+
+### Platform-Specific Notes
+
+#### Portainer
+- Use "Stacks" feature to paste docker-compose.yml content
+- Environment variables can be set in the Portainer UI under "Environment variables"
+- Create required directories via Portainer console or host SSH access
+- Ensure volume paths are accessible from the Docker host
+
+#### TrueNAS Scale
+- Use "Custom App" feature in Apps section
+- Map host paths carefully in volume configuration
+- Ensure datasets exist before creating the app
+- Consider using IX-applications for easier management
+
+#### Unraid
+- See [Unraid Guide](platforms/unraid.md) for template-based installation
+
+### Troubleshooting Manual Setup
+
+**Problem**: Container fails to start with "no such file or directory"
+
+**Solution**: Verify all directories exist:
+```bash
+ls -la config jobs server/images
+# All should exist and have correct permissions
+```
+
+**Problem**: "Permission denied" errors in logs
+
+**Solution**:
+```bash
+# Check configured UID/GID in .env
+grep YOUTARR_ .env
+
+# Verify directory ownership matches
+ls -ln config jobs server/images downloads
+
+# Fix permissions (replace UID:GID with your values)
+sudo chown -R 1000:1000 config jobs server/images downloads
+```
+
+**Problem**: "empty section between colons" error when starting
+
+**Solution**: `YOUTUBE_OUTPUT_DIR` is not set in .env
+```bash
+grep YOUTUBE_OUTPUT_DIR .env
+# Should show a valid path, not empty or commented out
+```
+
+**Problem**: Database initialization fails
+
+**Solution**: Ensure database directory has correct permissions
+```bash
+# If using bind mount for database (default)
+mkdir -p database
+sudo chown -R 999:999 database  # MariaDB runs as UID 999
+
+# Or switch to named volume (see DATABASE.md)
+```
+
+**Problem**: Videos download but aren't visible in media server
+
+**Solution**:
+- Verify `YOUTUBE_OUTPUT_DIR` path is correct
+- Check that the path is accessible to both Youtarr and your media server
+- Ensure permissions allow your media server to read files
+- Trigger a manual library scan in your media server
+
+### When to Use This Method
+
+**Good use cases:**
+- Portainer/TrueNAS/similar Docker-native platforms where Git is unavailable
+- Systems where Git is not installed or cannot be installed
+- Testing Youtarr in isolated environments
+- Automated deployment scripts (though Git is still recommended)
+
+**Bad use cases:**
+- Development or contribution work (clone the repo!)
+- Systems with Git available (use Method 1 or 2 instead)
+- Users uncomfortable with manual configuration and troubleshooting
+- Production environments where easy updates are important
+
+### Getting Help
+
+If you encounter issues with manual setup:
+
+1. Verify you followed all steps exactly as documented
+2. Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common issues
+3. Review Docker logs: `docker compose logs -f youtarr`
+4. When reporting issues on [GitHub](https://github.com/DialmasterOrg/Youtarr/issues):
+   - Mention you're using manual installation (Method 3)
+   - Provide your `.env` configuration (redact sensitive data)
+   - Include relevant log output
+   - Describe your platform (Portainer, TrueNAS, etc.)
+
+**Note**: Community support for manual installations may be limited compared to standard Git-based installations. The recommended installation methods provide better support and easier troubleshooting.
 
 ## Docker Commands
 
@@ -138,10 +347,10 @@ Youtarr provides a community Unraid Community Applications template that mirrors
 
 ```bash
 # Start containers
-./start.sh
+docker compose up -d
 
 # Stop containers
-./stop.sh
+docker compose down
 
 # View status
 docker compose ps
@@ -196,40 +405,17 @@ docker exec -it youtarr-db mysql -u root -p123qweasd youtarr
 
 You can configure environment variables in three ways:
 
-1. **Using .env file** (Recommended for manual Docker setups):
+1. **Using .env file**:
    ```bash
    cp .env.example .env
    nano .env  # Edit your configuration
    ```
    Docker Compose automatically reads `.env` and substitutes variables in docker-compose.yml.
 
-2. **Using start.sh script**:
-   The script reads `config/config.json` and exports variables before starting containers.
-
-3. **Hardcoding in docker-compose.yml**:
+2. **Hardcoding in docker-compose.yml**:
    Edit the compose file directly (not recommended - makes upgrades harder).
 
-### Required Variables
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `YOUTUBE_OUTPUT_DIR` | Host path for video downloads | `/mnt/media/youtube` |
-
-### Optional Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `AUTH_PRESET_USERNAME` | Initial admin username for headless deployments | (empty) |
-| `AUTH_PRESET_PASSWORD` | Initial admin password for headless deployments | (empty) |
-| `AUTH_ENABLED` | Set to `false` to disable authentication | `true` |
-| `LOG_LEVEL` | Logging verbosity: `warn`, `info`, or `debug` | `info` |
-| `DB_HOST` | Set to external IP when using external DB | `youtarr-db` (internal DB container) |
-| `DB_PORT` | Database port | `3321` |
-| `DB_USER` | Youtarr DB user | `root` |
-| `DB_NAME` | Youtarr DB name | `youtarr` |
-| `DB_PASSWORD` | Youtarr DB user password | `123qweasd` |
-
-See `.env.example` for detailed documentation of each variable.
+See: [ENVIRONMENT_VARIABLES](ENVIRONMENT_VARIABLES.md) for more details
 
 ### Platform Deployment Configuration
 
@@ -245,19 +431,19 @@ Youtarr supports platform-managed deployments (Elfhosted, Kubernetes, etc.) with
 
 ### Preset Credentials for Headless Deployments
 
-For platforms where you cannot access `http://localhost:3087` (Unraid, Kubernetes, etc.), you can seed the initial login without touching the UI by setting both environment variables below. They are only applied when the config file does not already contain credentials.
+For platforms where you cannot access `http://localhost:3087` (Unraid, Kubernetes, etc.), you can seed the initial login without touching the UI by setting both environment variables below. These values will override and overwrite existing values in config.json
 
 | Variable | Description |
 |----------|-------------|
 | `AUTH_PRESET_USERNAME` | Initial admin username. Trimmed and must be ≤ 32 characters. |
 | `AUTH_PRESET_PASSWORD` | Initial admin password (8–64 characters). Stored as a hash on first boot. |
 
-If only one variable is present, or the values fall outside the validation rules, the preset is ignored and the localhost-only setup wizard remains active. Once the credentials are saved to `config/config.json`, subsequent restarts ignore the preset variables so they can safely remain in your container template.
+If only one variable is present, or the values fall outside the validation rules, the preset is ignored and the localhost-only setup wizard remains active.
 
 #### What Happens in Platform Mode
 
 When `DATA_PATH` is set:
-1. **Consolidated Storage**: All persistent data is stored under `/app/config/`:
+1. **Consolidated Storage**: All persistent data aside from downloaded videos is stored under `/app/config/`:
    - `/app/config/config.json` - Configuration file
    - `/app/config/images/` - Channel and video thumbnails
    - `/app/config/jobs/` - Job state and metadata
@@ -271,47 +457,13 @@ When `AUTH_ENABLED=false`:
 - Login/logout buttons hidden in UI
 - All API endpoints accessible without token
 
-#### Example Kubernetes Deployment (not verified!)
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: youtarr
-spec:
-  template:
-    spec:
-      containers:
-      - name: youtarr
-        image: dialmaster/youtarr:latest
-        env:
-        - name: DATA_PATH # INTERNAL path used in the container for writing videos
-          value: "/storage/youtube"
-        - name: AUTH_ENABLED
-          value: "false"  # Platform handles auth
-        - name: PLEX_URL
-          value: "http://plex-service:32400"
-        volumeMounts:
-        - name: config
-          mountPath: /app/config
-        - name: youtube-storage
-          mountPath: /storage/youtube
-      volumes:
-      - name: config
-        persistentVolumeClaim:
-          claimName: youtarr-config
-      - name: youtube-storage
-        persistentVolumeClaim:
-          claimName: youtube-storage
-```
-
 ## Volume Management
 
 ### Persistent Data Locations
 
 - **Database**: `./database` directory
 - **Config**: `./config` directory
-- **Videos**: User-specified directory (set via start.sh or .env)
+- **Videos**: User-specified directory (set via `YOUTUBE_OUTPUT_DIR`)
 - **Images/Jobs**: `./server/images` and `./jobs` directories
 
 ### Network Storage (NAS) Configuration
@@ -376,17 +528,7 @@ mount_smbfs //username@nas-server/youtube ~/nas-youtube
 
 #### Docker Compose Configuration
 
-Once your network storage is mounted on the host, configure it in docker-compose.yml:
-
-```yaml
-services:
-  youtarr:
-    volumes:
-      # Local mount path : Container path
-      - /mnt/nas/youtube:/usr/src/app/data
-      # Or for Windows with mapped drive
-      - Z:/Youtube_videos:/usr/src/app/data
-```
+Once your network storage is mounted on the host, configure it using `YOUTUBE_OUTPUT_DIR`:
 
 #### Troubleshooting NAS Issues
 
@@ -467,7 +609,7 @@ The application container includes health checks:
 
 #### Same Machine Setup
 When Youtarr and Plex run on the same machine:
-- Docker Desktop (Windows/macOS): `host.docker.internal`
+- Docker Desktop (Windows/macOS): `host.docker.internal` or host LAN IP (e.g., `192.168.x.x`)
 - Docker on macOS without Docker Desktop (e.g., Colima): host LAN IP (e.g., `192.168.x.x`) or `host.lima.internal`
 - Docker on Linux: host LAN IP (e.g., `192.168.x.x`). The default bridge IP (`172.17.0.1`) usually won't work unless Plex is bound to the Docker bridge.
 - Explicit host mapping: add `--add-host host.docker.internal:<host-ip>` when starting the container if you prefer that hostname on Linux.
@@ -492,16 +634,16 @@ docker exec youtarr curl -I http://your-plex-server:32400/web
 
 ```bash
 # Stop containers
-./stop.sh
+docker compose down
+
+# Ensure you are on the `main` branch and then
+git pull
 
 # Pull latest images
 docker compose pull
 
-# Git pull to get any script updates or updates to docker-compose files, etc...
-git pull
-
 # Start with new images
-./start.sh
+docker compose up -d
 ```
 
 ## Performance Tuning
@@ -569,23 +711,6 @@ docker-compose version
 ```
 
 ## Security Considerations
-
-### Database Password
-
-Default password is `123qweasd`. To change:
-
-1. Update in docker-compose.yml:
-   ```yaml
-   DB_PASSWORD=your_new_password
-   MYSQL_ROOT_PASSWORD=your_new_password
-   ```
-
-2. Rebuild database container:
-   ```bash
-   ./stop.sh
-   docker compose down -v  # WARNING: Deletes data
-   ./start.sh
-   ```
 
 ### Network Isolation
 
