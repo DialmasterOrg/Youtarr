@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.54.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.54.0) - 2025-11-24
+
+## [1.54.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.53.2...v1.54.0) (2025-11-24)
+
+
+### Features
+
+* **channels:** add pagination/sort/filtering to Your Channels ([ed2406c](https://github.com/DialmasterOrg/Youtarr/commit/ed2406cff2e90f262a01f5af073ab496743f1a57))
+
+
+### Documentation
+
+* update CHANGELOG for v1.53.2 [skip ci] ([1a30714](https://github.com/DialmasterOrg/Youtarr/commit/1a30714cd6b3a0003e846cf2e9e2a5d2af490198))
+
+
+
+
+
 ## [v1.53.2](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.53.2) - 2025-11-22
 
 ### [1.53.2](https://github.com/DialmasterOrg/Youtarr/compare/vv1.53.1...v1.53.2) (2025-11-22)
