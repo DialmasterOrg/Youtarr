@@ -24,6 +24,11 @@ const videoDirectory = path.dirname(videoPath);
 // Poster image uses same filename as video but with .jpg extension
 const imagePath = path.join(videoDirectory, parsedPath.name + '.jpg');
 
+// Extract the actual channel folder name that yt-dlp created (already sanitized)
+// This is more reliable than using jsonData.uploader which may contain special characters
+// that yt-dlp sanitizes differently (e.g., #, :, <, >, etc.)
+const actualChannelFolderName = path.basename(path.dirname(videoDirectory));
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function moveWithRetries(src, dest, { retries = 5, delayMs = 200 } = {}) {
@@ -197,9 +202,9 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         if (channel && channel.sub_folder) {
           channelSubFolder = channel.sub_folder;
           const baseDir = configModule.directoryPath;
-          const channelName = jsonData.uploader || jsonData.channel || channel.uploader;
-          // Add __ prefix for namespace safety
-          targetChannelFolder = path.join(baseDir, `__${channel.sub_folder}`, channelName);
+          // Use the actual channel folder name from the filesystem (yt-dlp already sanitized it)
+          // instead of jsonData.uploader which may contain special characters
+          targetChannelFolder = path.join(baseDir, `__${channel.sub_folder}`, actualChannelFolderName);
           console.log(`[Post-Process] Channel has subfolder setting: ${channel.sub_folder}`);
         }
       } catch (err) {
@@ -231,7 +236,8 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         const videoDirectoryName = path.basename(videoDirectory);
         const videoFileName = path.basename(videoPath);
         const baseDir = configModule.directoryPath;
-        finalVideoPathForJson = path.join(baseDir, channelSubFolder, channelName, videoDirectoryName, videoFileName);
+        // Add __ prefix for namespace safety (consistent with targetChannelFolder)
+        finalVideoPathForJson = path.join(baseDir, `__${channelSubFolder}`, channelName, videoDirectoryName, videoFileName);
       } else {
         // No subfolder - use current path
         finalVideoPathForJson = videoPath;
@@ -488,9 +494,9 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
 
           if (channel && channel.sub_folder) {
             const baseDir = configModule.directoryPath;
-            const channelName = jsonData.uploader || jsonData.channel || channel.uploader;
-            // Add __ prefix for namespace safety
-            const expectedPath = path.join(baseDir, `__${channel.sub_folder}`, channelName);
+            // Use the actual channel folder name from the filesystem (yt-dlp already sanitized it)
+            // instead of jsonData.uploader which may contain special characters
+            const expectedPath = path.join(baseDir, `__${channel.sub_folder}`, actualChannelFolderName);
 
             // Check if we're not already in the correct subfolder
             if (currentChannelFolder !== expectedPath) {
