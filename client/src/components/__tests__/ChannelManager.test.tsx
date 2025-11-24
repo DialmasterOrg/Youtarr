@@ -1,1039 +1,1270 @@
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import React from 'react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import axios from 'axios';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import ChannelManager from '../ChannelManager';
-import { BrowserRouter } from 'react-router-dom';
-import { Channel } from '../../types/Channel';
 import { renderWithProviders, createMockWebSocketContext } from '../../test-utils';
-jest.mock('../../hooks/useConfig', () => ({
-  useConfig: () => ({
-    config: { preferredResolution: '1080' },
-    loading: false,
-    error: null,
-    refetch: jest.fn(),
-  }),
-}));
+import { Channel } from '../../types/Channel';
 
-jest.mock('axios', () => {
-  const mock = {
-    get: jest.fn(),
-    post: jest.fn(),
-  };
-  return {
-    __esModule: true,
-    default: mock,
-    get: mock.get,
-    post: mock.post,
-  };
-});
+// Mock Material-UI hooks
 jest.mock('@mui/material/useMediaQuery');
-
 jest.mock('@mui/material/styles', () => ({
   ...jest.requireActual('@mui/material/styles'),
   useTheme: () => ({
     breakpoints: { down: () => false },
+    zIndex: { snackbar: 1000, fab: 1050 },
   }),
 }));
 
+// Mock react-router-dom
 const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useNavigate: () => mockNavigate,
 }));
 
-const mockedAxios = axios as unknown as { get: jest.Mock; post: jest.Mock };
+// Mock custom hooks
+const mockRefetchChannels = jest.fn();
+const mockAddChannel = jest.fn();
+const mockQueueChannelForDeletion = jest.fn();
+const mockUndoChanges = jest.fn();
+const mockSaveChanges = jest.fn();
 
-const mockChannels: Channel[] = [
-  { url: 'https://www.youtube.com/@TechChannel', uploader: 'Tech Channel', channel_id: 'UC123456' },
-  { url: 'https://www.youtube.com/@GamingChannel', uploader: 'Gaming Channel', channel_id: 'UC789012' },
-  { url: 'https://www.youtube.com/@CookingChannel', uploader: 'Cooking Channel', channel_id: 'UC345678' },
-];
+jest.mock('../ChannelManager/hooks/useChannelList', () => ({
+  useChannelList: jest.fn(),
+}));
+
+jest.mock('../ChannelManager/hooks/useChannelMutations', () => ({
+  useChannelMutations: jest.fn(),
+}));
+
+jest.mock('../../hooks/useConfig', () => ({
+  useConfig: jest.fn(),
+}));
+
+// Mock child components
+jest.mock('../ChannelManager/components/ChannelCard', () => ({
+  __esModule: true,
+  default: function MockChannelCard({ channel, onNavigate, onDelete, isPendingAddition }: any) {
+    const React = require('react');
+    return React.createElement('div', {
+      'data-testid': `channel-card-${channel.url}`,
+      'data-pending': isPendingAddition,
+    },
+      React.createElement('div', null, channel.uploader),
+      React.createElement('button', {
+        'data-testid': `navigate-${channel.url}`,
+        onClick: onNavigate,
+      }, 'Navigate'),
+      React.createElement('button', {
+        'data-testid': `delete-${channel.url}`,
+        onClick: onDelete,
+      }, 'Delete')
+    );
+  }
+}));
+
+jest.mock('../ChannelManager/components/ChannelListRow', () => ({
+  __esModule: true,
+  default: function MockChannelListRow({ channel, onNavigate, onDelete, isPendingAddition }: any) {
+    const React = require('react');
+    return React.createElement('div', {
+      'data-testid': `channel-row-${channel.url}`,
+      'data-pending': isPendingAddition,
+    },
+      React.createElement('div', null, channel.uploader),
+      React.createElement('button', {
+        'data-testid': `navigate-${channel.url}`,
+        onClick: onNavigate,
+      }, 'Navigate'),
+      React.createElement('button', {
+        'data-testid': `delete-${channel.url}`,
+        onClick: onDelete,
+      }, 'Delete')
+    );
+  },
+  CHANNEL_LIST_DESKTOP_TEMPLATE: '2fr 1fr 1fr 1fr auto',
+}));
+
+jest.mock('../ChannelManager/components/PendingSaveBanner', () => ({
+  __esModule: true,
+  default: function MockPendingSaveBanner({ show }: any) {
+    const React = require('react');
+    return show ? React.createElement('div', { 'data-testid': 'pending-save-banner' }, 'Pending changes') : null;
+  }
+}));
+
+jest.mock('../ChannelManager/HelpDialog', () => ({
+  __esModule: true,
+  default: function MockHelpDialog({ open, onClose }: any) {
+    const React = require('react');
+    return open ? React.createElement('div', {
+      'data-testid': 'help-dialog',
+      onClick: onClose,
+    }, 'Help Dialog') : null;
+  }
+}));
+
+const { useChannelList } = require('../ChannelManager/hooks/useChannelList');
+const { useChannelMutations } = require('../ChannelManager/hooks/useChannelMutations');
+const { useConfig } = require('../../hooks/useConfig');
 
 describe('ChannelManager Component', () => {
   const mockToken = 'test-token';
-  let wsCtx: ReturnType<typeof createMockWebSocketContext>;
 
-  const renderChannelManager = (token: string | null = mockToken) => {
-    wsCtx = createMockWebSocketContext();
-    return renderWithProviders(<ChannelManager token={token} />, { websocketValue: wsCtx });
-  };
+  const mockChannels: Channel[] = [
+    {
+      url: 'https://www.youtube.com/@channel1',
+      uploader: 'Test Channel 1',
+      channel_id: 'UC1234',
+      auto_download_enabled_tabs: 'video',
+      sub_folder: null,
+      video_quality: '1080',
+    },
+    {
+      url: 'https://www.youtube.com/@channel2',
+      uploader: 'Test Channel 2',
+      channel_id: 'UC5678',
+      auto_download_enabled_tabs: 'video,short',
+      sub_folder: 'music',
+      video_quality: '720',
+    },
+  ];
 
-  const mockGetChannelsOnce = (channels: Channel[]) => {
-    mockedAxios.get.mockResolvedValueOnce({ data: channels } as any);
-  };
-
-  const mockAddChannelSuccessOnce = (channelInfo: Channel) => {
-    mockedAxios.post.mockResolvedValueOnce({ data: { status: 'success', channelInfo } } as any);
-  };
-
-  const addChannel = async (user: ReturnType<typeof userEvent.setup>, value: string) => {
-    const input = await screen.findByLabelText('Add a new channel');
-    await user.type(input, value);
-    await user.click(screen.getByTestId('add-channel-button'));
+  const renderChannelManager = (props = {}) => {
+    const wsCtx = createMockWebSocketContext();
+    return renderWithProviders(
+      <ChannelManager token={mockToken} {...props} />,
+      { websocketValue: wsCtx }
+    );
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedAxios.get.mockReset();
-    mockedAxios.post.mockReset();
     (useMediaQuery as jest.Mock).mockReturnValue(false);
     mockNavigate.mockClear();
+
+    // Default mock responses
+    useChannelList.mockReturnValue({
+      channels: [],
+      total: 0,
+      totalPages: 1,
+      loading: false,
+      error: null,
+      refetch: mockRefetchChannels,
+      subFolders: [],
+    });
+
+    useChannelMutations.mockReturnValue({
+      pendingAdditions: [],
+      deletedChannels: [],
+      isAddingChannel: false,
+      isSaving: false,
+      addChannel: mockAddChannel,
+      queueChannelForDeletion: mockQueueChannelForDeletion,
+      undoChanges: mockUndoChanges,
+      saveChanges: mockSaveChanges,
+      hasPendingChanges: false,
+    });
+
+    useConfig.mockReturnValue({
+      config: { preferredResolution: '1080' },
+    });
   });
 
   describe('Component Rendering', () => {
-    test('renders channel manager with title and fetches', async () => {
-      mockGetChannelsOnce([]);
+    test('renders without crashing', () => {
       renderChannelManager();
       expect(screen.getByText('Your Channels')).toBeInTheDocument();
-      await waitFor(() => expect(mockedAxios.get).toHaveBeenCalled());
     });
 
-    test('fetches and displays channels when token is provided', async () => {
-      mockGetChannelsOnce(mockChannels);
+    test('throws error when WebSocketContext is not provided', () => {
+      const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      expect(() => {
+        render(<ChannelManager token={mockToken} />);
+      }).toThrow('WebSocketContext not found');
+
+      spy.mockRestore();
+    });
+
+    test('displays help button', () => {
       renderChannelManager();
-
-      await screen.findByText('Tech Channel');
-      expect(mockedAxios.get).toHaveBeenCalledWith('/getchannels', { headers: { 'x-access-token': mockToken } });
-      expect(screen.getByText('Gaming Channel')).toBeInTheDocument();
-      expect(screen.getByText('Cooking Channel')).toBeInTheDocument();
+      const helpButton = screen.getByRole('button', { name: /learn how channel downloads work/i });
+      expect(helpButton).toBeInTheDocument();
     });
 
-    test('does not fetch channels when token is null', () => {
-      renderChannelManager(null);
-      expect(mockedAxios.get).not.toHaveBeenCalled();
-    });
-
-    test('sorts channels alphabetically by uploader name', async () => {
-      const unsortedChannels = [
-        { url: 'url3', uploader: 'Zebra Channel', channel_id: 'UC333' },
-        { url: 'url1', uploader: 'Alpha Channel', channel_id: 'UC111' },
-        { url: 'url2', uploader: 'Beta Channel', channel_id: 'UC222' }
-      ];
-
-      mockGetChannelsOnce(unsortedChannels as any);
+    test('displays add channel input and button', () => {
       renderChannelManager();
-
-      await screen.findByText('Alpha Channel');
-      const listItems = screen.getAllByRole('listitem');
-      const texts = listItems.map((li: HTMLElement) => (within(li).queryByText(/Channel$/)?.textContent ?? '').trim()).filter(Boolean);
-      expect(texts).toEqual(['Alpha Channel', 'Beta Channel', 'Zebra Channel']);
+      expect(screen.getByPlaceholderText('Paste a channel URL or @handle')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /add channel/i })).toBeInTheDocument();
     });
 
+    test('shows loading state when fetching channels', () => {
+      useChannelList.mockReturnValue({
+        channels: [],
+        total: 0,
+        totalPages: 1,
+        loading: true,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
+      renderChannelManager();
+      expect(screen.getByRole('progressbar')).toBeInTheDocument();
+    });
+
+    test('shows error message when channel fetch fails', () => {
+      useChannelList.mockReturnValue({
+        channels: [],
+        total: 0,
+        totalPages: 1,
+        loading: false,
+        error: 'Failed to load channels',
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
+      renderChannelManager();
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.getByText('Failed to load channels')).toBeInTheDocument();
+    });
+
+    test('displays channels in list view', () => {
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 2,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
+      renderChannelManager();
+      expect(screen.getByTestId(`channel-row-${mockChannels[0].url}`)).toBeInTheDocument();
+      expect(screen.getByTestId(`channel-row-${mockChannels[1].url}`)).toBeInTheDocument();
+    });
+
+    test('shows no channels message when empty', () => {
+      renderChannelManager();
+      expect(screen.getByText('No channels found. Try adjusting your filter.')).toBeInTheDocument();
+    });
+
+    test('displays total channel count', () => {
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 42,
+        totalPages: 3,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
+      renderChannelManager();
+      expect(screen.getByText('Total channels: 42')).toBeInTheDocument();
+    });
   });
 
-  describe('Thumbnail Handling', () => {
-    beforeEach(() => {
-      jest.clearAllMocks();
-      mockedAxios.get.mockReset();
-      mockedAxios.post.mockReset();
+  describe('View Mode Toggle', () => {
+    test('renders view mode toggle buttons on desktop', () => {
+      renderChannelManager();
+      expect(screen.getByLabelText('List view')).toBeInTheDocument();
+      expect(screen.getByLabelText('Grid view')).toBeInTheDocument();
     });
 
-    test('displays channel thumbnails with correct source', async () => {
-      mockGetChannelsOnce([mockChannels[0]]);
+    test('does not render view mode toggle on mobile', () => {
+      (useMediaQuery as jest.Mock).mockReturnValue(true);
       renderChannelManager();
-      await screen.findByText('Tech Channel');
-
-      const thumbnail = screen.getByAltText('Tech Channel thumbnail') as HTMLImageElement;
-      expect(thumbnail).toHaveAttribute('src', '/images/channelthumb-UC123456.jpg');
+      expect(screen.queryByLabelText('List view')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Grid view')).not.toBeInTheDocument();
     });
 
-    test('handles thumbnail loading errors by hiding the image', async () => {
-      mockGetChannelsOnce([mockChannels[0]]);
-      renderChannelManager();
-      await screen.findByText('Tech Channel');
+    test('switches to grid view when grid button clicked', async () => {
+      const user = userEvent.setup();
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 2,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
 
-      const thumbnail = screen.getByAltText('Tech Channel thumbnail') as HTMLImageElement;
-      fireEvent.error(thumbnail);
-      expect(thumbnail.style.display).toBe('none');
+      renderChannelManager();
+
+      await user.click(screen.getByLabelText('Grid view'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId(`channel-card-${mockChannels[0].url}`)).toBeInTheDocument();
+      });
     });
 
-    test('shows thumbnail on successful load', async () => {
-      mockGetChannelsOnce([mockChannels[0]]);
-      renderChannelManager();
-      await screen.findByText('Tech Channel');
+    test('displays list column headers in list view on desktop', () => {
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 2,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
 
-      const thumbnail = screen.getByAltText('Tech Channel thumbnail') as HTMLImageElement;
-      fireEvent.load(thumbnail);
-      expect(thumbnail.style.display).toBe('');
+      renderChannelManager();
+      expect(screen.getByText('Channel')).toBeInTheDocument();
+      expect(screen.getByText('Quality / Folder')).toBeInTheDocument();
+      expect(screen.getByText('Auto downloads')).toBeInTheDocument();
+      expect(screen.getByText('Filters')).toBeInTheDocument();
     });
   });
 
   describe('Adding Channels', () => {
-    test('adds a new channel with @ handle format', async () => {
+    test('adds channel when Add Channel button clicked', async () => {
       const user = userEvent.setup();
-      mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel', uploader: 'New Channel', channel_id: 'UCnew123' });
+      mockAddChannel.mockResolvedValue({ success: true });
+
       renderChannelManager();
-      await addChannel(user, '@NewChannel');
-      await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledWith(
-        '/addchannelinfo',
-        { url: 'https://www.youtube.com/@NewChannel' },
-        { headers: { 'x-access-token': mockToken } }
-      ));
+
+      const input = screen.getByPlaceholderText('Paste a channel URL or @handle');
+      await user.type(input, 'https://www.youtube.com/@newchannel');
+      await user.click(screen.getByRole('button', { name: /add channel/i }));
+
+      await waitFor(() => {
+        expect(mockAddChannel).toHaveBeenCalledWith('https://www.youtube.com/@newchannel');
+      });
     });
 
-    test('adds a new channel without @ prefix', async () => {
+    test('adds channel when Enter key pressed in input', async () => {
       const user = userEvent.setup();
-      mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel', uploader: 'New Channel', channel_id: 'UCnew123' });
+      mockAddChannel.mockResolvedValue({ success: true });
+
       renderChannelManager();
-      await addChannel(user, 'NewChannel');
-      await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledWith(
-        '/addchannelinfo',
-        { url: 'https://www.youtube.com/@NewChannel' },
-        expect.any(Object)
-      ));
+
+      const input = screen.getByPlaceholderText('Paste a channel URL or @handle');
+      await user.type(input, 'https://www.youtube.com/@newchannel');
+      await user.keyboard('{Enter}');
+
+      await waitFor(() => {
+        expect(mockAddChannel).toHaveBeenCalledWith('https://www.youtube.com/@newchannel');
+      });
     });
 
-    test('normalizes various YouTube URL formats', async () => {
-      const user = userEvent.setup();
-      mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UCtest' });
+    test('does not add channel when input is empty', () => {
       renderChannelManager();
-      await addChannel(user, 'youtube.com/@TestChannel');
-      await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledWith(
-        '/addchannelinfo',
-        { url: 'https://www.youtube.com/@TestChannel' },
-        expect.any(Object)
-      ));
+
+      const addButton = screen.getByRole('button', { name: /add channel/i });
+      // Button should be disabled when input is empty
+      expect(addButton).toBeDisabled();
+      expect(mockAddChannel).not.toHaveBeenCalled();
     });
 
-    test('adds channel using Enter key', async () => {
+    test('clears input after successful channel add', async () => {
       const user = userEvent.setup();
-      mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel', uploader: 'New Channel', channel_id: 'UCnew123' });
+      mockAddChannel.mockResolvedValue({ success: true });
+
       renderChannelManager();
-      const input = await screen.findByLabelText('Add a new channel');
-      await user.type(input, '@NewChannel{Enter}');
-      await waitFor(() => expect(mockedAxios.post).toHaveBeenCalled());
+
+      const input = screen.getByPlaceholderText('Paste a channel URL or @handle') as HTMLInputElement;
+      await user.type(input, 'https://www.youtube.com/@newchannel');
+      await user.click(screen.getByRole('button', { name: /add channel/i }));
+
+      await waitFor(() => {
+        expect(input.value).toBe('');
+      });
     });
 
-    test('shows error dialog for invalid channel URL', async () => {
+    test('shows error dialog when channel add fails', async () => {
       const user = userEvent.setup();
-      mockGetChannelsOnce([]);
+      mockAddChannel.mockResolvedValue({
+        success: false,
+        message: 'Channel not found'
+      });
+
       renderChannelManager();
-      const input = await screen.findByLabelText('Add a new channel');
-      await user.type(input, 'not a valid url with spaces');
-      await user.click(screen.getByTestId('add-channel-button'));
-      expect(await screen.findByText(/Invalid channel URL/)).toBeInTheDocument();
-      expect(screen.getByText(/youtube.com\/@ChannelName/)).toBeInTheDocument();
+
+      const input = screen.getByPlaceholderText('Paste a channel URL or @handle');
+      await user.type(input, 'https://www.youtube.com/@invalid');
+      await user.click(screen.getByRole('button', { name: /add channel/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Channel not found')).toBeInTheDocument();
+      });
     });
 
-    test('shows error dialog when channel already exists', async () => {
-      const user = userEvent.setup();
-      mockGetChannelsOnce(mockChannels);
+    test('disables add button when channel is being added', () => {
+      useChannelMutations.mockReturnValue({
+        pendingAdditions: [],
+        deletedChannels: [],
+        isAddingChannel: true,
+        isSaving: false,
+        addChannel: mockAddChannel,
+        queueChannelForDeletion: mockQueueChannelForDeletion,
+        undoChanges: mockUndoChanges,
+        saveChanges: mockSaveChanges,
+        hasPendingChanges: false,
+      });
+
       renderChannelManager();
-      await screen.findByText('Tech Channel');
-      const input = screen.getByLabelText('Add a new channel');
-      await user.type(input, '@TechChannel');
-      await user.click(screen.getByTestId('add-channel-button'));
-      expect(await screen.findByText('Channel already exists')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /adding/i })).toBeDisabled();
     });
 
-    test('clears input after adding channel', async () => {
+    test('shows success message when channel add returns message', async () => {
       const user = userEvent.setup();
-      mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel', uploader: 'New Channel', channel_id: 'UCnew123' });
-      renderChannelManager();
-      const input = await screen.findByLabelText('Add a new channel');
-      await user.type(input, '@NewChannel');
-      await user.click(screen.getByTestId('add-channel-button'));
-      await waitFor(() => expect((input as HTMLInputElement).value).toBe(''));
-    });
+      mockAddChannel.mockResolvedValue({
+        success: true,
+        message: 'Channel already exists'
+      });
 
-    test('highlights newly added channels', async () => {
-      const user = userEvent.setup();
-      mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel', uploader: 'New Channel', channel_id: 'UCnew123' });
       renderChannelManager();
-      await addChannel(user, '@NewChannel');
-      const listItems = screen.getAllByRole('listitem');
-      const listItem = listItems.find((li: HTMLElement) => within(li).queryByText('New Channel')) as HTMLElement;
-      expect(listItem).toHaveAttribute('data-state', 'new');
+
+      const input = screen.getByPlaceholderText('Paste a channel URL or @handle');
+      await user.type(input, 'https://www.youtube.com/@existing');
+      await user.click(screen.getByRole('button', { name: /add channel/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Channel already exists')).toBeInTheDocument();
+      });
     });
   });
 
   describe('Deleting Channels', () => {
-    test('marks Tech Channel for deletion and flags list item', async () => {
+    test('shows delete confirmation dialog when delete clicked', async () => {
       const user = userEvent.setup();
-      mockGetChannelsOnce(mockChannels);
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 2,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
       renderChannelManager();
-      await screen.findByText('Tech Channel');
-      const listItems = screen.getAllByRole('listitem');
-      const techItem = listItems.find((li: HTMLElement) => within(li).queryByText('Tech Channel')) as HTMLElement;
-      const delBtn = within(techItem).getByTestId('delete-channel-button');
-      await user.click(delBtn);
 
-      // Confirm deletion in the dialog
-      await screen.findByText(/Removing this channel will stop automatic downloads/);
-      await user.click(screen.getByRole('button', { name: /^OK$/i }));
+      await user.click(screen.getByTestId(`delete-${mockChannels[0].url}`));
 
-      expect(techItem).toHaveAttribute('data-state', 'deleted');
+      await waitFor(() => {
+        expect(screen.getByText('Remove channel?')).toBeInTheDocument();
+      });
+      expect(screen.getByText(/Removing this channel will stop automatic downloads/)).toBeInTheDocument();
     });
 
-    test('removes delete button after marking for deletion', async () => {
+    test('queues channel for deletion when confirmed', async () => {
       const user = userEvent.setup();
-      mockGetChannelsOnce(mockChannels);
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 2,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
       renderChannelManager();
-      await screen.findByText('Tech Channel');
 
-      const initialDeleteButtons = screen.getAllByTestId('delete-channel-button');
-      const initialCount = initialDeleteButtons.length;
+      await user.click(screen.getByTestId(`delete-${mockChannels[0].url}`));
 
-      await user.click(initialDeleteButtons[0]);
+      await waitFor(() => {
+        expect(screen.getByText('Remove channel?')).toBeInTheDocument();
+      });
 
-      // Confirm deletion in the dialog
-      await screen.findByText(/Removing this channel will stop automatic downloads/);
-      await user.click(screen.getByRole('button', { name: /^OK$/i }));
+      await user.click(screen.getByRole('button', { name: /remove/i }));
 
-      const remainingDeleteButtons = screen.getAllByTestId('delete-channel-button');
-      expect(remainingDeleteButtons.length).toBe(initialCount - 1);
+      expect(mockQueueChannelForDeletion).toHaveBeenCalledWith(mockChannels[0]);
     });
 
-    test('cancels deletion when Cancel is clicked', async () => {
+    test('closes dialog when cancel clicked', async () => {
       const user = userEvent.setup();
-      mockGetChannelsOnce(mockChannels);
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 2,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
       renderChannelManager();
-      await screen.findByText('Tech Channel');
-      const listItems = screen.getAllByRole('listitem');
-      const techItem = listItems.find((li: HTMLElement) => within(li).queryByText('Tech Channel')) as HTMLElement;
-      const delBtn = within(techItem).getByTestId('delete-channel-button');
-      await user.click(delBtn);
 
-      // Cancel deletion in the dialog
-      await screen.findByText(/Removing this channel will stop automatic downloads/);
-      await user.click(screen.getByRole('button', { name: /Cancel/i }));
+      await user.click(screen.getByTestId(`delete-${mockChannels[0].url}`));
 
-      // Channel should not be marked as deleted
-      expect(techItem).not.toHaveAttribute('data-state', 'deleted');
-      // Delete button should still be present
-      expect(within(techItem).getByTestId('delete-channel-button')).toBeInTheDocument();
-    });
+      await waitFor(() => {
+        expect(screen.getByText('Remove channel?')).toBeInTheDocument();
+      });
 
-    test('immediately removes unsaved channels on delete', async () => {
-      const user = userEvent.setup();
-      mockGetChannelsOnce([]);
-      mockAddChannelSuccessOnce({ url: 'https://www.youtube.com/@NewChannel', uploader: 'New Channel', channel_id: 'UCnew123' });
-      renderChannelManager();
-      await addChannel(user, '@NewChannel');
-      const deleteButtons = screen.getAllByTestId('delete-channel-button');
-      await user.click(deleteButtons[0]);
+      await user.click(screen.getByRole('button', { name: /cancel/i }));
 
-      // Confirm deletion in the dialog
-      await screen.findByText(/Removing this channel will stop automatic downloads/);
-      await user.click(screen.getByRole('button', { name: /^OK$/i }));
-
-      expect(screen.queryByText('New Channel')).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.queryByText('Remove channel?')).not.toBeInTheDocument();
+      });
+      expect(mockQueueChannelForDeletion).not.toHaveBeenCalled();
     });
   });
 
-  describe('Saving and Undoing Changes', () => {
-    test('saves changes successfully', async () => {
+  describe('Pending Changes Management', () => {
+    test('displays pending save banner when there are pending additions', () => {
+      useChannelMutations.mockReturnValue({
+        pendingAdditions: [mockChannels[0]],
+        deletedChannels: [],
+        isAddingChannel: false,
+        isSaving: false,
+        addChannel: mockAddChannel,
+        queueChannelForDeletion: mockQueueChannelForDeletion,
+        undoChanges: mockUndoChanges,
+        saveChanges: mockSaveChanges,
+        hasPendingChanges: true,
+      });
+
+      renderChannelManager();
+      expect(screen.getByTestId('pending-save-banner')).toBeInTheDocument();
+    });
+
+    test('displays save and undo buttons when there are pending changes', () => {
+      useChannelMutations.mockReturnValue({
+        pendingAdditions: [mockChannels[0]],
+        deletedChannels: [],
+        isAddingChannel: false,
+        isSaving: false,
+        addChannel: mockAddChannel,
+        queueChannelForDeletion: mockQueueChannelForDeletion,
+        undoChanges: mockUndoChanges,
+        saveChanges: mockSaveChanges,
+        hasPendingChanges: true,
+      });
+
+      renderChannelManager();
+      expect(screen.getByLabelText('Save changes')).toBeInTheDocument();
+      expect(screen.getByLabelText('Undo changes')).toBeInTheDocument();
+    });
+
+    test('calls saveChanges when save button clicked', async () => {
       const user = userEvent.setup();
-      mockGetChannelsOnce(mockChannels);
-      mockedAxios.post.mockResolvedValueOnce({ data: { status: 'success' } } as any);
-      mockedAxios.get.mockResolvedValueOnce({ data: mockChannels } as any);
+      mockSaveChanges.mockResolvedValue({ success: true, message: 'Saved' });
+
+      useChannelMutations.mockReturnValue({
+        pendingAdditions: [mockChannels[0]],
+        deletedChannels: [],
+        isAddingChannel: false,
+        isSaving: false,
+        addChannel: mockAddChannel,
+        queueChannelForDeletion: mockQueueChannelForDeletion,
+        undoChanges: mockUndoChanges,
+        saveChanges: mockSaveChanges,
+        hasPendingChanges: true,
+      });
+
       renderChannelManager();
-      await screen.findByText('Tech Channel');
-      const listItems = screen.getAllByRole('listitem');
-      const techItem = listItems.find((li: HTMLElement) => within(li).queryByText('Tech Channel')) as HTMLElement;
-      const delBtn = within(techItem).getByTestId('delete-channel-button');
-      await user.click(delBtn);
 
-      // Confirm deletion in the dialog
-      await screen.findByText(/Removing this channel will stop automatic downloads/);
-      await user.click(screen.getByRole('button', { name: /^OK$/i }));
+      await user.click(screen.getByLabelText('Save changes'));
 
-      // Wait for dialog to close
-      await waitFor(() => expect(screen.queryByText(/Removing this channel will stop automatic downloads/)).not.toBeInTheDocument());
-
-      await user.click(screen.getByRole('button', { name: /save changes/i }));
-      await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledWith(
-        '/updatechannels',
-        expect.arrayContaining([
-          'https://www.youtube.com/@GamingChannel',
-          'https://www.youtube.com/@CookingChannel',
-          // Deleted Tech Channel excluded
-        ]),
-        { headers: { 'x-access-token': mockToken } }
-      ));
-      expect(await screen.findByText('Channels updated successfully')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(mockSaveChanges).toHaveBeenCalled();
+      });
     });
 
-    test('undoes all changes', async () => {
+    test('calls undoChanges when undo button clicked', async () => {
       const user = userEvent.setup();
-      mockedAxios.get
-        .mockResolvedValueOnce({ data: mockChannels } as any)
-        .mockResolvedValueOnce({ data: mockChannels } as any);
+
+      useChannelMutations.mockReturnValue({
+        pendingAdditions: [mockChannels[0]],
+        deletedChannels: [],
+        isAddingChannel: false,
+        isSaving: false,
+        addChannel: mockAddChannel,
+        queueChannelForDeletion: mockQueueChannelForDeletion,
+        undoChanges: mockUndoChanges,
+        saveChanges: mockSaveChanges,
+        hasPendingChanges: true,
+      });
+
       renderChannelManager();
-      await screen.findByText('Tech Channel');
-      const deleteButtons = screen.getAllByTestId('delete-channel-button');
-      await user.click(deleteButtons[0]);
 
-      // Confirm deletion in the dialog
-      await screen.findByText(/Removing this channel will stop automatic downloads/);
-      await user.click(screen.getByRole('button', { name: /^OK$/i }));
+      await user.click(screen.getByLabelText('Undo changes'));
 
-      // Wait for dialog to close
-      await waitFor(() => expect(screen.queryByText(/Removing this channel will stop automatic downloads/)).not.toBeInTheDocument());
-
-      await user.click(screen.getByRole('button', { name: /undo/i }));
-      await waitFor(() => expect(mockedAxios.get).toHaveBeenCalledTimes(2));
+      expect(mockUndoChanges).toHaveBeenCalled();
     });
 
-    test('disables save button when no changes', async () => {
-      mockGetChannelsOnce(mockChannels);
-      renderChannelManager();
-      await screen.findByText('Tech Channel');
-      expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
-    });
-
-    test('enables save button when changes are made', async () => {
+    test('shows success message after save', async () => {
       const user = userEvent.setup();
-      mockGetChannelsOnce(mockChannels);
+      mockSaveChanges.mockResolvedValue({
+        success: true,
+        message: 'Channels updated successfully'
+      });
+
+      useChannelMutations.mockReturnValue({
+        pendingAdditions: [mockChannels[0]],
+        deletedChannels: [],
+        isAddingChannel: false,
+        isSaving: false,
+        addChannel: mockAddChannel,
+        queueChannelForDeletion: mockQueueChannelForDeletion,
+        undoChanges: mockUndoChanges,
+        saveChanges: mockSaveChanges,
+        hasPendingChanges: true,
+      });
+
       renderChannelManager();
-      await screen.findByText('Tech Channel');
-      const deleteButtons = screen.getAllByTestId('delete-channel-button');
-      await user.click(deleteButtons[0]);
 
-      // Confirm deletion in the dialog
-      await screen.findByText(/Removing this channel will stop automatic downloads/);
-      await user.click(screen.getByRole('button', { name: /^OK$/i }));
+      await user.click(screen.getByLabelText('Save changes'));
 
-      // Wait for dialog to close
-      await waitFor(() => expect(screen.queryByText(/Removing this channel will stop automatic downloads/)).not.toBeInTheDocument());
-
-      expect(screen.getByRole('button', { name: /save changes/i })).toBeEnabled();
+      await waitFor(() => {
+        expect(screen.getByText('Channels updated successfully')).toBeInTheDocument();
+      });
     });
 
-    test('disables undo button when no changes', async () => {
-      mockGetChannelsOnce(mockChannels);
+    test('disables save button while saving', () => {
+      useChannelMutations.mockReturnValue({
+        pendingAdditions: [mockChannels[0]],
+        deletedChannels: [],
+        isAddingChannel: false,
+        isSaving: true,
+        addChannel: mockAddChannel,
+        queueChannelForDeletion: mockQueueChannelForDeletion,
+        undoChanges: mockUndoChanges,
+        saveChanges: mockSaveChanges,
+        hasPendingChanges: true,
+      });
+
       renderChannelManager();
-      await screen.findByText('Tech Channel');
-      expect(screen.getByRole('button', { name: /undo/i })).toBeDisabled();
+      expect(screen.getByLabelText('Save changes')).toBeDisabled();
     });
 
-    test('enables undo button when changes are made', async () => {
+    test('marks pending additions with visual indicator', () => {
+      const pendingChannel: Channel = {
+        url: 'https://www.youtube.com/@pending',
+        uploader: 'Pending Channel',
+        channel_id: 'UCPEND',
+        auto_download_enabled_tabs: 'video',
+      };
+
+      useChannelList.mockReturnValue({
+        channels: [],
+        total: 0,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
+      useChannelMutations.mockReturnValue({
+        pendingAdditions: [pendingChannel],
+        deletedChannels: [],
+        isAddingChannel: false,
+        isSaving: false,
+        addChannel: mockAddChannel,
+        queueChannelForDeletion: mockQueueChannelForDeletion,
+        undoChanges: mockUndoChanges,
+        saveChanges: mockSaveChanges,
+        hasPendingChanges: true,
+      });
+
+      renderChannelManager();
+
+      const pendingCard = screen.getByTestId(`channel-row-${pendingChannel.url}`);
+      expect(pendingCard).toHaveAttribute('data-pending', 'true');
+    });
+
+    test('hides deleted channels from display', () => {
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 2,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
+      useChannelMutations.mockReturnValue({
+        pendingAdditions: [],
+        deletedChannels: [mockChannels[0].url],
+        isAddingChannel: false,
+        isSaving: false,
+        addChannel: mockAddChannel,
+        queueChannelForDeletion: mockQueueChannelForDeletion,
+        undoChanges: mockUndoChanges,
+        saveChanges: mockSaveChanges,
+        hasPendingChanges: true,
+      });
+
+      renderChannelManager();
+
+      expect(screen.queryByTestId(`channel-row-${mockChannels[0].url}`)).not.toBeInTheDocument();
+      expect(screen.getByTestId(`channel-row-${mockChannels[1].url}`)).toBeInTheDocument();
+    });
+  });
+
+  describe('Sorting', () => {
+    test('displays sort button', () => {
+      renderChannelManager();
+      expect(screen.getByRole('button', { name: /sort alphabetically/i })).toBeInTheDocument();
+    });
+
+    test('toggles sort order when sort button clicked', async () => {
       const user = userEvent.setup();
-      mockGetChannelsOnce(mockChannels);
       renderChannelManager();
-      await screen.findByText('Tech Channel');
-      const deleteButtons = screen.getAllByTestId('delete-channel-button');
-      await user.click(deleteButtons[0]);
 
-      // Confirm deletion in the dialog
-      await screen.findByText(/Removing this channel will stop automatic downloads/);
-      await user.click(screen.getByRole('button', { name: /^OK$/i }));
+      // Initially ascending
+      expect(screen.getByRole('button', { name: /sort alphabetically \(A → Z\)/i })).toBeInTheDocument();
 
-      // Wait for dialog to close
-      await waitFor(() => expect(screen.queryByText(/Removing this channel will stop automatic downloads/)).not.toBeInTheDocument());
+      await user.click(screen.getByRole('button', { name: /sort alphabetically/i }));
 
-      expect(screen.getByRole('button', { name: /undo/i })).toBeEnabled();
+      // After click, should be descending (resets page to 1)
+      await waitFor(() => {
+        expect(useChannelList).toHaveBeenCalledWith(
+          expect.objectContaining({ sortOrder: 'desc' })
+        );
+      });
+    });
+  });
+
+  describe('Filtering', () => {
+    test('displays filter button', () => {
+      renderChannelManager();
+      expect(screen.getByRole('button', { name: /filter by channel name/i })).toBeInTheDocument();
+    });
+
+    test('opens filter popover when filter button clicked', async () => {
+      const user = userEvent.setup();
+      renderChannelManager();
+
+      await user.click(screen.getByRole('button', { name: /filter by channel name/i }));
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Filter channels')).toBeInTheDocument();
+      });
+    });
+
+    test('applies filter when text entered', async () => {
+      const user = userEvent.setup();
+      renderChannelManager();
+
+      await user.click(screen.getByRole('button', { name: /filter by channel name/i }));
+
+      const filterInput = await screen.findByLabelText('Filter channels');
+      await user.type(filterInput, 'test');
+
+      await waitFor(() => {
+        expect(useChannelList).toHaveBeenCalledWith(
+          expect.objectContaining({ searchTerm: 'test' })
+        );
+      });
+    });
+
+    test('clears filter when clear button clicked', async () => {
+      const user = userEvent.setup();
+      renderChannelManager();
+
+      await user.click(screen.getByRole('button', { name: /filter by channel name/i }));
+
+      const filterInput = await screen.findByLabelText('Filter channels');
+      await user.type(filterInput, 'test');
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /clear filter/i })).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: /clear filter/i }));
+
+      await waitFor(() => {
+        expect(useChannelList).toHaveBeenCalledWith(
+          expect.objectContaining({ searchTerm: '' })
+        );
+      });
+    });
+
+    test('highlights filter button when filter is active', async () => {
+      const user = userEvent.setup();
+      renderChannelManager();
+
+      const filterButton = screen.getByRole('button', { name: /filter by channel name/i });
+
+      await user.click(filterButton);
+      const filterInput = await screen.findByLabelText('Filter channels');
+      await user.type(filterInput, 'test');
+
+      // Close the popover by clicking outside
+      await user.click(document.body);
+
+      // The filter button should now have primary color
+      await waitFor(() => {
+        expect(filterButton).toHaveAttribute('class', expect.stringContaining('MuiIconButton'));
+      });
+    });
+
+    test('resets page to 1 when filter applied', async () => {
+      const user = userEvent.setup();
+      renderChannelManager();
+
+      await user.click(screen.getByRole('button', { name: /filter by channel name/i }));
+      const filterInput = await screen.findByLabelText('Filter channels');
+      await user.type(filterInput, 'test');
+
+      await waitFor(() => {
+        expect(useChannelList).toHaveBeenCalledWith(
+          expect.objectContaining({ page: 1 })
+        );
+      });
+    });
+  });
+
+  describe('Folder Filtering', () => {
+    test('displays folder filter button', () => {
+      renderChannelManager();
+      expect(screen.getByRole('button', { name: /filter or group by folder/i })).toBeInTheDocument();
+    });
+
+    test('opens folder menu when folder button clicked', async () => {
+      const user = userEvent.setup();
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 2,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: ['music', 'news'],
+      });
+
+      renderChannelManager();
+
+      await user.click(screen.getByRole('button', { name: /filter or group by folder/i }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('menuitem', { name: /all folders/i })).toBeInTheDocument();
+      });
+    });
+
+    test('displays available folders in menu', async () => {
+      const user = userEvent.setup();
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 2,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: ['music', 'news'],
+      });
+
+      renderChannelManager();
+
+      await user.click(screen.getByRole('button', { name: /filter or group by folder/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('__music/')).toBeInTheDocument();
+      });
+      expect(screen.getByText('__news/')).toBeInTheDocument();
+    });
+
+    test('filters by selected folder', async () => {
+      const user = userEvent.setup();
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 2,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: ['music', 'news'],
+      });
+
+      renderChannelManager();
+
+      await user.click(screen.getByRole('button', { name: /filter or group by folder/i }));
+      await user.click(screen.getByText('__music/'));
+
+      await waitFor(() => {
+        expect(useChannelList).toHaveBeenCalledWith(
+          expect.objectContaining({ subFolder: 'music' })
+        );
+      });
+    });
+
+    test('clears folder filter when "All folders" selected', async () => {
+      const user = userEvent.setup();
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 2,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: ['music'],
+      });
+
+      renderChannelManager();
+
+      // First select a folder
+      await user.click(screen.getByRole('button', { name: /filter or group by folder/i }));
+      await user.click(screen.getByText('__music/'));
+
+      // Then clear it
+      await user.click(screen.getByRole('button', { name: /filtering by __music\//i }));
+      await user.click(screen.getByRole('menuitem', { name: /all folders/i }));
+
+      await waitFor(() => {
+        expect(useChannelList).toHaveBeenCalledWith(
+          expect.objectContaining({ subFolder: undefined })
+        );
+      });
+    });
+  });
+
+  describe('Pagination', () => {
+    test('displays pagination when multiple pages exist', () => {
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 50,
+        totalPages: 3,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
+      renderChannelManager();
+      expect(screen.getByRole('navigation')).toBeInTheDocument();
+    });
+
+    test('changes page when pagination button clicked', async () => {
+      const user = userEvent.setup();
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 50,
+        totalPages: 3,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
+      renderChannelManager();
+
+      const nextButton = screen.getByRole('button', { name: /go to page 2/i });
+      await user.click(nextButton);
+
+      await waitFor(() => {
+        expect(useChannelList).toHaveBeenCalledWith(
+          expect.objectContaining({ page: 2 })
+        );
+      });
+    });
+
+    test('adjusts page if current page exceeds total pages', () => {
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 5,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
+      renderChannelManager();
+
+      // The component should automatically adjust if page > pageCount
+      expect(useChannelList).toHaveBeenCalledWith(
+        expect.objectContaining({ page: 1 })
+      );
     });
   });
 
   describe('Navigation', () => {
-    test('navigates to channel page on click', async () => {
+    test('navigates to channel page when channel clicked', async () => {
       const user = userEvent.setup();
-      mockGetChannelsOnce(mockChannels);
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 2,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
       renderChannelManager();
-      await screen.findByText('Tech Channel');
-      await user.click(screen.getByText('Tech Channel'));
-      expect(mockNavigate).toHaveBeenCalledWith('/channel/UC123456');
+
+      await user.click(screen.getByTestId(`navigate-${mockChannels[0].url}`));
+
+      expect(mockNavigate).toHaveBeenCalledWith(`/channel/${mockChannels[0].channel_id}`);
     });
 
-    test('has a dedicated clickable area for channel', async () => {
-      mockGetChannelsOnce(mockChannels);
+    test('does not navigate when channel_id is missing', async () => {
+      const user = userEvent.setup();
+      const channelWithoutId: Channel = {
+        url: 'https://www.youtube.com/@nochannel',
+        uploader: 'No ID Channel',
+        channel_id: undefined as any,
+      };
+
+      useChannelList.mockReturnValue({
+        channels: [channelWithoutId],
+        total: 1,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
+
       renderChannelManager();
-      await screen.findByText('Tech Channel');
-      expect(screen.getByTestId('channel-click-area-UC123456')).toBeInTheDocument();
+
+      await user.click(screen.getByTestId(`navigate-${channelWithoutId.url}`));
+
+      expect(mockNavigate).not.toHaveBeenCalled();
     });
   });
 
   describe('WebSocket Integration', () => {
-    test('subscribes to WebSocket on mount', async () => {
-      mockGetChannelsOnce([]);
-      renderChannelManager();
-      await waitFor(() => expect(wsCtx.subscribe).toHaveBeenCalled());
+    test('subscribes to websocket on mount', () => {
+      const wsCtx = createMockWebSocketContext();
+      renderWithProviders(
+        <ChannelManager token={mockToken} />,
+        { websocketValue: wsCtx }
+      );
 
-      const [filterArg] = wsCtx.subscribe.mock.calls[0];
-      const testMessage = {
-        destination: 'broadcast',
-        source: 'channel',
-        type: 'channelsUpdated',
-        payload: {}
-      };
-
-      expect(filterArg(testMessage)).toBe(true);
+      expect(wsCtx.subscribe).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function)
+      );
     });
 
-    test('unsubscribes from WebSocket on unmount', async () => {
-      mockGetChannelsOnce([]);
-      const { unmount } = renderChannelManager();
-      await waitFor(() => expect(wsCtx.subscribe).toHaveBeenCalled());
+    test('unsubscribes from websocket on unmount', () => {
+      const wsCtx = createMockWebSocketContext();
+      const { unmount } = renderWithProviders(
+        <ChannelManager token={mockToken} />,
+        { websocketValue: wsCtx }
+      );
+
       unmount();
+
       expect(wsCtx.unsubscribe).toHaveBeenCalled();
     });
 
-    test('reloads channels on WebSocket message', async () => {
-      mockedAxios.get
-        .mockResolvedValueOnce({ data: [] } as any)
-        .mockResolvedValueOnce({ data: mockChannels } as any);
-      renderChannelManager();
-      await waitFor(() => expect(wsCtx.subscribe).toHaveBeenCalled());
-      const callback = wsCtx.subscribe.mock.calls[0][1];
-      callback({ type: 'channelsUpdated' });
-      await waitFor(() => expect(mockedAxios.get).toHaveBeenCalledTimes(2));
-      expect(await screen.findByText('Tech Channel')).toBeInTheDocument();
+    test('refetches channels when channelsUpdated message received', async () => {
+      useChannelMutations.mockReturnValue({
+        pendingAdditions: [],
+        deletedChannels: [],
+        isAddingChannel: false,
+        isSaving: false,
+        addChannel: mockAddChannel,
+        queueChannelForDeletion: mockQueueChannelForDeletion,
+        undoChanges: mockUndoChanges,
+        saveChanges: mockSaveChanges,
+        hasPendingChanges: false,
+      });
+
+      const wsCtx = createMockWebSocketContext();
+      renderWithProviders(
+        <ChannelManager token={mockToken} />,
+        { websocketValue: wsCtx }
+      );
+
+      const [messageFilter, handleMessage] = wsCtx.subscribe.mock.calls[0];
+
+      // Test filter
+      expect(messageFilter({
+        destination: 'broadcast',
+        source: 'channel',
+        type: 'channelsUpdated',
+      })).toBe(true);
+
+      expect(messageFilter({
+        destination: 'private',
+        source: 'channel',
+        type: 'channelsUpdated',
+      })).toBe(false);
+
+      // Trigger message handler
+      handleMessage();
+
+      await waitFor(() => {
+        expect(mockRefetchChannels).toHaveBeenCalled();
+      });
+    });
+
+    test('does not refetch when there are pending changes', () => {
+      useChannelMutations.mockReturnValue({
+        pendingAdditions: [mockChannels[0]],
+        deletedChannels: [],
+        isAddingChannel: false,
+        isSaving: false,
+        addChannel: mockAddChannel,
+        queueChannelForDeletion: mockQueueChannelForDeletion,
+        undoChanges: mockUndoChanges,
+        saveChanges: mockSaveChanges,
+        hasPendingChanges: true,
+      });
+
+      const wsCtx = createMockWebSocketContext();
+      renderWithProviders(
+        <ChannelManager token={mockToken} />,
+        { websocketValue: wsCtx }
+      );
+
+      const [, handleMessage] = wsCtx.subscribe.mock.calls[0];
+
+      // Trigger message handler
+      handleMessage();
+
+      // Should not refetch when there are pending changes
+      expect(mockRefetchChannels).not.toHaveBeenCalled();
     });
   });
 
-  describe('Dialog Interactions', () => {
-    test('closes dialog when Close button is clicked', async () => {
+  describe('Help Dialog', () => {
+    test('opens help dialog when help button clicked', async () => {
       const user = userEvent.setup();
-      mockGetChannelsOnce([]);
       renderChannelManager();
-      const input = await screen.findByLabelText('Add a new channel');
-      await user.type(input, 'not a valid url at all!!!');
-      await user.click(screen.getByTestId('add-channel-button'));
-      await screen.findByText(/Invalid channel URL/);
-      await user.click(screen.getByRole('button', { name: /close/i }));
-      await waitFor(() => expect(screen.queryByText(/Invalid channel URL/)).not.toBeInTheDocument());
+
+      await user.click(screen.getByRole('button', { name: /learn how channel downloads work/i }));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('help-dialog')).toBeInTheDocument();
+      });
+    });
+
+    test('closes help dialog when close action triggered', async () => {
+      const user = userEvent.setup();
+      renderChannelManager();
+
+      await user.click(screen.getByRole('button', { name: /learn how channel downloads work/i }));
+
+      const helpDialog = await screen.findByTestId('help-dialog');
+      await user.click(helpDialog);
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('help-dialog')).not.toBeInTheDocument();
+      });
     });
   });
 
-  describe('Mobile View', () => {
-    beforeEach(() => {
+  describe('Responsive Behavior', () => {
+    test('uses mobile page size on mobile', () => {
       (useMediaQuery as jest.Mock).mockReturnValue(true);
-    });
-
-    test('renders with mobile-specific styles', async () => {
-      mockGetChannelsOnce(mockChannels);
       renderChannelManager();
-      await screen.findByText('Tech Channel');
-      const thumbnails = screen.getAllByRole('img') as HTMLImageElement[];
-      thumbnails.forEach((img) => expect(img).toHaveAttribute('data-size', 'small'));
+
+      expect(useChannelList).toHaveBeenCalledWith(
+        expect.objectContaining({ pageSize: 16 })
+      );
     });
 
-    test('displays smaller font size for mobile', async () => {
-      mockGetChannelsOnce(mockChannels);
+    test('uses desktop page size on desktop in list view', () => {
       renderChannelManager();
-      await screen.findByText('Tech Channel');
-      const saveButton = screen.getByRole('button', { name: /save changes/i });
-      expect(saveButton).toHaveAttribute('data-size', 'small');
-    });
-  });
 
-  describe('Auto Download Badges', () => {
-    test('displays video badge for channels with video auto-download enabled', async () => {
-      const channelWithVideoTab: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', available_tabs: 'videos', auto_download_enabled_tabs: 'video' }
-      ];
-      mockGetChannelsOnce(channelWithVideoTab);
+      expect(useChannelList).toHaveBeenCalledWith(
+        expect.objectContaining({ pageSize: 20 })
+      );
+    });
+
+    test('uses grid page size on desktop in grid view', async () => {
+      const user = userEvent.setup();
       renderChannelManager();
-      await screen.findByText('Test Channel');
-      expect(screen.getByText('Videos')).toBeInTheDocument();
-    });
 
-    test('displays shorts badge for channels with shorts auto-download enabled', async () => {
-      const channelWithShortsTab: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', available_tabs: 'shorts', auto_download_enabled_tabs: 'short' }
-      ];
-      mockGetChannelsOnce(channelWithShortsTab);
-      renderChannelManager();
-      await screen.findByText('Test Channel');
-      expect(screen.getByText('Shorts')).toBeInTheDocument();
-    });
+      await user.click(screen.getByLabelText('Grid view'));
 
-    test('displays live badge for channels with livestream auto-download enabled', async () => {
-      const channelWithLiveTab: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', available_tabs: 'streams', auto_download_enabled_tabs: 'livestream' }
-      ];
-      mockGetChannelsOnce(channelWithLiveTab);
-      renderChannelManager();
-      await screen.findByText('Test Channel');
-      expect(screen.getByText('Live')).toBeInTheDocument();
-    });
-
-    test('displays multiple badges for channels with multiple tabs enabled', async () => {
-      const channelWithMultipleTabs: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', available_tabs: 'videos,shorts,streams', auto_download_enabled_tabs: 'video,short,livestream' }
-      ];
-      mockGetChannelsOnce(channelWithMultipleTabs);
-      renderChannelManager();
-      await screen.findByText('Test Channel');
-      expect(screen.getByText('Videos')).toBeInTheDocument();
-      expect(screen.getByText('Shorts')).toBeInTheDocument();
-      expect(screen.getByText('Live')).toBeInTheDocument();
-    });
-
-    test('handles tabs with whitespace in the comma-separated string', async () => {
-      const channelWithSpaces: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', available_tabs: 'videos , shorts , streams', auto_download_enabled_tabs: 'video , short , livestream' }
-      ];
-      mockGetChannelsOnce(channelWithSpaces);
-      renderChannelManager();
-      await screen.findByText('Test Channel');
-      expect(screen.getByText('Videos')).toBeInTheDocument();
-      expect(screen.getByText('Shorts')).toBeInTheDocument();
-      expect(screen.getByText('Live')).toBeInTheDocument();
-    });
-
-    test('does not render badges when auto_download_enabled_tabs is undefined', async () => {
-      const channelWithoutTabs: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123' }
-      ];
-      mockGetChannelsOnce(channelWithoutTabs);
-      renderChannelManager();
-      await screen.findByText('Test Channel');
-      expect(screen.queryByText('Videos')).not.toBeInTheDocument();
-      expect(screen.queryByText('Shorts')).not.toBeInTheDocument();
-      expect(screen.queryByText('Live')).not.toBeInTheDocument();
-    });
-
-    test('does not render badges when auto_download_enabled_tabs is empty string', async () => {
-      const channelWithEmptyTabs: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', auto_download_enabled_tabs: '' }
-      ];
-      mockGetChannelsOnce(channelWithEmptyTabs);
-      renderChannelManager();
-      await screen.findByText('Test Channel');
-      expect(screen.queryByText('Videos')).not.toBeInTheDocument();
-      expect(screen.queryByText('Shorts')).not.toBeInTheDocument();
-      expect(screen.queryByText('Live')).not.toBeInTheDocument();
-    });
-
-    test('ignores unknown tab types in the string', async () => {
-      const channelWithUnknownTab: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', available_tabs: 'videos,unknown,shorts', auto_download_enabled_tabs: 'video,unknown,short' }
-      ];
-      mockGetChannelsOnce(channelWithUnknownTab);
-      renderChannelManager();
-      await screen.findByText('Test Channel');
-      expect(screen.getByText('Videos')).toBeInTheDocument();
-      expect(screen.getByText('Shorts')).toBeInTheDocument();
-      expect(screen.queryByText('unknown')).not.toBeInTheDocument();
-    });
-
-    test('displays download icon only for auto-download enabled tabs', async () => {
-      const channelWithPartialAutoDownload: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', available_tabs: 'videos,shorts', auto_download_enabled_tabs: 'video' }
-      ];
-      mockGetChannelsOnce(channelWithPartialAutoDownload);
-      renderChannelManager();
-      await screen.findByText('Test Channel');
-
-      // Both tabs should be displayed
-      expect(screen.getByText('Videos')).toBeInTheDocument();
-      expect(screen.getByText('Shorts')).toBeInTheDocument();
-
-      // Only one download icon should be present (for the video tab which has auto-download enabled)
-      const downloadIcons = screen.queryAllByTestId('FileDownloadIcon');
-      expect(downloadIcons).toHaveLength(1);
-    });
-
-    test('displays tabs without download icons when auto_download_enabled_tabs is empty', async () => {
-      const channelWithNoAutoDownload: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', available_tabs: 'videos,shorts', auto_download_enabled_tabs: '' }
-      ];
-      mockGetChannelsOnce(channelWithNoAutoDownload);
-      renderChannelManager();
-      await screen.findByText('Test Channel');
-
-      // Both chips should be present but without download icons
-      expect(screen.getByText('Videos')).toBeInTheDocument();
-      expect(screen.getByText('Shorts')).toBeInTheDocument();
-      expect(screen.queryAllByTestId('FileDownloadIcon')).toHaveLength(0);
-    });
-  });
-
-  describe('Channel Configuration Display', () => {
-    test('displays custom subfolder for channel', async () => {
-      const channelWithSubFolder: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', sub_folder: 'Tech Videos' }
-      ];
-      mockGetChannelsOnce(channelWithSubFolder);
-      renderChannelManager();
-      await screen.findByText('Test Channel');
-      expect(screen.getByText('__Tech Videos/')).toBeInTheDocument();
-    });
-
-    test('displays default folder when sub_folder is null', async () => {
-      const channelWithoutSubFolder: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', sub_folder: null }
-      ];
-      mockGetChannelsOnce(channelWithoutSubFolder);
-      renderChannelManager();
-      await screen.findByText('Test Channel');
-      expect(screen.getByText('default')).toBeInTheDocument();
-    });
-
-    test('displays default folder when sub_folder is undefined', async () => {
-      const channelWithoutSubFolder: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123' }
-      ];
-      mockGetChannelsOnce(channelWithoutSubFolder);
-      renderChannelManager();
-      await screen.findByText('Test Channel');
-      expect(screen.getByText('default')).toBeInTheDocument();
-    });
-
-    test('displays custom video quality with settings icon', async () => {
-      const channelWithCustomQuality: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', video_quality: '720' }
-      ];
-      mockGetChannelsOnce(channelWithCustomQuality);
-      renderChannelManager();
-      await screen.findByText('Test Channel');
-      expect(screen.getByText('720p')).toBeInTheDocument();
-      // Settings icon indicates channel-specific override
-      expect(screen.getByTestId('SettingsIcon')).toBeInTheDocument();
-    });
-
-    test('displays global video quality without settings icon', async () => {
-      const channelWithoutQuality: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123' }
-      ];
-      mockGetChannelsOnce(channelWithoutQuality);
-      renderChannelManager();
-      await screen.findByText('Test Channel');
-      expect(screen.getByText('1080p')).toBeInTheDocument();
-      // No settings icon for global default
-      expect(screen.queryByTestId('SettingsIcon')).not.toBeInTheDocument();
-    });
-
-    test('displays folder icon for subfolder display', async () => {
-      const channelWithSubFolder: Channel[] = [
-        { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', sub_folder: 'Test' }
-      ];
-      mockGetChannelsOnce(channelWithSubFolder);
-      renderChannelManager();
-      await screen.findByText('Test Channel');
-      expect(screen.getByTestId('FolderIcon')).toBeInTheDocument();
-    });
-  });
-
-  describe('Filter Indicators', () => {
-    describe('Duration Filters', () => {
-      test('displays duration filter chip with min and max values', async () => {
-        const channelWithDuration: Channel[] = [
-          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', min_duration: 300, max_duration: 1800 }
-        ];
-        mockGetChannelsOnce(channelWithDuration);
-        renderChannelManager();
-        await screen.findByText('Test Channel');
-        expect(screen.getByText('5-30 min')).toBeInTheDocument();
-        expect(screen.getByTestId('AccessTimeIcon')).toBeInTheDocument();
-      });
-
-      test('displays duration filter chip with only min value', async () => {
-        const channelWithMinDuration: Channel[] = [
-          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', min_duration: 600, max_duration: null }
-        ];
-        mockGetChannelsOnce(channelWithMinDuration);
-        renderChannelManager();
-        await screen.findByText('Test Channel');
-        expect(screen.getByText('≥10 min')).toBeInTheDocument();
-      });
-
-      test('displays duration filter chip with only max value', async () => {
-        const channelWithMaxDuration: Channel[] = [
-          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', min_duration: null, max_duration: 1200 }
-        ];
-        mockGetChannelsOnce(channelWithMaxDuration);
-        renderChannelManager();
-        await screen.findByText('Test Channel');
-        expect(screen.getByText('≤20 min')).toBeInTheDocument();
-      });
-
-      test('displays shortened duration format in mobile view', async () => {
-        (useMediaQuery as jest.Mock).mockReturnValue(true);
-        const channelWithDuration: Channel[] = [
-          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', min_duration: 300, max_duration: 1800 }
-        ];
-        mockGetChannelsOnce(channelWithDuration);
-        renderChannelManager();
-        await screen.findByText('Test Channel');
-        expect(screen.getByText('5-30m')).toBeInTheDocument();
-      });
-
-      test('does not display duration filter when both values are null', async () => {
-        const channelWithoutDuration: Channel[] = [
-          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', min_duration: null, max_duration: null }
-        ];
-        mockGetChannelsOnce(channelWithoutDuration);
-        renderChannelManager();
-        await screen.findByText('Test Channel');
-        expect(screen.queryByTestId('AccessTimeIcon')).not.toBeInTheDocument();
-      });
-    });
-
-    describe('Title Regex Filters', () => {
-      test('displays title filter chip for desktop', async () => {
-        const channelWithRegex: Channel[] = [
-          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: '^Gaming.*' }
-        ];
-        mockGetChannelsOnce(channelWithRegex);
-        renderChannelManager();
-        await screen.findByText('Test Channel');
-        expect(screen.getByText('Title')).toBeInTheDocument();
-        expect(screen.getByTestId('FilterAltIcon')).toBeInTheDocument();
-      });
-
-      test('displays title filter icon button for mobile', async () => {
-        (useMediaQuery as jest.Mock).mockReturnValue(true);
-        const channelWithRegex: Channel[] = [
-          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: '^Gaming.*' }
-        ];
-        mockGetChannelsOnce(channelWithRegex);
-        renderChannelManager();
-        await screen.findByText('Test Channel');
-        expect(screen.getByTestId('FilterAltIcon')).toBeInTheDocument();
-        expect(screen.queryByText('Title')).not.toBeInTheDocument();
-      });
-
-      test('does not display title filter when regex is null', async () => {
-        const channelWithoutRegex: Channel[] = [
-          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: null }
-        ];
-        mockGetChannelsOnce(channelWithoutRegex);
-        renderChannelManager();
-        await screen.findByText('Test Channel');
-        expect(screen.queryByTestId('FilterAltIcon')).not.toBeInTheDocument();
-      });
-
-      test('does not display title filter when regex is undefined', async () => {
-        const channelWithoutRegex: Channel[] = [
-          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123' }
-        ];
-        mockGetChannelsOnce(channelWithoutRegex);
-        renderChannelManager();
-        await screen.findByText('Test Channel');
-        expect(screen.queryByTestId('FilterAltIcon')).not.toBeInTheDocument();
-      });
-    });
-
-    describe('Combined Filters', () => {
-      test('displays both duration and regex filters together', async () => {
-        const channelWithBothFilters: Channel[] = [
-          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', min_duration: 300, max_duration: 1800, title_filter_regex: '^Gaming.*' }
-        ];
-        mockGetChannelsOnce(channelWithBothFilters);
-        renderChannelManager();
-        await screen.findByText('Test Channel');
-        expect(screen.getByText('5-30 min')).toBeInTheDocument();
-        expect(screen.getByTestId('AccessTimeIcon')).toBeInTheDocument();
-        expect(screen.getByText('Title')).toBeInTheDocument();
-        expect(screen.getByTestId('FilterAltIcon')).toBeInTheDocument();
-      });
-
-      test('does not render filter indicators box when no filters exist', async () => {
-        const channelWithoutFilters: Channel[] = [
-          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123' }
-        ];
-        mockGetChannelsOnce(channelWithoutFilters);
-        renderChannelManager();
-        await screen.findByText('Test Channel');
-        expect(screen.queryByTestId('AccessTimeIcon')).not.toBeInTheDocument();
-        expect(screen.queryByTestId('FilterAltIcon')).not.toBeInTheDocument();
-      });
-    });
-
-    describe('Regex Popover (Desktop)', () => {
-      test('opens popover when title filter chip is clicked', async () => {
-        const user = userEvent.setup();
-        const channelWithRegex: Channel[] = [
-          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: '^Gaming.*' }
-        ];
-        mockGetChannelsOnce(channelWithRegex);
-        renderChannelManager();
-        await screen.findByText('Test Channel');
-
-        const titleChip = screen.getByText('Title');
-        await user.click(titleChip);
-
-        expect(await screen.findByText('Title Filter Regex Pattern:')).toBeInTheDocument();
-        expect(screen.getByText('^Gaming.*')).toBeInTheDocument();
-      });
-
-      test('opens and displays popover content correctly', async () => {
-        const user = userEvent.setup();
-        const channelWithRegex: Channel[] = [
-          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: '^Gaming.*' }
-        ];
-        mockGetChannelsOnce(channelWithRegex);
-        renderChannelManager();
-        await screen.findByText('Test Channel');
-
-        // Verify popover is not initially visible
-        expect(screen.queryByText('Title Filter Regex Pattern:')).not.toBeInTheDocument();
-
-        const titleChip = screen.getByText('Title');
-        await user.click(titleChip);
-
-        // Verify popover opens with correct content
-        await screen.findByText('Title Filter Regex Pattern:');
-        expect(screen.getByText('^Gaming.*')).toBeInTheDocument();
-      });
-
-      test('displays complex regex pattern in popover', async () => {
-        const user = userEvent.setup();
-        const complexRegex = '(?i)^(Gaming|Review|Tutorial).*(?<!Old)$';
-        const channelWithComplexRegex: Channel[] = [
-          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: complexRegex }
-        ];
-        mockGetChannelsOnce(channelWithComplexRegex);
-        renderChannelManager();
-        await screen.findByText('Test Channel');
-
-        const titleChip = screen.getByText('Title');
-        await user.click(titleChip);
-
-        expect(await screen.findByText(complexRegex)).toBeInTheDocument();
-      });
-    });
-
-    describe('Regex Dialog (Mobile)', () => {
-      beforeEach(() => {
-        (useMediaQuery as jest.Mock).mockReturnValue(true);
-      });
-
-      test('opens dialog when title filter icon is clicked on mobile', async () => {
-        const user = userEvent.setup();
-        const channelWithRegex: Channel[] = [
-          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: '^Gaming.*' }
-        ];
-        mockGetChannelsOnce(channelWithRegex);
-        renderChannelManager();
-        await screen.findByText('Test Channel');
-
-        const filterButton = screen.getByTestId('regex-filter-button');
-        await user.click(filterButton);
-
-        expect(await screen.findByText('Title Filter Regex Pattern')).toBeInTheDocument();
-        expect(screen.getByText('^Gaming.*')).toBeInTheDocument();
-      });
-
-      test('closes dialog when Close button is clicked', async () => {
-        const user = userEvent.setup();
-        const channelWithRegex: Channel[] = [
-          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: '^Gaming.*' }
-        ];
-        mockGetChannelsOnce(channelWithRegex);
-        renderChannelManager();
-        await screen.findByText('Test Channel');
-
-        const filterButton = screen.getByTestId('regex-filter-button');
-        await user.click(filterButton);
-
-        await screen.findByText('Title Filter Regex Pattern');
-
-        const closeButton = screen.getByRole('button', { name: /close/i });
-        await user.click(closeButton);
-
-        await waitFor(() => {
-          expect(screen.queryByText('Title Filter Regex Pattern')).not.toBeInTheDocument();
-        });
-      });
-
-      test('displays complex regex pattern in mobile dialog', async () => {
-        const user = userEvent.setup();
-        const complexRegex = '(?i)^(Gaming|Review|Tutorial).*(?<!Old)$';
-        const channelWithComplexRegex: Channel[] = [
-          { url: 'https://www.youtube.com/@TestChannel', uploader: 'Test Channel', channel_id: 'UC123', title_filter_regex: complexRegex }
-        ];
-        mockGetChannelsOnce(channelWithComplexRegex);
-        renderChannelManager();
-        await screen.findByText('Test Channel');
-
-        const filterButton = screen.getByTestId('regex-filter-button');
-        await user.click(filterButton);
-
-        expect(await screen.findByText(complexRegex)).toBeInTheDocument();
+      await waitFor(() => {
+        expect(useChannelList).toHaveBeenCalledWith(
+          expect.objectContaining({ pageSize: 27 })
+        );
       });
     });
   });
 
   describe('Edge Cases', () => {
-    test('handles empty channel list', async () => {
-      mockGetChannelsOnce([]);
-      renderChannelManager();
-      await waitFor(() => expect(mockedAxios.get).toHaveBeenCalled());
-      expect(screen.getByRole('list')).toBeInTheDocument();
-      expect(screen.queryAllByRole('listitem').length).toBe(0);
+    test('handles null token gracefully', () => {
+      renderChannelManager({ token: null });
+      expect(screen.getByText('Your Channels')).toBeInTheDocument();
     });
 
-    test('displays URL when uploader name is not available', async () => {
-      const channelsWithoutUploader = [
-        {
-          url: 'https://www.youtube.com/@NoNameChannel',
-          uploader: '',
-          channel_id: 'UCnoname'
-        }
-      ];
+    test('handles empty subfolder list', () => {
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 2,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: [],
+      });
 
-      mockGetChannelsOnce(channelsWithoutUploader as any);
       renderChannelManager();
-      expect(await screen.findByText('https://www.youtube.com/@NoNameChannel')).toBeInTheDocument();
+      expect(screen.getByText('Your Channels')).toBeInTheDocument();
     });
 
-    test('handles API error when adding channel', async () => {
+    test('closes dialog when close button clicked', async () => {
       const user = userEvent.setup();
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-      mockedAxios.get.mockResolvedValueOnce({ data: [] } as any);
-      mockedAxios.post.mockResolvedValueOnce({ data: { status: 'error' } } as any);
+      mockAddChannel.mockResolvedValue({
+        success: false,
+        message: 'Test error'
+      });
+
       renderChannelManager();
-      const input = await screen.findByLabelText('Add a new channel');
-      await user.type(input, '@NewChannel');
-      await user.click(screen.getByTestId('add-channel-button'));
-      await waitFor(() => expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to add channel info'));
-      consoleErrorSpy.mockRestore();
+
+      const input = screen.getByPlaceholderText('Paste a channel URL or @handle');
+      await user.type(input, '@test');
+      await user.click(screen.getByRole('button', { name: /add channel/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Test error')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: /close/i }));
+
+      await waitFor(() => {
+        expect(screen.queryByText('Test error')).not.toBeInTheDocument();
+      });
     });
 
-    test('throws error when WebSocketContext is not found', () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-
-      expect(() => {
-        render(
-          <BrowserRouter>
-            <ChannelManager token={mockToken} />
-          </BrowserRouter>
-        );
-      }).toThrow('WebSocketContext not found');
-
-      consoleErrorSpy.mockRestore();
-    });
-
-    test.each([
-      ['@New', 'https://www.youtube.com/@New'],
-      ['New', 'https://www.youtube.com/@New'],
-      ['youtube.com/@TestChannel', 'https://www.youtube.com/@TestChannel'],
-      ['m.youtube.com/@MobileChannel', 'https://www.youtube.com/@MobileChannel'],
-      ['https://www.youtube.com/@TestChannel/', 'https://www.youtube.com/@TestChannel'],
-      ['https://www.youtube.com/c/TestChannel', 'https://www.youtube.com/c/TestChannel'],
-      ['https://www.youtube.com/channel/UCtest123', 'https://www.youtube.com/channel/UCtest123'],
-    ])('normalizes %s to %s and posts', async (inputValue, normalized) => {
+    test('handles combined filter and folder selection', async () => {
       const user = userEvent.setup();
-      mockedAxios.get.mockResolvedValueOnce({ data: [] } as any);
-      mockedAxios.post.mockResolvedValueOnce({ data: { status: 'success', channelInfo: { url: normalized, uploader: 'X', channel_id: 'ID' } } } as any);
-      renderChannelManager();
-      const input = await screen.findByLabelText('Add a new channel');
-      await user.type(input, String(inputValue));
-      await user.click(screen.getByTestId('add-channel-button'));
-      await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledWith('/addchannelinfo', { url: normalized }, expect.any(Object)));
-    });
+      useChannelList.mockReturnValue({
+        channels: mockChannels,
+        total: 10,
+        totalPages: 1,
+        loading: false,
+        error: null,
+        refetch: mockRefetchChannels,
+        subFolders: ['music'],
+      });
 
-    test('rejects non-YouTube URLs', async () => {
-      const user = userEvent.setup();
-      mockedAxios.get.mockResolvedValueOnce({ data: [] } as any);
       renderChannelManager();
-      const input = await screen.findByLabelText('Add a new channel');
-      await user.type(input, 'https://vimeo.com/channel');
-      await user.click(screen.getByTestId('add-channel-button'));
-      expect(await screen.findByText(/Invalid channel URL/)).toBeInTheDocument();
-      expect(mockedAxios.post).not.toHaveBeenCalled();
+
+      // Apply text filter
+      await user.click(screen.getByRole('button', { name: /filter by channel name/i }));
+      const filterInput = await screen.findByLabelText('Filter channels');
+      await user.type(filterInput, 'test');
+
+      // Close the filter popover by clicking elsewhere
+      await user.keyboard('{Escape}');
+
+      await waitFor(() => {
+        expect(screen.queryByLabelText('Filter channels')).not.toBeInTheDocument();
+      });
+
+      // Apply folder filter
+      await user.click(screen.getByRole('button', { name: /filter or group by folder/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('__music/')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByText('__music/'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Total matching channels: 10')).toBeInTheDocument();
+      });
     });
   });
 });

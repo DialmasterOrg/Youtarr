@@ -169,6 +169,15 @@ const createServerModule = ({
         const channelModuleMock = {
           subscribe: jest.fn(),
           readChannels: jest.fn().mockResolvedValue([{ id: 'channel-1' }]),
+          getChannelsPaginated: jest.fn().mockResolvedValue({
+            channels: [{ id: 'channel-1' }],
+            total: 1,
+            page: 1,
+            pageSize: 50,
+            totalPages: 1,
+            subFolders: []
+          }),
+          updateChannelsByDelta: jest.fn().mockResolvedValue(),
           writeChannels: jest.fn().mockResolvedValue(),
           getChannelInfo: jest.fn().mockResolvedValue({
             id: 'channel-1',

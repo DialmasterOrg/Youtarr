@@ -150,6 +150,15 @@ const createServerModule = ({
         const channelModuleMock = {
           subscribe: jest.fn(),
           readChannels: jest.fn().mockResolvedValue([{ id: 'channel-1' }]),
+          getChannelsPaginated: jest.fn().mockResolvedValue({
+            channels: [{ id: 'channel-1' }],
+            total: 1,
+            page: 1,
+            pageSize: 50,
+            totalPages: 1,
+            subFolders: []
+          }),
+          updateChannelsByDelta: jest.fn().mockResolvedValue(),
           writeChannels: jest.fn().mockResolvedValue(),
           getChannelInfo: jest.fn().mockResolvedValue({ id: 'channel-1', title: 'Channel' })
         };
@@ -299,7 +308,7 @@ describe('server initialization', () => {
       message: 'Please complete initial setup first'
     });
     expect(dbMock.Session.findOne).not.toHaveBeenCalled();
-    expect(channelModuleMock.readChannels).not.toHaveBeenCalled();
+    expect(channelModuleMock.getChannelsPaginated).not.toHaveBeenCalled();
   });
 
   test('allows access to protected routes with a valid session token', async () => {
@@ -326,11 +335,18 @@ describe('server initialization', () => {
     });
 
     await getChannelsHandler(req, res);
-    expect(channelModuleMock.readChannels).toHaveBeenCalledTimes(1);
-    await channelModuleMock.readChannels.mock.results[0].value;
+    expect(channelModuleMock.getChannelsPaginated).toHaveBeenCalledTimes(1);
+    await channelModuleMock.getChannelsPaginated.mock.results[0].value;
 
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual([{ id: 'channel-1' }]);
+    expect(res.body).toEqual({
+      channels: [{ id: 'channel-1' }],
+      total: 1,
+      page: 1,
+      pageSize: 50,
+      subFolders: [],
+      totalPages: 1
+    });
 
     expect(dbMock.Session.findOne).toHaveBeenCalledTimes(1);
     const query = dbMock.Session.findOne.mock.calls[0][0];
@@ -357,7 +373,7 @@ describe('server initialization', () => {
     expect(res.statusCode).toBe(401);
     expect(res.body).toEqual({ error: 'Invalid or expired token' });
     expect(dbMock.Session.findOne).toHaveBeenCalledTimes(1);
-    expect(channelModuleMock.readChannels).not.toHaveBeenCalled();
+    expect(channelModuleMock.getChannelsPaginated).not.toHaveBeenCalled();
   });
 
   test('initializes cronJobs module after server starts', async () => {
@@ -456,6 +472,49 @@ describe('server initialization', () => {
       page: 1,
       totalPages: 0
     });
+  });
+
+  test('passes pagination and filter params to /getchannels handler', async () => {
+    const { app, channelModuleMock } = await createServerModule();
+
+    const handlers = findRouteHandlers(app, 'get', '/getchannels');
+    const verifyToken = handlers[0];
+    const getChannelsHandler = handlers[1];
+
+    const req = createMockRequest({
+      path: '/getchannels',
+      headers: { 'x-access-token': 'valid-token' },
+      query: {
+        page: '3',
+        pageSize: '30',
+        search: 'alpha',
+        sortBy: 'name',
+        sortOrder: 'desc'
+      }
+    });
+    const res = createMockResponse();
+
+    await new Promise((resolve, reject) => {
+      verifyToken(req, res, (err) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+    });
+
+    await getChannelsHandler(req, res);
+
+    expect(channelModuleMock.getChannelsPaginated).toHaveBeenCalledWith({
+      page: '3',
+      pageSize: '30',
+      searchTerm: 'alpha',
+      sortBy: 'name',
+      sortOrder: 'desc',
+      subFolder: undefined,
+    });
+    expect(res.statusCode).toBe(200);
   });
 
   test('handles /getVideos endpoint with default parameters', async () => {

@@ -1,5 +1,7 @@
 /* eslint-env jest */
 
+const { Op } = require('sequelize');
+
 jest.mock('fs');
 jest.mock('child_process');
 jest.mock('node-cron');
@@ -1627,6 +1629,102 @@ describe('ChannelModule', () => {
       });
     });
 
+    describe('getChannelsPaginated', () => {
+      beforeEach(() => {
+        Channel.findAndCountAll = jest.fn().mockResolvedValue({
+          rows: [],
+          count: 0
+        });
+        Channel.findAll = jest.fn().mockResolvedValue([]);
+      });
+
+      test('returns paginated data with defaults applied', async () => {
+        const mockChannels = [
+          {
+            url: 'https://youtube.com/@channel1',
+            uploader: 'Channel 1',
+            channel_id: 'UC111',
+            auto_download_enabled_tabs: 'video'
+          }
+        ];
+
+        Channel.findAndCountAll.mockResolvedValueOnce({
+          rows: mockChannels,
+          count: 25
+        });
+        Channel.findAll.mockResolvedValueOnce([
+          { sub_folder: null },
+          { sub_folder: '_Kids' },
+        ]);
+
+        const result = await ChannelModule.getChannelsPaginated({
+          page: 2,
+          pageSize: 10,
+          sortBy: 'name',
+          sortOrder: 'desc'
+        });
+
+        expect(Channel.findAndCountAll).toHaveBeenCalledWith(expect.objectContaining({
+          limit: 10,
+          offset: 10,
+          order: [['uploader', 'DESC']]
+        }));
+
+        expect(result).toEqual({
+          channels: [
+            {
+              url: 'https://youtube.com/@channel1',
+              uploader: 'Channel 1',
+              channel_id: 'UC111',
+              auto_download_enabled_tabs: 'video',
+              available_tabs: null,
+              sub_folder: null,
+              video_quality: null,
+              min_duration: null,
+              max_duration: null,
+              title_filter_regex: null,
+            }
+          ],
+          total: 25,
+          page: 2,
+          pageSize: 10,
+          totalPages: 3,
+          subFolders: ['__default__', '_Kids']
+        });
+      });
+
+      test('applies search filtering when a term is provided', async () => {
+        await ChannelModule.getChannelsPaginated({ searchTerm: 'Tech' });
+
+        expect(Channel.findAndCountAll).toHaveBeenCalledWith(expect.objectContaining({
+          where: expect.objectContaining({
+            enabled: true,
+            [Op.or]: expect.any(Array)
+          })
+        }));
+      });
+
+      test('applies sub-folder filtering for default folder key', async () => {
+        await ChannelModule.getChannelsPaginated({ subFolder: '__default__' });
+
+        expect(Channel.findAndCountAll).toHaveBeenCalledWith(expect.objectContaining({
+          where: expect.objectContaining({
+            sub_folder: expect.objectContaining({ [Op.or]: [null, ''] })
+          })
+        }));
+      });
+
+      test('applies sub-folder filtering for specific folder name', async () => {
+        await ChannelModule.getChannelsPaginated({ subFolder: '_Kids' });
+
+        expect(Channel.findAndCountAll).toHaveBeenCalledWith(expect.objectContaining({
+          where: expect.objectContaining({
+            sub_folder: '_Kids'
+          })
+        }));
+      });
+    });
+
     describe('writeChannels', () => {
       test('enables only newly added and disables removed channels', async () => {
         const channelUrls = [
@@ -1679,6 +1777,109 @@ describe('ChannelModule', () => {
           }),
           'Error updating channels in database'
         );
+      });
+    });
+
+    describe('updateChannelsByDelta', () => {
+      test('enables existing channel without fetching from YouTube', async () => {
+        // Mock existing channel
+        const mockChannel = {
+          channel_id: 'UCexisting',
+          url: 'https://youtube.com/@existingChannel',
+          update: jest.fn().mockResolvedValue(true)
+        };
+
+        Channel.findOne = jest.fn().mockResolvedValue(mockChannel);
+        Channel.update = jest.fn().mockResolvedValue([1]);
+        jest.spyOn(ChannelModule, 'getChannelInfo');
+
+        await ChannelModule.updateChannelsByDelta({
+          enableUrls: ['https://youtube.com/@existingChannel'],
+          disableUrls: ['https://youtube.com/@oldChannel']
+        });
+
+        // Should find channel by URL
+        expect(Channel.findOne).toHaveBeenCalledWith({ where: { url: 'https://youtube.com/@existingChannel' } });
+
+        // Should NOT call getChannelInfo since channel exists
+        expect(ChannelModule.getChannelInfo).not.toHaveBeenCalled();
+
+        // Should update the existing channel
+        expect(mockChannel.update).toHaveBeenCalledWith({ enabled: true });
+
+        // Should disable old channel
+        expect(Channel.update).toHaveBeenCalledWith(
+          { enabled: false },
+          { where: { url: ['https://youtube.com/@oldChannel'] } }
+        );
+      });
+
+      test('enables channel by channel_id when URL not found', async () => {
+        // Mock channel found by channel_id, not URL
+        const mockChannel = {
+          channel_id: 'UCexisting',
+          url: 'https://youtube.com/@differentUrl',
+          update: jest.fn().mockResolvedValue(true)
+        };
+
+        Channel.findOne = jest.fn()
+          .mockResolvedValueOnce(null) // Not found by URL
+          .mockResolvedValueOnce(mockChannel); // Found by channel_id
+        jest.spyOn(ChannelModule, 'getChannelInfo');
+
+        await ChannelModule.updateChannelsByDelta({
+          enableUrls: [{ url: 'https://youtube.com/@userInputUrl', channel_id: 'UCexisting' }]
+        });
+
+        // Should try to find by URL first
+        expect(Channel.findOne).toHaveBeenCalledWith({ where: { url: 'https://youtube.com/@userInputUrl' } });
+
+        // Should try to find by channel_id second
+        expect(Channel.findOne).toHaveBeenCalledWith({ where: { channel_id: 'UCexisting' } });
+
+        // Should NOT call getChannelInfo since channel exists
+        expect(ChannelModule.getChannelInfo).not.toHaveBeenCalled();
+
+        // Should update the existing channel
+        expect(mockChannel.update).toHaveBeenCalledWith({ enabled: true });
+      });
+
+      test('fetches from YouTube when channel not found', async () => {
+        Channel.findOne = jest.fn().mockResolvedValue(null);
+        Channel.update = jest.fn().mockResolvedValue([1]);
+        jest.spyOn(ChannelModule, 'getChannelInfo').mockResolvedValue({
+          id: 'UCnew'
+        });
+
+        await ChannelModule.updateChannelsByDelta({
+          enableUrls: ['https://youtube.com/@newChannel']
+        });
+
+        // Should try to find channel
+        expect(Channel.findOne).toHaveBeenCalledWith({ where: { url: 'https://youtube.com/@newChannel' } });
+
+        // Should call getChannelInfo as fallback
+        expect(ChannelModule.getChannelInfo).toHaveBeenCalledWith(
+          'https://youtube.com/@newChannel',
+          false,
+          true
+        );
+
+        // Should update with the fetched channel_id
+        expect(Channel.update).toHaveBeenCalledWith(
+          { enabled: true },
+          { where: { channel_id: 'UCnew' } }
+        );
+      });
+
+      test('propagates errors from getChannelInfo', async () => {
+        Channel.findOne = jest.fn().mockResolvedValue(null); // Channel not found
+        Channel.update = jest.fn();
+        jest.spyOn(ChannelModule, 'getChannelInfo').mockRejectedValueOnce(new Error('Failed'));
+
+        await expect(
+          ChannelModule.updateChannelsByDelta({ enableUrls: ['https://youtube.com/@new'] })
+        ).rejects.toThrow('Failed');
       });
     });
 

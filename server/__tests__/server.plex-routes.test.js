@@ -123,6 +123,15 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
   jest.doMock('../modules/channelModule', () => ({
     subscribe: jest.fn(),
     readChannels: jest.fn().mockResolvedValue([]),
+    getChannelsPaginated: jest.fn().mockResolvedValue({
+      channels: [],
+      total: 0,
+      page: 1,
+      pageSize: 50,
+      totalPages: 0,
+      subFolders: []
+    }),
+    updateChannelsByDelta: jest.fn().mockResolvedValue(),
     writeChannels: jest.fn().mockResolvedValue(),
     getChannelInfo: jest.fn().mockResolvedValue({}),
     getChannelVideos: jest.fn().mockResolvedValue([])

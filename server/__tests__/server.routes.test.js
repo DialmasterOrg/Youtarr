@@ -177,6 +177,15 @@ const createServerModule = ({
         const channelModuleMock = {
           subscribe: jest.fn(),
           readChannels: jest.fn().mockResolvedValue([{ id: 'channel-1' }]),
+          getChannelsPaginated: jest.fn().mockResolvedValue({
+            channels: [{ id: 'channel-1' }],
+            total: 1,
+            page: 1,
+            pageSize: 50,
+            totalPages: 1,
+            subFolders: []
+          }),
+          updateChannelsByDelta: jest.fn().mockResolvedValue(),
           writeChannels: jest.fn().mockResolvedValue(),
           getChannelInfo: jest.fn().mockResolvedValue({ id: 'channel-1', title: 'Channel' }),
           getChannelVideos: jest.fn().mockResolvedValue({
@@ -1060,6 +1069,101 @@ describe('server routes - channels', () => {
       expect(channelModuleMock.writeChannels).toHaveBeenCalledWith([{ id: 'channel-1', enabled: true }]);
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({ status: 'success' });
+    });
+
+    test('applies delta updates when add/remove arrays provided', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/updatechannels');
+      const updateHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { add: ['https://youtube.com/@new'], remove: ['https://youtube.com/@old'] }
+      });
+      const res = createMockResponse();
+
+      await updateHandler(req, res);
+
+      expect(channelModuleMock.updateChannelsByDelta).toHaveBeenCalledWith({
+        enableUrls: ['https://youtube.com/@new'],
+        disableUrls: ['https://youtube.com/@old']
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({ status: 'success' });
+    });
+
+    test('accepts objects with url and channel_id for add array', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/updatechannels');
+      const updateHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: {
+          add: [
+            { url: 'https://youtube.com/@channel1', channel_id: 'UC123' },
+            { url: 'https://youtube.com/@channel2', channel_id: 'UC456' }
+          ],
+          remove: []
+        }
+      });
+      const res = createMockResponse();
+
+      await updateHandler(req, res);
+
+      expect(channelModuleMock.updateChannelsByDelta).toHaveBeenCalledWith({
+        enableUrls: [
+          { url: 'https://youtube.com/@channel1', channel_id: 'UC123' },
+          { url: 'https://youtube.com/@channel2', channel_id: 'UC456' }
+        ],
+        disableUrls: []
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({ status: 'success' });
+    });
+
+    test('returns 400 when delta payload has no changes', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/updatechannels');
+      const updateHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { add: [], remove: [] }
+      });
+      const res = createMockResponse();
+
+      await updateHandler(req, res);
+
+      expect(channelModuleMock.updateChannelsByDelta).not.toHaveBeenCalled();
+      expect(channelModuleMock.writeChannels).not.toHaveBeenCalled();
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        status: 'error',
+        message: 'No channel changes provided'
+      });
+    });
+
+    test('returns 400 for invalid payload type', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+
+      const handlers = findRouteHandlers(app, 'post', '/updatechannels');
+      const updateHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { invalid: true }
+      });
+      const res = createMockResponse();
+
+      await updateHandler(req, res);
+
+      expect(channelModuleMock.updateChannelsByDelta).not.toHaveBeenCalled();
+      expect(channelModuleMock.writeChannels).not.toHaveBeenCalled();
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toEqual({
+        status: 'error',
+        message: 'Invalid payload for channel update'
+      });
     });
   });
 });

@@ -205,7 +205,16 @@ const createServerModule = ({
 
         jest.doMock('../modules/channelModule', () => ({
           subscribe: jest.fn(),
-          readChannels: jest.fn().mockResolvedValue([])
+          readChannels: jest.fn().mockResolvedValue([]),
+          getChannelsPaginated: jest.fn().mockResolvedValue({
+            channels: [],
+            total: 0,
+            page: 1,
+            pageSize: 50,
+            totalPages: 0,
+            subFolders: []
+          }),
+          updateChannelsByDelta: jest.fn().mockResolvedValue()
         }));
         jest.doMock('../modules/plexModule', () => ({}));
         jest.doMock('../modules/downloadModule', () => ({}));
