@@ -1,7 +1,7 @@
 # Youtarr
 
 ![Backend Coverage](https://img.shields.io/badge/Backend_Coverage-84%25-brightgreen)
-![Frontend Coverage](https://img.shields.io/badge/Frontend_Coverage-83%25-brightgreen)
+![Frontend Coverage](https://img.shields.io/badge/Frontend_Coverage-85%25-brightgreen)
 ![CI Status](https://github.com/DialmasterOrg/Youtarr/workflows/CI%20-%20Lint%20and%20Test/badge.svg)
 
 Youtarr is a self-hosted YouTube downloader that automatically downloads videos from your favorite channels. It provides metadata for multiple media servers and offers optional Plex integration for automatic library refreshes.
