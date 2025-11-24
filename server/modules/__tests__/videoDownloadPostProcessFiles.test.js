@@ -747,4 +747,215 @@ describe('videoDownloadPostProcessFiles', () => {
       expect(moveCalls.length).toBe(0);
     });
   });
+
+  describe('special character handling in channel names', () => {
+    it('uses filesystem path for channel with # character (temp downloads + subfolder)', async () => {
+      // Scenario: Channel name in metadata is "Fred again . #" but yt-dlp sanitizes to "Fred again . ."
+      const sanitizedChannelName = 'Fred again . .';
+      const rawChannelName = 'Fred again . #';
+      const tempVideoPath = `/tmp/youtarr-downloads/${sanitizedChannelName}/Fred again . . - Video Title [abc123]/Video Title [abc123].mp4`;
+      const tempVideoDir = `/tmp/youtarr-downloads/${sanitizedChannelName}/Fred again . . - Video Title [abc123]`;
+      process.argv = ['node', 'script', tempVideoPath];
+
+      Channel.findOne.mockResolvedValue({
+        sub_folder: 'Music',
+        uploader: rawChannelName
+      });
+
+      tempPathManager.isEnabled.mockReturnValue(true);
+      tempPathManager.isTempPath.mockReturnValue(true);
+
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        id: 'abc123',
+        title: 'Video Title',
+        uploader: rawChannelName, // Raw name with #
+        channel_id: 'channel123'
+      }));
+
+      const tempJsonPath = `${tempVideoDir}/Video Title [abc123].info.json`;
+      fs.existsSync.mockImplementation((path) => {
+        return path === tempJsonPath || path.includes('/library/__Music/Fred again');
+      });
+      fs.pathExists.mockResolvedValue(false);
+
+      await loadModule();
+      await settleAsync();
+
+      // Verify fs.move uses the SANITIZED channel name from filesystem, not raw metadata
+      expect(fs.move).toHaveBeenCalledWith(
+        tempVideoDir,
+        expect.stringContaining(`/library/__Music/${sanitizedChannelName}/Fred again`)
+      );
+
+      // Verify ensureDir was called with sanitized name
+      expect(fs.ensureDir).toHaveBeenCalledWith(
+        expect.stringContaining(`/library/__Music/${sanitizedChannelName}`)
+      );
+
+      // Verify _actual_filepath uses sanitized name
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        tempJsonPath,
+        expect.stringContaining(`"_actual_filepath": "/library/__Music/${sanitizedChannelName}/Fred again`)
+      );
+    });
+
+    it('uses filesystem path for channel with trailing dots (no temp downloads + subfolder)', async () => {
+      // Scenario: Channel name is "Fred again . ." with trailing dots
+      const channelName = 'Fred again . .';
+      const videoPathInChannel = `/library/${channelName}/Video Title [abc123]/Video Title [abc123].mp4`;
+      process.argv = ['node', 'script', videoPathInChannel];
+
+      Channel.findOne.mockResolvedValue({
+        sub_folder: 'Music',
+        uploader: channelName
+      });
+
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        id: 'abc123',
+        title: 'Video Title',
+        uploader: channelName,
+        channel_id: 'channel123'
+      }));
+
+      fs.existsSync.mockImplementation((path) => {
+        return path === `/library/${channelName}/Video Title [abc123]/Video Title [abc123].info.json` ||
+               path === videoPathInChannel;
+      });
+      fs.pathExists.mockResolvedValue(false);
+      fs.readdir.mockResolvedValue(['Video Title [abc123]']);
+
+      await loadModule();
+      await settleAsync();
+
+      // Verify fs.ensureDir was called with the channel name from filesystem
+      expect(fs.ensureDir).toHaveBeenCalledWith(
+        expect.stringContaining('/library/__Music')
+      );
+
+      // Verify fs.move uses the actual channel name from filesystem
+      expect(fs.move).toHaveBeenCalledWith(
+        `/library/${channelName}`,
+        `/library/__Music/${channelName}`
+      );
+
+      // Verify success log
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          expectedPath: `/library/__Music/${channelName}`
+        }),
+        '[Post-Process] Successfully moved to subfolder'
+      );
+    });
+
+    it('uses filesystem path for channel with colon character', async () => {
+      // Scenario: Channel name with : which gets sanitized by yt-dlp
+      const sanitizedChannelName = 'Test Channel';
+      const rawChannelName = 'Test: Channel';
+      const tempVideoPath = `/tmp/youtarr-downloads/${sanitizedChannelName}/Video Title [abc123]/Video Title [abc123].mp4`;
+      const tempVideoDir = `/tmp/youtarr-downloads/${sanitizedChannelName}/Video Title [abc123]`;
+      process.argv = ['node', 'script', tempVideoPath];
+
+      Channel.findOne.mockResolvedValue({
+        sub_folder: 'Education',
+        uploader: rawChannelName
+      });
+
+      tempPathManager.isEnabled.mockReturnValue(true);
+      tempPathManager.isTempPath.mockReturnValue(true);
+
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        id: 'abc123',
+        title: 'Video Title',
+        uploader: rawChannelName, // Raw name with :
+        channel_id: 'channel123'
+      }));
+
+      const tempJsonPath = `${tempVideoDir}/Video Title [abc123].info.json`;
+      fs.existsSync.mockImplementation((path) => {
+        return path === tempJsonPath || path.includes('/library/__Education/Test Channel');
+      });
+      fs.pathExists.mockResolvedValue(false);
+
+      await loadModule();
+      await settleAsync();
+
+      // Verify fs.move uses the SANITIZED channel name from filesystem
+      expect(fs.move).toHaveBeenCalledWith(
+        tempVideoDir,
+        expect.stringContaining(`/library/__Education/${sanitizedChannelName}/Video Title`)
+      );
+
+      // Verify no errors logged (ensureDir should succeed)
+      expect(logger.error).not.toHaveBeenCalledWith(
+        expect.objectContaining({ error: expect.anything() }),
+        '[Post-Process] ERROR during move operation'
+      );
+    });
+
+    it('handles channel name with multiple special characters', async () => {
+      // Scenario: Channel name with multiple special chars: #<>:|?*
+      const sanitizedChannelName = 'Channel Name';
+      const rawChannelName = 'Channel #<>:|?* Name';
+      const videoPath = `/library/${sanitizedChannelName}/Video Title [abc123]/Video Title [abc123].mp4`;
+      process.argv = ['node', 'script', videoPath];
+
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        id: 'abc123',
+        title: 'Video Title',
+        uploader: rawChannelName, // Raw name with special chars
+        channel_id: 'channel123'
+      }));
+
+      fs.existsSync.mockImplementation((path) => {
+        return path === `/library/${sanitizedChannelName}/Video Title [abc123]/Video Title [abc123].info.json` ||
+               path === videoPath;
+      });
+
+      await loadModule();
+      await settleAsync();
+
+      // Verify basic post-processing succeeds without errors
+      expect(fs.moveSync).toHaveBeenCalledWith(
+        expect.stringContaining('/library/Channel Name/Video Title [abc123]/Video Title [abc123].info.json'),
+        '/mock/jobs/info/abc123.info.json',
+        { overwrite: true }
+      );
+
+      // Verify no critical errors
+      expect(process.exit).not.toHaveBeenCalledWith(1);
+    });
+
+    it('writes _actual_filepath with __ prefix when channel has subfolder (non-temp)', async () => {
+      // This test verifies the fix for line 240 (missing __ prefix)
+      const channelName = 'Test Channel';
+      const videoPath = `/library/${channelName}/Video Title [abc123]/Video Title [abc123].mp4`;
+      process.argv = ['node', 'script', videoPath];
+
+      Channel.findOne.mockResolvedValue({
+        sub_folder: 'Music',
+        uploader: channelName
+      });
+
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        id: 'abc123',
+        title: 'Video Title',
+        uploader: channelName,
+        channel_id: 'channel123'
+      }));
+
+      fs.existsSync.mockImplementation((path) => {
+        return path === `/library/${channelName}/Video Title [abc123]/Video Title [abc123].info.json` ||
+               path === videoPath;
+      });
+
+      await loadModule();
+      await settleAsync();
+
+      // Verify that _actual_filepath includes the __ prefix for subfolder
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        expect.stringContaining('/library/Test Channel/Video Title [abc123]/Video Title [abc123].info.json'),
+        expect.stringContaining('"_actual_filepath": "/library/__Music/Test Channel/Video Title [abc123]/Video Title [abc123].mp4"')
+      );
+    });
+  });
 });
