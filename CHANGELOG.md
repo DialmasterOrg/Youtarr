@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.54.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.54.1) - 2025-11-24
+
+### [1.54.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.54.0...v1.54.1) (2025-11-24)
+
+
+### Bug Fixes
+
+* **downloads:** special chars in channel names ([a4c2276](https://github.com/DialmasterOrg/Youtarr/commit/a4c2276c9d46d8390b848789c4a92ae873f6ca34))
+
+
+### Documentation
+
+* update CHANGELOG for v1.54.0 [skip ci] ([ca3beb7](https://github.com/DialmasterOrg/Youtarr/commit/ca3beb778815fa6fd7e83ac3ae87ac87c324eddf))
+
+
+
+
+
 ## [v1.54.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.54.0) - 2025-11-24
 
 ## [1.54.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.53.2...v1.54.0) (2025-11-24)
