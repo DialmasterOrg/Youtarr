@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import WebSocketContext from '../contexts/WebSocketContext';
 
 interface WebSocketProviderProps {
@@ -15,9 +15,15 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
   const [retries, setRetries] = useState(0);
 
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const subscriptionsRef = useRef<Subscription[]>([]);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    subscriptionsRef.current = subscriptions;
+  }, [subscriptions]);
+
   const subscribe = useCallback(
     (filter: (message: any) => boolean, callback: (data: any) => void) => {
-      console.log('WebSocketProvider.subscribe called!');
       setSubscriptions((prev) => [...prev, { filter, callback }]);
     },
     []
@@ -35,15 +41,12 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     const ws = new WebSocket(`${protocol}://${host}:${port}`);
 
     ws.onopen = () => {
-      console.log('Connected to socket');
       setRetries(0); // Reset retries counter when successfully connected
     };
 
     ws.onclose = () => {
-      console.log('Socket closed connection');
       // If the connection was closed, try to reconnect after a delay.
       const delay = calculateBackoff(retries);
-      console.log(`Reconnecting in ${delay}ms...`);
       setTimeout(connect, delay);
     };
 
@@ -93,7 +96,6 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
 
   useEffect(() => {
     if (!socket) {
-      console.log('WebSocketProvider connecting...');
       connect();
     } else {
       socket.onmessage = (event) => {
@@ -109,7 +111,7 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
 
         // Uncomment to debug web socket messages...
         //console.log('Received message from socket: ', message);
-        subscriptions.forEach((sub) => {
+        subscriptionsRef.current.forEach((sub) => {
           if (sub.filter(message)) {
             sub.callback(message.payload);
           }
@@ -118,12 +120,11 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     }
 
     return () => {
-      console.log('WebSocketProvider unmounting...');
       if (socket) {
         socket.close();
       }
     };
-  }, [connect, socket, subscriptions]);
+  }, [connect, socket]);
 
   return (
     <WebSocketContext.Provider value={{ socket, subscribe, unsubscribe }}>

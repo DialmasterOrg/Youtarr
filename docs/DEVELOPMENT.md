@@ -57,6 +57,7 @@ npm i
 Optional flags:
 - `--install-deps` - Runs `npm install` in the root and `client/` before building (required on a clean clone or after dependency changes)
 - `--no-cache` - Force rebuild to get latest yt-dlp version
+- `SKIP_DEV_IMAGE_PRUNE=1` - Skip automatic cleanup of old untagged `youtarr-dev` images (pruning is enabled by default to keep Docker storage from filling)
 
 The script runs `npm run build` for the client and then invokes `docker build`, so make sure Node.js 18+ and npm are available locally.
 

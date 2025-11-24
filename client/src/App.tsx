@@ -679,6 +679,19 @@ function AppContent() {
             style={{
               paddingTop: isMobile ? '100px' : '32px',
               width: '100%',
+              ...(location.pathname === '/channels'
+                ? (isMobile
+                    ? {
+                        height: '100vh',
+                        maxHeight: 'calc(100vh - 16px)',
+                      }
+                    : {
+                        height: 'calc(100vh - 132px)',
+                        maxHeight: 'calc(100vh - 132px)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                      })
+                : {}),
             }}
           >
             {checkingSetup ? (

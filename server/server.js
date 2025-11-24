@@ -644,16 +644,58 @@ const initialize = async () => {
       }
     });
 
-    app.get('/getchannels', verifyToken, (req, res) => {
-      channelModule.readChannels().then((channels) => {
-        res.json(channels);
-      });
+    app.get('/getchannels', verifyToken, async (req, res) => {
+      try {
+        const result = await channelModule.getChannelsPaginated({
+          page: req.query.page,
+          pageSize: req.query.pageSize,
+          searchTerm: req.query.search,
+          sortBy: req.query.sortBy,
+          sortOrder: req.query.sortOrder,
+          subFolder: req.query.subFolder,
+        });
+        res.json(result);
+      } catch (error) {
+        req.log.error({ err: error }, 'Failed to fetch channels');
+        res.status(500).json({ error: 'Failed to fetch channels' });
+      }
     });
 
     app.post('/updatechannels', verifyToken, async (req, res) => {
-      const channels = req.body;
-      await channelModule.writeChannels(channels);
-      res.json({ status: 'success' });
+      try {
+        const payload = req.body;
+
+        if (Array.isArray(payload)) {
+          await channelModule.writeChannels(payload);
+          return res.json({ status: 'success' });
+        }
+
+        if (payload && (Array.isArray(payload.add) || Array.isArray(payload.remove))) {
+          const enableUrls = Array.isArray(payload.add) ? payload.add : [];
+          const disableUrls = Array.isArray(payload.remove) ? payload.remove : [];
+
+          if (enableUrls.length === 0 && disableUrls.length === 0) {
+            return res.status(400).json({
+              status: 'error',
+              message: 'No channel changes provided'
+            });
+          }
+
+          await channelModule.updateChannelsByDelta({ enableUrls, disableUrls });
+          return res.json({ status: 'success' });
+        }
+
+        return res.status(400).json({
+          status: 'error',
+          message: 'Invalid payload for channel update'
+        });
+      } catch (error) {
+        req.log.error({ err: error }, 'Failed to update channels');
+        res.status(500).json({
+          status: 'error',
+          message: 'Failed to update channels'
+        });
+      }
     });
 
     app.post('/addchannelinfo', verifyToken, async (req, res) => {
