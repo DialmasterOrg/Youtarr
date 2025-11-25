@@ -1,0 +1,139 @@
+name: Coverage Comment
+
+on:
+  workflow_run:
+    workflows:
+      - CI - Lint and Test
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  post-coverage-comment:
+    name: Post Coverage Comment
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.event == 'pull_request' }}
+
+    steps:
+      - name: Download backend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend-coverage
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Download frontend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend-coverage
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Generate coverage report comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+
+            const pullRequests = context.payload.workflow_run.pull_requests || [];
+
+            if (!pullRequests.length) {
+              core.info('No pull request found for this workflow run, skipping coverage comment.');
+              return;
+            }
+
+            const issueNumber = pullRequests[0].number;
+            const { owner, repo } = context.repo;
+            const headSha = context.payload.workflow_run.head_sha || '';
+            const shortSha = headSha ? headSha.slice(0, 7) : context.payload.workflow_run.id;
+
+            const readCoverage = (filePath) => {
+              try {
+                const raw = fs.readFileSync(filePath, 'utf8');
+                const parsed = JSON.parse(raw);
+                const total = parsed.total || parsed;
+                return { available: true, total };
+              } catch (error) {
+                core.info(`Coverage not available at ${filePath}: ${error.message}`);
+                return {
+                  available: false,
+                  total: { lines: { pct: 0 }, statements: { pct: 0 }, functions: { pct: 0 }, branches: { pct: 0 } }
+                };
+              }
+            };
+
+            const backendCoverage = readCoverage('backend-coverage/coverage-summary.json');
+            const frontendCoverage = readCoverage('frontend-coverage/coverage-summary.json');
+
+            const getBadge = (percentage) => {
+              if (percentage >= 80) return '🟢';
+              if (percentage >= 70) return '🟡';
+              return '🔴';
+            };
+
+            const formatPct = (value) => (typeof value === 'number' ? value.toFixed(2) : '0.00');
+
+            const formatSection = (label, coverage) => {
+              if (!coverage.available) {
+                return `### ${label}\n⚠️ Coverage data not available (tests may have failed)\n\n`;
+              }
+
+              const total = coverage.total;
+              return `### ${label}\n| Type | Coverage | Status |\n|------|----------|--------|\n| Lines | ${formatPct(total.lines.pct)}% | ${getBadge(total.lines.pct)} |\n| Statements | ${formatPct(total.statements.pct)}% | ${getBadge(total.statements.pct)} |\n| Functions | ${formatPct(total.functions.pct)}% | ${getBadge(total.functions.pct)} |\n| Branches | ${formatPct(total.branches.pct)}% | ${getBadge(total.branches.pct)} |\n\n`;
+            };
+
+            const backendSection = formatSection('Backend Coverage', backendCoverage);
+            const frontendSection = formatSection('Frontend Coverage', frontendCoverage);
+
+            const backendPass = backendCoverage.available && backendCoverage.total.lines.pct >= 70;
+            const frontendPass = frontendCoverage.available && frontendCoverage.total.lines.pct >= 70;
+
+            let comment = '## 📊 Test Coverage Report\n\n';
+            comment += backendSection;
+            comment += frontendSection;
+            comment += '### Coverage Requirements\n';
+            comment += '- **Minimum threshold:** 70% line coverage\n';
+            comment += `- **Backend:** ${backendPass ? '✅ Passes' : backendCoverage.available ? '❌ Fails (below 70%)' : '⚠️ Not available'}\n`;
+            comment += `- **Frontend:** ${frontendPass ? '✅ Passes' : frontendCoverage.available ? '❌ Fails (below 70%)' : '⚠️ Not available'}\n\n`;
+
+            if (!backendPass || !frontendPass) {
+              comment += '> ⚠️ Coverage thresholds are not met.\n\n';
+            }
+
+            comment += `---\n*Coverage report generated for commit ${shortSha}*`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number: issueNumber,
+            });
+
+            const existing = comments.find((comment) =>
+              comment.user.type === 'Bot' && comment.body.includes('Test Coverage Report')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body: comment,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                body: comment,
+              });
+            }
