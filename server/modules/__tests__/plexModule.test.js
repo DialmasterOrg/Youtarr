@@ -153,7 +153,7 @@ describe('plexModule', () => {
       const result = await plexModule.refreshLibrary();
 
       expect(axios.get).toHaveBeenCalledWith(
-        'http://127.0.0.1:32400/library/sections/1/refresh?X-Plex-Token=existing-token'
+        'http://127.0.0.1:32400/library/sections/1/refresh?X-Plex-Token=existing-token&force=1'
       );
       expect(result).toBe(mockResponse);
       expect(logger.info).toHaveBeenCalledWith('Refreshing Plex library');
@@ -222,7 +222,7 @@ describe('plexModule', () => {
       await plexModule.refreshLibrary();
 
       expect(axios.get).toHaveBeenCalledWith(
-        'http://env-plex:8080/library/sections/1/refresh?X-Plex-Token=existing-token'
+        'http://env-plex:8080/library/sections/1/refresh?X-Plex-Token=existing-token&force=1'
       );
     });
   });

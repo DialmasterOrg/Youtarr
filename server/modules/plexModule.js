@@ -32,7 +32,7 @@ class PlexModule {
 
   async refreshLibrary() {
     logger.info('Refreshing Plex library');
-    // Example GET http://[plexIP]:[plexPort]/library/sections/[plexYoutubeLibraryId]/refresh?X-Plex-Token=[plexApiKey]
+    // Example GET http://[plexIP]:[plexPort]/library/sections/[plexYoutubeLibraryId]/refresh?X-Plex-Token=[plexApiKey]&force=1
     try {
       const config = configModule.getConfig();
       const baseUrl = this.getBaseUrl(config.plexIP, config, config.plexPort, config.plexViaHttps);
@@ -43,7 +43,7 @@ class PlexModule {
       }
 
       const response = await axios.get(
-        `${baseUrl}/library/sections/${config.plexYoutubeLibraryId}/refresh?X-Plex-Token=${config.plexApiKey}`
+        `${baseUrl}/library/sections/${config.plexYoutubeLibraryId}/refresh?X-Plex-Token=${config.plexApiKey}&force=1`
       );
       logger.info({ libraryId: config.plexYoutubeLibraryId }, 'Plex library refresh initiated successfully');
       return response;
