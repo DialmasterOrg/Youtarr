@@ -37,6 +37,7 @@ https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
 - **Discord Notifications**: Optional webhook alerts for new downloads
 - **Web Interface**: Manage everything through a responsive (PC or mobile) web UI
 - **Secure Access**: Built-in authentication with admin controls
+- **REST API**: Full API with interactive [Swagger/OpenAPI documentation](http://localhost:3087/swagger) for automation and integrations
 - **Platform Flexible**: Configurable storage paths and guides for deployment to multiple platforms and architectures
 - **Unraid Ready**: Community Applications template (via DialmasterOrg repo) with headless-friendly credential presets
 - **Powered by yt-dlp**: Uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) under the hood for YouTube integration and downloads
@@ -72,6 +73,7 @@ https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
 - [Database Management](docs/DATABASE.md) - Database configuration and maintenance
 - [Docker Configuration](docs/DOCKER.md) - Advanced Docker settings
 - [Development Guide](docs/DEVELOPMENT.md) - Contributing and development setup
+- [API Documentation](http://localhost:3087/swagger) - Interactive Swagger/OpenAPI documentation (requires running instance)
 
 ### Help & Support
 - [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Common issues and solutions
