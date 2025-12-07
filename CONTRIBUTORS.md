@@ -8,7 +8,7 @@ Youtarr wouldn't be where it is today without the help of these awesome people.
 
 ## Contributors
 
-- [@matthewkulina](https://github.com/matthewkulina) - Added API documentation and cleaned up the backend
+- [@mkulina](https://github.com/mkulina) - Added API documentation and cleaned up the backend
 
 ---
 
