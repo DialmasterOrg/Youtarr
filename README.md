@@ -86,6 +86,7 @@ Interested in contributing to Youtarr? We welcome contributions of all kinds!
 
 - [Contributing Guide](CONTRIBUTING.md) - How to contribute, coding standards, and development workflow
 - [Development Guide](docs/DEVELOPMENT.md) - Technical setup and architecture details
+- [Contributors](CONTRIBUTORS.md) - People who have helped build Youtarr
 
 ## Screenshots
 
