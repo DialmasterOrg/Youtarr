@@ -1,15 +1,6 @@
 /* eslint-env jest */
 const loggerMock = require('../__mocks__/logger');
-
-const findRouteHandlers = (app, method, routePath) => {
-  const stack = app?._router?.stack || [];
-  for (const layer of stack) {
-    if (layer.route && layer.route.path === routePath && layer.route.methods[method]) {
-      return layer.route.stack.map((routeLayer) => routeLayer.handle);
-    }
-  }
-  throw new Error(`Route ${method.toUpperCase()} ${routePath} not found`);
-};
+const { findRouteHandlers } = require('./testUtils');
 
 const createMockRequest = (overrides = {}) => ({
   method: 'GET',
@@ -336,6 +327,15 @@ const createServerModule = ({
         jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
         jest.doMock('../modules/videoValidationModule', () => videoValidationModuleMock);
         jest.doMock('../modules/channelSettingsModule', () => channelSettingsModuleMock);
+        jest.doMock('../modules/archiveModule', () => ({
+          getAutoRemovalDryRun: jest.fn().mockResolvedValue({ videos: [], totalSize: 0 })
+        }));
+        jest.doMock('../modules/notificationModule', () => ({
+          sendTestNotification: jest.fn().mockResolvedValue({ success: true })
+        }));
+        jest.doMock('../models/channelvideo', () => ({
+          update: jest.fn().mockResolvedValue([1])
+        }));
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => cronMock);
         jest.doMock('express-rate-limit', () => Object.assign(rateLimitMiddleware, { ipKeyGenerator: rateLimitMiddleware.ipKeyGenerator }));
