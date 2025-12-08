@@ -1,6 +1,7 @@
 const Channel = require('../models/channel');
 const configModule = require('./configModule');
-const path = require('path');
+const channelSettingsModule = require('./channelSettingsModule');
+const { buildOutputTemplate, buildThumbnailTemplate } = require('./filesystem');
 
 /**
  * Encapsulates channel filter settings for download filtering
@@ -89,8 +90,8 @@ class ChannelDownloadGrouper {
       // Determine effective quality (channel override or global)
       const quality = channel.video_quality || globalQuality || '1080';
 
-      // Determine subfolder (null if not set)
-      const subFolder = channel.sub_folder ? channel.sub_folder.trim() : null;
+      // Resolve effective subfolder (handles ##USE_GLOBAL_DEFAULT## -> default, NULL -> root)
+      const subFolder = channelSettingsModule.resolveEffectiveSubfolder(channel.sub_folder);
 
       // Create filter config for this channel
       const filterConfig = ChannelFilterConfig.fromChannel(channel);
@@ -119,19 +120,7 @@ class ChannelDownloadGrouper {
    * @returns {string} - Path template for yt-dlp -o argument
    */
   buildOutputPathTemplate(subFolder) {
-    const baseOutputPath = configModule.directoryPath;
-    const CHANNEL_TEMPLATE = '%(uploader,channel,uploader_id)s';
-    const VIDEO_FOLDER_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title)s - %(id)s`;
-    const VIDEO_FILE_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title)s  [%(id)s].%(ext)s`;
-
-    if (subFolder) {
-      // Include subfolder in path with __ prefix for namespace safety
-      const safeSubFolder = `__${subFolder}`;
-      return path.join(baseOutputPath, safeSubFolder, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, VIDEO_FILE_TEMPLATE);
-    } else {
-      // Root level (current behavior)
-      return path.join(baseOutputPath, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, VIDEO_FILE_TEMPLATE);
-    }
+    return buildOutputTemplate(configModule.directoryPath, subFolder);
   }
 
   /**
@@ -140,17 +129,7 @@ class ChannelDownloadGrouper {
    * @returns {string} - Thumbnail path template for yt-dlp
    */
   buildThumbnailPathTemplate(subFolder) {
-    const baseOutputPath = configModule.directoryPath;
-    const CHANNEL_TEMPLATE = '%(uploader,channel,uploader_id)s';
-    const VIDEO_FOLDER_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title)s - %(id)s`;
-
-    if (subFolder) {
-      // Include subfolder in path with __ prefix for namespace safety
-      const safeSubFolder = `__${subFolder}`;
-      return path.join(baseOutputPath, safeSubFolder, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, 'poster');
-    } else {
-      return path.join(baseOutputPath, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, 'poster');
-    }
+    return buildThumbnailTemplate(configModule.directoryPath, subFolder);
   }
 
   /**
@@ -193,7 +172,8 @@ class ChannelDownloadGrouper {
     const groups = new Map();
 
     for (const channel of channels) {
-      const subFolder = channel.sub_folder ? channel.sub_folder.trim() : null;
+      // Resolve effective subfolder (handles ##USE_GLOBAL_DEFAULT## -> default, NULL -> root)
+      const subFolder = channelSettingsModule.resolveEffectiveSubfolder(channel.sub_folder);
 
       // Create filter config for this channel (filters still apply with quality override)
       const filterConfig = ChannelFilterConfig.fromChannel(channel);

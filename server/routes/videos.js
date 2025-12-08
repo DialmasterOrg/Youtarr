@@ -353,6 +353,18 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
           });
         }
       }
+      // Note: video count is not applicable for manual downloads
+
+      // Validate subfolder override if provided
+      if (overrideSettings.subfolder !== undefined && overrideSettings.subfolder !== null) {
+        const channelSettingsModule = require('../modules/channelSettingsModule');
+        const validation = channelSettingsModule.validateSubFolder(overrideSettings.subfolder);
+        if (!validation.valid) {
+          return res.status(400).json({
+            error: validation.error
+          });
+        }
+      }
     }
 
     downloadModule.doSpecificDownloads(req);

@@ -40,7 +40,8 @@ describe('Channel Poster Functionality', () => {
         directoryPath: '/videos',
         getImagePath: jest.fn().mockReturnValue('/images'),
         onConfigChange: jest.fn(),
-        getConfig
+        getConfig,
+        getDefaultSubfolder: jest.fn().mockReturnValue(null)
       };
     });
 
@@ -180,7 +181,7 @@ describe('Channel Poster Functionality', () => {
       expect(logger.error).toHaveBeenCalledWith(
         expect.objectContaining({
           err: testError,
-          channelUploader: 'Test Channel'
+          channelFolderName: 'Test Channel'
         }),
         'Error backfilling poster for channel'
       );

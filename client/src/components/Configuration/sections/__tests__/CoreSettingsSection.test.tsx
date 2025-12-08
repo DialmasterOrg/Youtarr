@@ -7,6 +7,16 @@ import { renderWithProviders } from '../../../../test-utils';
 import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../../types';
 import { DEFAULT_CONFIG } from '../../../../config/configSchema';
 
+// Mock useSubfolders hook to prevent network requests
+jest.mock('../../../../hooks/useSubfolders', () => ({
+  useSubfolders: () => ({
+    subfolders: ['__Sports', '__Music', '__Tech'],
+    loading: false,
+    error: null,
+    refetch: jest.fn(),
+  }),
+}));
+
 // Mock SubtitleLanguageSelector to simplify testing
 jest.mock('../../SubtitleLanguageSelector', () => ({
   __esModule: true,
@@ -21,6 +31,23 @@ jest.mock('../../SubtitleLanguageSelector', () => ({
         value: props.value,
         onChange: (e: React.ChangeEvent<HTMLInputElement>) => props.onChange(e.target.value)
       })
+    );
+  }
+}));
+
+// Mock SubfolderAutocomplete for dialog tests
+jest.mock('../../../shared/SubfolderAutocomplete', () => ({
+  SubfolderAutocomplete: function MockSubfolderAutocomplete(props: {
+    value: string | null;
+    onChange: (value: string | null) => void;
+    label: string;
+  }) {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'subfolder-autocomplete' },
+      React.createElement('button', {
+        'data-testid': 'trigger-subfolder-change',
+        onClick: () => props.onChange('NewFolder')
+      }, 'Change Subfolder')
     );
   }
 }));
@@ -57,6 +84,7 @@ const createSectionProps = (
   isPlatformManaged: createPlatformManagedState(),
   onConfigChange: jest.fn(),
   onMobileTooltipClick: jest.fn(),
+  token: 'test-token',
   ...overrides,
 });
 
@@ -775,6 +803,226 @@ describe('CoreSettingsSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<CoreSettingsSection {...props} />);
       expect(screen.getByLabelText(/YouTube Output Directory/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('Default Subfolder Confirmation Dialog', () => {
+    let mockFetch: jest.SpyInstance;
+
+    beforeEach(() => {
+      mockFetch = jest.spyOn(global, 'fetch');
+    });
+
+    afterEach(() => {
+      mockFetch.mockRestore();
+    });
+
+    const openSubfolderDialog = async (user: ReturnType<typeof userEvent.setup>) => {
+      // Click the button that triggers the onChange with a new folder value
+      const triggerButton = screen.getByTestId('trigger-subfolder-change');
+      await user.click(triggerButton);
+    };
+
+    test('shows loading state while fetching affected channels', async () => {
+      const user = userEvent.setup();
+      // Create a promise that we control to simulate loading state
+      let resolvePromise: (value: Response) => void;
+      const pendingPromise = new Promise<Response>((resolve) => {
+        resolvePromise = resolve;
+      });
+      mockFetch.mockReturnValue(pendingPromise);
+
+      const props = createSectionProps({
+        config: createConfig({ defaultSubfolder: '' })
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+      await openSubfolderDialog(user);
+
+      // Wait for dialog to appear, then check loading state
+      await screen.findByText('Set Default Subfolder?');
+      expect(screen.getByText('Checking affected channels...')).toBeInTheDocument();
+
+      // Resolve the promise to clean up
+      resolvePromise!({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ count: 0, channelNames: [] })
+      } as unknown as Response);
+    });
+
+    test('shows "No tracked channels" message when count is 0', async () => {
+      const user = userEvent.setup();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ count: 0, channelNames: [] })
+      });
+
+      const props = createSectionProps({
+        config: createConfig({ defaultSubfolder: '' })
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+      await openSubfolderDialog(user);
+
+      // Wait for the message to appear
+      await screen.findByText('No tracked channels are currently using Default Subfolder.');
+    });
+
+    test('shows channel count when channels are affected', async () => {
+      const user = userEvent.setup();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          count: 3,
+          channelNames: ['Channel A', 'Channel B', 'Channel C']
+        })
+      });
+
+      const props = createSectionProps({
+        config: createConfig({ defaultSubfolder: '' })
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+      await openSubfolderDialog(user);
+
+      // Wait for the count message
+      await screen.findByText('3 tracked channels configured to use Default Subfolder.');
+    });
+
+    test('shows singular "channel" when count is 1', async () => {
+      const user = userEvent.setup();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          count: 1,
+          channelNames: ['Only Channel']
+        })
+      });
+
+      const props = createSectionProps({
+        config: createConfig({ defaultSubfolder: '' })
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+      await openSubfolderDialog(user);
+
+      await screen.findByText('1 tracked channel configured to use Default Subfolder.');
+    });
+
+    test('expands and collapses channel list on click', async () => {
+      const user = userEvent.setup();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          count: 2,
+          channelNames: ['Channel A', 'Channel B']
+        })
+      });
+
+      const props = createSectionProps({
+        config: createConfig({ defaultSubfolder: '' })
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+      await openSubfolderDialog(user);
+
+      // Wait for dialog to load
+      await screen.findByText('2 tracked channels configured to use Default Subfolder.');
+
+      // Initially should show "Show" link (collapsed state)
+      expect(screen.getByText('Show affected channels ▼')).toBeInTheDocument();
+
+      // Click to expand
+      const expandLink = screen.getByText('Show affected channels ▼');
+      await user.click(expandLink);
+
+      // Should now show "Hide" link (expanded state)
+      expect(screen.getByText('Hide affected channels ▲')).toBeInTheDocument();
+
+      // Channel names should be visible when expanded
+      expect(screen.getByText('Channel A')).toBeVisible();
+      expect(screen.getByText('Channel B')).toBeVisible();
+
+      // Click to collapse
+      const collapseLink = screen.getByText('Hide affected channels ▲');
+      await user.click(collapseLink);
+
+      // Should show "Show" link again (collapsed state)
+      expect(screen.getByText('Show affected channels ▼')).toBeInTheDocument();
+    });
+
+    test('calls onConfigChange with new subfolder on confirm', async () => {
+      const user = userEvent.setup();
+      const onConfigChange = jest.fn();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ count: 0, channelNames: [] })
+      });
+
+      const props = createSectionProps({
+        config: createConfig({ defaultSubfolder: '' }),
+        onConfigChange
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+      await openSubfolderDialog(user);
+
+      // Wait for dialog to load
+      await screen.findByText('No tracked channels are currently using Default Subfolder.');
+
+      // Click confirm
+      const confirmButton = screen.getByRole('button', { name: 'Confirm' });
+      await user.click(confirmButton);
+
+      expect(onConfigChange).toHaveBeenCalledWith({ defaultSubfolder: 'NewFolder' });
+    });
+
+    test('closes dialog on cancel without calling onConfigChange', async () => {
+      const user = userEvent.setup();
+      const onConfigChange = jest.fn();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ count: 0, channelNames: [] })
+      });
+
+      const props = createSectionProps({
+        config: createConfig({ defaultSubfolder: '' }),
+        onConfigChange
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+      await openSubfolderDialog(user);
+
+      // Wait for dialog to load
+      await screen.findByText('No tracked channels are currently using Default Subfolder.');
+
+      // Click cancel
+      const cancelButton = screen.getByRole('button', { name: 'Cancel' });
+      await user.click(cancelButton);
+
+      // Should not have called onConfigChange
+      expect(onConfigChange).not.toHaveBeenCalled();
+
+      // Dialog should be closed
+      expect(screen.queryByText('Set Default Subfolder?')).not.toBeInTheDocument();
+    });
+
+    test('handles fetch error gracefully', async () => {
+      const user = userEvent.setup();
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      mockFetch.mockRejectedValue(new Error('Network error'));
+
+      const props = createSectionProps({
+        config: createConfig({ defaultSubfolder: '' })
+      });
+      renderWithProviders(<CoreSettingsSection {...props} />);
+
+      await openSubfolderDialog(user);
+
+      // Should show zero count (fallback) after error
+      await screen.findByText('No tracked channels are currently using Default Subfolder.');
+
+      consoleSpy.mockRestore();
     });
   });
 });

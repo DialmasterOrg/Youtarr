@@ -11,6 +11,7 @@ import { useTheme } from '@mui/material/styles';
 import { Channel } from '../types/Channel';
 import ChannelVideos from './ChannelPage/ChannelVideos';
 import ChannelSettingsDialog from './ChannelPage/ChannelSettingsDialog';
+import { isUsingDefaultSubfolder, isExplicitlyNoSubfolder } from '../utils/channelHelpers';
 
 interface ChannelPageProps {
   token: string | null;
@@ -71,11 +72,26 @@ function ChannelPage({ token }: ChannelPageProps) {
   }
 
   const renderSubFolder = (subFolder: string | null | undefined) => {
-    const displayText = subFolder ? `__${subFolder}/` : 'default';
+    let displayText: string;
+    let isSpecial = false;
+
+    if (isExplicitlyNoSubfolder(subFolder)) {
+      // null/empty = root (backwards compatible)
+      displayText = 'root';
+      isSpecial = true;
+    } else if (isUsingDefaultSubfolder(subFolder)) {
+      // ##USE_GLOBAL_DEFAULT## = use global default
+      displayText = 'global default';
+      isSpecial = true;
+    } else {
+      // Specific subfolder
+      displayText = `__${subFolder}/`;
+    }
+
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
         <FolderIcon sx={{ fontSize: isMobile ? '0.75rem' : '0.85rem', color: 'text.secondary' }} />
-        <Typography sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem', color: 'text.secondary', fontStyle: subFolder ? 'normal' : 'italic' }}>
+        <Typography sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem', color: 'text.secondary', fontStyle: isSpecial ? 'italic' : 'normal' }}>
           {displayText}
         </Typography>
       </Box>

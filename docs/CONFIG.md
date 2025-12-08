@@ -88,6 +88,21 @@ Configuration can be modified through:
   - `vp9`: YouTube's preferred codec
   - `av1`: Best compression, limited device support
 
+### Default Subfolder
+- **Config Key**: `defaultSubfolder`
+- **Type**: `string`
+- **Default**: `""` (empty - downloads to root directory)
+- **Description**: Default download location for untracked channels and channels set to use "Default Subfolder"
+- **Note**: Subfolders are prefixed with `__` on the filesystem (e.g., setting `Sports` creates `__Sports/`)
+- **Channel Subfolder Semantics**:
+  - **"Default Subfolder"** (NULL in database): Channel uses this global default setting
+  - **"No Subfolder"** (special value): Channel explicitly downloads to root directory, ignoring the global default
+  - **Specific subfolder**: Channel downloads to that specific subfolder
+- **Use Cases**:
+  - Organize untracked manual downloads into a specific folder
+  - Set a default location while allowing individual channels to override
+  - Explicitly place specific channels in the root directory using "No Subfolder"
+
 ### Enable Subtitles
 - **Config Key**: `subtitlesEnabled`
 - **Type**: `boolean`

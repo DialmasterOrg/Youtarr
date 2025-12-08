@@ -31,6 +31,11 @@ Channel.init(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    folder_name: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      defaultValue: null,
+    },
     lastFetchedByTab: {
       type: DataTypes.TEXT,
       allowNull: true,

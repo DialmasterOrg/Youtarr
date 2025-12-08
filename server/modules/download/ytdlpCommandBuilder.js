@@ -1,16 +1,11 @@
 const path = require('path');
 const configModule = require('../configModule');
 const tempPathManager = require('./tempPathManager');
-
-// Use proper yt-dlp fallback syntax with comma separator
-// Will use uploader, fall back to channel, then uploader_id
-// The @ prefix from uploader_id will be handled by --replace-in-metadata
-const CHANNEL_TEMPLATE = '%(uploader,channel,uploader_id)s';
-
-// Truncate title to 76 characters to avoid overly long folder/file names that can cause issues with Plex
-// The full title is still stored in metadata and nfo files so it will show properly in Plex/Jellyfin/Emby.
-const VIDEO_FOLDER_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title).76s - %(id)s`;
-const VIDEO_FILE_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title).76s [%(id)s].%(ext)s`;
+const {
+  CHANNEL_TEMPLATE,
+  VIDEO_FOLDER_TEMPLATE,
+  VIDEO_FILE_TEMPLATE
+} = require('../filesystem/constants');
 
 class YtdlpCommandBuilder {
   /**
@@ -123,9 +118,12 @@ class YtdlpCommandBuilder {
    * Build arguments that ALWAYS apply to any yt-dlp invocation
    * Includes: IPv4 enforcement, proxy, sleep-requests, and cookies
    * @param {Object} config - Configuration object
+   * @param {Object} options - Options for building args
+   * @param {boolean} options.skipSleepRequests - Skip adding --sleep-requests (for single metadata fetches)
    * @returns {string[]} - Array of common arguments
    */
-  static buildCommonArgs(config) {
+  static buildCommonArgs(config, options = {}) {
+    const { skipSleepRequests = false } = options;
     const args = [];
 
     // Always use IPv4
@@ -138,9 +136,12 @@ class YtdlpCommandBuilder {
     }
 
     // Add sleep between requests (configurable)
-    const sleepRequests = config.sleepRequests ?? 1;
-    if (sleepRequests > 0) {
-      args.push('--sleep-requests', String(sleepRequests));
+    // Skip for single metadata fetches where rate limiting isn't needed
+    if (!skipSleepRequests) {
+      const sleepRequests = config.sleepRequests ?? 1;
+      if (sleepRequests > 0) {
+        args.push('--sleep-requests', String(sleepRequests));
+      }
     }
 
     // Add cookies if configured
@@ -160,11 +161,12 @@ class YtdlpCommandBuilder {
    * @param {number} options.playlistEnd - Limit playlist items
    * @param {string} options.playlistItems - Specific playlist items
    * @param {string} options.extractorArgs - Extractor arguments
+   * @param {boolean} options.skipSleepRequests - Skip sleep between requests (for single fetches)
    * @returns {string[]} - Complete args array
    */
   static buildMetadataFetchArgs(url, options = {}) {
     const config = configModule.getConfig();
-    const args = [...this.buildCommonArgs(config)];
+    const args = [...this.buildCommonArgs(config, { skipSleepRequests: options.skipSleepRequests })];
 
     args.push('--skip-download', '--dump-single-json');
 
@@ -183,6 +185,31 @@ class YtdlpCommandBuilder {
     if (options.extractorArgs) {
       args.push('--extractor-args', options.extractorArgs);
     }
+
+    args.push(url);
+    return args;
+  }
+
+  /**
+   * Build arguments for fetching metadata AND sanitized folder name in one call.
+   * Combines --dump-single-json with --get-filename to output:
+   *   <sanitized folder name>\n<JSON metadata>
+   * For channels with no videos, only JSON is output (no folder name line).
+   * @param {string} url - URL to fetch
+   * @param {Object} options - Options object
+   * @param {number} options.playlistEnd - Limit playlist items
+   * @param {boolean} options.skipSleepRequests - Skip sleep between requests
+   * @returns {string[]} - Complete args array
+   */
+  static buildMetadataWithFolderNameArgs(url, options = {}) {
+    const config = configModule.getConfig();
+    const args = [];
+    args.push('--skip-download', '--dump-single-json', '--flat-playlist');
+    if (options.playlistEnd !== undefined && options.playlistEnd !== null) {
+      args.push('--playlist-end', String(options.playlistEnd));
+    }
+
+    args.push(...this.buildCommonArgs(config, { skipSleepRequests: options.skipSleepRequests }));
 
     args.push(url);
     return args;

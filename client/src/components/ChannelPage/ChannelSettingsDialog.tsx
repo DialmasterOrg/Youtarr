@@ -10,7 +10,6 @@ import {
   Select,
   MenuItem,
   TextField,
-  Autocomplete,
   CircularProgress,
   Alert,
   Box,
@@ -27,6 +26,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import InfoIcon from '@mui/icons-material/Info';
 import { useConfig } from '../../hooks/useConfig';
+import { SubfolderAutocomplete } from '../shared/SubfolderAutocomplete';
 
 interface ChannelSettings {
   sub_folder: string | null;
@@ -390,46 +390,27 @@ function ChannelSettingsDialog({
               </Typography>
               <Typography variant="body2" component="div">
                 Subfolders are automatically prefixed with <code>__</code> on the filesystem.
+                Choose &quot;Default Subfolder&quot; to use your global default setting, or &quot;No Subfolder&quot; to explicitly place in the root directory.
               </Typography>
             </Alert>
 
-            <Autocomplete
-              freeSolo
-              options={subfolders}
-              value={settings.sub_folder ? `__${settings.sub_folder}` : ''}
-              onChange={(event, newValue) => {
-                // Strip __ prefix before saving to DB (backend stores clean names)
-                const cleanValue = newValue ? newValue.trim().replace(/^__/, '') : null;
+            <SubfolderAutocomplete
+              mode="channel"
+              value={settings.sub_folder}
+              onChange={(newValue) => {
                 setSettings({
                   ...settings,
-                  sub_folder: cleanValue
+                  sub_folder: newValue
                 });
               }}
-              onInputChange={(event, newInputValue) => {
-                // Strip __ prefix before saving to DB (backend stores clean names)
-                const cleanValue = newInputValue ? newInputValue.trim().replace(/^__/, '') : null;
-                setSettings({
-                  ...settings,
-                  sub_folder: cleanValue
-                });
-              }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Subfolder (optional)"
-                  placeholder="SportsChannels"
-                  helperText="Enter a subfolder name (e.g., 'Sports'). Leave empty to place in root."
-                  fullWidth
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
-                />
-              )}
+              subfolders={subfolders}
+              defaultSubfolderDisplay={config.defaultSubfolder || null}
+              label="Subfolder"
+              helperText="Choose where this channel's videos are saved"
             />
 
             <Typography variant="caption" color="text.secondary">
-              Note: Changing the subfolder will move the channel's existing folder and files!
-            </Typography>
+              Note: Changing the subfolder will move the channel's existing folder and files!</Typography>
 
             {/* Download Filters Section */}
             <Divider sx={{ my: 0 }} />

@@ -441,6 +441,16 @@ const initialize = async () => {
           const cronJobs = require('./modules/cronJobs');
           cronJobs.initialize();
 
+          // Run folder_name migration for existing channels asynchronously
+          // This populates folder_name from Video.filePath for channels that don't have it set
+          setTimeout(() => {
+            const channelFolderNameMigration = require('./modules/channelFolderNameMigration');
+            channelFolderNameMigration.migrateExistingChannels()
+              .catch(err => {
+                logger.error({ err }, 'Channel folder_name migration failed');
+              });
+          }, 2000); // Delay 2 seconds to let other startup tasks complete
+
           // Run video metadata backfill asynchronously after server starts
           setTimeout(() => {
             logger.info('Starting async video metadata backfill');

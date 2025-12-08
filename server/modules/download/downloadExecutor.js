@@ -10,6 +10,7 @@ const tempPathManager = require('./tempPathManager');
 const { JobVideoDownload } = require('../../models');
 const Channel = require('../../models/channel');
 const logger = require('../../logger');
+const filesystem = require('../filesystem');
 
 class DownloadExecutor {
   constructor() {
@@ -67,98 +68,6 @@ class DownloadExecutor {
     }
   }
 
-  // Helper function to check if a file path is a main video file (not fragments or thumbnails)
-  isMainVideoFile(filePath) {
-    const filename = path.basename(filePath);
-    // Main video files end with [VideoID].mp4 or [VideoID].mkv (not .fXXX.mp4)
-    return /\[[a-zA-Z0-9_-]{10,12}\]\.(mp4|mkv|webm)$/.test(filename) &&
-           !/\.f\d+\.(mp4|m4a|webm)$/.test(filename);
-  }
-
-  // Helper function to check if a directory is a video-specific directory
-  // Video directories follow the pattern: "ChannelName - VideoTitle - VideoID"
-  // where VideoID is the last segment after the final " - " separator
-  isVideoSpecificDirectory(dirPath) {
-    try {
-      const dirName = path.basename(dirPath);
-
-      // Video directories end with " - <VideoID>" where VideoID is typically 11 chars
-      // Pattern: something - something - videoId
-      const parts = dirName.split(' - ');
-      if (parts.length < 3) {
-        return false; // Not enough segments to be a video directory
-      }
-
-      const potentialVideoId = parts[parts.length - 1];
-
-      // YouTube video IDs are 11 characters, alphanumeric plus - and _
-      // Allow 10-12 chars to be flexible with other platforms
-      if (potentialVideoId.length >= 10 && potentialVideoId.length <= 12 &&
-          /^[a-zA-Z0-9_-]+$/.test(potentialVideoId)) {
-        return true;
-      }
-
-      return false;
-    } catch (error) {
-      logger.error({ err: error }, 'Error checking if directory is video-specific');
-      return false;
-    }
-  }
-
-  // Helper function to check if a directory is a channel-level directory
-  // A channel directory is:
-  // - One level below baseDir (no subfolder): baseDir/channelName
-  // - Two levels below baseDir (with subfolder): baseDir/subfolder/channelName
-  // We never want to clean up baseDir itself or subfolder directories
-  isChannelDirectory(dirPath) {
-    try {
-      const configModule = require('../configModule');
-      const baseDir = configModule.directoryPath;
-
-      // Normalize paths for comparison
-      const normalizedDirPath = path.resolve(dirPath);
-      const normalizedBaseDir = path.resolve(baseDir);
-
-      // Cannot be baseDir itself
-      if (normalizedDirPath === normalizedBaseDir) {
-        return false;
-      }
-
-      // Get the parent directory
-      const parentDir = path.dirname(normalizedDirPath);
-
-      // Check if parent is baseDir (channel without subfolder)
-      if (parentDir === normalizedBaseDir) {
-        return true;
-      }
-
-      // Check if grandparent is baseDir (channel with subfolder)
-      const grandparentDir = path.dirname(parentDir);
-      if (grandparentDir === normalizedBaseDir) {
-        return true;
-      }
-
-      return false;
-    } catch (error) {
-      logger.error({ err: error, dirPath }, 'Error checking if directory is channel directory');
-      return false;
-    }
-  }
-
-  // Helper function to check if a directory exists and is empty
-  async isDirectoryEmpty(dirPath) {
-    const fsPromises = require('fs').promises;
-
-    try {
-      const entries = await fsPromises.readdir(dirPath);
-      return entries.length === 0;
-    } catch (error) {
-      // Directory doesn't exist or can't be read
-      logger.debug({ err: error, dirPath }, 'Cannot read directory (may not exist)');
-      return false;
-    }
-  }
-
   // Helper function to remove a channel directory if it's empty
   // This is called after removing a video directory to clean up empty channel folders
   async cleanupEmptyChannelDirectory(channelDir) {
@@ -166,7 +75,7 @@ class DownloadExecutor {
 
     try {
       // Verify this is actually a channel directory (not root or subfolder)
-      if (!this.isChannelDirectory(channelDir)) {
+      if (!filesystem.isChannelDirectory(channelDir, configModule.directoryPath)) {
         logger.debug({ channelDir }, 'Not a channel directory, skipping cleanup');
         return;
       }
@@ -179,7 +88,7 @@ class DownloadExecutor {
       }
 
       // Check if directory is empty
-      const isEmpty = await this.isDirectoryEmpty(channelDir);
+      const isEmpty = await filesystem.isDirectoryEmpty(channelDir);
       if (!isEmpty) {
         logger.debug({ channelDir }, 'Channel directory not empty, keeping it');
         return;
@@ -238,7 +147,7 @@ class DownloadExecutor {
 
             foundExistingPath = true;
 
-            if (!this.isVideoSpecificDirectory(dirPath)) {
+            if (!filesystem.isVideoDirectory(dirPath)) {
               logger.info({ dirPath }, 'Skipping non-video directory');
               continue;
             }
@@ -475,7 +384,7 @@ class DownloadExecutor {
     this.pendingProgressMessage = null;
   }
 
-  async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false) {
+  async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false, subfolderOverride = null) {
     const initialCount = this.getCountOfDownloadedVideos();
     const config = configModule.getConfig();
     const monitor = new DownloadProgressMonitor(jobId, jobType);
@@ -497,12 +406,16 @@ class DownloadExecutor {
     }
 
     return new Promise((resolve, reject) => {
-      logger.info({ jobType, args }, 'Running yt-dlp');
+      logger.info({ jobType, args, subfolderOverride }, 'Running yt-dlp');
       const proc = spawn('yt-dlp', args, {
         env: {
           ...process.env,
           YOUTARR_JOB_ID: jobId,
-          TMPDIR: '/tmp'
+          TMPDIR: '/tmp',
+          // Pass subfolder override to post-processor (empty string means no override)
+          ...(subfolderOverride !== null && subfolderOverride !== undefined
+            ? { YOUTARR_SUBFOLDER_OVERRIDE: subfolderOverride }
+            : {})
         }
       });
 
@@ -691,7 +604,7 @@ class DownloadExecutor {
                 const youtubeId = this.extractYoutubeIdFromPath(destPath);
                 if (youtubeId) {
                   // Update current video ID if we can extract it from the path
-                  if (this.isMainVideoFile(destPath)) {
+                  if (filesystem.isMainVideoFile(destPath)) {
                     currentVideoId = youtubeId;
                     logger.debug({ currentVideoId, destPath }, 'Updated current video ID from destination');
                   }

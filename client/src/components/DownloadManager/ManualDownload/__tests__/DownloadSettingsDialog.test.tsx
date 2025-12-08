@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import DownloadSettingsDialog from '../DownloadSettingsDialog';
 
@@ -56,38 +56,43 @@ describe('DownloadSettingsDialog', () => {
       expect(screen.getByLabelText('Use custom settings for this download')).toBeInTheDocument();
     });
 
-    test('renders re-download toggle', () => {
+    test('renders re-download toggle when custom settings enabled', () => {
       render(<DownloadSettingsDialog {...defaultProps} />);
+
+      // Enable custom settings to see re-download toggle
+      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(toggle);
 
       expect(screen.getByLabelText('Allow re-downloading previously fetched videos')).toBeInTheDocument();
     });
 
-    test('shows current automatic setting with channel override source', () => {
+    test('shows summary box with quality info', () => {
       render(
         <DownloadSettingsDialog
           {...defaultProps}
           defaultResolution="720"
-          defaultResolutionSource="channel"
         />
       );
 
-      expect(
-        screen.getByText(/Current automatic setting: 720p \(HD\) \(channel override\)/i)
-      ).toBeInTheDocument();
+      // Should show the summary box with quality
+      const summaryBox = screen.getByTestId('settings-summary');
+      expect(summaryBox).toBeInTheDocument();
+      expect(within(summaryBox).getByText('Current Settings')).toBeInTheDocument();
+      expect(within(summaryBox).getByText(/Quality:/)).toBeInTheDocument();
+      expect(within(summaryBox).getByText('720p (HD)')).toBeInTheDocument();
     });
 
-    test('shows current automatic setting with global default source', () => {
+    test('shows summary box with destination info', () => {
       render(
         <DownloadSettingsDialog
           {...defaultProps}
           defaultResolution="1080"
-          defaultResolutionSource="global"
         />
       );
 
-      expect(
-        screen.getByText(/Current automatic setting: 1080p \(Full HD\) \(global default\)/i)
-      ).toBeInTheDocument();
+      // Should show destination behavior
+      expect(screen.getByText(/Destination:/)).toBeInTheDocument();
+      expect(screen.getByText('Per channel settings (or global default)')).toBeInTheDocument();
     });
 
     test('renders warning for missing videos when missingVideoCount is 1 in manual mode', () => {
@@ -144,8 +149,12 @@ describe('DownloadSettingsDialog', () => {
       expect(screen.getByRole('option', { name: '2160p (4K)' })).toBeInTheDocument();
     });
 
-    test('renders video count field in channel mode', () => {
+    test('renders video count field in channel mode when custom settings enabled', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="channel" />);
+
+      // Enable custom settings to see video count field
+      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(toggle);
 
       expect(screen.getByText('Videos Per Channel')).toBeInTheDocument();
       expect(screen.getByLabelText('Number of videos to download per channel')).toBeInTheDocument();
@@ -153,6 +162,10 @@ describe('DownloadSettingsDialog', () => {
 
     test('does not render video count field in manual mode', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+
+      // Enable custom settings
+      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(toggle);
 
       expect(screen.queryByText('Videos Per Channel')).not.toBeInTheDocument();
       expect(screen.queryByLabelText('Number of videos to download per channel')).not.toBeInTheDocument();
@@ -177,12 +190,20 @@ describe('DownloadSettingsDialog', () => {
     test('uses default resolution of 1080', () => {
       render(<DownloadSettingsDialog {...defaultProps} />);
 
+      // Enable custom settings to see resolution select
+      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(toggle);
+
       const resolutionSelect = screen.getByLabelText('Maximum Resolution');
       expect(resolutionSelect).toHaveTextContent('1080p (Full HD)');
     });
 
     test('uses custom default resolution when provided', () => {
       render(<DownloadSettingsDialog {...defaultProps} defaultResolution="720" />);
+
+      // Enable custom settings to see resolution select
+      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(toggle);
 
       const resolutionSelect = screen.getByLabelText('Maximum Resolution');
       expect(resolutionSelect).toHaveTextContent('720p (HD)');
@@ -191,6 +212,10 @@ describe('DownloadSettingsDialog', () => {
     test('uses default video count of 3 in channel mode', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="channel" />);
 
+      // Enable custom settings to see video count select
+      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(toggle);
+
       const videoCountSelect = screen.getByLabelText('Number of videos to download per channel');
       expect(videoCountSelect).toHaveTextContent('3 videos');
     });
@@ -198,69 +223,84 @@ describe('DownloadSettingsDialog', () => {
     test('uses custom default video count when provided', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="channel" defaultVideoCount={10} />);
 
+      // Enable custom settings to see video count select
+      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(toggle);
+
       const videoCountSelect = screen.getByLabelText('Number of videos to download per channel');
       expect(videoCountSelect).toHaveTextContent('10 videos');
     });
 
-    test('shows default settings info when custom settings disabled', () => {
+    test('shows summary box with quality when custom settings disabled', () => {
       render(<DownloadSettingsDialog {...defaultProps} defaultResolution="720" />);
 
-      expect(screen.getByText(/Using default settings: 720p \(HD\)/i)).toBeInTheDocument();
+      // Summary box should show quality
+      const summaryBox = screen.getByTestId('settings-summary');
+      expect(summaryBox).toBeInTheDocument();
+      expect(within(summaryBox).getByText('720p (HD)')).toBeInTheDocument();
     });
 
-    test('shows default settings info with video count in channel mode', () => {
+    test('shows summary box with video count in channel mode', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="channel" defaultVideoCount={5} defaultResolution="1080" />);
 
-      expect(screen.getByText(/Using default settings: 5 videos per channel at 1080p \(Full HD\)/i)).toBeInTheDocument();
+      // Summary box should show videos per channel in channel mode
+      expect(screen.getByTestId('settings-summary')).toBeInTheDocument();
+      expect(screen.getByText(/Videos per channel:/)).toBeInTheDocument();
+      expect(screen.getByText('5')).toBeInTheDocument();
     });
   });
 
   describe('Custom Settings Toggle', () => {
-    test('disables resolution select when custom settings off', () => {
+    test('collapses resolution select when custom settings off', () => {
       render(<DownloadSettingsDialog {...defaultProps} />);
 
-      const resolutionSelect = screen.getByLabelText('Maximum Resolution');
-      // Check that the select is disabled
-      expect(resolutionSelect).toHaveAttribute('aria-disabled', 'true');
+      // Custom settings section should be in collapsed state when custom settings is off
+      // The Collapse component keeps children mounted but hidden
+      const customSettingsToggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      expect(customSettingsToggle).not.toBeChecked();
     });
 
-    test('enables resolution select when custom settings on', () => {
+    test('shows resolution select when custom settings on', () => {
       render(<DownloadSettingsDialog {...defaultProps} />);
 
       const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
       fireEvent.click(toggle);
 
       const resolutionSelect = screen.getByLabelText('Maximum Resolution');
-      expect(resolutionSelect).not.toBeDisabled();
+      expect(resolutionSelect).toBeInTheDocument();
+      expect(resolutionSelect).toBeVisible();
     });
 
-    test('applies opacity transition when toggling custom settings', () => {
+    test('shows summary box when custom settings off', () => {
       render(<DownloadSettingsDialog {...defaultProps} />);
 
-      // Find the container using test id
-      const settingsBox = screen.getByTestId('custom-settings-section');
-      expect(settingsBox).toHaveStyle({ opacity: '0.5', transition: 'opacity 0.3s' });
+      // Summary box should be visible when custom settings is off
+      const summaryBox = screen.getByTestId('settings-summary');
+      expect(summaryBox).toBeVisible();
+    });
+
+    test('collapses summary box when custom settings on', () => {
+      render(<DownloadSettingsDialog {...defaultProps} />);
+
+      // Summary should be visible initially
+      const summaryBox = screen.getByTestId('settings-summary');
+      expect(summaryBox).toBeVisible();
 
       const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
       fireEvent.click(toggle);
 
-      expect(settingsBox).toHaveStyle({ opacity: '1', transition: 'opacity 0.3s' });
+      // After toggle, custom settings section should be visible
+      expect(screen.getByTestId('custom-settings-section')).toBeVisible();
     });
 
-    test('shows helper text for video count when custom settings disabled', () => {
-      render(<DownloadSettingsDialog {...defaultProps} mode="channel" defaultVideoCount={5} />);
-
-      expect(screen.getByText('Using default: 5 videos per channel')).toBeInTheDocument();
-    });
-
-    test('does not show helper text for video count when custom settings enabled', () => {
+    test('shows custom settings section when toggle is on', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="channel" />);
 
       const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
       fireEvent.click(toggle);
 
-      // The helper text "1-50 videos per channel" is no longer shown with dropdown
-      expect(screen.queryByText('1-50 videos per channel')).not.toBeInTheDocument();
+      // Custom settings section should be visible
+      expect(screen.getByTestId('custom-settings-section')).toBeVisible();
     });
   });
 
@@ -364,16 +404,19 @@ describe('DownloadSettingsDialog', () => {
       expect(screen.getByRole('option', { name: '10 videos' })).toBeInTheDocument();
     });
 
-    test('disables dropdown when custom settings are off', () => {
+    test('shows dropdown when custom settings are on', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="channel" />);
 
-      const videoCountSelect = screen.getByLabelText('Number of videos to download per channel');
-      expect(videoCountSelect).toHaveAttribute('aria-disabled', 'true');
-
+      // Custom settings is off initially
       const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      expect(toggle).not.toBeChecked();
+
+      // Enable custom settings
       fireEvent.click(toggle);
 
-      expect(videoCountSelect).not.toHaveAttribute('aria-disabled', 'true');
+      // Should be visible when custom settings is on
+      const videoCountSelect = screen.getByLabelText('Number of videos to download per channel');
+      expect(videoCountSelect).toBeVisible();
     });
   });
 
@@ -440,6 +483,7 @@ describe('DownloadSettingsDialog', () => {
         resolution: '720',
         videoCount: 0,
         allowRedownload: false,
+        subfolder: null,
       });
     });
 
@@ -526,6 +570,10 @@ describe('DownloadSettingsDialog', () => {
     test('auto-checks re-download toggle when missing videos are present', () => {
       render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={3} />);
 
+      // Enable custom settings to see re-download toggle
+      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(toggle);
+
       const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
       expect(redownloadToggle).toBeChecked();
     });
@@ -533,12 +581,20 @@ describe('DownloadSettingsDialog', () => {
     test('does not auto-check re-download toggle when no missing videos', () => {
       render(<DownloadSettingsDialog {...defaultProps} missingVideoCount={0} />);
 
+      // Enable custom settings to see re-download toggle
+      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(toggle);
+
       const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
       expect(redownloadToggle).not.toBeChecked();
     });
 
     test('calls onConfirm with allowRedownload true when toggle is checked', () => {
       render(<DownloadSettingsDialog {...defaultProps} />);
+
+      // Enable custom settings
+      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(toggle);
 
       const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
       fireEvent.click(redownloadToggle);
@@ -550,13 +606,18 @@ describe('DownloadSettingsDialog', () => {
         resolution: '1080',
         videoCount: 0,
         allowRedownload: true,
+        subfolder: null,
       });
     });
 
-    test('calls onConfirm with settings when only re-download is enabled', () => {
+    test('calls onConfirm with settings when custom settings enabled', () => {
       render(<DownloadSettingsDialog {...defaultProps} defaultResolution="720" />);
 
-      // Only enable re-download, not custom settings
+      // Enable custom settings
+      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(toggle);
+
+      // Enable re-download
       const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
       fireEvent.click(redownloadToggle);
 
@@ -564,14 +625,19 @@ describe('DownloadSettingsDialog', () => {
       fireEvent.click(confirmButton);
 
       expect(mockOnConfirm).toHaveBeenCalledWith({
-        resolution: '720', // Uses default
+        resolution: '720',
         videoCount: 0,
         allowRedownload: true,
+        subfolder: null,
       });
     });
 
     test('saves allowRedownload state to localStorage', () => {
       render(<DownloadSettingsDialog {...defaultProps} />);
+
+      // Enable custom settings
+      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(toggle);
 
       const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
       fireEvent.click(redownloadToggle);
@@ -585,6 +651,10 @@ describe('DownloadSettingsDialog', () => {
 
     test('marks user as having interacted when changing re-download toggle', () => {
       render(<DownloadSettingsDialog {...defaultProps} />);
+
+      // Enable custom settings
+      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(toggle);
 
       const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
       fireEvent.click(redownloadToggle);
@@ -624,22 +694,24 @@ describe('DownloadSettingsDialog', () => {
       const newCustomToggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
       expect(newCustomToggle).not.toBeChecked();
 
+      // Re-enable custom settings to check re-download toggle
+      fireEvent.click(newCustomToggle);
       const newRedownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
       expect(newRedownloadToggle).not.toBeChecked();
     });
 
-    test('preserves defaultResolutionSource when dialog reopens', () => {
+    test('preserves quality in summary when dialog reopens', () => {
       const { rerender } = render(
         <DownloadSettingsDialog
           {...defaultProps}
           defaultResolution="720"
-          defaultResolutionSource="channel"
         />
       );
 
-      expect(
-        screen.getByText(/Current automatic setting: 720p \(HD\) \(channel override\)/i)
-      ).toBeInTheDocument();
+      // Summary should show the quality
+      let summaryBox = screen.getByTestId('settings-summary');
+      expect(summaryBox).toBeInTheDocument();
+      expect(within(summaryBox).getByText('720p (HD)')).toBeInTheDocument();
 
       // Close and reopen
       rerender(
@@ -647,7 +719,6 @@ describe('DownloadSettingsDialog', () => {
           {...defaultProps}
           open={false}
           defaultResolution="720"
-          defaultResolutionSource="channel"
         />
       );
 
@@ -656,20 +727,23 @@ describe('DownloadSettingsDialog', () => {
           {...defaultProps}
           open={true}
           defaultResolution="720"
-          defaultResolutionSource="channel"
         />
       );
 
-      // Should still show channel override
-      expect(
-        screen.getByText(/Current automatic setting: 720p \(HD\) \(channel override\)/i)
-      ).toBeInTheDocument();
+      // Should still show quality in summary
+      summaryBox = screen.getByTestId('settings-summary');
+      expect(summaryBox).toBeInTheDocument();
+      expect(within(summaryBox).getByText('720p (HD)')).toBeInTheDocument();
     });
 
     test('auto-enables redownload toggle again when reopened with missing videos', () => {
       const { rerender } = render(
         <DownloadSettingsDialog {...defaultProps} missingVideoCount={3} />
       );
+
+      // Enable custom settings to see re-download toggle
+      let customToggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(customToggle);
 
       // Should be auto-checked
       let redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
@@ -684,6 +758,10 @@ describe('DownloadSettingsDialog', () => {
 
       // Reopen with missing videos again
       rerender(<DownloadSettingsDialog {...defaultProps} open={true} missingVideoCount={3} />);
+
+      // Enable custom settings again
+      customToggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(customToggle);
 
       // Should be auto-checked again (hasUserInteracted was reset)
       redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
@@ -702,8 +780,9 @@ describe('DownloadSettingsDialog', () => {
     test('handles missing resolution in RESOLUTION_OPTIONS', () => {
       render(<DownloadSettingsDialog {...defaultProps} defaultResolution="9999" />);
 
-      // Should display raw resolution value
-      expect(screen.getByText(/Using default settings: 9999p/i)).toBeInTheDocument();
+      // Summary box should show the raw resolution value
+      expect(screen.getByTestId('settings-summary')).toBeInTheDocument();
+      expect(screen.getByText('9999p')).toBeInTheDocument();
     });
 
     test('handles localStorage being unavailable', () => {

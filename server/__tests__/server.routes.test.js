@@ -198,7 +198,7 @@ const createServerModule = ({
             videos: [{ id: 'video-1', title: 'Video 1' }]
           }),
           deleteChannel: jest.fn().mockResolvedValue({ success: true }),
-          getChannelAvailableTabs: jest.fn().mockResolvedValue(['videos', 'shorts', 'streams']),
+          getChannelAvailableTabs: jest.fn().mockResolvedValue({ availableTabs: ['videos', 'shorts', 'streams']}),
           updateAutoDownloadForTab: jest.fn().mockResolvedValue()
         };
 
@@ -679,7 +679,7 @@ describe('server routes - channels', () => {
       expect(channelModuleMock.getChannelAvailableTabs).toHaveBeenCalledWith('channel-1');
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
-        availableTabs: ['videos', 'shorts', 'streams']
+        availableTabs: ['videos', 'shorts', 'streams'],
       });
     });
 

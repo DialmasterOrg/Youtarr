@@ -4,6 +4,18 @@ const Channel = require('../models/channel');
 const configModule = require('./configModule');
 const { Op } = require('sequelize');
 const logger = require('../logger');
+const {
+  GLOBAL_DEFAULT_SENTINEL,
+  ROOT_SENTINEL,
+  SUBFOLDER_PREFIX,
+  buildChannelPath,
+  buildSubfolderSegment,
+  resolveEffectiveSubfolder: fsResolveEffectiveSubfolder,
+  resolveChannelFolderName,
+  calculateRelocatedPath,
+  ensureDir,
+  moveWithRetries
+} = require('./filesystem');
 
 /**
  * Module for managing channel-level configuration settings
@@ -11,13 +23,40 @@ const logger = require('../logger');
  */
 class ChannelSettingsModule {
   /**
+   * Get the sentinel value for "use global default subfolder"
+   * @returns {string} - The sentinel value
+   */
+  getGlobalDefaultSentinel() {
+    return GLOBAL_DEFAULT_SENTINEL;
+  }
+
+  /**
+   * Resolve the effective subfolder for a channel
+   * @param {string|null} channelSubFolder - The channel's sub_folder DB value
+   * @returns {string|null} - The actual subfolder to use (without __ prefix), or null for root
+   */
+  resolveEffectiveSubfolder(channelSubFolder) {
+    return fsResolveEffectiveSubfolder(channelSubFolder, configModule.getDefaultSubfolder());
+  }
+
+  /**
    * Validate subfolder name
    * @param {string} subFolder - Subfolder name to validate
    * @returns {Object} - { valid: boolean, error?: string }
    */
   validateSubFolder(subFolder) {
-    // NULL or empty string is valid (no subfolder)
+    // NULL or empty string is valid (download to root)
     if (!subFolder || subFolder.trim() === '') {
+      return { valid: true };
+    }
+
+    // Allow the special "use global default" sentinel value
+    if (subFolder === GLOBAL_DEFAULT_SENTINEL) {
+      return { valid: true };
+    }
+
+    // Allow the special "explicit root" sentinel value (for manual downloads)
+    if (subFolder === ROOT_SENTINEL) {
       return { valid: true };
     }
 
@@ -41,8 +80,8 @@ class ChannelSettingsModule {
     }
 
     // Reject names starting with __ (reserved for system use)
-    if (trimmed.startsWith('__')) {
-      return { valid: false, error: 'Subfolder names cannot start with __ (reserved prefix)' };
+    if (trimmed.startsWith(SUBFOLDER_PREFIX)) {
+      return { valid: false, error: `Subfolder names cannot start with ${SUBFOLDER_PREFIX} (reserved prefix)` };
     }
 
     return { valid: true };
@@ -186,16 +225,9 @@ class ChannelSettingsModule {
    */
   getChannelDirectory(channel) {
     const baseDir = configModule.directoryPath;
-    const subFolder = channel.sub_folder ? channel.sub_folder.trim() : null;
-    const channelName = channel.uploader;
-
-    if (subFolder) {
-      // Add __ prefix for namespace safety
-      const safeSubFolder = `__${subFolder}`;
-      return path.join(baseDir, safeSubFolder, channelName);
-    }
-
-    return path.join(baseDir, channelName);
+    const effectiveSubfolder = this.resolveEffectiveSubfolder(channel.sub_folder);
+    const channelName = resolveChannelFolderName(channel);
+    return buildChannelPath(baseDir, effectiveSubfolder, channelName);
   }
 
   /**
@@ -253,6 +285,25 @@ class ChannelSettingsModule {
   }
 
   /**
+   * Get count of channels using the default subfolder (sub_folder = ##USE_GLOBAL_DEFAULT##)
+   * Used to warn users when changing the global default subfolder
+   * @returns {Promise<Object>} - { count: number, channelNames: string[] }
+   */
+  async getChannelsUsingDefaultSubfolder() {
+    const channels = await Channel.findAll({
+      attributes: ['uploader'],
+      where: {
+        sub_folder: GLOBAL_DEFAULT_SENTINEL
+      }
+    });
+
+    return {
+      count: channels.length,
+      channelNames: channels.map(ch => ch.uploader).slice(0, 10) // First 10 for display
+    };
+  }
+
+  /**
    * Get all unique subfolders currently in use
    * @returns {Promise<Array<string>>} - Array of unique subfolder names
    */
@@ -261,7 +312,10 @@ class ChannelSettingsModule {
       attributes: ['sub_folder'],
       where: {
         sub_folder: {
-          [Op.ne]: null
+          [Op.and]: [
+            { [Op.ne]: null },
+            { [Op.ne]: GLOBAL_DEFAULT_SENTINEL }
+          ]
         }
       }
     });
@@ -269,11 +323,11 @@ class ChannelSettingsModule {
     const uniqueSubFolders = [...new Set(
       channels
         .map(ch => ch.sub_folder ? ch.sub_folder.trim() : null)
-        .filter(Boolean)
+        .filter(folder => folder && folder !== GLOBAL_DEFAULT_SENTINEL)
     )];
 
     // Add __ prefix for display (matches filesystem names)
-    return uniqueSubFolders.map(folder => `__${folder}`).sort();
+    return uniqueSubFolders.map(folder => buildSubfolderSegment(folder)).sort();
   }
 
   /**
@@ -539,24 +593,34 @@ class ChannelSettingsModule {
   /**
    * Move a channel's folder to a new subfolder location
    * @param {Object} channel - Channel database record (with updated sub_folder)
-   * @param {string|null} oldSubFolder - Previous subfolder (or null)
-   * @param {string|null} newSubFolder - New subfolder (or null)
+   * @param {string|null} oldSubFolder - Previous subfolder (raw database value, may include ##USE_GLOBAL_DEFAULT## sentinel)
+   * @param {string|null} newSubFolder - New subfolder (raw database value, may include ##USE_GLOBAL_DEFAULT## sentinel)
    * @returns {Promise<Object>} - Result of move operation
    */
   async moveChannelFolder(channel, oldSubFolder, newSubFolder) {
     const baseDir = configModule.directoryPath;
-    const channelName = channel.uploader;
+    const channelName = resolveChannelFolderName(channel);
 
-    // Calculate old and new paths with __ prefix for subfolders
-    const oldPath = oldSubFolder ?
-      path.join(baseDir, `__${oldSubFolder}`, channelName) :
-      path.join(baseDir, channelName);
+    // Resolve effective subfolders (handles ##USE_GLOBAL_DEFAULT## sentinel -> global default, null -> root)
+    const effectiveOldSubFolder = this.resolveEffectiveSubfolder(oldSubFolder);
+    const effectiveNewSubFolder = this.resolveEffectiveSubfolder(newSubFolder);
 
-    const newPath = newSubFolder ?
-      path.join(baseDir, `__${newSubFolder}`, channelName) :
-      path.join(baseDir, channelName);
+    // Calculate old and new paths using centralized path builder
+    const oldPath = buildChannelPath(baseDir, effectiveOldSubFolder, channelName);
+    const newPath = buildChannelPath(baseDir, effectiveNewSubFolder, channelName);
 
     logger.info(`Moving channel folder from ${oldPath} to ${newPath}`);
+
+    // If paths are the same, no move needed
+    if (oldPath === newPath) {
+      logger.info({ oldPath, newPath }, 'Source and destination paths are the same, no move needed');
+      return {
+        success: true,
+        message: 'No move needed - source and destination are the same',
+        oldPath,
+        newPath
+      };
+    }
 
     // Check if old folder exists
     if (!fs.existsSync(oldPath)) {
@@ -577,10 +641,10 @@ class ChannelSettingsModule {
     try {
       // Ensure parent directory exists
       const newParentDir = path.dirname(newPath);
-      await fs.ensureDir(newParentDir);
+      await ensureDir(newParentDir);
 
-      // Move the folder
-      await fs.move(oldPath, newPath);
+      // Move the folder with retries for resilience
+      await moveWithRetries(oldPath, newPath);
 
       logger.info({ newPath }, 'Successfully moved channel folder');
 
@@ -641,13 +705,9 @@ class ChannelSettingsModule {
       let updateCount = 0;
       for (const video of videos) {
         const oldFilePath = video.filePath;
+        const newFilePath = calculateRelocatedPath(oldBasePath, newBasePath, oldFilePath);
 
-        // Check if the file path starts with the old base path
-        if (oldFilePath && oldFilePath.startsWith(oldBasePath)) {
-          // Replace the old base path with the new base path
-          const relativePath = oldFilePath.substring(oldBasePath.length);
-          const newFilePath = newBasePath + relativePath;
-
+        if (newFilePath) {
           await video.update({ filePath: newFilePath });
           logger.info({ oldFilePath, newFilePath }, 'Updated video file path');
           updateCount++;

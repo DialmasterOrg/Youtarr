@@ -205,6 +205,8 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
    *         description: Unable to connect to YouTube
    */
   router.post('/addchannelinfo', verifyToken, async (req, res) => {
+    const logger = require('../logger');
+    logger.info('addchannelinfo endpoint start');
     const url = req.body.url;
     if (!url) {
       return res.status(400).json({
@@ -217,6 +219,7 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
       req.log.info({ url }, 'Adding channel info');
       let channelInfo = await channelModule.getChannelInfo(url, false);
       channelInfo.channel_id = channelInfo.id;
+      logger.info('addchannelinfo returning result');
       res.json({ status: 'success', channelInfo: channelInfo });
     } catch (error) {
       req.log.error({ err: error, url }, 'Failed to get channel info');
@@ -237,6 +240,12 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
         return res.status(503).json({
           status: 'error',
           message: 'Unable to connect to YouTube. Please try again later.',
+          error: error.message
+        });
+      } else if (error.code === 'CHANNEL_EMPTY') {
+        return res.status(422).json({
+          status: 'error',
+          message: 'This channel has no videos to download.',
           error: error.message
         });
       } else {
@@ -308,8 +317,9 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     const channelId = req.params.channelId;
 
     try {
-      const availableTabs = await channelModule.getChannelAvailableTabs(channelId);
-      res.status(200).json({ availableTabs });
+      // Returns { availableTabs: string[] }
+      const result = await channelModule.getChannelAvailableTabs(channelId);
+      res.status(200).json(result);
     } catch (error) {
       req.log.error({ err: error, channelId }, 'Failed to get available tabs');
       res.status(500).json({
@@ -484,6 +494,36 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
       res.json(subfolders);
     } catch (error) {
       console.error('Error getting subfolders:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/channels/using-default-subfolder:
+   *   get:
+   *     summary: Get channels using default subfolder
+   *     description: Get count of channels that are using the default subfolder setting.
+   *     tags: [Channels]
+   *     responses:
+   *       200:
+   *         description: Count of channels using default subfolder
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 count:
+   *                   type: integer
+   *       500:
+   *         description: Failed to get count
+   */
+  router.get('/api/channels/using-default-subfolder', verifyToken, async (req, res) => {
+    try {
+      const result = await channelSettingsModule.getChannelsUsingDefaultSubfolder();
+      res.json(result);
+    } catch (error) {
+      console.error('Error getting channels using default subfolder:', error);
       res.status(500).json({ error: error.message });
     }
   });

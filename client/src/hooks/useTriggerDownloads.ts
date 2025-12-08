@@ -3,6 +3,7 @@ import { useState, useCallback } from 'react';
 interface DownloadOverrideSettings {
   resolution: string;
   allowRedownload?: boolean;
+  subfolder?: string | null;
 }
 
 interface TriggerDownloadsParams {
@@ -38,6 +39,7 @@ export function useTriggerDownloads(token: string | null): UseTriggerDownloadsRe
           requestBody.overrideSettings = {
             resolution: overrideSettings.resolution,
             allowRedownload: overrideSettings.allowRedownload,
+            subfolder: overrideSettings.subfolder,
           };
         }
 
