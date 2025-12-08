@@ -53,6 +53,7 @@ describe('ChannelVideosDialogs Component', () => {
     defaultResolutionSource: 'global',
     selectedTab: 'videos',
     tabLabel: 'Videos',
+    token: null,
     onDownloadDialogClose: jest.fn(),
     onDownloadConfirm: jest.fn(),
     onRefreshCancel: jest.fn(),

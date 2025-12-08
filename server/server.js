@@ -699,6 +699,7 @@ const initialize = async () => {
     });
 
     app.post('/addchannelinfo', verifyToken, async (req, res) => {
+      logger.info('addchannelinfo endpoint start');
       const url = req.body.url;
       if (!url) {
         return res.status(400).json({
@@ -711,6 +712,7 @@ const initialize = async () => {
         req.log.info({ url }, 'Adding channel info');
         let channelInfo = await channelModule.getChannelInfo(url, false);
         channelInfo.channel_id = channelInfo.id;
+        logger.info('addchannelinfo returning result');
         res.json({ status: 'success', channelInfo: channelInfo });
       } catch (error) {
         req.log.error({ err: error, url }, 'Failed to get channel info');
@@ -732,6 +734,12 @@ const initialize = async () => {
           return res.status(503).json({
             status: 'error',
             message: 'Unable to connect to YouTube. Please try again later.',
+            error: error.message
+          });
+        } else if (error.code === 'CHANNEL_EMPTY') {
+          return res.status(422).json({
+            status: 'error',
+            message: 'This channel has no videos to download.',
             error: error.message
           });
         } else {
@@ -771,8 +779,9 @@ const initialize = async () => {
       const channelId = req.params.channelId;
 
       try {
-        const availableTabs = await channelModule.getChannelAvailableTabs(channelId);
-        res.status(200).json({ availableTabs });
+        // Returns { availableTabs: string[] }
+        const result = await channelModule.getChannelAvailableTabs(channelId);
+        res.status(200).json(result);
       } catch (error) {
         req.log.error({ err: error, channelId }, 'Failed to get available tabs');
         res.status(500).json({
@@ -838,6 +847,17 @@ const initialize = async () => {
         res.json(subfolders);
       } catch (error) {
         console.error('Error getting subfolders:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Get count of channels using the default subfolder
+    app.get('/api/channels/using-default-subfolder', verifyToken, async (req, res) => {
+      try {
+        const result = await channelSettingsModule.getChannelsUsingDefaultSubfolder();
+        res.json(result);
+      } catch (error) {
+        console.error('Error getting channels using default subfolder:', error);
         res.status(500).json({ error: error.message });
       }
     });
@@ -1228,6 +1248,17 @@ const initialize = async () => {
           }
         }
         // Note: video count is not applicable for manual downloads
+
+        // Validate subfolder override if provided
+        if (overrideSettings.subfolder !== undefined && overrideSettings.subfolder !== null) {
+          const channelSettingsModule = require('./modules/channelSettingsModule');
+          const validation = channelSettingsModule.validateSubFolder(overrideSettings.subfolder);
+          if (!validation.valid) {
+            return res.status(400).json({
+              error: validation.error
+            });
+          }
+        }
       }
 
       downloadModule.doSpecificDownloads(req);
@@ -1636,6 +1667,16 @@ const initialize = async () => {
           // Initialize cron jobs
           const cronJobs = require('./modules/cronJobs');
           cronJobs.initialize();
+
+          // Run folder_name migration for existing channels asynchronously
+          // This populates folder_name from Video.filePath for channels that don't have it set
+          setTimeout(() => {
+            const channelFolderNameMigration = require('./modules/channelFolderNameMigration');
+            channelFolderNameMigration.migrateExistingChannels()
+              .catch(err => {
+                logger.error({ err }, 'Channel folder_name migration failed');
+              });
+          }, 2000); // Delay 2 seconds to let other startup tasks complete
 
           // Run video metadata backfill asynchronously after server starts
           setTimeout(() => {

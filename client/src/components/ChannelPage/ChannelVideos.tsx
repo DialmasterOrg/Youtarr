@@ -111,6 +111,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
         if (response.ok) {
           const data = await response.json();
+
           if (data.availableTabs && data.availableTabs.length > 0) {
             setAvailableTabs(data.availableTabs);
 
@@ -120,28 +121,64 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
               : data.availableTabs[0];
 
             setSelectedTab(defaultTab);
+            setTabsLoading(false);
           } else {
-            // Fallback to 'videos' if no tabs are detected
+            // Detection complete but no tabs found - fallback to 'videos'
             setAvailableTabs(['videos']);
             setSelectedTab('videos');
+            setTabsLoading(false);
           }
         } else {
           // Fallback on error
           setAvailableTabs(['videos']);
           setSelectedTab('videos');
+          setTabsLoading(false);
         }
       } catch (err) {
         console.error('Error fetching available tabs:', err);
         // Fallback on error
         setAvailableTabs(['videos']);
         setSelectedTab('videos');
-      } finally {
         setTabsLoading(false);
       }
     };
 
     fetchAvailableTabs();
   }, [channelId, token]);
+
+  // Poll for tabs while detection is in progress
+  useEffect(() => {
+    if (!channelId || !token || !tabsLoading) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/channels/${channelId}/tabs`, {
+          headers: { 'x-access-token': token },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+
+          if (data.availableTabs && data.availableTabs.length > 0) {
+              setAvailableTabs(data.availableTabs);
+              const defaultTab = data.availableTabs.includes('videos')
+              ? 'videos'
+              : data.availableTabs[0];
+              setSelectedTab(defaultTab);
+          } else {
+              setAvailableTabs(['videos']);
+              setSelectedTab('videos');
+          }
+          setTabsLoading(false);
+          clearInterval(pollInterval);
+        }
+      } catch (err) {
+        // Ignore polling errors, will retry
+      }
+    }, 2000);
+
+    return () => clearInterval(pollInterval);
+  }, [channelId, token, tabsLoading]);
 
   // Initialize tab auto-download status from prop
   useEffect(() => {
@@ -284,6 +321,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
       ? {
           resolution: settings.resolution,
           allowRedownload: settings.allowRedownload,
+          subfolder: settings.subfolder,
         }
       : undefined;
 
@@ -725,15 +763,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         />
 
         {/* Tabs */}
-        {tabsLoading ? (
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2, py: 1.5 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3 }}>
-              <Skeleton variant="rectangular" width={80} height={36} sx={{ borderRadius: 1 }} />
-              <Skeleton variant="rectangular" width={80} height={36} sx={{ borderRadius: 1 }} />
-              <Skeleton variant="rectangular" width={80} height={36} sx={{ borderRadius: 1 }} />
-            </Box>
-          </Box>
-        ) : availableTabs.length > 0 ? (
+          { availableTabs.length > 0 && (
           <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
             <Tabs
               value={selectedTab || 'videos'}
@@ -747,7 +777,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
               ))}
             </Tabs>
           </Box>
-        ) : null}
+        )}
 
         {/* Pagination - directly under tabs */}
         {totalPages > 1 && (
@@ -869,6 +899,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
       {/* Dialogs and Snackbars */}
       <ChannelVideosDialogs
+        token={token}
         downloadDialogOpen={downloadDialogOpen}
         refreshConfirmOpen={refreshConfirmOpen}
         deleteDialogOpen={deleteDialogOpen}

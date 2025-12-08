@@ -47,6 +47,16 @@ jest.mock('../nfoGenerator', () => ({
   writeVideoNfoFile: jest.fn(),
 }));
 
+jest.mock('../channelSettingsModule', () => ({
+  getGlobalDefaultSentinel: jest.fn(() => '##USE_GLOBAL_DEFAULT##'),
+  resolveEffectiveSubfolder: jest.fn((subFolder) => {
+    // Simulate the real logic: GLOBAL_DEFAULT_SENTINEL uses global default, null/empty -> root
+    if (subFolder === '##USE_GLOBAL_DEFAULT##') return null; // Mock: assume no global default
+    if (subFolder && subFolder.trim() !== '') return subFolder.trim();
+    return null; // null/empty = root (backwards compatible)
+  }),
+}));
+
 const mockTempPathManager = {
   isEnabled: jest.fn(() => false),
   isTempPath: jest.fn(() => false),
@@ -266,7 +276,7 @@ describe('videoDownloadPostProcessFiles', () => {
 
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: tempPath }),
-      'Error deleting temp file'
+      'Error deleting file'
     );
   });
 

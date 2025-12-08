@@ -3,35 +3,46 @@ import '@testing-library/jest-dom';
 import SubFolderChip from '../SubFolderChip';
 import { renderWithProviders } from '../../../../../test-utils';
 import { within } from '@testing-library/react';
+import { GLOBAL_DEFAULT_SENTINEL } from '../../../../../utils/channelHelpers';
 
 describe('SubFolderChip', () => {
-  test('renders default subfolder when subFolder is null', () => {
+  test('renders root when subFolder is null (backwards compatible)', () => {
     renderWithProviders(<SubFolderChip subFolder={null} />);
 
     const chip = screen.getByTestId('subfolder-chip');
 
-    expect(chip).toHaveTextContent('default');
-    expect(chip).toHaveAttribute('data-default', 'true');
+    expect(chip).toHaveTextContent('root');
+    expect(chip).toHaveAttribute('data-root', 'true');
     expect(within(chip).getByTestId('FolderIcon')).toBeInTheDocument();
   });
 
-  test('renders default subfolder when subFolder is undefined', () => {
+  test('renders root when subFolder is undefined', () => {
     renderWithProviders(<SubFolderChip subFolder={undefined} />);
 
     const chip = screen.getByTestId('subfolder-chip');
 
-    expect(chip).toHaveTextContent('default');
-    expect(chip).toHaveAttribute('data-default', 'true');
+    expect(chip).toHaveTextContent('root');
+    expect(chip).toHaveAttribute('data-root', 'true');
     expect(within(chip).getByTestId('FolderIcon')).toBeInTheDocument();
   });
 
-  test('renders default subfolder when subFolder is empty string', () => {
+  test('renders root when subFolder is empty string', () => {
     renderWithProviders(<SubFolderChip subFolder="" />);
 
     const chip = screen.getByTestId('subfolder-chip');
 
-    expect(chip).toHaveTextContent('default');
+    expect(chip).toHaveTextContent('root');
+    expect(chip).toHaveAttribute('data-root', 'true');
+  });
+
+  test('renders global default when subFolder is sentinel value', () => {
+    renderWithProviders(<SubFolderChip subFolder={GLOBAL_DEFAULT_SENTINEL} />);
+
+    const chip = screen.getByTestId('subfolder-chip');
+
+    expect(chip).toHaveTextContent('global default');
     expect(chip).toHaveAttribute('data-default', 'true');
+    expect(within(chip).getByTestId('FolderIcon')).toBeInTheDocument();
   });
 
   test('renders custom subfolder with correct format', () => {

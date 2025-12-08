@@ -14,6 +14,7 @@ import DeleteVideosDialog from '../shared/DeleteVideosDialog';
 import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
 
 export interface ChannelVideosDialogsProps {
+  token: string | null;
   downloadDialogOpen: boolean;
   refreshConfirmOpen: boolean;
   deleteDialogOpen: boolean;
@@ -41,6 +42,7 @@ export interface ChannelVideosDialogsProps {
 }
 
 function ChannelVideosDialogs({
+  token,
   downloadDialogOpen,
   refreshConfirmOpen,
   deleteDialogOpen,
@@ -78,6 +80,7 @@ function ChannelVideosDialogs({
         defaultResolution={defaultResolution}
         defaultResolutionSource={defaultResolutionSource}
         mode="manual"
+        token={token}
       />
 
       {/* Refresh Confirmation Dialog */}

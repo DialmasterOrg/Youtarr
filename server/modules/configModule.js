@@ -250,6 +250,16 @@ class ConfigModule extends EventEmitter {
     return this.config;
   }
 
+  /**
+   * Get the default subfolder for downloads
+   * Used for untracked channels and channels set to "use default"
+   * @returns {string|null} - Subfolder name (without __ prefix) or null if not set
+   */
+  getDefaultSubfolder() {
+    const value = this.config.defaultSubfolder;
+    return value && value.trim() !== '' ? value.trim() : null;
+  }
+
   isPlatformDeployment() {
     return !!process.env.DATA_PATH;
   }

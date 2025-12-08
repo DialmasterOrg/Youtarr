@@ -11,6 +11,7 @@ const MessageEmitter = require('./messageEmitter.js');
 const { Op, fn, col, where } = require('sequelize');
 const fileCheckModule = require('./fileCheckModule');
 const logger = require('../logger');
+const { sanitizeNameLikeYtDlp } = require('./filesystem');
 
 const { v4: uuidv4 } = require('uuid');
 const { spawn, execSync } = require('child_process');
@@ -280,6 +281,57 @@ class ChannelModule {
   }
 
   /**
+   * Resolve the folder name for a channel with fallback to yt-dlp.
+   * Uses cached folder_name if available, otherwise calls yt-dlp to get
+   * the authoritative sanitized folder name and saves it to the database.
+   *
+   * @param {Object} channel - Channel record with channel_id, folder_name, uploader
+   * @returns {Promise<string>} - The resolved folder name
+   */
+  async resolveChannelFolderName(channel) {
+    // Fast path: use cached folder_name if available
+    if (channel.folder_name) {
+      return channel.folder_name;
+    }
+
+    // Slow path: call yt-dlp to get authoritative folder name
+    const channelUrl = `https://www.youtube.com/channel/${channel.channel_id}`;
+    let channelData;
+    try {
+      channelData = await this.fetchChannelMetadata(channelUrl);
+    } catch (fetchErr) {
+      // If yt-dlp fails, fall back to sanitizing the uploader name
+      logger.warn({ channelId: channel.channel_id, uploader: channel.uploader },
+        'Could not determine folder_name via yt-dlp, using uploader as fallback');
+      return sanitizeNameLikeYtDlp(channel.uploader);
+    }
+
+    const folderName = channelData.folder_name;
+
+    if (folderName) {
+      // Save to database for future fast access
+      try {
+        await Channel.update(
+          { folder_name: folderName },
+          { where: { channel_id: channel.channel_id } }
+        );
+        logger.info({ channelId: channel.channel_id, folderName },
+          'Populated folder_name via yt-dlp fallback');
+      } catch (updateErr) {
+        logger.warn({ err: updateErr.message, channelId: channel.channel_id },
+          'Failed to save folder_name to database');
+      }
+      return folderName;
+    }
+
+    // Ultimate fallback (should rarely happen - yt-dlp returned no folder_name)
+    // Just sanitize the uploader we already have
+    logger.warn({ channelId: channel.channel_id, uploader: channel.uploader },
+      'Could not determine folder_name via yt-dlp, using uploader as fallback');
+    return sanitizeNameLikeYtDlp(channel.uploader);
+  }
+
+  /**
    * Insert or update channel in database
    * @param {Object} channelData - Channel data to save
    * @param {boolean} enabled - Whether the channel should be enabled (default: false)
@@ -301,6 +353,11 @@ class ChannelModule {
       url: channelData.url,
       enabled: enabled,
     };
+
+    // Only set folder_name if explicitly provided (don't overwrite existing with null)
+    if (channelData.folder_name) {
+      updateData.folder_name = channelData.folder_name;
+    }
 
     // Only set auto_download_enabled_tabs if explicitly provided
     if (autoDownloadEnabledTabs !== null) {
@@ -467,29 +524,104 @@ class ChannelModule {
   }
 
   /**
-   * Fetch channel metadata from YouTube
+   * Fetch channel metadata from YouTube along with sanitized folder name.
+   * Uses a combined yt-dlp call that outputs both folder name and JSON metadata.
    * @param {string} channelUrl - Channel URL
-   * @returns {Promise<Object>} - Channel metadata
+   * @returns {Promise<Object>} - Channel metadata with folder_name property
    */
   async fetchChannelMetadata(channelUrl) {
     const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
     return await this.withTempFile('channel', async (outputFilePath) => {
-      const args = YtdlpCommandBuilder.buildMetadataFetchArgs(channelUrl, {
+      const args = YtdlpCommandBuilder.buildMetadataWithFolderNameArgs(channelUrl, {
         playlistEnd: 1,
-        playlistItems: 0
+        skipSleepRequests: true,
       });
+      logger.info('fetchChannelMetadata executing yt-dlp with args' + JSON.stringify(args));
       const content = await this.executeYtDlpCommand(args, outputFilePath);
+      logger.info('fetchChannelMetadata received yt-dlp output of length ' + content.length);
 
-      return JSON.parse(content);
+      const metadata = JSON.parse(content);
+
+      const unsanitizedFolderName = metadata.uploader || metadata.channel || metadata.uploader_id;
+      const sanitizedFolderName = sanitizeNameLikeYtDlp(unsanitizedFolderName);
+
+      return { ...metadata, folder_name: sanitizedFolderName };
+
     });
   }
 
   /**
-   * Download channel thumbnail
+   * Extract the avatar thumbnail URL from channel metadata
+   * @param {Object} channelData - Channel metadata from yt-dlp
+   * @returns {string|null} - Avatar thumbnail URL or null if not found
+   */
+  extractAvatarThumbnailUrl(channelData) {
+    if (!channelData.thumbnails || !Array.isArray(channelData.thumbnails)) {
+      return null;
+    }
+    // Prefer 900x900 (height and width), then any square dimension thumb, then avatar_uncropped
+    // (avatar_uncropped last since it is good, but usually HUGE)
+    const avatarThumb = channelData.thumbnails.find(t => t.width === 900 && t.height === 900)
+      || channelData.thumbnails.find(t => t.width && t.height && t.width === t.height)
+      || channelData.thumbnails.find(t => t.id === 'avatar_uncropped');
+    logger.info({ channelId: channelData.channel_id, avatarThumb }, 'Extracted avatar thumbnail URL');
+    return avatarThumb?.url || null;
+  }
+
+  /**
+   * Download channel thumbnail directly from URL
+   * @param {string} thumbnailUrl - Direct URL to the thumbnail image
+   * @param {string} channelId - Channel ID for naming the file
+   * @returns {Promise<void>}
+   */
+  async downloadChannelThumbnailFromUrl(thumbnailUrl, channelId) {
+    const https = require('https');
+    const http = require('http');
+    const imageDir = configModule.getImagePath();
+    const imagePath = path.join(imageDir, `channelthumb-${channelId}.jpg`);
+
+    return new Promise((resolve, reject) => {
+      const protocol = thumbnailUrl.startsWith('https') ? https : http;
+      const file = fs.createWriteStream(imagePath);
+
+      protocol.get(thumbnailUrl, (response) => {
+        // Handle redirects
+        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+          file.close();
+          fs.unlinkSync(imagePath);
+          return this.downloadChannelThumbnailFromUrl(response.headers.location, channelId)
+            .then(resolve)
+            .catch(reject);
+        }
+
+        if (response.statusCode !== 200) {
+          file.close();
+          fs.unlinkSync(imagePath);
+          return reject(new Error(`Failed to download thumbnail: HTTP ${response.statusCode}`));
+        }
+
+        response.pipe(file);
+        file.on('finish', () => {
+          file.close();
+          logger.debug({ channelId, imagePath }, 'Channel thumbnail downloaded via HTTP');
+          resolve();
+        });
+      }).on('error', (err) => {
+        file.close();
+        if (fs.existsSync(imagePath)) {
+          fs.unlinkSync(imagePath);
+        }
+        reject(err);
+      });
+    });
+  }
+
+  /**
+   * Download channel thumbnail using yt-dlp (fallback method)
    * @param {string} channelUrl - Channel URL
    * @returns {Promise<void>}
    */
-  async downloadChannelThumbnail(channelUrl) {
+  async downloadChannelThumbnailViaYtdlp(channelUrl) {
     const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
     const imageDir = configModule.getImagePath();
     const imagePath = path.join(
@@ -503,12 +635,27 @@ class ChannelModule {
 
   /**
    * Process channel thumbnail (download and resize)
-   * @param {string} channelUrl - Channel URL
+   * @param {Object} channelData - Channel metadata containing thumbnails array
    * @param {string} channelId - Channel ID
+   * @param {string} channelUrl - Channel URL (fallback for yt-dlp download)
    * @returns {Promise<void>}
    */
-  async processChannelThumbnail(channelUrl, channelId) {
-    await this.downloadChannelThumbnail(channelUrl);
+  async processChannelThumbnail(channelData, channelId, channelUrl) {
+    const thumbnailUrl = this.extractAvatarThumbnailUrl(channelData);
+    logger.info({ channelId, thumbnailUrl }, 'Processing channel thumbnail');
+
+    if (thumbnailUrl) {
+      try {
+        await this.downloadChannelThumbnailFromUrl(thumbnailUrl, channelId);
+      } catch (err) {
+        logger.warn({ err, channelId }, 'Failed to download thumbnail via HTTP, falling back to yt-dlp');
+        await this.downloadChannelThumbnailViaYtdlp(channelUrl);
+      }
+    } else {
+      logger.info({ channelId }, 'No avatar thumbnail URL found in metadata, using yt-dlp');
+      await this.downloadChannelThumbnailViaYtdlp(channelUrl);
+    }
+
     await this.resizeChannelThumbnail(channelId);
   }
 
@@ -537,7 +684,16 @@ class ChannelModule {
       return this.mapChannelToResponse(foundChannel);
     }
 
+    logger.info('Fetching channel metadata from YouTube');
     const channelData = await this.fetchChannelMetadata(channelUrl);
+    logger.info('Channel metadata fetched successfully');
+
+    // Reject channels with no videos - these can't be usefully added
+    if (!channelData.entries || channelData.entries.length === 0) {
+      const error = new Error('Channel has no videos');
+      error.code = 'CHANNEL_EMPTY';
+      throw error;
+    }
 
     // Extract the actual current handle URL from the response
     const actualChannelUrl = channelData.channel_url || channelData.url || channelUrl;
@@ -548,6 +704,10 @@ class ChannelModule {
 
     logger.info({ channelId: properChannelId, channelUrl: actualChannelUrl }, 'Storing handle URL for channel');
 
+    // Use the sanitized folder name from the metadata (already fetched in the same yt-dlp call)
+    // Fall back to uploader if folder_name wasn't available
+    const folderName = channelData.folder_name || channelData.uploader;
+
     // First, upsert the channel so it exists in the database
     // We'll update auto_download_enabled_tabs after detecting available tabs
     await this.upsertChannel({
@@ -556,50 +716,16 @@ class ChannelModule {
       description: channelData.description,
       uploader: channelData.uploader,
       url: actualChannelUrl,  // Store the actual handle URL for display
+      folder_name: folderName,
     }, enableChannel);
 
-    // Now process thumbnail using the proper channel ID
-    await this.processChannelThumbnail(channelUrl, properChannelId);
+    // Now process thumbnail using the proper channel ID (uses metadata URL, falls back to yt-dlp)
+    logger.info('Processing channel thumbnail');
+    await this.processChannelThumbnail(channelData, properChannelId, channelUrl);
+    logger.info('Channel thumbnail processed successfully');
 
-    // Detect available tabs to set smart default for auto_download_enabled_tabs
-    // This ensures we don't default to 'video' for channels that only have shorts/streams
-    let availableTabs = [];
-    let autoDownloadEnabledTabs = 'video'; // Default fallback
-
-    try {
-      availableTabs = await this.getChannelAvailableTabs(properChannelId);
-
-      // Determine smart default: prefer 'video' if it exists, otherwise use first available tab
-      const TAB_TO_MEDIA_TYPE = {
-        'videos': 'video',
-        'shorts': 'short',
-        'streams': 'livestream'
-      };
-
-      if (availableTabs.includes('videos')) {
-        autoDownloadEnabledTabs = 'video';
-      } else if (availableTabs.length > 0) {
-        // Use first available tab as default
-        const firstTab = availableTabs[0];
-        autoDownloadEnabledTabs = TAB_TO_MEDIA_TYPE[firstTab] || 'video';
-        logger.warn({ channelId: properChannelId, defaultTab: autoDownloadEnabledTabs }, 'Channel has no videos tab, using alternative default');
-      } else {
-        logger.warn({ channelId: properChannelId }, 'Channel has no detectable tabs, using default video tab');
-      }
-
-      // Update the channel with the determined auto_download_enabled_tabs
-      await this.upsertChannel({
-        id: properChannelId,
-        title: channelData.title,
-        description: channelData.description,
-        uploader: channelData.uploader,
-        url: actualChannelUrl,
-      }, enableChannel, autoDownloadEnabledTabs);
-
-    } catch (err) {
-      logger.error({ err, channelId: properChannelId }, 'Error fetching tabs for channel');
-      // Keep default 'video' on error
-    }
+    // Detect available tabs (fast via RSS feeds)
+    const tabResult = await this.detectAndSaveChannelTabs(properChannelId);
 
     if (emitMessage) {
       logger.debug('Channel data fetched, emitting update message');
@@ -619,8 +745,8 @@ class ChannelModule {
       title: channelData.title,
       description: channelData.description,
       url: channelUrl,
-      auto_download_enabled_tabs: autoDownloadEnabledTabs,
-      available_tabs: availableTabs.length > 0 ? availableTabs.join(',') : null,
+      auto_download_enabled_tabs: tabResult?.autoDownloadEnabledTabs || 'video',
+      available_tabs: tabResult?.availableTabs?.join(',') || null,
       sub_folder: null,
       video_quality: null,
     };
@@ -674,22 +800,24 @@ class ChannelModule {
       }
 
       for (const channel of channels) {
-        if (!channel.channel_id || !channel.uploader) continue;
+        if (!channel.channel_id) continue;
 
-        const channelFolderPath = path.join(outputDir, channel.uploader);
+        // Use folder_name (sanitized by yt-dlp) if available, fall back to uploader
+        const channelFolderName = channel.folder_name || channel.uploader;
+        if (!channelFolderName) continue;
+
+        const channelFolderPath = path.join(outputDir, channelFolderName);
         const channelPosterPath = path.join(channelFolderPath, 'poster.jpg');
-
 
         // Check if channel folder exists and poster.jpg doesn't exist
         if (fs.existsSync(channelFolderPath) && !fs.existsSync(channelPosterPath)) {
           const channelThumbPath = path.join(imageDir, `channelthumb-${channel.channel_id}.jpg`);
 
-
           if (fs.existsSync(channelThumbPath)) {
             try {
               fs.copySync(channelThumbPath, channelPosterPath);
             } catch (copyErr) {
-              logger.error({ err: copyErr, channelUploader: channel.uploader }, 'Error backfilling poster for channel');
+              logger.error({ err: copyErr, channelFolderName }, 'Error backfilling poster for channel');
             }
           }
         }
@@ -1505,10 +1633,147 @@ class ChannelModule {
   }
 
   /**
-   * Detect which tab types (videos, shorts, streams) are available for a channel.
-   * Caches the result in the channel's available_tabs column.
+   * Build RSS feed URL for a specific tab type.
+   * Uses YouTube's RSS feed playlist IDs which have specific prefixes:
+   * - Videos: UULF + channel_unique_id
+   * - Shorts: UUSH + channel_unique_id
+   * - Live/Streams: UULV + channel_unique_id
+   * @param {string} channelId - Full channel ID (e.g., "UCwaNuezahYT3BOjfXsne2mg")
+   * @param {string} tabType - Tab type ('videos', 'shorts', or 'streams')
+   * @returns {string} - RSS feed URL
+   */
+  buildRssFeedUrl(channelId, tabType) {
+    // Strip the "UC" prefix to get the unique channel portion
+    const uniquePortion = channelId.substring(2);
+
+    // Map tab types to RSS playlist prefixes
+    const prefixMap = {
+      [TAB_TYPES.VIDEOS]: 'UULF',
+      [TAB_TYPES.SHORTS]: 'UUSH',
+      [TAB_TYPES.LIVE]: 'UULV',
+    };
+
+    const prefix = prefixMap[tabType];
+    if (!prefix) {
+      throw new Error(`Unknown tab type: ${tabType}`);
+    }
+
+    return `https://www.youtube.com/feeds/videos.xml?playlist_id=${prefix}${uniquePortion}`;
+  }
+
+  /**
+   * Check if a tab exists for a channel by testing its RSS feed.
+   * A non-404 response indicates the tab exists.
+   * @param {string} channelId - Channel ID
+   * @param {string} tabType - Tab type to check
+   * @returns {Promise<boolean>} - True if tab exists
+   */
+  async checkTabExistsViaRss(channelId, tabType) {
+    const rssUrl = this.buildRssFeedUrl(channelId, tabType);
+
+    try {
+      const response = await fetch(rssUrl, { method: 'GET' });
+      // Any non-404 response means the tab exists
+      // (YouTube returns 404 for non-existent playlist feeds)
+      return response.status !== 404;
+    } catch (error) {
+      // Network error - assume tab doesn't exist
+      logger.debug({ channelId, tabType, error: error.message }, 'RSS feed check failed');
+      return false;
+    }
+  }
+
+  /**
+   * Detect and save available tabs for a channel.
+   * Uses RSS feed checks for fast detection instead of yt-dlp.
+   * Uses activeFetches map to prevent concurrent detection for the same channel.
    * @param {string} channelId - Channel ID to detect tabs for
-   * @returns {Promise<Array<string>>} - Array of available tab types (e.g., ['videos', 'shorts'])
+   * @returns {Promise<{availableTabs: string[], autoDownloadEnabledTabs: string}|null>} - Detected tabs or null if skipped/failed
+   */
+  async detectAndSaveChannelTabs(channelId) {
+    // Check if already detecting (use activeFetches map to prevent concurrent)
+    const fetchKey = `tabs-${channelId}`;
+    if (this.activeFetches.has(fetchKey)) {
+      logger.debug({ channelId }, 'Tab detection already in progress, skipping');
+      return null;
+    }
+    this.activeFetches.set(fetchKey, { startTime: new Date().toISOString(), type: 'tabDetection' });
+
+    try {
+      const channel = await Channel.findOne({ where: { channel_id: channelId } });
+      if (!channel) {
+        logger.warn({ channelId }, 'Channel not found for tab detection');
+        return null;
+      }
+
+      // If already populated (race condition), return cached values
+      if (channel.available_tabs) {
+        logger.debug({ channelId }, 'Tabs already detected, returning cached');
+        return {
+          availableTabs: channel.available_tabs.split(','),
+          autoDownloadEnabledTabs: channel.auto_download_enabled_tabs || 'video'
+        };
+      }
+
+      logger.info({ channelId, channelTitle: channel.title }, 'Starting tab detection for channel (via RSS)');
+
+      // Check all tabs in parallel using RSS feeds - much faster than yt-dlp
+      const tabTypesToTest = [TAB_TYPES.VIDEOS, TAB_TYPES.SHORTS, TAB_TYPES.LIVE];
+      const tabChecks = await Promise.all(
+        tabTypesToTest.map(async (tabType) => {
+          const exists = await this.checkTabExistsViaRss(channelId, tabType);
+          if (exists) {
+            logger.info({ channelId, tabType }, 'Tab exists for channel');
+          } else {
+            logger.debug({ channelId, tabType }, 'Tab not available for channel');
+          }
+          return { tabType, exists };
+        })
+      );
+
+      const availableTabs = tabChecks
+        .filter(result => result.exists)
+        .map(result => result.tabType);
+
+      // Determine smart default for auto_download_enabled_tabs
+      let autoDownloadEnabledTabs = 'video';
+      if (!availableTabs.includes(TAB_TYPES.VIDEOS) && availableTabs.length > 0) {
+        autoDownloadEnabledTabs = MEDIA_TAB_TYPE_MAP[availableTabs[0]] || 'video';
+        logger.info({ channelId, defaultTab: autoDownloadEnabledTabs }, 'Channel has no videos tab, using alternative default');
+      }
+
+      // Update channel with detected tabs
+      await Channel.update(
+        {
+          available_tabs: availableTabs.length > 0 ? availableTabs.join(',') : null,
+          auto_download_enabled_tabs: autoDownloadEnabledTabs
+        },
+        { where: { channel_id: channelId } }
+      );
+
+      logger.info({ channelId, availableTabs, autoDownloadEnabledTabs }, 'Tab detection completed');
+
+      // Emit WebSocket update so frontend can refresh
+      MessageEmitter.emitMessage('broadcast', null, 'channel', 'channelTabsDetected', {
+        channelId,
+        availableTabs,
+        autoDownloadEnabledTabs
+      });
+
+      return { availableTabs, autoDownloadEnabledTabs };
+    } catch (err) {
+      logger.error({ err, channelId }, 'Tab detection failed');
+      return null;
+    } finally {
+      this.activeFetches.delete(fetchKey);
+    }
+  }
+
+  /**
+   * Get available tabs for a channel.
+   * Returns cached result if available, otherwise detects tabs via RSS feeds.
+   * @param {string} channelId - Channel ID to get tabs for
+   * @returns {Promise<Object>} - Object with availableTabs array
    */
   async getChannelAvailableTabs(channelId) {
     const channel = await Channel.findOne({
@@ -1519,48 +1784,19 @@ class ChannelModule {
       throw new Error('Channel not found in database');
     }
 
-    // If we already have available_tabs data, return it
+    // Fast path: return cached tabs
     if (channel.available_tabs) {
-      return channel.available_tabs.split(',');
+      return {
+        availableTabs: channel.available_tabs.split(','),
+      };
     }
 
-    // Otherwise, detect which tabs exist by testing each one
-    const availableTabs = [];
-    const tabTypesToTest = [TAB_TYPES.VIDEOS, TAB_TYPES.SHORTS, TAB_TYPES.LIVE];
-    const canonicalChannelUrl = this.resolveChannelUrlFromId(channelId);
+    // No tabs cached - detect them now (fast via RSS feeds)
+    const result = await this.detectAndSaveChannelTabs(channelId);
 
-    logger.info({ channelId, channelTitle: channel.title }, 'Detecting available tabs for channel');
-
-    const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
-    for (const tabType of tabTypesToTest) {
-      try {
-        const tabUrl = `${canonicalChannelUrl}/${tabType}`;
-
-        // Test if the tab exists by trying to fetch just 1 video
-        await this.withTempFile(`tab-test-${tabType}`, async (outputFilePath) => {
-          const args = YtdlpCommandBuilder.buildMetadataFetchArgs(tabUrl, {
-            flatPlaylist: true,
-            playlistEnd: 1
-          });
-          await this.executeYtDlpCommand(args, outputFilePath);
-        });
-
-        // If we got here without error, the tab exists
-        availableTabs.push(tabType);
-        logger.info({ channelId, tabType }, 'Tab exists for channel');
-      } catch (error) {
-        // Tab doesn't exist or is empty - that's fine
-        logger.debug({ channelId, tabType }, 'Tab not available for channel');
-      }
-    }
-
-    // Store the result in the database for future use
-    if (availableTabs.length > 0) {
-      channel.available_tabs = availableTabs.join(',');
-      await channel.save();
-    }
-
-    return availableTabs;
+    return {
+      availableTabs: result?.availableTabs || [],
+    };
   }
 
   /**

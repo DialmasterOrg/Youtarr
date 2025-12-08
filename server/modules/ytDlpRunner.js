@@ -121,21 +121,8 @@ class YtDlpRunner {
    */
   async fetchMetadata(url, timeoutMs = 60000) {
     const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
-    let args = YtdlpCommandBuilder.buildMetadataFetchArgs(url);
-
-    // When fetching metadata, we don't want to use --sleep-requests as we are only making a single request
-    // So we remove it from the args and also remove the arg after it (number of seconds)
-    args = args.filter((arg) => {
-      if (arg.startsWith('--sleep-requests')) {
-        // Strip the next argument as well
-        const index = args.indexOf(arg);
-        if (index !== -1 && index + 1 < args.length) {
-          args.splice(index + 1, 1);
-        }
-        return false;
-      }
-      return true;
-    });
+    // Skip sleep-requests for single metadata fetches - no rate limiting needed
+    const args = YtdlpCommandBuilder.buildMetadataFetchArgs(url, { skipSleepRequests: true });
 
     try {
       const stdout = await this.run(args, { timeoutMs });

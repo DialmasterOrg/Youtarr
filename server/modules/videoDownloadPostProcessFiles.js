@@ -2,11 +2,13 @@ const fs = require('fs-extra');
 const path = require('path');
 const { execSync, spawnSync } = require('child_process');
 const configModule = require('./configModule');
+const channelSettingsModule = require('./channelSettingsModule');
 const nfoGenerator = require('./nfoGenerator');
 const tempPathManager = require('./download/tempPathManager');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { JobVideoDownload } = require('../models');
 const logger = require('../logger');
+const { moveWithRetries, safeRemove, buildChannelPath, buildSubfolderSegment } = require('./filesystem');
 
 const activeJobId = process.env.YOUTARR_JOB_ID;
 
@@ -28,40 +30,6 @@ const imagePath = path.join(videoDirectory, parsedPath.name + '.jpg');
 // This is more reliable than using jsonData.uploader which may contain special characters
 // that yt-dlp sanitizes differently (e.g., #, :, <, >, etc.)
 const actualChannelFolderName = path.basename(path.dirname(videoDirectory));
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-async function moveWithRetries(src, dest, { retries = 5, delayMs = 200 } = {}) {
-  let attempt = 0;
-  let lastError;
-
-  while (attempt <= retries) {
-    try {
-      await fs.move(src, dest, { overwrite: true });
-      return;
-    } catch (err) {
-      lastError = err;
-      if (attempt === retries) {
-        throw err;
-      }
-      const backoff = delayMs * Math.pow(2, attempt);
-      await sleep(backoff);
-      attempt += 1;
-    }
-  }
-
-  throw lastError;
-}
-
-async function safeRemove(filePath) {
-  try {
-    await fs.remove(filePath);
-  } catch (err) {
-    if (err && err.code !== 'ENOENT') {
-      logger.warn({ err, filePath }, 'Error deleting temp file');
-    }
-  }
-}
 
 function shouldWriteChannelPosters() {
   const config = configModule.getConfig() || {};
@@ -191,24 +159,95 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     let targetChannelFolder = null;
     let channelSubFolder = null;
 
-    if (jsonData.channel_id) {
+    // Check for subfolder override from manual download (passed via environment variable)
+    const subfolderOverride = process.env.YOUTARR_SUBFOLDER_OVERRIDE || null;
+
+    if (subfolderOverride) {
+      // Manual download with subfolder override
+      const { ROOT_SENTINEL } = require('./filesystem/constants');
+      if (subfolderOverride === ROOT_SENTINEL) {
+        // Explicit root - no subfolder, download directly to output directory
+        channelSubFolder = null;
+        const baseDir = configModule.directoryPath;
+        targetChannelFolder = buildChannelPath(baseDir, null, actualChannelFolderName);
+        console.log('[Post-Process] Using subfolder override: root directory (no subfolder)');
+      } else if (subfolderOverride === channelSettingsModule.getGlobalDefaultSentinel()) {
+        // Use global default subfolder
+        channelSubFolder = channelSettingsModule.resolveEffectiveSubfolder(subfolderOverride);
+        if (channelSubFolder) {
+          const baseDir = configModule.directoryPath;
+          targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
+        }
+        console.log('[Post-Process] Using subfolder override: global default');
+      } else {
+        // Specific subfolder override
+        channelSubFolder = subfolderOverride;
+        const baseDir = configModule.directoryPath;
+        targetChannelFolder = buildChannelPath(baseDir, subfolderOverride, actualChannelFolderName);
+        console.log(`[Post-Process] Using subfolder override: ${subfolderOverride}`);
+      }
+    } else if (jsonData.channel_id) {
+      // No override - check channel settings or use global default
       try {
         const Channel = require('../models/channel');
-        const channel = await Channel.findOne({
+        let channel = await Channel.findOne({
           where: { channel_id: jsonData.channel_id },
-          attributes: ['sub_folder', 'uploader']
+          attributes: ['id', 'sub_folder', 'uploader', 'folder_name']
         });
 
-        if (channel && channel.sub_folder) {
-          channelSubFolder = channel.sub_folder;
+        if (channel) {
+          // Tracked channel - resolve effective subfolder using centralized logic
+          channelSubFolder = channelSettingsModule.resolveEffectiveSubfolder(channel.sub_folder);
+
+          // Update folder_name if not set or different (channel may have been renamed on YouTube)
+          if (actualChannelFolderName && channel.folder_name !== actualChannelFolderName) {
+            try {
+              await Channel.update(
+                { folder_name: actualChannelFolderName },
+                { where: { id: channel.id } }
+              );
+              console.log(`[Post-Process] Updated channel folder_name to: ${actualChannelFolderName}`);
+            } catch (updateErr) {
+              console.error(`[Post-Process] Error updating folder_name: ${updateErr.message}`);
+            }
+          }
+        } else {
+          // Untracked channel (not in database) - auto-create with enabled=false
+          console.log(`[Post-Process] Untracked channel ${jsonData.channel_id}, auto-creating as disabled`);
+          try {
+            channel = await Channel.create({
+              channel_id: jsonData.channel_id,
+              uploader: jsonData.uploader || jsonData.channel || jsonData.uploader_id || null,
+              folder_name: actualChannelFolderName,
+              enabled: false,
+              sub_folder: null
+            });
+            console.log(`[Post-Process] Auto-created disabled channel with folder_name: ${actualChannelFolderName}`);
+          } catch (createErr) {
+            console.error(`[Post-Process] Error auto-creating channel: ${createErr.message}`);
+          }
+
+          // Use global default subfolder for the newly created channel
+          channelSubFolder = configModule.getDefaultSubfolder();
+        }
+
+        if (channelSubFolder) {
           const baseDir = configModule.directoryPath;
           // Use the actual channel folder name from the filesystem (yt-dlp already sanitized it)
           // instead of jsonData.uploader which may contain special characters
-          targetChannelFolder = path.join(baseDir, `__${channel.sub_folder}`, actualChannelFolderName);
-          console.log(`[Post-Process] Channel has subfolder setting: ${channel.sub_folder}`);
+          targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
+          console.log(`[Post-Process] Channel will use subfolder: ${channelSubFolder}`);
         }
       } catch (err) {
         console.error(`[Post-Process] Error checking channel subfolder: ${err.message}`);
+      }
+    } else {
+      // No channel_id available (rare case) - use global default
+      channelSubFolder = configModule.getDefaultSubfolder();
+      if (channelSubFolder) {
+        const baseDir = configModule.directoryPath;
+        targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
+        console.log(`[Post-Process] No channel ID, using global default subfolder: ${channelSubFolder}`);
       }
     }
 
@@ -236,8 +275,8 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         const videoDirectoryName = path.basename(videoDirectory);
         const videoFileName = path.basename(videoPath);
         const baseDir = configModule.directoryPath;
-        // Add __ prefix for namespace safety (consistent with targetChannelFolder)
-        finalVideoPathForJson = path.join(baseDir, `__${channelSubFolder}`, channelName, videoDirectoryName, videoFileName);
+        // Use buildChannelPath for namespace safety (adds __ prefix consistently)
+        finalVideoPathForJson = path.join(buildChannelPath(baseDir, channelSubFolder, channelName), videoDirectoryName, videoFileName);
       } else {
         // No subfolder - use current path
         finalVideoPathForJson = videoPath;
@@ -483,87 +522,108 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
 
     // Phase 4: Check if channel has a subfolder setting and move if needed
     // This only runs when NOT using temp downloads (temp downloads handle subfolder atomically above)
+    // Also skip if we already have a subfolder override (handled in Phase 1)
     if (!tempPathManager.isEnabled() || !tempPathManager.isTempPath(videoPath)) {
-      if (jsonData.channel_id) {
+      // Determine effective subfolder (may have been set by override or channel lookup in Phase 1)
+      let effectiveSubfolder = channelSubFolder;
+
+      // If not already determined, look it up now
+      if (effectiveSubfolder === null && !subfolderOverride) {
+        if (jsonData.channel_id) {
+          try {
+            const Channel = require('../models/channel');
+            const channel = await Channel.findOne({
+              where: { channel_id: jsonData.channel_id },
+              attributes: ['sub_folder', 'uploader']
+            });
+
+            if (channel) {
+              effectiveSubfolder = channelSettingsModule.resolveEffectiveSubfolder(channel.sub_folder);
+            } else {
+              // Untracked channel - use global default
+              effectiveSubfolder = configModule.getDefaultSubfolder();
+            }
+          } catch (lookupErr) {
+            logger.error({ err: lookupErr }, '[Post-Process] Error looking up channel subfolder');
+          }
+        } else {
+          // No channel_id - use global default
+          effectiveSubfolder = configModule.getDefaultSubfolder();
+        }
+      }
+
+      if (effectiveSubfolder) {
         try {
-          const Channel = require('../models/channel');
-          const channel = await Channel.findOne({
-            where: { channel_id: jsonData.channel_id },
-            attributes: ['sub_folder', 'uploader']
-          });
+          const baseDir = configModule.directoryPath;
+          // Use the actual channel folder name from the filesystem (yt-dlp already sanitized it)
+          // instead of jsonData.uploader which may contain special characters
+          const expectedPath = buildChannelPath(baseDir, effectiveSubfolder, actualChannelFolderName);
 
-          if (channel && channel.sub_folder) {
-            const baseDir = configModule.directoryPath;
-            // Use the actual channel folder name from the filesystem (yt-dlp already sanitized it)
-            // instead of jsonData.uploader which may contain special characters
-            const expectedPath = path.join(baseDir, `__${channel.sub_folder}`, actualChannelFolderName);
+          // Check if we're not already in the correct subfolder
+          if (currentChannelFolder !== expectedPath) {
+            logger.info({ subFolder: effectiveSubfolder }, '[Post-Process] Channel has subfolder setting');
+            logger.info({ from: currentChannelFolder, to: expectedPath }, '[Post-Process] Moving channel folder to subfolder');
 
-            // Check if we're not already in the correct subfolder
-            if (currentChannelFolder !== expectedPath) {
-              logger.info({ subFolder: channel.sub_folder }, '[Post-Process] Channel has subfolder setting');
-              logger.info({ from: currentChannelFolder, to: expectedPath }, '[Post-Process] Moving channel folder to subfolder');
+            // Ensure the subfolder parent directory exists with __ prefix
+            const subfolderParent = path.join(baseDir, buildSubfolderSegment(effectiveSubfolder));
+            await fs.ensureDir(subfolderParent);
 
-              // Ensure the subfolder parent directory exists with __ prefix
-              const subfolderParent = path.join(baseDir, `__${channel.sub_folder}`);
-              await fs.ensureDir(subfolderParent);
+            // Check if destination exists
+            const destExists = await fs.pathExists(expectedPath);
 
-              // Check if destination exists
-              const destExists = await fs.pathExists(expectedPath);
+            if (destExists) {
+              // Destination exists - merge contents
+              logger.info('[Post-Process] Destination exists, merging contents');
 
-              if (destExists) {
-                // Destination exists - merge contents
-                logger.info('[Post-Process] Destination exists, merging contents');
+              // Get all items in the source channel folder
+              const items = await fs.readdir(currentChannelFolder);
 
-                // Get all items in the source channel folder
-                const items = await fs.readdir(currentChannelFolder);
+              for (const item of items) {
+                const sourcePath = path.join(currentChannelFolder, item);
+                const destPath = path.join(expectedPath, item);
 
-                for (const item of items) {
-                  const sourcePath = path.join(currentChannelFolder, item);
-                  const destPath = path.join(expectedPath, item);
+                try {
+                  const destItemExists = await fs.pathExists(destPath);
 
-                  try {
-                    const destItemExists = await fs.pathExists(destPath);
-
-                    if (destItemExists) {
-                      // Item already exists at destination
-                      if (item === 'poster.jpg') {
-                        // Poster already exists, just remove source
-                        await fs.remove(sourcePath);
-                        logger.debug({ item }, '[Post-Process] Skipped (already exists)');
-                      } else {
-                        // For other items (shouldn't happen for video folders), log warning
-                        logger.warn({ item }, '[Post-Process] Item already exists at destination, skipping');
-                        await fs.remove(sourcePath);
-                      }
-                    } else {
-                      // Move the item
-                      await fs.move(sourcePath, destPath);
-                      logger.debug({ item }, '[Post-Process] Moved item');
-                    }
-                  } catch (itemErr) {
-                    logger.error({ err: itemErr, item }, '[Post-Process] Error moving item');
-                    // Try to remove source item anyway to clean up
-                    try {
+                  if (destItemExists) {
+                    // Item already exists at destination
+                    if (item === 'poster.jpg') {
+                      // Poster already exists, just remove source
                       await fs.remove(sourcePath);
-                    } catch (removeErr) {
-                      // Ignore cleanup errors
+                      logger.debug({ item }, '[Post-Process] Skipped (already exists)');
+                    } else {
+                      // For other items (shouldn't happen for video folders), log warning
+                      logger.warn({ item }, '[Post-Process] Item already exists at destination, skipping');
+                      await fs.remove(sourcePath);
                     }
+                  } else {
+                    // Move the item
+                    await fs.move(sourcePath, destPath);
+                    logger.debug({ item }, '[Post-Process] Moved item');
+                  }
+                } catch (itemErr) {
+                  logger.error({ err: itemErr, item }, '[Post-Process] Error moving item');
+                  // Try to remove source item anyway to clean up
+                  try {
+                    await fs.remove(sourcePath);
+                  } catch (removeErr) {
+                    // Ignore cleanup errors
                   }
                 }
-
-                // Remove the now-empty source channel folder
-                await fs.remove(currentChannelFolder);
-              } else {
-                // Destination doesn't exist - move entire folder
-                await fs.move(currentChannelFolder, expectedPath);
               }
 
-              // Update the final video path to reflect the new location
-              const relativePath = path.relative(currentChannelFolder, finalVideoPath);
-              finalVideoPath = path.join(expectedPath, relativePath);
-
-              logger.info({ expectedPath, finalVideoPath }, '[Post-Process] Successfully moved to subfolder');
+              // Remove the now-empty source channel folder
+              await fs.remove(currentChannelFolder);
+            } else {
+              // Destination doesn't exist - move entire folder
+              await fs.move(currentChannelFolder, expectedPath);
             }
+
+            // Update the final video path to reflect the new location
+            const relativePath = path.relative(currentChannelFolder, finalVideoPath);
+            finalVideoPath = path.join(expectedPath, relativePath);
+
+            logger.info({ expectedPath, finalVideoPath }, '[Post-Process] Successfully moved to subfolder');
           }
         } catch (err) {
           logger.error({ err }, '[Post-Process] Error moving to subfolder');

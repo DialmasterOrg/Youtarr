@@ -459,12 +459,13 @@ class DownloadModule {
 
       const resolution = effectiveQuality || configModule.config.preferredResolution || '1080';
       const allowRedownload = overrideSettings.allowRedownload || false;
+      const subfolderOverride = overrideSettings.subfolder !== undefined ? overrideSettings.subfolder : null;
 
       // Persist resolved quality for any subsequent retries of this job
       this.setJobDataValue(jobData, 'effectiveQuality', resolution);
 
       // For manual downloads, we don't apply duration filters but still exclude members-only
-      // Note: Subfolder routing is now handled post-download in videoDownloadPostProcessFiles.js
+      // Subfolder override is passed to post-processor via environment variable
       const args = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload(resolution, allowRedownload);
 
       // Check if any URLs are for videos marked as ignored, and remove them from archive
@@ -512,8 +513,8 @@ class DownloadModule {
         }
       });
 
-      // Pass URL count, URLs, and allowRedownload flag as additional parameters for manual downloads
-      this.downloadExecutor.doDownload(args, jobId, jobType, urls.length, urls, allowRedownload);
+      // Pass URL count, URLs, allowRedownload flag, and subfolder override as additional parameters for manual downloads
+      this.downloadExecutor.doDownload(args, jobId, jobType, urls.length, urls, allowRedownload, false, subfolderOverride);
     }
   }
 

@@ -124,7 +124,7 @@ describe('ChannelSettingsDialog', () => {
       });
 
       expect(screen.getByLabelText('Channel Video Quality Override')).toBeInTheDocument();
-      expect(screen.getByLabelText('Subfolder (optional)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Subfolder')).toBeInTheDocument();
       expect(screen.getByLabelText('Min Duration (mins)')).toBeInTheDocument();
       expect(screen.getByLabelText('Max Duration (mins)')).toBeInTheDocument();
       expect(screen.getByLabelText('Title Filter (Python Regex)')).toBeInTheDocument();
@@ -161,7 +161,7 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const subfolderInput = screen.getByLabelText('Subfolder (optional)');
+      const subfolderInput = screen.getByLabelText('Subfolder');
       expect(subfolderInput).toHaveValue('__Sports');
 
       const minDurationInput = screen.getByLabelText('Min Duration (mins)');
@@ -250,7 +250,7 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      expect(screen.getByLabelText('Subfolder (optional)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Subfolder')).toBeInTheDocument();
 
       consoleSpy.mockRestore();
     });
@@ -397,11 +397,11 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const subfolderInput = screen.getByLabelText('Subfolder (optional)');
+      const subfolderInput = screen.getByLabelText('Subfolder');
       expect(subfolderInput).toHaveValue('__Sports');
     });
 
-    test('allows entering new subfolder name', async () => {
+    test('allows adding new subfolder via Add Subfolder dialog', async () => {
       const user = userEvent.setup();
 
       mockFetch
@@ -420,16 +420,35 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const subfolderInput = screen.getByLabelText('Subfolder (optional)');
-      await user.clear(subfolderInput);
-      // Component automatically adds __ prefix when user types
-      await user.type(subfolderInput, 'Gaming');
+      // Open the subfolder dropdown
+      const subfolderInput = screen.getByLabelText('Subfolder');
+      await user.click(subfolderInput);
 
-      // Component displays the value with __ prefix
+      // Click "Add Subfolder" option
+      const addOption = await screen.findByText('Add Subfolder');
+      await user.click(addOption);
+
+      // The Add Subfolder dialog should open
+      expect(screen.getByText('Add New Subfolder')).toBeInTheDocument();
+
+      // Enter a new subfolder name
+      const dialogInput = screen.getByLabelText('Subfolder Name');
+      await user.type(dialogInput, 'Gaming');
+
+      // Click Add button
+      const addButton = screen.getByRole('button', { name: 'Add Subfolder' });
+      await user.click(addButton);
+
+      // The dialog should close and the new value should be selected
+      await waitFor(() => {
+        expect(screen.queryByText('Add New Subfolder')).not.toBeInTheDocument();
+      });
+
+      // The input should show the new subfolder
       expect(subfolderInput).toHaveValue('__Gaming');
     });
 
-    test('strips __ prefix when saving subfolder', async () => {
+    test('sends clean subfolder name when saving via Add Subfolder', async () => {
       const user = userEvent.setup();
 
       mockFetch
@@ -454,15 +473,27 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const subfolderInput = screen.getByLabelText('Subfolder (optional)');
-      await user.clear(subfolderInput);
-      // User types "Gaming" but component shows "__Gaming" in the input
-      await user.type(subfolderInput, 'Gaming');
+      // Open the subfolder dropdown and add a new subfolder
+      const subfolderInput = screen.getByLabelText('Subfolder');
+      await user.click(subfolderInput);
+
+      const addOption = await screen.findByText('Add Subfolder');
+      await user.click(addOption);
+
+      const dialogInput = screen.getByLabelText('Subfolder Name');
+      await user.type(dialogInput, 'Gaming');
+
+      const addButton = screen.getByRole('button', { name: 'Add Subfolder' });
+      await user.click(addButton);
+
+      await waitFor(() => {
+        expect(screen.queryByText('Add New Subfolder')).not.toBeInTheDocument();
+      });
 
       const saveButton = screen.getByRole('button', { name: 'Save' });
       await user.click(saveButton);
 
-      // Verify the component strips the __ prefix before sending to API
+      // Verify the component sends the clean subfolder name to API
       await waitFor(() => {
         const putCall = mockFetch.mock.calls.find(
           call => call[0] === '/api/channels/channel123/settings' && call[1]?.method === 'PUT'
@@ -474,7 +505,7 @@ describe('ChannelSettingsDialog', () => {
         call => call[0] === '/api/channels/channel123/settings' && call[1]?.method === 'PUT'
       );
       const body = JSON.parse(putCall[1].body);
-      // Should strip the __ prefix that was displayed in UI
+      // Should send the clean subfolder name to API (without __ prefix)
       expect(body.sub_folder).toBe('Gaming');
     });
 
@@ -1066,8 +1097,10 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const subfolderInput = screen.getByLabelText('Subfolder (optional)');
-      await user.type(subfolderInput, '__NewFolder');
+      // Change quality to enable save button
+      const qualitySelect = screen.getByLabelText('Channel Video Quality Override');
+      await user.click(qualitySelect);
+      await user.click(screen.getByText('720p (HD)'));
 
       const saveButton = screen.getByRole('button', { name: 'Save' });
       await user.click(saveButton);
@@ -1399,8 +1432,10 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const subfolderInput = screen.getByLabelText('Subfolder (optional)');
-      await user.type(subfolderInput, '__NewFolder');
+      // Change quality to enable save button
+      const qualitySelect = screen.getByLabelText('Channel Video Quality Override');
+      await user.click(qualitySelect);
+      await user.click(screen.getByText('720p (HD)'));
 
       const saveButton = screen.getByRole('button', { name: 'Save' });
       await user.click(saveButton);
