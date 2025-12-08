@@ -70,6 +70,14 @@ jest.mock('../jobModule', () => ({
   getAllJobs: jest.fn().mockReturnValue({})
 }));
 
+jest.mock('../ytDlpRunner', () => ({
+  run: jest.fn()
+}));
+
+jest.mock('../filesystem', () => ({
+  sanitizeNameLikeYtDlp: jest.fn((name) => name) // Pass through by default
+}));
+
 jest.mock('../../db', () => {
   const mockSequelize = {
     query: jest.fn().mockResolvedValue([]),
@@ -101,6 +109,7 @@ describe('ChannelModule', () => {
   let ChannelVideo;
   let uuid;
   let logger;
+  let filesystem;
 
   const mockChannelData = {
     channel_id: 'UC123456',
@@ -174,6 +183,8 @@ describe('ChannelModule', () => {
     ChannelVideo = require('../../models/channelvideo');
 
     logger = require('../../logger');
+
+    filesystem = require('../filesystem');
 
     ChannelModule = require('../channelModule');
   });
@@ -2345,13 +2356,13 @@ describe('ChannelModule', () => {
 
         const result = await ChannelModule.getChannelAvailableTabs('UC123');
 
-        expect(result).toEqual(['videos', 'shorts']);
+        expect(result).toEqual({ availableTabs: ['videos', 'shorts'] });
         expect(Channel.findOne).toHaveBeenCalledWith({
           where: { channel_id: 'UC123' }
         });
       });
 
-      test('should detect and cache available tabs when not stored', async () => {
+      test('should detect tabs when not cached and return results', async () => {
         const mockChannel = {
           ...mockChannelData,
           available_tabs: null,
@@ -2359,17 +2370,17 @@ describe('ChannelModule', () => {
         };
         Channel.findOne.mockResolvedValue(mockChannel);
 
-        // Mock successful yt-dlp execution for videos and shorts, fail for streams
-        jest.spyOn(ChannelModule, 'executeYtDlpCommand')
-          .mockResolvedValueOnce('{"entries": []}') // videos tab exists
-          .mockResolvedValueOnce('{"entries": []}') // shorts tab exists
-          .mockRejectedValueOnce(new Error('Not found')); // streams tab doesn't exist
+        // Spy on detectAndSaveChannelTabs to return detected tabs
+        const detectSpy = jest.spyOn(ChannelModule, 'detectAndSaveChannelTabs')
+          .mockResolvedValue({ availableTabs: ['videos', 'shorts'], autoDownloadEnabledTabs: 'video' });
 
         const result = await ChannelModule.getChannelAvailableTabs('UC123');
 
-        expect(result).toEqual(['videos', 'shorts']);
-        expect(mockChannel.available_tabs).toBe('videos,shorts');
-        expect(mockChannel.save).toHaveBeenCalled();
+        // Should await detection and return results
+        expect(result).toEqual({ availableTabs: ['videos', 'shorts'] });
+        expect(detectSpy).toHaveBeenCalledWith('UC123');
+
+        detectSpy.mockRestore();
       });
 
       test('should throw error when channel not found', async () => {
@@ -2378,7 +2389,7 @@ describe('ChannelModule', () => {
         await expect(ChannelModule.getChannelAvailableTabs('UC999')).rejects.toThrow('Channel not found in database');
       });
 
-      test('should handle channel with no available tabs', async () => {
+      test('should return empty array when detection returns null', async () => {
         const mockChannel = {
           ...mockChannelData,
           available_tabs: null,
@@ -2386,16 +2397,177 @@ describe('ChannelModule', () => {
         };
         Channel.findOne.mockResolvedValue(mockChannel);
 
-        // All tabs fail
-        jest.spyOn(ChannelModule, 'executeYtDlpCommand')
-          .mockRejectedValueOnce(new Error('Not found'))
-          .mockRejectedValueOnce(new Error('Not found'))
-          .mockRejectedValueOnce(new Error('Not found'));
+        // Spy on detectAndSaveChannelTabs to return null (detection failed/skipped)
+        const detectSpy = jest.spyOn(ChannelModule, 'detectAndSaveChannelTabs').mockResolvedValue(null);
 
         const result = await ChannelModule.getChannelAvailableTabs('UC123');
 
-        expect(result).toEqual([]);
-        expect(mockChannel.save).not.toHaveBeenCalled();
+        // Should return empty array when detection fails
+        expect(result).toEqual({ availableTabs: [] });
+        expect(detectSpy).toHaveBeenCalledWith('UC123');
+
+        detectSpy.mockRestore();
+      });
+    });
+
+    describe('detectAndSaveChannelTabs', () => {
+      test('should detect and save available tabs and return results', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          available_tabs: null,
+          title: 'Test Channel'
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+        Channel.update.mockResolvedValue([1]);
+
+        // Mock fetch responses for RSS feed checks:
+        // - videos tab exists (200 OK)
+        // - shorts tab exists (200 OK)
+        // - streams tab doesn't exist (404)
+        const originalFetch = global.fetch;
+        global.fetch = jest.fn((url) => {
+          if (url.includes('UULF')) {
+            // Videos tab - exists
+            return Promise.resolve({ status: 200 });
+          } else if (url.includes('UUSH')) {
+            // Shorts tab - exists
+            return Promise.resolve({ status: 200 });
+          } else if (url.includes('UULV')) {
+            // Streams tab - doesn't exist
+            return Promise.resolve({ status: 404 });
+          }
+          return Promise.resolve({ status: 404 });
+        });
+
+        try {
+          const result = await ChannelModule.detectAndSaveChannelTabs('UC123');
+
+          expect(Channel.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+              available_tabs: 'videos,shorts',
+              auto_download_enabled_tabs: 'video'
+            }),
+            { where: { channel_id: 'UC123' } }
+          );
+
+          // Should return detected tabs
+          expect(result).toEqual({
+            availableTabs: ['videos', 'shorts'],
+            autoDownloadEnabledTabs: 'video'
+          });
+        } finally {
+          global.fetch = originalFetch;
+        }
+      });
+
+      test('should return null if already detecting', async () => {
+        // Simulate already detecting
+        ChannelModule.activeFetches.set('tabs-UC123', { startTime: new Date().toISOString(), type: 'tabDetection' });
+
+        const result = await ChannelModule.detectAndSaveChannelTabs('UC123');
+
+        // Should not call Channel.findOne since we skipped
+        expect(Channel.findOne).not.toHaveBeenCalled();
+        // Should return null
+        expect(result).toBeNull();
+
+        // Cleanup
+        ChannelModule.activeFetches.delete('tabs-UC123');
+      });
+
+      test('should return cached values if tabs already populated', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          available_tabs: 'videos,shorts', // Already populated
+          auto_download_enabled_tabs: 'video,short'
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+
+        const result = await ChannelModule.detectAndSaveChannelTabs('UC123');
+
+        // Should not call Channel.update since tabs already exist
+        expect(Channel.update).not.toHaveBeenCalled();
+        // Should return cached values
+        expect(result).toEqual({
+          availableTabs: ['videos', 'shorts'],
+          autoDownloadEnabledTabs: 'video,short'
+        });
+      });
+    });
+
+    describe('buildRssFeedUrl', () => {
+      test('should build correct URL for videos tab', () => {
+        const url = ChannelModule.buildRssFeedUrl('UCwaNuezahYT3BOjfXsne2mg', 'videos');
+        expect(url).toBe('https://www.youtube.com/feeds/videos.xml?playlist_id=UULFwaNuezahYT3BOjfXsne2mg');
+      });
+
+      test('should build correct URL for shorts tab', () => {
+        const url = ChannelModule.buildRssFeedUrl('UCwaNuezahYT3BOjfXsne2mg', 'shorts');
+        expect(url).toBe('https://www.youtube.com/feeds/videos.xml?playlist_id=UUSHwaNuezahYT3BOjfXsne2mg');
+      });
+
+      test('should build correct URL for streams tab', () => {
+        const url = ChannelModule.buildRssFeedUrl('UCwaNuezahYT3BOjfXsne2mg', 'streams');
+        expect(url).toBe('https://www.youtube.com/feeds/videos.xml?playlist_id=UULVwaNuezahYT3BOjfXsne2mg');
+      });
+
+      test('should throw error for unknown tab type', () => {
+        expect(() => ChannelModule.buildRssFeedUrl('UCwaNuezahYT3BOjfXsne2mg', 'unknown'))
+          .toThrow('Unknown tab type: unknown');
+      });
+    });
+
+    describe('checkTabExistsViaRss', () => {
+      test('should return true when RSS feed returns 200', async () => {
+        const originalFetch = global.fetch;
+        global.fetch = jest.fn().mockResolvedValue({ status: 200 });
+
+        try {
+          const exists = await ChannelModule.checkTabExistsViaRss('UC123', 'videos');
+          expect(exists).toBe(true);
+          expect(global.fetch).toHaveBeenCalledWith(
+            'https://www.youtube.com/feeds/videos.xml?playlist_id=UULF123',
+            { method: 'GET' }
+          );
+        } finally {
+          global.fetch = originalFetch;
+        }
+      });
+
+      test('should return false when RSS feed returns 404', async () => {
+        const originalFetch = global.fetch;
+        global.fetch = jest.fn().mockResolvedValue({ status: 404 });
+
+        try {
+          const exists = await ChannelModule.checkTabExistsViaRss('UC123', 'videos');
+          expect(exists).toBe(false);
+        } finally {
+          global.fetch = originalFetch;
+        }
+      });
+
+      test('should return false on network error', async () => {
+        const originalFetch = global.fetch;
+        global.fetch = jest.fn().mockRejectedValue(new Error('Network error'));
+
+        try {
+          const exists = await ChannelModule.checkTabExistsViaRss('UC123', 'videos');
+          expect(exists).toBe(false);
+        } finally {
+          global.fetch = originalFetch;
+        }
+      });
+
+      test('should return true for non-404 error codes (e.g., 500)', async () => {
+        const originalFetch = global.fetch;
+        global.fetch = jest.fn().mockResolvedValue({ status: 500 });
+
+        try {
+          const exists = await ChannelModule.checkTabExistsViaRss('UC123', 'videos');
+          expect(exists).toBe(true); // Non-404 means the feed exists, even if there's an error
+        } finally {
+          global.fetch = originalFetch;
+        }
       });
     });
 
@@ -2475,6 +2647,319 @@ describe('ChannelModule', () => {
         expect(mockChannel.auto_download_enabled_tabs).toBe('');
         expect(mockChannel.save).toHaveBeenCalled();
       });
+    });
+  });
+
+  describe('resolveChannelFolderName', () => {
+    let originalFetchChannelMetadata;
+
+    beforeEach(() => {
+      // Store original method so we can mock it per-test
+      originalFetchChannelMetadata = ChannelModule.fetchChannelMetadata;
+    });
+
+    afterEach(() => {
+      // Restore original method
+      ChannelModule.fetchChannelMetadata = originalFetchChannelMetadata;
+    });
+
+    test('should return folder_name when available (fast path)', async () => {
+      const channel = {
+        channel_id: 'UC123',
+        folder_name: 'Sanitized Channel Name',
+        uploader: 'Original Uploader Name'
+      };
+
+      // Mock fetchChannelMetadata to verify it's not called
+      const mockFetchChannelMetadata = jest.fn();
+      ChannelModule.fetchChannelMetadata = mockFetchChannelMetadata;
+
+      const result = await ChannelModule.resolveChannelFolderName(channel);
+
+      expect(result).toBe('Sanitized Channel Name');
+      // Should not call fetchChannelMetadata when folder_name exists
+      expect(mockFetchChannelMetadata).not.toHaveBeenCalled();
+    });
+
+    test('should call fetchChannelMetadata and save result when folder_name is null', async () => {
+      const channel = {
+        channel_id: 'UC123',
+        folder_name: null,
+        uploader: 'Original Uploader'
+      };
+
+      // Mock fetchChannelMetadata to return folder_name
+      ChannelModule.fetchChannelMetadata = jest.fn().mockResolvedValue({
+        uploader: 'Channel Uploader',
+        folder_name: 'Sanitized Folder Name'
+      });
+
+      Channel.update.mockResolvedValue([1]);
+
+      const result = await ChannelModule.resolveChannelFolderName(channel);
+
+      expect(result).toBe('Sanitized Folder Name');
+      expect(ChannelModule.fetchChannelMetadata).toHaveBeenCalledWith(
+        'https://www.youtube.com/channel/UC123'
+      );
+      expect(Channel.update).toHaveBeenCalledWith(
+        { folder_name: 'Sanitized Folder Name' },
+        { where: { channel_id: 'UC123' } }
+      );
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ channelId: 'UC123', folderName: 'Sanitized Folder Name' }),
+        'Populated folder_name via yt-dlp fallback'
+      );
+    });
+
+    test('should fallback to uploader when fetchChannelMetadata fails', async () => {
+      const channel = {
+        channel_id: 'UC123',
+        folder_name: null,
+        uploader: 'Fallback Uploader Name'
+      };
+
+      // Mock fetchChannelMetadata failing
+      ChannelModule.fetchChannelMetadata = jest.fn().mockRejectedValue(new Error('yt-dlp failed'));
+
+      // Mock sanitizeNameLikeYtDlp to return the uploader as-is for this test
+      filesystem.sanitizeNameLikeYtDlp.mockReturnValue('Fallback Uploader Name');
+
+      const result = await ChannelModule.resolveChannelFolderName(channel);
+
+      expect(result).toBe('Fallback Uploader Name');
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ channelId: 'UC123', uploader: 'Fallback Uploader Name' }),
+        'Could not determine folder_name via yt-dlp, using uploader as fallback'
+      );
+    });
+
+    test('should handle empty string folder_name as missing', async () => {
+      const channel = {
+        channel_id: 'UC123',
+        folder_name: '', // Empty string should be treated as falsy
+        uploader: 'Fallback Uploader'
+      };
+
+      // Mock fetchChannelMetadata failing to trigger fallback
+      ChannelModule.fetchChannelMetadata = jest.fn().mockRejectedValue(new Error('yt-dlp failed'));
+
+      // Mock sanitizeNameLikeYtDlp to return the uploader as-is for this test
+      filesystem.sanitizeNameLikeYtDlp.mockReturnValue('Fallback Uploader');
+
+      const result = await ChannelModule.resolveChannelFolderName(channel);
+
+      // Empty string is falsy, so should try fetchChannelMetadata and fall back to uploader
+      expect(result).toBe('Fallback Uploader');
+      expect(ChannelModule.fetchChannelMetadata).toHaveBeenCalled();
+    });
+
+    test('should continue even if database update fails', async () => {
+      const channel = {
+        channel_id: 'UC123',
+        folder_name: null,
+        uploader: 'Original Uploader'
+      };
+
+      // Mock successful fetchChannelMetadata
+      ChannelModule.fetchChannelMetadata = jest.fn().mockResolvedValue({
+        uploader: 'Channel Uploader',
+        folder_name: 'Sanitized Name'
+      });
+
+      // Mock database update failing
+      Channel.update.mockRejectedValue(new Error('Database error'));
+
+      const result = await ChannelModule.resolveChannelFolderName(channel);
+
+      // Should still return the folder name even if DB update fails
+      expect(result).toBe('Sanitized Name');
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ channelId: 'UC123' }),
+        'Failed to save folder_name to database'
+      );
+    });
+
+    test('should fallback to uploader when fetchChannelMetadata returns no folder_name', async () => {
+      const channel = {
+        channel_id: 'UC123',
+        folder_name: null,
+        uploader: 'Fallback Name'
+      };
+
+      // Mock fetchChannelMetadata returning metadata without folder_name
+      ChannelModule.fetchChannelMetadata = jest.fn().mockResolvedValue({
+        uploader: 'Channel Uploader',
+        folder_name: null
+      });
+
+      // Mock sanitizeNameLikeYtDlp
+      filesystem.sanitizeNameLikeYtDlp.mockReturnValue('Fallback Name');
+
+      const result = await ChannelModule.resolveChannelFolderName(channel);
+
+      expect(result).toBe('Fallback Name');
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ channelId: 'UC123', uploader: 'Fallback Name' }),
+        'Could not determine folder_name via yt-dlp, using uploader as fallback'
+      );
+    });
+  });
+
+  describe('extractAvatarThumbnailUrl', () => {
+    test('should return null when thumbnails is not an array', () => {
+      const channelData = { channel_id: 'UC123', thumbnails: null };
+      const result = ChannelModule.extractAvatarThumbnailUrl(channelData);
+      expect(result).toBeNull();
+    });
+
+    test('should return null when thumbnails is undefined', () => {
+      const channelData = { channel_id: 'UC123' };
+      const result = ChannelModule.extractAvatarThumbnailUrl(channelData);
+      expect(result).toBeNull();
+    });
+
+    test('should prefer 900x900 thumbnail', () => {
+      const channelData = {
+        channel_id: 'UC123',
+        thumbnails: [
+          { url: 'https://example.com/small.jpg', width: 100, height: 100 },
+          { url: 'https://example.com/large.jpg', width: 900, height: 900 },
+          { url: 'https://example.com/avatar.jpg', id: 'avatar_uncropped' }
+        ]
+      };
+      const result = ChannelModule.extractAvatarThumbnailUrl(channelData);
+      expect(result).toBe('https://example.com/large.jpg');
+    });
+
+    test('should fallback to any square thumbnail', () => {
+      const channelData = {
+        channel_id: 'UC123',
+        thumbnails: [
+          { url: 'https://example.com/square.jpg', width: 200, height: 200 },
+          { url: 'https://example.com/avatar.jpg', id: 'avatar_uncropped' }
+        ]
+      };
+      const result = ChannelModule.extractAvatarThumbnailUrl(channelData);
+      expect(result).toBe('https://example.com/square.jpg');
+    });
+
+    test('should fallback to avatar_uncropped as last resort', () => {
+      const channelData = {
+        channel_id: 'UC123',
+        thumbnails: [
+          { url: 'https://example.com/non-square.jpg', width: 100, height: 200 },
+          { url: 'https://example.com/avatar.jpg', id: 'avatar_uncropped' }
+        ]
+      };
+      const result = ChannelModule.extractAvatarThumbnailUrl(channelData);
+      expect(result).toBe('https://example.com/avatar.jpg');
+    });
+
+    test('should return null when no suitable thumbnail found', () => {
+      const channelData = {
+        channel_id: 'UC123',
+        thumbnails: [
+          { url: 'https://example.com/non-square.jpg', width: 100, height: 200 }
+        ]
+      };
+      const result = ChannelModule.extractAvatarThumbnailUrl(channelData);
+      expect(result).toBeNull();
+    });
+
+    test('should return null when thumbnails array is empty', () => {
+      const channelData = { channel_id: 'UC123', thumbnails: [] };
+      const result = ChannelModule.extractAvatarThumbnailUrl(channelData);
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('processChannelThumbnail', () => {
+    let originalExtractAvatarThumbnailUrl;
+    let originalDownloadChannelThumbnailFromUrl;
+    let originalDownloadChannelThumbnailViaYtdlp;
+    let originalResizeChannelThumbnail;
+
+    beforeEach(() => {
+      originalExtractAvatarThumbnailUrl = ChannelModule.extractAvatarThumbnailUrl;
+      originalDownloadChannelThumbnailFromUrl = ChannelModule.downloadChannelThumbnailFromUrl;
+      originalDownloadChannelThumbnailViaYtdlp = ChannelModule.downloadChannelThumbnailViaYtdlp;
+      originalResizeChannelThumbnail = ChannelModule.resizeChannelThumbnail;
+    });
+
+    afterEach(() => {
+      ChannelModule.extractAvatarThumbnailUrl = originalExtractAvatarThumbnailUrl;
+      ChannelModule.downloadChannelThumbnailFromUrl = originalDownloadChannelThumbnailFromUrl;
+      ChannelModule.downloadChannelThumbnailViaYtdlp = originalDownloadChannelThumbnailViaYtdlp;
+      ChannelModule.resizeChannelThumbnail = originalResizeChannelThumbnail;
+    });
+
+    test('should download from URL when avatar thumbnail is found', async () => {
+      const channelData = { channel_id: 'UC123', thumbnails: [] };
+      const channelId = 'UC123';
+      const channelUrl = 'https://www.youtube.com/@testchannel';
+
+      ChannelModule.extractAvatarThumbnailUrl = jest.fn().mockReturnValue('https://example.com/avatar.jpg');
+      ChannelModule.downloadChannelThumbnailFromUrl = jest.fn().mockResolvedValue();
+      ChannelModule.resizeChannelThumbnail = jest.fn().mockResolvedValue();
+
+      await ChannelModule.processChannelThumbnail(channelData, channelId, channelUrl);
+
+      expect(ChannelModule.extractAvatarThumbnailUrl).toHaveBeenCalledWith(channelData);
+      expect(ChannelModule.downloadChannelThumbnailFromUrl).toHaveBeenCalledWith('https://example.com/avatar.jpg', channelId);
+      expect(ChannelModule.resizeChannelThumbnail).toHaveBeenCalledWith(channelId);
+    });
+
+    test('should fallback to yt-dlp when URL download fails', async () => {
+      const channelData = { channel_id: 'UC123', thumbnails: [] };
+      const channelId = 'UC123';
+      const channelUrl = 'https://www.youtube.com/@testchannel';
+
+      ChannelModule.extractAvatarThumbnailUrl = jest.fn().mockReturnValue('https://example.com/avatar.jpg');
+      ChannelModule.downloadChannelThumbnailFromUrl = jest.fn().mockRejectedValue(new Error('Download failed'));
+      ChannelModule.downloadChannelThumbnailViaYtdlp = jest.fn().mockResolvedValue();
+      ChannelModule.resizeChannelThumbnail = jest.fn().mockResolvedValue();
+
+      await ChannelModule.processChannelThumbnail(channelData, channelId, channelUrl);
+
+      expect(ChannelModule.downloadChannelThumbnailFromUrl).toHaveBeenCalled();
+      expect(ChannelModule.downloadChannelThumbnailViaYtdlp).toHaveBeenCalledWith(channelUrl);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ channelId }),
+        'Failed to download thumbnail via HTTP, falling back to yt-dlp'
+      );
+    });
+
+    test('should use yt-dlp when no avatar thumbnail URL found', async () => {
+      const channelData = { channel_id: 'UC123', thumbnails: [] };
+      const channelId = 'UC123';
+      const channelUrl = 'https://www.youtube.com/@testchannel';
+
+      ChannelModule.extractAvatarThumbnailUrl = jest.fn().mockReturnValue(null);
+      ChannelModule.downloadChannelThumbnailViaYtdlp = jest.fn().mockResolvedValue();
+      ChannelModule.resizeChannelThumbnail = jest.fn().mockResolvedValue();
+
+      await ChannelModule.processChannelThumbnail(channelData, channelId, channelUrl);
+
+      expect(ChannelModule.downloadChannelThumbnailViaYtdlp).toHaveBeenCalledWith(channelUrl);
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ channelId }),
+        'No avatar thumbnail URL found in metadata, using yt-dlp'
+      );
+    });
+
+    test('should always call resizeChannelThumbnail at the end', async () => {
+      const channelData = { channel_id: 'UC123', thumbnails: [] };
+      const channelId = 'UC123';
+      const channelUrl = 'https://www.youtube.com/@testchannel';
+
+      ChannelModule.extractAvatarThumbnailUrl = jest.fn().mockReturnValue('https://example.com/avatar.jpg');
+      ChannelModule.downloadChannelThumbnailFromUrl = jest.fn().mockResolvedValue();
+      ChannelModule.resizeChannelThumbnail = jest.fn().mockResolvedValue();
+
+      await ChannelModule.processChannelThumbnail(channelData, channelId, channelUrl);
+
+      expect(ChannelModule.resizeChannelThumbnail).toHaveBeenCalledWith(channelId);
     });
   });
 });

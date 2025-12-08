@@ -1,4 +1,4 @@
-import React, { ChangeEvent } from 'react';
+import React, { ChangeEvent, useState } from 'react';
 import {
   SelectChangeEvent,
   FormControl,
@@ -12,10 +12,21 @@ import {
   Box,
   Chip,
   Switch,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Button,
+  Collapse,
+  CircularProgress,
+  Link,
 } from '@mui/material';
 import { ConfigurationCard } from '../common/ConfigurationCard';
 import { InfoTooltip } from '../common/InfoTooltip';
 import SubtitleLanguageSelector from '../SubtitleLanguageSelector';
+import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
+import { useSubfolders } from '../../../hooks/useSubfolders';
 import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../types';
 import { reverseFrequencyMapping, getChannelFilesOptions } from '../helpers';
 import { FREQUENCY_MAPPING } from '../constants';
@@ -26,6 +37,7 @@ interface CoreSettingsSectionProps {
   isPlatformManaged: PlatformManagedState;
   onConfigChange: (updates: Partial<ConfigState>) => void;
   onMobileTooltipClick?: (text: string) => void;
+  token: string | null;
 }
 
 export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
@@ -34,7 +46,64 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
   isPlatformManaged,
   onConfigChange,
   onMobileTooltipClick,
+  token,
 }) => {
+  // Fetch available subfolders
+  const { subfolders, loading: subfoldersLoading } = useSubfolders(token);
+
+  // State for confirmation dialog when setting default subfolder
+  const [pendingDefaultSubfolder, setPendingDefaultSubfolder] = useState<string | null>(null);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [affectedChannels, setAffectedChannels] = useState<{ count: number; channelNames: string[] }>({ count: 0, channelNames: [] });
+  const [loadingAffectedChannels, setLoadingAffectedChannels] = useState(false);
+  const [showAffectedList, setShowAffectedList] = useState(false);
+
+  // Handle default subfolder change with confirmation
+  const handleDefaultSubfolderChange = async (newValue: string | null) => {
+    const currentValue = config.defaultSubfolder || '';
+    const newValueNormalized = newValue || '';
+
+    // No change
+    if (currentValue === newValueNormalized) {
+      return;
+    }
+
+    // Show dialog immediately with loading state
+    setPendingDefaultSubfolder(newValue);
+    setShowConfirmDialog(true);
+    setLoadingAffectedChannels(true);
+    setAffectedChannels({ count: 0, channelNames: [] });
+
+    // Fetch affected channels count
+    try {
+      const response = await fetch('/api/channels/using-default-subfolder', {
+        headers: { 'x-access-token': token || '' },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAffectedChannels(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch affected channels:', err);
+      setAffectedChannels({ count: 0, channelNames: [] });
+    } finally {
+      setLoadingAffectedChannels(false);
+    }
+  };
+
+  const handleConfirmDefaultSubfolder = () => {
+    onConfigChange({ defaultSubfolder: pendingDefaultSubfolder || '' });
+    setShowConfirmDialog(false);
+    setPendingDefaultSubfolder(null);
+    setShowAffectedList(false);
+  };
+
+  const handleCancelDefaultSubfolder = () => {
+    setShowConfirmDialog(false);
+    setPendingDefaultSubfolder(null);
+    setShowAffectedList(false);
+  };
+
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     let parsedValue: any = value;
@@ -218,6 +287,24 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
 
         <Grid item xs={12} md={6}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <SubfolderAutocomplete
+              mode="global"
+              value={config.defaultSubfolder || null}
+              onChange={handleDefaultSubfolderChange}
+              subfolders={subfolders}
+              loading={subfoldersLoading}
+              label="Default Subfolder"
+              helperText="Default download location for channels using 'Default Subfolder'"
+            />
+            <InfoTooltip
+              text="Set the default download location for untracked channels and channels using 'Default Subfolder'. Leave empty to download to the root directory by default."
+              onMobileClick={onMobileTooltipClick}
+            />
+          </Box>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <FormControlLabel
               control={
                 <Checkbox
@@ -299,6 +386,84 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
           </Box>
         </Grid>
       </Grid>
+
+      {/* Confirmation Dialog for Default Subfolder */}
+      <Dialog open={showConfirmDialog} onClose={handleCancelDefaultSubfolder}>
+        <DialogTitle>Set Default Subfolder?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Setting a default subfolder will affect where videos are downloaded for:
+          </DialogContentText>
+          <Box component="ul" sx={{ mt: 1, pl: 2 }}>
+            <li>Untracked channels (manual URL downloads)</li>
+            <li>Channels configured to use &quot;Default Subfolder&quot;</li>
+          </Box>
+
+          {/* Affected channels section */}
+          <Box sx={{ mt: 2, mb: 2 }}>
+            {loadingAffectedChannels ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CircularProgress size={16} />
+                <DialogContentText component="span">
+                  Checking affected channels...
+                </DialogContentText>
+              </Box>
+            ) : affectedChannels.count === 0 ? (
+              <DialogContentText>
+                No tracked channels are currently using Default Subfolder.
+              </DialogContentText>
+            ) : (
+              <>
+                <DialogContentText>
+                  {affectedChannels.count} tracked channel{affectedChannels.count !== 1 ? 's' : ''} configured to use Default Subfolder.
+                </DialogContentText>
+                <Link
+                  component="button"
+                  variant="body2"
+                  onClick={() => setShowAffectedList(!showAffectedList)}
+                  sx={{ mt: 0.5, display: 'block', cursor: 'pointer' }}
+                >
+                  {showAffectedList ? 'Hide affected channels ▲' : 'Show affected channels ▼'}
+                </Link>
+                <Collapse in={showAffectedList}>
+                  <Box
+                    component="ul"
+                    sx={{
+                      mt: 1,
+                      pl: 2,
+                      maxHeight: 200,
+                      overflow: 'auto',
+                      bgcolor: 'action.hover',
+                      borderRadius: 1,
+                      py: 1,
+                    }}
+                  >
+                    {affectedChannels.channelNames.map((name, index) => (
+                      <li key={index}>{name}</li>
+                    ))}
+                  </Box>
+                </Collapse>
+              </>
+            )}
+          </Box>
+
+          <DialogContentText>
+            Videos will be downloaded to channel folders in:{' '}
+            <strong>
+              {pendingDefaultSubfolder ? `__${pendingDefaultSubfolder}` : 'the root directory'}
+            </strong>
+          </DialogContentText>
+          <DialogContentText sx={{ mt: 1, fontStyle: 'italic' }}>
+            Existing videos will not be moved. Continue?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelDefaultSubfolder}>Cancel</Button>
+          <Button onClick={handleConfirmDefaultSubfolder} variant="contained" color="primary">
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
     </ConfigurationCard>
   );
 };

@@ -13,15 +13,20 @@ import {
   Box,
   Switch,
   FormControlLabel,
-  Divider,
-  Alert
+  Collapse,
+  Alert,
+  Paper,
+  SelectChangeEvent
 } from '@mui/material';
 import {
   Download as DownloadIcon,
   Settings as SettingsIcon,
-  Info as InfoIcon
+  FolderOpen as FolderIcon,
+  HighQuality as QualityIcon
 } from '@mui/icons-material';
 import { DownloadSettings } from './types';
+import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
+import { useSubfolders } from '../../../hooks/useSubfolders';
 
 interface DownloadSettingsDialogProps {
   open: boolean;
@@ -33,6 +38,7 @@ interface DownloadSettingsDialogProps {
   defaultVideoCount?: number; // For channel downloads
   mode?: 'manual' | 'channel'; // To differentiate between modes
   defaultResolutionSource?: 'channel' | 'global';
+  token?: string | null; // For fetching subfolders
 }
 
 const RESOLUTION_OPTIONS = [
@@ -53,19 +59,23 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   defaultResolution = '1080',
   defaultVideoCount = 3,
   mode = 'manual',
-  defaultResolutionSource = 'global'
+  defaultResolutionSource = 'global',
+  token = null
 }) => {
   const [useCustomSettings, setUseCustomSettings] = useState(false);
   const [resolution, setResolution] = useState(defaultResolution);
   const [channelVideoCount, setChannelVideoCount] = useState(defaultVideoCount);
   const [allowRedownload, setAllowRedownload] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  const [subfolderOverride, setSubfolderOverride] = useState<string | null>(null);
+
+  // Fetch available subfolders
+  const { subfolders, loading: subfoldersLoading } = useSubfolders(token);
 
   const selectedDefaultOption = RESOLUTION_OPTIONS.find((option) => option.value === defaultResolution);
   const defaultQualityLabel = selectedDefaultOption
     ? selectedDefaultOption.label
     : `${defaultResolution}p`;
-  const qualitySourceLabel = defaultResolutionSource === 'channel' ? 'channel override' : 'global default';
 
   // Auto-detect re-download need
   useEffect(() => {
@@ -86,6 +96,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       setHasUserInteracted(false);
       setUseCustomSettings(false);
       setAllowRedownload(false);
+      setSubfolderOverride(null);
     }
   }, [open]);
 
@@ -94,12 +105,12 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
     setHasUserInteracted(true);
   };
 
-  const handleResolutionChange = (event: any) => {
+  const handleResolutionChange = (event: SelectChangeEvent<string>) => {
     setResolution(event.target.value);
     setHasUserInteracted(true);
   };
 
-  const handleVideoCountChange = (event: any) => {
+  const handleVideoCountChange = (event: SelectChangeEvent<string>) => {
     const value = parseInt(event.target.value, 10);
     if (!isNaN(value)) {
       setChannelVideoCount(value);
@@ -142,11 +153,15 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       console.error('Failed to save settings to localStorage:', e);
     }
 
-    if (useCustomSettings || allowRedownload) {
+    // Include subfolder override if set (only for manual mode)
+    const hasOverride = useCustomSettings || allowRedownload || (mode === 'manual' && subfolderOverride !== null);
+
+    if (hasOverride) {
       onConfirm({
         resolution: useCustomSettings ? resolution : defaultResolution,
         videoCount: mode === 'channel' ? (useCustomSettings ? channelVideoCount : defaultVideoCount) : 0,
-        allowRedownload
+        allowRedownload,
+        subfolder: mode === 'manual' ? subfolderOverride : undefined
       });
     } else {
       onConfirm(null); // Use defaults
@@ -174,6 +189,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
 
       <DialogContent>
         <Box sx={{ pt: 1 }}>
+          {/* Info Alert */}
           <Alert severity="info" sx={{ mb: 2 }}>
             <Typography variant="body2">
               {mode === 'channel'
@@ -184,6 +200,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
             </Typography>
           </Alert>
 
+          {/* Warning for previously downloaded */}
           {missingVideoCount > 0 && (
             <Alert severity="warning" sx={{ mb: 2 }}>
               <Typography variant="body2">
@@ -200,112 +217,166 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
             </Alert>
           )}
 
-          <FormControlLabel
-            control={
-              <Switch
-                checked={allowRedownload}
-                onChange={(e) => {
-                  setAllowRedownload(e.target.checked);
-                  setHasUserInteracted(true);
-                }}
-                color="primary"
-              />
-            }
-            label="Allow re-downloading previously fetched videos"
-            sx={{ mb: 2 }}
-          />
+          {/* Summary Box - Only shown when custom settings are OFF */}
+          <Collapse in={!useCustomSettings} timeout={300}>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 2,
+                mb: 2,
+                bgcolor: 'action.hover',
+                borderColor: 'divider'
+              }}
+              data-testid="settings-summary"
+            >
+              <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
+                Current Settings
+              </Typography>
 
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <QualityIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                <Typography variant="body2">
+                  <strong>Quality:</strong> {defaultQualityLabel}
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                <FolderIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                <Typography variant="body2">
+                  <strong>Destination:</strong> Per channel settings (or global default)
+                </Typography>
+              </Box>
+
+              {mode === 'channel' && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                  <DownloadIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                  <Typography variant="body2">
+                    <strong>Videos per channel:</strong> {defaultVideoCount}
+                  </Typography>
+                </Box>
+              )}
+
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                Configured channels will use their subfolder settings.
+                Unconfigured channels will use the global default.
+              </Typography>
+            </Paper>
+          </Collapse>
+
+          {/* Custom Settings Toggle */}
           <FormControlLabel
             control={
               <Switch
                 checked={useCustomSettings}
                 onChange={handleUseCustomToggle}
                 color="primary"
+              />
+            }
+            label="Use custom settings for this download"
+            sx={{ mb: 2 }}
           />
-        }
-        label="Use custom settings for this download"
-        sx={{ mb: 2 }}
-      />
 
-      <Divider sx={{ mb: 2 }} />
+          {/* Custom Settings - Only shown when toggle is ON */}
+          <Collapse in={useCustomSettings} timeout={300}>
+            <Box data-testid="custom-settings-section" sx={{ mb: 2 }}>
+              {/* Allow Re-download Toggle */}
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={allowRedownload}
+                    onChange={(e) => {
+                      setAllowRedownload(e.target.checked);
+                      setHasUserInteracted(true);
+                    }}
+                    color="primary"
+                  />
+                }
+                label="Allow re-downloading previously fetched videos"
+                sx={{ mb: 2, display: 'block' }}
+              />
 
-      <Alert severity="info" sx={{ mb: 2 }}>
-        <Typography variant="body2">
-          Current automatic setting: {defaultQualityLabel} ({qualitySourceLabel}).
-        </Typography>
-      </Alert>
-
-      <Box sx={{ opacity: useCustomSettings ? 1 : 0.5, transition: 'opacity 0.3s' }} data-testid="custom-settings-section">
-        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>
-          Custom Video Quality
-        </Typography>
-
-            <FormControl fullWidth disabled={!useCustomSettings}>
-              <InputLabel id="resolution-select-label">Maximum Resolution</InputLabel>
-              <Select
-                labelId="resolution-select-label"
-                id="resolution-select"
-                value={resolution}
-                label="Maximum Resolution"
-                onChange={handleResolutionChange}
-              >
-                {RESOLUTION_OPTIONS.map(option => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            {mode === 'channel' && (
-              <>
-                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2, mt: 2 }}>
-                  Videos Per Channel
-                </Typography>
-
-                <FormControl fullWidth disabled={!useCustomSettings}>
-                  <InputLabel id="video-count-select-label">Number of videos to download per channel</InputLabel>
-                  <Select
-                    labelId="video-count-select-label"
-                    id="video-count-select"
-                    value={channelVideoCount}
-                    label="Number of videos to download per channel"
-                    onChange={handleVideoCountChange}
-                  >
-                    {getVideoCountOptions().map(count => (
-                      <MenuItem key={count} value={count}>
-                        {count} {count === 1 ? 'video' : 'videos'}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                {!useCustomSettings && (
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                    Using default: {defaultVideoCount} videos per channel
-                  </Typography>
-                )}
-              </>
-            )}
-
-            {useCustomSettings && resolution === '2160' && (
-              <Alert severity="warning" sx={{ mt: 2 }}>
-                <Typography variant="body2">
-                  4K videos may take significantly longer to download and use more storage space.
-                </Typography>
-              </Alert>
-            )}
-          </Box>
-
-          {!useCustomSettings && (
-            <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1, p: 1.5, bgcolor: 'primary.main', borderRadius: 1, color: 'primary.contrastText' }}>
-              <InfoIcon fontSize="small" />
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                Using default settings{mode === 'channel' ? `: ${defaultVideoCount} videos per channel at ` : ': '}{RESOLUTION_OPTIONS.find(r => r.value === defaultResolution)?.label || `${defaultResolution}p`}
+              {/* Resolution Selection */}
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                Maximum Resolution
               </Typography>
-            </Box>
-          )}
 
-          <Box sx={{ mt: 2, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel id="resolution-select-label">Maximum Resolution</InputLabel>
+                <Select
+                  labelId="resolution-select-label"
+                  id="resolution-select"
+                  value={resolution}
+                  label="Maximum Resolution"
+                  onChange={handleResolutionChange}
+                >
+                  {RESOLUTION_OPTIONS.map(option => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              {resolution === '2160' && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    4K videos may take significantly longer to download and use more storage space.
+                  </Typography>
+                </Alert>
+              )}
+
+              {/* Videos Per Channel - Channel mode only */}
+              {mode === 'channel' && (
+                <>
+                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                    Videos Per Channel
+                  </Typography>
+
+                  <FormControl fullWidth sx={{ mb: 2 }}>
+                    <InputLabel id="video-count-select-label">Number of videos to download per channel</InputLabel>
+                    <Select
+                      labelId="video-count-select-label"
+                      id="video-count-select"
+                      value={String(channelVideoCount)}
+                      label="Number of videos to download per channel"
+                      onChange={handleVideoCountChange}
+                    >
+                      {getVideoCountOptions().map(count => (
+                        <MenuItem key={count} value={count}>
+                          {count} {count === 1 ? 'video' : 'videos'}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </>
+              )}
+
+              {/* Subfolder Override - Manual mode only */}
+              {mode === 'manual' && (
+                <>
+                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                    Destination Override
+                  </Typography>
+
+                  <SubfolderAutocomplete
+                    mode="download"
+                    value={subfolderOverride}
+                    onChange={(newValue) => {
+                      setSubfolderOverride(newValue);
+                      setHasUserInteracted(true);
+                    }}
+                    subfolders={subfolders}
+                    loading={subfoldersLoading}
+                    label="Override Destination"
+                    helperText="Configured channels use their subfolder, unconfigured channels use global default."
+                  />
+                </>
+              )}
+            </Box>
+          </Collapse>
+
+          {/* Note about YouTube quality */}
+          <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
             <Typography variant="caption" color="text.secondary">
               <strong>Note:</strong> YouTube will provide the best available quality up to your selected resolution.
             </Typography>

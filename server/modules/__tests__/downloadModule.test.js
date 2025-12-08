@@ -16,6 +16,7 @@ jest.mock('../configModule', () => {
     channelFilesToDownload: 3
   };
   mockConfigModule.on = jest.fn();
+  mockConfigModule.getDefaultSubfolder = jest.fn().mockReturnValue(null);
   return mockConfigModule;
 });
 
@@ -897,7 +898,9 @@ describe('DownloadModule', () => {
         'Manually Added Urls',
         2,
         ['https://youtube.com/watch?v=abc123', 'https://youtube.com/watch?v=def456'],
-        false
+        false,
+        false,
+        null
       );
     });
 
@@ -926,7 +929,9 @@ describe('DownloadModule', () => {
         'Manually Added Urls',
         1,
         ['https://youtube.com/watch?v=xyz789'],
-        false
+        false,
+        false,
+        null
       );
     });
 
@@ -950,7 +955,9 @@ describe('DownloadModule', () => {
         'Manually Added Urls',
         2,
         ['-abc123', 'https://youtube.com/watch?v=def456'],
-        false
+        false,
+        false,
+        null
       );
     });
 
@@ -1016,17 +1023,13 @@ describe('DownloadModule', () => {
         'Manually Added Urls',
         2,
         ['https://youtube.com/watch?v=test1', 'https://youtube.com/watch?v=test2'],
-        true
+        true,
+        false,
+        null
       );
       // Verify that --download-archive is NOT in the arguments when allowRedownload is true
-      expect(mockDownloadExecutor.doDownload).not.toHaveBeenCalledWith(
-        expect.arrayContaining(['--download-archive']),
-        expect.anything(),
-        expect.anything(),
-        expect.anything(),
-        expect.anything(),
-        expect.anything()
-      );
+      const callArgs = mockDownloadExecutor.doDownload.mock.calls[0][0];
+      expect(callArgs).not.toContain('--download-archive');
     });
 
     it('should handle only resolution override when allowRedownload is false', async () => {
@@ -1055,7 +1058,9 @@ describe('DownloadModule', () => {
         'Manually Added Urls',
         1,
         ['https://youtube.com/watch?v=test'],
-        false
+        false,
+        false,
+        null
       );
     });
 
@@ -1082,7 +1087,88 @@ describe('DownloadModule', () => {
         'Manually Added Urls',
         1,
         ['https://youtube.com/watch?v=default'],
-        false
+        false,
+        false,
+        null
+      );
+    });
+
+    it('should pass subfolder override to doDownload when specified', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+      const request = {
+        body: {
+          urls: ['https://youtube.com/watch?v=test'],
+          overrideSettings: {
+            subfolder: 'Movies'
+          }
+        }
+      };
+
+      await downloadModule.doSpecificDownloads(request);
+
+      expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          '--download-archive', './config/complete.list',
+          'https://youtube.com/watch?v=test'
+        ]),
+        mockJobId,
+        'Manually Added Urls',
+        1,
+        ['https://youtube.com/watch?v=test'],
+        false,
+        false,
+        'Movies'
+      );
+    });
+
+    it('should pass null subfolder when subfolder is undefined in overrideSettings', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+      const request = {
+        body: {
+          urls: ['https://youtube.com/watch?v=test'],
+          overrideSettings: {
+            resolution: '720'
+            // subfolder not specified
+          }
+        }
+      };
+
+      await downloadModule.doSpecificDownloads(request);
+
+      expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
+        expect.any(Array),
+        mockJobId,
+        'Manually Added Urls',
+        1,
+        ['https://youtube.com/watch?v=test'],
+        false,
+        false,
+        null
+      );
+    });
+
+    it('should handle empty string subfolder as empty string', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+      const request = {
+        body: {
+          urls: ['https://youtube.com/watch?v=test'],
+          overrideSettings: {
+            subfolder: ''
+          }
+        }
+      };
+
+      await downloadModule.doSpecificDownloads(request);
+
+      expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
+        expect.any(Array),
+        mockJobId,
+        'Manually Added Urls',
+        1,
+        ['https://youtube.com/watch?v=test'],
+        false,
+        false,
+        ''
       );
     });
 
@@ -1138,7 +1224,9 @@ describe('DownloadModule', () => {
         'Manually Added Urls',
         0,
         [],
-        false
+        false,
+        false,
+        null
       );
     });
   });

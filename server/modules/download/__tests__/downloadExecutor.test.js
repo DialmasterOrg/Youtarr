@@ -78,7 +78,16 @@ jest.mock('../../../models/channel', () => ({
   findAll: jest.fn().mockResolvedValue([])
 }));
 
+// Mock filesystem module
+jest.mock('../../filesystem', () => ({
+  isMainVideoFile: jest.fn(),
+  isVideoDirectory: jest.fn(),
+  isChannelDirectory: jest.fn(),
+  isDirectoryEmpty: jest.fn()
+}));
+
 const DownloadExecutor = require('../downloadExecutor');
+const filesystem = require('../../filesystem');
 const configModule = require('../../configModule');
 const plexModule = require('../../plexModule');
 const jobModule = require('../../jobModule');
@@ -104,6 +113,12 @@ describe('DownloadExecutor', () => {
     configModule.getConfig.mockReturnValue({
       enableStallDetection: false,
     });
+
+    // Setup filesystem module mocks with sensible defaults
+    filesystem.isMainVideoFile.mockReturnValue(true);
+    filesystem.isVideoDirectory.mockReturnValue(true);
+    filesystem.isChannelDirectory.mockReturnValue(true);
+    filesystem.isDirectoryEmpty.mockReturnValue(true);
 
     // Create mock process
     mockProcess = new EventEmitter();
@@ -227,70 +242,9 @@ describe('DownloadExecutor', () => {
     });
   });
 
-  describe('isMainVideoFile', () => {
-    it('should identify main video files with mp4 extension', () => {
-      expect(executor.isMainVideoFile('/path/Channel - Title [abc123XYZ_].mp4')).toBe(true);
-    });
-
-    it('should identify main video files with mkv extension', () => {
-      expect(executor.isMainVideoFile('/path/Channel - Title [abc123XYZ_].mkv')).toBe(true);
-    });
-
-    it('should identify main video files with webm extension', () => {
-      expect(executor.isMainVideoFile('/path/Channel - Title [abc123XYZ_].webm')).toBe(true);
-    });
-
-    it('should reject fragment files', () => {
-      expect(executor.isMainVideoFile('/path/Channel - Title.f137.mp4')).toBe(false);
-    });
-
-    it('should reject audio fragment files', () => {
-      expect(executor.isMainVideoFile('/path/Channel - Title.f140.m4a')).toBe(false);
-    });
-
-    it('should reject files without video ID', () => {
-      expect(executor.isMainVideoFile('/path/video.mp4')).toBe(false);
-    });
-
-    it('should reject files with too short video IDs', () => {
-      expect(executor.isMainVideoFile('/path/Channel - Title [abc].mp4')).toBe(false);
-    });
-  });
-
-  describe('isVideoSpecificDirectory', () => {
-    it('should identify valid video directory', () => {
-      expect(executor.isVideoSpecificDirectory('/path/Channel - Video Title - abc123XYZ_d')).toBe(true);
-    });
-
-    it('should reject directory with insufficient segments', () => {
-      expect(executor.isVideoSpecificDirectory('/path/Channel - Title')).toBe(false);
-    });
-
-    it('should reject directory with invalid video ID', () => {
-      expect(executor.isVideoSpecificDirectory('/path/Channel - Title - abc')).toBe(false);
-    });
-
-    it('should accept video IDs between 10-12 characters', () => {
-      expect(executor.isVideoSpecificDirectory('/path/Ch - Title - 1234567890')).toBe(true);
-      expect(executor.isVideoSpecificDirectory('/path/Ch - Title - 12345678901')).toBe(true);
-      expect(executor.isVideoSpecificDirectory('/path/Ch - Title - 123456789012')).toBe(true);
-    });
-
-    it('should reject video IDs with too few characters', () => {
-      expect(executor.isVideoSpecificDirectory('/path/Ch - Title - 123456789')).toBe(false);
-    });
-
-    it('should handle errors gracefully', () => {
-      const originalBasename = require('path').basename;
-      require('path').basename = jest.fn(() => {
-        throw new Error('Path error');
-      });
-
-      expect(executor.isVideoSpecificDirectory('/invalid')).toBe(false);
-
-      require('path').basename = originalBasename;
-    });
-  });
+  // NOTE: isMainVideoFile, isVideoDirectory (previously isVideoSpecificDirectory),
+  // isChannelDirectory, and isDirectoryEmpty tests have been moved to
+  // server/modules/filesystem/__tests__/directoryManager.test.js
 
   describe('cleanupInProgressVideos', () => {
     beforeEach(() => {
@@ -339,6 +293,8 @@ describe('DownloadExecutor', () => {
 
       JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
       mockFsPromises.access.mockResolvedValue(); // Directory exists
+      // Mock filesystem.isVideoDirectory to return false for this path
+      filesystem.isVideoDirectory.mockReturnValue(false);
 
       await executor.cleanupInProgressVideos('job-123');
 
@@ -897,6 +853,78 @@ describe('DownloadExecutor', () => {
         expect.objectContaining({
           status: 'Complete'
         })
+      );
+    });
+
+    it('should pass subfolderOverride to yt-dlp via environment variable', async () => {
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, 'TestSubfolder');
+
+      expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
+        env: expect.objectContaining({
+          YOUTARR_JOB_ID: mockJobId,
+          YOUTARR_SUBFOLDER_OVERRIDE: 'TestSubfolder'
+        })
+      });
+    });
+
+    it('should pass empty string subfolderOverride to yt-dlp', async () => {
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      // Empty string means "no subfolder" (downloads to root)
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, '');
+
+      expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
+        env: expect.objectContaining({
+          YOUTARR_JOB_ID: mockJobId,
+          YOUTARR_SUBFOLDER_OVERRIDE: ''
+        })
+      });
+    });
+
+    it('should not set YOUTARR_SUBFOLDER_OVERRIDE when subfolderOverride is null', async () => {
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, null);
+
+      expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
+        env: expect.not.objectContaining({
+          YOUTARR_SUBFOLDER_OVERRIDE: expect.anything()
+        })
+      });
+    });
+
+    it('should not set YOUTARR_SUBFOLDER_OVERRIDE when subfolderOverride is undefined', async () => {
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, undefined);
+
+      expect(mockSpawn).toHaveBeenCalledWith('yt-dlp', mockArgs, {
+        env: expect.not.objectContaining({
+          YOUTARR_SUBFOLDER_OVERRIDE: expect.anything()
+        })
+      });
+    });
+
+    it('should log subfolderOverride in info message', async () => {
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, 'MyFolder');
+
+      expect(logger.info).toHaveBeenCalledWith(
+        { jobType: mockJobType, args: mockArgs, subfolderOverride: 'MyFolder' },
+        'Running yt-dlp'
       );
     });
   });

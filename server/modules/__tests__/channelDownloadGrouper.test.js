@@ -13,7 +13,8 @@ jest.mock('../configModule', () => ({
   directoryPath: '/mock/youtube/output',
   config: {
     preferredResolution: '1080'
-  }
+  },
+  getDefaultSubfolder: jest.fn().mockReturnValue(null)
 }));
 
 const channelDownloadGrouper = require('../channelDownloadGrouper');
@@ -575,11 +576,12 @@ describe('ChannelDownloadGrouper', () => {
     it('should build root level path when subfolder is null', () => {
       const template = channelDownloadGrouper.buildOutputPathTemplate(null);
 
+      // Template now uses .76s for title truncation to avoid path length issues
       const expectedPath = path.join(
         '/mock/youtube/output',
         '%(uploader,channel,uploader_id)s',
-        '%(uploader,channel,uploader_id)s - %(title)s - %(id)s',
-        '%(uploader,channel,uploader_id)s - %(title)s  [%(id)s].%(ext)s'
+        '%(uploader,channel,uploader_id)s - %(title).76s - %(id)s',
+        '%(uploader,channel,uploader_id)s - %(title).76s [%(id)s].%(ext)s'
       );
 
       expect(template).toBe(expectedPath);
@@ -588,12 +590,13 @@ describe('ChannelDownloadGrouper', () => {
     it('should build subfolder path with __ prefix', () => {
       const template = channelDownloadGrouper.buildOutputPathTemplate('Tech');
 
+      // Template now uses .76s for title truncation to avoid path length issues
       const expectedPath = path.join(
         '/mock/youtube/output',
         '__Tech',
         '%(uploader,channel,uploader_id)s',
-        '%(uploader,channel,uploader_id)s - %(title)s - %(id)s',
-        '%(uploader,channel,uploader_id)s - %(title)s  [%(id)s].%(ext)s'
+        '%(uploader,channel,uploader_id)s - %(title).76s - %(id)s',
+        '%(uploader,channel,uploader_id)s - %(title).76s [%(id)s].%(ext)s'
       );
 
       expect(template).toBe(expectedPath);
@@ -616,10 +619,11 @@ describe('ChannelDownloadGrouper', () => {
     it('should build root level thumbnail path when subfolder is null', () => {
       const template = channelDownloadGrouper.buildThumbnailPathTemplate(null);
 
+      // Template now uses .76s for title truncation to avoid path length issues
       const expectedPath = path.join(
         '/mock/youtube/output',
         '%(uploader,channel,uploader_id)s',
-        '%(uploader,channel,uploader_id)s - %(title)s - %(id)s',
+        '%(uploader,channel,uploader_id)s - %(title).76s - %(id)s',
         'poster'
       );
 
@@ -629,11 +633,12 @@ describe('ChannelDownloadGrouper', () => {
     it('should build subfolder thumbnail path with __ prefix', () => {
       const template = channelDownloadGrouper.buildThumbnailPathTemplate('Tech');
 
+      // Template now uses .76s for title truncation to avoid path length issues
       const expectedPath = path.join(
         '/mock/youtube/output',
         '__Tech',
         '%(uploader,channel,uploader_id)s',
-        '%(uploader,channel,uploader_id)s - %(title)s - %(id)s',
+        '%(uploader,channel,uploader_id)s - %(title).76s - %(id)s',
         'poster'
       );
 

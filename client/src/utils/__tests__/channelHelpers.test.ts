@@ -210,8 +210,8 @@ describe('channelHelpers Utility', () => {
   });
 
   describe('formatSubFolderLabel', () => {
-    test('returns "default" for DEFAULT_SUBFOLDER_KEY', () => {
-      expect(formatSubFolderLabel(DEFAULT_SUBFOLDER_KEY)).toBe('default');
+    test('returns "root" for DEFAULT_SUBFOLDER_KEY', () => {
+      expect(formatSubFolderLabel(DEFAULT_SUBFOLDER_KEY)).toBe('root');
     });
 
     test('formats custom key with __ prefix and / suffix', () => {
@@ -238,22 +238,22 @@ describe('channelHelpers Utility', () => {
   });
 
   describe('Integration: normalizeSubFolderKey and formatSubFolderLabel', () => {
-    test('null value normalizes and formats to "default"', () => {
+    test('null value normalizes and formats to "root"', () => {
       const normalized = normalizeSubFolderKey(null);
       const formatted = formatSubFolderLabel(normalized);
-      expect(formatted).toBe('default');
+      expect(formatted).toBe('root');
     });
 
-    test('undefined value normalizes and formats to "default"', () => {
+    test('undefined value normalizes and formats to "root"', () => {
       const normalized = normalizeSubFolderKey(undefined);
       const formatted = formatSubFolderLabel(normalized);
-      expect(formatted).toBe('default');
+      expect(formatted).toBe('root');
     });
 
-    test('empty string normalizes and formats to "default"', () => {
+    test('empty string normalizes and formats to "root"', () => {
       const normalized = normalizeSubFolderKey('');
       const formatted = formatSubFolderLabel(normalized);
-      expect(formatted).toBe('default');
+      expect(formatted).toBe('root');
     });
 
     test('custom value normalizes and formats correctly', () => {

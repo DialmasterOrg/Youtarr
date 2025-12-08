@@ -198,6 +198,7 @@ function Configuration({ token }: ConfigurationProps) {
         isPlatformManaged={isPlatformManaged}
         onConfigChange={handleConfigChange}
         onMobileTooltipClick={setMobileTooltip}
+        token={token}
       />
 
       <PlexIntegrationSection

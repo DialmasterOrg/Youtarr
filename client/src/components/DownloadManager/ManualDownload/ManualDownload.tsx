@@ -272,6 +272,7 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
         defaultResolution={defaultResolution}
         mode="manual"
         defaultResolutionSource="global"
+        token={token}
       />
     </Box>
   );
