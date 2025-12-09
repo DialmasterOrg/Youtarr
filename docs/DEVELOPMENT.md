@@ -354,11 +354,39 @@ const sequelize = new Sequelize({
 
 ## API Development
 
-### API Endpoints
+### API Documentation (Swagger)
 
-See `./server/server.js` for api endpoint/route definitions.
+Youtarr provides interactive API documentation via Swagger UI:
 
-Key endpoints (all require authentication except setup):
+- **Swagger UI**: http://localhost:3087/swagger
+- **OpenAPI JSON**: http://localhost:3087/swagger.json
+
+The Swagger documentation includes:
+- All available endpoints with request/response schemas
+- Authentication requirements
+- Try-it-out functionality for testing endpoints
+- Request body examples and parameter descriptions
+
+### API Structure
+
+Routes are organized into modular files under `./server/routes/`:
+
+```
+server/routes/
+├── auth.js       # Authentication endpoints
+├── channels.js   # Channel management
+├── config.js     # Configuration endpoints
+├── health.js     # Health check endpoints
+├── jobs.js       # Download job management
+├── plex.js       # Plex integration
+├── setup.js      # Initial setup endpoints
+├── videos.js     # Video management
+└── index.js      # Route registration
+```
+
+### Key Endpoints
+
+All endpoints require authentication except setup and health checks:
 
 - **Setup:** `GET /setup/status`, `POST /setup/create-auth`
 - **Auth:** `POST /auth/login`, `POST /auth/logout`, `GET /auth/sessions`
@@ -366,15 +394,50 @@ Key endpoints (all require authentication except setup):
 - **Channels:** `GET /getchannels`, `POST /updatechannels`
 - **Downloads:** `POST /triggerspecificdownloads`, `GET /jobstatus/:jobId`
 - **Plex:** `GET /getplexlibraries`, `GET /plex/auth-url`
+- **Health:** `GET /api/health`, `GET /api/db-status`
+
+For the complete list of 40+ endpoints, see the [Swagger documentation](http://localhost:3087/swagger).
 
 ### Authentication
 
-All API endpoints (except setup and login) require authentication:
+All API endpoints (except setup, login, and health checks) require authentication:
 ```javascript
 headers: {
   'x-access-token': 'session-token-here'
 }
 ```
+
+### Adding New Endpoints
+
+When adding new API endpoints:
+
+1. Add the route to the appropriate file in `./server/routes/`
+2. Include JSDoc annotations for Swagger documentation:
+
+```javascript
+/**
+ * @swagger
+ * /api/your-endpoint:
+ *   get:
+ *     summary: Brief description
+ *     description: Detailed description of what the endpoint does.
+ *     tags: [CategoryTag]
+ *     parameters:
+ *       - in: query
+ *         name: paramName
+ *         schema:
+ *           type: string
+ *         description: Parameter description
+ *     responses:
+ *       200:
+ *         description: Success response description
+ */
+router.get('/api/your-endpoint', verifyToken, async (req, res) => {
+  // Implementation
+});
+```
+
+3. The Swagger documentation will automatically update on the next server restart
 
 ### WebSocket Events
 

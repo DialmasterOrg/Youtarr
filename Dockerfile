@@ -44,6 +44,7 @@ COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=build /app/server ./server
 COPY --from=build /app/client/build ./client/build
 COPY --from=build /app/migrations ./migrations
+COPY --from=build /app/package.json ./package.json
 
 # Copy config.example.json to server directory (guaranteed to exist and accessible)
 COPY config/config.example.json /app/server/config.example.json

@@ -1,15 +1,6 @@
 /* eslint-env jest */
 const loggerMock = require('../__mocks__/logger');
-
-const findRouteHandlers = (app, method, routePath) => {
-  const stack = app?._router?.stack || [];
-  for (const layer of stack) {
-    if (layer.route && layer.route.path === routePath && layer.route.methods[method]) {
-      return layer.route.stack.map((routeLayer) => routeLayer.handle);
-    }
-  }
-  throw new Error(`Route ${method.toUpperCase()} ${routePath} not found`);
-};
+const { findRouteHandlers } = require('./testUtils');
 
 const createMockRequest = (overrides = {}) => ({
   method: 'GET',
@@ -221,6 +212,19 @@ const createServerModule = ({
           getChannelSettings: jest.fn(),
           updateChannelSettings: jest.fn(),
           getAllSubFolders: jest.fn()
+        }));
+        jest.doMock('../modules/archiveModule', () => ({
+          getAutoRemovalDryRun: jest.fn().mockResolvedValue({ videos: [], totalSize: 0 })
+        }));
+        jest.doMock('../modules/videoDeletionModule', () => ({
+          deleteVideos: jest.fn().mockResolvedValue({ deleted: [], failed: [] }),
+          deleteVideosByYoutubeIds: jest.fn().mockResolvedValue({ deleted: [], failed: [] })
+        }));
+        jest.doMock('../modules/notificationModule', () => ({
+          sendTestNotification: jest.fn().mockResolvedValue({ success: true })
+        }));
+        jest.doMock('../models/channelvideo', () => ({
+          update: jest.fn().mockResolvedValue([1])
         }));
         jest.doMock('../modules/cronJobs', () => cronJobsMock);
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());

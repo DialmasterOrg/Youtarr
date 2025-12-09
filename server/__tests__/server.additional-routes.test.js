@@ -1,15 +1,6 @@
 /* eslint-env jest */
 const loggerMock = require('../__mocks__/logger');
-
-const findRouteHandlers = (app, method, routePath) => {
-  const stack = app?._router?.stack || [];
-  for (const layer of stack) {
-    if (layer.route && layer.route.path === routePath && layer.route.methods[method]) {
-      return layer.route.stack.map((routeLayer) => routeLayer.handle);
-    }
-  }
-  throw new Error(`Route ${method.toUpperCase()} ${routePath} not found`);
-};
+const { findRouteHandlers } = require('./testUtils');
 
 const createMockRequest = (overrides = {}) => ({
   method: 'GET',
@@ -63,7 +54,9 @@ const createServerModule = ({
   passwordHash = 'hashed-password',
   session,
   skipInitialize = false,
-  configOverrides = {}
+  configOverrides = {},
+  channelVideoMock = null,
+  archiveModuleMock = null
 } = {}) => {
   jest.resetModules();
   jest.clearAllMocks();
@@ -260,6 +253,36 @@ const createServerModule = ({
           updateChannelSettings: jest.fn(),
           getAllSubFolders: jest.fn()
         }));
+        jest.doMock('../modules/videoDeletionModule', () => ({
+          deleteVideos: jest.fn().mockResolvedValue({ deleted: [], failed: [] }),
+          deleteVideosByYoutubeIds: jest.fn().mockResolvedValue({ deleted: [], failed: [] })
+        }));
+        jest.doMock('../modules/videoValidationModule', () => ({
+          validateVideo: jest.fn().mockResolvedValue({ isValidUrl: true, metadata: {} })
+        }));
+        jest.doMock('../modules/notificationModule', () => ({
+          sendTestNotification: jest.fn().mockResolvedValue({ success: true })
+        }));
+        // ChannelVideo mock - use provided mock or default
+        jest.doMock('../models/channelvideo', () => channelVideoMock || {
+          update: jest.fn().mockResolvedValue([1]),
+          findOne: jest.fn().mockResolvedValue({
+            id: 1,
+            youtube_id: 'test-video',
+            channel_id: 'test-channel',
+            ignored: false,
+            update: jest.fn().mockResolvedValue()
+          })
+        });
+        
+        // Archive module mock - use provided mock or default
+        if (archiveModuleMock) {
+          jest.doMock('../modules/archiveModule', () => archiveModuleMock);
+        } else {
+          jest.doMock('../modules/archiveModule', () => ({
+            getAutoRemovalDryRun: jest.fn().mockResolvedValue({ videos: [], totalSize: 0 })
+          }));
+        }
         jest.doMock('../modules/cronJobs', () => ({ initialize: jest.fn() }));
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => ({ schedule: jest.fn() }));
@@ -857,18 +880,19 @@ describe('server routes - channel video ignore operations', () => {
         update: jest.fn().mockResolvedValue()
       };
 
-      const ChannelVideoMock = {
+      const channelVideoMock = {
         findOne: jest.fn().mockResolvedValue(mockChannelVideo)
       };
 
-      const archiveModuleMock = {
-        addVideoToArchive: jest.fn().mockResolvedValue(true)
+      const archiveMock = {
+        addVideoToArchive: jest.fn().mockResolvedValue(true),
+        getAutoRemovalDryRun: jest.fn().mockResolvedValue({ videos: [], totalSize: 0 })
       };
 
-      jest.doMock('../models/channelvideo', () => ChannelVideoMock);
-      jest.doMock('../modules/archiveModule', () => archiveModuleMock);
-
-      const { app } = await createServerModule();
+      const { app } = await createServerModule({
+        channelVideoMock,
+        archiveModuleMock: archiveMock
+      });
 
       const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/:youtubeId/ignore');
       const ignoreHandler = handlers[handlers.length - 1];
@@ -880,14 +904,14 @@ describe('server routes - channel video ignore operations', () => {
 
       await ignoreHandler(req, res);
 
-      expect(ChannelVideoMock.findOne).toHaveBeenCalledWith({
+      expect(channelVideoMock.findOne).toHaveBeenCalledWith({
         where: { channel_id: 'UCtest123', youtube_id: 'video123' }
       });
       expect(mockChannelVideo.update).toHaveBeenCalledWith({
         ignored: true,
         ignored_at: expect.any(Date)
       });
-      expect(archiveModuleMock.addVideoToArchive).toHaveBeenCalledWith('video123');
+      expect(archiveMock.addVideoToArchive).toHaveBeenCalledWith('video123');
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
         success: true,
@@ -896,13 +920,11 @@ describe('server routes - channel video ignore operations', () => {
     });
 
     test('returns 404 when channel video not found', async () => {
-      const ChannelVideoMock = {
+      const channelVideoMock = {
         findOne: jest.fn().mockResolvedValue(null)
       };
 
-      jest.doMock('../models/channelvideo', () => ChannelVideoMock);
-
-      const { app } = await createServerModule();
+      const { app } = await createServerModule({ channelVideoMock });
 
       const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/:youtubeId/ignore');
       const ignoreHandler = handlers[handlers.length - 1];
@@ -922,13 +944,11 @@ describe('server routes - channel video ignore operations', () => {
     });
 
     test('handles error during ignore operation', async () => {
-      const ChannelVideoMock = {
+      const channelVideoMock = {
         findOne: jest.fn().mockRejectedValue(new Error('Database error'))
       };
 
-      jest.doMock('../models/channelvideo', () => ChannelVideoMock);
-
-      const { app } = await createServerModule();
+      const { app } = await createServerModule({ channelVideoMock });
 
       const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/:youtubeId/ignore');
       const ignoreHandler = handlers[handlers.length - 1];
@@ -957,18 +977,19 @@ describe('server routes - channel video ignore operations', () => {
         update: jest.fn().mockResolvedValue()
       };
 
-      const ChannelVideoMock = {
+      const channelVideoMock = {
         findOne: jest.fn().mockResolvedValue(mockChannelVideo)
       };
 
-      const archiveModuleMock = {
-        removeVideoFromArchive: jest.fn().mockResolvedValue(true)
+      const archiveMock = {
+        removeVideoFromArchive: jest.fn().mockResolvedValue(true),
+        getAutoRemovalDryRun: jest.fn().mockResolvedValue({ videos: [], totalSize: 0 })
       };
 
-      jest.doMock('../models/channelvideo', () => ChannelVideoMock);
-      jest.doMock('../modules/archiveModule', () => archiveModuleMock);
-
-      const { app } = await createServerModule();
+      const { app } = await createServerModule({
+        channelVideoMock,
+        archiveModuleMock: archiveMock
+      });
 
       const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/:youtubeId/unignore');
       const unignoreHandler = handlers[handlers.length - 1];
@@ -980,14 +1001,14 @@ describe('server routes - channel video ignore operations', () => {
 
       await unignoreHandler(req, res);
 
-      expect(ChannelVideoMock.findOne).toHaveBeenCalledWith({
+      expect(channelVideoMock.findOne).toHaveBeenCalledWith({
         where: { channel_id: 'UCtest123', youtube_id: 'video123' }
       });
       expect(mockChannelVideo.update).toHaveBeenCalledWith({
         ignored: false,
         ignored_at: null
       });
-      expect(archiveModuleMock.removeVideoFromArchive).toHaveBeenCalledWith('video123');
+      expect(archiveMock.removeVideoFromArchive).toHaveBeenCalledWith('video123');
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
         success: true,
@@ -996,13 +1017,11 @@ describe('server routes - channel video ignore operations', () => {
     });
 
     test('returns 404 when channel video not found', async () => {
-      const ChannelVideoMock = {
+      const channelVideoMock = {
         findOne: jest.fn().mockResolvedValue(null)
       };
 
-      jest.doMock('../models/channelvideo', () => ChannelVideoMock);
-
-      const { app } = await createServerModule();
+      const { app } = await createServerModule({ channelVideoMock });
 
       const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/:youtubeId/unignore');
       const unignoreHandler = handlers[handlers.length - 1];
@@ -1022,13 +1041,11 @@ describe('server routes - channel video ignore operations', () => {
     });
 
     test('handles error during unignore operation', async () => {
-      const ChannelVideoMock = {
+      const channelVideoMock = {
         findOne: jest.fn().mockRejectedValue(new Error('Database error'))
       };
 
-      jest.doMock('../models/channelvideo', () => ChannelVideoMock);
-
-      const { app } = await createServerModule();
+      const { app } = await createServerModule({ channelVideoMock });
 
       const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/:youtubeId/unignore');
       const unignoreHandler = handlers[handlers.length - 1];
@@ -1062,20 +1079,21 @@ describe('server routes - channel video ignore operations', () => {
         update: jest.fn().mockResolvedValue()
       };
 
-      const ChannelVideoMock = {
+      const channelVideoMock = {
         findOne: jest.fn()
           .mockResolvedValueOnce(mockChannelVideo1)
           .mockResolvedValueOnce(mockChannelVideo2)
       };
 
-      const archiveModuleMock = {
-        addVideoToArchive: jest.fn().mockResolvedValue(true)
+      const archiveMock = {
+        addVideoToArchive: jest.fn().mockResolvedValue(true),
+        getAutoRemovalDryRun: jest.fn().mockResolvedValue({ videos: [], totalSize: 0 })
       };
 
-      jest.doMock('../models/channelvideo', () => ChannelVideoMock);
-      jest.doMock('../modules/archiveModule', () => archiveModuleMock);
-
-      const { app } = await createServerModule();
+      const { app } = await createServerModule({
+        channelVideoMock,
+        archiveModuleMock: archiveMock
+      });
 
       const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/bulk-ignore');
       const bulkIgnoreHandler = handlers[handlers.length - 1];
@@ -1088,7 +1106,7 @@ describe('server routes - channel video ignore operations', () => {
 
       await bulkIgnoreHandler(req, res);
 
-      expect(ChannelVideoMock.findOne).toHaveBeenCalledTimes(2);
+      expect(channelVideoMock.findOne).toHaveBeenCalledTimes(2);
       expect(mockChannelVideo1.update).toHaveBeenCalledWith({
         ignored: true,
         ignored_at: expect.any(Date)
@@ -1097,8 +1115,8 @@ describe('server routes - channel video ignore operations', () => {
         ignored: true,
         ignored_at: expect.any(Date)
       });
-      expect(archiveModuleMock.addVideoToArchive).toHaveBeenCalledWith('video1');
-      expect(archiveModuleMock.addVideoToArchive).toHaveBeenCalledWith('video2');
+      expect(archiveMock.addVideoToArchive).toHaveBeenCalledWith('video1');
+      expect(archiveMock.addVideoToArchive).toHaveBeenCalledWith('video2');
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
         success: true,
@@ -1117,20 +1135,21 @@ describe('server routes - channel video ignore operations', () => {
         update: jest.fn().mockResolvedValue()
       };
 
-      const ChannelVideoMock = {
+      const channelVideoMock = {
         findOne: jest.fn()
           .mockResolvedValueOnce(mockChannelVideo1)
           .mockResolvedValueOnce(null)
       };
 
-      const archiveModuleMock = {
-        addVideoToArchive: jest.fn().mockResolvedValue(true)
+      const archiveMock = {
+        addVideoToArchive: jest.fn().mockResolvedValue(true),
+        getAutoRemovalDryRun: jest.fn().mockResolvedValue({ videos: [], totalSize: 0 })
       };
 
-      jest.doMock('../models/channelvideo', () => ChannelVideoMock);
-      jest.doMock('../modules/archiveModule', () => archiveModuleMock);
-
-      const { app } = await createServerModule();
+      const { app } = await createServerModule({
+        channelVideoMock,
+        archiveModuleMock: archiveMock
+      });
 
       const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/bulk-ignore');
       const bulkIgnoreHandler = handlers[handlers.length - 1];
@@ -1218,13 +1237,11 @@ describe('server routes - channel video ignore operations', () => {
     });
 
     test('handles error during bulk ignore operation', async () => {
-      const ChannelVideoMock = {
+      const channelVideoMock = {
         findOne: jest.fn().mockRejectedValue(new Error('Database error'))
       };
 
-      jest.doMock('../models/channelvideo', () => ChannelVideoMock);
-
-      const { app } = await createServerModule();
+      const { app } = await createServerModule({ channelVideoMock });
 
       const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/videos/bulk-ignore');
       const bulkIgnoreHandler = handlers[handlers.length - 1];
