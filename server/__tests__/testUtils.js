@@ -24,14 +24,14 @@ const findRouteHandlers = (app, method, routePath, debug = false) => {
   const stack = app?._router?.stack || [];
 
   if (debug) {
-    console.log(`Looking for ${method.toUpperCase()} ${routePath}`);
-    console.log(`App router stack has ${stack.length} layers`);
+    console.error(`Looking for ${method.toUpperCase()} ${routePath}`);
+    console.error(`App router stack has ${stack.length} layers`);
   }
 
   // First, try to find the route directly on the app
   for (const layer of stack) {
     if (debug && layer.route) {
-      console.log(`  Direct route: ${layer.route.path}, methods: ${JSON.stringify(layer.route.methods)}`);
+      console.error(`  Direct route: ${layer.route.path}, methods: ${JSON.stringify(layer.route.methods)}`);
     }
     if (layer.route && layer.route.path === routePath && layer.route.methods[method]) {
       return layer.route.stack.map((routeLayer) => routeLayer.handle);
@@ -44,12 +44,12 @@ const findRouteHandlers = (app, method, routePath, debug = false) => {
     // Check if this layer has a handle with a stack (indicates it's a router)
     if (layer.handle && layer.handle.stack && Array.isArray(layer.handle.stack)) {
       if (debug) {
-        console.log(`  Router layer (${layer.name}): ${layer.handle.stack.length} nested routes`);
+        console.error(`  Router layer (${layer.name}): ${layer.handle.stack.length} nested routes`);
       }
       const routerStack = layer.handle.stack;
       for (const routerLayer of routerStack) {
         if (debug && routerLayer.route) {
-          console.log(`    Nested route: ${routerLayer.route.path}, methods: ${JSON.stringify(routerLayer.route.methods)}`);
+          console.error(`    Nested route: ${routerLayer.route.path}, methods: ${JSON.stringify(routerLayer.route.methods)}`);
         }
         if (routerLayer.route && routerLayer.route.path === routePath && routerLayer.route.methods[method]) {
           return routerLayer.route.stack.map((routeLayer) => routeLayer.handle);
