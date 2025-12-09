@@ -30,11 +30,24 @@ fi
 # shellcheck source=scripts/_shared_start_tasks.sh
 source "$SCRIPT_DIR/_shared_start_tasks.sh" "$@"
 
+# Detect ARM architecture (Apple Silicon, Raspberry Pi, etc.)
+ARCH=$(uname -m)
+IS_ARM=false
+if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
+  IS_ARM=true
+  yt_info "Detected ARM architecture ($ARCH) - using named volume for MariaDB"
+fi
+
 if [ "$USE_EXTERNAL_DB" == "true" ]; then
   # Only start the youtarr service.
   COMPOSE_ARGS="-f docker-compose.external-db.yml up -d"
 else
-  COMPOSE_ARGS="-f docker-compose.yml up -d"
+  if [ "$IS_ARM" == "true" ]; then
+    # Use ARM override to switch to named volume (works around virtiofs bugs)
+    COMPOSE_ARGS="-f docker-compose.yml -f docker-compose.arm.yml up -d"
+  else
+    COMPOSE_ARGS="-f docker-compose.yml up -d"
+  fi
 fi
 
 $COMPOSE_CMD $COMPOSE_ARGS
