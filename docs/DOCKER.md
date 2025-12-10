@@ -22,8 +22,11 @@ Youtarr uses Docker Compose with two containers:
 - **Image**: `mariadb:10.3`
 - **Port**: 3321 (both host and container)
 - **Volumes**:
-  - `./database:/var/lib/mysql` - Database persistence
+  - `./database:/var/lib/mysql` - Database persistence (default)
+  - `youtarr-db-data:/var/lib/mysql` - Named volume (required for ARM/Synology)
 - **Character Set**: utf8mb4 (full Unicode support)
+
+> **ARM Users**: See [ARM Architecture Notes](#arm-architecture-apple-silicon-raspberry-pi) below.
 
 ## ⚠️ Important: Do Not Mount the Migrations Directory
 
@@ -47,6 +50,45 @@ volumes:
 ```
 
 If your automation creates a migrations directory, remove it from both directory creation and volume mounts.
+
+## ARM Architecture (Apple Silicon, Raspberry Pi)
+
+ARM-based systems (Apple Silicon Macs, Raspberry Pi, etc.) have known issues with MariaDB bind mounts due to virtiofs bugs. The start scripts automatically detect ARM and apply the fix.
+
+### Using Start Scripts (Recommended)
+
+The `./start.sh` script automatically detects ARM architecture and applies the correct configuration:
+```bash
+./start.sh
+```
+
+### Using Docker Compose Directly
+
+If you prefer running `docker compose` commands directly on ARM systems, use the override file:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
+```
+
+This uses a named Docker volume instead of a bind mount for MariaDB data, avoiding the virtiofs issues.
+
+### Manual Configuration
+
+Alternatively, edit `docker-compose.yml` directly:
+```yaml
+services:
+  youtarr-db:
+    volumes:
+      # Comment out bind mount:
+      # - ./database:/var/lib/mysql
+      # Use named volume:
+      - youtarr-db-data:/var/lib/mysql
+
+# Add at the bottom:
+volumes:
+  youtarr-db-data:
+```
+
+See [Troubleshooting](TROUBLESHOOTING.md#apple-silicon--arm-incorrect-information-in-file-errors) for more details on the underlying issue.
 
 ## Configuration Setup
 - **Create a .env file** to configure environment variables:

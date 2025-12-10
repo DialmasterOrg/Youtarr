@@ -1,0 +1,11 @@
+# Override file for ARM-based systems (Apple Silicon, Raspberry Pi, etc.)
+# This uses a named volume for MariaDB to work around virtiofs bugs on ARM
+
+services:
+  youtarr-db:
+    volumes:
+      - youtarr-db-data:/var/lib/mysql
+
+volumes:
+  youtarr-db-data:
+

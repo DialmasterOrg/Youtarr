@@ -81,6 +81,12 @@ If you prefer to use standard `docker compose up` commands:
    docker compose up -d
    ```
 
+   > **ARM Users (Apple Silicon, Raspberry Pi)**: Use the ARM override to avoid MariaDB volume issues:
+   > ```bash
+   > docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
+   > ```
+   > See [Troubleshooting](TROUBLESHOOTING.md#apple-silicon--arm-incorrect-information-in-file-errors) for details.
+
 5. **Access the web interface**:
    - Navigate to `http://localhost:3087`
    - If you set preset credentials in .env, use those to log in

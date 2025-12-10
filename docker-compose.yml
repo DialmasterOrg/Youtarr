@@ -15,9 +15,10 @@
 # mkdir -p config jobs server/images /path/to/youtube_videos
 # sudo chown -R 1000:1000 config jobs server/images /path/to/youtube_videos
 #
-# 2) Database setup notes for Synology and Apple Silicon macOS users:
-# There are known issues with using bind mounts for MariaDB data directories due to permission and virtiofs bugs respectively.
-# It is highly recommended to use a named volume for the youtarr-db service instead of the bind mount.
+# 2) Database setup notes for Synology and ARM-based systems (Apple Silicon, Raspberry Pi):
+# There are known issues with using bind mounts for MariaDB data directories due to permission and virtiofs bugs.
+# The start scripts automatically detect ARM architecture and use docker-compose.arm.yml override to switch to named volumes.
+# For Synology or manual override, run: docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
 
 services:
   youtarr-db:
@@ -38,9 +39,6 @@ services:
       - "${DB_PORT:-3321}:${DB_PORT:-3321}"
     volumes:
       - ./database:/var/lib/mysql
-      # Synology and Apple Silicon macOS users:
-      # Uncomment the line below and comment out the line above to use named volume:
-      # - youtarr-db-data:/var/lib/mysql
     command: --port=${DB_PORT:-3321} --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --innodb-file-per-table=1 --innodb-large-prefix=ON
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-P", "${DB_PORT:-3321}", "-u", "${DB_USER:-root}", "-p${DB_PASSWORD:-123qweasd}"]
@@ -98,7 +96,6 @@ networks:
   default:
     name: youtarr-network
 
-# Synology and Apple Silicon macOS users:
-# Uncomment the line below and comment out the line above to use named volume:
-# volumes:
-#   youtarr-db-data:
+# Named volume definition (used by docker-compose.arm.yml override for ARM systems)
+volumes:
+  youtarr-db-data:

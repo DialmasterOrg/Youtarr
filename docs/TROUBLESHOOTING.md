@@ -347,31 +347,48 @@ ERROR 1396 (HY000) at line 21: Operation CREATE USER failed for 'root'@'%'
 
 Tip: run with a named volume (see Apple Silicon/Synology sections) so filesystem corruption is less likely to recur.
 
-### Apple Silicon: `Incorrect information in file` errors
+### Apple Silicon / ARM: `Incorrect information in file` errors
 
-**Problem**: On Apple Silicon (M1/M2/M3/M4) running Docker Desktop, MariaDB logs errors like:
+**Problem**: On Apple Silicon (M1/M2/M3/M4) or other ARM systems running Docker Desktop, MariaDB logs errors like:
 ```
 ERROR 1033 (HY000): Incorrect information in file: './youtarr/videos.frm'
 ```
 This happens whenever MariaDB touches tables stored on a bind-mounted host directory (our default `./database:/var/lib/mysql`). Docker Desktop shares bind mounts over `virtiofs`, and MariaDB 10.3 cannot reliably reopen InnoDB tables on that filesystem ([MariaDB issue #447](https://github.com/MariaDB/mariadb-docker/issues/447), [#481](https://github.com/MariaDB/mariadb-docker/issues/481)). Linux and WSL users are unaffected.
 
-**Solution** (switch to a named Docker volume):
+**Solution A: Use the start scripts (Recommended)**
+
+The `./start.sh` and `./start-dev.sh` scripts automatically detect ARM architecture and apply the fix:
+```bash
+./start.sh
+```
+No manual configuration needed—the scripts use `docker-compose.arm.yml` as an override on ARM systems.
+
+**Solution B: Manual docker compose (if not using start scripts)**
+
+If you run `docker compose up` directly, use the ARM override file:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
+```
+
+Or manually edit `docker-compose.yml` to use a named volume:
+
 **NOTE:** Existing data will *not* be migrated!
-1. Stop the stack and remove the old volume `docker compose down -v`.
+1. Stop the stack: `docker compose down`
 2. Edit `docker-compose.yml`:
    ```yaml
    services:
      youtarr-db:
-       # Comment out the default bind mount line:
-       # - ./database:/var/lib/mysql
-       # And enable the named volume instead (charset tuning is built into the container command):
-       - youtarr-db-data:/var/lib/mysql
+       volumes:
+         # Comment out the bind mount:
+         # - ./database:/var/lib/mysql
+         # Use named volume instead:
+         - youtarr-db-data:/var/lib/mysql
 
-   # Ensure that the volume is defined
+   # Add at the bottom of the file:
    volumes:
      youtarr-db-data:
    ```
-4. Start Youtarr again (`./start.sh` or `docker compose up -d`). MariaDB will initialize inside `youtarr-db-data`, avoiding virtiofs entirely.
+3. Start Youtarr: `docker compose up -d`
 
 **Alternatives**:
 - Point Youtarr at an external MariaDB/MySQL instance via `./start-with-external-db.sh`.
