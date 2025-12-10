@@ -1,5 +1,45 @@
 # Changelog
 
+## [v1.55.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.55.0) - 2025-12-10
+
+## [1.55.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.54.1...v1.55.0) (2025-12-10)
+
+
+### Features
+
+* add swagger-jsdoc and swagger-ui-express dependencies ([8a23f4f](https://github.com/DialmasterOrg/Youtarr/commit/8a23f4fa889d0f7c75e41a7c14fb3640f8cb635a))
+* add Swagger/OpenAPI configuration with API documentation ([70d2613](https://github.com/DialmasterOrg/Youtarr/commit/70d26136ea1978ef1b35f8c7b2ac439d8a8c7dae))
+* **#287:** subfolder enhance / optimize perf ([81a0a03](https://github.com/DialmasterOrg/Youtarr/commit/81a0a03a0ea1f7411c494ecea8125f845ea719eb)), closes [#287](https://github.com/DialmasterOrg/Youtarr/issues/287)
+
+
+### Bug Fixes
+
+* **ci:** move coverage comment to separate workflow for fork PR support ([04658f5](https://github.com/DialmasterOrg/Youtarr/commit/04658f5d49357aef4f3645b44442aefc1477f9cb))
+* auto-detect ARM architecture for MariaDB volume configuration ([ef8974d](https://github.com/DialmasterOrg/Youtarr/commit/ef8974dcccb2d199abdb9cac820a55e5effc8832))
+
+
+### Tests
+
+* update backend tests for modular route structure ([6389d6b](https://github.com/DialmasterOrg/Youtarr/commit/6389d6b3df78a12ec93da7d97619ddf3d74dd002))
+
+
+### Code Refactoring
+
+* extract API routes into modular route files ([16b7faf](https://github.com/DialmasterOrg/Youtarr/commit/16b7faf6e9a87e73e8139948874db8e388eac481))
+* update server.js to use modular route system ([c776022](https://github.com/DialmasterOrg/Youtarr/commit/c7760229614097f4ca29091276e1feb36da8e80c))
+
+
+### Documentation
+
+* add ARM architecture guidance for manual docker compose users ([956bebc](https://github.com/DialmasterOrg/Youtarr/commit/956bebccf87b388d232da4d30df7ccc9f47afdb9))
+* add contributors page ([0459771](https://github.com/DialmasterOrg/Youtarr/commit/04597714e05a0b8f2c6bc4f08e4dddebd5e877c4))
+* Add link to Patreon ([07ca0ed](https://github.com/DialmasterOrg/Youtarr/commit/07ca0ed937284f8430e2be1800015c306f27ce79))
+* update CHANGELOG for v1.54.1 [skip ci] ([be3f89e](https://github.com/DialmasterOrg/Youtarr/commit/be3f89e1b3d2ebc97307fd27a9abe286942b8387))
+
+
+
+
+
 ## [v1.54.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.54.1) - 2025-11-24
 
 ### [1.54.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.54.0...v1.54.1) (2025-11-24)
