@@ -27,7 +27,9 @@ RUN apt-get update && apt-get install -y \
     curl \
     unzip \
     python3-minimal \
-    && rm -rf /var/lib/apt/lists/*
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --break-system-packages apprise
 
 # Download the latest yt-dlp release directly from GitHub
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
