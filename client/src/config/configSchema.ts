@@ -76,8 +76,7 @@ export const CONFIG_FIELDS = {
 
   // Notifications
   notificationsEnabled: { default: false, trackChanges: true },
-  notificationService: { default: 'discord', trackChanges: false }, // Not tracked for changes
-  discordWebhookUrl: { default: '', trackChanges: true },
+  appriseUrls: { default: [] as Array<{ url: string; name: string; richFormatting?: boolean }>, trackChanges: true },
 
   // Auto removal
   autoRemovalEnabled: { default: false, trackChanges: true },
@@ -142,8 +141,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   writeChannelPosters: CONFIG_FIELDS.writeChannelPosters.default,
   writeVideoNfoFiles: CONFIG_FIELDS.writeVideoNfoFiles.default,
   notificationsEnabled: CONFIG_FIELDS.notificationsEnabled.default,
-  notificationService: CONFIG_FIELDS.notificationService.default,
-  discordWebhookUrl: CONFIG_FIELDS.discordWebhookUrl.default,
+  appriseUrls: CONFIG_FIELDS.appriseUrls.default,
   autoRemovalEnabled: CONFIG_FIELDS.autoRemovalEnabled.default,
   autoRemovalFreeSpaceThreshold: CONFIG_FIELDS.autoRemovalFreeSpaceThreshold.default,
   autoRemovalVideoAgeThreshold: CONFIG_FIELDS.autoRemovalVideoAgeThreshold.default,
