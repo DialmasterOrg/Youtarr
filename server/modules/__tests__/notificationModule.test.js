@@ -1,109 +1,202 @@
 /* eslint-env jest */
 
-// Mock https, logger, and configModule before requiring notificationModule
-jest.mock('https');
-jest.mock('../../logger');
-jest.mock('../configModule', () => ({
-  getConfig: jest.fn()
+const { EventEmitter } = require('events');
+
+// Create mock functions
+const mockSpawn = jest.fn();
+const mockHttpsRequest = jest.fn();
+const mockGetConfig = jest.fn();
+const mockLoggerDebug = jest.fn();
+const mockLoggerInfo = jest.fn();
+const mockLoggerError = jest.fn();
+
+// Mock modules before requiring notificationModule
+jest.mock('child_process', () => ({
+  spawn: (...args) => mockSpawn(...args)
 }));
 
-const https = require('https');
-const { EventEmitter } = require('events');
-const logger = require('../../logger');
+jest.mock('https', () => ({
+  request: (...args) => mockHttpsRequest(...args)
+}));
+
+// Mock logger for both old and new paths (the module redirects)
+jest.mock('../../logger', () => ({
+  debug: (...args) => mockLoggerDebug(...args),
+  info: (...args) => mockLoggerInfo(...args),
+  error: (...args) => mockLoggerError(...args)
+}));
+
+jest.mock('../configModule', () => ({
+  getConfig: () => mockGetConfig()
+}));
+
+// Now require the module (which now redirects to notifications/index.js)
+const notificationModule = require('../notificationModule');
+
+// Also require the formatters and senders for direct testing
+const { plainFormatter, discordFormatter, slackFormatter } = require('../notifications/formatters');
+const { appriseSender, discordSender } = require('../notifications/senders');
+const { formatDuration } = require('../notifications/utils');
 
 describe('NotificationModule', () => {
-  let notificationModule;
-  let configModule;
   let mockConfig;
 
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Setup default config
+    // Setup default config with Apprise URLs in new object format
     mockConfig = {
       notificationsEnabled: true,
-      discordWebhookUrl: 'https://discord.com/api/webhooks/123456789/abcdefghijklmnop'
+      appriseUrls: [{ url: 'ntfy://test-topic', name: 'Test Ntfy', richFormatting: true }]
     };
 
-    configModule = require('../configModule');
-    configModule.getConfig.mockReturnValue(mockConfig);
-
-    notificationModule = require('../notificationModule');
+    mockGetConfig.mockReturnValue(mockConfig);
   });
 
   describe('isConfigured', () => {
-    it('should return true when notifications are enabled and webhook URL is set', () => {
+    it('should return true when notifications are enabled and appriseUrls has entries', () => {
       expect(notificationModule.isConfigured()).toBe(true);
     });
 
     it('should return false when notifications are disabled', () => {
       mockConfig.notificationsEnabled = false;
-      configModule.getConfig.mockReturnValue(mockConfig);
-
       expect(notificationModule.isConfigured()).toBe(false);
     });
 
-    it('should return false when webhook URL is empty', () => {
-      mockConfig.discordWebhookUrl = '';
-      configModule.getConfig.mockReturnValue(mockConfig);
-
+    it('should return false when appriseUrls is empty', () => {
+      mockConfig.appriseUrls = [];
       expect(notificationModule.isConfigured()).toBe(false);
     });
 
-    it('should return false when webhook URL is only whitespace', () => {
-      mockConfig.discordWebhookUrl = '   ';
-      configModule.getConfig.mockReturnValue(mockConfig);
-
+    it('should return false when appriseUrls is undefined', () => {
+      mockConfig.appriseUrls = undefined;
       expect(notificationModule.isConfigured()).toBe(false);
     });
 
-    it('should return false when webhook URL is undefined', () => {
-      mockConfig.discordWebhookUrl = undefined;
-      configModule.getConfig.mockReturnValue(mockConfig);
-
+    it('should return false when appriseUrls is not an array', () => {
+      mockConfig.appriseUrls = 'not-an-array';
       expect(notificationModule.isConfigured()).toBe(false);
+    });
+
+    it('should handle legacy string format in appriseUrls', () => {
+      mockConfig.appriseUrls = ['ntfy://test-topic'];
+      expect(notificationModule.isConfigured()).toBe(true);
     });
   });
 
+  describe('getUrlsFromConfig', () => {
+    it('should normalize string URLs to object format', () => {
+      mockConfig.appriseUrls = ['ntfy://test-topic', 'discord://webhook_id/token'];
+      const urls = notificationModule.getUrlsFromConfig(mockConfig);
+
+      expect(urls).toHaveLength(2);
+      // Ntfy doesn't support rich formatting, so it defaults to false
+      expect(urls[0]).toEqual({
+        url: 'ntfy://test-topic',
+        name: 'Ntfy',
+        richFormatting: false
+      });
+    });
+
+    it('should preserve object format with all fields', () => {
+      mockConfig.appriseUrls = [{
+        url: 'ntfy://test-topic',
+        name: 'My Custom Name',
+        richFormatting: false
+      }];
+      const urls = notificationModule.getUrlsFromConfig(mockConfig);
+
+      expect(urls[0]).toEqual({
+        url: 'ntfy://test-topic',
+        name: 'My Custom Name',
+        richFormatting: false
+      });
+    });
+
+    it('should default richFormatting to true when not specified', () => {
+      mockConfig.appriseUrls = [{
+        url: 'ntfy://test-topic',
+        name: 'Test'
+      }];
+      const urls = notificationModule.getUrlsFromConfig(mockConfig);
+
+      expect(urls[0].richFormatting).toBe(true);
+    });
+
+    it('should filter out empty URLs', () => {
+      mockConfig.appriseUrls = [
+        { url: 'ntfy://test', name: 'Test' },
+        { url: '', name: 'Empty' },
+        { url: '   ', name: 'Whitespace' }
+      ];
+      const urls = notificationModule.getUrlsFromConfig(mockConfig);
+
+      expect(urls).toHaveLength(1);
+      expect(urls[0].name).toBe('Test');
+    });
+  });
+
+  describe('isDiscordWebhook', () => {
+    it('should return true for discord.com webhook URLs', () => {
+      expect(notificationModule.isDiscordWebhook('https://discord.com/api/webhooks/123/abc')).toBe(true);
+    });
+
+    it('should return true for discordapp.com webhook URLs', () => {
+      expect(notificationModule.isDiscordWebhook('https://discordapp.com/api/webhooks/123/abc')).toBe(true);
+    });
+
+    it('should return false for discord:// Apprise URLs', () => {
+      expect(notificationModule.isDiscordWebhook('discord://webhook_id/token')).toBe(false);
+    });
+
+    it('should return false for other URLs', () => {
+      expect(notificationModule.isDiscordWebhook('ntfy://test')).toBe(false);
+    });
+  });
+});
+
+describe('Notification Utils', () => {
   describe('formatDuration', () => {
     it('should return "0:00" for zero seconds', () => {
-      expect(notificationModule.formatDuration(0)).toBe('0:00');
+      expect(formatDuration(0)).toBe('0:00');
     });
 
     it('should return "0:00" for null or undefined', () => {
-      expect(notificationModule.formatDuration(null)).toBe('0:00');
-      expect(notificationModule.formatDuration(undefined)).toBe('0:00');
+      expect(formatDuration(null)).toBe('0:00');
+      expect(formatDuration(undefined)).toBe('0:00');
     });
 
     it('should format seconds under a minute', () => {
-      expect(notificationModule.formatDuration(30)).toBe('0:30');
-      expect(notificationModule.formatDuration(5)).toBe('0:05');
-      expect(notificationModule.formatDuration(59)).toBe('0:59');
+      expect(formatDuration(30)).toBe('0:30');
+      expect(formatDuration(5)).toBe('0:05');
+      expect(formatDuration(59)).toBe('0:59');
     });
 
     it('should format minutes and seconds', () => {
-      expect(notificationModule.formatDuration(90)).toBe('1:30');
-      expect(notificationModule.formatDuration(125)).toBe('2:05');
-      expect(notificationModule.formatDuration(599)).toBe('9:59');
+      expect(formatDuration(90)).toBe('1:30');
+      expect(formatDuration(125)).toBe('2:05');
+      expect(formatDuration(599)).toBe('9:59');
     });
 
     it('should format hours, minutes, and seconds', () => {
-      expect(notificationModule.formatDuration(3600)).toBe('1:00:00');
-      expect(notificationModule.formatDuration(3661)).toBe('1:01:01');
-      expect(notificationModule.formatDuration(7384)).toBe('2:03:04');
+      expect(formatDuration(3600)).toBe('1:00:00');
+      expect(formatDuration(3661)).toBe('1:01:01');
+      expect(formatDuration(7384)).toBe('2:03:04');
     });
 
     it('should pad minutes and seconds in HH:MM:SS format', () => {
-      expect(notificationModule.formatDuration(3605)).toBe('1:00:05');
-      expect(notificationModule.formatDuration(3665)).toBe('1:01:05');
+      expect(formatDuration(3605)).toBe('1:00:05');
+      expect(formatDuration(3665)).toBe('1:01:05');
     });
 
     it('should handle decimal seconds by flooring', () => {
-      expect(notificationModule.formatDuration(90.7)).toBe('1:30');
-      expect(notificationModule.formatDuration(3661.9)).toBe('1:01:01');
+      expect(formatDuration(90.7)).toBe('1:30');
+      expect(formatDuration(3661.9)).toBe('1:01:01');
     });
   });
+});
 
+describe('Plain Formatter', () => {
   describe('formatDownloadMessage', () => {
     const baseFinalSummary = {
       totalDownloaded: 2,
@@ -129,56 +222,54 @@ describe('NotificationModule', () => {
       const summary = { ...baseFinalSummary, totalDownloaded: 1 };
       const videos = [baseVideoData[0]];
 
-      const message = notificationModule.formatDownloadMessage(summary, videos);
+      const message = plainFormatter.formatDownloadMessage(summary, videos);
 
-      expect(message.embeds[0].title).toBe('🎬 New Video Downloaded');
-      expect(message.embeds[0].color).toBe(0x00ff00);
-      expect(message.embeds[0].footer.text).toBe('Youtarr');
-      expect(message.embeds[0].timestamp).toBeDefined();
+      expect(message.title).toBe('🎬 New Video Downloaded');
+      expect(message.body).toContain('Tech Channel - How to Code');
     });
 
     it('should format message for multiple video downloads', () => {
-      const message = notificationModule.formatDownloadMessage(baseFinalSummary, baseVideoData);
+      const message = plainFormatter.formatDownloadMessage(baseFinalSummary, baseVideoData);
 
-      expect(message.embeds[0].title).toBe('🎬 2 New Videos Downloaded');
+      expect(message.title).toBe('🎬 2 New Videos Downloaded');
     });
 
-    it('should include channel download label in description', () => {
-      const message = notificationModule.formatDownloadMessage(baseFinalSummary, baseVideoData);
+    it('should include channel download label in body', () => {
+      const message = plainFormatter.formatDownloadMessage(baseFinalSummary, baseVideoData);
 
-      expect(message.embeds[0].description).toContain('**Channel Video Downloads:**');
+      expect(message.body).toContain('Channel Video Downloads:');
     });
 
     it('should include manual download label for manually added URLs', () => {
       const summary = { ...baseFinalSummary, jobType: 'Manually Added Urls' };
-      const message = notificationModule.formatDownloadMessage(summary, baseVideoData);
+      const message = plainFormatter.formatDownloadMessage(summary, baseVideoData);
 
-      expect(message.embeds[0].description).toContain('**Manually Selected Video Downloads:**');
+      expect(message.body).toContain('Manually Selected Downloads:');
     });
 
     it('should list video details with duration', () => {
-      const message = notificationModule.formatDownloadMessage(baseFinalSummary, baseVideoData);
+      const message = plainFormatter.formatDownloadMessage(baseFinalSummary, baseVideoData);
 
-      expect(message.embeds[0].description).toContain('• Tech Channel - How to Code - 10:00');
-      expect(message.embeds[0].description).toContain('• Music Channel - Best Song Ever - 4:05');
+      expect(message.body).toContain('• Tech Channel - How to Code - 10:00');
+      expect(message.body).toContain('• Music Channel - Best Song Ever - 4:05');
     });
 
     it('should handle videos without channel names', () => {
       const videos = [{ youTubeVideoName: 'Test Video', duration: 120 }];
       const summary = { ...baseFinalSummary, totalDownloaded: 1 };
 
-      const message = notificationModule.formatDownloadMessage(summary, videos);
+      const message = plainFormatter.formatDownloadMessage(summary, videos);
 
-      expect(message.embeds[0].description).toContain('Unknown Channel - Test Video');
+      expect(message.body).toContain('Unknown Channel - Test Video');
     });
 
     it('should handle videos without video names', () => {
       const videos = [{ youTubeChannelName: 'Test Channel', duration: 120 }];
       const summary = { ...baseFinalSummary, totalDownloaded: 1 };
 
-      const message = notificationModule.formatDownloadMessage(summary, videos);
+      const message = plainFormatter.formatDownloadMessage(summary, videos);
 
-      expect(message.embeds[0].description).toContain('Test Channel - Unknown Title');
+      expect(message.body).toContain('Test Channel - Unknown Title');
     });
 
     it('should truncate very long video titles', () => {
@@ -190,12 +281,11 @@ describe('NotificationModule', () => {
       }];
       const summary = { ...baseFinalSummary, totalDownloaded: 1 };
 
-      const message = notificationModule.formatDownloadMessage(summary, videos);
+      const message = plainFormatter.formatDownloadMessage(summary, videos);
 
-      const descriptionLines = message.embeds[0].description.split('\n');
-      const videoLine = descriptionLines.find(line => line.startsWith('•'));
-      expect(videoLine.length).toBeLessThanOrEqual(154); // 150 + "• " + "..."
-      expect(videoLine).toContain('...');
+      const videoLines = message.body.split('\n').filter(line => line.startsWith('•'));
+      expect(videoLines[0].length).toBeLessThanOrEqual(154);
+      expect(videoLines[0]).toContain('...');
     });
 
     it('should limit to first 10 videos and show count of remaining', () => {
@@ -206,70 +296,202 @@ describe('NotificationModule', () => {
       }));
       const summary = { ...baseFinalSummary, totalDownloaded: 15 };
 
-      const message = notificationModule.formatDownloadMessage(summary, manyVideos);
+      const message = plainFormatter.formatDownloadMessage(summary, manyVideos);
 
-      // Should show first 10 videos
-      expect(message.embeds[0].description).toContain('Video 0');
-      expect(message.embeds[0].description).toContain('Video 9');
-      // Should not show video 10 or beyond
-      expect(message.embeds[0].description).not.toContain('Video 10');
-      // Should show count of remaining
-      expect(message.embeds[0].description).toContain('...and 5 more');
+      expect(message.body).toContain('Video 0');
+      expect(message.body).toContain('Video 9');
+      expect(message.body).not.toContain('Video 10');
+      expect(message.body).toContain('...and 5 more');
     });
 
     it('should handle empty video data array', () => {
-      const message = notificationModule.formatDownloadMessage(baseFinalSummary, []);
+      const message = plainFormatter.formatDownloadMessage(baseFinalSummary, []);
 
-      expect(message.embeds[0].title).toBe('🎬 2 New Videos Downloaded');
-      expect(message.embeds[0].description).toContain('**Channel Video Downloads:**');
+      expect(message.title).toBe('🎬 2 New Videos Downloaded');
+      expect(message.body).toContain('Channel Video Downloads:');
     });
 
     it('should handle null video data', () => {
-      const message = notificationModule.formatDownloadMessage(baseFinalSummary, null);
+      const message = plainFormatter.formatDownloadMessage(baseFinalSummary, null);
 
-      expect(message.embeds[0].title).toBe('🎬 2 New Videos Downloaded');
+      expect(message.title).toBe('🎬 2 New Videos Downloaded');
     });
   });
+});
 
-  describe('sendDiscordWebhook', () => {
-    let mockRequest;
-    let mockResponse;
+describe('Discord Formatter', () => {
+  describe('formatDownloadMessage', () => {
+    const baseFinalSummary = {
+      totalDownloaded: 2,
+      jobType: 'Channel Downloads'
+    };
 
-    beforeEach(() => {
-      mockResponse = new EventEmitter();
-      mockResponse.statusCode = 200;
+    const baseVideoData = [
+      {
+        youTubeChannelName: 'Tech Channel',
+        youTubeVideoName: 'How to Code',
+        duration: 600
+      }
+    ];
 
-      mockRequest = new EventEmitter();
-      mockRequest.write = jest.fn();
-      mockRequest.end = jest.fn();
-      mockRequest.destroy = jest.fn();
+    it('should return Discord embed format', () => {
+      const message = discordFormatter.formatDownloadMessage(baseFinalSummary, baseVideoData);
 
-      https.request.mockImplementation((options, callback) => {
-        // Call the callback with our mock response
-        if (callback) {
-          setImmediate(() => callback(mockResponse));
-        }
-        return mockRequest;
-      });
+      expect(message).toHaveProperty('embeds');
+      expect(message.embeds).toHaveLength(1);
+      expect(message.embeds[0]).toHaveProperty('title');
+      expect(message.embeds[0]).toHaveProperty('description');
+      expect(message.embeds[0]).toHaveProperty('color');
+      expect(message.embeds[0]).toHaveProperty('timestamp');
     });
 
-    it('should successfully send webhook with valid URL', async () => {
-      const webhookUrl = 'https://discord.com/api/webhooks/123/abc';
-      const message = { embeds: [{ title: 'Test' }] };
+    it('should include video fields in embed', () => {
+      const message = discordFormatter.formatDownloadMessage(baseFinalSummary, baseVideoData);
 
-      const sendPromise = notificationModule.sendDiscordWebhook(webhookUrl, message);
+      expect(message.embeds[0].fields).toBeDefined();
+      expect(message.embeds[0].fields[0].name).toContain('Tech Channel');
+      expect(message.embeds[0].fields[0].value).toContain('How to Code');
+    });
+  });
+});
 
-      // Simulate successful response
+describe('Slack Formatter', () => {
+  describe('formatDownloadMessage', () => {
+    const baseFinalSummary = {
+      totalDownloaded: 2,
+      jobType: 'Channel Downloads'
+    };
+
+    const baseVideoData = [
+      {
+        youTubeChannelName: 'Tech Channel',
+        youTubeVideoName: 'How to Code',
+        duration: 600
+      }
+    ];
+
+    it('should return Slack Block Kit format', () => {
+      const message = slackFormatter.formatDownloadMessage(baseFinalSummary, baseVideoData);
+
+      expect(message).toHaveProperty('blocks');
+      expect(message.blocks.length).toBeGreaterThan(0);
+      expect(message.blocks[0]).toHaveProperty('type', 'header');
+    });
+  });
+});
+
+describe('Apprise Sender', () => {
+  let mockProcess;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockProcess = new EventEmitter();
+    mockProcess.stdout = new EventEmitter();
+    mockProcess.stderr = new EventEmitter();
+
+    mockSpawn.mockReturnValue(mockProcess);
+  });
+
+  describe('send', () => {
+    it('should spawn apprise with correct arguments', async () => {
+      const sendPromise = appriseSender.send('Test Title', 'Test Body', ['ntfy://test']);
+
       setImmediate(() => {
-        mockResponse.emit('end');
+        mockProcess.emit('close', 0);
+      });
+
+      await sendPromise;
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'apprise',
+        ['-vv', '-t', 'Test Title', '-b', 'Test Body', 'ntfy://test'],
+        expect.objectContaining({ timeout: 30000 })
+      );
+    });
+
+    it('should include all provided URLs in arguments', async () => {
+      const urls = ['ntfy://url1', 'gotify://url2', 'pover://url3'];
+      const sendPromise = appriseSender.send('Title', 'Body', urls);
+
+      setImmediate(() => {
+        mockProcess.emit('close', 0);
+      });
+
+      await sendPromise;
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'apprise',
+        ['-vv', '-t', 'Title', '-b', 'Body', 'ntfy://url1', 'gotify://url2', 'pover://url3'],
+        expect.any(Object)
+      );
+    });
+
+    it('should reject when apprise exits with non-zero code', async () => {
+      const sendPromise = appriseSender.send('Title', 'Body', ['ntfy://test']);
+
+      setImmediate(() => {
+        mockProcess.stderr.emit('data', 'Some error occurred');
+        mockProcess.emit('close', 1);
+      });
+
+      await expect(sendPromise).rejects.toThrow('Some error occurred');
+    });
+
+    it('should throw error when no URLs are provided', async () => {
+      await expect(appriseSender.send('Title', 'Body', []))
+        .rejects.toThrow('No notification URLs provided');
+    });
+
+    it('should resolve successfully on exit code 0', async () => {
+      const sendPromise = appriseSender.send('Title', 'Body', ['ntfy://test']);
+
+      setImmediate(() => {
+        mockProcess.stdout.emit('data', 'Notification sent');
+        mockProcess.emit('close', 0);
       });
 
       await expect(sendPromise).resolves.toBeUndefined();
+    });
+  });
+});
 
-      expect(https.request).toHaveBeenCalledWith(
+describe('Discord Sender', () => {
+  let mockRequest;
+  let mockResponse;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockResponse = new EventEmitter();
+    mockResponse.statusCode = 204;
+
+    mockRequest = new EventEmitter();
+    mockRequest.write = jest.fn();
+    mockRequest.end = jest.fn();
+    mockRequest.destroy = jest.fn();
+
+    mockHttpsRequest.mockImplementation((options, callback) => {
+      callback(mockResponse);
+      return mockRequest;
+    });
+  });
+
+  describe('send', () => {
+    it('should send message to Discord webhook', async () => {
+      const sendPromise = discordSender.send(
+        'https://discord.com/api/webhooks/123/abc',
+        { content: 'Test message' }
+      );
+
+      setImmediate(() => {
+        mockResponse.emit('data', '');
+        mockResponse.emit('end');
+      });
+
+      await sendPromise;
+
+      expect(mockHttpsRequest).toHaveBeenCalledWith(
         expect.objectContaining({
           hostname: 'discord.com',
-          port: 443,
           method: 'POST',
           headers: expect.objectContaining({
             'Content-Type': 'application/json'
@@ -277,200 +499,146 @@ describe('NotificationModule', () => {
         }),
         expect.any(Function)
       );
-      expect(mockRequest.write).toHaveBeenCalledWith(JSON.stringify(message));
-      expect(mockRequest.end).toHaveBeenCalled();
+      expect(mockRequest.write).toHaveBeenCalledWith(JSON.stringify({ content: 'Test message' }));
     });
 
-    it('should reject with error for non-Discord URL', async () => {
-      const webhookUrl = 'https://example.com/webhook';
-      const message = { embeds: [{ title: 'Test' }] };
-
-      await expect(notificationModule.sendDiscordWebhook(webhookUrl, message))
-        .rejects.toThrow('Invalid Discord webhook URL');
+    it('should reject for non-Discord URLs', async () => {
+      await expect(
+        discordSender.send('https://example.com/webhook', { content: 'Test' })
+      ).rejects.toThrow('Invalid Discord webhook URL');
     });
 
-    it('should reject with error for invalid URL format', async () => {
-      const webhookUrl = 'not-a-url';
-      const message = { embeds: [{ title: 'Test' }] };
-
-      await expect(notificationModule.sendDiscordWebhook(webhookUrl, message))
-        .rejects.toThrow('Invalid webhook URL');
-    });
-
-    it('should handle 4xx response codes', async () => {
+    it('should reject on non-2xx status code', async () => {
       mockResponse.statusCode = 400;
-      const webhookUrl = 'https://discord.com/api/webhooks/123/abc';
-      const message = { embeds: [{ title: 'Test' }] };
 
-      const sendPromise = notificationModule.sendDiscordWebhook(webhookUrl, message);
+      const sendPromise = discordSender.send(
+        'https://discord.com/api/webhooks/123/abc',
+        { content: 'Test' }
+      );
 
       setImmediate(() => {
         mockResponse.emit('data', 'Bad request');
         mockResponse.emit('end');
       });
 
-      await expect(sendPromise).rejects.toThrow('Discord webhook returned status 400');
+      await expect(sendPromise).rejects.toThrow();
+    });
+  });
+});
+
+describe('NotificationModule Integration', () => {
+  let mockProcess;
+  let mockRequest;
+  let mockResponse;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+
+    mockProcess = new EventEmitter();
+    mockProcess.stdout = new EventEmitter();
+    mockProcess.stderr = new EventEmitter();
+    mockSpawn.mockReturnValue(mockProcess);
+
+    mockResponse = new EventEmitter();
+    mockResponse.statusCode = 204;
+
+    mockRequest = new EventEmitter();
+    mockRequest.write = jest.fn();
+    mockRequest.end = jest.fn();
+    mockRequest.destroy = jest.fn();
+
+    mockHttpsRequest.mockImplementation((options, callback) => {
+      callback(mockResponse);
+      return mockRequest;
     });
 
-    it('should handle 5xx response codes', async () => {
-      mockResponse.statusCode = 500;
-      const webhookUrl = 'https://discord.com/api/webhooks/123/abc';
-      const message = { embeds: [{ title: 'Test' }] };
-
-      const sendPromise = notificationModule.sendDiscordWebhook(webhookUrl, message);
-
-      setImmediate(() => {
-        mockResponse.emit('data', 'Internal server error');
-        mockResponse.emit('end');
-      });
-
-      await expect(sendPromise).rejects.toThrow('Discord webhook returned status 500');
-    });
-
-    it('should handle network errors', async () => {
-      const webhookUrl = 'https://discord.com/api/webhooks/123/abc';
-      const message = { embeds: [{ title: 'Test' }] };
-
-      const sendPromise = notificationModule.sendDiscordWebhook(webhookUrl, message);
-
-      setImmediate(() => {
-        mockRequest.emit('error', new Error('Network error'));
-      });
-
-      await expect(sendPromise).rejects.toThrow('Failed to send Discord webhook: Network error');
-    });
-
-    it('should handle timeout', async () => {
-      const webhookUrl = 'https://discord.com/api/webhooks/123/abc';
-      const message = { embeds: [{ title: 'Test' }] };
-
-      const sendPromise = notificationModule.sendDiscordWebhook(webhookUrl, message);
-
-      setImmediate(() => {
-        mockRequest.emit('timeout');
-      });
-
-      await expect(sendPromise).rejects.toThrow('Discord webhook request timed out');
-      expect(mockRequest.destroy).toHaveBeenCalled();
-    });
-
-    it('should include query parameters in request path', async () => {
-      const webhookUrl = 'https://discord.com/api/webhooks/123/abc?wait=true';
-      const message = { embeds: [{ title: 'Test' }] };
-
-      const sendPromise = notificationModule.sendDiscordWebhook(webhookUrl, message);
-
-      setImmediate(() => {
-        mockResponse.emit('end');
-      });
-
-      await sendPromise;
-
-      expect(https.request).toHaveBeenCalledWith(
-        expect.objectContaining({
-          path: '/api/webhooks/123/abc?wait=true'
-        }),
-        expect.any(Function)
-      );
-    });
-
-    it('should set proper timeout in request options', async () => {
-      const webhookUrl = 'https://discord.com/api/webhooks/123/abc';
-      const message = { embeds: [{ title: 'Test' }] };
-
-      const sendPromise = notificationModule.sendDiscordWebhook(webhookUrl, message);
-
-      setImmediate(() => {
-        mockResponse.emit('end');
-      });
-
-      await sendPromise;
-
-      expect(https.request).toHaveBeenCalledWith(
-        expect.objectContaining({
-          timeout: 10000
-        }),
-        expect.any(Function)
-      );
+    mockGetConfig.mockReturnValue({
+      notificationsEnabled: true,
+      appriseUrls: [{ url: 'ntfy://test-topic', name: 'Test Ntfy', richFormatting: true }]
     });
   });
 
   describe('sendTestNotification', () => {
-    let mockRequest;
-    let mockResponse;
-
-    beforeEach(() => {
-      mockResponse = new EventEmitter();
-      mockResponse.statusCode = 200;
-
-      mockRequest = new EventEmitter();
-      mockRequest.write = jest.fn();
-      mockRequest.end = jest.fn();
-      mockRequest.destroy = jest.fn();
-
-      https.request.mockImplementation((options, callback) => {
-        if (callback) {
-          setImmediate(() => callback(mockResponse));
-        }
-        return mockRequest;
-      });
-    });
-
-    it('should send test notification with correct format', async () => {
+    it('should send test notification via Apprise for non-Discord URLs', async () => {
       const sendPromise = notificationModule.sendTestNotification();
 
       setImmediate(() => {
+        mockProcess.emit('close', 0);
+      });
+
+      await sendPromise;
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'apprise',
+        expect.arrayContaining([
+          '-vv', '-t', '✅ Test Notification'
+        ]),
+        expect.any(Object)
+      );
+    });
+
+    it('should send rich embed for Discord webhooks with richFormatting enabled', async () => {
+      mockGetConfig.mockReturnValue({
+        notificationsEnabled: true,
+        appriseUrls: [{
+          url: 'https://discord.com/api/webhooks/123/abc',
+          name: 'Discord',
+          richFormatting: true
+        }]
+      });
+
+      const sendPromise = notificationModule.sendTestNotification();
+
+      setImmediate(() => {
+        mockResponse.emit('data', '');
         mockResponse.emit('end');
       });
 
       await sendPromise;
 
-      expect(mockRequest.write).toHaveBeenCalled();
-      const payload = JSON.parse(mockRequest.write.mock.calls[0][0]);
-      expect(payload.embeds[0].title).toBe('✅ Test Notification');
-      expect(payload.embeds[0].description).toBe('Your Youtarr notifications are working correctly!');
-      expect(payload.embeds[0].color).toBe(0x00ff00);
-      expect(payload.embeds[0].footer.text).toBe('Youtarr Notifications');
+      expect(mockHttpsRequest).toHaveBeenCalled();
+      expect(mockRequest.write).toHaveBeenCalledWith(
+        expect.stringContaining('embeds')
+      );
     });
 
-    it('should throw error when webhook URL is not configured', async () => {
-      mockConfig.discordWebhookUrl = '';
-      configModule.getConfig.mockReturnValue(mockConfig);
+    it('should send plain text for Discord webhooks with richFormatting disabled', async () => {
+      mockGetConfig.mockReturnValue({
+        notificationsEnabled: true,
+        appriseUrls: [{
+          url: 'https://discord.com/api/webhooks/123/abc',
+          name: 'Discord',
+          richFormatting: false
+        }]
+      });
 
-      await expect(notificationModule.sendTestNotification())
-        .rejects.toThrow('Discord webhook URL is not configured');
+      const sendPromise = notificationModule.sendTestNotification();
+
+      setImmediate(() => {
+        mockResponse.emit('data', '');
+        mockResponse.emit('end');
+      });
+
+      await sendPromise;
+
+      expect(mockHttpsRequest).toHaveBeenCalled();
+      expect(mockRequest.write).toHaveBeenCalledWith(
+        expect.stringContaining('content')
+      );
     });
 
-    it('should throw error when webhook URL is only whitespace', async () => {
-      mockConfig.discordWebhookUrl = '   ';
-      configModule.getConfig.mockReturnValue(mockConfig);
+    it('should throw error when no URLs are configured', async () => {
+      mockGetConfig.mockReturnValue({
+        notificationsEnabled: true,
+        appriseUrls: []
+      });
 
       await expect(notificationModule.sendTestNotification())
-        .rejects.toThrow('Discord webhook URL is not configured');
+        .rejects.toThrow('No notification URLs are configured');
     });
   });
 
   describe('sendDownloadNotification', () => {
-    let mockRequest;
-    let mockResponse;
-
-    beforeEach(() => {
-      mockResponse = new EventEmitter();
-      mockResponse.statusCode = 200;
-
-      mockRequest = new EventEmitter();
-      mockRequest.write = jest.fn();
-      mockRequest.end = jest.fn();
-      mockRequest.destroy = jest.fn();
-
-      https.request.mockImplementation((options, callback) => {
-        if (callback) {
-          setImmediate(() => callback(mockResponse));
-        }
-        return mockRequest;
-      });
-    });
-
     const baseNotificationData = {
       finalSummary: {
         totalDownloaded: 2,
@@ -492,26 +660,28 @@ describe('NotificationModule', () => {
       const sendPromise = notificationModule.sendDownloadNotification(baseNotificationData);
 
       setImmediate(() => {
-        mockResponse.emit('end');
+        mockProcess.emit('close', 0);
       });
 
       await sendPromise;
 
-      expect(https.request).toHaveBeenCalled();
-      expect(logger.info).toHaveBeenCalledWith(
+      expect(mockSpawn).toHaveBeenCalled();
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
         { downloadCount: 2 },
         'Download notification sent successfully'
       );
     });
 
     it('should skip notification when not configured', async () => {
-      mockConfig.notificationsEnabled = false;
-      configModule.getConfig.mockReturnValue(mockConfig);
+      mockGetConfig.mockReturnValue({
+        notificationsEnabled: false,
+        appriseUrls: []
+      });
 
       await notificationModule.sendDownloadNotification(baseNotificationData);
 
-      expect(https.request).not.toHaveBeenCalled();
-      expect(logger.debug).toHaveBeenCalledWith('Notifications not configured, skipping notification');
+      expect(mockSpawn).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith('Notifications not configured, skipping notification');
     });
 
     it('should skip notification when no videos downloaded', async () => {
@@ -522,38 +692,33 @@ describe('NotificationModule', () => {
 
       await notificationModule.sendDownloadNotification(notificationData);
 
-      expect(https.request).not.toHaveBeenCalled();
-      expect(logger.debug).toHaveBeenCalledWith('No new videos downloaded, skipping notification');
+      expect(mockSpawn).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith('No new videos downloaded, skipping notification');
     });
 
-    it('should handle errors gracefully without throwing', async () => {
-      const sendPromise = notificationModule.sendDownloadNotification(baseNotificationData);
-
-      setImmediate(() => {
-        mockRequest.emit('error', new Error('Network failure'));
+    it('should use Discord webhook directly for Discord URLs with rich formatting', async () => {
+      mockGetConfig.mockReturnValue({
+        notificationsEnabled: true,
+        appriseUrls: [{
+          url: 'https://discord.com/api/webhooks/123/abc',
+          name: 'Discord',
+          richFormatting: true
+        }]
       });
 
-      // Should not throw
-      await expect(sendPromise).resolves.toBeUndefined();
-      expect(logger.error).toHaveBeenCalledWith(
-        { err: expect.any(Error) },
-        'Failed to send download notification'
-      );
-    });
-
-    it('should send properly formatted message', async () => {
       const sendPromise = notificationModule.sendDownloadNotification(baseNotificationData);
 
       setImmediate(() => {
+        mockResponse.emit('data', '');
         mockResponse.emit('end');
       });
 
       await sendPromise;
 
-      expect(mockRequest.write).toHaveBeenCalled();
-      const payload = JSON.parse(mockRequest.write.mock.calls[0][0]);
-      expect(payload.embeds[0].title).toBe('🎬 2 New Videos Downloaded');
-      expect(payload.embeds[0].description).toContain('Tech Channel - How to Code - 10:00');
+      expect(mockHttpsRequest).toHaveBeenCalled();
+      expect(mockRequest.write).toHaveBeenCalledWith(
+        expect.stringContaining('embeds')
+      );
     });
   });
 });

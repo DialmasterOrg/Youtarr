@@ -611,8 +611,10 @@ describe('useConfigSave', () => {
       const notificationsConfig: ConfigState = {
         ...mockConfig,
         notificationsEnabled: true,
-        notificationService: 'discord',
-        discordWebhookUrl: 'https://discord.com/api/webhooks/123',
+        appriseUrls: [
+          { url: 'discord://webhook_id/token', name: 'Discord', richFormatting: true },
+          { url: 'tgram://bot/chat', name: 'Telegram', richFormatting: true }
+        ],
       };
 
       const { result } = renderHook(() =>
@@ -630,8 +632,7 @@ describe('useConfigSave', () => {
 
       const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
       expect(callBody.notificationsEnabled).toBe(true);
-      expect(callBody.notificationService).toBe('discord');
-      expect(callBody.discordWebhookUrl).toBe('https://discord.com/api/webhooks/123');
+      expect(callBody.appriseUrls).toEqual(['discord://webhook_id/token', 'tgram://bot/chat']);
     });
 
     test('saves configuration with subtitles enabled', async () => {
@@ -806,7 +807,7 @@ describe('useConfigSave', () => {
       const emptyConfig: ConfigState = {
         ...mockConfig,
         plexApiKey: '',
-        discordWebhookUrl: '',
+        appriseUrls: [],
         autoRemovalFreeSpaceThreshold: '',
         autoRemovalVideoAgeThreshold: '',
       };
@@ -826,7 +827,7 @@ describe('useConfigSave', () => {
 
       const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
       expect(callBody.plexApiKey).toBe('');
-      expect(callBody.discordWebhookUrl).toBe('');
+      expect(callBody.appriseUrls).toEqual([]);
       expect(callBody.autoRemovalFreeSpaceThreshold).toBe('');
       expect(callBody.autoRemovalVideoAgeThreshold).toBe('');
     });
