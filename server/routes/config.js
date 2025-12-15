@@ -283,6 +283,70 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
 
   /**
    * @swagger
+   * /api/notifications/test-single:
+   *   post:
+   *     summary: Send test notification to a single webhook
+   *     description: Send a test notification to a specific webhook URL to verify it works.
+   *     tags: [Configuration]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - url
+   *             properties:
+   *               url:
+   *                 type: string
+   *                 description: The notification URL to test
+   *               name:
+   *                 type: string
+   *                 description: The name of the notification service
+   *               richFormatting:
+   *                 type: boolean
+   *                 description: Whether to use rich formatting
+   *     responses:
+   *       200:
+   *         description: Test notification sent successfully
+   *       400:
+   *         description: Invalid request (missing URL)
+   *       500:
+   *         description: Failed to send test notification
+   */
+  router.post('/api/notifications/test-single', verifyToken, async (req, res) => {
+    try {
+      const { url, name, richFormatting } = req.body;
+
+      if (!url || typeof url !== 'string' || url.trim().length === 0) {
+        return res.status(400).json({
+          error: 'Invalid request',
+          message: 'Notification URL is required'
+        });
+      }
+
+      const notificationModule = require('../modules/notificationModule');
+      await notificationModule.sendTestNotificationToSingle({
+        url: url.trim(),
+        name: name || 'Test Notification',
+        richFormatting: richFormatting !== false
+      });
+
+      res.json({
+        status: 'success',
+        message: 'Test notification sent successfully'
+      });
+    } catch (error) {
+      req.log.error({ err: error }, 'Failed to send test notification to single URL');
+      res.status(500).json({
+        error: 'Failed to send test notification',
+        message: error.message
+      });
+    }
+  });
+
+  /**
+   * @swagger
    * /storage-status:
    *   get:
    *     summary: Get storage status
