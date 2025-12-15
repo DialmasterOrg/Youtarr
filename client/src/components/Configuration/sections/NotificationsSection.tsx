@@ -295,7 +295,7 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
       chipColor={config.notificationsEnabled ? "success" : "default"}
       defaultExpanded={false}
     >
-      <Grid container spacing={2}>mkkkkiihhhhmmnbvcxz,,.llo887ytgbnmjiu
+      <Grid container spacing={2}>
         {/* Enable switch - always visible */}
         <Grid item xs={12}>
           <FormControlLabel

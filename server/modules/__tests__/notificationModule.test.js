@@ -1,6 +1,7 @@
 /* eslint-env jest */
 
 const { EventEmitter } = require('events');
+const { isDiscordWebhook } = require('../notificationHelpers');
 
 // Create mock functions
 const mockSpawn = jest.fn();
@@ -136,21 +137,22 @@ describe('NotificationModule', () => {
     });
   });
 
-  describe('isDiscordWebhook', () => {
+  describe('isDiscordWebhook (from notificationHelpers)', () => {
     it('should return true for discord.com webhook URLs', () => {
-      expect(notificationModule.isDiscordWebhook('https://discord.com/api/webhooks/123/abc')).toBe(true);
+      expect(isDiscordWebhook('https://discord.com/api/webhooks/123/abc')).toBe(true);
     });
 
     it('should return true for discordapp.com webhook URLs', () => {
-      expect(notificationModule.isDiscordWebhook('https://discordapp.com/api/webhooks/123/abc')).toBe(true);
+      expect(isDiscordWebhook('https://discordapp.com/api/webhooks/123/abc')).toBe(true);
     });
 
     it('should return false for discord:// Apprise URLs', () => {
-      expect(notificationModule.isDiscordWebhook('discord://webhook_id/token')).toBe(false);
+      // discord:// URLs are NOT HTTP webhooks, they go through Apprise
+      expect(isDiscordWebhook('discord://webhook_id/token')).toBe(false);
     });
 
     it('should return false for other URLs', () => {
-      expect(notificationModule.isDiscordWebhook('ntfy://test')).toBe(false);
+      expect(isDiscordWebhook('ntfy://test')).toBe(false);
     });
   });
 });
@@ -602,7 +604,7 @@ describe('NotificationModule Integration', () => {
       );
     });
 
-    it('should send plain text for Discord webhooks with richFormatting disabled', async () => {
+    it('should send plain text via Apprise for Discord webhooks with richFormatting disabled', async () => {
       mockGetConfig.mockReturnValue({
         notificationsEnabled: true,
         appriseUrls: [{
@@ -614,16 +616,18 @@ describe('NotificationModule Integration', () => {
 
       const sendPromise = notificationModule.sendTestNotification();
 
+      // Plain text Discord goes through Apprise, not direct HTTP
       setImmediate(() => {
-        mockResponse.emit('data', '');
-        mockResponse.emit('end');
+        mockProcess.emit('close', 0);
       });
 
       await sendPromise;
 
-      expect(mockHttpsRequest).toHaveBeenCalled();
-      expect(mockRequest.write).toHaveBeenCalledWith(
-        expect.stringContaining('content')
+      // Should use Apprise for plain text
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'apprise',
+        expect.arrayContaining(['-vv', '-t']),
+        expect.any(Object)
       );
     });
 
