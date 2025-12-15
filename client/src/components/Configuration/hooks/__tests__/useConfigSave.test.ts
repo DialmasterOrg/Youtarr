@@ -632,7 +632,10 @@ describe('useConfigSave', () => {
 
       const callBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
       expect(callBody.notificationsEnabled).toBe(true);
-      expect(callBody.appriseUrls).toEqual(['discord://webhook_id/token', 'tgram://bot/chat']);
+      expect(callBody.appriseUrls).toEqual([
+        { url: 'discord://webhook_id/token', name: 'Discord', richFormatting: true },
+        { url: 'tgram://bot/chat', name: 'Telegram', richFormatting: true }
+      ]);
     });
 
     test('saves configuration with subtitles enabled', async () => {

@@ -52,16 +52,16 @@ describe('NotificationsSection Component', () => {
       expect(screen.getByText('Notifications')).toBeInTheDocument();
     });
 
-    test('renders info alert with title and description', async () => {
+    test('renders Apprise link and info text', async () => {
       const user = userEvent.setup();
       const props = createSectionProps();
       renderWithProviders(<NotificationsSection {...props} />);
 
       await expandAccordion(user);
 
-      expect(screen.getByText('Get Notified of New Downloads')).toBeInTheDocument();
-      expect(screen.getByText(/Receive notifications when new videos are downloaded/i)).toBeInTheDocument();
+      // Check for Apprise link and description text
       expect(screen.getByText(/Apprise/i)).toBeInTheDocument();
+      expect(screen.getByText(/supports 100\+ services/i)).toBeInTheDocument();
     });
 
     test('displays "Disabled" chip when notifications are disabled', () => {
@@ -172,7 +172,7 @@ describe('NotificationsSection Component', () => {
 
       await expandAccordion(user);
 
-      expect(screen.queryByLabelText(/Add Notification URL/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Notification URL/i)).not.toBeInTheDocument();
     });
 
     test('shows URL input field when notifications are enabled', async () => {
@@ -184,10 +184,10 @@ describe('NotificationsSection Component', () => {
 
       await expandAccordion(user);
 
-      expect(screen.getByLabelText(/Add Notification URL/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Notification URL/i)).toBeInTheDocument();
     });
 
-    test('does not show test button when notifications are disabled', async () => {
+    test('does not show add service section when notifications are disabled', async () => {
       const user = userEvent.setup();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: false })
@@ -196,10 +196,10 @@ describe('NotificationsSection Component', () => {
 
       await expandAccordion(user);
 
-      expect(screen.queryByTestId('test-notification-button')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Add a Notification Service/i)).not.toBeInTheDocument();
     });
 
-    test('shows test button when notifications are enabled', async () => {
+    test('shows add service section when notifications are enabled', async () => {
       const user = userEvent.setup();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: true })
@@ -208,7 +208,7 @@ describe('NotificationsSection Component', () => {
 
       await expandAccordion(user);
 
-      expect(screen.getByTestId('test-notification-button')).toBeInTheDocument();
+      expect(screen.getByText(/Add a Notification Service/i)).toBeInTheDocument();
     });
   });
 
@@ -228,7 +228,8 @@ describe('NotificationsSection Component', () => {
 
       await expandAccordion(user);
 
-      expect(screen.getByText(/Configured Notification Services \(2\)/i)).toBeInTheDocument();
+      expect(screen.getByText(/Your Notification Services/i)).toBeInTheDocument();
+      expect(screen.getByText(/2 configured/i)).toBeInTheDocument();
     });
 
     test('displays user-friendly names for known services', async () => {
@@ -265,7 +266,7 @@ describe('NotificationsSection Component', () => {
       expect(screen.getByRole('button', { name: /Remove notification URL/i })).toBeInTheDocument();
     });
 
-    test('removes URL when delete button is clicked', async () => {
+    test('removes URL when delete button is clicked and confirmed', async () => {
       const user = userEvent.setup();
       const onConfigChange = jest.fn();
       const props = createSectionProps({
@@ -282,8 +283,13 @@ describe('NotificationsSection Component', () => {
 
       await expandAccordion(user);
 
+      // Click delete button to open confirmation dialog
       const deleteButtons = screen.getAllByRole('button', { name: /Remove notification URL/i });
       await user.click(deleteButtons[0]);
+
+      // Confirm deletion in dialog
+      const confirmButton = screen.getByRole('button', { name: /^Remove$/i });
+      await user.click(confirmButton);
 
       expect(onConfigChange).toHaveBeenCalledWith({
         appriseUrls: [{ url: 'tgram://bot/chat', name: 'Telegram Bot', richFormatting: true }]
@@ -379,7 +385,7 @@ describe('NotificationsSection Component', () => {
 
       await expandAccordion(user);
 
-      const input = screen.getByLabelText(/Add Notification URL/i);
+      const input = screen.getByPlaceholderText(/e\.g\., discord:\/\//i);
       await user.type(input, 'discord://existing');
 
       const addButton = screen.getByRole('button', { name: /Add/i });
@@ -436,7 +442,7 @@ describe('NotificationsSection Component', () => {
       expect(testButtons).toHaveLength(2);
     });
 
-    test('displays save reminder text when webhooks are configured', async () => {
+    test('displays configured webhooks count when webhooks are configured', async () => {
       const user = userEvent.setup();
       const props = createSectionProps({
         config: createConfig({
@@ -448,7 +454,7 @@ describe('NotificationsSection Component', () => {
 
       await expandAccordion(user);
 
-      expect(screen.getByText(/save your configuration/i)).toBeInTheDocument();
+      expect(screen.getByText(/configured/i)).toBeInTheDocument();
     });
 
     test('sends test notification to single webhook on click', async () => {
@@ -542,8 +548,8 @@ describe('NotificationsSection Component', () => {
     });
   });
 
-  describe('Common URL Examples', () => {
-    test('displays common URL format examples', async () => {
+  describe('Supported URL Formats', () => {
+    test('displays supported URL format examples', async () => {
       const user = userEvent.setup();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: true })
@@ -552,9 +558,12 @@ describe('NotificationsSection Component', () => {
 
       await expandAccordion(user);
 
-      expect(screen.getByText(/Common URL formats:/i)).toBeInTheDocument();
-      expect(screen.getByText(/Discord:/i)).toBeInTheDocument();
-      expect(screen.getByText(/Telegram:/i)).toBeInTheDocument();
+      expect(screen.getByText(/Feature Rich Supported Formats/i)).toBeInTheDocument();
+      // Check that format examples are present (Discord and Telegram appear in format cards)
+      const discordElements = screen.getAllByText(/Discord/);
+      expect(discordElements.length).toBeGreaterThan(0);
+      const telegramElements = screen.getAllByText(/Telegram/);
+      expect(telegramElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -581,7 +590,7 @@ describe('NotificationsSection Component', () => {
   });
 
   describe('Integration Tests', () => {
-    test('enabling notifications shows URL input and button', async () => {
+    test('enabling notifications shows URL input', async () => {
       const user = userEvent.setup();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: false })
@@ -590,8 +599,7 @@ describe('NotificationsSection Component', () => {
 
       await expandAccordion(user);
 
-      expect(screen.queryByLabelText(/Add Notification URL/i)).not.toBeInTheDocument();
-      expect(screen.queryByTestId('test-notification-button')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Notification URL/i)).not.toBeInTheDocument();
 
       // Simulate enabling notifications
       rerender(
@@ -601,11 +609,10 @@ describe('NotificationsSection Component', () => {
         />
       );
 
-      expect(screen.getByLabelText(/Add Notification URL/i)).toBeInTheDocument();
-      expect(screen.getByTestId('test-notification-button')).toBeInTheDocument();
+      expect(screen.getByLabelText(/Notification URL/i)).toBeInTheDocument();
     });
 
-    test('disabling notifications hides URL input and button', async () => {
+    test('disabling notifications hides URL input', async () => {
       const user = userEvent.setup();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: true })
@@ -614,8 +621,7 @@ describe('NotificationsSection Component', () => {
 
       await expandAccordion(user);
 
-      expect(screen.getByLabelText(/Add Notification URL/i)).toBeInTheDocument();
-      expect(screen.getByTestId('test-notification-button')).toBeInTheDocument();
+      expect(screen.getByLabelText(/Notification URL/i)).toBeInTheDocument();
 
       // Simulate disabling notifications
       rerender(
@@ -625,8 +631,7 @@ describe('NotificationsSection Component', () => {
         />
       );
 
-      expect(screen.queryByLabelText(/Add Notification URL/i)).not.toBeInTheDocument();
-      expect(screen.queryByTestId('test-notification-button')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Notification URL/i)).not.toBeInTheDocument();
     });
   });
 
@@ -651,10 +656,10 @@ describe('NotificationsSection Component', () => {
 
       await expandAccordion(user);
 
-      expect(screen.getByLabelText(/Add Notification URL/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/Notification URL/i)).toBeInTheDocument();
     });
 
-    test('button has accessible text', async () => {
+    test('add button has accessible text', async () => {
       const user = userEvent.setup();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: true })
@@ -663,18 +668,19 @@ describe('NotificationsSection Component', () => {
 
       await expandAccordion(user);
 
-      expect(screen.getByTestId('test-notification-button')).toHaveTextContent('Send Test Notification');
+      expect(screen.getByRole('button', { name: /Add/i })).toBeInTheDocument();
     });
 
-    test('alert has proper role', async () => {
+    test('info text is present', async () => {
       const user = userEvent.setup();
       const props = createSectionProps();
       renderWithProviders(<NotificationsSection {...props} />);
 
       await expandAccordion(user);
 
-      const alerts = screen.getAllByRole('alert');
-      expect(alerts.length).toBeGreaterThan(0);
+      // Check that info text about Apprise is present
+      expect(screen.getByText(/Powered by/i)).toBeInTheDocument();
+      expect(screen.getByText(/Apprise/i)).toBeInTheDocument();
     });
 
     test('accordion has proper aria attributes', () => {
