@@ -58,9 +58,10 @@ jest.mock('../channelSettingsModule', () => ({
 }));
 
 const mockTempPathManager = {
-  isEnabled: jest.fn(() => false),
-  isTempPath: jest.fn(() => false),
-  convertTempToFinal: jest.fn((path) => path)
+  isEnabled: jest.fn(() => true),
+  isTempPath: jest.fn(() => true),
+  convertTempToFinal: jest.fn((path) => path),
+  getTempBasePath: jest.fn(() => '/tmp/youtarr-downloads')
 };
 
 jest.mock('../download/tempPathManager', () => mockTempPathManager);
@@ -80,6 +81,11 @@ const mockChannel = {
 jest.mock('../../models/channel', () => mockChannel);
 
 jest.mock('../../logger');
+
+jest.mock('../filesystem', () => ({
+  ...jest.requireActual('../filesystem'),
+  cleanupEmptyParents: jest.fn(() => Promise.resolve())
+}));
 
 const fs = require('fs-extra');
 const logger = require('../../logger');
@@ -556,84 +562,6 @@ describe('videoDownloadPostProcessFiles', () => {
   });
 
   describe('subfolder support', () => {
-    it('moves channel folder to subfolder when channel has sub_folder setting (no temp downloads)', async () => {
-      const channelFolder = '/library/Channel';
-      const videoPathInChannel = '/library/Channel/Video Title [abc123]/Video Title [abc123].mp4';
-      process.argv = ['node', 'script', videoPathInChannel];
-
-      Channel.findOne.mockResolvedValue({
-        sub_folder: 'Entertainment',
-        uploader: 'Channel'
-      });
-
-      fs.existsSync.mockImplementation((path) => {
-        return path === '/library/Channel/Video Title [abc123]/Video Title [abc123].info.json' ||
-               path === videoPathInChannel;
-      });
-      fs.pathExists.mockImplementation(async (path) => {
-        // Return false for destination (doesn't exist yet), true for tempPath
-        if (path === '/library/__Entertainment/Channel') return false;
-        return path === tempPath;
-      });
-      fs.readdir.mockResolvedValue(['Video Title [abc123]']);
-
-      await loadModule();
-      await settleAsync();
-
-      // Verify that fs.ensureDir was called for subfolder parent with __ prefix
-      expect(fs.ensureDir).toHaveBeenCalledWith(expect.stringContaining('/library/__Entertainment'));
-
-      // Verify that fs.move was called to move the entire channel folder to subfolder with __ prefix
-      expect(fs.move).toHaveBeenCalledWith(
-        channelFolder,
-        '/library/__Entertainment/Channel'
-      );
-
-      // Verify the final path was logged
-      expect(logger.info).toHaveBeenCalledWith(
-        expect.objectContaining({
-          expectedPath: '/library/__Entertainment/Channel'
-        }),
-        '[Post-Process] Successfully moved to subfolder'
-      );
-    });
-
-    it('merges contents when subfolder destination already exists (no temp downloads)', async () => {
-      const channelFolder = '/library/Channel';
-      const videoPathInChannel = '/library/Channel/Video Title [abc123]/Video Title [abc123].mp4';
-      process.argv = ['node', 'script', videoPathInChannel];
-
-      Channel.findOne.mockResolvedValue({
-        sub_folder: 'Entertainment',
-        uploader: 'Channel'
-      });
-
-      fs.existsSync.mockImplementation((path) => {
-        return path === '/library/Channel/Video Title [abc123]/Video Title [abc123].info.json' ||
-               path === videoPathInChannel;
-      });
-      fs.pathExists
-        .mockResolvedValueOnce(false) // tempPath doesn't exist
-        .mockResolvedValueOnce(true)  // destination exists
-        .mockResolvedValueOnce(false); // destination item doesn't exist
-      fs.readdir.mockResolvedValue(['Video Title [abc123]', 'poster.jpg']);
-
-      await loadModule();
-      await settleAsync();
-
-      // Verify destination exists check was made with __ prefix
-      expect(fs.pathExists).toHaveBeenCalledWith('/library/__Entertainment/Channel');
-
-      // Verify items were moved individually
-      expect(fs.move).toHaveBeenCalled();
-
-      // Verify old channel folder was removed
-      expect(fs.remove).toHaveBeenCalledWith(channelFolder);
-
-      // Verify merge log
-      expect(logger.info).toHaveBeenCalledWith('[Post-Process] Destination exists, merging contents');
-    });
-
     it('moves video directory directly to subfolder when using temp downloads', async () => {
       const tempVideoPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123]/Video Title [abc123].mp4';
       const tempVideoDir = '/tmp/youtarr-downloads/Channel/Video Title [abc123]';
@@ -704,58 +632,6 @@ describe('videoDownloadPostProcessFiles', () => {
       );
     });
 
-    it('handles errors during subfolder move gracefully', async () => {
-      const videoPathInChannel = '/library/Channel/Video Title [abc123]/Video Title [abc123].mp4';
-      process.argv = ['node', 'script', videoPathInChannel];
-
-      Channel.findOne.mockResolvedValue({
-        sub_folder: 'Entertainment',
-        uploader: 'Channel'
-      });
-
-      fs.existsSync.mockImplementation((path) => {
-        return path === '/library/Channel/Video Title [abc123]/Video Title [abc123].info.json' ||
-               path === videoPathInChannel;
-      });
-      fs.pathExists.mockResolvedValue(false);
-      fs.move.mockRejectedValueOnce(new Error('Permission denied'));
-
-      await loadModule();
-      await settleAsync();
-
-      // Verify error was logged
-      expect(logger.error).toHaveBeenCalledWith(
-        expect.objectContaining({ err: expect.any(Error) }),
-        '[Post-Process] Error moving to subfolder'
-      );
-
-      // Verify process did NOT exit (graceful degradation)
-      expect(process.exit).not.toHaveBeenCalled();
-    });
-
-    it('skips subfolder move when already in correct subfolder', async () => {
-      const videoPathInSubfolder = '/library/__Entertainment/Channel/Video Title [abc123]/Video Title [abc123].mp4';
-      process.argv = ['node', 'script', videoPathInSubfolder];
-
-      Channel.findOne.mockResolvedValue({
-        sub_folder: 'Entertainment',
-        uploader: 'Channel'
-      });
-
-      fs.existsSync.mockImplementation((path) => {
-        return path === '/library/__Entertainment/Channel/Video Title [abc123]/Video Title [abc123].info.json' ||
-               path === videoPathInSubfolder;
-      });
-
-      await loadModule();
-      await settleAsync();
-
-      // Verify fs.move was NOT called for subfolder move (only for metadata temp file if any)
-      const moveCalls = fs.move.mock.calls.filter(call =>
-        call[0].includes('/library') && call[1].includes('/library')
-      );
-      expect(moveCalls.length).toBe(0);
-    });
   });
 
   describe('special character handling in channel names', () => {
@@ -806,54 +682,6 @@ describe('videoDownloadPostProcessFiles', () => {
       expect(fs.writeFileSync).toHaveBeenCalledWith(
         tempJsonPath,
         expect.stringContaining(`"_actual_filepath": "/library/__Music/${sanitizedChannelName}/Fred again`)
-      );
-    });
-
-    it('uses filesystem path for channel with trailing dots (no temp downloads + subfolder)', async () => {
-      // Scenario: Channel name is "Fred again . ." with trailing dots
-      const channelName = 'Fred again . .';
-      const videoPathInChannel = `/library/${channelName}/Video Title [abc123]/Video Title [abc123].mp4`;
-      process.argv = ['node', 'script', videoPathInChannel];
-
-      Channel.findOne.mockResolvedValue({
-        sub_folder: 'Music',
-        uploader: channelName
-      });
-
-      fs.readFileSync.mockReturnValue(JSON.stringify({
-        id: 'abc123',
-        title: 'Video Title',
-        uploader: channelName,
-        channel_id: 'channel123'
-      }));
-
-      fs.existsSync.mockImplementation((path) => {
-        return path === `/library/${channelName}/Video Title [abc123]/Video Title [abc123].info.json` ||
-               path === videoPathInChannel;
-      });
-      fs.pathExists.mockResolvedValue(false);
-      fs.readdir.mockResolvedValue(['Video Title [abc123]']);
-
-      await loadModule();
-      await settleAsync();
-
-      // Verify fs.ensureDir was called with the channel name from filesystem
-      expect(fs.ensureDir).toHaveBeenCalledWith(
-        expect.stringContaining('/library/__Music')
-      );
-
-      // Verify fs.move uses the actual channel name from filesystem
-      expect(fs.move).toHaveBeenCalledWith(
-        `/library/${channelName}`,
-        `/library/__Music/${channelName}`
-      );
-
-      // Verify success log
-      expect(logger.info).toHaveBeenCalledWith(
-        expect.objectContaining({
-          expectedPath: `/library/__Music/${channelName}`
-        }),
-        '[Post-Process] Successfully moved to subfolder'
       );
     });
 

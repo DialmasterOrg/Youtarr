@@ -470,11 +470,11 @@ describe('CoreSettingsSection Component', () => {
     });
   });
 
-  describe('Use tmp dir for download processing Checkbox', () => {
-    test('renders Use tmp dir checkbox', () => {
+  describe('Use external temp directory Checkbox', () => {
+    test('renders Use external temp directory checkbox', () => {
       const props = createSectionProps();
       renderWithProviders(<CoreSettingsSection {...props} />);
-      expect(screen.getByRole('checkbox', { name: /Use tmp dir for download processing/i })).toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: /Use external temp directory/i })).toBeInTheDocument();
     });
 
     test('checkbox reflects useTmpForDownloads state', () => {
@@ -482,7 +482,7 @@ describe('CoreSettingsSection Component', () => {
         config: createConfig({ useTmpForDownloads: true })
       });
       renderWithProviders(<CoreSettingsSection {...props} />);
-      const checkbox = screen.getByRole('checkbox', { name: /Use tmp dir for download processing/i });
+      const checkbox = screen.getByRole('checkbox', { name: /Use external temp directory/i });
       expect(checkbox).toBeChecked();
     });
 
@@ -495,7 +495,7 @@ describe('CoreSettingsSection Component', () => {
       });
       renderWithProviders(<CoreSettingsSection {...props} />);
 
-      const checkbox = screen.getByRole('checkbox', { name: /Use tmp dir for download processing/i });
+      const checkbox = screen.getByRole('checkbox', { name: /Use external temp directory/i });
       await user.click(checkbox);
 
       expect(onConfigChange).toHaveBeenCalledWith({ useTmpForDownloads: true });
@@ -506,7 +506,7 @@ describe('CoreSettingsSection Component', () => {
         isPlatformManaged: createPlatformManagedState({ useTmpForDownloads: true })
       });
       renderWithProviders(<CoreSettingsSection {...props} />);
-      const checkbox = screen.getByRole('checkbox', { name: /Use tmp dir for download processing/i });
+      const checkbox = screen.getByRole('checkbox', { name: /Use external temp directory/i });
       expect(checkbox).toBeDisabled();
     });
 
@@ -515,7 +515,7 @@ describe('CoreSettingsSection Component', () => {
         isPlatformManaged: createPlatformManagedState({ useTmpForDownloads: false })
       });
       renderWithProviders(<CoreSettingsSection {...props} />);
-      const checkbox = screen.getByRole('checkbox', { name: /Use tmp dir for download processing/i });
+      const checkbox = screen.getByRole('checkbox', { name: /Use external temp directory/i });
       expect(checkbox).not.toBeDisabled();
     });
 
@@ -701,7 +701,7 @@ describe('CoreSettingsSection Component', () => {
       expect(onConfigChange).toHaveBeenCalledWith({ subtitlesEnabled: true });
 
       // Toggle tmp downloads
-      const tmpCheckbox = screen.getByRole('checkbox', { name: /Use tmp dir for download processing/i });
+      const tmpCheckbox = screen.getByRole('checkbox', { name: /Use external temp directory/i });
       await user.click(tmpCheckbox);
       expect(onConfigChange).toHaveBeenCalledWith({ useTmpForDownloads: true });
 
@@ -750,7 +750,7 @@ describe('CoreSettingsSection Component', () => {
 
       const autoDownload = screen.getByRole('checkbox', { name: /Enable Automatic Downloads/i });
       const subtitles = screen.getByRole('checkbox', { name: /Enable Subtitle Downloads/i });
-      const tmp = screen.getByRole('checkbox', { name: /Use tmp dir for download processing/i });
+      const tmp = screen.getByRole('checkbox', { name: /Use external temp directory/i });
 
       expect(autoDownload).not.toBeChecked();
       expect(subtitles).not.toBeChecked();
@@ -769,7 +769,7 @@ describe('CoreSettingsSection Component', () => {
 
       const autoDownload = screen.getByRole('checkbox', { name: /Enable Automatic Downloads/i });
       const subtitles = screen.getByRole('checkbox', { name: /Enable Subtitle Downloads/i });
-      const tmp = screen.getByRole('checkbox', { name: /Use tmp dir for download processing/i });
+      const tmp = screen.getByRole('checkbox', { name: /Use external temp directory/i });
 
       expect(autoDownload).toBeChecked();
       expect(subtitles).toBeChecked();
@@ -795,7 +795,7 @@ describe('CoreSettingsSection Component', () => {
       renderWithProviders(<CoreSettingsSection {...props} />);
 
       expect(screen.getByRole('checkbox', { name: /Enable Automatic Downloads/i })).toBeInTheDocument();
-      expect(screen.getByRole('checkbox', { name: /Use tmp dir for download processing/i })).toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: /Use external temp directory/i })).toBeInTheDocument();
       expect(screen.getByRole('checkbox', { name: /Enable Subtitle Downloads/i })).toBeInTheDocument();
     });
 

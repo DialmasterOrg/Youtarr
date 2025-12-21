@@ -10,13 +10,13 @@ const {
 class YtdlpCommandBuilder {
   /**
    * Build output path with optional subfolder support
+   * Downloads always go to temp path first, then get moved to final location
    * @param {string|null} subFolder - Optional subfolder name
    * @returns {string} - Full output path template
    */
   static buildOutputPath(subFolder = null) {
-    const baseOutputPath = tempPathManager.isEnabled()
-      ? tempPathManager.getTempBasePath()
-      : configModule.directoryPath;
+    // Always use temp path - downloads are staged before moving to final location
+    const baseOutputPath = tempPathManager.getTempBasePath();
 
     if (subFolder) {
       return path.join(baseOutputPath, subFolder, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, VIDEO_FILE_TEMPLATE);
@@ -27,13 +27,13 @@ class YtdlpCommandBuilder {
 
   /**
    * Build thumbnail output path with optional subfolder support
+   * Thumbnails are staged in temp path alongside videos
    * @param {string|null} subFolder - Optional subfolder name
    * @returns {string} - Thumbnail path template
    */
   static buildThumbnailPath(subFolder = null) {
-    const baseOutputPath = tempPathManager.isEnabled()
-      ? tempPathManager.getTempBasePath()
-      : configModule.directoryPath;
+    // Always use temp path - thumbnails are staged with videos
+    const baseOutputPath = tempPathManager.getTempBasePath();
 
     // Use same filename as video file (without extension - yt-dlp adds .jpg)
     const thumbnailFilename = `${CHANNEL_TEMPLATE} - %(title).76s [%(id)s]`;

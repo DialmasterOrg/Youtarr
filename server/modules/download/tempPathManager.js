@@ -3,28 +3,49 @@ const fs = require('fs-extra');
 const configModule = require('../configModule');
 const logger = require('../../logger');
 
+// Hidden temp directory name (dot-prefix hides from media servers like Plex/Jellyfin)
+const LOCAL_TEMP_DIR_NAME = '.youtarr_tmp';
+
 /**
  * Manages temporary download paths and conversions between temp and final locations.
- * When useTmpForDownloads is enabled, all downloads happen in tmpFilePath first,
- * then get moved to the final location atomically to minimize network I/O.
+ * Downloads are always staged in a temporary location before moving to the final destination.
+ * This prevents media servers from scanning incomplete files during download.
+ *
+ * When useTmpForDownloads is true: uses external tmpFilePath (e.g., /tmp) - useful for network mounts
+ * When useTmpForDownloads is false: uses .youtarr_tmp/ in output directory - fast same-filesystem moves
  */
 class TempPathManager {
   /**
-   * Check if temporary downloads are enabled
+   * Check if staging downloads is enabled (always true - downloads are always staged)
    * @returns {boolean}
    */
   isEnabled() {
+    // Staging is always enabled - downloads go to temp location first, then move to final
+    return true;
+  }
+
+  /**
+   * Check if using external temp path (e.g., /tmp) vs local .youtarr_tmp
+   * @returns {boolean} - true if useTmpForDownloads is enabled (external temp)
+   */
+  isUsingExternalTemp() {
     const config = configModule.getConfig();
     return config.useTmpForDownloads === true;
   }
 
   /**
-   * Get the temporary download base path from config
+   * Get the temporary download base path
+   * When useTmpForDownloads is true: uses configured tmpFilePath (external)
+   * When useTmpForDownloads is false: uses .youtarr_tmp in output directory (local)
    * @returns {string}
    */
   getTempBasePath() {
-    const config = configModule.getConfig();
-    return config.tmpFilePath || '/tmp/youtarr-downloads';
+    if (this.isUsingExternalTemp()) {
+      const config = configModule.getConfig();
+      return config.tmpFilePath || '/tmp/youtarr-downloads';
+    }
+    // Local temp directory in output path
+    return path.join(configModule.directoryPath, LOCAL_TEMP_DIR_NAME);
   }
 
   /**
@@ -36,20 +57,24 @@ class TempPathManager {
   }
 
   /**
-   * Check if a given path is in the temp directory
+   * Check if a given path is in the temp directory (either external or local)
    * @param {string} filePath - Path to check
    * @returns {boolean}
    */
   isTempPath(filePath) {
-    if (!this.isEnabled()) {
-      return false;
+    const tempBase = this.getTempBasePath();
+    // Use path.resolve to normalize and remove trailing separators on all platforms
+    const resolvedPath = path.resolve(filePath);
+    const resolvedBase = path.resolve(tempBase);
+
+    // Check if path equals base
+    if (resolvedPath === resolvedBase) {
+      return true;
     }
 
-    const tempBase = this.getTempBasePath();
-    const normalized = path.normalize(filePath);
-    const normalizedBase = path.normalize(tempBase);
-
-    return normalized.startsWith(normalizedBase);
+    // Get relative path - if it doesn't start with '..' it's a descendant
+    const relativePath = path.relative(resolvedBase, resolvedPath);
+    return relativePath && !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
   }
 
   /**
@@ -100,10 +125,6 @@ class TempPathManager {
    * @returns {Promise<void>}
    */
   async ensureTempDirectory() {
-    if (!this.isEnabled()) {
-      return;
-    }
-
     const tempBase = this.getTempBasePath();
 
     try {
@@ -121,11 +142,6 @@ class TempPathManager {
    * @returns {Promise<void>}
    */
   async cleanTempDirectory() {
-    if (!this.isEnabled()) {
-      logger.debug('Temp downloads disabled, skipping cleanup');
-      return;
-    }
-
     const tempBase = this.getTempBasePath();
 
     try {
@@ -153,70 +169,14 @@ class TempPathManager {
   }
 
   /**
-   * Move a video directory from temp to final location atomically
-   * @param {string} tempPath - Source path in temp directory (can be file or directory)
-   * @param {string} finalPath - Destination path (optional, calculated if not provided)
-   * @returns {Promise<{success: boolean, finalPath: string, error?: string}>}
-   */
-  async moveToFinal(tempPath, finalPath = null) {
-    try {
-      // Calculate final path if not provided
-      const targetPath = finalPath || this.convertTempToFinal(tempPath);
-
-      // Determine if we're moving a directory or a file
-      const stats = await fs.stat(tempPath);
-      const isDirectory = stats.isDirectory();
-
-      // For files, we need to move the parent directory (the video directory)
-      const sourcePath = isDirectory ? tempPath : path.dirname(tempPath);
-      const destinationPath = isDirectory ? targetPath : path.dirname(targetPath);
-
-      logger.debug({ sourcePath, destinationPath }, 'Moving from temp to final');
-
-      // Pre-verification: Check source exists
-      const sourceExists = await fs.pathExists(sourcePath);
-      if (!sourceExists) {
-        throw new Error(`Source path does not exist: ${sourcePath}`);
-      }
-
-      // Ensure parent directory of destination exists
-      const destParent = path.dirname(destinationPath);
-      await fs.ensureDir(destParent);
-
-      // Move the directory (will copy+delete if cross-filesystem)
-      await fs.move(sourcePath, destinationPath, { overwrite: true });
-
-      // Post-verification: Check destination exists
-      const destExists = await fs.pathExists(destinationPath);
-      if (!destExists) {
-        throw new Error(`Move completed but destination doesn't exist: ${destinationPath}`);
-      }
-
-      logger.info({ sourcePath, destinationPath }, 'Successfully moved to final location');
-
-      return {
-        success: true,
-        finalPath: isDirectory ? destinationPath : path.join(destinationPath, path.basename(tempPath))
-      };
-
-    } catch (error) {
-      logger.error({ tempPath, finalPath, err: error }, 'Error moving to final location');
-      return {
-        success: false,
-        finalPath: finalPath || this.convertTempToFinal(tempPath),
-        error: error.message
-      };
-    }
-  }
-
-  /**
    * Get status information for debugging
    * @returns {object}
    */
   getStatus() {
     return {
       enabled: this.isEnabled(),
-      tempBasePath: this.isEnabled() ? this.getTempBasePath() : null,
+      isUsingExternalTemp: this.isUsingExternalTemp(),
+      tempBasePath: this.getTempBasePath(),
       finalBasePath: this.getFinalBasePath()
     };
   }

@@ -39,9 +39,9 @@ describe('YtdlpCommandBuilder', () => {
     configModule.getConfig.mockReturnValue(mockConfig);
     configModule.getCookiesPath.mockReturnValue(null);
 
-    // Default tempPathManager behavior - disabled
-    tempPathManager.isEnabled.mockReturnValue(false);
-    tempPathManager.getTempBasePath.mockReturnValue(null);
+    // Default tempPathManager behavior - always returns a temp path (staging always enabled)
+    tempPathManager.isEnabled.mockReturnValue(true);
+    tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
   });
 
   describe('buildSponsorblockArgs', () => {
@@ -198,18 +198,17 @@ describe('YtdlpCommandBuilder', () => {
   });
 
   describe('buildOutputPath', () => {
-    it('should build path using configModule.directoryPath when temp path disabled', () => {
-      tempPathManager.isEnabled.mockReturnValue(false);
+    it('should always build path using temp path (staging is always enabled)', () => {
+      tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
       const result = YtdlpCommandBuilder.buildOutputPath();
-      expect(result).toContain('/mock/youtube/output');
+      expect(result).toContain('/mock/youtube/output/.youtarr_tmp');
       expect(result).toContain('%(uploader,channel,uploader_id)s');
       expect(result).toContain('%(title).76s');
       expect(result).toContain('%(id)s');
       expect(result).toContain('%(ext)s');
     });
 
-    it('should build path using temp path when enabled', () => {
-      tempPathManager.isEnabled.mockReturnValue(true);
+    it('should build path using external temp path when configured', () => {
       tempPathManager.getTempBasePath.mockReturnValue('/tmp/youtarr-temp');
       const result = YtdlpCommandBuilder.buildOutputPath();
       expect(result).toContain('/tmp/youtarr-temp');
@@ -217,20 +216,21 @@ describe('YtdlpCommandBuilder', () => {
     });
 
     it('should include subfolder when provided', () => {
+      tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
       const result = YtdlpCommandBuilder.buildOutputPath('TechChannel');
-      expect(result).toContain('/mock/youtube/output');
+      expect(result).toContain('/mock/youtube/output/.youtarr_tmp');
       expect(result).toContain('TechChannel');
       expect(result).toContain('%(uploader,channel,uploader_id)s');
     });
 
     it('should not include subfolder when null', () => {
+      tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
       const result = YtdlpCommandBuilder.buildOutputPath(null);
-      expect(result).toContain('/mock/youtube/output');
+      expect(result).toContain('/mock/youtube/output/.youtarr_tmp');
       expect(result).toContain('%(uploader,channel,uploader_id)s');
     });
 
     it('should use temp path with subfolder', () => {
-      tempPathManager.isEnabled.mockReturnValue(true);
       tempPathManager.getTempBasePath.mockReturnValue('/tmp/downloads');
       const result = YtdlpCommandBuilder.buildOutputPath('GameChannel');
       expect(result).toContain('/tmp/downloads');
@@ -239,10 +239,10 @@ describe('YtdlpCommandBuilder', () => {
   });
 
   describe('buildThumbnailPath', () => {
-    it('should build thumbnail path using configModule.directoryPath when temp path disabled', () => {
-      tempPathManager.isEnabled.mockReturnValue(false);
+    it('should always build thumbnail path using temp path (staging is always enabled)', () => {
+      tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
       const result = YtdlpCommandBuilder.buildThumbnailPath();
-      expect(result).toContain('/mock/youtube/output');
+      expect(result).toContain('/mock/youtube/output/.youtarr_tmp');
       expect(result).toContain('%(uploader,channel,uploader_id)s');
       expect(result).toContain('%(title).76s');
       expect(result).toContain('[%(id)s]');
@@ -250,8 +250,7 @@ describe('YtdlpCommandBuilder', () => {
       expect(result).not.toMatch(/\.%(ext)s$/);
     });
 
-    it('should build thumbnail path using temp path when enabled', () => {
-      tempPathManager.isEnabled.mockReturnValue(true);
+    it('should build thumbnail path using external temp path when configured', () => {
       tempPathManager.getTempBasePath.mockReturnValue('/tmp/youtarr-temp');
       const result = YtdlpCommandBuilder.buildThumbnailPath();
       expect(result).toContain('/tmp/youtarr-temp');
@@ -259,19 +258,22 @@ describe('YtdlpCommandBuilder', () => {
     });
 
     it('should include subfolder when provided', () => {
+      tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
       const result = YtdlpCommandBuilder.buildThumbnailPath('NewsChannel');
-      expect(result).toContain('/mock/youtube/output');
+      expect(result).toContain('/mock/youtube/output/.youtarr_tmp');
       expect(result).toContain('NewsChannel');
       expect(result).toContain('%(uploader,channel,uploader_id)s');
     });
 
     it('should not include subfolder when null', () => {
+      tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
       const result = YtdlpCommandBuilder.buildThumbnailPath(null);
-      expect(result).toContain('/mock/youtube/output');
+      expect(result).toContain('/mock/youtube/output/.youtarr_tmp');
       expect(result).toContain('%(uploader,channel,uploader_id)s');
     });
 
     it('should match video filename pattern without extension', () => {
+      tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
       const outputPath = YtdlpCommandBuilder.buildOutputPath();
       const thumbnailPath = YtdlpCommandBuilder.buildThumbnailPath();
 
