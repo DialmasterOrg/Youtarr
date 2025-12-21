@@ -8,7 +8,7 @@ const tempPathManager = require('./download/tempPathManager');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { JobVideoDownload } = require('../models');
 const logger = require('../logger');
-const { moveWithRetries, safeRemove, buildChannelPath, buildSubfolderSegment } = require('./filesystem');
+const { moveWithRetries, safeRemove, buildChannelPath, cleanupEmptyParents } = require('./filesystem');
 
 const activeJobId = process.env.YOUTARR_JOB_ID;
 
@@ -252,35 +252,17 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     }
 
     // Phase 2: Calculate the final path for _actual_filepath with subfolder if applicable
-    // If temp downloads are enabled, we need to store the FINAL path, not the temp path
+    // Downloads always go to temp first, so we need to store the FINAL path, not the temp path
     let finalVideoPathForJson;
 
-    if (tempPathManager.isEnabled() && tempPathManager.isTempPath(videoPath)) {
-      // Temp downloads enabled
-      if (targetChannelFolder) {
-        // Channel has subfolder - calculate path with subfolder included
-        const videoDirectoryName = path.basename(videoDirectory);
-        const videoFileName = path.basename(videoPath);
-        finalVideoPathForJson = path.join(targetChannelFolder, videoDirectoryName, videoFileName);
-      } else {
-        // No subfolder - use standard temp-to-final conversion
-        finalVideoPathForJson = tempPathManager.convertTempToFinal(videoPath);
-      }
+    if (targetChannelFolder) {
+      // Channel has subfolder - calculate path with subfolder included
+      const videoDirectoryName = path.basename(videoDirectory);
+      const videoFileName = path.basename(videoPath);
+      finalVideoPathForJson = path.join(targetChannelFolder, videoDirectoryName, videoFileName);
     } else {
-      // Not using temp downloads
-      if (targetChannelFolder) {
-        // Channel has subfolder - calculate expected path with subfolder
-        const currentChannelFolder = path.dirname(videoDirectory);
-        const channelName = path.basename(currentChannelFolder);
-        const videoDirectoryName = path.basename(videoDirectory);
-        const videoFileName = path.basename(videoPath);
-        const baseDir = configModule.directoryPath;
-        // Use buildChannelPath for namespace safety (adds __ prefix consistently)
-        finalVideoPathForJson = path.join(buildChannelPath(baseDir, channelSubFolder, channelName), videoDirectoryName, videoFileName);
-      } else {
-        // No subfolder - use current path
-        finalVideoPathForJson = videoPath;
-      }
+      // No subfolder - use standard temp-to-final conversion
+      finalVideoPathForJson = tempPathManager.convertTempToFinal(videoPath);
     }
 
     // Add the actual video filepath to the JSON data before moving it
@@ -457,13 +439,13 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       }
     }
 
-    // Phase 3: If temp downloads are enabled, move files from temp to final location
-    // This now handles subfolder routing atomically (one move instead of two)
+    // Phase 3: Move files from temp to final location
+    // Downloads are always staged in temp, so we move to final location here
+    // This handles subfolder routing atomically (one move instead of two)
     let finalVideoPath = videoPath;
-    let currentChannelFolder = path.dirname(videoDirectory);
 
-    if (tempPathManager.isEnabled() && tempPathManager.isTempPath(videoPath)) {
-      logger.info('[Post-Process] Temp downloads enabled, moving files to final location');
+    if (tempPathManager.isTempPath(videoPath)) {
+      logger.info('[Post-Process] Moving files from temp to final location');
 
       // Calculate target video directory based on subfolder setting
       const videoDirectoryName = path.basename(videoDirectory);
@@ -503,9 +485,13 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
 
         // Update paths to reflect final locations
         finalVideoPath = path.join(targetVideoDirectory, videoFileName);
-        currentChannelFolder = targetChannelFolderForMove;
 
         logger.info({ targetVideoDirectory }, '[Post-Process] Successfully moved to final location');
+
+        // Clean up empty parent directories in the temp path (e.g., empty channel folder)
+        const tempBasePath = tempPathManager.getTempBasePath();
+        const parentDir = path.dirname(videoDirectory); // This was the channel folder in temp
+        await cleanupEmptyParents(parentDir, tempBasePath);
 
         // Verify the final file exists
         if (!fs.existsSync(finalVideoPath)) {
@@ -517,119 +503,6 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         logger.error({ error, videoDirectory }, '[Post-Process] ERROR during move operation');
         logger.error({ videoDirectory }, '[Post-Process] Files remain in temp location');
         process.exit(1);
-      }
-    }
-
-    // Phase 4: Check if channel has a subfolder setting and move if needed
-    // This only runs when NOT using temp downloads (temp downloads handle subfolder atomically above)
-    // Also skip if we already have a subfolder override (handled in Phase 1)
-    if (!tempPathManager.isEnabled() || !tempPathManager.isTempPath(videoPath)) {
-      // Determine effective subfolder (may have been set by override or channel lookup in Phase 1)
-      let effectiveSubfolder = channelSubFolder;
-
-      // If not already determined, look it up now
-      if (effectiveSubfolder === null && !subfolderOverride) {
-        if (jsonData.channel_id) {
-          try {
-            const Channel = require('../models/channel');
-            const channel = await Channel.findOne({
-              where: { channel_id: jsonData.channel_id },
-              attributes: ['sub_folder', 'uploader']
-            });
-
-            if (channel) {
-              effectiveSubfolder = channelSettingsModule.resolveEffectiveSubfolder(channel.sub_folder);
-            } else {
-              // Untracked channel - use global default
-              effectiveSubfolder = configModule.getDefaultSubfolder();
-            }
-          } catch (lookupErr) {
-            logger.error({ err: lookupErr }, '[Post-Process] Error looking up channel subfolder');
-          }
-        } else {
-          // No channel_id - use global default
-          effectiveSubfolder = configModule.getDefaultSubfolder();
-        }
-      }
-
-      if (effectiveSubfolder) {
-        try {
-          const baseDir = configModule.directoryPath;
-          // Use the actual channel folder name from the filesystem (yt-dlp already sanitized it)
-          // instead of jsonData.uploader which may contain special characters
-          const expectedPath = buildChannelPath(baseDir, effectiveSubfolder, actualChannelFolderName);
-
-          // Check if we're not already in the correct subfolder
-          if (currentChannelFolder !== expectedPath) {
-            logger.info({ subFolder: effectiveSubfolder }, '[Post-Process] Channel has subfolder setting');
-            logger.info({ from: currentChannelFolder, to: expectedPath }, '[Post-Process] Moving channel folder to subfolder');
-
-            // Ensure the subfolder parent directory exists with __ prefix
-            const subfolderParent = path.join(baseDir, buildSubfolderSegment(effectiveSubfolder));
-            await fs.ensureDir(subfolderParent);
-
-            // Check if destination exists
-            const destExists = await fs.pathExists(expectedPath);
-
-            if (destExists) {
-              // Destination exists - merge contents
-              logger.info('[Post-Process] Destination exists, merging contents');
-
-              // Get all items in the source channel folder
-              const items = await fs.readdir(currentChannelFolder);
-
-              for (const item of items) {
-                const sourcePath = path.join(currentChannelFolder, item);
-                const destPath = path.join(expectedPath, item);
-
-                try {
-                  const destItemExists = await fs.pathExists(destPath);
-
-                  if (destItemExists) {
-                    // Item already exists at destination
-                    if (item === 'poster.jpg') {
-                      // Poster already exists, just remove source
-                      await fs.remove(sourcePath);
-                      logger.debug({ item }, '[Post-Process] Skipped (already exists)');
-                    } else {
-                      // For other items (shouldn't happen for video folders), log warning
-                      logger.warn({ item }, '[Post-Process] Item already exists at destination, skipping');
-                      await fs.remove(sourcePath);
-                    }
-                  } else {
-                    // Move the item
-                    await fs.move(sourcePath, destPath);
-                    logger.debug({ item }, '[Post-Process] Moved item');
-                  }
-                } catch (itemErr) {
-                  logger.error({ err: itemErr, item }, '[Post-Process] Error moving item');
-                  // Try to remove source item anyway to clean up
-                  try {
-                    await fs.remove(sourcePath);
-                  } catch (removeErr) {
-                    // Ignore cleanup errors
-                  }
-                }
-              }
-
-              // Remove the now-empty source channel folder
-              await fs.remove(currentChannelFolder);
-            } else {
-              // Destination doesn't exist - move entire folder
-              await fs.move(currentChannelFolder, expectedPath);
-            }
-
-            // Update the final video path to reflect the new location
-            const relativePath = path.relative(currentChannelFolder, finalVideoPath);
-            finalVideoPath = path.join(expectedPath, relativePath);
-
-            logger.info({ expectedPath, finalVideoPath }, '[Post-Process] Successfully moved to subfolder');
-          }
-        } catch (err) {
-          logger.error({ err }, '[Post-Process] Error moving to subfolder');
-          // Don't fail the entire post-processing if subfolder move fails
-          // The video is still downloaded and accessible, just not in the ideal location
-        }
       }
     }
 

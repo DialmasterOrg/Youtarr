@@ -127,9 +127,10 @@ class DownloadExecutor {
         const videoDir = videoDownload.file_path;
 
         try {
-          // If temp downloads are enabled, also check temp location
+          // Check both final location and temp location for incomplete downloads
           const pathsToCheck = [videoDir];
-          if (tempPathManager.isEnabled()) {
+          // Only convert to temp path if not already a temp path (avoids double-nesting)
+          if (!tempPathManager.isTempPath(videoDir)) {
             const tempDir = tempPathManager.convertFinalToTemp(videoDir);
             pathsToCheck.push(tempDir);
           }

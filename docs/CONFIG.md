@@ -325,18 +325,21 @@ Configuration can be modified through:
 - **Description**: HTTP/HTTPS proxy for downloads
 - **Format**: `"http://proxy:port"` or `"socks5://proxy:port"`
 
-### Use Temporary Download Directory
+### Use External Temporary Directory
 - **Config Key**: `useTmpForDownloads`
 - **Type**: `boolean`
 - **Default**: `false`
-- **Description**: When `true`, downloads are written to the temporary path specified by `tmpFilePath` before being moved into the final channel folders. Some managed platforms (e.g., ElfHosted) force this value on.
+- **Description**: Controls where downloads are staged before moving to final location:
+  - `false` (default): Downloads are staged in a hidden `.youtarr_tmp/` directory within your output folder. Uses fast atomic renames since source and destination are on the same filesystem. The dot-prefix hides in-progress downloads from media servers like Plex and Jellyfin.
+  - `true`: Downloads are staged in the external path specified by `tmpFilePath` (e.g., `/tmp`). Useful when your output directory is on slow network storage and you want to download to fast local storage first.
+- **Note**: Some managed platforms (e.g., ElfHosted) force this value on.
 
-### Temporary File Path
+### External Temporary File Path
 - **Config Key**: `tmpFilePath`
 - **Type**: `string`
 - **Default**: `"/tmp/youtarr-downloads"`
-- **Description**: Temporary directory for downloads when useTmpForDownloads is enabled
-- **Note**: Internal path in Youtarr container
+- **Description**: External temporary directory for downloads when `useTmpForDownloads` is `true`
+- **Note**: Only used when `useTmpForDownloads` is enabled. Internal path in Youtarr container.
 
 ## Auto-Removal Settings
 

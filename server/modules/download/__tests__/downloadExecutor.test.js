@@ -273,7 +273,15 @@ describe('DownloadExecutor', () => {
       };
 
       JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
-      mockFsPromises.access.mockResolvedValue(); // Directory exists
+      // File path is a final path, not a temp path
+      tempPathManager.isTempPath.mockReturnValue(false);
+      // Mock temp path conversion to return a different path
+      tempPathManager.convertFinalToTemp.mockReturnValue('/tmp/youtarr-downloads/Channel - Title - abc123XYZ_d');
+      // Final path exists, temp path doesn't
+      mockFsPromises.access.mockImplementation((path) => {
+        if (path === '/output/Channel - Title - abc123XYZ_d') return Promise.resolve();
+        return Promise.reject(new Error('ENOENT'));
+      });
       mockFsPromises.readdir.mockResolvedValue(['video.mp4', 'poster.jpg']);
 
       await executor.cleanupInProgressVideos('job-123');
@@ -304,8 +312,8 @@ describe('DownloadExecutor', () => {
       expect(mockVideoDownload.destroy).not.toHaveBeenCalled();
     });
 
-    it('should check temp location when temp downloads enabled', async () => {
-      tempPathManager.isEnabled.mockReturnValue(true);
+    it('should check temp location when file path is final path', async () => {
+      tempPathManager.isTempPath.mockReturnValue(false);
       tempPathManager.convertFinalToTemp.mockReturnValue('/tmp/Channel - Title - abc123XYZ_d');
 
       const mockVideoDownload = {
@@ -322,6 +330,29 @@ describe('DownloadExecutor', () => {
 
       expect(mockFsPromises.access).toHaveBeenCalledWith('/output/Channel - Title - abc123XYZ_d');
       expect(mockFsPromises.access).toHaveBeenCalledWith('/tmp/Channel - Title - abc123XYZ_d');
+    });
+
+    it('should not convert to temp path when file path is already a temp path', async () => {
+      // When file_path is already a temp path, convertFinalToTemp should NOT be called
+      tempPathManager.isTempPath.mockReturnValue(true);
+
+      const mockVideoDownload = {
+        youtube_id: 'abc123XYZ_d',
+        file_path: '/output/.youtarr_tmp/Channel - Title - abc123XYZ_d',
+        destroy: jest.fn().mockResolvedValue()
+      };
+
+      JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
+      mockFsPromises.access.mockResolvedValue(); // Path exists
+      mockFsPromises.readdir.mockResolvedValue(['video.mp4']);
+      mockFsPromises.stat.mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+
+      await executor.cleanupInProgressVideos('job-123');
+
+      // Should check the original temp path (first call)
+      expect(mockFsPromises.access).toHaveBeenNthCalledWith(1, '/output/.youtarr_tmp/Channel - Title - abc123XYZ_d');
+      // convertFinalToTemp should not be called since file_path is already temp
+      expect(tempPathManager.convertFinalToTemp).not.toHaveBeenCalled();
     });
 
     it('should handle file removal errors gracefully', async () => {

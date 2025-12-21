@@ -27,31 +27,67 @@ describe('TempPathManager', () => {
   });
 
   describe('isEnabled', () => {
-    it('should return true when useTmpForDownloads is enabled', () => {
+    it('should always return true (staging is always enabled)', () => {
       configModule.getConfig.mockReturnValue({ useTmpForDownloads: true });
       expect(tempPathManager.isEnabled()).toBe(true);
     });
 
-    it('should return false when useTmpForDownloads is disabled', () => {
+    it('should still return true when useTmpForDownloads is false', () => {
       configModule.getConfig.mockReturnValue({ useTmpForDownloads: false });
-      expect(tempPathManager.isEnabled()).toBe(false);
+      expect(tempPathManager.isEnabled()).toBe(true);
+    });
+
+    it('should still return true when useTmpForDownloads is undefined', () => {
+      configModule.getConfig.mockReturnValue({});
+      expect(tempPathManager.isEnabled()).toBe(true);
+    });
+  });
+
+  describe('isUsingExternalTemp', () => {
+    it('should return true when useTmpForDownloads is true', () => {
+      configModule.getConfig.mockReturnValue({ useTmpForDownloads: true });
+      expect(tempPathManager.isUsingExternalTemp()).toBe(true);
+    });
+
+    it('should return false when useTmpForDownloads is false', () => {
+      configModule.getConfig.mockReturnValue({ useTmpForDownloads: false });
+      expect(tempPathManager.isUsingExternalTemp()).toBe(false);
     });
 
     it('should return false when useTmpForDownloads is undefined', () => {
       configModule.getConfig.mockReturnValue({});
-      expect(tempPathManager.isEnabled()).toBe(false);
+      expect(tempPathManager.isUsingExternalTemp()).toBe(false);
     });
   });
 
   describe('getTempBasePath', () => {
-    it('should return configured temp path', () => {
-      configModule.getConfig.mockReturnValue({ tmpFilePath: '/custom/temp/path' });
-      expect(tempPathManager.getTempBasePath()).toBe('/custom/temp/path');
+    describe('when using external temp (useTmpForDownloads=true)', () => {
+      it('should return configured temp path', () => {
+        configModule.getConfig.mockReturnValue({
+          useTmpForDownloads: true,
+          tmpFilePath: '/custom/temp/path'
+        });
+        expect(tempPathManager.getTempBasePath()).toBe('/custom/temp/path');
+      });
+
+      it('should return default temp path when tmpFilePath not configured', () => {
+        configModule.getConfig.mockReturnValue({ useTmpForDownloads: true });
+        expect(tempPathManager.getTempBasePath()).toBe('/tmp/youtarr-downloads');
+      });
     });
 
-    it('should return default temp path when not configured', () => {
-      configModule.getConfig.mockReturnValue({});
-      expect(tempPathManager.getTempBasePath()).toBe('/tmp/youtarr-downloads');
+    describe('when using local temp (useTmpForDownloads=false)', () => {
+      it('should return .youtarr_tmp in output directory', () => {
+        configModule.getConfig.mockReturnValue({ useTmpForDownloads: false });
+        configModule.directoryPath = '/mnt/network/youtube';
+        expect(tempPathManager.getTempBasePath()).toBe('/mnt/network/youtube/.youtarr_tmp');
+      });
+
+      it('should return .youtarr_tmp in output directory when useTmpForDownloads is undefined', () => {
+        configModule.getConfig.mockReturnValue({});
+        configModule.directoryPath = '/data/videos';
+        expect(tempPathManager.getTempBasePath()).toBe('/data/videos/.youtarr_tmp');
+      });
     });
   });
 
@@ -63,32 +99,64 @@ describe('TempPathManager', () => {
   });
 
   describe('isTempPath', () => {
-    beforeEach(() => {
-      configModule.getConfig.mockReturnValue({
-        useTmpForDownloads: true,
-        tmpFilePath: '/tmp/youtarr-downloads'
+    describe('when using external temp (useTmpForDownloads=true)', () => {
+      beforeEach(() => {
+        configModule.getConfig.mockReturnValue({
+          useTmpForDownloads: true,
+          tmpFilePath: '/tmp/youtarr-downloads'
+        });
+      });
+
+      it('should return true for paths in external temp directory', () => {
+        const testPath = '/tmp/youtarr-downloads/Channel/video.mp4';
+        expect(tempPathManager.isTempPath(testPath)).toBe(true);
+      });
+
+      it('should return false for paths outside temp directory', () => {
+        const testPath = '/mnt/network/youtube/Channel/video.mp4';
+        expect(tempPathManager.isTempPath(testPath)).toBe(false);
+      });
+
+      it('should handle paths with trailing slashes', () => {
+        const testPath = '/tmp/youtarr-downloads/Channel/';
+        expect(tempPathManager.isTempPath(testPath)).toBe(true);
+      });
+
+      it('should return true for exact temp base path', () => {
+        const testPath = '/tmp/youtarr-downloads';
+        expect(tempPathManager.isTempPath(testPath)).toBe(true);
+      });
+
+      it('should handle temp base path with trailing separator', () => {
+        configModule.getConfig.mockReturnValue({
+          useTmpForDownloads: true,
+          tmpFilePath: '/tmp/youtarr-downloads/'  // Note trailing slash
+        });
+        const testPath = '/tmp/youtarr-downloads/Channel/video.mp4';
+        expect(tempPathManager.isTempPath(testPath)).toBe(true);
       });
     });
 
-    it('should return true for paths in temp directory', () => {
-      const testPath = '/tmp/youtarr-downloads/Channel/video.mp4';
-      expect(tempPathManager.isTempPath(testPath)).toBe(true);
-    });
+    describe('when using local temp (useTmpForDownloads=false)', () => {
+      beforeEach(() => {
+        configModule.getConfig.mockReturnValue({ useTmpForDownloads: false });
+        configModule.directoryPath = '/mnt/network/youtube';
+      });
 
-    it('should return false for paths outside temp directory', () => {
-      const testPath = '/mnt/network/youtube/Channel/video.mp4';
-      expect(tempPathManager.isTempPath(testPath)).toBe(false);
-    });
+      it('should return true for paths in local .youtarr_tmp directory', () => {
+        const testPath = '/mnt/network/youtube/.youtarr_tmp/Channel/video.mp4';
+        expect(tempPathManager.isTempPath(testPath)).toBe(true);
+      });
 
-    it('should return false when temp downloads are disabled', () => {
-      configModule.getConfig.mockReturnValue({ useTmpForDownloads: false });
-      const testPath = '/tmp/youtarr-downloads/Channel/video.mp4';
-      expect(tempPathManager.isTempPath(testPath)).toBe(false);
-    });
+      it('should return false for paths in final directory', () => {
+        const testPath = '/mnt/network/youtube/Channel/video.mp4';
+        expect(tempPathManager.isTempPath(testPath)).toBe(false);
+      });
 
-    it('should handle paths with trailing slashes', () => {
-      const testPath = '/tmp/youtarr-downloads/Channel/';
-      expect(tempPathManager.isTempPath(testPath)).toBe(true);
+      it('should return true for exact local temp base path', () => {
+        const testPath = '/mnt/network/youtube/.youtarr_tmp';
+        expect(tempPathManager.isTempPath(testPath)).toBe(true);
+      });
     });
   });
 
@@ -152,17 +220,17 @@ describe('TempPathManager', () => {
 
     beforeEach(() => {
       mockEnsureDir = jest.spyOn(fs, 'ensureDir').mockResolvedValue(undefined);
-      configModule.getConfig.mockReturnValue({
-        useTmpForDownloads: true,
-        tmpFilePath: '/tmp/youtarr-downloads'
-      });
     });
 
     afterEach(() => {
       mockEnsureDir.mockRestore();
     });
 
-    it('should create temp directory when enabled', async () => {
+    it('should create external temp directory when useTmpForDownloads is true', async () => {
+      configModule.getConfig.mockReturnValue({
+        useTmpForDownloads: true,
+        tmpFilePath: '/tmp/youtarr-downloads'
+      });
       await tempPathManager.ensureTempDirectory();
       expect(mockEnsureDir).toHaveBeenCalledWith('/tmp/youtarr-downloads');
       expect(logger.info).toHaveBeenCalledWith(
@@ -171,13 +239,22 @@ describe('TempPathManager', () => {
       );
     });
 
-    it('should not create directory when temp downloads are disabled', async () => {
+    it('should create local .youtarr_tmp directory when useTmpForDownloads is false', async () => {
       configModule.getConfig.mockReturnValue({ useTmpForDownloads: false });
+      configModule.directoryPath = '/mnt/network/youtube';
       await tempPathManager.ensureTempDirectory();
-      expect(mockEnsureDir).not.toHaveBeenCalled();
+      expect(mockEnsureDir).toHaveBeenCalledWith('/mnt/network/youtube/.youtarr_tmp');
+      expect(logger.info).toHaveBeenCalledWith(
+        { tempBasePath: '/mnt/network/youtube/.youtarr_tmp' },
+        'Ensured temp directory exists'
+      );
     });
 
     it('should throw error if directory creation fails', async () => {
+      configModule.getConfig.mockReturnValue({
+        useTmpForDownloads: true,
+        tmpFilePath: '/tmp/youtarr-downloads'
+      });
       mockEnsureDir.mockRejectedValue(new Error('Permission denied'));
       await expect(tempPathManager.ensureTempDirectory()).rejects.toThrow('Cannot create temp directory');
       expect(logger.error).toHaveBeenCalledWith(
@@ -196,10 +273,6 @@ describe('TempPathManager', () => {
       mockPathExists = jest.spyOn(fs, 'pathExists').mockResolvedValue(true);
       mockRemove = jest.spyOn(fs, 'remove').mockResolvedValue(undefined);
       mockEnsureDir = jest.spyOn(fs, 'ensureDir').mockResolvedValue(undefined);
-      configModule.getConfig.mockReturnValue({
-        useTmpForDownloads: true,
-        tmpFilePath: '/tmp/youtarr-downloads'
-      });
     });
 
     afterEach(() => {
@@ -208,7 +281,11 @@ describe('TempPathManager', () => {
       mockEnsureDir.mockRestore();
     });
 
-    it('should remove and recreate temp directory when it exists', async () => {
+    it('should remove and recreate external temp directory when useTmpForDownloads is true', async () => {
+      configModule.getConfig.mockReturnValue({
+        useTmpForDownloads: true,
+        tmpFilePath: '/tmp/youtarr-downloads'
+      });
       await tempPathManager.cleanTempDirectory();
 
       expect(mockPathExists).toHaveBeenCalledWith('/tmp/youtarr-downloads');
@@ -225,7 +302,25 @@ describe('TempPathManager', () => {
       );
     });
 
+    it('should remove and recreate local .youtarr_tmp directory when useTmpForDownloads is false', async () => {
+      configModule.getConfig.mockReturnValue({ useTmpForDownloads: false });
+      configModule.directoryPath = '/mnt/network/youtube';
+      await tempPathManager.cleanTempDirectory();
+
+      expect(mockPathExists).toHaveBeenCalledWith('/mnt/network/youtube/.youtarr_tmp');
+      expect(mockRemove).toHaveBeenCalledWith('/mnt/network/youtube/.youtarr_tmp');
+      expect(mockEnsureDir).toHaveBeenCalledWith('/mnt/network/youtube/.youtarr_tmp');
+      expect(logger.info).toHaveBeenCalledWith(
+        { tempBasePath: '/mnt/network/youtube/.youtarr_tmp' },
+        'Cleaning temp directory'
+      );
+    });
+
     it('should create temp directory when it does not exist', async () => {
+      configModule.getConfig.mockReturnValue({
+        useTmpForDownloads: true,
+        tmpFilePath: '/tmp/youtarr-downloads'
+      });
       mockPathExists.mockResolvedValue(false);
       await tempPathManager.cleanTempDirectory();
 
@@ -239,17 +334,11 @@ describe('TempPathManager', () => {
       );
     });
 
-    it('should not do anything when temp downloads are disabled', async () => {
-      configModule.getConfig.mockReturnValue({ useTmpForDownloads: false });
-      await tempPathManager.cleanTempDirectory();
-
-      expect(mockPathExists).not.toHaveBeenCalled();
-      expect(mockRemove).not.toHaveBeenCalled();
-      expect(mockEnsureDir).not.toHaveBeenCalled();
-      expect(logger.debug).toHaveBeenCalledWith('Temp downloads disabled, skipping cleanup');
-    });
-
     it('should throw error if cleanup fails', async () => {
+      configModule.getConfig.mockReturnValue({
+        useTmpForDownloads: true,
+        tmpFilePath: '/tmp/youtarr-downloads'
+      });
       mockRemove.mockRejectedValue(new Error('Deletion failed'));
       await expect(tempPathManager.cleanTempDirectory()).rejects.toThrow('Failed to clean temp directory');
       expect(logger.error).toHaveBeenCalledWith(
@@ -259,126 +348,8 @@ describe('TempPathManager', () => {
     });
   });
 
-  describe('moveToFinal', () => {
-    let mockStat;
-    let mockPathExists;
-    let mockEnsureDir;
-    let mockMove;
-
-    beforeEach(() => {
-      mockStat = jest.spyOn(fs, 'stat').mockResolvedValue({ isDirectory: () => true });
-      mockPathExists = jest.spyOn(fs, 'pathExists')
-        .mockResolvedValueOnce(true)  // Source exists
-        .mockResolvedValueOnce(true); // Destination exists after move
-      mockEnsureDir = jest.spyOn(fs, 'ensureDir').mockResolvedValue(undefined);
-      mockMove = jest.spyOn(fs, 'move').mockResolvedValue(undefined);
-
-      configModule.getConfig.mockReturnValue({
-        useTmpForDownloads: true,
-        tmpFilePath: '/tmp/youtarr-downloads'
-      });
-      configModule.directoryPath = '/mnt/network/youtube';
-    });
-
-    afterEach(() => {
-      mockStat.mockRestore();
-      mockPathExists.mockRestore();
-      mockEnsureDir.mockRestore();
-      mockMove.mockRestore();
-    });
-
-    it('should successfully move directory from temp to final', async () => {
-      const tempPath = '/tmp/youtarr-downloads/Channel/Video - ID';
-      const result = await tempPathManager.moveToFinal(tempPath);
-
-      expect(result.success).toBe(true);
-      expect(result.finalPath).toBe('/mnt/network/youtube/Channel/Video - ID');
-      expect(mockMove).toHaveBeenCalledWith(
-        tempPath,
-        '/mnt/network/youtube/Channel/Video - ID',
-        { overwrite: true }
-      );
-      expect(logger.debug).toHaveBeenCalledWith(
-        { sourcePath: tempPath, destinationPath: '/mnt/network/youtube/Channel/Video - ID' },
-        'Moving from temp to final'
-      );
-      expect(logger.info).toHaveBeenCalledWith(
-        { sourcePath: tempPath, destinationPath: '/mnt/network/youtube/Channel/Video - ID' },
-        'Successfully moved to final location'
-      );
-    });
-
-    it('should use provided final path if given', async () => {
-      const tempPath = '/tmp/youtarr-downloads/Channel/Video - ID';
-      const finalPath = '/custom/final/path';
-      await tempPathManager.moveToFinal(tempPath, finalPath);
-
-      expect(mockMove).toHaveBeenCalledWith(tempPath, finalPath, { overwrite: true });
-    });
-
-    it('should return error if source does not exist', async () => {
-      // Reset mocks for this test
-      mockPathExists.mockReset().mockResolvedValue(false); // Source doesn't exist
-
-      const tempPath = '/tmp/youtarr-downloads/Channel/Video - ID';
-      const result = await tempPathManager.moveToFinal(tempPath);
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Source path does not exist');
-      expect(logger.error).toHaveBeenCalledWith(
-        { tempPath, finalPath: null, err: expect.any(Error) },
-        'Error moving to final location'
-      );
-    });
-
-    it('should return error if move fails', async () => {
-      mockMove.mockRejectedValue(new Error('Move failed'));
-
-      const tempPath = '/tmp/youtarr-downloads/Channel/Video - ID';
-      const result = await tempPathManager.moveToFinal(tempPath);
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Move failed');
-      expect(logger.error).toHaveBeenCalledWith(
-        { tempPath, finalPath: null, err: expect.any(Error) },
-        'Error moving to final location'
-      );
-    });
-
-    it('should return error if destination does not exist after move', async () => {
-      // Reset and set up specific mock sequence
-      mockPathExists.mockReset()
-        .mockResolvedValueOnce(true)  // Source exists
-        .mockResolvedValueOnce(false); // Destination doesn't exist after move
-
-      const tempPath = '/tmp/youtarr-downloads/Channel/Video - ID';
-      const result = await tempPathManager.moveToFinal(tempPath);
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Move completed but destination doesn\'t exist');
-      expect(logger.error).toHaveBeenCalledWith(
-        { tempPath, finalPath: null, err: expect.any(Error) },
-        'Error moving to final location'
-      );
-    });
-
-    it('should handle file path by moving parent directory', async () => {
-      mockStat.mockResolvedValue({ isDirectory: () => false });
-
-      const tempPath = '/tmp/youtarr-downloads/Channel/Video - ID/video.mp4';
-      const result = await tempPathManager.moveToFinal(tempPath);
-
-      expect(result.success).toBe(true);
-      expect(mockMove).toHaveBeenCalledWith(
-        '/tmp/youtarr-downloads/Channel/Video - ID',
-        '/mnt/network/youtube/Channel/Video - ID',
-        { overwrite: true }
-      );
-    });
-  });
-
   describe('getStatus', () => {
-    it('should return status when enabled', () => {
+    it('should return status with external temp when useTmpForDownloads is true', () => {
       configModule.getConfig.mockReturnValue({
         useTmpForDownloads: true,
         tmpFilePath: '/tmp/youtarr-downloads'
@@ -389,20 +360,22 @@ describe('TempPathManager', () => {
 
       expect(status).toEqual({
         enabled: true,
+        isUsingExternalTemp: true,
         tempBasePath: '/tmp/youtarr-downloads',
         finalBasePath: '/mnt/network/youtube'
       });
     });
 
-    it('should return status when disabled', () => {
+    it('should return status with local temp when useTmpForDownloads is false', () => {
       configModule.getConfig.mockReturnValue({ useTmpForDownloads: false });
       configModule.directoryPath = '/mnt/network/youtube';
 
       const status = tempPathManager.getStatus();
 
       expect(status).toEqual({
-        enabled: false,
-        tempBasePath: null,
+        enabled: true,
+        isUsingExternalTemp: false,
+        tempBasePath: '/mnt/network/youtube/.youtarr_tmp',
         finalBasePath: '/mnt/network/youtube'
       });
     });

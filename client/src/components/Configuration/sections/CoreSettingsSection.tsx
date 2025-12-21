@@ -316,7 +316,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
               }
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  Use tmp dir for download processing
+                  Use external temp directory
                   {isPlatformManaged.useTmpForDownloads && (
                     <Chip
                       label={deploymentEnvironment.platform?.toLowerCase() === "elfhosted" ? "Managed by Elfhosted" : "Platform Managed"}
@@ -330,7 +330,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
               text={
                 isPlatformManaged.useTmpForDownloads
                   ? 'This setting is managed by your platform deployment and cannot be changed.'
-                  : 'Downloads to local /tmp first, then moves to final location when complete. Recommended for network-mounted storage (NFS, SMB, cloud mounts) to improve performance and avoid file locking issues with Plex or other processes reading from the same location. Not needed for local drives or SSDs.'
+                  : 'Controls where downloads are staged before moving to final location. When enabled, uses external /tmp path (useful for slow network storage). When disabled, uses a hidden .youtarr_tmp/ folder in your output directory (faster for local/SSD storage). Both options hide in-progress files from media servers.'
               }
               onMobileClick={onMobileTooltipClick}
             />
