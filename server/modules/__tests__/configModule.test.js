@@ -216,7 +216,7 @@ describe('ConfigModule', () => {
       expect(config.appriseUrls).toEqual([
         {
           url: 'discord://1234567890/abcdefghijklmnop',
-          name: 'Discord Webhook',
+          name: 'Discord',
           richFormatting: true
         }
       ]);
@@ -304,12 +304,12 @@ describe('ConfigModule', () => {
       // Each should now be an object with url, name, and richFormatting
       expect(config.appriseUrls[0]).toEqual({
         url: 'discord://1234567890/token123',
-        name: 'Discord Webhook',
+        name: 'Discord',
         richFormatting: true
       });
       expect(config.appriseUrls[1]).toEqual({
         url: 'tgram://bottoken/chatid',
-        name: 'Telegram Bot',
+        name: 'Telegram',
         richFormatting: true
       });
     });

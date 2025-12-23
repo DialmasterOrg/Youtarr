@@ -1,69 +1,52 @@
 /**
  * Notification Module - Main Orchestrator
- * 
- * Routes notifications to appropriate formatters and senders:
- * - Discord: Uses direct webhook with embeds for rich formatting
- * - Telegram: Uses Apprise with HTML formatting
- * - Email: Uses Apprise with HTML formatting
- * - Others: Uses Apprise with plain text
+ *
+ * Routes notifications to appropriate formatters and senders based on
+ * the service registry. Adding new services only requires updating
+ * serviceRegistry.js - no changes needed here.
  */
 
 const logger = require('../../logger');
 const {
-  normalizeAppriseEntry,
-  supportsRichFormatting,
-  isDiscord,
-  isSlack,
-  isTelegram,
-  isEmail
-} = require('../notificationHelpers');
-
-// Formatters
-const {
-  discordFormatter,
-  slackMarkdownFormatter,
-  telegramFormatter,
-  emailFormatter,
-  plainFormatter
-} = require('./formatters');
+  getServiceForUrl,
+  getFormatter,
+  supportsRichFormatting
+} = require('./serviceRegistry');
 
 // Senders
 const { appriseSender, discordSender } = require('./senders');
 
+// Plain formatter for non-rich formatting
+const plainFormatter = require('./formatters/plainFormatter');
+
 /**
- * Get the appropriate formatter and send configuration for a URL
+ * Normalize an appriseUrls entry to the current object format
+ * @param {string|Object} item - URL string or object entry
+ * @returns {Object} Normalized entry with url, name, and richFormatting
  */
-function getFormatterConfig(url, useRichFormatting) {
-  if (!useRichFormatting) {
-    return { formatter: plainFormatter, sendMethod: 'apprise-plain' };
+function normalizeAppriseEntry(item) {
+  const { getDefaultNameForUrl } = require('./serviceRegistry');
+
+  if (typeof item === 'string') {
+    return {
+      url: item,
+      name: getDefaultNameForUrl(item),
+      richFormatting: supportsRichFormatting(item)
+    };
   }
 
-  // Discord uses direct webhook with embeds for rich formatting
-  if (isDiscord(url)) {
-    return { formatter: discordFormatter, sendMethod: 'discord-embed' };
-  }
-
-  // Slack uses markdown via Apprise
-  if (isSlack(url)) {
-    return { formatter: slackMarkdownFormatter, sendMethod: 'apprise-markdown' };
-  }
-
-  // Telegram uses HTML formatting via Apprise
-  if (isTelegram(url)) {
-    return { formatter: telegramFormatter, sendMethod: 'apprise-html' };
-  }
-
-  // Email uses HTML formatting via Apprise
-  if (isEmail(url)) {
-    return { formatter: emailFormatter, sendMethod: 'apprise-html' };
-  }
-
-  // All other services use plain text via Apprise
-  return { formatter: plainFormatter, sendMethod: 'apprise-plain' };
+  return {
+    url: item.url || '',
+    name: item.name || getDefaultNameForUrl(item.url || ''),
+    richFormatting: item.richFormatting !== false
+  };
 }
 
 /**
- * Send notification using the appropriate method
+ * Send notification using the appropriate method based on service config
+ * @param {string} url - The notification URL
+ * @param {Object} message - The formatted message
+ * @param {string} sendMethod - The send method from service registry
  */
 async function sendNotification(url, message, sendMethod) {
   switch (sendMethod) {
@@ -74,7 +57,7 @@ async function sendNotification(url, message, sendMethod) {
     // message is { title, body } with HTML body
     return appriseSender.sendHtml(message.title, message.body, [url]);
   case 'apprise-markdown':
-    // message is { title, body } with Markdown body (for Slack)
+    // message is { title, body } with Markdown body
     return appriseSender.sendMarkdown(message.title, message.body, [url]);
   case 'apprise-plain':
   default:
@@ -131,8 +114,13 @@ class NotificationModule {
       // Send notifications individually to use appropriate formatting per service
       const results = await Promise.all(urls.map(async (entry) => {
         try {
-          const useRichFormatting = entry.richFormatting && supportsRichFormatting(entry.url);
-          const { formatter, sendMethod } = getFormatterConfig(entry.url, useRichFormatting);
+          const service = getServiceForUrl(entry.url);
+          const useRichFormatting = entry.richFormatting && service.supportsRichFormatting;
+
+          // Get formatter based on rich formatting preference
+          const formatter = useRichFormatting ? getFormatter(service) : plainFormatter;
+          const sendMethod = useRichFormatting ? service.sendMethod : 'apprise-plain';
+
           const message = formatter.formatDownloadMessage(finalSummary, videoData);
           await sendNotification(entry.url, message, sendMethod);
           return true;
@@ -166,8 +154,12 @@ class NotificationModule {
 
     await Promise.all(urls.map(async (entry) => {
       try {
-        const useRichFormatting = entry.richFormatting && supportsRichFormatting(entry.url);
-        const { formatter, sendMethod } = getFormatterConfig(entry.url, useRichFormatting);
+        const service = getServiceForUrl(entry.url);
+        const useRichFormatting = entry.richFormatting && service.supportsRichFormatting;
+
+        const formatter = useRichFormatting ? getFormatter(service) : plainFormatter;
+        const sendMethod = useRichFormatting ? service.sendMethod : 'apprise-plain';
+
         const message = formatter.formatTestMessage(entry.name);
         await sendNotification(entry.url, message, sendMethod);
       } catch (err) {
@@ -190,8 +182,12 @@ class NotificationModule {
       throw new Error('Notification URL is required');
     }
 
-    const useRichFormatting = richFormatting && supportsRichFormatting(url);
-    const { formatter, sendMethod } = getFormatterConfig(url, useRichFormatting);
+    const service = getServiceForUrl(url);
+    const useRichFormatting = richFormatting && service.supportsRichFormatting;
+
+    const formatter = useRichFormatting ? getFormatter(service) : plainFormatter;
+    const sendMethod = useRichFormatting ? service.sendMethod : 'apprise-plain';
+
     const message = formatter.formatTestMessage(name);
     await sendNotification(url, message, sendMethod);
   }

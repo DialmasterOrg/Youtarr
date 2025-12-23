@@ -585,7 +585,7 @@ class ConfigModule extends EventEmitter {
         (typeof item === 'object' && (item.url === rawDiscordUrl || item.url === appriseDiscordUrl))
       );
       if (!alreadyExists) {
-        this.config.appriseUrls.push({ url: appriseDiscordUrl, name: 'Discord Webhook', richFormatting: true });
+        this.config.appriseUrls.push({ url: appriseDiscordUrl, name: 'Discord', richFormatting: true });
         logger.info('Migrated discordWebhookUrl to appriseUrls array');
       }
       migrated = true;
