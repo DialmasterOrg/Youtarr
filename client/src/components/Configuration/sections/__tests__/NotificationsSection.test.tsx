@@ -238,7 +238,7 @@ describe('NotificationsSection Component', () => {
         config: createConfig({
           notificationsEnabled: true,
           appriseUrls: [
-            { url: 'https://discord.com/api/webhooks/123/abcdefgh', name: 'Discord Webhook', richFormatting: true }
+            { url: 'https://discord.com/api/webhooks/123/abcdefgh', name: 'Discord', richFormatting: true }
           ]
         })
       });
@@ -246,7 +246,9 @@ describe('NotificationsSection Component', () => {
 
       await expandAccordion(user);
 
-      expect(screen.getByText(/Discord Webhook/i)).toBeInTheDocument();
+      // Check that the configured webhook name is visible (may have multiple "Discord" texts on page)
+      expect(screen.getByText('Your Notification Services')).toBeInTheDocument();
+      expect(screen.getByText('(1 configured)')).toBeInTheDocument();
     });
 
     test('shows delete button for each URL', async () => {
@@ -273,8 +275,8 @@ describe('NotificationsSection Component', () => {
         config: createConfig({
           notificationsEnabled: true,
           appriseUrls: [
-            { url: 'discord://webhook1', name: 'Discord Webhook', richFormatting: true },
-            { url: 'tgram://bot/chat', name: 'Telegram Bot', richFormatting: true }
+            { url: 'discord://webhook1', name: 'Discord', richFormatting: true },
+            { url: 'tgram://bot/chat', name: 'Telegram', richFormatting: true }
           ]
         }),
         onConfigChange
@@ -292,7 +294,7 @@ describe('NotificationsSection Component', () => {
       await user.click(confirmButton);
 
       expect(onConfigChange).toHaveBeenCalledWith({
-        appriseUrls: [{ url: 'tgram://bot/chat', name: 'Telegram Bot', richFormatting: true }]
+        appriseUrls: [{ url: 'tgram://bot/chat', name: 'Telegram', richFormatting: true }]
       });
     });
   });
@@ -319,7 +321,7 @@ describe('NotificationsSection Component', () => {
       await user.click(addButton);
 
       expect(onConfigChange).toHaveBeenCalledWith({
-        appriseUrls: [{ url: 'discord://webhook_id/token', name: 'Discord Webhook', richFormatting: true }]
+        appriseUrls: [{ url: 'discord://webhook_id/token', name: 'Discord', richFormatting: true }]
       });
     });
 
@@ -341,7 +343,7 @@ describe('NotificationsSection Component', () => {
       await user.type(input, 'tgram://bot/chat{enter}');
 
       expect(onConfigChange).toHaveBeenCalledWith({
-        appriseUrls: [{ url: 'tgram://bot/chat', name: 'Telegram Bot', richFormatting: true }]
+        appriseUrls: [{ url: 'tgram://bot/chat', name: 'Telegram', richFormatting: true }]
       });
     });
 

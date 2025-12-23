@@ -11,7 +11,7 @@ export interface NotificationService {
 
 export const NOTIFICATION_SERVICES: Record<string, NotificationService> = {
   discord: {
-    name: 'Discord Webhook',
+    name: 'Discord',
     patterns: [
       (url) => url.startsWith('discord://'),
       (url) => url.includes('discord.com/api/webhooks'),
@@ -20,7 +20,7 @@ export const NOTIFICATION_SERVICES: Record<string, NotificationService> = {
     supportsRichFormatting: true
   },
   telegram: {
-    name: 'Telegram Bot',
+    name: 'Telegram',
     patterns: [
       (url) => url.startsWith('tgram://'),
       (url) => url.startsWith('telegram://')
@@ -28,7 +28,7 @@ export const NOTIFICATION_SERVICES: Record<string, NotificationService> = {
     supportsRichFormatting: true
   },
   slack: {
-    name: 'Slack Webhook',
+    name: 'Slack',
     patterns: [
       (url) => url.includes('hooks.slack.com'),
       (url) => url.startsWith('slack://')
@@ -73,12 +73,12 @@ export const NOTIFICATION_SERVICES: Record<string, NotificationService> = {
       (url) => url.startsWith('matrix://'),
       (url) => url.startsWith('matrixs://')
     ],
-    supportsRichFormatting: true
+    supportsRichFormatting: false
   },
   mattermost: {
     name: 'Mattermost',
     patterns: [(url) => url.startsWith('mmost://')],
-    supportsRichFormatting: true
+    supportsRichFormatting: false
   }
 };
 
