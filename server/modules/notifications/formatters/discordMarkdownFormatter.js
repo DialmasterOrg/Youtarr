@@ -32,7 +32,7 @@ function formatDownloadMessage(finalSummary, videoData) {
       body += `📺 **${channelName}**\n`;
       body += `${truncatedTitle}\n`;
       body += `⏱️ ${duration}\n`;
-      
+
       if (index < videosToShow.length - 1) {
         body += '\n';
       }

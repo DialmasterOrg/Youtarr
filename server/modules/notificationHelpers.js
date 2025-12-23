@@ -88,7 +88,7 @@ const NOTIFICATION_SERVICES = {
  */
 function detectServiceType(url) {
   if (!url) return null;
-  
+
   for (const [serviceKey, service] of Object.entries(NOTIFICATION_SERVICES)) {
     if (service.patterns.some(pattern => pattern(url))) {
       return serviceKey;
@@ -104,18 +104,18 @@ function detectServiceType(url) {
  */
 function getDefaultNameForUrl(url) {
   if (!url) return 'Notification Service';
-  
+
   const serviceType = detectServiceType(url);
   if (serviceType && NOTIFICATION_SERVICES[serviceType]) {
     return NOTIFICATION_SERVICES[serviceType].name;
   }
-  
+
   // Try to extract service name from URL scheme
   const schemeMatch = url.match(/^([a-z]+):\/\//i);
   if (schemeMatch) {
     return schemeMatch[1].charAt(0).toUpperCase() + schemeMatch[1].slice(1);
   }
-  
+
   return 'Notification Service';
 }
 
@@ -126,12 +126,12 @@ function getDefaultNameForUrl(url) {
  */
 function supportsRichFormatting(url) {
   if (!url) return false;
-  
+
   const serviceType = detectServiceType(url);
   if (serviceType && NOTIFICATION_SERVICES[serviceType]) {
     return NOTIFICATION_SERVICES[serviceType].supportsRichFormatting;
   }
-  
+
   return false;
 }
 
@@ -143,7 +143,7 @@ function supportsRichFormatting(url) {
 function isDiscordWebhook(url) {
   if (!url) return false;
   // Only match HTTP webhook URLs, NOT discord:// Apprise URLs
-  return url.includes('discord.com/api/webhooks') || 
+  return url.includes('discord.com/api/webhooks') ||
          url.includes('discordapp.com/api/webhooks');
 }
 
@@ -165,7 +165,7 @@ function isDiscordApprise(url) {
 function isDiscord(url) {
   if (!url) return false;
   return url.startsWith('discord://') ||
-         url.includes('discord.com/api/webhooks') || 
+         url.includes('discord.com/api/webhooks') ||
          url.includes('discordapp.com/api/webhooks');
 }
 
@@ -222,7 +222,7 @@ function normalizeAppriseEntry(item) {
       richFormatting: supportsRichFormatting(item)
     };
   }
-  
+
   return {
     url: item.url || '',
     name: item.name || getDefaultNameForUrl(item.url || ''),

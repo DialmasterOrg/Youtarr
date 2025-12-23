@@ -15,7 +15,7 @@ function convertToHttpUrl(url) {
   if (url.startsWith('http://') || url.startsWith('https://')) {
     return url;
   }
-  
+
   // Convert discord://WEBHOOK_ID/TOKEN to https://discord.com/api/webhooks/WEBHOOK_ID/TOKEN
   if (url.startsWith('discord://')) {
     const parts = url.replace('discord://', '').split('/');
@@ -25,7 +25,7 @@ function convertToHttpUrl(url) {
       return `https://discord.com/api/webhooks/${webhookId}/${token}`;
     }
   }
-  
+
   throw new Error('Invalid Discord URL format');
 }
 
