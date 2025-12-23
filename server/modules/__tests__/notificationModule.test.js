@@ -35,7 +35,7 @@ jest.mock('../configModule', () => ({
 const notificationModule = require('../notificationModule');
 
 // Also require the formatters and senders for direct testing
-const { plainFormatter, discordFormatter, slackFormatter } = require('../notifications/formatters');
+const { plainFormatter, discordFormatter } = require('../notifications/formatters');
 const { appriseSender, discordSender } = require('../notifications/senders');
 const { formatDuration } = require('../notifications/utils');
 
@@ -357,30 +357,6 @@ describe('Discord Formatter', () => {
   });
 });
 
-describe('Slack Formatter', () => {
-  describe('formatDownloadMessage', () => {
-    const baseFinalSummary = {
-      totalDownloaded: 2,
-      jobType: 'Channel Downloads'
-    };
-
-    const baseVideoData = [
-      {
-        youTubeChannelName: 'Tech Channel',
-        youTubeVideoName: 'How to Code',
-        duration: 600
-      }
-    ];
-
-    it('should return Slack Block Kit format', () => {
-      const message = slackFormatter.formatDownloadMessage(baseFinalSummary, baseVideoData);
-
-      expect(message).toHaveProperty('blocks');
-      expect(message.blocks.length).toBeGreaterThan(0);
-      expect(message.blocks[0]).toHaveProperty('type', 'header');
-    });
-  });
-});
 
 describe('Apprise Sender', () => {
   let mockProcess;
@@ -671,7 +647,7 @@ describe('NotificationModule Integration', () => {
 
       expect(mockSpawn).toHaveBeenCalled();
       expect(mockLoggerInfo).toHaveBeenCalledWith(
-        { downloadCount: 2 },
+        { downloadCount: 2, successCount: 1, totalCount: 1 },
         'Download notification sent successfully'
       );
     });
