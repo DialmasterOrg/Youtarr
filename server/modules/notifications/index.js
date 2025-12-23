@@ -45,7 +45,7 @@ function getFormatterConfig(url, useRichFormatting) {
 
   // Slack uses markdown via Apprise
   if (isSlack(url)) {
-    return { formatter: slackMarkdownFormatter, sendMethod: 'apprise-plain' };
+    return { formatter: slackMarkdownFormatter, sendMethod: 'apprise-markdown' };
   }
 
   // Telegram uses HTML formatting via Apprise
@@ -73,6 +73,9 @@ async function sendNotification(url, message, sendMethod) {
   case 'apprise-html':
     // message is { title, body } with HTML body
     return appriseSender.sendHtml(message.title, message.body, [url]);
+  case 'apprise-markdown':
+    // message is { title, body } with Markdown body (for Slack)
+    return appriseSender.sendMarkdown(message.title, message.body, [url]);
   case 'apprise-plain':
   default:
     // message is { title, body } with plain text
