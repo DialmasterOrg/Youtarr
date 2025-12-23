@@ -129,18 +129,23 @@ class NotificationModule {
       const urls = this.getUrlsFromConfig(config);
 
       // Send notifications individually to use appropriate formatting per service
-      await Promise.all(urls.map(async (entry) => {
+      const results = await Promise.all(urls.map(async (entry) => {
         try {
           const useRichFormatting = entry.richFormatting && supportsRichFormatting(entry.url);
           const { formatter, sendMethod } = getFormatterConfig(entry.url, useRichFormatting);
           const message = formatter.formatDownloadMessage(finalSummary, videoData);
           await sendNotification(entry.url, message, sendMethod);
+          return true;
         } catch (err) {
           logger.error({ err, name: entry.name }, 'Failed to send notification');
+          return false;
         }
       }));
 
-      logger.info({ downloadCount: finalSummary.totalDownloaded }, 'Download notification sent successfully');
+      const successCount = results.filter(Boolean).length;
+      if (successCount > 0) {
+        logger.info({ downloadCount: finalSummary.totalDownloaded, successCount, totalCount: urls.length }, 'Download notification sent successfully');
+      }
     } catch (error) {
       logger.error({ err: error }, 'Failed to send download notification');
     }
