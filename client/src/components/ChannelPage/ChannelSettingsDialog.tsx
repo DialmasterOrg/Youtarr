@@ -20,11 +20,13 @@ import {
   ListItemText,
   ListItemIcon,
   IconButton,
-  Link
+  Link,
+  Collapse
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import InfoIcon from '@mui/icons-material/Info';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { useConfig } from '../../hooks/useConfig';
 import { SubfolderAutocomplete } from '../shared/SubfolderAutocomplete';
 
@@ -57,6 +59,24 @@ interface ChannelSettingsDialogProps {
   token: string | null;
   onSettingsSaved?: (settings: ChannelSettings) => void;
 }
+
+const regexExamples = [
+  {
+    label: 'Exclude videos containing a word (case-insensitive)',
+    pattern: '(?i)^(?!.*roblox).*',
+    description: 'Excludes videos with "roblox" in the title'
+  },
+  {
+    label: 'Exclude videos containing multiple words',
+    pattern: '(?i)^(?!.*(roblox|minecraft)).*',
+    description: 'Excludes videos with "roblox" OR "minecraft"'
+  },
+  {
+    label: 'Include only videos matching specific phrases',
+    pattern: '(?i)(Official Trailer|New Trailer)',
+    description: 'Only matches videos containing these phrases'
+  }
+];
 
 function ChannelSettingsDialog({
   open,
@@ -98,6 +118,9 @@ function ChannelSettingsDialog({
   const [previewResult, setPreviewResult] = useState<FilterPreviewResult | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+
+  // Regex examples collapsible state
+  const [showRegexExamples, setShowRegexExamples] = useState(false);
 
   const effectiveQualityDisplay = settings.video_quality
     ? `${settings.video_quality}p (channel)`
@@ -332,6 +355,14 @@ function ChannelSettingsDialog({
     }
   };
 
+  const handleCopyRegex = async (pattern: string) => {
+    try {
+      await navigator.clipboard.writeText(pattern);
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+    }
+  };
+
   return (
     <Dialog open={open} onClose={handleCancel} maxWidth="sm" fullWidth>
       <DialogTitle>
@@ -484,6 +515,74 @@ function ChannelSettingsDialog({
                 <InfoIcon fontSize="small" />
               </IconButton>
             </Box>
+
+            {/* Regex examples toggle and collapsible section */}
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Typography
+                variant="body2"
+                component="button"
+                onClick={() => setShowRegexExamples(!showRegexExamples)}
+                sx={{
+                  color: 'primary.main',
+                  cursor: 'pointer',
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  textDecoration: 'underline',
+                  '&:hover': { color: 'primary.dark' }
+                }}
+              >
+                {showRegexExamples ? 'Hide examples' : 'Show examples'}
+              </Typography>
+            </Box>
+
+            <Collapse in={showRegexExamples}>
+              <Box sx={{
+                mt: 1,
+                p: 2,
+                bgcolor: 'action.hover',
+                borderRadius: 1,
+                border: '1px solid',
+                borderColor: 'divider'
+              }}>
+                {regexExamples.map((example, index) => (
+                  <Box key={index} sx={{ mb: index < regexExamples.length - 1 ? 2 : 0 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      {example.label}
+                    </Typography>
+                    <Box sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      bgcolor: 'background.paper',
+                      p: 1,
+                      borderRadius: 1
+                    }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontFamily: 'monospace',
+                          flex: 1,
+                          wordBreak: 'break-all'
+                        }}
+                      >
+                        {example.pattern}
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleCopyRegex(example.pattern)}
+                        title="Copy to clipboard"
+                      >
+                        <ContentCopyIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                    <Typography variant="caption" color="text.secondary">
+                      {example.description}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Collapse>
 
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
               <Button
