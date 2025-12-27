@@ -17,16 +17,21 @@ COPY server/ ./server/
 COPY client/build/ ./client/build/
 COPY migrations/ ./migrations/
 
+# ---- Apprise ----
+FROM python:3.11-slim AS apprise
+RUN pip install --no-cache-dir --target=/opt/apprise apprise
+
 # ---- Release ----
 FROM node:20-slim AS release
 WORKDIR /app
 
 # Install runtime dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
     unzip \
-    python3-minimal \
+    python3 \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Download the latest yt-dlp release directly from GitHub
@@ -36,6 +41,14 @@ RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o 
 # Install Deno
 ENV DENO_INSTALL="/usr/local"
 RUN curl -fsSL https://deno.land/install.sh | sh
+
+# Copy Apprise from builder stage
+COPY --from=apprise /opt/apprise /opt/apprise
+ENV PYTHONPATH="/opt/apprise"
+
+# Create apprise wrapper (the pip-installed script has wrong shebang for this image)
+RUN printf '#!/bin/sh\nexec python3 -c "from apprise.cli import main; main()" "$@"\n' > /usr/local/bin/apprise && \
+    chmod +x /usr/local/bin/apprise
 
 # Copy production node_modules
 COPY --from=dependencies /app/node_modules ./node_modules

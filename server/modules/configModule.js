@@ -3,6 +3,7 @@ const path = require('path');
 const uuidv4 = require('uuid').v4;
 const EventEmitter = require('events');
 const logger = require('../logger');
+const { getDefaultNameForUrl } = require('./notificationHelpers');
 
 class ConfigModule extends EventEmitter {
   constructor() {
@@ -41,6 +42,11 @@ class ConfigModule extends EventEmitter {
       delete this.config.cronSchedule;
       legacyMigrationNeeded = true;
       logger.info('Migrated legacy cronSchedule field to channelDownloadFrequency');
+    }
+
+    // Migrate notification settings to new format
+    if (this.migrateNotificationSettings()) {
+      legacyMigrationNeeded = true;
     }
 
     // Handle plexPort type conversion (ensure it's a string)
@@ -392,6 +398,11 @@ class ConfigModule extends EventEmitter {
               legacyMigrationNeeded = true;
             }
 
+            // Migrate notification settings to new format
+            if (this.migrateNotificationSettings()) {
+              legacyMigrationNeeded = true;
+            }
+
             // Save config if modified by merge or legacy migrations
             if (mergeResult.modified || legacyMigrationNeeded) {
               this.saveConfig();
@@ -540,6 +551,74 @@ class ConfigModule extends EventEmitter {
       logger.error({ err: error }, 'Error getting storage status');
       return null;
     }
+  }
+
+  /**
+   * Migrate notification settings from legacy formats to current format.
+   * Handles:
+   * - discordWebhookUrl -> appriseUrls array
+   * - string[] appriseUrls -> object[] with name and richFormatting
+   * - Missing richFormatting field on existing objects
+   * @returns {boolean} True if any migration was performed
+   */
+  migrateNotificationSettings() {
+    let migrated = false;
+
+    // Migrate discordWebhookUrl to appriseUrls array with Apprise discord:// format
+    if (this.config.discordWebhookUrl && this.config.discordWebhookUrl.trim().length > 0) {
+      if (!Array.isArray(this.config.appriseUrls)) {
+        this.config.appriseUrls = [];
+      }
+      const rawDiscordUrl = this.config.discordWebhookUrl.trim();
+      
+      // Convert https://discord.com/api/webhooks/ID/TOKEN to discord://ID/TOKEN
+      let appriseDiscordUrl = rawDiscordUrl;
+      const discordWebhookMatch = rawDiscordUrl.match(/https?:\/\/(?:discord\.com|discordapp\.com)\/api\/webhooks\/(\d+)\/([A-Za-z0-9_-]+)/);
+      if (discordWebhookMatch) {
+        const [, webhookId, webhookToken] = discordWebhookMatch;
+        appriseDiscordUrl = `discord://${webhookId}/${webhookToken}`;
+        logger.info('Converted Discord webhook URL to Apprise format');
+      }
+      
+      const alreadyExists = this.config.appriseUrls.some(item =>
+        (typeof item === 'string' && (item === rawDiscordUrl || item === appriseDiscordUrl)) ||
+        (typeof item === 'object' && (item.url === rawDiscordUrl || item.url === appriseDiscordUrl))
+      );
+      if (!alreadyExists) {
+        this.config.appriseUrls.push({ url: appriseDiscordUrl, name: 'Discord', richFormatting: true });
+        logger.info('Migrated discordWebhookUrl to appriseUrls array');
+      }
+      migrated = true;
+    }
+
+    // Clean up old notification fields
+    if (this.config.discordWebhookUrl !== undefined || this.config.notificationService !== undefined) {
+      delete this.config.discordWebhookUrl;
+      delete this.config.notificationService;
+      migrated = true;
+    }
+
+    // Migrate string-based appriseUrls to object format
+    if (Array.isArray(this.config.appriseUrls)) {
+      let needsUrlMigration = false;
+      this.config.appriseUrls = this.config.appriseUrls.map(item => {
+        if (typeof item === 'string') {
+          needsUrlMigration = true;
+          return { url: item, name: getDefaultNameForUrl(item), richFormatting: true };
+        }
+        if (typeof item === 'object' && item.richFormatting === undefined) {
+          needsUrlMigration = true;
+          return { ...item, richFormatting: true };
+        }
+        return item;
+      });
+      if (needsUrlMigration) {
+        logger.info('Migrated appriseUrls to object format with richFormatting');
+        migrated = true;
+      }
+    }
+
+    return migrated;
   }
 
   /**

@@ -243,26 +243,107 @@ Configuration can be modified through:
 
 ## Notifications
 
+Youtarr uses [Apprise](https://github.com/caronc/apprise) to send notifications when new videos are downloaded, supporting 100+ notification services.
+
 ### Enable Notifications
 - **Config Key**: `notificationsEnabled`
 - **Type**: `boolean`
 - **Default**: `false`
-- **Description**: Enable notifications
+- **Description**: Enable notifications when new videos are downloaded
 
-### Notification Service
-- **Config Key**: `notificationService`
-- **Type**: `string`
-- **Default**: `"discord"`
-- **Options**: `"discord"`
-- **Description**: Notification service to use
-- **Note**: Currently only Discord is supported
+### Apprise URLs
+- **Config Key**: `appriseUrls`
+- **Type**: `array` of objects
+- **Default**: `[]` (empty array)
+- **Description**: List of notification service configurations
 
-### Discord Webhook URL
-- **Config Key**: `discordWebhookUrl`
-- **Type**: `string`
-- **Default**: `""` (empty)
-- **Description**: Discord webhook URL for notifications
-- **Format**: `https://discord.com/api/webhooks/{id}/{token}`
+Each entry in the array is an object with the following properties:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `url` | `string` | Apprise-compatible notification URL |
+| `name` | `string` | Friendly name for this notification (e.g., "Discord - Gaming Server") |
+| `richFormatting` | `boolean` | Enable rich formatting (embeds, styled text) when supported |
+
+**Example Configuration:**
+```json
+{
+  "appriseUrls": [
+    {
+      "url": "discord://webhook_id/webhook_token",
+      "name": "Discord Server",
+      "richFormatting": true
+    },
+    {
+      "url": "tgram://bot_token/chat_id",
+      "name": "Telegram Group",
+      "richFormatting": true
+    },
+    {
+      "url": "ntfy://my-topic",
+      "name": "Ntfy Mobile",
+      "richFormatting": false
+    }
+  ]
+}
+```
+
+### Rich Formatting
+
+For supported services, Youtarr sends beautifully formatted notifications with embeds, styled text, video cards, and timestamps. Services without rich formatting support receive plain text notifications.
+
+| Service | URL Format | Rich Formatting |
+|---------|------------|-----------------|
+| Discord | `discord://webhook_id/webhook_token` | ✅ Embeds with colors, thumbnails |
+| Telegram | `tgram://bot_token/chat_id` | ✅ HTML formatting |
+| Slack | `slack://token_a/token_b/token_c` | ✅ Block Kit formatting |
+| Email | `mailto://user:pass@gmail.com` | ✅ HTML email with styling |
+| Pushover | `pover://user_key@app_token` | ❌ Plain text |
+| Ntfy | `ntfy://topic` | ❌ Plain text |
+| Other services | Various | ❌ Plain text |
+
+Toggle "Rich formatting" off on any webhook to send plain text instead.
+
+### Supported Services
+
+Apprise supports 100+ notification services. See the [Apprise Notification Services Wiki](https://github.com/caronc/apprise/wiki#notification-services) for a complete list and URL formats.
+
+Common services include:
+- **Discord**: `discord://webhook_id/webhook_token`
+- **Telegram**: `tgram://bot_token/chat_id`
+- **Slack**: `slack://token_a/token_b/token_c`
+- **Pushover**: `pover://user_key@app_token`
+- **Ntfy**: `ntfy://topic` or `ntfys://your-server/topic`
+- **Email**: `mailto://user:pass@gmail.com`
+- **Matrix**: `matrix://user:pass@hostname/#room`
+- **Gotify**: `gotify://hostname/token`
+
+### Migration from Discord Webhook
+
+If you previously used the `discordWebhookUrl` configuration option, Youtarr automatically migrates it to the new `appriseUrls` format on startup:
+
+**Before (legacy):**
+```json
+{
+  "discordWebhookUrl": "https://discord.com/api/webhooks/123/abc",
+  "notificationService": "discord"
+}
+```
+
+**After (automatic migration):**
+```json
+{
+  "appriseUrls": [
+    {
+      "url": "https://discord.com/api/webhooks/123/abc",
+      "name": "Discord Webhook",
+      "richFormatting": true
+    }
+  ]
+}
+```
+
+The old `discordWebhookUrl` and `notificationService` fields are automatically removed after migration. No manual action is required.
 
 ## Download Performance
 

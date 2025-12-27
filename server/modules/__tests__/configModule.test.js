@@ -192,6 +192,179 @@ describe('ConfigModule', () => {
       expect(logger.info).toHaveBeenCalledWith('Converted plexPort to string type');
     });
 
+    test('should migrate legacy discordWebhookUrl to appriseUrls with discord:// format', () => {
+      // Arrange
+      const legacyConfig = {
+        ...defaultTemplate,
+        discordWebhookUrl: 'https://discord.com/api/webhooks/1234567890/abcdefghijklmnop'
+      };
+
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockImplementation((path) => {
+        if (path.includes('config.json') && !path.includes('example')) {
+          return JSON.stringify(legacyConfig);
+        }
+        return JSON.stringify(defaultTemplate);
+      });
+
+      // Act
+      ConfigModule = require('../configModule');
+
+      // Assert
+      const config = ConfigModule.getConfig();
+      expect(config.discordWebhookUrl).toBeUndefined();
+      expect(config.appriseUrls).toEqual([
+        {
+          url: 'discord://1234567890/abcdefghijklmnop',
+          name: 'Discord',
+          richFormatting: true
+        }
+      ]);
+      expect(logger.info).toHaveBeenCalledWith('Converted Discord webhook URL to Apprise format');
+      expect(logger.info).toHaveBeenCalledWith('Migrated discordWebhookUrl to appriseUrls array');
+    });
+
+    test('should migrate discordapp.com webhook URL to discord:// format', () => {
+      // Arrange
+      const legacyConfig = {
+        ...defaultTemplate,
+        discordWebhookUrl: 'https://discordapp.com/api/webhooks/9876543210/zyxwvutsrqponmlk'
+      };
+
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockImplementation((path) => {
+        if (path.includes('config.json') && !path.includes('example')) {
+          return JSON.stringify(legacyConfig);
+        }
+        return JSON.stringify(defaultTemplate);
+      });
+
+      // Act
+      ConfigModule = require('../configModule');
+
+      // Assert
+      const config = ConfigModule.getConfig();
+      expect(config.discordWebhookUrl).toBeUndefined();
+      expect(config.appriseUrls[0].url).toBe('discord://9876543210/zyxwvutsrqponmlk');
+    });
+
+    test('should not duplicate Discord webhook if already in appriseUrls', () => {
+      // Arrange - user already has the webhook in appriseUrls but old field still exists
+      const legacyConfig = {
+        ...defaultTemplate,
+        discordWebhookUrl: 'https://discord.com/api/webhooks/1234567890/abcdefghijklmnop',
+        appriseUrls: [
+          { url: 'discord://1234567890/abcdefghijklmnop', name: 'My Discord', richFormatting: true }
+        ]
+      };
+
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockImplementation((path) => {
+        if (path.includes('config.json') && !path.includes('example')) {
+          return JSON.stringify(legacyConfig);
+        }
+        return JSON.stringify(defaultTemplate);
+      });
+
+      // Act
+      ConfigModule = require('../configModule');
+
+      // Assert
+      const config = ConfigModule.getConfig();
+      expect(config.discordWebhookUrl).toBeUndefined();
+      // Should only have one entry, not duplicated
+      expect(config.appriseUrls.length).toBe(1);
+      expect(config.appriseUrls[0].url).toBe('discord://1234567890/abcdefghijklmnop');
+    });
+
+    test('should migrate string appriseUrls to object format with richFormatting', () => {
+      // Arrange - old format where appriseUrls were just strings
+      const legacyConfig = {
+        ...defaultTemplate,
+        appriseUrls: [
+          'discord://1234567890/token123',
+          'tgram://bottoken/chatid'
+        ]
+      };
+
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockImplementation((path) => {
+        if (path.includes('config.json') && !path.includes('example')) {
+          return JSON.stringify(legacyConfig);
+        }
+        return JSON.stringify(defaultTemplate);
+      });
+
+      // Act
+      ConfigModule = require('../configModule');
+
+      // Assert
+      const config = ConfigModule.getConfig();
+      expect(config.appriseUrls.length).toBe(2);
+      // Each should now be an object with url, name, and richFormatting
+      expect(config.appriseUrls[0]).toEqual({
+        url: 'discord://1234567890/token123',
+        name: 'Discord',
+        richFormatting: true
+      });
+      expect(config.appriseUrls[1]).toEqual({
+        url: 'tgram://bottoken/chatid',
+        name: 'Telegram',
+        richFormatting: true
+      });
+    });
+
+    test('should add richFormatting field to existing object appriseUrls missing it', () => {
+      // Arrange - objects without richFormatting field
+      const legacyConfig = {
+        ...defaultTemplate,
+        appriseUrls: [
+          { url: 'discord://1234567890/token123', name: 'My Discord' }
+        ]
+      };
+
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockImplementation((path) => {
+        if (path.includes('config.json') && !path.includes('example')) {
+          return JSON.stringify(legacyConfig);
+        }
+        return JSON.stringify(defaultTemplate);
+      });
+
+      // Act
+      ConfigModule = require('../configModule');
+
+      // Assert
+      const config = ConfigModule.getConfig();
+      expect(config.appriseUrls[0].richFormatting).toBe(true);
+      expect(config.appriseUrls[0].name).toBe('My Discord'); // Should preserve existing name
+    });
+
+    test('should clean up old notificationService field', () => {
+      // Arrange - old format with notificationService field
+      const legacyConfig = {
+        ...defaultTemplate,
+        notificationService: 'discord',
+        discordWebhookUrl: 'https://discord.com/api/webhooks/1234567890/token'
+      };
+
+      fs.existsSync.mockReturnValue(true);
+      fs.readFileSync.mockImplementation((path) => {
+        if (path.includes('config.json') && !path.includes('example')) {
+          return JSON.stringify(legacyConfig);
+        }
+        return JSON.stringify(defaultTemplate);
+      });
+
+      // Act
+      ConfigModule = require('../configModule');
+
+      // Assert
+      const config = ConfigModule.getConfig();
+      expect(config.notificationService).toBeUndefined();
+      expect(config.discordWebhookUrl).toBeUndefined();
+    });
+
     test('should set up file watcher for config changes', () => {
       // Arrange
       fs.existsSync.mockReturnValue(true);
