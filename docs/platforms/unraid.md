@@ -53,3 +53,35 @@ curl -L https://raw.githubusercontent.com/DialmasterOrg/unraid-templates/main/Yo
 Once the container is running, open http://<your-unraid-ip>:3087 in your browser to access Youtarr.
 
 - **Note** Until the template is accepted into the main Community Applications feed, it is available directly from the repository above.
+
+## Running as Non-Root User
+
+By default, Youtarr runs as root inside the container. This works fine for most setups, but if you need Plex or Jellyfin to be able to delete files that Youtarr downloads, you'll need to run Youtarr as a non-root user with matching permissions.
+
+**Note**: The `YOUTARR_UID` and `YOUTARR_GID` environment variables do not work on Unraid. You must use the `--user` parameter instead.
+
+### Steps to Run as Non-Root
+
+1. **Stop the Youtarr container** if it's running
+
+2. **Set correct ownership on your directories** by opening an Unraid terminal and running:
+   ```bash
+   chown -R 99:100 /mnt/user/appdata/youtarr/config
+   chown -R 99:100 /mnt/user/appdata/youtarr/jobs
+   chown -R 99:100 /path/to/your/youtube_videos
+   ```
+   Replace the paths with your actual mapped directories. The `99:100` corresponds to the `nobody:users` user/group on Unraid.
+
+3. **Add the user parameter to your container**:
+   - Edit your Youtarr container in Unraid
+   - Scroll down to "Extra Parameters"
+   - Add: `--user 99:100`
+   - Click "Apply" to restart the container
+
+4. **Verify it's working** by running:
+   ```bash
+   docker exec -it Youtarr sh -c 'id'
+   ```
+   You should see `uid=99(nobody) gid=100(users)` instead of `uid=0(root)`.
+
+After this setup, Youtarr will create files with `nobody:users` ownership, which matches the default permissions that Plex and other media apps use on Unraid, allowing them to delete files as needed.
