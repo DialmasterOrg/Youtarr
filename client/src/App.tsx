@@ -41,6 +41,7 @@ import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
 import LoginIcon from '@mui/icons-material/Login';
 import LogoutIcon from '@mui/icons-material/Logout';
 import ShieldIcon from '@mui/icons-material/Shield';
+import NewReleasesIcon from '@mui/icons-material/NewReleases';
 import Configuration from './components/Configuration';
 import ChannelManager from './components/ChannelManager';
 import DownloadManager from './components/DownloadManager';
@@ -48,6 +49,7 @@ import VideosPage from './components/VideosPage';
 import LocalLogin from './components/LocalLogin';
 import InitialSetup from './components/InitialSetup';
 import ChannelPage from './components/ChannelPage';
+import ChangelogPage from './components/ChangelogPage';
 import StorageStatus from './components/StorageStatus';
 import { useConfig } from './hooks/useConfig';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -603,6 +605,31 @@ function AppContent() {
                   primary='Downloaded Videos'
                 />
               </ListItem>
+              <ListItem
+                button
+                component={Link}
+                to='/changelog'
+                onClick={handleDrawerToggle}
+                sx={{
+                  bgcolor: location.pathname === '/changelog' ? 'action.selected' : 'transparent',
+                  borderLeft: location.pathname === '/changelog' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
+                  '&:hover': {
+                    bgcolor: 'action.hover',
+                  },
+                  paddingX: isMobile ? '8px' : '16px'
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
+                  <NewReleasesIcon sx={{ color: location.pathname === '/changelog' ? 'primary.main' : 'inherit' }} />
+                </ListItemIcon>
+                <ListItemText
+                  primaryTypographyProps={{
+                    fontSize: isMobile ? 'small' : 'medium',
+                    fontWeight: location.pathname === '/changelog' ? 'bold' : 'normal'
+                  }}
+                  primary='Changelog'
+                />
+              </ListItem>
               {!token && !isPlatformManaged && (
                 <ListItem
                   button
@@ -715,6 +742,10 @@ function AppContent() {
                       <LocalLogin setToken={setToken} />
                     )
                   }
+                />
+                <Route
+                  path='/changelog'
+                  element={<ChangelogPage />}
                 />
                 {token ? (
                   <>

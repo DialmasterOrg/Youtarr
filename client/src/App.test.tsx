@@ -87,6 +87,12 @@ jest.mock('./components/StorageStatus', () => {
   };
 });
 
+jest.mock('./components/ChangelogPage', () => {
+  return function ChangelogPage() {
+    return <div data-testid="changelog-page">Changelog Page Component</div>;
+  };
+});
+
 jest.mock('./components/ErrorBoundary', () => {
   return function ErrorBoundary({ children }: { children: React.ReactNode; fallbackMessage?: string }) {
     return <>{children}</>;
@@ -244,6 +250,7 @@ describe('App Component', () => {
     expect(screen.getByText('Your Channels')).toBeInTheDocument();
     expect(screen.getByText('Manage Downloads')).toBeInTheDocument();
     expect(screen.getByText('Downloaded Videos')).toBeInTheDocument();
+    expect(screen.getByText('Changelog')).toBeInTheDocument();
   });
 
   test('shows login link when not authenticated', async () => {
