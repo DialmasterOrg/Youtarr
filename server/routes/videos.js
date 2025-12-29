@@ -12,6 +12,32 @@ const videoValidationLimiter = rateLimit({
   validate: { trustProxy: false },
 });
 
+// API key download rate limiter
+const apiKeyDownloadLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: (req) => {
+    // Only apply to API key auth, session auth is unlimited
+    if (req.authType !== 'api_key') {
+      return 0; // 0 = unlimited
+    }
+    const configModule = require('../modules/configModule');
+    return configModule.getConfig().apiKeyRateLimit || 10;
+  },
+  keyGenerator: (req) => {
+    // Rate limit per API key ID
+    if (req.authType === 'api_key') {
+      return `apikey:${req.apiKeyId}`;
+    }
+    // Session auth uses IP (but max=0 so won't limit)
+    return req.ip;
+  },
+  skip: (req) => req.authType !== 'api_key', // Skip rate limiting for session auth
+  message: { success: false, error: 'Rate limit exceeded. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false },
+});
+
 /**
  * Creates video routes
  * @param {Object} deps - Dependencies
@@ -386,7 +412,7 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
    *       429:
    *         description: Rate limit exceeded
    */
-  router.post('/api/videos/download', verifyToken, async (req, res) => {
+  router.post('/api/videos/download', verifyToken, apiKeyDownloadLimiter, async (req, res) => {
     // Set CORS headers for bookmarklet/external access
     res.set('Access-Control-Allow-Origin', '*');
 
