@@ -30,7 +30,12 @@ class ApiKeyModule {
       is_active: true,
     });
 
-    logger.info({ keyId: apiKey.id, name }, 'Created new API key');
+    logger.info({ 
+      keyId: apiKey.id, 
+      name,
+      prefix,
+      event: 'api_key_created'
+    }, 'API key created');
 
     return {
       id: apiKey.id,
@@ -96,8 +101,15 @@ class ApiKeyModule {
       return false;
     }
 
+    const keyName = apiKey.name;
+    const keyPrefix = apiKey.key_prefix;
     await apiKey.update({ is_active: false });
-    logger.info({ keyId: id }, 'Revoked API key');
+    logger.info({ 
+      keyId: id, 
+      name: keyName,
+      prefix: keyPrefix,
+      event: 'api_key_revoked'
+    }, 'API key revoked');
     return true;
   }
 
@@ -107,9 +119,19 @@ class ApiKeyModule {
    * @returns {boolean} True if deleted, false if not found
    */
   async deleteApiKey(id) {
+    // Get key info before deletion for audit log
+    const apiKey = await ApiKey.findByPk(id);
+    const keyName = apiKey?.name;
+    const keyPrefix = apiKey?.key_prefix;
+    
     const result = await ApiKey.destroy({ where: { id } });
     if (result > 0) {
-      logger.info({ keyId: id }, 'Deleted API key');
+      logger.info({ 
+        keyId: id,
+        name: keyName,
+        prefix: keyPrefix,
+        event: 'api_key_deleted'
+      }, 'API key deleted');
       return true;
     }
     return false;

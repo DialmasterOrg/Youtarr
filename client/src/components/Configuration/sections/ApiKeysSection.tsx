@@ -63,6 +63,11 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
   const [createdKey, setCreatedKey] = useState<ApiKeyCreatedResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '' });
+  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{ open: boolean; keyId: number | null; keyName: string }>({
+    open: false,
+    keyId: null,
+    keyName: '',
+  });
   const [isHttpWarning] = useState(
     window.location.protocol !== 'https:' && window.location.hostname !== 'localhost'
   );
@@ -122,11 +127,11 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
     }
   };
 
-  const handleDeleteKey = async (id: number) => {
-    if (!token) return;
+  const handleDeleteKey = async () => {
+    if (!token || !deleteConfirmDialog.keyId) return;
 
     try {
-      const response = await fetch(`/api/keys/${id}`, {
+      const response = await fetch(`/api/keys/${deleteConfirmDialog.keyId}`, {
         method: 'DELETE',
         headers: { 'x-access-token': token },
       });
@@ -140,7 +145,13 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
       }
     } catch (err) {
       setError('Failed to delete API key');
+    } finally {
+      setDeleteConfirmDialog({ open: false, keyId: null, keyName: '' });
     }
+  };
+
+  const openDeleteConfirmDialog = (id: number, name: string) => {
+    setDeleteConfirmDialog({ open: true, keyId: id, keyName: name });
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -260,7 +271,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
                     <Tooltip title="Delete">
                       <IconButton
                         size="small"
-                        onClick={() => handleDeleteKey(key.id)}
+                        onClick={() => openDeleteConfirmDialog(key.id, key.name)}
                         color="error"
                       >
                         <DeleteIcon fontSize="small" />
@@ -420,6 +431,30 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
         <DialogActions>
           <Button onClick={() => setCreatedKeyDialogOpen(false)} variant="contained">
             Done
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteConfirmDialog.open}
+        onClose={() => setDeleteConfirmDialog({ open: false, keyId: null, keyName: '' })}
+      >
+        <DialogTitle>Delete API Key?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete the API key <strong>"{deleteConfirmDialog.keyName}"</strong>?
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            This action cannot be undone. Any integrations using this key will stop working.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmDialog({ open: false, keyId: null, keyName: '' })}>
+            Cancel
+          </Button>
+          <Button onClick={handleDeleteKey} color="error" variant="contained">
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

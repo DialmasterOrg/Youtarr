@@ -118,8 +118,17 @@ module.exports = function createApiKeyRoutes({ verifyToken }) {
       return res.status(400).json({ error: 'Name is required (1-100 characters)' });
     }
 
+    // Sanitize name: remove control characters, trim whitespace
+    // eslint-disable-next-line no-control-regex
+    const sanitizedName = name.trim().replace(/[\x00-\x1F\x7F]/g, '');
+    
+    // Validate sanitized name still has content
+    if (sanitizedName.length < 1) {
+      return res.status(400).json({ error: 'Name contains only invalid characters' });
+    }
+
     try {
-      const result = await apiKeyModule.createApiKey(name.trim());
+      const result = await apiKeyModule.createApiKey(sanitizedName);
       res.json({
         success: true,
         message: 'API key created. Save this key - it will not be shown again!',

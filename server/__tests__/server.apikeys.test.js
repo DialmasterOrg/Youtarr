@@ -938,3 +938,101 @@ describe('Maximum API Keys Limit', () => {
   });
 });
 
+describe('Input Sanitization - Security Tests', () => {
+  test('rejects empty name after sanitization', async () => {
+    const apiKeyModuleMock = createApiKeyModuleMock();
+    const { app } = await createServerModule({ apiKeyModuleMock });
+
+    const handlers = findRouteHandlers(app, 'post', '/api/keys');
+    const createHandler = handlers[handlers.length - 1];
+
+    // Name with only control characters that would be stripped
+    const req = createMockRequest({
+      body: { name: '\x00\x01\x02' },
+      username: 'tester',
+      authType: 'session'
+    });
+    const res = createMockResponse();
+
+    await createHandler(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toContain('invalid characters');
+  });
+
+  test('sanitizes control characters from name', async () => {
+    const apiKeyModuleMock = createApiKeyModuleMock();
+    const { app } = await createServerModule({ apiKeyModuleMock });
+
+    const handlers = findRouteHandlers(app, 'post', '/api/keys');
+    const createHandler = handlers[handlers.length - 1];
+
+    // Name with valid chars mixed with control chars
+    const req = createMockRequest({
+      body: { name: 'My\x00Key\x1FName' },
+      username: 'tester',
+      authType: 'session'
+    });
+    const res = createMockResponse();
+
+    await createHandler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.name).toBe('MyKeyName');
+  });
+});
+
+describe('URL Length Validation - Security Tests', () => {
+  test('rejects excessively long URLs', async () => {
+    const apiKeyModuleMock = createApiKeyModuleMock();
+    const created = await apiKeyModuleMock.createApiKey('Download Key');
+    
+    const { app } = await createServerModule({ apiKeyModuleMock });
+
+    const handlers = findRouteHandlers(app, 'post', '/api/videos/download');
+    const downloadHandler = handlers[handlers.length - 1];
+
+    // Create a URL longer than 2048 characters
+    const longUrl = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' + '&extra=' + 'a'.repeat(3000);
+
+    const req = createMockRequest({
+      body: { url: longUrl },
+      headers: { 'x-api-key': created.key },
+      authType: 'api_key',
+      apiKeyId: created.id
+    });
+    const res = createMockResponse();
+
+    await downloadHandler(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toContain('too long');
+  });
+
+  test('accepts URLs under length limit', async () => {
+    const apiKeyModuleMock = createApiKeyModuleMock();
+    const created = await apiKeyModuleMock.createApiKey('Download Key');
+    
+    const { app } = await createServerModule({ apiKeyModuleMock });
+
+    const handlers = findRouteHandlers(app, 'post', '/api/videos/download');
+    const downloadHandler = handlers[handlers.length - 1];
+
+    // Normal YouTube URL
+    const normalUrl = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+
+    const req = createMockRequest({
+      body: { url: normalUrl },
+      headers: { 'x-api-key': created.key },
+      authType: 'api_key',
+      apiKeyId: created.id
+    });
+    const res = createMockResponse();
+
+    await downloadHandler(req, res);
+
+    // Should pass URL validation (200) not fail on length
+    expect(res.statusCode).toBe(200);
+  });
+});
+

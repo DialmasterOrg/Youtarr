@@ -330,17 +330,35 @@ const initialize = async () => {
           );
 
           if (!isAllowed) {
+            req.log.warn({
+              event: 'api_key_access_denied',
+              keyId: validKey.id,
+              keyName: validKey.name,
+              keyPrefix: validKey.key_prefix,
+              method: req.method,
+              path: req.path
+            }, 'API key attempted to access unauthorized endpoint');
             return res.status(403).json({
               error: 'API keys can only access the download endpoint'
             });
           }
 
+          req.log.info({
+            event: 'api_key_auth_success',
+            keyId: validKey.id,
+            keyName: validKey.name,
+            keyPrefix: validKey.key_prefix
+          }, 'API key authentication successful');
           req.authType = 'api_key';
           req.apiKeyId = validKey.id;
           req.apiKeyName = validKey.name;
           req.apiKeyRecord = validKey;
           return next();
         }
+        req.log.warn({
+          event: 'api_key_auth_failed',
+          keyPrefix: apiKey.substring(0, 8)
+        }, 'Invalid API key authentication attempt');
         return res.status(401).json({ error: 'Invalid API key' });
       }
 

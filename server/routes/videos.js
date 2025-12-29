@@ -422,6 +422,15 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
       });
     }
 
+    // Validate URL length (prevent excessively long URLs)
+    const MAX_URL_LENGTH = 2048;
+    if (url.length > MAX_URL_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        error: `URL too long (max ${MAX_URL_LENGTH} characters)`
+      });
+    }
+
     // Validate URL format - single videos only
     const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|shorts\/)|youtu\.be\/)[a-zA-Z0-9_-]{11}/;
     if (!youtubeRegex.test(url)) {
