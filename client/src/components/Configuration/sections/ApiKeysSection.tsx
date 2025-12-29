@@ -27,7 +27,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import WarningIcon from '@mui/icons-material/Warning';
-import { ConfigurationCard } from '../common/ConfigurationCard';
+import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 
 interface ApiKey {
@@ -167,14 +167,14 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
 
   if (loading) {
     return (
-      <ConfigurationCard title="API Keys & External Access">
+      <ConfigurationAccordion title="API Keys & External Access">
         <Skeleton variant="rectangular" height={200} />
-      </ConfigurationCard>
+      </ConfigurationAccordion>
     );
   }
 
   return (
-    <ConfigurationCard title="API Keys & External Access">
+    <ConfigurationAccordion title="API Keys & External Access">
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         API keys allow external tools like bookmarklets and mobile shortcuts to send individual videos to Youtarr.
         <strong> Note:</strong> API keys currently support single video downloads only—playlists and channels require the web UI.
@@ -430,7 +430,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
         onClose={() => setSnackbar({ ...snackbar, open: false })}
         message={snackbar.message}
       />
-    </ConfigurationCard>
+    </ConfigurationAccordion>
   );
 };
 
