@@ -21,11 +21,14 @@ import {
   Chip,
   Skeleton,
   Snackbar,
+  Divider,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import WarningIcon from '@mui/icons-material/Warning';
+import { ConfigurationCard } from '../common/ConfigurationCard';
+import { InfoTooltip } from '../common/InfoTooltip';
 
 interface ApiKey {
   id: number;
@@ -47,9 +50,11 @@ interface ApiKeyCreatedResponse {
 
 interface ApiKeysSectionProps {
   token: string | null;
+  apiKeyRateLimit: number;
+  onRateLimitChange: (value: number) => void;
 }
 
-const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token }) => {
+const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit, onRateLimitChange }) => {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -162,16 +167,41 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token }) => {
 
   if (loading) {
     return (
-      <Box>
+      <ConfigurationCard title="API Keys & External Access">
         <Skeleton variant="rectangular" height={200} />
-      </Box>
+      </ConfigurationCard>
     );
   }
 
   return (
-    <Box>
+    <ConfigurationCard title="API Keys & External Access">
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        API keys allow external tools like bookmarklets and mobile shortcuts to send videos to Youtarr.
+      </Typography>
+
+      {/* Rate Limit Setting */}
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+        <TextField
+          type="number"
+          label="Rate Limit (requests/min)"
+          value={apiKeyRateLimit}
+          onChange={(e) => {
+            const val = parseInt(e.target.value, 10);
+            if (!isNaN(val) && val >= 1 && val <= 100) {
+              onRateLimitChange(val);
+            }
+          }}
+          inputProps={{ min: 1, max: 100 }}
+          size="small"
+          sx={{ width: 200 }}
+        />
+        <InfoTooltip title="Maximum download requests per minute per API key. Helps prevent abuse." />
+      </Box>
+
+      <Divider sx={{ mb: 3 }} />
+
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6">API Keys</Typography>
+        <Typography variant="subtitle1">Manage API Keys</Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -181,10 +211,6 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token }) => {
           Create Key
         </Button>
       </Box>
-
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        API keys allow external tools like bookmarklets and mobile shortcuts to send videos to Youtarr.
-      </Typography>
 
       {isHttpWarning && (
         <Alert severity="warning" sx={{ mb: 2 }} icon={<WarningIcon />}>
@@ -403,7 +429,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token }) => {
         onClose={() => setSnackbar({ ...snackbar, open: false })}
         message={snackbar.message}
       />
-    </Box>
+    </ConfigurationCard>
   );
 };
 
