@@ -1,4 +1,5 @@
 name: Production Release
+run-name: ${{ github.event_name == 'workflow_dispatch' && (inputs.dry_run && 'Production Release — Dry Run' || 'Production Release — Manual') || 'Production Release — Auto' }}
 
 on:
   push:
