@@ -195,7 +195,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
           size="small"
           sx={{ width: 200 }}
         />
-        <InfoTooltip title="Maximum download requests per minute per API key. Helps prevent abuse." />
+        <InfoTooltip text="Maximum download requests per minute per API key. Helps prevent abuse." />
       </Box>
 
       <Divider sx={{ mb: 3 }} />
