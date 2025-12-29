@@ -24,18 +24,15 @@ const apiKeyDownloadLimiter = rateLimit({
     return configModule.getConfig().apiKeyRateLimit || 10;
   },
   keyGenerator: (req) => {
-    // Rate limit per API key ID
-    if (req.authType === 'api_key') {
-      return `apikey:${req.apiKeyId}`;
-    }
-    // Session auth uses IP (but max=0 so won't limit)
-    return req.ip;
+    // Rate limit per API key ID - only used for API key auth
+    // Session auth is skipped entirely via the skip function
+    return `apikey:${req.apiKeyId || 'unknown'}`;
   },
   skip: (req) => req.authType !== 'api_key', // Skip rate limiting for session auth
   message: { success: false, error: 'Rate limit exceeded. Try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
-  validate: { trustProxy: false },
+  validate: { trustProxy: false, ip: false },
 });
 
 /**
