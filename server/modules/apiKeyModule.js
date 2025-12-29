@@ -86,17 +86,6 @@ class ApiKeyModule {
   }
 
   /**
-   * Get a single API key by ID
-   * @param {number} id - API key ID
-   * @returns {Object|null} API key record or null
-   */
-  async getApiKey(id) {
-    return ApiKey.findByPk(id, {
-      attributes: ['id', 'name', 'key_prefix', 'created_at', 'last_used_at', 'is_active'],
-    });
-  }
-
-  /**
    * Revoke an API key (soft delete)
    * @param {number} id - API key ID
    * @returns {boolean} True if revoked, false if not found
