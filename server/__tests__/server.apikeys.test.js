@@ -784,6 +784,54 @@ describe('API Key Authentication - Security Tests', () => {
       expect(res.body.error).toContain('YouTube');
     });
 
+    test('rejects playlist URLs - single video only', async () => {
+      const apiKeyModuleMock = createApiKeyModuleMock();
+      const created = await apiKeyModuleMock.createApiKey('Download Key');
+      
+      const { app } = await createServerModule({ apiKeyModuleMock });
+
+      const handlers = findRouteHandlers(app, 'post', '/api/videos/download');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({
+        body: { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf' },
+        headers: { 'x-api-key': created.key },
+        authType: 'api_key',
+        apiKeyId: created.id
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toContain('single video');
+    });
+
+    test('rejects channel URLs', async () => {
+      const apiKeyModuleMock = createApiKeyModuleMock();
+      const created = await apiKeyModuleMock.createApiKey('Download Key');
+      
+      const { app } = await createServerModule({ apiKeyModuleMock });
+
+      const handlers = findRouteHandlers(app, 'post', '/api/videos/download');
+      const downloadHandler = handlers[handlers.length - 1];
+
+      // Channel URLs don't match the video URL pattern, so they're rejected
+      const req = createMockRequest({
+        body: { url: 'https://www.youtube.com/@LinusTechTips' },
+        headers: { 'x-api-key': created.key },
+        authType: 'api_key',
+        apiKeyId: created.id
+      });
+      const res = createMockResponse();
+
+      await downloadHandler(req, res);
+
+      expect(res.statusCode).toBe(400);
+      // Channel URLs fail the video URL regex validation
+      expect(res.body.error).toContain('YouTube URL');
+    });
+
     test('accepts various valid YouTube URL formats', async () => {
       const validUrls = [
         'https://www.youtube.com/watch?v=dQw4w9WgXcQ',

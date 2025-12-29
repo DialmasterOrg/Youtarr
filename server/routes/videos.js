@@ -422,12 +422,20 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
       });
     }
 
-    // Validate URL format
+    // Validate URL format - single videos only
     const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|shorts\/)|youtu\.be\/)[a-zA-Z0-9_-]{11}/;
     if (!youtubeRegex.test(url)) {
       return res.status(400).json({
         success: false,
         error: 'Invalid YouTube URL format'
+      });
+    }
+
+    // Reject playlists and channels - API keys only support single video downloads
+    if (url.includes('list=') || url.includes('/playlist') || url.includes('/channel/') || url.includes('/@')) {
+      return res.status(400).json({
+        success: false,
+        error: 'API keys only support single video downloads. Playlists and channels require the web UI.'
       });
     }
 

@@ -19,7 +19,9 @@ Youtarr provides an API endpoint that allows you to add YouTube videos to your d
 - **Apple Shortcuts**: Share videos from the YouTube app on iOS
 - **Android Tasker/Automate**: Automated download workflows
 - **Home Assistant/n8n**: Smart home and automation integrations
-- **CLI Scripts**: Batch download operations
+- **CLI Scripts**: Download individual videos
+
+> **Note**: API keys currently support **single video downloads only**. Playlists, channels, and batch operations are not supported via the API at this time. Use the web UI for those features.
 
 ## Authentication
 
@@ -59,7 +61,9 @@ You can also use session tokens (the same tokens used by the web UI) via the `x-
 
 ### POST /api/videos/download
 
-Add a YouTube video to the download queue.
+Add a single YouTube video to the download queue.
+
+> **Scope Limitation**: This endpoint only accepts individual video URLs. Playlist URLs, channel URLs, and batch requests are not supported via API keys. Use the web UI for those operations.
 
 **Headers:**
 | Header | Required | Description |

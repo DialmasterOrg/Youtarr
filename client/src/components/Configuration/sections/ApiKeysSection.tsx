@@ -176,7 +176,8 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
   return (
     <ConfigurationCard title="API Keys & External Access">
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        API keys allow external tools like bookmarklets and mobile shortcuts to send videos to Youtarr.
+        API keys allow external tools like bookmarklets and mobile shortcuts to send individual videos to Youtarr.
+        <strong> Note:</strong> API keys currently support single video downloads only—playlists and channels require the web UI.
       </Typography>
 
       {/* Rate Limit Setting */}
