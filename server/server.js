@@ -314,7 +314,37 @@ const initialize = async () => {
         }
       }
 
-      // Check for token in headers
+      // Check for API key first (x-api-key header)
+      const apiKey = req.headers['x-api-key'];
+      if (apiKey) {
+        const apiKeyModule = require('./modules/apiKeyModule');
+        const validKey = await apiKeyModule.validateApiKey(apiKey);
+        if (validKey) {
+          // API keys can ONLY access specific endpoints
+          const allowedApiKeyEndpoints = [
+            { method: 'POST', path: '/api/videos/download' },
+          ];
+
+          const isAllowed = allowedApiKeyEndpoints.some(
+            e => req.method === e.method && req.path === e.path
+          );
+
+          if (!isAllowed) {
+            return res.status(403).json({
+              error: 'API keys can only access the download endpoint'
+            });
+          }
+
+          req.authType = 'api_key';
+          req.apiKeyId = validKey.id;
+          req.apiKeyName = validKey.name;
+          req.apiKeyRecord = validKey;
+          return next();
+        }
+        return res.status(401).json({ error: 'Invalid API key' });
+      }
+
+      // Check for session token in headers
       const token = req.headers['x-access-token'];
 
       if (!token) {
@@ -341,6 +371,7 @@ const initialize = async () => {
         await session.update({ last_used_at: new Date() });
 
         // Attach username to request for downstream use
+        req.authType = 'session';
         req.username = session.username;
         req.sessionId = session.id;
 
