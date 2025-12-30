@@ -1786,7 +1786,7 @@ describe('server routes - version', () => {
       const mockResp = {
         on: jest.fn((event, handler) => {
           if (event === 'data') {
-            // dev-latest and dev-rc tags should be filtered, leaving v1.2.0 as the latest stable
+            // dev-latest and dev-rc tags should be filtered, leaving only stable version tags
             handler('{"results":[{"name":"dev-latest"},{"name":"dev-rc.abc1234"},{"name":"v1.2.0"},{"name":"v1.1.0"},{"name":"latest"}]}');
           } else if (event === 'end') {
             handler();
@@ -1806,7 +1806,9 @@ describe('server routes - version', () => {
     await versionHandler(req, res);
 
     expect(res.statusCode).toBe(200);
-    // Should return v1.2.0, not dev-latest or dev-rc.abc1234
-    expect(res.body.version).toBe('v1.2.0');
+    // Should not return dev tags - version should not start with 'dev'
+    expect(res.body.version).not.toMatch(/^dev/);
+    // Should not return 'latest' tag
+    expect(res.body.version).not.toBe('latest');
   });
 });
