@@ -1,11 +1,11 @@
 'use strict';
 
-const { addColumnIfNotExists } = require('./helpers');
+const { addColumnIfMissing, removeColumnIfExists } = require('./helpers');
 
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await addColumnIfNotExists(queryInterface, 'ApiKeys', 'usage_count', {
+    await addColumnIfMissing(queryInterface, 'ApiKeys', 'usage_count', {
       type: Sequelize.INTEGER,
       allowNull: false,
       defaultValue: 0,
@@ -13,10 +13,7 @@ module.exports = {
   },
 
   async down(queryInterface) {
-    const tableDescription = await queryInterface.describeTable('ApiKeys');
-    if (tableDescription.usage_count) {
-      await queryInterface.removeColumn('ApiKeys', 'usage_count');
-    }
+    await removeColumnIfExists(queryInterface, 'ApiKeys', 'usage_count');
   },
 };
 
