@@ -78,7 +78,8 @@ const createApiKeyModuleMock = () => {
         key_prefix: key.prefix,
         created_at: new Date(),
         last_used_at: null,
-        is_active: true
+        is_active: true,
+        usage_count: 0
       });
       return key;
     }),
@@ -100,8 +101,15 @@ const createApiKeyModuleMock = () => {
         key_prefix: k.key_prefix,
         created_at: k.created_at,
         last_used_at: k.last_used_at,
-        is_active: k.is_active
+        is_active: k.is_active,
+        usage_count: k.usage_count
       }));
+    }),
+    incrementUsageCount: jest.fn(async (id) => {
+      const key = keys.find(k => k.id === id);
+      if (key && key.is_active) {
+        key.usage_count++;
+      }
     }),
     revokeApiKey: jest.fn(async (id) => {
       const key = keys.find(k => k.id === id);
@@ -501,6 +509,39 @@ describe('API Key Module - Unit Tests', () => {
     test('returns false for non-existent key', async () => {
       const result = await apiKeyModule.deleteApiKey(9999);
       expect(result).toBe(false);
+    });
+  });
+
+  describe('incrementUsageCount', () => {
+    test('increments usage count for active key', async () => {
+      const created = await apiKeyModule.createApiKey('Usage Key');
+      const storedKey = apiKeyModule._getKeys().find(k => k.id === created.id);
+      expect(storedKey.usage_count).toBe(0);
+
+      await apiKeyModule.incrementUsageCount(created.id);
+
+      expect(storedKey.usage_count).toBe(1);
+    });
+
+    test('increments multiple times', async () => {
+      const created = await apiKeyModule.createApiKey('Multi Usage Key');
+      
+      await apiKeyModule.incrementUsageCount(created.id);
+      await apiKeyModule.incrementUsageCount(created.id);
+      await apiKeyModule.incrementUsageCount(created.id);
+
+      const storedKey = apiKeyModule._getKeys().find(k => k.id === created.id);
+      expect(storedKey.usage_count).toBe(3);
+    });
+
+    test('does not increment for revoked key', async () => {
+      const created = await apiKeyModule.createApiKey('Revoked Usage Key');
+      await apiKeyModule.revokeApiKey(created.id);
+      
+      await apiKeyModule.incrementUsageCount(created.id);
+
+      const storedKey = apiKeyModule._getKeys().find(k => k.id === created.id);
+      expect(storedKey.usage_count).toBe(0);
     });
   });
 });

@@ -37,6 +37,7 @@ interface ApiKey {
   created_at: string;
   last_used_at: string | null;
   is_active: boolean;
+  usage_count: number;
 }
 
 interface ApiKeyCreatedResponse {
@@ -251,6 +252,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
                 <TableCell>Key</TableCell>
                 <TableCell>Created</TableCell>
                 <TableCell>Last Used</TableCell>
+                <TableCell align="center">Uses</TableCell>
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
@@ -267,6 +269,14 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
                   </TableCell>
                   <TableCell>{formatDate(key.created_at)}</TableCell>
                   <TableCell>{formatDate(key.last_used_at)}</TableCell>
+                  <TableCell align="center">
+                    <Chip
+                      label={key.usage_count}
+                      size="small"
+                      color={key.usage_count > 0 ? 'primary' : 'default'}
+                      variant="outlined"
+                    />
+                  </TableCell>
                   <TableCell align="right">
                     <Tooltip title="Delete">
                       <IconButton

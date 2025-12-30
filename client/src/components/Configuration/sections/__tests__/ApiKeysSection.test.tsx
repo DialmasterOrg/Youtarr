@@ -33,6 +33,7 @@ const mockApiKeys = [
     created_at: '2024-01-15T10:30:00Z',
     last_used_at: '2024-01-20T15:45:00Z',
     is_active: true,
+    usage_count: 42,
   },
   {
     id: 2,
@@ -41,6 +42,7 @@ const mockApiKeys = [
     created_at: '2024-01-10T08:00:00Z',
     last_used_at: null,
     is_active: true,
+    usage_count: 0,
   },
 ];
 
@@ -261,6 +263,25 @@ describe('ApiKeysSection Component', () => {
       await waitFor(() => {
         const deleteButtons = screen.getAllByRole('button', { name: /Delete/i });
         expect(deleteButtons).toHaveLength(2);
+      });
+    });
+
+    test('displays usage count for each key', async () => {
+      const user = userEvent.setup();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ keys: mockApiKeys }),
+      });
+      
+      const props = createSectionProps();
+      renderWithProviders(<ApiKeysSection {...props} />);
+
+      await expandAccordion(user);
+
+      await waitFor(() => {
+        // Check that usage counts are displayed
+        expect(screen.getByText('42')).toBeInTheDocument();
+        expect(screen.getByText('0')).toBeInTheDocument();
       });
     });
   });

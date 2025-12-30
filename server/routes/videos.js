@@ -499,6 +499,14 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
         }
       });
 
+      // Increment usage count for API key statistics
+      if (req.authType === 'api_key' && req.apiKeyId) {
+        const apiKeyModule = require('../modules/apiKeyModule');
+        apiKeyModule.incrementUsageCount(req.apiKeyId).catch(err => {
+          req.log.warn({ err, keyId: req.apiKeyId }, 'Failed to increment API key usage count');
+        });
+      }
+
       res.json({
         success: true,
         message: 'Video queued for download',

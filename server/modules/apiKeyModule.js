@@ -70,7 +70,7 @@ class ApiKeyModule {
 
       if (storedHashBuffer.length === providedHashBuffer.length &&
           crypto.timingSafeEqual(storedHashBuffer, providedHashBuffer)) {
-        // Update last_used_at
+        // Update last_used_at (download_count is incremented separately on successful download)
         await candidate.update({ last_used_at: new Date() });
         return candidate;
       }
@@ -80,12 +80,24 @@ class ApiKeyModule {
   }
 
   /**
+   * Increment the usage count for an API key
+   * @param {number} id - API key ID
+   */
+  async incrementUsageCount(id) {
+    const apiKey = await ApiKey.findByPk(id);
+    if (apiKey && apiKey.is_active) {
+      await apiKey.increment('usage_count');
+      logger.debug({ keyId: id, newCount: apiKey.usage_count + 1 }, 'Incremented API key usage count');
+    }
+  }
+
+  /**
    * List all API keys (without the actual key values)
    * @returns {Array} List of API key records
    */
   async listApiKeys() {
     return ApiKey.findAll({
-      attributes: ['id', 'name', 'key_prefix', 'created_at', 'last_used_at', 'is_active'],
+      attributes: ['id', 'name', 'key_prefix', 'created_at', 'last_used_at', 'is_active', 'usage_count'],
       order: [['created_at', 'DESC']],
     });
   }
