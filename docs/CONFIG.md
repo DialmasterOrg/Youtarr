@@ -14,6 +14,7 @@ These settings can be changed from the Configuration page in the web UI.
 - [Download Performance](#download-performance)
 - [Advanced Settings](#advanced-settings)
 - [Auto-Removal Settings](#auto-removal-settings)
+- [API Keys & External Access](#api-keys--external-access)
 - [Account & Security](#account--security)
 - [System Fields](#system-fields)
 - [Configuration Examples](#configuration-examples)
@@ -444,6 +445,20 @@ The old `discordWebhookUrl` and `notificationService` fields are automatically r
 - **Default**: `null` (not set)
 - **Description**: Delete videos older than this age
 - **Examples**: `"30d"` (30 days), `"3m"` (3 months), `"1y"` (1 year)
+
+## API Keys & External Access
+
+Settings for API key authentication used by bookmarklets, mobile shortcuts, and automation tools.
+
+### API Key Rate Limit
+- **Config Key**: `apiKeyRateLimit`
+- **Type**: `number`
+- **Default**: `10`
+- **Description**: Maximum download requests per minute per API key
+- **Range**: 1-100
+- **Note**: Helps prevent abuse from external integrations. Each API key is rate-limited independently.
+
+For detailed information on creating and using API keys, see [API Integration Guide](API_INTEGRATION.md).
 
 ## Account & Security
 
