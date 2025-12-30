@@ -448,10 +448,22 @@ WebSocket shares the HTTP port (3011 in container, 3087 on host) and emits:
 
 ## Contributing
 
+### Branching Strategy
+
+Youtarr uses a **dev → main** branching model:
+
+| Branch | Purpose | Docker Tag |
+|--------|---------|------------|
+| `main` | Stable, released code | `latest`, `vX.X.X` |
+| `dev` | Integration branch for upcoming release | `dev-latest`, `X.X.X-rc.sha` |
+| `feature/*`, `fix/*` | Individual changes | None |
+
 ### Git Workflow
 
-1. Create a feature branch:
+1. **Start from dev branch**:
    ```bash
+   git checkout dev
+   git pull origin dev
    git checkout -b feat/your-feature
    ```
 
@@ -461,7 +473,11 @@ WebSocket shares the HTTP port (3011 in container, 3087 on host) and emits:
    git commit -m "feat: add new feature"
    ```
 
-3. Push and create pull request
+3. Push and create pull request **targeting `dev`** (not `main`)
+
+4. After merge to `dev`, an RC Docker image is automatically built
+
+5. When ready, maintainer creates PR from `dev` → `main` for production release
 
 ### Commit Message Convention
 
@@ -479,6 +495,7 @@ Follow conventional commits for automatic versioning:
 ### Code Review Checklist
 
 Before submitting PR:
+- [ ] PR targets `dev` branch
 - [ ] Code passes linting (`npm run lint`)
 - [ ] All tests pass (`npm test`)
 - [ ] Database migrations included (if needed)
@@ -500,14 +517,22 @@ Before submitting PR:
 
 ### Release Process
 
-Releases are automated via GitHub Actions:
+Releases are automated via GitHub Actions with a two-stage workflow:
 
-1. Merge changes to `main` branch
-2. Go to Actions → "Create Release V2" → Run workflow
-3. Workflow will:
-   - Bump version based on commit messages
-   - Build optimized Docker image (~600MB)
-   - Push to Docker Hub with version and latest tags
+**Release Candidates (automatic on dev merge):**
+1. Merge your PR to `dev` branch
+2. RC workflow automatically:
+   - Builds multi-arch Docker images (amd64 + arm64)
+   - Pushes `dev-latest` and `X.X.X-rc.<sha>` tags to Docker Hub
+
+**Production Releases (automatic on main merge):**
+1. Maintainer creates PR from `dev` → `main`
+2. After merge, release workflow automatically:
+   - Bumps version based on commit messages
+   - Updates CHANGELOG.md
+   - Creates GitHub release
+   - Builds optimized Docker image (~600MB)
+   - Pushes `latest` and `vX.X.X` tags to Docker Hub
 
 ## Troubleshooting Development Issues
 

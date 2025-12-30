@@ -2,7 +2,7 @@ name: CI - Lint and Test
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
 
 permissions:
   contents: read
