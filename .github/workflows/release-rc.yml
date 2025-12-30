@@ -27,21 +27,16 @@ jobs:
       - name: Get version info
         id: version
         run: |
-          # Get the current version from package.json
-          CURRENT_VERSION=$(node -p "require('./package.json').version")
-          
           # Get short SHA for unique RC identifier
           SHORT_SHA=$(git rev-parse --short HEAD)
           
-          # Create RC version: current version + rc + short sha
-          RC_VERSION="${CURRENT_VERSION}-rc.${SHORT_SHA}"
+          # Create RC tag: dev-rc.<sha> (not tied to a specific version)
+          RC_TAG="dev-rc.${SHORT_SHA}"
           
-          echo "current_version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
-          echo "rc_version=${RC_VERSION}" >> $GITHUB_OUTPUT
+          echo "rc_tag=${RC_TAG}" >> $GITHUB_OUTPUT
           echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
           
-          echo "📦 Current version: ${CURRENT_VERSION}"
-          echo "🏷️ RC version: ${RC_VERSION}"
+          echo "🏷️ RC tag: ${RC_TAG}"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -81,7 +76,7 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
-            ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.version.outputs.rc_version }}
+            ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.version.outputs.rc_tag }}
             ${{ vars.DOCKERHUB_USERNAME }}/youtarr:dev-latest
           no-cache: true
 
@@ -90,13 +85,13 @@ jobs:
           echo "## 🚀 Release Candidate Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Docker Images" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.version.outputs.rc_version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.version.outputs.rc_tag }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- \`${{ vars.DOCKERHUB_USERNAME }}/youtarr:dev-latest\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Pull Commands" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
           echo "# Specific RC version" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.version.outputs.rc_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.version.outputs.rc_tag }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "# Latest dev build" >> $GITHUB_STEP_SUMMARY
           echo "docker pull ${{ vars.DOCKERHUB_USERNAME }}/youtarr:dev-latest" >> $GITHUB_STEP_SUMMARY
