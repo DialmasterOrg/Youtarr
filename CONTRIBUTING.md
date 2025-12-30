@@ -186,7 +186,7 @@ fix/zzz ──────┘
 | Branch | Purpose | Docker Tag |
 |--------|---------|------------|
 | `main` | Stable, released code | `latest`, `vX.X.X` |
-| `dev` | Integration branch for upcoming release | `dev-latest`, `X.X.X-rc.sha` |
+| `dev` | Integration branch for upcoming release | `dev-latest`, `dev-rc.<sha>` |
 | `feature/*`, `fix/*` | Individual changes | None |
 
 ### Workflow Summary
@@ -254,7 +254,7 @@ When you're ready, push your branch and create a pull request **targeting the `d
 3. **Merge to dev**
    - Once approved, your PR is merged to `dev`
    - A release candidate (RC) Docker image is automatically built
-   - RC images are tagged as `dev-latest` and `X.X.X-rc.<commit-sha>`
+   - RC images are tagged as `dev-latest` and `dev-rc.<commit-sha>`
 
 4. **Release to main**
    - When ready, the maintainer creates a PR from `dev` → `main`
@@ -296,7 +296,7 @@ When code is merged to `dev`, an RC build is automatically triggered:
 - Builds multi-architecture Docker images (amd64 + arm64)
 - Pushes to Docker Hub with tags:
   - `dialmaster/youtarr:dev-latest` (always the latest dev build)
-  - `dialmaster/youtarr:X.X.X-rc.<commit-sha>` (specific RC version)
+  - `dialmaster/youtarr:dev-rc.<commit-sha>` (specific RC build)
 
 These RC images allow testing bleeding-edge features before stable release.
 

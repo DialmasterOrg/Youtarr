@@ -455,7 +455,7 @@ Youtarr uses a **dev → main** branching model:
 | Branch | Purpose | Docker Tag |
 |--------|---------|------------|
 | `main` | Stable, released code | `latest`, `vX.X.X` |
-| `dev` | Integration branch for upcoming release | `dev-latest`, `X.X.X-rc.sha` |
+| `dev` | Integration branch for upcoming release | `dev-latest`, `dev-rc.<sha>` |
 | `feature/*`, `fix/*` | Individual changes | None |
 
 ### Git Workflow
@@ -523,7 +523,7 @@ Releases are automated via GitHub Actions with a two-stage workflow:
 1. Merge your PR to `dev` branch
 2. RC workflow automatically:
    - Builds multi-arch Docker images (amd64 + arm64)
-   - Pushes `dev-latest` and `X.X.X-rc.<sha>` tags to Docker Hub
+   - Pushes `dev-latest` and `dev-rc.<sha>` tags to Docker Hub
 
 **Production Releases (automatic on main merge):**
 1. Maintainer creates PR from `dev` → `main`
