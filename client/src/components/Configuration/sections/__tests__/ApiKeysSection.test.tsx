@@ -207,10 +207,8 @@ describe('ApiKeysSection Component', () => {
 
       await expandAccordion(user);
 
-      await waitFor(() => {
-        expect(screen.getByText('My Bookmarklet')).toBeInTheDocument();
-        expect(screen.getByText('iPhone Shortcut')).toBeInTheDocument();
-      });
+      expect(await screen.findByText('My Bookmarklet')).toBeInTheDocument();
+      expect(screen.getByText('iPhone Shortcut')).toBeInTheDocument();
     });
 
     test('displays key prefix with ellipsis', async () => {
@@ -225,10 +223,8 @@ describe('ApiKeysSection Component', () => {
 
       await expandAccordion(user);
 
-      await waitFor(() => {
-        expect(screen.getByText('abc12345...')).toBeInTheDocument();
-        expect(screen.getByText('xyz98765...')).toBeInTheDocument();
-      });
+      expect(await screen.findByText('abc12345...')).toBeInTheDocument();
+      expect(screen.getByText('xyz98765...')).toBeInTheDocument();
     });
 
     test('displays "Never" for keys that have not been used', async () => {
@@ -278,11 +274,9 @@ describe('ApiKeysSection Component', () => {
 
       await expandAccordion(user);
 
-      await waitFor(() => {
-        // Check that usage counts are displayed
-        expect(screen.getByText('42')).toBeInTheDocument();
-        expect(screen.getByText('0')).toBeInTheDocument();
-      });
+      // Check that usage counts are displayed
+      expect(await screen.findByText('42')).toBeInTheDocument();
+      expect(screen.getByText('0')).toBeInTheDocument();
     });
   });
 
@@ -406,11 +400,9 @@ describe('ApiKeysSection Component', () => {
       await user.type(screen.getByLabelText(/Key Name/i), 'Test Key');
       await user.click(screen.getByRole('button', { name: /^Create$/i }));
 
-      await waitFor(() => {
-        expect(screen.getByText(/Add to Bookmarks/i)).toBeInTheDocument();
-        expect(screen.getByText(/Send to Youtarr/i)).toBeInTheDocument();
-        expect(screen.getByText(/Mobile \/ Shortcuts/i)).toBeInTheDocument();
-      });
+      expect(await screen.findByText(/Add to Bookmarks/i)).toBeInTheDocument();
+      expect(screen.getByText(/Send to Youtarr/i)).toBeInTheDocument();
+      expect(screen.getByText(/Mobile \/ Shortcuts/i)).toBeInTheDocument();
     });
 
     test('shows error when API key creation fails', async () => {
