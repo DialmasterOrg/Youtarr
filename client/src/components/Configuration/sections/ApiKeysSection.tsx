@@ -346,7 +346,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              bgcolor: 'grey.100',
+              bgcolor: 'action.hover',
               fontFamily: 'monospace',
               wordBreak: 'break-all',
             }}
@@ -396,7 +396,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              bgcolor: 'grey.100',
+              bgcolor: 'action.hover',
               maxHeight: 100,
               overflow: 'auto',
             }}
@@ -423,7 +423,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
             Use this URL in Apple Shortcuts, Tasker, or other tools:
           </Typography>
-          <Paper sx={{ p: 2, bgcolor: 'grey.100' }}>
+          <Paper sx={{ p: 2, bgcolor: 'action.hover' }}>
             <Typography variant="body2" sx={{ fontFamily: 'monospace', mb: 1 }}>
               <strong>URL:</strong> {window.location.origin}/api/videos/download
             </Typography>
