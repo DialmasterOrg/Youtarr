@@ -288,6 +288,13 @@ const initialize = async () => {
         return next();
       }
 
+      // Allow CORS preflight requests for the download endpoint
+      // OPTIONS requests don't include auth headers, so we must let them through
+      // to reach the CORS handler in the route
+      if (req.method === 'OPTIONS' && req.path === '/api/videos/download') {
+        return next();
+      }
+
       const config = configModule.getConfig();
 
       // If no password hash exists, authentication is not configured

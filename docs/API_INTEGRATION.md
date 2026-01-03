@@ -10,6 +10,8 @@ This guide covers how to use Youtarr's API for external integrations, including 
 - [Bookmarklet Setup](#bookmarklet-setup)
 - [Mobile Shortcuts](#mobile-shortcuts)
 - [Examples](#examples)
+- [Security Considerations](#security-considerations)
+- [Troubleshooting](#troubleshooting)
 
 ## Overview
 
@@ -329,6 +331,7 @@ action:
 3. **Rotate Keys**: If a key is compromised, delete it immediately and create a new one
 4. **Use Descriptive Names**: Name your keys by purpose (e.g., "iPhone", "Work Laptop") so you can identify and revoke specific keys if needed
 5. **Monitor Usage**: Check the "Last Used" column to identify unused or suspicious keys
+6. **External Auth Proxies**: If using Cloudflare Zero Trust, Authelia, or similar, you'll need to bypass authentication for `/api/videos/download`. This is safe because Youtarr's API key authentication still protects the endpoint. See [Troubleshooting](#cors-error--blocked-by-external-auth-cloudflare-zero-trust-authelia-etc) for setup instructions.
 
 ## Troubleshooting
 
@@ -347,4 +350,28 @@ The bookmarklet only works on youtube.com or youtu.be pages. Make sure you're on
 ### 429 Rate Limited
 - Wait a minute before trying again
 - Consider increasing the rate limit in Configuration
+
+### CORS Error / Blocked by External Auth (Cloudflare Zero Trust, Authelia, etc.)
+
+If you're running Youtarr behind an authentication proxy like Cloudflare Zero Trust, Authelia, or similar, bookmarklets and external API calls will fail with CORS errors because:
+
+1. The bookmarklet runs from `youtube.com` (cross-origin)
+2. Browser sends a preflight OPTIONS request (no auth headers)
+3. Your auth proxy blocks the request before it reaches Youtarr
+
+**Solution for Cloudflare Zero Trust:**
+
+1. Go to **Zero Trust Dashboard → Access → Applications**
+2. Create a **new application** for the API endpoint:
+   - **Application URL**: `yourdomain.com/api/videos/download`
+3. Add a policy with:
+   - **Action**: **Bypass** (not "Allow" - Allow still requires authentication)
+   - **Selector**: Everyone
+4. Save the application
+
+The `/api/videos/download` endpoint is still protected by Youtarr's API key authentication, so this bypass is safe.
+
+**Solution for other auth proxies (Authelia, Authentik, etc.):**
+
+Configure your proxy to skip authentication for the `/api/videos/download` path. The exact configuration varies by proxy - consult your proxy's documentation for path-based bypass rules.
 
