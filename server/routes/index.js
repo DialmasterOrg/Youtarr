@@ -6,6 +6,7 @@ const createChannelRoutes = require('./channels');
 const createVideoRoutes = require('./videos');
 const createJobRoutes = require('./jobs');
 const createPlexRoutes = require('./plex');
+const createApiKeyRoutes = require('./apikeys');
 
 /**
  * Registers all route modules with the Express app
@@ -52,6 +53,9 @@ function registerRoutes(app, deps) {
 
   // Plex routes
   app.use(createPlexRoutes({ verifyToken, plexModule, configModule }));
+
+  // API Key routes
+  app.use(createApiKeyRoutes({ verifyToken }));
 }
 
 module.exports = { registerRoutes };

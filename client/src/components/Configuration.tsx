@@ -21,6 +21,7 @@ import { DownloadPerformanceSection } from './Configuration/sections/DownloadPer
 import { AdvancedSettingsSection } from './Configuration/sections/AdvancedSettingsSection';
 import { AutoRemovalSection } from './Configuration/sections/AutoRemovalSection';
 import { AccountSecuritySection } from './Configuration/sections/AccountSecuritySection';
+import ApiKeysSection from './Configuration/sections/ApiKeysSection';
 import { SaveBar } from './Configuration/sections/SaveBar';
 import {
   usePlexConnection,
@@ -267,6 +268,12 @@ function Configuration({ token }: ConfigurationProps) {
         envAuthApplied={config.envAuthApplied}
         authEnabled={isPlatformManaged.authEnabled}
         setSnackbar={setSnackbar}
+      />
+
+      <ApiKeysSection
+        token={token}
+        apiKeyRateLimit={config.apiKeyRateLimit}
+        onRateLimitChange={(value) => handleConfigChange({ apiKeyRateLimit: value })}
       />
 
       <SaveBar

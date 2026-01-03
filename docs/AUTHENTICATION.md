@@ -6,6 +6,7 @@ This document covers all aspects of authentication in Youtarr, including initial
 - [Overview](#overview)
 - [Initial Setup](#initial-setup)
 - [Authentication Methods](#authentication-methods)
+- [API Keys](#api-keys)
 - [Session Management](#session-management)
 - [Password Management](#password-management)
 - [Plex OAuth Integration](#plex-oauth-integration)
@@ -20,6 +21,7 @@ Youtarr implements a secure authentication system to protect your instance from 
 - Local username/password authentication
 - Bcrypt password hashing
 - Session-based authentication with 7-day expiry
+- **API Keys for external integrations** (bookmarklets, mobile shortcuts, automation)
 - Plex OAuth for API token retrieval
 - Optional authentication bypass for platform deployments
 
@@ -91,6 +93,72 @@ Using the start script:
 ### Platform Authentication (AUTH_ENABLED=false)
 
 For deployments behind external authentication or not exposed to the internet:
+
+## API Keys
+
+API Keys provide persistent authentication for external integrations like bookmarklets, mobile shortcuts, and automation tools.
+
+### Key Features
+- **Persistent**: No expiration (unlike session tokens)
+- **Scoped**: Limited to single video downloads only
+- **Secure**: SHA-256 hashed, stored securely
+- **Rate Limited**: Configurable requests per minute
+- **Revocable**: Can be deleted instantly if compromised
+
+### Current Limitations
+- API keys can only download **individual videos**
+- Playlists, channels, and batch operations require the web UI
+- Maximum of 20 active API keys per instance
+
+### Creating API Keys
+
+1. Navigate to **Configuration** in the web UI
+2. Scroll to **API Keys & External Access**
+3. Click **Create Key**
+4. Enter a descriptive name (e.g., "iPhone Shortcut", "Bookmarklet")
+5. **Important**: Copy and save the key immediately - it will not be shown again!
+
+### Using API Keys
+
+Include the API key in the `x-api-key` header:
+
+```bash
+curl -X POST https://your-server.com/api/videos/download \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_API_KEY" \
+  -d '{"url": "https://www.youtube.com/watch?v=VIDEO_ID"}'
+```
+
+### Security Best Practices
+- **Use HTTPS**: API keys are transmitted in headers; use HTTPS to protect them
+- **Descriptive Names**: Name keys by purpose (e.g., "Work Laptop", "iPhone") for easy identification
+- **Monitor Usage**: Check "Last Used" to identify suspicious or unused keys
+- **Rotate If Compromised**: Delete and recreate keys if you suspect exposure
+- **Don't Share Keys**: Each user/device should have its own key
+
+### API Key Management
+
+#### Via Web UI
+- View all keys in Configuration → API Keys & External Access
+- Delete keys by clicking the trash icon
+- See last usage time for each key
+
+#### Via Database (Advanced)
+```bash
+# List active API keys
+docker exec youtarr-db mysql -u root -p123qweasd youtarr -e "
+SELECT id, name, key_prefix, created_at, last_used_at
+FROM ApiKeys
+WHERE is_active = 1;
+"
+
+# Revoke a key by ID
+docker exec youtarr-db mysql -u root -p123qweasd youtarr -e "
+UPDATE ApiKeys SET is_active = 0 WHERE id = 1;
+"
+```
+
+For detailed API documentation and examples (bookmarklets, mobile shortcuts, Python, cURL, etc.), see [API Integration Guide](API_INTEGRATION.md).
 
 1. Set in `.env`:
    ```bash

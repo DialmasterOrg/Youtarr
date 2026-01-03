@@ -45,6 +45,7 @@ const pinoConfig = {
       'plexApiKey',
       'req.headers.authorization',
       'req.headers["x-access-token"]',
+      'req.headers["x-api-key"]',
       'authorization',
 
       // Cookies

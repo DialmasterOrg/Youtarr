@@ -314,7 +314,55 @@ const initialize = async () => {
         }
       }
 
-      // Check for token in headers
+      // Check for API key first (x-api-key header)
+      const apiKey = req.headers['x-api-key'];
+      if (apiKey) {
+        const apiKeyModule = require('./modules/apiKeyModule');
+        const validKey = await apiKeyModule.validateApiKey(apiKey);
+        if (validKey) {
+          // API keys can ONLY access specific endpoints
+          const allowedApiKeyEndpoints = [
+            { method: 'POST', path: '/api/videos/download' },
+          ];
+
+          const isAllowed = allowedApiKeyEndpoints.some(
+            e => req.method === e.method && req.path === e.path
+          );
+
+          if (!isAllowed) {
+            req.log.warn({
+              event: 'api_key_access_denied',
+              keyId: validKey.id,
+              keyName: validKey.name,
+              keyPrefix: validKey.key_prefix,
+              method: req.method,
+              path: req.path
+            }, 'API key attempted to access unauthorized endpoint');
+            return res.status(403).json({
+              error: 'API keys can only access the download endpoint'
+            });
+          }
+
+          req.log.info({
+            event: 'api_key_auth_success',
+            keyId: validKey.id,
+            keyName: validKey.name,
+            keyPrefix: validKey.key_prefix
+          }, 'API key authentication successful');
+          req.authType = 'api_key';
+          req.apiKeyId = validKey.id;
+          req.apiKeyName = validKey.name;
+          req.apiKeyRecord = validKey;
+          return next();
+        }
+        req.log.warn({
+          event: 'api_key_auth_failed',
+          keyPrefix: apiKey.substring(0, 8)
+        }, 'Invalid API key authentication attempt');
+        return res.status(401).json({ error: 'Invalid API key' });
+      }
+
+      // Check for session token in headers
       const token = req.headers['x-access-token'];
 
       if (!token) {
@@ -341,6 +389,7 @@ const initialize = async () => {
         await session.update({ last_used_at: new Date() });
 
         // Attach username to request for downstream use
+        req.authType = 'session';
         req.username = session.username;
         req.sessionId = session.id;
 
