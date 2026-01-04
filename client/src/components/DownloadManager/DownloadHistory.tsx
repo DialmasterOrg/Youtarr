@@ -222,8 +222,14 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                     let formattedJobType = '';
                     if (job.jobType.includes('Channel Downloads')) {
                       formattedJobType = 'Channels';
-                    } else if (job.jobType === 'Manually Added Urls') {
-                      formattedJobType = 'Manual Videos';
+                    } else if (job.jobType.includes('Manually Added Urls')) {
+                      // Check for API key source indicator
+                      const apiKeyMatch = job.jobType.match(/\(via API: (.+)\)/);
+                      if (apiKeyMatch) {
+                        formattedJobType = `API: ${apiKeyMatch[1]}`;
+                      } else {
+                        formattedJobType = 'Manual Videos';
+                      }
                     }
 
                     // Adjust hours

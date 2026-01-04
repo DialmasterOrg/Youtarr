@@ -48,6 +48,45 @@ https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
 - Bash shell (Git Bash for Windows)
 > **Heads up:** Youtarr runs exclusively via Docker; direct `npm start`/Node deployments are unsupported.
 
+## Using Development Builds
+
+Want to try new features before they're officially released? Youtarr offers bleeding-edge development builds that contain the latest merged changes.
+
+> ⚠️ **Warning:** Dev builds are not fully tested and may be unstable. Use at your own risk, and expect potential bugs or breaking changes. Recommended for testing/feedback only.
+
+### Option 1: Using the start script (recommended)
+
+```bash
+./start.sh --dev --pull-latest
+```
+
+This pulls and runs the `dev-latest` image, which is automatically built whenever changes are merged to the `dev` branch.
+
+### Option 2: Manual configuration
+
+If you're not using the start script, set the `YOUTARR_IMAGE` environment variable in your `.env` file or docker-compose command:
+
+```bash
+# In .env file
+YOUTARR_IMAGE=dialmaster/youtarr:dev-latest
+```
+
+Or with docker-compose directly:
+
+```bash
+YOUTARR_IMAGE=dialmaster/youtarr:dev-latest docker compose up -d
+```
+
+### Switching back to stable
+
+Simply run without the `--dev` flag:
+
+```bash
+./start.sh --pull-latest
+```
+
+Or remove/comment out the `YOUTARR_IMAGE` line in your `.env` file to use the default stable `latest` tag.
+
 ## Documentation
 
 ### Getting Started

@@ -557,11 +557,15 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
               </Typography>
               <Typography variant="caption" color={(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'warning.contrastText' : 'success.contrastText'} sx={{ mt: 0.5, display: 'block' }}>
                 {(() => {
-                  const jobTypeLabel = finalSummary.jobType.includes('Channel Downloads')
-                    ? 'Channel update'
-                    : finalSummary.jobType === 'Manually Added Urls'
-                    ? 'Manual download'
-                    : finalSummary.jobType;
+                  let jobTypeLabel: string;
+                  if (finalSummary.jobType.includes('Channel Downloads')) {
+                    jobTypeLabel = 'Channel update';
+                  } else if (finalSummary.jobType.includes('Manually Added Urls')) {
+                    const apiKeyMatch = finalSummary.jobType.match(/\(via API: (.+)\)/);
+                    jobTypeLabel = apiKeyMatch ? `API: ${apiKeyMatch[1]}` : 'Manual download';
+                  } else {
+                    jobTypeLabel = finalSummary.jobType;
+                  }
                   return jobTypeLabel + (finalSummary.completedAt ? ` • Completed ${formatTimestamp(finalSummary.completedAt)}` : '');
                 })()}
               </Typography>

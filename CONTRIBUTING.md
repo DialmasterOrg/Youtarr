@@ -169,12 +169,41 @@ Husky automatically runs these checks before each commit:
 
 If any check fails, the commit is blocked. Fix the issues and try again.
 
+## Branching Strategy
+
+Youtarr uses a **dev → main** branching model to ensure stable releases:
+
+```
+feature/xxx ──┐
+              │
+feature/yyy ──┼──→ dev (bleeding edge) ──→ main (stable releases)
+              │
+fix/zzz ──────┘
+```
+
+### Branch Overview
+
+| Branch | Purpose | Docker Tag |
+|--------|---------|------------|
+| `main` | Stable, released code | `latest`, `vX.X.X` |
+| `dev` | Integration branch for upcoming release | `dev-latest`, `dev-rc.<sha>` |
+| `feature/*`, `fix/*` | Individual changes | None |
+
+### Workflow Summary
+
+1. **Feature development**: Branch from `dev`, create PR back to `dev`
+2. **RC builds**: Merging to `dev` automatically builds release candidate images
+3. **Releases**: PR from `dev` → `main` triggers a full release
+4. **Hotfixes**: Can merge directly to `main` (then merge back to `dev`)
+
 ## Pull Request Process
 
 ### Before Submitting
 
-1. **Create a feature branch** from `main`:
+1. **Create a feature branch** from `dev`:
    ```bash
+   git checkout dev
+   git pull origin dev
    git checkout -b feat/your-feature-name
    # or
    git checkout -b fix/issue-description
@@ -195,10 +224,11 @@ If any check fails, the commit is blocked. Fix the issues and try again.
 
 ### Submitting Your PR
 
-When you're ready, push your branch and create a pull request on GitHub. Your PR will be reviewed by the maintainer.
+When you're ready, push your branch and create a pull request **targeting the `dev` branch** on GitHub. Your PR will be reviewed by the maintainer.
 
 **PR Checklist:**
 
+- [ ] PR targets `dev` branch (not `main`)
 - [ ] Tests pass locally (`npm test`)
 - [ ] Coverage meets 70% threshold
 - [ ] Conventional commit format used
@@ -221,17 +251,22 @@ When you're ready, push your branch and create a pull request on GitHub. Your PR
    - Feedback may be provided for improvements
    - Additional changes may be requested
 
-3. **Merge and release**
-   - Once approved, the maintainer will merge your PR
-   - Releases are created manually by the maintainer
-   - Version bumps are automatic based on your commit message prefix
-   - Docker images are automatically built and published
+3. **Merge to dev**
+   - Once approved, your PR is merged to `dev`
+   - A release candidate (RC) Docker image is automatically built
+   - RC images are tagged as `dev-latest` and `dev-rc.<commit-sha>`
+
+4. **Release to main**
+   - When ready, the maintainer creates a PR from `dev` → `main`
+   - Merging to `main` triggers the full release workflow
+   - Version bumps are automatic based on commit message prefixes
+   - Production Docker images are tagged as `latest` and `vX.X.X`
 
 ## CI/CD Information
 
 ### Checks on Pull Requests
 
-Every PR triggers automated checks:
+Every PR (to `dev` or `main`) triggers automated checks:
 
 - **ESLint**: Code style and linting
 - **TypeScript**: Type checking and compilation
@@ -255,15 +290,27 @@ If CI checks fail:
 3. **Test failures**: Run `npm test` to see which tests failed
 4. **Coverage drops**: Add tests to increase coverage above 70%
 
-### Release Automation
+### Release Candidate Builds (dev branch)
 
-Releases are triggered manually by the maintainer via GitHub Actions. The release workflow:
+When code is merged to `dev`, an RC build is automatically triggered:
+- Builds multi-architecture Docker images (amd64 + arm64)
+- Pushes to Docker Hub with tags:
+  - `dialmaster/youtarr:dev-latest` (always the latest dev build)
+  - `dialmaster/youtarr:dev-rc.<commit-sha>` (specific RC build)
+
+These RC images allow testing bleeding-edge features before stable release.
+
+### Production Releases (main branch)
+
+When code is merged from `dev` to `main`, a production release is triggered:
 - Analyzes conventional commit messages to determine version bump
 - Updates version in `package.json`
 - Generates `CHANGELOG.md` entries
-- Creates GitHub release
+- Creates GitHub release with release notes
 - Builds multi-architecture Docker images (amd64 + arm64)
-- Publishes to Docker Hub (`dialmaster/youtarr`)
+- Publishes to Docker Hub with tags:
+  - `dialmaster/youtarr:latest` (stable release for end-users)
+  - `dialmaster/youtarr:vX.X.X` (specific version)
 
 You don't need to worry about versioning or releases - just use the correct commit message prefix.
 

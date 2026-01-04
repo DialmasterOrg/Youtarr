@@ -732,7 +732,7 @@ describe('DownloadModule', () => {
       await downloadModule.executeGroupDownload(group, mockJobId, 'Channel Downloads - Group 1/1 (1080p)', {}, true);
 
       expect(fsPromises.writeFile).toHaveBeenCalledWith(
-        expect.stringContaining('/tmp/channels-group-'),
+        expect.stringMatching(/channels-group-/),
         'https://youtube.com/channel/UC123/videos\nhttps://youtube.com/channel/UC123/shorts\nhttps://youtube.com/channel/UC456/streams'
       );
     });

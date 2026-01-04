@@ -43,15 +43,24 @@ const options = {
     ],
     components: {
       securitySchemes: {
-        ApiKeyAuth: {
+        SessionAuth: {
           type: 'apiKey',
           in: 'header',
           name: 'x-access-token',
           description: 'Session token obtained from /auth/login',
         },
+        ApiKeyAuth: {
+          type: 'apiKey',
+          in: 'header',
+          name: 'x-api-key',
+          description: 'API key for external integrations (bookmarklets, shortcuts). Only works for /api/videos/download endpoint.',
+        },
       },
     },
     security: [
+      {
+        SessionAuth: [],
+      },
       {
         ApiKeyAuth: [],
       },
@@ -89,6 +98,10 @@ const options = {
         name: 'Health',
         description: 'Health check endpoints',
       },
+      {
+        name: 'API Keys',
+        description: 'API key management for external integrations',
+      },
     ],
   },
   // Use absolute paths based on __dirname to work in both local dev and Docker
@@ -102,6 +115,7 @@ const options = {
     path.join(__dirname, 'routes', 'plex.js'),
     path.join(__dirname, 'routes', 'setup.js'),
     path.join(__dirname, 'routes', 'videos.js'),
+    path.join(__dirname, 'routes', 'apikeys.js'),
   ],
 };
 

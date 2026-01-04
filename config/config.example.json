@@ -47,5 +47,6 @@
   "subtitlesEnabled": false,
   "subtitleLanguage": "en",
   "darkModeEnabled": false,
-  "uuid": ""
+  "uuid": "",
+  "apiKeyRateLimit": 10
 }

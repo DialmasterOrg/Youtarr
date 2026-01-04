@@ -5,6 +5,7 @@ const JobVideoDownload = require('./jobvideodownload');
 const Video = require('./video');
 const Channel = require('./channel');
 const Session = require('./session');
+const ApiKey = require('./apikey');
 
 Job.hasMany(JobVideo, { foreignKey: 'job_id', as: 'jobVideos' });
 Job.hasMany(JobVideoDownload, { foreignKey: 'job_id', as: 'jobVideoDownloads' });
@@ -23,4 +24,5 @@ module.exports = {
   Video,
   Channel,
   Session,
+  ApiKey,
 };
