@@ -12,6 +12,29 @@ const videoValidationLimiter = rateLimit({
   validate: { trustProxy: false },
 });
 
+// API key download rate limiter
+const apiKeyDownloadLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: (req) => {
+    // Only apply to API key auth, session auth is unlimited
+    if (req.authType !== 'api_key') {
+      return 0; // 0 = unlimited
+    }
+    const configModule = require('../modules/configModule');
+    return configModule.getConfig().apiKeyRateLimit || 10;
+  },
+  keyGenerator: (req) => {
+    // Rate limit per API key ID - only used for API key auth
+    // Session auth is skipped entirely via the skip function
+    return `apikey:${req.apiKeyId || 'unknown'}`;
+  },
+  skip: (req) => req.authType !== 'api_key', // Skip rate limiting for session auth
+  message: { success: false, error: 'Rate limit exceeded. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false, ip: false },
+});
+
 /**
  * Creates video routes
  * @param {Object} deps - Dependencies
@@ -304,6 +327,200 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
       res.status(500).json({
         isValidUrl: false,
         error: 'Internal server error'
+      });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/videos/download:
+   *   options:
+   *     summary: CORS preflight for download endpoint
+   *     description: Handle CORS preflight requests for the download endpoint.
+   *     tags: [Videos]
+   *     security: []
+   *     responses:
+   *       204:
+   *         description: CORS preflight successful
+   */
+  router.options('/api/videos/download', (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, x-api-key, x-access-token');
+    res.set('Access-Control-Max-Age', '86400');
+    res.status(204).end();
+  });
+
+  /**
+   * @swagger
+   * /api/videos/download:
+   *   post:
+   *     summary: Download a YouTube video
+   *     description: Add a YouTube video URL to the download queue. Designed for external integrations (bookmarklets, shortcuts, automations).
+   *     tags: [Videos]
+   *     security:
+   *       - ApiKeyAuth: []
+   *       - BearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - url
+   *             properties:
+   *               url:
+   *                 type: string
+   *                 description: YouTube video URL
+   *                 example: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+   *               resolution:
+   *                 type: string
+   *                 enum: ['360', '480', '720', '1080', '1440', '2160']
+   *                 description: Preferred resolution (defaults to server config)
+   *               subfolder:
+   *                 type: string
+   *                 description: Override subfolder for download
+   *     responses:
+   *       200:
+   *         description: Video queued for download
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 message:
+   *                   type: string
+   *                 video:
+   *                   type: object
+   *                   properties:
+   *                     title:
+   *                       type: string
+   *                     thumbnail:
+   *                       type: string
+   *                     duration:
+   *                       type: integer
+   *       400:
+   *         description: Invalid URL or parameters
+   *       401:
+   *         description: Invalid or missing authentication
+   *       429:
+   *         description: Rate limit exceeded
+   */
+  router.post('/api/videos/download', verifyToken, apiKeyDownloadLimiter, async (req, res) => {
+    // Set CORS headers for bookmarklet/external access
+    res.set('Access-Control-Allow-Origin', '*');
+
+    const { url, resolution, subfolder } = req.body;
+
+    if (!url) {
+      return res.status(400).json({
+        success: false,
+        error: 'URL is required'
+      });
+    }
+
+    // Validate URL length (prevent excessively long URLs)
+    const MAX_URL_LENGTH = 2048;
+    if (url.length > MAX_URL_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        error: `URL too long (max ${MAX_URL_LENGTH} characters)`
+      });
+    }
+
+    // Validate URL format - single videos only
+    const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|shorts\/)|youtu\.be\/)[a-zA-Z0-9_-]{11}/;
+    if (!youtubeRegex.test(url)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid YouTube URL format'
+      });
+    }
+
+    // Reject playlists and channels - API keys only support single video downloads
+    if (url.includes('list=') || url.includes('/playlist') || url.includes('/channel/') || url.includes('/@')) {
+      return res.status(400).json({
+        success: false,
+        error: 'API keys only support single video downloads. Playlists and channels require the web UI.'
+      });
+    }
+
+    // Validate resolution if provided
+    const validResolutions = ['360', '480', '720', '1080', '1440', '2160'];
+    if (resolution && !validResolutions.includes(resolution)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid resolution. Valid values: 360, 480, 720, 1080, 1440, 2160'
+      });
+    }
+
+    // Validate subfolder if provided
+    if (subfolder) {
+      const channelSettingsModule = require('../modules/channelSettingsModule');
+      const validation = channelSettingsModule.validateSubFolder(subfolder);
+      if (!validation.valid) {
+        return res.status(400).json({
+          success: false,
+          error: validation.error
+        });
+      }
+    }
+
+    try {
+      // Optionally fetch video metadata for response
+      const videoValidationModule = require('../modules/videoValidationModule');
+      const metadata = await videoValidationModule.validateVideo(url);
+
+      if (!metadata.isValidUrl) {
+        return res.status(400).json({
+          success: false,
+          error: metadata.error || 'Could not validate video URL'
+        });
+      }
+
+      // Queue the download
+      const overrideSettings = {};
+      if (resolution) overrideSettings.resolution = resolution;
+      if (subfolder) overrideSettings.subfolder = subfolder;
+
+      // Build initiatedBy info for download source indicator
+      const initiatedBy = req.authType === 'api_key'
+        ? { type: 'api_key', name: req.apiKeyName }
+        : { type: 'web_ui' };
+
+      downloadModule.doSpecificDownloads({
+        body: {
+          urls: [url],
+          overrideSettings: Object.keys(overrideSettings).length > 0 ? overrideSettings : undefined,
+          initiatedBy
+        }
+      });
+
+      // Increment usage count for API key statistics
+      if (req.authType === 'api_key' && req.apiKeyId) {
+        const apiKeyModule = require('../modules/apiKeyModule');
+        apiKeyModule.incrementUsageCount(req.apiKeyId).catch(err => {
+          req.log.warn({ err, keyId: req.apiKeyId }, 'Failed to increment API key usage count');
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Video queued for download',
+        video: {
+          title: metadata.title,
+          thumbnail: metadata.thumbnail,
+          duration: metadata.duration
+        }
+      });
+    } catch (error) {
+      req.log.error({ err: error }, 'Failed to queue video download');
+      res.status(500).json({
+        success: false,
+        error: 'Failed to queue video for download'
       });
     }
   });

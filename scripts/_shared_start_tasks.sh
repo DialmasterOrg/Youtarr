@@ -8,7 +8,7 @@ source "$SHARED_SCRIPT_DIR/_console_output.sh"
 
 print_usage() {
   cat <<EOF
-Usage: $START_SCRIPT_NAME [--no-auth] [--debug] [--headless-auth] [--pull-latest]
+Usage: $START_SCRIPT_NAME [--no-auth] [--debug] [--headless-auth] [--pull-latest] [--dev]
 
   --no-auth          Disable authentication (only safe behind your own auth layer!)
   --debug            Set container log level to debug
@@ -16,6 +16,8 @@ Usage: $START_SCRIPT_NAME [--no-auth] [--debug] [--headless-auth] [--pull-latest
                      This will disable web UI credential management (credentials set here persist)
                      To update credentials later, edit .env directly and restart Youtarr
   --pull-latest      Pull latest git commits and Docker images before starting
+  --dev              Use the bleeding-edge dev image (dialmaster/youtarr:dev-latest)
+                     Warning: Dev builds contain unreleased features and may be unstable
 EOF
 }
 
@@ -58,6 +60,10 @@ while [[ $# -gt 0 ]]; do
       PULL_LATEST=true
       shift
       ;;
+    --dev)
+      USE_DEV_IMAGE=true
+      shift
+      ;;
     --help)
       print_usage
       exit 0
@@ -81,6 +87,10 @@ fi
 if [ -n "$LOG_LEVEL" ]; then
   export LOG_LEVEL
   yt_info "Log level forced to '$LOG_LEVEL' via CLI flag."
+fi
+
+if [ "$USE_DEV_IMAGE" = true ]; then
+  export USE_DEV_IMAGE
 fi
 
 if [ "$HEADLESS_AUTH" = true ]; then

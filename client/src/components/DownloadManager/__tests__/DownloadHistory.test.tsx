@@ -471,4 +471,122 @@ describe('DownloadHistory', () => {
       expect(allRows.length).toBe(3); // 1 header + 2 jobs
     });
   });
+
+  describe('API Source Indicator', () => {
+    test('displays "Manual Videos" for standard manual downloads', () => {
+      const manualJob: Job[] = [{
+        id: 'manual-job',
+        jobType: 'Manually Added Urls',
+        status: 'Completed',
+        output: '',
+        timeCreated: Date.now(),
+        timeInitiated: Date.now(),
+        data: {
+          videos: [{
+            id: 1,
+            youtubeId: 'v1',
+            youTubeChannelName: 'Test',
+            youTubeVideoName: 'Manual Video',
+            duration: 100,
+            timeCreated: new Date().toISOString(),
+            originalDate: null,
+            description: null,
+          } as VideoData],
+        },
+      }];
+
+      render(<DownloadHistory {...defaultProps} jobs={manualJob} />);
+
+      const tableCells = screen.getAllByRole('cell');
+      const cellTexts = tableCells.map(cell => cell.textContent || '');
+      expect(cellTexts.some(text => text === 'Manual Videos')).toBe(true);
+    });
+
+    test('displays "API: KeyName" for API-triggered downloads', () => {
+      const apiJob: Job[] = [{
+        id: 'api-job',
+        jobType: 'Manually Added Urls (via API: My Bookmarklet)',
+        status: 'Completed',
+        output: '',
+        timeCreated: Date.now(),
+        timeInitiated: Date.now(),
+        data: {
+          videos: [{
+            id: 1,
+            youtubeId: 'v1',
+            youTubeChannelName: 'Test',
+            youTubeVideoName: 'API Video',
+            duration: 100,
+            timeCreated: new Date().toISOString(),
+            originalDate: null,
+            description: null,
+          } as VideoData],
+        },
+      }];
+
+      render(<DownloadHistory {...defaultProps} jobs={apiJob} />);
+
+      const tableCells = screen.getAllByRole('cell');
+      const cellTexts = tableCells.map(cell => cell.textContent || '');
+      expect(cellTexts.some(text => text === 'API: My Bookmarklet')).toBe(true);
+    });
+
+    test('displays "Channels" for channel downloads', () => {
+      const channelJob: Job[] = [{
+        id: 'channel-job',
+        jobType: 'Channel Downloads',
+        status: 'Completed',
+        output: '',
+        timeCreated: Date.now(),
+        timeInitiated: Date.now(),
+        data: {
+          videos: [{
+            id: 1,
+            youtubeId: 'v1',
+            youTubeChannelName: 'Test',
+            youTubeVideoName: 'Channel Video',
+            duration: 100,
+            timeCreated: new Date().toISOString(),
+            originalDate: null,
+            description: null,
+          } as VideoData],
+        },
+      }];
+
+      render(<DownloadHistory {...defaultProps} jobs={channelJob} />);
+
+      const tableCells = screen.getAllByRole('cell');
+      const cellTexts = tableCells.map(cell => cell.textContent || '');
+      expect(cellTexts.some(text => text === 'Channels')).toBe(true);
+    });
+
+    test('extracts API key name with special characters', () => {
+      const apiJob: Job[] = [{
+        id: 'api-job',
+        jobType: 'Manually Added Urls (via API: iPhone Shortcut #1)',
+        status: 'Completed',
+        output: '',
+        timeCreated: Date.now(),
+        timeInitiated: Date.now(),
+        data: {
+          videos: [{
+            id: 1,
+            youtubeId: 'v1',
+            youTubeChannelName: 'Test',
+            youTubeVideoName: 'API Video',
+            duration: 100,
+            timeCreated: new Date().toISOString(),
+            originalDate: null,
+            description: null,
+          } as VideoData],
+        },
+      }];
+
+      render(<DownloadHistory {...defaultProps} jobs={apiJob} />);
+
+      const tableCells = screen.getAllByRole('cell');
+      const cellTexts = tableCells.map(cell => cell.textContent || '');
+      expect(cellTexts.some(text => text === 'API: iPhone Shortcut #1')).toBe(true);
+    });
+  });
 });

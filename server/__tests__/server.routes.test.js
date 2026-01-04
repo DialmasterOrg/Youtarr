@@ -1777,4 +1777,38 @@ describe('server routes - version', () => {
     expect(res.statusCode).toBe(500);
     expect(res.body.error).toBeDefined();
   });
+
+  test('GET /getCurrentReleaseVersion filters out dev tags', async () => {
+    const { app, httpsMock } = await createServerModule();
+
+    // Mock response with dev tags that should be filtered out
+    httpsMock.get.mockImplementationOnce((url, callback) => {
+      const mockResp = {
+        on: jest.fn((event, handler) => {
+          if (event === 'data') {
+            // dev-latest and dev-rc tags should be filtered, leaving only stable version tags
+            handler('{"results":[{"name":"dev-latest"},{"name":"dev-rc.abc1234"},{"name":"v1.2.0"},{"name":"v1.1.0"},{"name":"latest"}]}');
+          } else if (event === 'end') {
+            handler();
+          }
+        })
+      };
+      callback(mockResp);
+      return { on: jest.fn() };
+    });
+
+    const handlers = findRouteHandlers(app, 'get', '/getCurrentReleaseVersion');
+    const versionHandler = handlers[handlers.length - 1];
+
+    const req = createMockRequest({});
+    const res = createMockResponse();
+
+    await versionHandler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    // Should not return dev tags - version should not start with 'dev'
+    expect(res.body.version).not.toMatch(/^dev/);
+    // Should not return 'latest' tag
+    expect(res.body.version).not.toBe('latest');
+  });
 });

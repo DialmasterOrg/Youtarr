@@ -412,8 +412,14 @@ class DownloadModule {
   }
 
   async doSpecificDownloads(reqOrJobData, isNextJob = false) {
-    const jobType = 'Manually Added Urls';
     const jobData = reqOrJobData.body ? reqOrJobData.body : reqOrJobData;
+
+    // Build job type with optional source indicator
+    let jobType = 'Manually Added Urls';
+    const initiatedBy = this.getJobDataValue(jobData, 'initiatedBy');
+    if (initiatedBy && initiatedBy.type === 'api_key' && initiatedBy.name) {
+      jobType = `Manually Added Urls (via API: ${initiatedBy.name})`;
+    }
 
     logger.info({ jobData }, 'Running specific downloads job');
 

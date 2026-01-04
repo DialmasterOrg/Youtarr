@@ -12,6 +12,7 @@ This guide provides step-by-step instructions for common tasks in Youtarr. After
 - [Re-download Missing Videos](#re-download-missing-videos)
 - [Organize Channels with Multi-Library Support](#organize-channels-with-multi-library-support)
 - [Browse and Filter Channel Videos](#browse-and-filter-channel-videos)
+- [External Access with API Keys](#external-access-with-api-keys)
 
 ## Download Individual Videos
 
@@ -267,11 +268,71 @@ Mark specific videos to exclude them from automatic channel downloads.
    - They won't appear in download recommendations
    - You can still manually download them if you change your mind
 
+## External Access with API Keys
+
+Send videos to Youtarr from anywhere using API keys. This enables one-click downloads from browser bookmarklets, mobile shortcuts, and automation tools.
+
+> **Note**: API keys currently support **single video downloads only**. Playlists and channels require the web UI.
+
+### Create an API Key
+
+1. **Navigate to Configuration**
+   - Click "Configuration" in the navigation menu
+
+2. **Open the API Keys section**
+   - Scroll to "API Keys & External Access"
+   - Click to expand the section
+
+3. **Create a new key**
+   - Click "Create Key"
+   - Enter a descriptive name (e.g., "iPhone Shortcut", "Work Laptop")
+   - Click "Create"
+
+4. **Save the key immediately**
+   - The full key is shown only once
+   - Copy it to a secure location before closing the dialog
+
+### Install a Browser Bookmarklet
+
+After creating an API key, you can set up a bookmarklet to send videos with one click:
+
+1. **Get the bookmarklet**
+   - In the key creation dialog, drag the "📥 Send to Youtarr" button to your bookmarks bar
+   - Or copy the bookmarklet code and create a bookmark manually
+
+2. **Use the bookmarklet**
+   - Navigate to any YouTube video page
+   - Click the bookmarklet in your bookmarks bar
+   - An alert confirms the video was queued
+
+### Set Up Mobile Shortcuts
+
+**Apple Shortcuts (iOS/macOS)**:
+1. Create a new Shortcut
+2. Add "Get URLs from Input" for Share Sheet integration
+3. Add "Get Contents of URL" with your Youtarr server URL and API key
+4. Enable "Show in Share Sheet" for YouTube
+
+**Android (Tasker/Automate)**:
+1. Create an HTTP Request action
+2. Configure POST to your Youtarr download endpoint
+3. Include your API key in the headers
+
+For detailed setup instructions and code examples, see the [API Integration Guide](API_INTEGRATION.md).
+
+### Manage Your API Keys
+
+- **View keys**: Configuration → API Keys & External Access shows all your keys
+- **Monitor usage**: Check "Last Used" and "Uses" columns to track activity
+- **Delete keys**: Click the trash icon to revoke a key instantly
+- **Rate limiting**: Adjust requests per minute to prevent abuse
+
 ## Next Steps
 
 Now that you know how to use Youtarr's features, check out these guides for advanced topics:
 
 - [Configuration Reference](CONFIG.md) - Detailed explanation of all settings
+- [API Integration Guide](API_INTEGRATION.md) - Bookmarklets, mobile shortcuts, and automation
 - [Media Server Setup](MEDIA_SERVERS.md) - Configure Plex, Kodi, Jellyfin, or Emby
 - [Troubleshooting Guide](TROUBLESHOOTING.md) - Solutions to common issues
 - [Database Management](DATABASE.md) - Advanced database operations

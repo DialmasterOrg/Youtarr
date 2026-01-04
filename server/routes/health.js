@@ -115,9 +115,12 @@ module.exports = function createHealthRoutes({ getCachedYtDlpVersion }) {
 
             resp.on('end', () => {
               const dockerData = JSON.parse(data);
-              const latestVersion = dockerData.results.filter(
-                (tag) => tag.name !== 'latest'
-              )[0].name;
+              // Filter out 'latest' and dev tags (dev-latest, dev-rc.*)
+              // Only consider stable version tags (e.g., v1.55.0)
+              const stableTags = dockerData.results.filter(
+                (tag) => tag.name !== 'latest' && !tag.name.startsWith('dev')
+              );
+              const latestVersion = stableTags.length > 0 ? stableTags[0].name : null;
 
               const response = { version: latestVersion };
               if (ytDlpVersion) {

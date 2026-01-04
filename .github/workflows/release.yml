@@ -1,7 +1,9 @@
-name: Create Release V2
-run-name: ${{ inputs.dry_run && 'Create Release V2 — Dry Run' || 'Create Release V2' }}
+name: Production Release
+run-name: ${{ github.event_name == 'workflow_dispatch' && (inputs.dry_run && 'Production Release — Dry Run' || 'Production Release — Manual') || 'Production Release — Auto' }}
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       dry_run:
@@ -18,6 +20,8 @@ jobs:
   release:
     name: ${{ inputs.dry_run && 'Release (Dry Run)' || 'Release' }}
     runs-on: ubuntu-latest
+    # Skip if commit message contains [skip ci]
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     permissions:
       contents: write
       packages: write
