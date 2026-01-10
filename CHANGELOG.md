@@ -1,5 +1,87 @@
 # Changelog
 
+## [v1.56.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.56.0) - 2026-01-04
+
+## [1.56.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.55.0...v1.56.0) (2026-01-04)
+
+
+### Features
+
+* add --dev flag to start scripts for bleeding-edge builds ([1d985c7](https://github.com/DialmasterOrg/Youtarr/commit/1d985c7d03a7051576d83b80c244bfab717cfc41))
+* add API key auth to verifyToken middleware ([a0ef720](https://github.com/DialmasterOrg/Youtarr/commit/a0ef720989e47055db5e12f619fe838feafbd8b5))
+* add API key routes and download endpoint ([c755f86](https://github.com/DialmasterOrg/Youtarr/commit/c755f863afa67ac52457c0235efd88a1cefffe46))
+* add apiKeyModule with security features ([850ee7b](https://github.com/DialmasterOrg/Youtarr/commit/850ee7b04727beba47ff53ff600ab3fb9e48a82a))
+* add ApiKeys table and model ([2346c40](https://github.com/DialmasterOrg/Youtarr/commit/2346c40d62af366e722070bd353453cba8aa490a))
+* add ApiKeysSection component with bookmarklet ([72f54e5](https://github.com/DialmasterOrg/Youtarr/commit/72f54e5010ed11e0cc0cae78c477e361853e7244))
+* add download source indicator for API-triggered downloads ([43ca979](https://github.com/DialmasterOrg/Youtarr/commit/43ca979834f37445cedf1bdd75d2c5e4e891e831))
+* add endpoint to test individual notification webhooks ([228c3a7](https://github.com/DialmasterOrg/Youtarr/commit/228c3a71130a054946b5631b7b87c99624e6b3d4))
+* add individual test buttons and rich formatting toggle for notifications ([1ba61f3](https://github.com/DialmasterOrg/Youtarr/commit/1ba61f3bc10bb58440207ea809efca258e1d8fba))
+* always stage to hidden temp directory ([6010ef9](https://github.com/DialmasterOrg/Youtarr/commit/6010ef9a63640bbfec62f6c75b9b75e20322caa0))
+* auto-migrate Discord webhooks to Apprise format on upgrade ([b243b2a](https://github.com/DialmasterOrg/Youtarr/commit/b243b2adb403a44ddb636854d1637905482d2a7d))
+* **#349:** add changelog page to web UI ([bc8edb3](https://github.com/DialmasterOrg/Youtarr/commit/bc8edb33e0a0f7567f5798ee98b3f39766d6221f)), closes [#349](https://github.com/DialmasterOrg/Youtarr/issues/349)
+* **#381:** regex examples in channel title filter ([ac7419d](https://github.com/DialmasterOrg/Youtarr/commit/ac7419d17f94dcf748e75f6ff42e14f727e24fda)), closes [#381](https://github.com/DialmasterOrg/Youtarr/issues/381)
+* add logger redaction and rate limiting for API keys ([7f9934d](https://github.com/DialmasterOrg/Youtarr/commit/7f9934d0f05dbebbed9d34e0e6db0daff3f14eec))
+* implement dev branch workflow with RC builds ([17b5242](https://github.com/DialmasterOrg/Youtarr/commit/17b5242e2b25e8b09ad466b04e413f6dc6d1f26f)), closes [#378](https://github.com/DialmasterOrg/Youtarr/issues/378)
+* integrate ApiKeysSection in Configuration page ([7682998](https://github.com/DialmasterOrg/Youtarr/commit/7682998eaa7ab818356bd3a568da9519b381330a))
+* make API keys section collapsible and add swagger docs ([67821f4](https://github.com/DialmasterOrg/Youtarr/commit/67821f4c0893282b0c5a961302e22c45f10eb14e))
+
+
+### Bug Fixes
+
+* change RC tag format from version-based to dev-rc.<sha> ([4a5dd6a](https://github.com/DialmasterOrg/Youtarr/commit/4a5dd6a9bb469859903dce09af13cf917d204781))
+* correct InfoTooltip prop name ([50166ec](https://github.com/DialmasterOrg/Youtarr/commit/50166ecd07454952eedc4470a91e5d7eb549992c))
+* filter dev tags from version update notification ([d06963e](https://github.com/DialmasterOrg/Youtarr/commit/d06963e9d02ced682ecca559ca8a400df4a8e240))
+* make temp path test platform-agnostic ([c6ffc3c](https://github.com/DialmasterOrg/Youtarr/commit/c6ffc3c95b9207f01d60cdbe978cd04f6305c1dc))
+* only log notification success when at least one succeeds ([b26feee](https://github.com/DialmasterOrg/Youtarr/commit/b26feeef73685824cb6a8a0e49cf50779b08e627))
+* rate limiter IPv6 validation error ([b556bfa](https://github.com/DialmasterOrg/Youtarr/commit/b556bfafc714876506b3c5b232d13f6457629a55))
+* resolve ESLint waitFor multiple assertions errors ([ccb21d7](https://github.com/DialmasterOrg/Youtarr/commit/ccb21d72152bb146740fc23b07d42d66da2e36ca))
+* route Slack notifications through Apprise markdown mode ([77a3fda](https://github.com/DialmasterOrg/Youtarr/commit/77a3fda29adbaf85e7af325ca3d632bb4c926a86))
+* sync frontend notification service names with backend registry ([aca08f4](https://github.com/DialmasterOrg/Youtarr/commit/aca08f4c9ebd3aadd7e7fd4a586122f675edaa12))
+* theme-aware color for dark mode support ([fb7c014](https://github.com/DialmasterOrg/Youtarr/commit/fb7c014ea737986d5ab42c258c2e9ef0df2d3730))
+* update notification test to match new success logging format ([74c1394](https://github.com/DialmasterOrg/Youtarr/commit/74c13949a7e3f2126664881436e125a62574343d))
+
+
+### Performance Improvements
+
+* optimize Dockerfile with multi-stage Apprise build to reduce image size ([b3f6f18](https://github.com/DialmasterOrg/Youtarr/commit/b3f6f181983467978cebc7ab6e23a952f4e4d551))
+
+
+### Styles
+
+* remove trailing whitespace in notification modules ([93fc3e3](https://github.com/DialmasterOrg/Youtarr/commit/93fc3e30898d0c6020a3bea0bf088c69f198656a))
+
+
+### Tests
+
+* add comprehensive API key security tests ([f5cb315](https://github.com/DialmasterOrg/Youtarr/commit/f5cb3159e9f69ea13498aaf2e3122db62d8082a4))
+* add migration tests and update notification tests ([4e10aea](https://github.com/DialmasterOrg/Youtarr/commit/4e10aead13d4917609b3d2122e88c9a4a524154d))
+* fix notification tests for refactored module ([6f7e064](https://github.com/DialmasterOrg/Youtarr/commit/6f7e0646946c3ef6d2893b641aee7894ee45a367))
+* make version filter test more flexible ([3637d11](https://github.com/DialmasterOrg/Youtarr/commit/3637d11013417f3937ffecea36271437012606e0))
+* update frontend tests for refactored NotificationsSection ([278c9af](https://github.com/DialmasterOrg/Youtarr/commit/278c9afaba1466aa7e536d37544eb93deb2f24ab))
+
+
+### Code Refactoring
+
+* introduce service registry pattern for notification routing ([99349ba](https://github.com/DialmasterOrg/Youtarr/commit/99349bafecc7fb895ae4cc534d44a42333fbbe47))
+* remove unused getApiKey function ([1069361](https://github.com/DialmasterOrg/Youtarr/commit/106936128a6ec7aede4cee40231ece393bad7742))
+* remove unused notification formatters and senders ([0ea6efd](https://github.com/DialmasterOrg/Youtarr/commit/0ea6efddcff1fe4d8214c06b95ed841a43acf6a2))
+* split notification module into separate formatters and senders ([88007cb](https://github.com/DialmasterOrg/Youtarr/commit/88007cb838ab86c5a62ae47a08b307ba9134ddc6))
+
+
+### Documentation
+
+* update CHANGELOG for v1.55.0 [skip ci] ([10a9e95](https://github.com/DialmasterOrg/Youtarr/commit/10a9e95fb8d8558e999b8154ec151a4f3f4a1e37))
+* update notification configuration documentation ([86b1013](https://github.com/DialmasterOrg/Youtarr/commit/86b10135bbd5c62870903e50f16332873c68abaa))
+* **unraid:** add instructions for running as non-root user ([276febc](https://github.com/DialmasterOrg/Youtarr/commit/276febc05f2b097e0baba2c4bb0c404de8d88b7d))
+* add API integration guide ([b4b6fa4](https://github.com/DialmasterOrg/Youtarr/commit/b4b6fa4d4172b3a5fe163a7ec04ccf0e5b10967c))
+* add API key settings to CONFIG and USAGE_GUIDE ([dee27de](https://github.com/DialmasterOrg/Youtarr/commit/dee27dec3bf5bb8303bf4c3b8b5807c19409a37c))
+* clarify API keys support single videos only ([7ae79b4](https://github.com/DialmasterOrg/Youtarr/commit/7ae79b447645fedfa4c2e0db936a69d54279c075))
+* update CONTRIBUTING.md and DEVELOPMENT.md for dev branch workflow ([4ff0f47](https://github.com/DialmasterOrg/Youtarr/commit/4ff0f47268bd8e1644826b8de08a8080333b29f7))
+
+
+
+
+
 ## [v1.55.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.55.0) - 2025-12-10
 
 ## [1.55.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.54.1...v1.55.0) (2025-12-10)
