@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Chores
+* start UI modernization (initial planning and templates) — private work tracked in `feat/ui-modernization`
+
 ## [v1.56.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.56.0) - 2026-01-04
 
 ## [1.56.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.55.0...v1.56.0) (2026-01-04)
