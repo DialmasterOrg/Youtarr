@@ -30,6 +30,12 @@ const MEDIA_TAB_TYPE_MAP = {
   'streams': 'livestream',
 };
 
+// Maximum number of videos to load when user clicks "Load More"
+// Limit set here because some channels have tens or hundreds of thousands of videos...
+// which effectively is not "loadable", so we had to set some reasonable limit.
+// Unfortunately, yt-dlp ALWAYS starts a fetch with the newest video, so there is no way to "page" through
+const MAX_LOAD_MORE_VIDEOS = 5000;
+
 class ChannelModule {
   constructor() {
     this.channelAutoDownload = this.channelAutoDownload.bind(this);
@@ -95,6 +101,41 @@ class ChannelModule {
 
     // Reload channel to sync in-memory state with database
     await channel.reload();
+  }
+
+  /**
+   * Check if a fetch operation is currently in progress for a channel/tab combination
+   * @param {string} channelId - Channel ID to check
+   * @param {string} tabType - Tab type to check (optional, defaults to checking any tab)
+   * @returns {Object} - Object with isFetching boolean and operation details if fetching
+   */
+  isFetchInProgress(channelId, tabType = null) {
+    if (tabType) {
+      // Check for specific tab
+      const key = `${channelId}:${tabType}`;
+      if (this.activeFetches.has(key)) {
+        const activeOperation = this.activeFetches.get(key);
+        return {
+          isFetching: true,
+          startTime: activeOperation.startTime,
+          type: activeOperation.type,
+          tabType: tabType
+        };
+      }
+    } else {
+      // Check for any tab on this channel (legacy behavior)
+      for (const [key, value] of this.activeFetches.entries()) {
+        if (key.startsWith(`${channelId}:`)) {
+          return {
+            isFetching: true,
+            startTime: value.startTime,
+            type: value.type,
+            tabType: key.split(':')[1]
+          };
+        }
+      }
+    }
+    return { isFetching: false };
   }
 
 
@@ -1896,14 +1937,18 @@ class ChannelModule {
       const mostRecentVideoDate = allVideos.length > 0 ? allVideos[0].publishedAt : null;
 
       if (shouldFetchFromYoutube && this.shouldRefreshChannelVideos(channel, allVideos.length, mediaType)) {
-        // Check if there's already an active fetch for this channel
-        if (this.activeFetches.has(channelId)) {
-          logger.info({ channelId }, 'Skipping auto-refresh - fetch already in progress');
+        // Use composite key to allow concurrent fetches for different tabs
+        const fetchKey = `${channelId}:${tabType}`;
+
+        // Check if there's already an active fetch for this channel/tab
+        if (this.activeFetches.has(fetchKey)) {
+          logger.info({ channelId, tabType }, 'Skipping auto-refresh - fetch already in progress for this tab');
         } else {
           // Register this fetch operation
-          this.activeFetches.set(channelId, {
+          this.activeFetches.set(fetchKey, {
             startTime: new Date().toISOString(),
-            type: 'autoRefresh'
+            type: 'autoRefresh',
+            tabType: tabType
           });
 
           try {
@@ -1911,7 +1956,7 @@ class ChannelModule {
             await this.fetchAndSaveVideosViaYtDlp(channel, channelId, tabType, mostRecentVideoDate);
           } finally {
             // Clear the active fetch record
-            this.activeFetches.delete(channelId);
+            this.activeFetches.delete(fetchKey);
           }
         }
       }
@@ -2055,16 +2100,20 @@ class ChannelModule {
    * @returns {Promise<Object>} - Response with success status and paginated data
    */
   async fetchAllChannelVideos(channelId, requestedPage = 1, requestedPageSize = 50, hideDownloaded = false, tabType = TAB_TYPES.VIDEOS) {
-    // Check if there's already an active fetch for this channel
-    if (this.activeFetches.has(channelId)) {
-      const activeOperation = this.activeFetches.get(channelId);
-      throw new Error(`A fetch operation is already in progress for this channel (started ${activeOperation.startTime})`);
+    // Use composite key to allow concurrent fetches for different tabs
+    const fetchKey = `${channelId}:${tabType}`;
+
+    // Check if there's already an active fetch for this channel/tab combination
+    if (this.activeFetches.has(fetchKey)) {
+      const activeOperation = this.activeFetches.get(fetchKey);
+      throw new Error(`A fetch operation is already in progress for this channel tab (started ${activeOperation.startTime})`);
     }
 
     // Register this fetch operation
-    this.activeFetches.set(channelId, {
+    this.activeFetches.set(fetchKey, {
       startTime: new Date().toISOString(),
-      type: 'fetchAll'
+      type: 'fetchAll',
+      tabType: tabType
     });
 
     try {
@@ -2080,14 +2129,15 @@ class ChannelModule {
         logger.info({ channelId, channelTitle: channel.title, tabType }, 'Starting full video fetch for channel');
         const startTime = Date.now();
 
-        // Fetch ALL videos from YouTube (no --playlist-end parameter)
+        // Fetch videos from YouTube (limited to MAX_LOAD_MORE_VIDEOS to prevent hanging on large channels)
         const canonicalUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
 
         const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
         const result = await this.withTempFile('channel-all-videos', async (outputFilePath) => {
           const args = YtdlpCommandBuilder.buildMetadataFetchArgs(canonicalUrl, {
             flatPlaylist: true,
-            extractorArgs: 'youtubetab:approximate_date'
+            extractorArgs: 'youtubetab:approximate_date',
+            playlistEnd: MAX_LOAD_MORE_VIDEOS
           });
           const content = await this.executeYtDlpCommand(args, outputFilePath);
 
@@ -2148,7 +2198,7 @@ class ChannelModule {
       }
     } finally {
       // Always clear the active fetch record, whether successful or failed
-      this.activeFetches.delete(channelId);
+      this.activeFetches.delete(fetchKey);
     }
   }
 }

@@ -83,7 +83,7 @@ function ChannelVideosDialogs({
         token={token}
       />
 
-      {/* Refresh Confirmation Dialog */}
+      {/* Load More Confirmation Dialog */}
       <Dialog
         open={refreshConfirmOpen}
         onClose={onRefreshCancel}
@@ -91,11 +91,11 @@ function ChannelVideosDialogs({
         aria-describedby="refresh-dialog-description"
       >
         <DialogTitle id="refresh-dialog-title">
-          Refresh All {tabLabel} Videos
+          Load More {tabLabel}
         </DialogTitle>
         <DialogContent>
           <DialogContentText id="refresh-dialog-description">
-            This will refresh all &apos;{tabLabel}&apos; videos for this Channel. This may take some time to complete.
+            This will load up to 5000 additional videos from this channel&apos;s &apos;{tabLabel}&apos; tab on YouTube. <i>This can take quite some time to complete, depending on the size of the channel and your internet connection!</i>
           </DialogContentText>
         </DialogContent>
         <DialogActions>

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ChannelVideo } from '../../../types/ChannelVideo';
 
 interface RefreshResult {
@@ -24,6 +24,12 @@ export function useRefreshChannelVideos(
 ): UseRefreshChannelVideosResult {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Reset loading state when tab changes (the load is per-tab, not global)
+  useEffect(() => {
+    setLoading(false);
+    setError(null);
+  }, [tabType]);
 
   const refreshVideos = useCallback(async (): Promise<RefreshResult | null> => {
     if (!channelId || !token || !tabType) return null;

@@ -43,6 +43,7 @@ import ChannelVideosHeader from './ChannelVideosHeader';
 import ChannelVideosDialogs from './ChannelVideosDialogs';
 import { useChannelVideos } from './hooks/useChannelVideos';
 import { useRefreshChannelVideos } from './hooks/useRefreshChannelVideos';
+import { useChannelFetchStatus } from './hooks/useChannelFetchStatus';
 import { useConfig } from '../../hooks/useConfig';
 import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
 
@@ -255,10 +256,28 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
   const {
     refreshVideos,
-    loading: fetchingAllVideos,
+    loading: localFetchingAllVideos,
     error: fetchAllError,
     clearError: clearFetchAllError,
   } = useRefreshChannelVideos(channelId, page, pageSize, hideDownloaded, selectedTab, token);
+
+  // Poll for background fetch status (persists across navigation)
+  const {
+    isFetching: backgroundFetching,
+    onFetchComplete,
+    startPolling,
+  } = useChannelFetchStatus(channelId, selectedTab, token);
+
+  // Combine local and background fetch states
+  const fetchingAllVideos = localFetchingAllVideos || backgroundFetching;
+
+  // When a background fetch completes, refetch the videos
+  useEffect(() => {
+    onFetchComplete(() => {
+      refetchVideos();
+    });
+  }, [onFetchComplete, refetchVideos]);
+
   const navigate = useNavigate();
 
   // Apply local ignore status overrides to videos (for optimistic updates)
@@ -337,6 +356,8 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
   const handleRefreshConfirm = async () => {
     setRefreshConfirmOpen(false);
+    // Start polling for fetch status since we're initiating a fetch
+    startPolling();
     await refreshVideos();
     // The hook handles loading and error states
     // After refresh completes, refetch the videos to update the list

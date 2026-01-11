@@ -713,6 +713,60 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
 
   /**
    * @swagger
+   * /api/channels/{channelId}/fetch-status:
+   *   get:
+   *     summary: Check if a fetch operation is in progress for a channel
+   *     description: Returns whether a fetch operation (like Load More) is currently running for this channel/tab.
+   *     tags: [Channels]
+   *     parameters:
+   *       - in: path
+   *         name: channelId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The channel ID
+   *       - in: query
+   *         name: tabType
+   *         schema:
+   *           type: string
+   *           enum: [videos, shorts, streams]
+   *         description: Tab type to check (if not provided, checks any tab)
+   *     responses:
+   *       200:
+   *         description: Fetch status retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 isFetching:
+   *                   type: boolean
+   *                 startTime:
+   *                   type: string
+   *                   format: date-time
+   *                 type:
+   *                   type: string
+   *                 tabType:
+   *                   type: string
+   */
+  router.get('/api/channels/:channelId/fetch-status', verifyToken, async (req, res) => {
+    const { channelId } = req.params;
+    const tabType = req.query.tabType || null;
+
+    try {
+      const status = channelModule.isFetchInProgress(channelId, tabType);
+      res.status(200).json(status);
+    } catch (error) {
+      req.log.error({ err: error, channelId, tabType }, 'Failed to get fetch status');
+      res.status(500).json({
+        isFetching: false,
+        error: 'Failed to get fetch status'
+      });
+    }
+  });
+
+  /**
+   * @swagger
    * /api/channels/{channelId}/videos/{youtubeId}/ignore:
    *   post:
    *     summary: Ignore a video

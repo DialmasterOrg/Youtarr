@@ -2198,10 +2198,11 @@ describe('ChannelModule', () => {
         ChannelVideo.count.mockResolvedValue(0);
         Video.findAll = jest.fn().mockResolvedValue([]);
 
-        // Simulate an active fetch
-        ChannelModule.activeFetches.set('UC123', {
+        // Simulate an active fetch using composite key (channelId:tabType)
+        ChannelModule.activeFetches.set('UC123:videos', {
           startTime: new Date().toISOString(),
-          type: 'fetchAll'
+          type: 'fetchAll',
+          tabType: 'videos'
         });
 
         const result = await ChannelModule.getChannelVideos('UC123');
@@ -2209,12 +2210,12 @@ describe('ChannelModule', () => {
         // Should not throw, should return cached data
         expect(result.videos).toBeDefined();
         expect(logger.info).toHaveBeenCalledWith(
-          expect.objectContaining({ channelId: 'UC123' }),
-          'Skipping auto-refresh - fetch already in progress'
+          expect.objectContaining({ channelId: 'UC123', tabType: 'videos' }),
+          'Skipping auto-refresh - fetch already in progress for this tab'
         );
 
         // Clean up
-        ChannelModule.activeFetches.delete('UC123');
+        ChannelModule.activeFetches.delete('UC123:videos');
       });
 
       test('should handle errors and return cached data', async () => {
@@ -2279,15 +2280,17 @@ describe('ChannelModule', () => {
       });
 
       test('should throw error when fetch already in progress', async () => {
-        ChannelModule.activeFetches.set('UC123', {
+        // Use composite key (channelId:tabType) since we now track per-tab
+        ChannelModule.activeFetches.set('UC123:videos', {
           startTime: new Date().toISOString(),
-          type: 'autoRefresh'
+          type: 'autoRefresh',
+          tabType: 'videos'
         });
 
         await expect(ChannelModule.fetchAllChannelVideos('UC123')).rejects.toThrow('fetch operation is already in progress');
 
         // Clean up
-        ChannelModule.activeFetches.delete('UC123');
+        ChannelModule.activeFetches.delete('UC123:videos');
       });
 
       test('should throw error when channel not found', async () => {
