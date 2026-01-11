@@ -347,13 +347,13 @@ class ChannelSettingsModule {
       throw new Error(validation.error);
     }
 
-    // Get recent 20 videos for this channel from channelvideos table
+    // Get recent 50 videos for this channel from channelvideos table
     // This table is populated when browsing channel page, before any downloads
     const channelVideos = await ChannelVideo.findAll({
       where: { channel_id: channelId },
       attributes: ['youtube_id', 'title', 'publishedAt'],
       order: [['publishedAt', 'DESC']],
-      limit: 20,
+      limit: 50,
     });
 
     // If no regex pattern provided or empty, all videos match

@@ -11,6 +11,10 @@ interface UseChannelVideosParams {
   sortOrder: string;
   tabType: string | null;
   token: string | null;
+  minDuration?: number | null;
+  maxDuration?: number | null;
+  dateFrom?: Date | null;
+  dateTo?: Date | null;
 }
 
 interface UseChannelVideosResult {
@@ -35,6 +39,10 @@ export function useChannelVideos({
   sortOrder,
   tabType,
   token,
+  minDuration,
+  maxDuration,
+  dateFrom,
+  dateTo,
 }: UseChannelVideosParams): UseChannelVideosResult {
   const [videos, setVideos] = useState<ChannelVideo[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
@@ -62,6 +70,20 @@ export function useChannelVideos({
         tabType: tabType,
       });
 
+      // Add optional filter params (convert duration from minutes to seconds)
+      if (minDuration != null) {
+        queryParams.append('minDuration', (minDuration * 60).toString());
+      }
+      if (maxDuration != null) {
+        queryParams.append('maxDuration', (maxDuration * 60).toString());
+      }
+      if (dateFrom) {
+        queryParams.append('dateFrom', dateFrom.toISOString().split('T')[0]);
+      }
+      if (dateTo) {
+        queryParams.append('dateTo', dateTo.toISOString().split('T')[0]);
+      }
+
       const response = await fetch(`/getchannelvideos/${channelId}?${queryParams}`, {
         headers: {
           'x-access-token': token,
@@ -88,7 +110,7 @@ export function useChannelVideos({
     } finally {
       setLoading(false);
     }
-  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, token]);
+  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, token, minDuration, maxDuration, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchVideos();

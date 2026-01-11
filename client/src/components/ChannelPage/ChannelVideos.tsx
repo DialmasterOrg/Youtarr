@@ -43,6 +43,9 @@ import ChannelVideosHeader from './ChannelVideosHeader';
 import ChannelVideosDialogs from './ChannelVideosDialogs';
 import { useChannelVideos } from './hooks/useChannelVideos';
 import { useRefreshChannelVideos } from './hooks/useRefreshChannelVideos';
+import { useChannelFetchStatus } from './hooks/useChannelFetchStatus';
+import { useChannelVideoFilters } from './hooks/useChannelVideoFilters';
+import ChannelVideosFilters from './components/ChannelVideosFilters';
 import { useConfig } from '../../hooks/useConfig';
 import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
 
@@ -67,6 +70,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const [sortBy, setSortBy] = useState<SortBy>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
 
   // Tab states
   const [selectedTab, setSelectedTab] = useState<string | null>(null);
@@ -90,6 +94,20 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
   // Local state to track ignore status changes without refetching
   const [localIgnoreStatus, setLocalIgnoreStatus] = useState<Record<string, boolean>>({});
+
+  // Filter state
+  const {
+    filters,
+    inputMinDuration,
+    inputMaxDuration,
+    setMinDuration,
+    setMaxDuration,
+    setDateFrom,
+    setDateTo,
+    clearAllFilters,
+    hasActiveFilters,
+    activeFilterCount,
+  } = useChannelVideoFilters();
 
   const { deleteVideosByYoutubeIds, loading: deleteLoading } = useVideoDeletion();
 
@@ -232,6 +250,10 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     sortOrder,
     tabType: selectedTab,
     token,
+    minDuration: filters.minDuration,
+    maxDuration: filters.maxDuration,
+    dateFrom: filters.dateFrom,
+    dateTo: filters.dateTo,
   });
 
   // Update available tabs from video fetch response if available
@@ -244,7 +266,12 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   // Clear local ignore status overrides when videos are refetched (page change, tab change, etc)
   useEffect(() => {
     setLocalIgnoreStatus({});
-  }, [page, selectedTab, hideDownloaded, searchQuery, sortBy, sortOrder]);
+  }, [page, selectedTab, hideDownloaded, searchQuery, sortBy, sortOrder, filters]);
+
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [filters.minDuration, filters.maxDuration, filters.dateFrom, filters.dateTo]);
 
   const { config } = useConfig(token);
   const hasChannelOverride = Boolean(channelVideoQuality);
@@ -255,10 +282,28 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
   const {
     refreshVideos,
-    loading: fetchingAllVideos,
+    loading: localFetchingAllVideos,
     error: fetchAllError,
     clearError: clearFetchAllError,
   } = useRefreshChannelVideos(channelId, page, pageSize, hideDownloaded, selectedTab, token);
+
+  // Poll for background fetch status (persists across navigation)
+  const {
+    isFetching: backgroundFetching,
+    onFetchComplete,
+    startPolling,
+  } = useChannelFetchStatus(channelId, selectedTab, token);
+
+  // Combine local and background fetch states
+  const fetchingAllVideos = localFetchingAllVideos || backgroundFetching;
+
+  // When a background fetch completes, refetch the videos
+  useEffect(() => {
+    onFetchComplete(() => {
+      refetchVideos();
+    });
+  }, [onFetchComplete, refetchVideos]);
+
   const navigate = useNavigate();
 
   // Apply local ignore status overrides to videos (for optimistic updates)
@@ -337,6 +382,8 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
   const handleRefreshConfirm = async () => {
     setRefreshConfirmOpen(false);
+    // Start polling for fetch status since we're initiating a fetch
+    startPolling();
     await refreshVideos();
     // The hook handles loading and error states
     // After refresh completes, refetch the videos to update the list
@@ -504,6 +551,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     setPage(1); // Reset to first page when changing tabs
     setCheckedBoxes([]); // Clear selections when changing tabs
     setSelectedForDeletion([]); // Clear deletion selections when changing tabs
+    clearAllFilters(); // Clear filters when changing tabs
   };
 
   const handleAutoDownloadChange = async (enabled: boolean) => {
@@ -760,6 +808,26 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           onDeleteClick={handleDeleteClick}
           onBulkIgnoreClick={handleBulkIgnore}
           onInfoIconClick={(tooltip) => setMobileTooltip(tooltip)}
+          activeFilterCount={activeFilterCount}
+          filtersExpanded={filtersExpanded}
+          onFiltersExpandedChange={setFiltersExpanded}
+        />
+
+        {/* Filters */}
+        <ChannelVideosFilters
+          isMobile={isMobile}
+          filters={filters}
+          inputMinDuration={inputMinDuration}
+          inputMaxDuration={inputMaxDuration}
+          onMinDurationChange={setMinDuration}
+          onMaxDurationChange={setMaxDuration}
+          onDateFromChange={setDateFrom}
+          onDateToChange={setDateTo}
+          onClearAll={clearAllFilters}
+          hasActiveFilters={hasActiveFilters}
+          activeFilterCount={activeFilterCount}
+          hideDateFilter={selectedTab === 'shorts'}
+          filtersExpanded={filtersExpanded}
         />
 
         {/* Tabs */}
@@ -795,7 +863,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
         {/* Content area */}
         <Box sx={{ p: 2 }} {...(isMobile ? handlers : {})}>
-          {videoFailed && videos.length === 0 ? (
+          {videoFailed && videos.length === 0 && !hasActiveFilters && !searchQuery ? (
             <Alert severity="error">
               Failed to fetch channel videos. Please try again later.
             </Alert>
@@ -817,7 +885,9 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           ) : videos.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <Typography variant="body1" color="text.secondary">
-                No videos found
+                {hasActiveFilters || searchQuery
+                  ? 'No videos found matching your search and filter criteria'
+                  : 'No videos found'}
               </Typography>
             </Box>
           ) : (

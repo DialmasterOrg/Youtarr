@@ -716,7 +716,6 @@ describe('VideosModule', () => {
 
       // Mock large number of videos
       mockVideo.count.mockResolvedValueOnce(2500);
-
       // Mock findAll to return videos in chunks
       const chunk1 = Array(1000).fill({
         id: 1,
