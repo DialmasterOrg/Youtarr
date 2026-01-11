@@ -528,6 +528,10 @@ describe('ChannelVideos Component', () => {
         sortOrder: 'desc',
         tabType: null,
         token: mockToken,
+        minDuration: null,
+        maxDuration: null,
+        dateFrom: null,
+        dateTo: null,
       });
     });
 
