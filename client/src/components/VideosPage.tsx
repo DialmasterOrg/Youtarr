@@ -52,6 +52,7 @@ import { useVideoDeletion } from './shared/useVideoDeletion';
 import RatingBadge from './shared/RatingBadge';
 import ChangeRatingDialog from './shared/ChangeRatingDialog';
 import EighteenUpRatingIcon from '@mui/icons-material/EighteenUpRating';
+import VideoActionsDropdown from './shared/VideoActionsDropdown';
 
 interface VideosPageProps {
   token: string | null;
@@ -410,24 +411,12 @@ function VideosPage({ token }: VideosPageProps) {
               <Typography variant="body2" color="text.secondary">
                 {selectedVideos.length} video{selectedVideos.length !== 1 ? 's' : ''} selected
               </Typography>
-              <Button
-                variant="contained"
-                color="primary"
-                startIcon={<EighteenUpRatingIcon />}
-                onClick={handleChangeRatingClick}
+              <VideoActionsDropdown
+                selectedVideosCount={selectedVideos.length}
+                onContentRating={handleChangeRatingClick}
+                onDelete={handleDeleteClick}
                 disabled={deleteLoading}
-              >
-                Content Rating
-              </Button>
-              <Button
-                variant="contained"
-                color="error"
-                startIcon={<DeleteIcon />}
-                onClick={handleDeleteClick}
-                disabled={deleteLoading}
-              >
-                Delete Selected
-              </Button>
+              />
               <Button
                 variant="outlined"
                 onClick={() => setSelectedVideos([])}
