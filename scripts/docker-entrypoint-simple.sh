@@ -37,7 +37,7 @@ while [ $TRIES -lt $MAX_TRIES ]; do
             process.exit(1);
         });
     " 2>/dev/null; then
-        echo "Database is ready!"
+echo "Database is ready!"
         break
     fi
 
