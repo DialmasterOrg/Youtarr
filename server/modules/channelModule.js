@@ -8,6 +8,7 @@ const os = require('os');
 const Channel = require('../models/channel');
 const ChannelVideo = require('../models/channelvideo');
 const MessageEmitter = require('./messageEmitter.js');
+const ratingMapper = require('./ratingMapper');
 const { Op, fn, col, where } = require('sequelize');
 const fileCheckModule = require('./fileCheckModule');
 const logger = require('../logger');
@@ -257,6 +258,7 @@ class ChannelModule {
       min_duration: channel.min_duration || null,
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
+      default_rating: channel.default_rating || null,
     };
   }
 
@@ -277,6 +279,7 @@ class ChannelModule {
       min_duration: channel.min_duration || null,
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
+      default_rating: channel.default_rating || null,
     };
   }
 
@@ -1486,6 +1489,13 @@ class ChannelModule {
    * @returns {Object} - Parsed video object
    */
   parseVideoMetadata(entry) {
+    // Extract rating information
+    const contentRating = entry.contentRating || entry.content_rating || null;
+    const ageLimit = entry.age_limit || null;
+    
+    // Map to normalized rating
+    const ratingInfo = ratingMapper.mapFromEntry(contentRating, ageLimit);
+
     return {
       title: entry.title || 'Untitled',
       youtube_id: entry.id,
@@ -1495,6 +1505,10 @@ class ChannelModule {
       availability: entry.availability || null,
       media_type: entry.media_type || 'video',
       live_status: entry.live_status || null,
+      content_rating: contentRating,
+      age_limit: ageLimit,
+      normalized_rating: ratingInfo.normalized_rating,
+      rating_source: ratingInfo.source,
     };
   }
 

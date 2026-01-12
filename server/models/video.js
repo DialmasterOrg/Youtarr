@@ -73,6 +73,26 @@ Video.init(
       allowNull: true,
       defaultValue: null,
     },
+    content_rating: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      comment: 'Raw content rating object from YouTube/yt-dlp',
+    },
+    age_limit: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: 'Age limit from yt-dlp',
+    },
+    normalized_rating: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      comment: 'Normalized rating for Plex/Kodi (e.g., "R", "PG-13", "TV-14")',
+    },
+    rating_source: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      comment: 'Source of the rating',
+    },
   },
   {
     sequelize,

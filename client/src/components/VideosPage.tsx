@@ -49,6 +49,7 @@ import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import DeleteVideosDialog from './shared/DeleteVideosDialog';
 import { useVideoDeletion } from './shared/useVideoDeletion';
+import RatingBadge from './shared/RatingBadge';
 
 interface VideosPageProps {
   token: string | null;
@@ -723,6 +724,13 @@ function VideosPage({ token }: VideosPageProps) {
                                   />
                                 ) : null;
                               })()}
+                              {video.normalized_rating && (
+                                <RatingBadge
+                                  rating={video.normalized_rating}
+                                  ratingSource={video.rating_source}
+                                  size="small"
+                                />
+                              )}
                               {video.fileSize && (
                                 <Tooltip title="File size on disk" enterTouchDelay={0}>
                                   <Chip

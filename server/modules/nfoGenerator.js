@@ -147,6 +147,20 @@ class NfoGenerator {
         }
       }
 
+      // Add rating information if available
+      if (jsonData.normalized_rating) {
+        xml += '\n  <!-- Rating -->\n';
+        xml += `  <mpaa>${this.escapeXml(jsonData.normalized_rating)}</mpaa>\n`;
+        
+        // Also add a ratings block for extended compatibility
+        xml += '  <ratings>\n';
+        xml += `    <rating name="mpaa" max="10">${this.escapeXml(jsonData.normalized_rating)}</rating>\n`;
+        if (jsonData.rating_source) {
+          xml += `    <rating name="source">${this.escapeXml(jsonData.rating_source)}</rating>\n`;
+        }
+        xml += '  </ratings>\n';
+      }
+
       if (durationSeconds > 0) {
         xml += '\n  <!-- Runtime -->\n';
         xml += `  <runtime>${runtimeMinutes}</runtime>\n`;

@@ -115,6 +115,10 @@ class VideoValidationModule {
   toValidationResponse(videoId, metadata, isDuplicate) {
     const isMembersOnly = metadata.availability === 'subscriber_only';
 
+    // Extract rating information
+    const contentRating = metadata.contentRating || metadata.content_rating || null;
+    const ageLimit = metadata.age_limit || null;
+
     return {
       isValidUrl: true,
       isAlreadyDownloaded: isDuplicate,
@@ -133,7 +137,9 @@ class VideoValidationModule {
           ).getTime() / 1000) :
           null,
         availability: metadata.availability || 'public',
-        media_type: metadata.media_type || 'video'
+        media_type: metadata.media_type || 'video',
+        content_rating: contentRating,
+        age_limit: ageLimit,
       }
     };
   }

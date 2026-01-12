@@ -442,6 +442,7 @@ describe('ChannelModule', () => {
           min_duration: null,
           max_duration: null,
           title_filter_regex: null,
+          default_rating: null,
         });
       });
 

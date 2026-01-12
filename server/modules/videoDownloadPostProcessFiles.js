@@ -324,6 +324,18 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         ffmpegArgs.push('-metadata', `originaldate=${releaseDate}`);
       }
 
+      // Add rating metadata if available
+      if (jsonData.normalized_rating) {
+        ffmpegArgs.push('-metadata', `rating=${jsonData.normalized_rating}`);
+      }
+      if (jsonData.content_rating) {
+        const ratingSource = jsonData.rating_source || 'youtube';
+        ffmpegArgs.push('-metadata', `content_rating=${ratingSource}`);
+      }
+      if (jsonData.age_limit) {
+        ffmpegArgs.push('-metadata', `age_limit=${jsonData.age_limit}`);
+      }
+
       // Add media type hint for Plex (9 = Home Video)
       ffmpegArgs.push('-metadata', 'media_type=9');
 
