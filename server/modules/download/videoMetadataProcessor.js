@@ -165,6 +165,8 @@ class VideoMetadataProcessor {
           originalDate: data.upload_date,
           channel_id: data.channel_id,
           media_type: data.media_type || 'video',
+          normalized_rating: data.normalized_rating || null,
+          rating_source: data.rating_source || null,
         };
 
         let fullPath = data._actual_filepath;

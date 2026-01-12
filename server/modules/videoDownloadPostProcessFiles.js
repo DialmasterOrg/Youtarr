@@ -4,6 +4,7 @@ const { execSync, spawnSync } = require('child_process');
 const configModule = require('./configModule');
 const channelSettingsModule = require('./channelSettingsModule');
 const nfoGenerator = require('./nfoGenerator');
+const ratingMapper = require('./ratingMapper');
 const tempPathManager = require('./download/tempPathManager');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { JobVideoDownload } = require('../models');
@@ -192,10 +193,23 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         const Channel = require('../models/channel');
         let channel = await Channel.findOne({
           where: { channel_id: jsonData.channel_id },
-          attributes: ['id', 'sub_folder', 'uploader', 'folder_name']
+          attributes: ['id', 'sub_folder', 'uploader', 'folder_name', 'default_rating']
         });
 
         if (channel) {
+          // Apply channel-level default rating if none exists in metadata
+          if (!jsonData.normalized_rating) {
+            const mapped = ratingMapper.mapFromEntry(jsonData.content_rating, jsonData.age_limit);
+            if (mapped.normalized_rating) {
+              jsonData.normalized_rating = mapped.normalized_rating;
+              jsonData.rating_source = mapped.source;
+            } else if (channel.default_rating && channel.default_rating !== 'NR') {
+              jsonData.normalized_rating = channel.default_rating;
+              jsonData.rating_source = 'Channel Default';
+              console.log(`[Post-Process] Applying channel default rating: ${channel.default_rating}`);
+            }
+          }
+
           // Tracked channel - resolve effective subfolder using centralized logic
           channelSubFolder = channelSettingsModule.resolveEffectiveSubfolder(channel.sub_folder);
 

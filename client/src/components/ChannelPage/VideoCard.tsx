@@ -21,6 +21,7 @@ import { ChannelVideo } from '../../types/ChannelVideo';
 import { formatFileSize, decodeHtml } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
+import RatingBadge from '../shared/RatingBadge';
 
 interface VideoCardProps {
   video: ChannelVideo;
@@ -134,26 +135,6 @@ function VideoCard({
                   color: 'white',
                   fontSize: '0.75rem',
                   height: 22,
-                }}
-              />
-            )}
-
-            {/* Rating overlay */}
-            {video.normalized_rating && (
-              <Chip
-                label={video.normalized_rating}
-                size="small"
-                sx={{
-                  position: 'absolute',
-                  top: 8,
-                  right: 8,
-                  bgcolor: 'rgba(25, 118, 210, 0.9)',
-                  color: 'white',
-                  fontSize: '0.7rem',
-                  fontWeight: 'bold',
-                  height: 20,
-                  zIndex: 1,
-                  '& .MuiChip-label': { px: 0.75 },
                 }}
               />
             )}
@@ -301,6 +282,15 @@ function VideoCard({
                     {formatFileSize(video.fileSize)}
                   </Typography>
                 )}
+                <RatingBadge
+                  rating={video.normalized_rating}
+                  showNA={true}
+                  size="small"
+                  variant="text"
+                  sx={{ 
+                    ml: 0.5 
+                  }}
+                />
                 {mediaTypeInfo && (
                   <Chip
                     size="small"

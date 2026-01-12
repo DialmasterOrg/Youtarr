@@ -21,6 +21,7 @@ import { ChannelVideo } from '../../types/ChannelVideo';
 import { formatFileSize, decodeHtml } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
+import RatingBadge from '../shared/RatingBadge';
 
 interface VideoListItemProps {
   video: ChannelVideo;
@@ -123,26 +124,6 @@ function VideoListItem({
                 color: 'white',
                 fontSize: '0.7rem',
                 height: 18,
-                '& .MuiChip-label': { px: 0.5 },
-              }}
-            />
-          )}
-
-          {/* Rating overlay */}
-          {video.normalized_rating && (
-            <Chip
-              label={video.normalized_rating}
-              size="small"
-              sx={{
-                position: 'absolute',
-                top: 4,
-                right: 4,
-                bgcolor: 'primary.main',
-                color: 'white',
-                fontSize: '0.6rem',
-                fontWeight: 'bold',
-                height: 16,
-                zIndex: 1,
                 '& .MuiChip-label': { px: 0.5 },
               }}
             />
@@ -275,6 +256,17 @@ function VideoListItem({
                 {formatFileSize(video.fileSize)}
               </Typography>
             )}
+            <RatingBadge
+              rating={video.normalized_rating}
+              showNA={true}
+              size="small"
+              sx={{
+                height: 18,
+                fontSize: '0.65rem',
+                ml: 0.2,
+                '& .MuiChip-label': { px: 0.6 },
+              }}
+            />
             {mediaTypeInfo && (
               <Chip
                 size="small"

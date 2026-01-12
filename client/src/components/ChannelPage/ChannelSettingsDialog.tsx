@@ -233,7 +233,8 @@ function ChannelSettingsDialog({
           video_quality: settings.video_quality || null,
           min_duration: settings.min_duration,
           max_duration: settings.max_duration,
-          title_filter_regex: settings.title_filter_regex || null
+          title_filter_regex: settings.title_filter_regex || null,
+          default_rating: settings.default_rating || null
         })
       });
 
@@ -260,7 +261,8 @@ function ChannelSettingsDialog({
         video_quality: result?.settings?.video_quality ?? settings.video_quality ?? null,
         min_duration: result?.settings?.min_duration ?? settings.min_duration ?? null,
         max_duration: result?.settings?.max_duration ?? settings.max_duration ?? null,
-        title_filter_regex: result?.settings?.title_filter_regex ?? settings.title_filter_regex ?? null
+        title_filter_regex: result?.settings?.title_filter_regex ?? settings.title_filter_regex ?? null,
+        default_rating: result?.settings?.default_rating ?? settings.default_rating ?? null
       };
 
       setSettings(updatedSettings);
@@ -298,7 +300,8 @@ function ChannelSettingsDialog({
            settings.video_quality !== originalSettings.video_quality ||
            settings.min_duration !== originalSettings.min_duration ||
            settings.max_duration !== originalSettings.max_duration ||
-           settings.title_filter_regex !== originalSettings.title_filter_regex;
+           settings.title_filter_regex !== originalSettings.title_filter_regex ||
+           settings.default_rating !== originalSettings.default_rating;
   };
 
   const handlePreviewFilter = async () => {

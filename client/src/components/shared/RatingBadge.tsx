@@ -1,20 +1,34 @@
 import React from 'react';
-import { Chip, Tooltip } from '@mui/material';
+import { Chip, Tooltip, SxProps, Theme, Box, Typography } from '@mui/material';
+import EighteenUpRatingIcon from '@mui/icons-material/EighteenUpRating';
 
 interface RatingBadgeProps {
   rating: string | null | undefined;
   ratingSource?: string | null;
   size?: 'small' | 'medium';
+  showNA?: boolean;
+  variant?: 'pill' | 'text';
+  sx?: SxProps<Theme>;
 }
 
 /**
  * Displays a content/parental rating badge
  * Examples: R, PG-13, TV-14, TV-MA, etc.
  */
-const RatingBadge: React.FC<RatingBadgeProps> = ({ rating, ratingSource, size = 'small' }) => {
-  if (!rating) {
+const RatingBadge: React.FC<RatingBadgeProps> = ({ 
+  rating, 
+  ratingSource, 
+  size = 'small', 
+  showNA = false, 
+  variant = 'pill',
+  sx 
+}) => {
+  if (!rating && !showNA) {
     return null;
   }
+
+  const displayRating = rating || 'NR';
+  const label = variant === 'pill' ? `Rating: ${displayRating}` : displayRating;
 
   // Color coding based on rating type
   const getRatingColor = (rate: string): 'default' | 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success' => {
@@ -37,19 +51,43 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({ rating, ratingSource, size = 
   };
 
   const tooltipText = ratingSource 
-    ? `Content Rating: ${rating} (Source: ${ratingSource})`
-    : `Content Rating: ${rating}`;
+    ? `Content Rating: ${displayRating} (Source: ${ratingSource})`
+    : `Content Rating: ${displayRating}`;
+
+  if (variant === 'text') {
+    const color = getRatingColor(displayRating);
+    const resolvedColor = color === 'default' ? 'text.secondary' : `${color}.main`;
+
+    return (
+      <Tooltip title={tooltipText} placement="top">
+        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, ...sx }}>
+          <EighteenUpRatingIcon sx={{ fontSize: size === 'small' ? 16 : 20, color: resolvedColor }} />
+          <Typography 
+            variant="caption" 
+            sx={{ 
+              fontWeight: 600, 
+              color: resolvedColor,
+              fontSize: size === 'small' ? '0.75rem' : '0.875rem'
+            }}
+          >
+            {displayRating}
+          </Typography>
+        </Box>
+      </Tooltip>
+    );
+  }
 
   return (
     <Tooltip title={tooltipText} placement="top">
       <Chip
-        label={rating}
+        label={label}
         size={size}
-        color={getRatingColor(rating)}
+        color={getRatingColor(displayRating)}
         variant="outlined"
         sx={{
           fontWeight: 'bold',
           fontSize: size === 'small' ? '0.75rem' : '0.875rem',
+          ...sx
         }}
       />
     </Tooltip>

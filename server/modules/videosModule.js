@@ -91,6 +91,8 @@ class VideosModule {
           Videos.removed,
           Videos.youtube_removed,
           Videos.media_type,
+          Videos.normalized_rating,
+          Videos.rating_source,
           COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) AS timeCreated
         FROM Videos
         LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
@@ -208,6 +210,76 @@ class VideosModule {
       logger.error({ err }, 'Error in getVideosPaginated');
       throw err;
     }
+  }
+
+  /**
+   * Bulk update video ratings
+   * @param {number[]} videoIds - List of database IDs
+   * @param {string} rating - The new rating value
+   */
+  async bulkUpdateVideoRatings(videoIds, rating) {
+    const results = {
+      success: [],
+      failed: []
+    };
+
+    const nfoGenerator = require('./nfoGenerator');
+
+    for (const id of videoIds) {
+      try {
+        const video = await Video.findByPk(id);
+        if (!video) {
+          results.failed.push({ id, error: 'Video not found' });
+          continue;
+        }
+
+        // Update database
+        await video.update({
+          normalized_rating: rating,
+          rating_source: 'Manual Override'
+        });
+
+        // Update metadata files if they exist
+        if (video.filePath) {
+          const parsedPath = path.parse(video.filePath);
+          const jsonPath = path.format({
+            dir: parsedPath.dir,
+            name: parsedPath.name,
+            ext: '.info.json'
+          });
+
+          // Check if .info.json exists
+          const jsonExists = await fs.access(jsonPath).then(() => true).catch(() => false);
+          
+          if (jsonExists) {
+            const content = await fs.readFile(jsonPath, 'utf8');
+            let jsonData;
+            try {
+              jsonData = JSON.parse(content);
+            } catch (pErr) {
+              logger.warn({ pErr, jsonPath }, 'Failed to parse .info.json for rating update');
+              // If JSON is corrupt, we still try to update DB but skip disk sync
+              results.success.push(id);
+              continue;
+            }
+            
+            jsonData.normalized_rating = rating;
+            jsonData.rating_source = 'Manual Override';
+            
+            await fs.writeFile(jsonPath, JSON.stringify(jsonData, null, 2), 'utf8');
+            
+            // Re-generate NFO file
+            nfoGenerator.writeVideoNfoFile(video.filePath, jsonData);
+          }
+        }
+        results.success.push(id);
+      } catch (err) {
+        logger.error({ err, videoId: id }, 'Failed to update video rating');
+        results.failed.push({ id, error: err.message });
+      }
+    }
+
+    return results;
   }
 
   async getAllUniqueChannels() {

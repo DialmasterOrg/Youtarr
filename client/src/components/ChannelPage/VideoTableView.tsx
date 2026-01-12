@@ -22,6 +22,7 @@ import { ChannelVideo } from '../../types/ChannelVideo';
 import { formatFileSize, decodeHtml } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
+import RatingBadge from '../shared/RatingBadge';
 
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
@@ -246,6 +247,12 @@ function VideoTableView({
                       size="small"
                       color={getStatusColor(status)}
                       variant={status === 'downloaded' ? 'filled' : 'outlined'}
+                    />
+                    <RatingBadge
+                      rating={video.normalized_rating}
+                      showNA={true}
+                      size="small"
+                      variant="text"
                     />
                   </Box>
                 </TableCell>

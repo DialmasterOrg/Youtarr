@@ -50,6 +50,8 @@ import ScheduleIcon from '@mui/icons-material/Schedule';
 import DeleteVideosDialog from './shared/DeleteVideosDialog';
 import { useVideoDeletion } from './shared/useVideoDeletion';
 import RatingBadge from './shared/RatingBadge';
+import ChangeRatingDialog from './shared/ChangeRatingDialog';
+import EighteenUpRatingIcon from '@mui/icons-material/EighteenUpRating';
 
 interface VideosPageProps {
   token: string | null;
@@ -79,6 +81,7 @@ function VideosPage({ token }: VideosPageProps) {
   const [selectedVideos, setSelectedVideos] = useState<number[]>([]);
   const [selectedForDeletion, setSelectedForDeletion] = useState<number[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -252,6 +255,35 @@ function VideosPage({ token }: VideosPageProps) {
     setDeleteDialogOpen(true);
   };
 
+  const handleChangeRatingClick = () => {
+    setRatingDialogOpen(true);
+  };
+
+  const handleApplyRating = async (rating: string) => {
+    if (!token) return;
+
+    const videoIdsToUpdate = isMobile ? selectedForDeletion : selectedVideos;
+
+    try {
+      await axios.post('/api/videos/rating', {
+        videoIds: videoIdsToUpdate,
+        rating
+      }, {
+        headers: {
+          'x-access-token': token,
+        },
+      });
+
+      setSuccessMessage(`Successfully updated content rating for ${videoIdsToUpdate.length} video(s)`);
+      setSelectedVideos([]);
+      setSelectedForDeletion([]);
+      fetchVideos();
+    } catch (error: any) {
+      console.error('Failed to update ratings:', error);
+      setErrorMessage(error.response?.data?.error || 'Failed to update content ratings');
+    }
+  };
+
   const handleDeleteConfirm = async () => {
     setDeleteDialogOpen(false);
 
@@ -378,6 +410,15 @@ function VideosPage({ token }: VideosPageProps) {
               <Typography variant="body2" color="text.secondary">
                 {selectedVideos.length} video{selectedVideos.length !== 1 ? 's' : ''} selected
               </Typography>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<EighteenUpRatingIcon />}
+                onClick={handleChangeRatingClick}
+                disabled={deleteLoading}
+              >
+                Content Rating
+              </Button>
               <Button
                 variant="contained"
                 color="error"
@@ -724,13 +765,6 @@ function VideosPage({ token }: VideosPageProps) {
                                   />
                                 ) : null;
                               })()}
-                              {video.normalized_rating && (
-                                <RatingBadge
-                                  rating={video.normalized_rating}
-                                  ratingSource={video.rating_source}
-                                  size="small"
-                                />
-                              )}
                               {video.fileSize && (
                                 <Tooltip title="File size on disk" enterTouchDelay={0}>
                                   <Chip
@@ -742,6 +776,13 @@ function VideosPage({ token }: VideosPageProps) {
                                   />
                                 </Tooltip>
                               )}
+                              <RatingBadge
+                                rating={video.normalized_rating}
+                                ratingSource={video.rating_source}
+                                showNA={true}
+                                size="small"
+                                sx={{ height: 20, fontSize: '0.7rem' }}
+                              />
                               {video.removed ? (
                                 <Tooltip title="Video file not found on disk" enterTouchDelay={0}>
                                   <Chip
@@ -933,6 +974,12 @@ function VideosPage({ token }: VideosPageProps) {
                                   />
                                 </Tooltip>
                               )}
+                              <RatingBadge
+                                rating={video.normalized_rating}
+                                ratingSource={video.rating_source}
+                                showNA={true}
+                                size="small"
+                              />
                               {video.removed ? (
                                 <Tooltip title="Video file not found on disk. It may have been deleted or moved." enterTouchDelay={0}>
                                   <Chip
@@ -988,6 +1035,32 @@ function VideosPage({ token }: VideosPageProps) {
         onConfirm={handleDeleteConfirm}
         videoCount={isMobile ? selectedForDeletion.length : selectedVideos.length}
       />
+
+      {/* Change Rating Dialog */}
+      <ChangeRatingDialog
+        open={ratingDialogOpen}
+        onClose={() => setRatingDialogOpen(false)}
+        onApply={handleApplyRating}
+        selectedCount={isMobile ? selectedForDeletion.length : selectedVideos.length}
+      />
+
+      {/* Mobile Rating FAB */}
+      {isMobile && selectedForDeletion.length > 0 && (
+        <Zoom in={selectedForDeletion.length > 0}>
+          <Fab
+            color="primary"
+            sx={{
+              position: 'fixed',
+              bottom: 80,
+              right: 16,
+              zIndex: 1000,
+            }}
+            onClick={handleChangeRatingClick}
+          >
+            <EighteenUpRatingIcon />
+          </Fab>
+        </Zoom>
+      )}
 
       {/* Mobile Delete FAB */}
       {isMobile && selectedForDeletion.length > 0 && (
