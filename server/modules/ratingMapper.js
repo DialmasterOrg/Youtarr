@@ -8,11 +8,8 @@
  */
 const MPAA_RATINGS = {
   'mpaaG': 'G',
-  'mpaaG': 'G',
   'mpaaPg': 'PG',
-  'mpaaPG': 'PG',
   'mpaaPg13': 'PG-13',
-  'mpaaPG13': 'PG-13',
   'mpaaR': 'R',
   'mpaaNc17': 'NC-17',
   'mpaaUnrated': null,
@@ -26,13 +23,22 @@ const TVPG_RATINGS = {
   'tvpgY7': 'TV-Y7',
   'tvpgG': 'TV-G',
   'tvpgPg': 'TV-PG',
-  'tvpgPG': 'TV-PG',
   '14': 'TV-14',
   'tvpg14': 'TV-14',
   'tvpgMa': 'TV-MA',
-  'tvpgMA': 'TV-MA',
   'tvpgUnrated': null,
 };
+
+// Create case-insensitive lookup maps to allow varied casing from yt-dlp
+const MPAA_MAP = {};
+Object.keys(MPAA_RATINGS).forEach(k => {
+  MPAA_MAP[k.toLowerCase()] = MPAA_RATINGS[k];
+});
+
+const TVPG_MAP = {};
+Object.keys(TVPG_RATINGS).forEach(k => {
+  TVPG_MAP[k.toLowerCase()] = TVPG_RATINGS[k];
+});
 
 /**
  * Age limit to rating heuristics (fallback when no explicit rating available)
@@ -58,14 +64,14 @@ function normalizeRating(key, value = null) {
 
   const keyStr = String(key).toLowerCase().trim();
 
-  // Try MPAA mappings
-  if (MPAA_RATINGS.hasOwnProperty(keyStr)) {
-    return MPAA_RATINGS[keyStr];
+  // Try MPAA mappings (case-insensitive)
+  if (MPAA_MAP.hasOwnProperty(keyStr)) {
+    return MPAA_MAP[keyStr];
   }
 
-  // Try TVPG mappings
-  if (TVPG_RATINGS.hasOwnProperty(keyStr)) {
-    return TVPG_RATINGS[keyStr];
+  // Try TVPG mappings (case-insensitive)
+  if (TVPG_MAP.hasOwnProperty(keyStr)) {
+    return TVPG_MAP[keyStr];
   }
 
   return null;
