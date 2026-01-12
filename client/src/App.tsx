@@ -103,8 +103,8 @@ function AppContent() {
 
   // Override global fetch to automatically detect database errors
   useEffect(() => {
-    // Skip fetch override in test environment to preserve Jest mock functionality
-    if (process.env.NODE_ENV === 'test') {
+    // Skip fetch override in test environment to preserve Vitest/Jest mock functionality
+    if (import.meta.env.MODE === 'test') {
       return;
     }
 

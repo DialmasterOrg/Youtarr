@@ -6,68 +6,64 @@ import '@testing-library/jest-dom';
 import ChannelListRow from '../ChannelListRow';
 import { Channel } from '../../../../types/Channel';
 import { renderWithProviders } from '../../../../test-utils';
+import { vi } from 'vitest';
 
-jest.mock('../chips', () => ({
-  QualityChip: function MockQualityChip({ videoQuality, globalPreferredResolution }: any) {
-    const React = require('react');
-    return React.createElement(
-      'div',
-      {
-        'data-testid': 'quality-chip',
-        'data-quality': videoQuality,
-        'data-global': globalPreferredResolution,
-      },
-      'Quality'
-    );
-  },
-  SubFolderChip: function MockSubFolderChip({ subFolder }: any) {
-    const React = require('react');
-    return React.createElement(
-      'div',
-      {
-        'data-testid': 'sub-folder-chip',
-      },
-      subFolder || 'Default Folder'
-    );
-  },
-  AutoDownloadChips: function MockAutoDownloadChips({ availableTabs, autoDownloadTabs }: any) {
-    const React = require('react');
-    return React.createElement(
-      'div',
-      {
-        'data-testid': 'auto-download-chips',
-        'data-available': availableTabs,
-        'data-enabled': autoDownloadTabs,
-      },
-      'Auto'
-    );
-  },
-  DurationFilterChip: function MockDurationFilterChip({ minDuration, maxDuration }: any) {
-    const React = require('react');
-    if (!minDuration && !maxDuration) return null;
-    return React.createElement(
-      'div',
-      {
-        'data-testid': 'duration-filter-chip',
-        'data-min': minDuration,
-        'data-max': maxDuration,
-      },
-      'Duration'
-    );
-  },
-  TitleFilterChip: function MockTitleFilterChip({ titleFilterRegex, onRegexClick }: any) {
-    const React = require('react');
-    if (!titleFilterRegex) return null;
-    return React.createElement(
-      'button',
-      {
-        'data-testid': 'title-filter-chip',
-        onClick: (e: any) => onRegexClick(e, titleFilterRegex),
-      },
-      'Title Filter'
-    );
-  },
-}));
+vi.mock('../chips', () => {
+  const React = require('react');
+  return {
+    QualityChip: ({ videoQuality, globalPreferredResolution }: any) =>
+      React.createElement(
+        'div',
+        {
+          'data-testid': 'quality-chip',
+          'data-quality': videoQuality,
+          'data-global': globalPreferredResolution,
+        },
+        'Quality'
+      ),
+    SubFolderChip: ({ subFolder }: any) =>
+      React.createElement(
+        'div',
+        {
+          'data-testid': 'sub-folder-chip',
+        },
+        subFolder || 'Default Folder'
+      ),
+    AutoDownloadChips: ({ availableTabs, autoDownloadTabs }: any) =>
+      React.createElement(
+        'div',
+        {
+          'data-testid': 'auto-download-chips',
+          'data-available': availableTabs,
+          'data-enabled': autoDownloadTabs,
+        },
+        'Auto'
+      ),
+    DurationFilterChip: ({ minDuration, maxDuration }: any) => {
+      if (!minDuration && !maxDuration) return null;
+      return React.createElement(
+        'div',
+        {
+          'data-testid': 'duration-filter-chip',
+          'data-min': minDuration,
+          'data-max': maxDuration,
+        },
+        'Duration'
+      );
+    },
+    TitleFilterChip: ({ titleFilterRegex, onRegexClick }: any) => {
+      if (!titleFilterRegex) return null;
+      return React.createElement(
+        'button',
+        {
+          'data-testid': 'title-filter-chip',
+          onClick: (e: any) => onRegexClick(e, titleFilterRegex),
+        },
+        'Title Filter'
+      );
+    },
+  };
+});
 
 describe('ChannelListRow', () => {
   const mockChannel: Channel = {

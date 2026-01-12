@@ -77,7 +77,7 @@ class ErrorBoundary extends Component<Props, State> {
               {fallbackMessage}
             </Alert>
 
-            {process.env.NODE_ENV === 'development' && this.state.error && (
+            {import.meta.env.DEV && this.state.error && (
               <Box
                 sx={{
                   mt: 2,

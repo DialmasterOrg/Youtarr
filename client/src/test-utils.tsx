@@ -2,19 +2,20 @@ import React from 'react';
 import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { vi } from 'vitest';
 import WebSocketContext from './contexts/WebSocketContext';
 
 type WebSocketValue = {
   socket: any;
-  subscribe: jest.Mock;
-  unsubscribe: jest.Mock;
+  subscribe: any;
+  unsubscribe: any;
 } | null;
 
 export function createMockWebSocketContext(): NonNullable<WebSocketValue> {
   return {
     socket: null,
-    subscribe: jest.fn(),
-    unsubscribe: jest.fn(),
+    subscribe: vi.fn(),
+    unsubscribe: vi.fn(),
   };
 }
 

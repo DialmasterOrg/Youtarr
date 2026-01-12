@@ -5,49 +5,49 @@ import '@testing-library/jest-dom';
 import ChannelCard from '../ChannelCard';
 import { Channel } from '../../../../types/Channel';
 import { renderWithProviders } from '../../../../test-utils';
+import { vi } from 'vitest';
 
 // Mock the chip components
-jest.mock('../chips', () => ({
-  QualityChip: function MockQualityChip({ videoQuality, globalPreferredResolution }: any) {
-    const React = require('react');
-    const attrs: any = { 'data-testid': 'quality-chip' };
-    if (videoQuality !== null && videoQuality !== undefined) {
-      attrs['data-quality'] = videoQuality;
-    }
-    if (globalPreferredResolution !== null && globalPreferredResolution !== undefined) {
-      attrs['data-global'] = globalPreferredResolution;
-    }
-    return React.createElement('div', attrs, `Quality: ${videoQuality || 'default'}`);
-  },
-  AutoDownloadChips: function MockAutoDownloadChips({ availableTabs, autoDownloadTabs }: any) {
-    const React = require('react');
-    const attrs: any = { 'data-testid': 'auto-download-chips' };
-    if (availableTabs !== null && availableTabs !== undefined) {
-      attrs['data-available'] = availableTabs;
-    }
-    if (autoDownloadTabs !== null && autoDownloadTabs !== undefined) {
-      attrs['data-enabled'] = autoDownloadTabs;
-    }
-    return React.createElement('div', attrs, `Auto: ${autoDownloadTabs || 'none'}`);
-  },
-  DurationFilterChip: function MockDurationFilterChip({ minDuration, maxDuration }: any) {
-    const React = require('react');
-    if (!minDuration && !maxDuration) return null;
-    return React.createElement('div', {
-      'data-testid': 'duration-filter-chip',
-      'data-min': minDuration,
-      'data-max': maxDuration,
-    }, `Duration: ${minDuration || 0}-${maxDuration || '∞'}`);
-  },
-  TitleFilterChip: function MockTitleFilterChip({ titleFilterRegex, onRegexClick }: any) {
-    const React = require('react');
-    if (!titleFilterRegex) return null;
-    return React.createElement('div', {
-      'data-testid': 'title-filter-chip',
-      onClick: (e: any) => onRegexClick(e, titleFilterRegex),
-    }, `Title Filter: ${titleFilterRegex}`);
-  },
-}));
+vi.mock('../chips', () => {
+  const React = require('react');
+  return {
+    QualityChip: ({ videoQuality, globalPreferredResolution }: any) => {
+      const attrs: any = { 'data-testid': 'quality-chip' };
+      if (videoQuality !== null && videoQuality !== undefined) {
+        attrs['data-quality'] = videoQuality;
+      }
+      if (globalPreferredResolution !== null && globalPreferredResolution !== undefined) {
+        attrs['data-global'] = globalPreferredResolution;
+      }
+      return React.createElement('div', attrs, `Quality: ${videoQuality || 'default'}`);
+    },
+    AutoDownloadChips: ({ availableTabs, autoDownloadTabs }: any) => {
+      const attrs: any = { 'data-testid': 'auto-download-chips' };
+      if (availableTabs !== null && availableTabs !== undefined) {
+        attrs['data-available'] = availableTabs;
+      }
+      if (autoDownloadTabs !== null && autoDownloadTabs !== undefined) {
+        attrs['data-enabled'] = autoDownloadTabs;
+      }
+      return React.createElement('div', attrs, `Auto: ${autoDownloadTabs || 'none'}`);
+    },
+    DurationFilterChip: ({ minDuration, maxDuration }: any) => {
+      if (!minDuration && !maxDuration) return null;
+      return React.createElement('div', {
+        'data-testid': 'duration-filter-chip',
+        'data-min': minDuration,
+        'data-max': maxDuration,
+      }, `Duration: ${minDuration || 0}-${maxDuration || '∞'}`);
+    },
+    TitleFilterChip: ({ titleFilterRegex, onRegexClick }: any) => {
+      if (!titleFilterRegex) return null;
+      return React.createElement('div', {
+        'data-testid': 'title-filter-chip',
+        onClick: (e: any) => onRegexClick(e, titleFilterRegex),
+      }, `Title Filter: ${titleFilterRegex}`);
+    },
+  };
+});
 
 describe('ChannelCard Component', () => {
   const mockChannel: Channel = {
