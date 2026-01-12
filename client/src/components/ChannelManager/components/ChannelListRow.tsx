@@ -11,7 +11,7 @@ import {
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { Channel } from '../../../types/Channel';
-import { SubFolderChip, QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip } from './chips';
+import { SubFolderChip, QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, RatingBadge } from './chips';
 
 interface ChannelListRowProps {
   channel: Channel;
@@ -72,6 +72,7 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
             <Box sx={{ mt: 0.25, display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
               <QualityChip videoQuality={channel.video_quality} globalPreferredResolution={globalPreferredResolution} />
               <SubFolderChip subFolder={channel.sub_folder} />
+              <RatingBadge rating={channel.default_rating} />
             </Box>)}
         </Box>
         {isPendingAddition && <Chip label="Pending addition" size="small" color="warning" sx={{ mt: 0.5 }} />}
@@ -160,7 +161,7 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
       >
         <Box sx={{ minWidth: 0, pr: 1 }}>{renderChannelHeader()}</Box>
 
-        {/* Quality / Folder Column */}
+        {/* Quality / Folder / Rating Column */}
         <Box
           sx={{
             minWidth: 0,
@@ -172,6 +173,7 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
         >
           <QualityChip videoQuality={channel.video_quality} globalPreferredResolution={globalPreferredResolution} />
           <SubFolderChip subFolder={channel.sub_folder} />
+          <RatingBadge rating={channel.default_rating} />
         </Box>
 
         {/* Auto Downloads Column */}

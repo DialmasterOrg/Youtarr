@@ -3,7 +3,7 @@ import { Avatar, Box, Card, CardActionArea, CardContent, Chip, IconButton, Toolt
 import DeleteIcon from '@mui/icons-material/Delete';
 import ImageIcon from '@mui/icons-material/Image';
 import { Channel } from '../../../types/Channel';
-import { QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip } from './chips';
+import { QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, RatingBadge } from './chips';
 import FolderIcon from '@mui/icons-material/Folder';
 
 interface ChannelCardProps {
@@ -165,24 +165,26 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                     </Box>
 
 
-                    <Tooltip title="Remove channel">
-                        <IconButton
-                            color="error"
-                            size="large"
-                            aria-label="Remove channel"
-                            sx={{
-                                position: 'absolute',
-                                top: 8,
-                                right: 8,
-                            }}
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                onDelete();
-                            }}
-                        >
-                            <DeleteIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
+                    <span>
+                        <Tooltip title="Remove channel">
+                            <IconButton
+                                color="error"
+                                size="large"
+                                aria-label="Remove channel"
+                                sx={{
+                                    position: 'absolute',
+                                    top: 8,
+                                    right: 8,
+                                }}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    onDelete();
+                                }}
+                            >
+                                <DeleteIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    </span>
                 </Box>
 
                 <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%', flexGrow: 1 }}>
@@ -229,6 +231,12 @@ const CardDetails: React.FC<CardDetailsProps> = ({ channel, isMobile, onRegexCli
                     autoDownloadTabs={channel.auto_download_enabled_tabs}
                     isMobile={isMobile}
                 />
+                {(channel.video_quality || channel.default_rating) && (
+                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                        <QualityChip videoQuality={channel.video_quality} globalPreferredResolution="1080" />
+                        <RatingBadge rating={channel.default_rating} />
+                    </Box>
+                )}
             </Box>
         </Box>
     );

@@ -252,6 +252,50 @@ module.exports = function createConfigRoutes({ verifyToken, configModule, valida
   });
 
   /**
+   * Get theme settings used by the Admin UI
+   * Returns current theme mode and optional custom colors
+   */
+  // Public read-only endpoint for admin UI theme settings
+  // NOTE: This is intentionally unauthenticated so the UI can read theme
+  // info without requiring a token. Mutations still require auth.
+  router.get('/api/v1/admin/settings/theme', (req, res) => {
+    try {
+      const cfg = configModule.getConfig();
+      const theme = {
+        darkModeEnabled: !!cfg.darkModeEnabled,
+        mode: cfg.darkModeEnabled ? 'dark' : 'light',
+        customColors: cfg.customColors || {},
+      };
+      res.json({ theme });
+    } catch (error) {
+      req.log.error({ err: error }, 'Failed to get theme settings');
+      res.status(500).json({ error: 'Failed to get theme settings' });
+    }
+  });
+
+  // Allow updating theme settings via POST (admin only)
+  router.post('/api/v1/admin/settings/theme', verifyToken, (req, res) => {
+    try {
+      const { darkModeEnabled, customColors } = req.body;
+      const cfg = configModule.getConfig();
+
+      if (typeof darkModeEnabled === 'boolean') {
+        cfg.darkModeEnabled = darkModeEnabled;
+      }
+
+      if (customColors && typeof customColors === 'object') {
+        cfg.customColors = customColors;
+      }
+
+      configModule.updateConfig(cfg);
+      res.json({ status: 'success' });
+    } catch (error) {
+      req.log.error({ err: error }, 'Failed to update theme settings');
+      res.status(500).json({ error: 'Failed to update theme settings' });
+    }
+  });
+
+  /**
    * @swagger
    * /api/notifications/test:
    *   post:

@@ -14,6 +14,7 @@ import ConfigurationSkeleton from './Configuration/common/ConfigurationSkeleton'
 import { CoreSettingsSection } from './Configuration/sections/CoreSettingsSection';
 import { PlexIntegrationSection } from './Configuration/sections/PlexIntegrationSection';
 import { SponsorBlockSection } from './Configuration/sections/SponsorBlockSection';
+import { ContentRatingsSection } from './Configuration/sections/ContentRatingsSection';
 import { KodiCompatibilitySection } from './Configuration/sections/KodiCompatibilitySection';
 import { CookieConfigSection } from './Configuration/sections/CookieConfigSection';
 import { NotificationsSection } from './Configuration/sections/NotificationsSection';
@@ -215,6 +216,12 @@ function Configuration({ token }: ConfigurationProps) {
       />
 
       <SponsorBlockSection
+        config={config}
+        onConfigChange={handleConfigChange}
+        onMobileTooltipClick={setMobileTooltip}
+      />
+
+      <ContentRatingsSection
         config={config}
         onConfigChange={handleConfigChange}
         onMobileTooltipClick={setMobileTooltip}

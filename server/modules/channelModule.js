@@ -1206,7 +1206,7 @@ class ChannelModule {
       where: {
         youtubeId: youtubeIds
       },
-      attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+      attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'normalized_rating']
     });
 
     // Create Maps for O(1) lookup of download status
@@ -1219,7 +1219,8 @@ class ChannelModule {
         added: true,
         removed: v.removed,
         fileSize: v.fileSize,
-        filePath: v.filePath
+        filePath: v.filePath,
+        normalized_rating: v.normalized_rating
       });
 
       // Collect videos that need file checking (only if checkFiles is true)
@@ -1257,6 +1258,9 @@ class ChannelModule {
         plainVideoObject.added = true;
         plainVideoObject.removed = status.removed;
         plainVideoObject.fileSize = status.fileSize;
+        if (status.normalized_rating) {
+          plainVideoObject.normalized_rating = status.normalized_rating;
+        }
       } else {
         // Video never downloaded
         plainVideoObject.added = false;
@@ -1352,7 +1356,10 @@ class ChannelModule {
         availability: v.availability,
         youtube_removed: v.youtube_removed,
         ignored: v.ignored,
-        ignored_at: v.ignored_at
+        ignored_at: v.ignored_at,
+        normalized_rating: v.normalized_rating,
+        media_type: v.media_type,
+        live_status: v.live_status
       }));
 
       // This will check files for only the current page

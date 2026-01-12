@@ -36,6 +36,7 @@ interface ChannelSettings {
   min_duration: number | null;
   max_duration: number | null;
   title_filter_regex: string | null;
+  default_rating: string | null;
 }
 
 interface FilterPreviewVideo {
@@ -91,14 +92,16 @@ function ChannelSettingsDialog({
     video_quality: null,
     min_duration: null,
     max_duration: null,
-    title_filter_regex: null
+    title_filter_regex: null,
+    default_rating: null
   });
   const [originalSettings, setOriginalSettings] = useState<ChannelSettings>({
     sub_folder: null,
     video_quality: null,
     min_duration: null,
     max_duration: null,
-    title_filter_regex: null
+    title_filter_regex: null,
+    default_rating: null
   });
   const [subfolders, setSubfolders] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -174,7 +177,8 @@ function ChannelSettingsDialog({
           video_quality: settingsData.video_quality || null,
           min_duration: settingsData.min_duration || null,
           max_duration: settingsData.max_duration || null,
-          title_filter_regex: settingsData.title_filter_regex || null
+          title_filter_regex: settingsData.title_filter_regex || null,
+          default_rating: settingsData.default_rating || null
         };
         setSettings(loadedSettings);
         setOriginalSettings(loadedSettings);
@@ -441,14 +445,47 @@ function ChannelSettingsDialog({
             />
 
             <Typography variant="caption" color="text.secondary">
-              Note: Changing the subfolder will move the channel's existing folder and files!</Typography>
-
+                Note: Changing the subfolder will move the channel&apos;s existing folder and files!</Typography>
             {/* Download Filters Section */}
             <Divider sx={{ my: 0 }} />
 
             <Typography variant="h6" sx={{ mb: 1 }}>
               Download Filters
             </Typography>
+
+            <FormControl fullWidth>
+              <InputLabel id="default-rating-label" shrink>Default Content Rating</InputLabel>
+              <Select
+                labelId="default-rating-label"
+                value={settings.default_rating || ''}
+                label="Default Content Rating"
+                onChange={(e) => setSettings({
+                  ...settings,
+                  default_rating: e.target.value || null
+                })}
+                displayEmpty
+                notched
+              >
+                <MenuItem value="">
+                  <em>No Default Rating</em>
+                </MenuItem>
+                <MenuItem value="G">G</MenuItem>
+                <MenuItem value="PG">PG</MenuItem>
+                <MenuItem value="PG-13">PG-13</MenuItem>
+                <MenuItem value="R">R</MenuItem>
+                <MenuItem value="NC-17">NC-17</MenuItem>
+                <MenuItem value="TV-Y">TV-Y</MenuItem>
+                <MenuItem value="TV-Y7">TV-Y7</MenuItem>
+                <MenuItem value="TV-G">TV-G</MenuItem>
+                <MenuItem value="TV-PG">TV-PG</MenuItem>
+                <MenuItem value="TV-14">TV-14</MenuItem>
+                <MenuItem value="TV-MA">TV-MA</MenuItem>
+              </Select>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                Rating to apply to videos in this channel if they don&apos;t have one.
+              </Typography>
+            </FormControl>
+
             <Alert severity="info" sx={{ mb: 2 }}>
               <Typography variant="body2">
                 These filters only apply to channel downloads. Manually selected videos will always download.

@@ -774,7 +774,7 @@ function VideosPage({ token }: VideosPageProps) {
                             <Checkbox
                               checked={selectedVideos.includes(video.id)}
                               onChange={() => handleSelectVideo(video.id)}
-                              disabled={video.removed}
+                              disabled={Boolean(video.removed)}
                             />
                           </TableCell>
                           <TableCell>
@@ -963,7 +963,7 @@ function VideosPage({ token }: VideosPageProps) {
                                   color="error"
                                   size="small"
                                   onClick={() => handleDeleteSingleVideo(video.id)}
-                                  disabled={video.removed || deleteLoading}
+                                  disabled={Boolean(video.removed) || deleteLoading}
                                 >
                                   <DeleteIcon />
                                 </IconButton>

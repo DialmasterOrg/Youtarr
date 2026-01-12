@@ -128,6 +128,26 @@ function VideoListItem({
             />
           )}
 
+          {/* Rating overlay */}
+          {video.normalized_rating && (
+            <Chip
+              label={video.normalized_rating}
+              size="small"
+              sx={{
+                position: 'absolute',
+                top: 4,
+                right: 4,
+                bgcolor: 'primary.main',
+                color: 'white',
+                fontSize: '0.6rem',
+                fontWeight: 'bold',
+                height: 16,
+                zIndex: 1,
+                '& .MuiChip-label': { px: 0.5 },
+              }}
+            />
+          )}
+
           {/* Still Live indicator or Checkbox for selectable videos */}
           {isStillLive ? (
             <Box

@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Card, CardContent, Grid, Typography, Box, IconButton, Tooltip, Chip, Popover, Dialog, DialogTitle, DialogContent } from '@mui/material';
+import { Card, CardContent, Grid, Typography, Box, IconButton, Tooltip, Chip, Popover, Dialog, DialogTitle, DialogContent, Divider, Button } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import FolderIcon from '@mui/icons-material/Folder';
 import VideocamIcon from '@mui/icons-material/Videocam';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
+import StarIcon from '@mui/icons-material/Star';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { Channel } from '../types/Channel';
 import ChannelVideos from './ChannelPage/ChannelVideos';
 import ChannelSettingsDialog from './ChannelPage/ChannelSettingsDialog';
+import RatingBadge from './shared/RatingBadge';
 import { isUsingDefaultSubfolder, isExplicitlyNoSubfolder } from '../utils/channelHelpers';
 
 interface ChannelPageProps {
@@ -32,6 +34,7 @@ function ChannelPage({ token }: ChannelPageProps) {
     min_duration: number | null;
     max_duration: number | null;
     title_filter_regex: string | null;
+    default_rating: string | null;
   }) => {
     setChannel((prev) => {
       if (!prev) {
@@ -44,12 +47,13 @@ function ChannelPage({ token }: ChannelPageProps) {
         min_duration: updated.min_duration,
         max_duration: updated.max_duration,
         title_filter_regex: updated.title_filter_regex,
+        default_rating: updated.default_rating,
       };
     });
   };
 
   useEffect(() => {
-    fetch(`/getChannelInfo/${channel_id}`, {
+    fetch(`/getchannelinfo/${channel_id}`, {
       headers: {
         'x-access-token': token || '',
       },
@@ -131,13 +135,17 @@ function ChannelPage({ token }: ChannelPageProps) {
     const hasQualityOverride = channel.video_quality;
     const hasDurationFilter = channel.min_duration || channel.max_duration;
     const hasRegexFilter = channel.title_filter_regex;
+    const hasDefaultRating = channel.default_rating;
 
-    if (!hasQualityOverride && !hasDurationFilter && !hasRegexFilter) {
+    if (!hasQualityOverride && !hasDurationFilter && !hasRegexFilter && !hasDefaultRating) {
       return null;
     }
 
     return (
       <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', marginBottom: 0.5, alignItems: 'center' }}>
+        {hasDefaultRating && (
+          <RatingBadge rating={channel.default_rating} />
+        )}
         {hasQualityOverride && (
           <Tooltip title={`Auto-download quality override: ${channel.video_quality}p`}>
             <Chip
@@ -325,6 +333,58 @@ function ChannelPage({ token }: ChannelPageProps) {
           </Grid>
         </CardContent>
       </Card>
+
+      {channel && (
+        <Card
+          elevation={0}
+          sx={{
+            mb: 2,
+            borderRadius: 2,
+            bgcolor: 'action.hover',
+            border: '1px solid',
+            borderColor: 'divider'
+          }}
+        >
+          <CardContent sx={{ py: '8px !important' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <StarIcon color="primary" sx={{ fontSize: 20 }} />
+                  <Typography variant="body2" fontWeight={600}>Default Rating:</Typography>
+                  {channel.default_rating ? (
+                    <RatingBadge
+                      rating={channel.default_rating}
+                      size="medium"
+                    />
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                      Inherit
+                    </Typography>
+                  )}
+                </Box>
+
+                <Divider orientation="vertical" flexItem sx={{ mx: 0.5, display: { xs: 'none', sm: 'block' } }} />
+
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="body2" fontWeight={600}>Target Folder:</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {channel.sub_folder ? `__${channel.sub_folder}/` : 'Root'}
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<SettingsIcon />}
+                onClick={() => setSettingsOpen(true)}
+              >
+                Customize Channel
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
 
       <ChannelVideos
         token={token}

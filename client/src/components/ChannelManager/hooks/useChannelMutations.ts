@@ -95,6 +95,7 @@ export const useChannelMutations = ({ token, onRefresh }: UseChannelMutationsOpt
         min_duration: channelInfo.min_duration,
         max_duration: channelInfo.max_duration,
         title_filter_regex: channelInfo.title_filter_regex,
+        default_rating: channelInfo.default_rating,
       };
 
       setPendingAdditions((prev) => [...prev, formattedChannel]);

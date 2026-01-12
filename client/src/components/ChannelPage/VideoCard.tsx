@@ -138,6 +138,26 @@ function VideoCard({
               />
             )}
 
+            {/* Rating overlay */}
+            {video.normalized_rating && (
+              <Chip
+                label={video.normalized_rating}
+                size="small"
+                sx={{
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  bgcolor: 'rgba(25, 118, 210, 0.9)',
+                  color: 'white',
+                  fontSize: '0.7rem',
+                  fontWeight: 'bold',
+                  height: 20,
+                  zIndex: 1,
+                  '& .MuiChip-label': { px: 0.75 },
+                }}
+              />
+            )}
+
             {/* Still Live indicator or Selection overlay for download */}
             {isStillLive ? (
               <Box

@@ -440,6 +440,7 @@ class ChannelSettingsModule {
       min_duration: channel.min_duration,
       max_duration: channel.max_duration,
       title_filter_regex: channel.title_filter_regex,
+      default_rating: channel.default_rating,
     };
   }
 
@@ -538,6 +539,11 @@ class ChannelSettingsModule {
     if (settings.title_filter_regex !== undefined) {
       updateData.title_filter_regex = settings.title_filter_regex
         ? settings.title_filter_regex.trim()
+        : null;
+    }
+    if (settings.default_rating !== undefined) {
+      updateData.default_rating = settings.default_rating
+        ? settings.default_rating.trim()
         : null;
     }
 
