@@ -49,7 +49,34 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: ['./src/setupTests.ts'], // Will rename existing setupTests if needed
+    setupFiles: ['./src/setupTests.ts'],
     exclude: ['node_modules', 'dist', '.idea', '.git', '.cache'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html', 'lcov'],
+      exclude: [
+        'node_modules/',
+        'src/setupTests.ts',
+        'src/test-utils.tsx',
+        '**/*.d.ts',
+        '**/*.stories.tsx',
+        'src/main.tsx',
+        'src/vite-env.d.ts',
+      ],
+      thresholds: {
+        global: {
+          branches: 70,
+          functions: 70,
+          lines: 70,
+          statements: 70,
+        },
+      },
+    },
+    // Enable UI for better test debugging
+    ui: true,
+    // Watch mode configuration
+    watch: {
+      include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    },
   },
 });
