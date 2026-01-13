@@ -26,7 +26,7 @@ const LocalLogin: React.FC<LocalLoginProps> = ({ setToken }) => {
       const { token } = response.data;
       localStorage.setItem('authToken', token);
       setToken(token);
-      window.location.href = '/configuration';
+      window.location.href = '/settings';
     } catch (err: any) {
       if (err.response?.data?.requiresSetup) {
         window.location.href = '/setup';

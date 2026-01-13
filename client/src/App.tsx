@@ -12,37 +12,17 @@ import {
   useLocation,
 } from 'react-router-dom';
 import {
-  Grid,
-  AppBar,
-  Toolbar,
   Container,
   Typography,
-  Drawer,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  IconButton,
-  useTheme,
-  useMediaQuery,
   Snackbar,
   Alert,
   Box,
   CssBaseline,
 } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
-import CloseIcon from '@mui/icons-material/Close';
-import MenuIcon from '@mui/icons-material/Menu';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import SettingsIcon from '@mui/icons-material/Settings';
-import SubscriptionsIcon from '@mui/icons-material/Subscriptions';
-import DownloadIcon from '@mui/icons-material/Download';
-import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
-import LoginIcon from '@mui/icons-material/Login';
-import LogoutIcon from '@mui/icons-material/Logout';
-import ShieldIcon from '@mui/icons-material/Shield';
-import NewReleasesIcon from '@mui/icons-material/NewReleases';
-import Configuration from './components/Configuration';
+import { AppShell } from './components/layout/AppShell';
+import { Settings } from './components/Settings/Settings';
 import ChannelManager from './components/ChannelManager';
 import DownloadManager from './components/DownloadManager';
 import VideosPage from './components/VideosPage';
@@ -50,7 +30,6 @@ import LocalLogin from './components/LocalLogin';
 import InitialSetup from './components/InitialSetup';
 import ChannelPage from './components/ChannelPage';
 import ChangelogPage from './components/ChangelogPage';
-import StorageStatus from './components/StorageStatus';
 import { useConfig } from './hooks/useConfig';
 import ErrorBoundary from './components/ErrorBoundary';
 import DatabaseErrorOverlay from './components/DatabaseErrorOverlay';
@@ -77,9 +56,6 @@ function AppContent() {
   const [dbRecovered, setDbRecovered] = useState(false);
   const [countdown, setCountdown] = useState(15);
   const location = useLocation();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const drawerWidth = isMobile ? '50%' : 240; // specify your drawer width
 
   // Use config hook for global configuration access
   const { config: appConfig, deploymentEnvironment } = useConfig(token);
@@ -94,6 +70,12 @@ function AppContent() {
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('plexAuthToken');
+    setToken(null);
   };
 
   const handleDatabaseRetry = () => {
@@ -373,471 +355,133 @@ function AppContent() {
           />
         )}
 
-      <AppBar
-        position="fixed"
-        sx={{
-          bgcolor: 'background.paper',
-          width: '100%',
-          margin: 0,
-          padding: 0,
-        }}
-      >
-        <Toolbar
-          style={{
-            paddingBottom: '8px',
-          }}
-        >
-          <IconButton
-            color='inherit'
-            aria-label='open drawer'
-            edge='start'
-            onClick={handleDrawerToggle}
-            sx={{
-              mx: 0.25,
-              mt: 1,
-              visibility: isMobile ? 'visible' : 'hidden',
-              color: 'text.primary',
-            }}
-          >
-            <MenuIcon fontSize='large' />
-          </IconButton>
-          {!requiresSetup && token && <StorageStatus token={token} />}
-          <Box
-            sx={{
-              marginTop: '8px',
-              color: 'text.primary',
-              flexGrow: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {platformName?.toLowerCase() === 'elfhosted' && (
-                <img
-                  src="https://store.elfhosted.com/wp-content/uploads/2024/11/logo.svg"
-                  alt="ElfHosted"
-                  style={{ width: isMobile ? '30px' : '40px', height: 'auto' }}
-                />
-              )}
-              <img
-                src={toplogo}
-                alt='Youtarr'
-                style={{ width: isMobile ? '150px' : '200px', height: isMobile ? '44px' : '56px' }}
-              />
-            </div>
-            <Typography
-              style={{ fontSize: isMobile ? 'small' : 'large' }}
-              align='center'
-            >
-              YouTube Video Manager
-            </Typography>
-          </Box>
-          <Box
-            style={{
-              position: 'absolute',
-              top: 5,
-              right: 10,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-end'
-            }}
-          >
-            <Typography
-              fontSize='small'
-              color={'textSecondary'}
-            >
-              {clientVersion}
-            </Typography>
-            {ytDlpVersion && (
-              <Typography
-                fontSize='x-small'
-                color={'textSecondary'}
-                style={{ opacity: 0.7 }}
-              >
-                yt-dlp: {ytDlpVersion}
-              </Typography>
-            )}
-          </Box>
-          {/* This is the matching invisible IconButton */}
-          <IconButton
-            color='inherit'
-            aria-label='menu space'
-            edge='start'
-            sx={{ mx: 0.25, visibility: 'hidden', color: 'text.primary' }}
-          >
-            <MenuIcon fontSize='large' />
-          </IconButton>
-        </Toolbar>
-      </AppBar>
-      <Grid container>
-        <Grid
-          item
-          xs={12}
-          sm={3}
-          md={1}
-          style={{ maxWidth: drawerWidth, paddingTop: isMobile ?'0px' : '100px' }}
-        >
-          <Drawer
-            variant={isMobile ? 'temporary' : 'permanent'}
-            open={isMobile ? mobileOpen : true}
-            onClose={handleDrawerToggle}
-            style={{ width: drawerWidth }}
-            PaperProps={{
-              sx: {
-                width: drawerWidth,
-                bgcolor: 'background.default',
-                maxWidth: '50vw',
-                marginTop: isMobile ? '0' : '100px',
-              },
-            }}
-            ModalProps={{ keepMounted: true }} // Better open performance on mobile.
-          >
-            {isMobile && (
-              <IconButton
-                color='inherit'
-                aria-label='close drawer'
-                edge='end'
-                onClick={handleDrawerToggle}
-                sx={{ mx: 2, mb: 0, mt: 2, alignSelf: 'flex-end' }}
-              >
-                <CloseIcon fontSize='large' />
-              </IconButton>
-            )}
-            <List>
-              <ListItem
-                button
-                component={Link}
-                to='/configuration'
-                onClick={handleDrawerToggle}
-                sx={{
-                  bgcolor: location.pathname === '/configuration' ? 'action.selected' : 'transparent',
-                  borderLeft: location.pathname === '/configuration' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
-                  '&:hover': {
-                    bgcolor: location.pathname === '/configuration' ? 'action.hover' : 'action.hover',
-                  },
-                  paddingX: isMobile ? '8px' : '16px'
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                  <SettingsIcon sx={{ color: location.pathname === '/configuration' ? 'primary.main' : 'inherit' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primaryTypographyProps={{
-                    fontSize: isMobile ? 'small' : 'medium',
-                    fontWeight: location.pathname === '/configuration' ? 'bold' : 'normal'
-                  }}
-                  primary='Configuration'
-                />
-              </ListItem>
-              <ListItem
-                button
-                component={Link}
-                to='/channels'
-                onClick={handleDrawerToggle}
-                sx={{
-                  bgcolor: location.pathname === '/channels' ? 'action.selected' : 'transparent',
-                  borderLeft: location.pathname === '/channels' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
-                  '&:hover': {
-                    bgcolor: 'action.hover',
-                  },
-                  paddingX: isMobile ? '8px' : '16px'
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                  <SubscriptionsIcon sx={{ color: location.pathname === '/channels' ? 'primary.main' : 'inherit' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primaryTypographyProps={{
-                    fontSize: isMobile ? 'small' : 'medium',
-                    fontWeight: location.pathname === '/channels' ? 'bold' : 'normal'
-                  }}
-                  primary='Your Channels'
-                />
-              </ListItem>
-              <ListItem
-                button
-                component={Link}
-                to='/downloads'
-                onClick={handleDrawerToggle}
-                sx={{
-                  bgcolor: location.pathname === '/downloads' ? 'action.selected' : 'transparent',
-                  borderLeft: location.pathname === '/downloads' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
-                  '&:hover': {
-                    bgcolor: 'action.hover',
-                  },
-                  paddingX: isMobile ? '8px' : '16px'
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                  <DownloadIcon sx={{ color: location.pathname === '/downloads' ? 'primary.main' : 'inherit' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primaryTypographyProps={{
-                    fontSize: isMobile ? 'small' : 'medium',
-                    fontWeight: location.pathname === '/downloads' ? 'bold' : 'normal'
-                  }}
-                  primary='Manage Downloads'
-                />
-              </ListItem>
-              <ListItem
-                button
-                component={Link}
-                to='/videos'
-                onClick={handleDrawerToggle}
-                sx={{
-                  bgcolor: location.pathname === '/videos' ? 'action.selected' : 'transparent',
-                  borderLeft: location.pathname === '/videos' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
-                  '&:hover': {
-                    bgcolor: 'action.hover',
-                  },
-                  paddingX: isMobile ? '8px' : '16px'
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                  <VideoLibraryIcon sx={{ color: location.pathname === '/videos' ? 'primary.main' : 'inherit' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primaryTypographyProps={{
-                    fontSize: isMobile ? 'small' : 'medium',
-                    fontWeight: location.pathname === '/videos' ? 'bold' : 'normal'
-                  }}
-                  primary='Downloaded Videos'
-                />
-              </ListItem>
-              <ListItem
-                button
-                component={Link}
-                to='/changelog'
-                onClick={handleDrawerToggle}
-                sx={{
-                  bgcolor: location.pathname === '/changelog' ? 'action.selected' : 'transparent',
-                  borderLeft: location.pathname === '/changelog' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
-                  '&:hover': {
-                    bgcolor: 'action.hover',
-                  },
-                  paddingX: isMobile ? '8px' : '16px'
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                  <NewReleasesIcon sx={{ color: location.pathname === '/changelog' ? 'primary.main' : 'inherit' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primaryTypographyProps={{
-                    fontSize: isMobile ? 'small' : 'medium',
-                    fontWeight: location.pathname === '/changelog' ? 'bold' : 'normal'
-                  }}
-                  primary='Changelog'
-                />
-              </ListItem>
-              {!token && !isPlatformManaged && (
-                <ListItem
-                  button
-                  component={Link}
-                  to='/login'
-                  onClick={handleDrawerToggle}
-                  sx={{
-                    bgcolor: location.pathname === '/login' ? 'action.selected' : 'transparent',
-                    borderLeft: location.pathname === '/login' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
-                    '&:hover': {
-                      bgcolor: 'action.hover',
-                    },
-                    paddingX: isMobile ? '8px' : '16px'
-                  }}
-                >
-                  <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                    <LoginIcon sx={{ color: location.pathname === '/login' ? 'primary.main' : 'inherit' }} />
-                  </ListItemIcon>
-                  <ListItemText
-                    primaryTypographyProps={{
-                      fontSize: isMobile ? 'small' : 'medium',
-                      fontWeight: location.pathname === '/login' ? 'bold' : 'normal'
-                    }}
-                    primary='Login'
-                  />
-                </ListItem>
-              )}
-              {token && !isPlatformManaged && (
-                <ListItem
-                  button
-                  onClick={() => {
-                    localStorage.removeItem('authToken');
-                    localStorage.removeItem('plexAuthToken');
-                    setToken(null);
-                    handleDrawerToggle();
-                  }}
-                  sx={{
-                    paddingX: isMobile ? '8px' : '16px'
-                  }}
-                >
-                  <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                    <LogoutIcon />
-                  </ListItemIcon>
-                  <ListItemText
-                    primaryTypographyProps={{ fontSize: isMobile ? 'small' : 'medium' }}
-                    primary='Logout'
-                  />
-                </ListItem>
-              )}
-              {isPlatformManaged && (
-                <ListItem sx={{ paddingX: isMobile ? '8px' : '16px' }}>
-                  <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                    <ShieldIcon sx={{ color: 'success.main' }} />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Platform Authentication"
-                    primaryTypographyProps={{ fontSize: isMobile ? 'small' : 'medium' }}
-                    secondary={platformName?.toLowerCase() === "elfhosted" ? "Managed by Elfhosted" : "Managed by platform"}
-                    secondaryTypographyProps={{ fontSize: 'x-small' }}
-                  />
-                </ListItem>
-              )}
-            </List>
-          </Drawer>
-        </Grid>
-        <Grid
-          item
-          xs={12}
-          style={{
-            marginLeft: isMobile ? '0' : drawerWidth,
-          }}
+        <AppShell
+          token={requiresSetup ? null : token}
+          isPlatformManaged={isPlatformManaged}
+          appName="Youtarr"
+          logoSrc={toplogo}
+          versionLabel={clientVersion}
+          onLogout={handleLogout}
         >
           <Container
-            style={{
-              paddingTop: isMobile ? '100px' : '32px',
+            maxWidth={false}
+            sx={{
               width: '100%',
               ...(location.pathname === '/channels'
-                ? (isMobile
-                    ? {
-                        height: '100vh',
-                        maxHeight: 'calc(100vh - 16px)',
-                      }
-                    : {
-                        height: 'calc(100vh - 132px)',
-                        maxHeight: 'calc(100vh - 132px)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                      })
+                ? {
+                    display: 'flex',
+                    flexDirection: 'column',
+                    minHeight: 'calc(100vh - 140px)',
+                  }
                 : {}),
             }}
           >
             {checkingSetup ? (
               <div>Loading...</div>
             ) : (
-              <ErrorBoundary
-                fallbackMessage="An unexpected error occurred. Please refresh the page to continue."
-              >
+              <ErrorBoundary fallbackMessage="An unexpected error occurred. Please refresh the page to continue.">
                 <Routes>
-                <Route path='/setup' element={<InitialSetup onSetupComplete={(newToken) => {
-                  setToken(newToken);
-                  setRequiresSetup(false);
-                  window.location.href = '/configuration';
-                }} />} />
-                <Route
-                  path='/login'
-                  element={
-                    isPlatformManaged ? (
-                      <Navigate to='/configuration' replace />
-                    ) : (
-                      <LocalLogin setToken={setToken} />
-                    )
-                  }
-                />
-                <Route
-                  path='/changelog'
-                  element={<ChangelogPage />}
-                />
-                {token ? (
-                  <>
-                    <Route
-                      path='/configuration'
-                      element={<Configuration token={token} />}
-                    />
-                    <Route
-                      path='/channels'
-                      element={<ChannelManager token={token} />}
-                    />
-                    <Route
-                      path='/downloads'
-                      element={<DownloadManager token={token} />}
-                    />
-                    <Route
-                      path='/videos'
-                      element={<VideosPage token={token} />}
-                    />
-                    <Route
-                      path='/channel/:channel_id'
-                      element={<ChannelPage token={token} />}
-                    />
-                    <Route path='/*' element={<Navigate to='/downloads' />} />
-                  </>
-                ) : (
-                  // If setup is required, redirect to setup, otherwise to login
-                  <Route path='/*' element={<Navigate to={requiresSetup ? '/setup' : '/login'} />} />
-                )}
+                  <Route
+                    path='/setup'
+                    element={
+                      <InitialSetup
+                        onSetupComplete={(newToken) => {
+                          setToken(newToken);
+                          setRequiresSetup(false);
+                          window.location.href = '/settings';
+                        }}
+                      />
+                    }
+                  />
+                  <Route
+                    path='/login'
+                    element={
+                      isPlatformManaged ? (
+                        <Navigate to='/settings' replace />
+                      ) : (
+                        <LocalLogin setToken={setToken} />
+                      )
+                    }
+                  />
+                  <Route path='/changelog' element={<ChangelogPage />} />
+
+                  {token ? (
+                    <>
+                      <Route path='/settings/*' element={<Settings token={token} />} />
+                      <Route path='/configuration' element={<Navigate to='/settings' replace />} />
+                      <Route path='/channels' element={<ChannelManager token={token} />} />
+                      <Route path='/downloads' element={<DownloadManager token={token} />} />
+                      <Route path='/videos' element={<VideosPage token={token} />} />
+                      <Route path='/channel/:channel_id' element={<ChannelPage token={token} />} />
+                      <Route path='/*' element={<Navigate to='/downloads' />} />
+                    </>
+                  ) : (
+                    <Route path='/*' element={<Navigate to={requiresSetup ? '/setup' : '/login'} />} />
+                  )}
                 </Routes>
               </ErrorBoundary>
             )}
           </Container>
-        </Grid>
-      </Grid>
-      <Box
-        component="footer"
-        sx={{
-          position: 'fixed',
-          bottom: 0,
-          width: '100%',
-          bgcolor: 'background.paper',
-          textAlign: 'center',
-        }}
-      >
-        <Typography variant='subtitle1' color='textSecondary'>
-          {serverVersion && serverVersion !== clientVersion && platformName?.toLowerCase() !== 'elfhosted' && (
-            <Typography color='error'>
-              New version ({serverVersion}) available! Please shut down and pull the latest image and files to update.
-            </Typography>
-          )}
-        </Typography>
-      </Box>
+        </AppShell>
 
-      {/* Persistent warning for temp directory */}
-      <Snackbar
-        open={showTmpWarning}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-        sx={{ mt: 8 }}
-        onClose={() => setShowTmpWarning(false)}
-      >
-        <Alert
-          severity="error"
-          icon={<WarningAmberIcon />}
-          onClose={() => setShowTmpWarning(false)}
+        <Box
+          component="footer"
           sx={{
-            maxWidth: '600px',
-            '& .MuiAlert-message': {
-              width: '100%'
-            }
+            position: 'fixed',
+            bottom: 0,
+            width: '100%',
+            bgcolor: 'background.paper',
+            textAlign: 'center',
+            borderTop: (theme) => `1px solid ${theme.palette.divider}`,
           }}
         >
-          <Box>
-            <Typography variant="body2" gutterBottom>
-              <strong>Warning:</strong> Your video directory is mounted to {tmpDirectory}. This means your downloaded videos will not persist between restarts.
-            </Typography>
-            {platformName && platformName.toLowerCase() === 'elfhosted' && (
-              <Typography variant="body2">
-                Please see the{' '}
-                <a
-                  href="https://docs.elfhosted.com/app/youtarr"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: 'inherit', textDecoration: 'underline' }}
-                >
-                  Elfhosted setup guide
-                </a>
+          <Typography variant='subtitle1' color='textSecondary'>
+            {serverVersion && serverVersion !== clientVersion && platformName?.toLowerCase() !== 'elfhosted' && (
+              <Typography color='error'>
+                New version ({serverVersion}) available! Please shut down and pull the latest image and files to update.
               </Typography>
             )}
-          </Box>
-        </Alert>
-      </Snackbar>
+          </Typography>
+        </Box>
+
+        {/* Persistent warning for temp directory */}
+        <Snackbar
+          open={showTmpWarning}
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+          sx={{ mt: 8 }}
+          onClose={() => setShowTmpWarning(false)}
+        >
+          <Alert
+            severity="error"
+            icon={<WarningAmberIcon />}
+            onClose={() => setShowTmpWarning(false)}
+            sx={{
+              maxWidth: '600px',
+              '& .MuiAlert-message': {
+                width: '100%',
+              },
+            }}
+          >
+            <Box>
+              <Typography variant="body2" gutterBottom>
+                <strong>Warning:</strong> Your video directory is mounted to {tmpDirectory}. This means your downloaded videos will not persist between restarts.
+              </Typography>
+              {platformName && platformName.toLowerCase() === 'elfhosted' && (
+                <Typography variant="body2">
+                  Please see the{' '}
+                  <a
+                    href="https://docs.elfhosted.com/app/youtarr"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: 'inherit', textDecoration: 'underline' }}
+                  >
+                    Elfhosted setup guide
+                  </a>
+                </Typography>
+              )}
+            </Box>
+          </Alert>
+        </Snackbar>
       </>
     </ThemeProvider>
   );

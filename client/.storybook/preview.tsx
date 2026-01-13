@@ -16,6 +16,11 @@ const preview: Preview = {
         date: /Date$/i,
       },
     },
+    docs: {
+      autodocs: 'tag',
+      toc: true,
+    },
+    layout: 'padded',
   },
   decorators: [
     (Story) => (

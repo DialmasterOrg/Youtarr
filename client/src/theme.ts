@@ -26,6 +26,10 @@ const commonThemeOptions: ThemeOptions = {
       'sans-serif',
     ].join(','),
   },
+  shape: {
+    // Rounded-rectangle design language across the app
+    borderRadius: 12,
+  },
   components: {
     MuiCssBaseline: {
       styleOverrides: {
@@ -33,6 +37,42 @@ const commonThemeOptions: ThemeOptions = {
           margin: 0,
           WebkitFontSmoothing: 'antialiased',
           MozOsxFontSmoothing: 'grayscale',
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: 16,
+        },
+      },
+    },
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+          textTransform: 'none',
+        },
+      },
+    },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
         },
       },
     },

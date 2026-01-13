@@ -37,7 +37,7 @@ interface SubfolderAutocompleteProps {
   /** Callback when value changes */
   onChange: (value: string | null) => void;
   /** List of existing subfolders (with __ prefix from API) */
-  subfolders: string[];
+  subfolders?: string[];
   /** Global default subfolder for display purposes (without __ prefix) */
   defaultSubfolderDisplay?: string | null;
   /** Mode determines available options */
@@ -64,7 +64,7 @@ const ADD_NEW_SENTINEL = '__ADD_NEW__';
 export function SubfolderAutocomplete({
   value,
   onChange,
-  subfolders,
+  subfolders = [],
   defaultSubfolderDisplay,
   mode,
   disabled = false,
@@ -77,11 +77,14 @@ export function SubfolderAutocomplete({
   // Track locally added subfolders (not yet on filesystem)
   const [localSubfolders, setLocalSubfolders] = useState<string[]>([]);
 
+  // Ensure subfolders is always an array
+  const safeSubfolders = Array.isArray(subfolders) ? subfolders : [];
+
   // Combine API subfolders with locally added ones
   const allSubfolders = useMemo(() => {
-    const combined = new Set([...subfolders, ...localSubfolders]);
+    const combined = new Set([...safeSubfolders, ...localSubfolders]);
     return Array.from(combined).sort();
-  }, [subfolders, localSubfolders]);
+  }, [safeSubfolders, localSubfolders]);
 
   // Build options based on mode
   const options = useMemo((): SubfolderOption[] => {
