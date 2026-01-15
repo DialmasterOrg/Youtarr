@@ -27,6 +27,7 @@ yt-dlp.exe
 # production
 client/build
 client/node_modules
+client/storybook-static
 jobs/*
 config/jobs/*
 config/images/*
