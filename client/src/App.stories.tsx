@@ -74,9 +74,17 @@ export const LoggedIn: Story = {
     // Wait for the app to load
     await new Promise((resolve) => setTimeout(resolve, 300));
 
-    // Verify main navigation is visible
+    // Verify navigation toggle is actionable
+    const toggleButton = canvas.getByRole('button', { name: /toggle navigation/i });
+    await expect(toggleButton).toBeEnabled();
+    await userEvent.click(toggleButton);
+
+    // Verify main navigation is visible and enabled
     const navButtons = canvas.queryAllByRole('button', { name: /channels?|download|video|setting/i });
     expect(navButtons.length).toBeGreaterThan(0);
+    if (navButtons[0]) {
+      await expect(navButtons[0]).toBeEnabled();
+    }
 
     // Verify main content area exists
     const mainContent = canvas.queryByRole('main') || canvas.queryByRole('region');

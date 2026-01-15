@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, within } from '@storybook/test';
+import { expect, userEvent, within } from '@storybook/test';
 import { http, HttpResponse } from 'msw';
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
@@ -34,6 +34,9 @@ const meta: Meta<typeof Settings> = {
         http.get('/storage-status', () =>
           HttpResponse.json({ availableGB: '100', totalGB: '200', percentFree: 50 })
         ),
+        http.get('/api/channels/subfolders', () =>
+          HttpResponse.json(['Movies', 'Shows'])
+        ),
       ],
     },
   },
@@ -47,5 +50,9 @@ export const IndexPage: Story = {
     const canvas = within(canvasElement);
     await expect(await canvas.findByText('Settings')).toBeInTheDocument();
     await expect(await canvas.findByText('Choose a settings area.')).toBeInTheDocument();
+
+    const coreLink = canvas.getByRole('link', { name: /core/i });
+    await userEvent.click(coreLink);
+    await expect(await canvas.findByText('Core Settings')).toBeInTheDocument();
   },
 };

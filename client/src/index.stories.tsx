@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, within } from '@storybook/test';
+import { expect, userEvent, within } from '@storybook/test';
 import { http, HttpResponse } from 'msw';
 import React from 'react';
 import { Root } from './Root';
@@ -25,6 +25,10 @@ export const RendersAppShell: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await new Promise((resolve) => setTimeout(resolve, 300));
+    const toggleButton = canvas.getByRole('button', { name: /toggle navigation/i });
+    await expect(toggleButton).toBeEnabled();
+    await userEvent.click(toggleButton);
+
     const navButtons = canvas.queryAllByRole('button', { name: /channels?|download|video|setting/i });
     await expect(navButtons.length).toBeGreaterThan(0);
   },

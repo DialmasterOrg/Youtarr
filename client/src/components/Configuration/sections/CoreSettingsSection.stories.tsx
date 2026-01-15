@@ -53,5 +53,8 @@ export const ToggleAutoDownloads: Story = {
     const checkbox = canvas.getByRole('checkbox', { name: /enable automatic downloads/i });
     await userEvent.click(checkbox);
     await expect(checkbox).toBeChecked();
+
+    const frequencySelect = canvas.getByLabelText('Download Frequency');
+    await expect(frequencySelect).toBeEnabled();
   },
 };

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, within } from '@storybook/test';
+import { expect, userEvent, within } from '@storybook/test';
 import { MemoryRouter } from 'react-router-dom';
 import { SettingsIndex } from './SettingsIndex';
 
@@ -22,5 +22,9 @@ export const Default: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+
+    const link = canvas.getByRole('link', { name: /core/i });
+    await expect(link).toHaveAttribute('href', '/settings/core');
+    await userEvent.click(link);
   },
 };

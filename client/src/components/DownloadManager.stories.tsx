@@ -58,6 +58,10 @@ export const Empty: Story = {
       handlers: [http.get('/runningjobs', () => HttpResponse.json([]))],
     },
   },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await expect(await body.findByText(/no jobs currently running/i)).toBeInTheDocument();
+  },
 };
 
 export const WithJobs: Story = {

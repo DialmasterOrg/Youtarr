@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, within } from '@storybook/test';
+import { expect, userEvent, within } from '@storybook/test';
 import { http, HttpResponse } from 'msw';
 import ChannelSettingsDialog from './ChannelSettingsDialog';
 
@@ -43,5 +43,10 @@ export const Loaded: Story = {
     const body = within(canvasElement.ownerDocument.body);
     await expect(await body.findByText('Channel Settings: Example Channel')).toBeInTheDocument();
     await expect(await body.findByText(/effective channel quality/i)).toBeInTheDocument();
+
+    const select = body.getByLabelText('Channel Video Quality Override');
+    await userEvent.click(select);
+    await userEvent.click(await body.findByText('1080p (Full HD)'));
+    await expect(await body.findByText(/1080p \(channel\)/i)).toBeInTheDocument();
   },
 };

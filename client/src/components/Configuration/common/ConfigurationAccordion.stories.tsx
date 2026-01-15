@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, within } from '@storybook/test';
+import { expect, userEvent, within } from '@storybook/test';
 import { ConfigurationAccordion } from './ConfigurationAccordion';
 
 const meta: Meta<typeof ConfigurationAccordion> = {
@@ -23,5 +23,8 @@ export const Expanded: Story = {
     await expect(canvas.getByText('Accordion Title')).toBeInTheDocument();
     await expect(canvas.getByText('Enabled')).toBeInTheDocument();
     await expect(canvas.getByText('Accordion content goes here')).toBeInTheDocument();
+
+    await userEvent.click(canvas.getByText('Accordion Title'));
+    await expect(canvas.queryByText('Accordion content goes here')).not.toBeVisible();
   },
 };

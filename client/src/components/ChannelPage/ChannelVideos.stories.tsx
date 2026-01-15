@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, within } from '@storybook/test';
+import { expect, userEvent, within } from '@storybook/test';
 import { http, HttpResponse } from 'msw';
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
@@ -52,5 +52,9 @@ export const EmptyState: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(await canvas.findByText('No videos found')).toBeInTheDocument();
+
+    const searchInput = canvas.getByPlaceholderText('Search videos...') as HTMLInputElement;
+    await userEvent.type(searchInput, 'trailer');
+    await expect(searchInput).toHaveValue('trailer');
   },
 };
