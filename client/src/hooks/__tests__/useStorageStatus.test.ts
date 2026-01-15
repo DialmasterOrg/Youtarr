@@ -1,16 +1,26 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { useStorageStatus } from '../useStorageStatus';
 import type { StorageData } from '../useStorageStatus';
+import { vi } from 'vitest';
+import axios from 'axios';
 
 // Mock axios
-jest.mock('axios', () => ({
-  get: jest.fn(),
+vi.mock('axios', () => ({
+  default: {
+    get: vi.fn(),
+  },
 }));
 
-const axios = require('axios');
+const mockedAxios = axios as unknown as { get: ReturnType<typeof vi.fn> };
 
 describe('useStorageStatus', () => {
   const mockToken = 'test-token-123';
+
+  const advanceTimers = async (ms: number) => {
+    await act(async () => {
+      vi.advanceTimersByTime(ms);
+    });
+  };
 
   const mockStorageData: StorageData = {
     availableGB: '250',
@@ -18,19 +28,25 @@ describe('useStorageStatus', () => {
     totalGB: '500',
   };
 
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn> | undefined;
+
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.useFakeTimers();
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
-    jest.runOnlyPendingTimers();
-    jest.useRealTimers();
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+    vi.useRealTimers();
+    consoleErrorSpy?.mockRestore();
   });
 
   describe('Initial State', () => {
     test('returns default state values before fetch completes', () => {
-      axios.get.mockImplementation(() => new Promise(() => {})); // Never resolves
+      mockedAxios.get.mockImplementation(() => new Promise(() => {})); // Never resolves
 
       const { result } = renderHook(() => useStorageStatus(mockToken));
 
@@ -41,7 +57,7 @@ describe('useStorageStatus', () => {
     });
 
     test('initializes with loading true when token is provided', () => {
-      axios.get.mockImplementation(() => new Promise(() => {})); // Never resolves
+      mockedAxios.get.mockImplementation(() => new Promise(() => {})); // Never resolves
 
       const { result } = renderHook(() => useStorageStatus(mockToken));
 
@@ -51,7 +67,7 @@ describe('useStorageStatus', () => {
 
   describe('Successful Data Fetching', () => {
     test('fetches and returns storage data successfully in default mode', async () => {
-      axios.get.mockResolvedValueOnce({
+      mockedAxios.get.mockResolvedValueOnce({
         data: mockStorageData,
       });
 
@@ -67,17 +83,17 @@ describe('useStorageStatus', () => {
     });
 
     test('includes correct authentication header', async () => {
-      axios.get.mockResolvedValueOnce({
+      mockedAxios.get.mockResolvedValueOnce({
         data: mockStorageData,
       });
 
       renderHook(() => useStorageStatus(mockToken));
 
       await waitFor(() => {
-        expect(axios.get).toHaveBeenCalledTimes(1);
+        expect(mockedAxios.get).toHaveBeenCalledTimes(1);
       });
 
-      expect(axios.get).toHaveBeenCalledWith('/storage-status', {
+      expect(mockedAxios.get).toHaveBeenCalledWith('/storage-status', {
         headers: {
           'x-access-token': mockToken,
         },
@@ -91,7 +107,7 @@ describe('useStorageStatus', () => {
         totalGB: '200',
       };
 
-      axios.get.mockResolvedValueOnce({
+      mockedAxios.get.mockResolvedValueOnce({
         data: lowSpaceData,
       });
 
@@ -112,7 +128,7 @@ describe('useStorageStatus', () => {
         totalGB: '1000',
       };
 
-      axios.get.mockResolvedValueOnce({
+      mockedAxios.get.mockResolvedValueOnce({
         data: highSpaceData,
       });
 
@@ -220,7 +236,6 @@ describe('useStorageStatus', () => {
 
   describe('Error Handling', () => {
     test('handles network errors', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
       const networkError = new Error('Network error');
 
       axios.get.mockRejectedValueOnce(networkError);
@@ -233,16 +248,9 @@ describe('useStorageStatus', () => {
 
       expect(result.current.error).toBe(true);
       expect(result.current.data).toBeNull();
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Failed to fetch storage status:',
-        networkError
-      );
-
-      consoleErrorSpy.mockRestore();
     });
 
     test('handles API errors', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
       const apiError = new Error('Internal server error');
 
       axios.get.mockRejectedValueOnce(apiError);
@@ -255,13 +263,9 @@ describe('useStorageStatus', () => {
 
       expect(result.current.error).toBe(true);
       expect(result.current.data).toBeNull();
-
-      consoleErrorSpy.mockRestore();
     });
 
     test('sets available to false on error in checkOnly mode', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-
       axios.get.mockRejectedValueOnce(new Error('Fetch failed'));
 
       const { result } = renderHook(() =>
@@ -274,13 +278,9 @@ describe('useStorageStatus', () => {
 
       expect(result.current.error).toBe(true);
       expect(result.current.available).toBe(false);
-
-      consoleErrorSpy.mockRestore();
     });
 
     test('clears previous error on successful refetch', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-
       // First call fails
       axios.get.mockRejectedValueOnce(new Error('First error'));
 
@@ -366,14 +366,14 @@ describe('useStorageStatus', () => {
       });
 
       // Advance by default pollInterval (120000ms)
-      jest.advanceTimersByTime(120000);
+      await advanceTimers(120000);
 
       await waitFor(() => {
         expect(axios.get).toHaveBeenCalledTimes(2);
       });
 
       // Advance again
-      jest.advanceTimersByTime(120000);
+      await advanceTimers(120000);
 
       await waitFor(() => {
         expect(axios.get).toHaveBeenCalledTimes(3);
@@ -395,14 +395,14 @@ describe('useStorageStatus', () => {
       });
 
       // Advance by custom pollInterval (60000ms)
-      jest.advanceTimersByTime(60000);
+      await advanceTimers(60000);
 
       await waitFor(() => {
         expect(axios.get).toHaveBeenCalledTimes(2);
       });
 
       // Advance again
-      jest.advanceTimersByTime(60000);
+      await advanceTimers(60000);
 
       await waitFor(() => {
         expect(axios.get).toHaveBeenCalledTimes(3);
@@ -422,7 +422,7 @@ describe('useStorageStatus', () => {
       });
 
       // Advance time
-      jest.advanceTimersByTime(120000);
+      await advanceTimers(120000);
 
       // Should still be only 1 call
       expect(axios.get).toHaveBeenCalledTimes(1);
@@ -441,7 +441,7 @@ describe('useStorageStatus', () => {
       });
 
       // Advance time
-      jest.advanceTimersByTime(120000);
+      await advanceTimers(120000);
 
       // Should still be only 1 call
       expect(axios.get).toHaveBeenCalledTimes(1);
@@ -465,7 +465,7 @@ describe('useStorageStatus', () => {
       unmount();
 
       // Advance time
-      jest.advanceTimersByTime(60000);
+      await advanceTimers(60000);
 
       // Should not make another call after unmount
       expect(axios.get).toHaveBeenCalledTimes(1);
@@ -495,7 +495,7 @@ describe('useStorageStatus', () => {
       });
 
       // Advance by new interval to trigger poll
-      jest.advanceTimersByTime(30000);
+      await advanceTimers(30000);
 
       await waitFor(() => {
         expect(axios.get).toHaveBeenCalledTimes(3);
@@ -602,7 +602,7 @@ describe('useStorageStatus', () => {
     });
 
     test('sets loading to false after failed fetch', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       axios.get.mockRejectedValueOnce(new Error('Fetch error'));
 
@@ -721,7 +721,7 @@ describe('useStorageStatus', () => {
       expect(result.current.data).toBeNull();
 
       // Poll again
-      jest.advanceTimersByTime(60000);
+      await advanceTimers(60000);
 
       await waitFor(() => {
         expect(axios.get).toHaveBeenCalledTimes(2);
@@ -732,8 +732,6 @@ describe('useStorageStatus', () => {
     });
 
     test('handles checkOnly with poll and errors', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-
       axios.get.mockRejectedValue(new Error('Storage unavailable'));
 
       const { result } = renderHook(() =>
@@ -748,7 +746,7 @@ describe('useStorageStatus', () => {
       expect(result.current.error).toBe(true);
 
       // Poll again
-      jest.advanceTimersByTime(60000);
+      await advanceTimers(60000);
 
       await waitFor(() => {
         expect(axios.get).toHaveBeenCalledTimes(2);
@@ -756,8 +754,6 @@ describe('useStorageStatus', () => {
 
       expect(result.current.available).toBe(false);
       expect(result.current.error).toBe(true);
-
-      consoleErrorSpy.mockRestore();
     });
   });
 

@@ -2,6 +2,7 @@
   "name": "client",
   "version": "1.56.0",
   "private": true,
+  "type": "module",
   "proxy": "http://localhost:3011",
   "dependencies": {
     "@emotion/react": "^11.11.0",
@@ -11,7 +12,7 @@
     "@mui/x-date-pickers": "^5.0.20",
     "@types/jest": "^27.5.2",
     "@types/lodash": "^4.17.20",
-    "@types/node": "^16.18.30",
+    "@types/node": "^20.11.30",
     "@types/react": "^18.2.6",
     "@types/react-dom": "^18.2.4",
     "@types/react-transition-group": "^4.4.12",
@@ -33,13 +34,19 @@
     "start": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest",
-    "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage",
-    "test:ui": "vitest --ui",
-    "test:watch": "vitest --watch",
-    "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "test": "vitest --config vitest.config.ts",
+    "test:run": "vitest --config vitest.config.ts run",
+    "test:coverage": "vitest --config vitest.unit.config.ts run --coverage",
+    "test:ui": "vitest --config vitest.unit.config.ts --ui",
+    "test:watch": "vitest --config vitest.unit.config.ts --watch",
+    "storybook": "storybook dev -p ${STORYBOOK_PORT:-6006}",
+    "build-storybook": "storybook build",
+    "storybook:ci": "storybook dev -p ${STORYBOOK_PORT:-6006} --ci --quiet",
+    "storybook:serve": "http-server storybook-static -p ${STORYBOOK_PORT:-6006} -c-1 --silent",
+    "test-storybook": "vitest --config vitest.storybook.config.ts run",
+    "test-storybook:ci": "vitest --config vitest.storybook.config.ts run",
+    "test-storybook:test-runner": "test-storybook --url http://127.0.0.1:${STORYBOOK_PORT:-6006}",
+    "test-storybook:test-runner:ci": "npm run build-storybook && concurrently -k -s first -n STORYBOOK,TEST \"npm run storybook:serve\" \"wait-on --timeout 120000 http://127.0.0.1:${STORYBOOK_PORT:-6006}/iframe.html http://127.0.0.1:${STORYBOOK_PORT:-6006}/index.json && npm run test-storybook:test-runner\""
   },
   "browserslist": {
     "production": [
@@ -54,23 +61,35 @@
     ]
   },
   "devDependencies": {
-    "@storybook/addon-essentials": "^8.6.14",
-    "@storybook/addon-interactions": "^8.6.14",
+    "@storybook/addon-a11y": "^10.1.11",
     "@storybook/addon-links": "^10.1.11",
-    "@storybook/blocks": "^8.6.14",
+    "@storybook/addon-vitest": "^10.1.11",
     "@storybook/react": "^10.1.11",
     "@storybook/react-vite": "^10.1.11",
+    "@storybook/test": "file:packages/storybook-test",
+    "@storybook/test-runner": "^0.24.2",
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
+    "concurrently": "^9.2.1",
+    "http-server": "^14.1.1",
     "@vitejs/plugin-react": "^5.1.2",
-    "@vitest/ui": "^4.0.16",
+    "@vitest/browser": "^4.0.17",
+    "@vitest/browser-playwright": "^4.0.17",
+    "@vitest/ui": "^4.0.17",
     "jsdom": "^27.0.1",
     "msw": "^2.12.7",
     "msw-storybook-addon": "^2.0.6",
+    "playwright": "^1.51.1",
     "storybook": "^10.1.11",
     "vite": "^7.3.1",
     "vite-tsconfig-paths": "^6.0.4",
-    "vitest": "^3.2.4"
+    "wait-on": "^8.0.5",
+    "vitest": "^4.0.17"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }

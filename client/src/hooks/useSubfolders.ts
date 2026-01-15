@@ -35,7 +35,9 @@ export function useSubfolders(token: string | null): UseSubfoldersResult {
       }
 
       const data = await response.json();
-      setSubfolders(data);
+      // API may return either an array (legacy) or an object containing subfolders.
+      const subfolderList = Array.isArray(data) ? data : data?.subfolders;
+      setSubfolders(Array.isArray(subfolderList) ? subfolderList : []);
     } catch (err) {
       console.error('Failed to fetch subfolders:', err);
       setError(err instanceof Error ? err : new Error('Unknown error'));

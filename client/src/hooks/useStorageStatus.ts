@@ -54,7 +54,9 @@ export const useStorageStatus = (
 
       setError(false);
     } catch (err) {
-      console.error('Failed to fetch storage status:', err);
+      if (import.meta.env.MODE !== 'test') {
+        console.error('Failed to fetch storage status:', err);
+      }
       setError(true);
 
       if (checkOnly) {

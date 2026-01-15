@@ -79,6 +79,12 @@ function AppContent() {
   };
 
   const handleDatabaseRetry = () => {
+    // In Vitest/jsdom, Location.reload can trigger an unimplemented navigation path.
+    // The UI intent is "retry by reloading"; keep that behavior in real runtime only.
+    if (import.meta.env.MODE === 'test') {
+      return;
+    }
+
     // Reload the page to re-check database status
     window.location.reload();
   };
@@ -360,7 +366,7 @@ function AppContent() {
           isPlatformManaged={isPlatformManaged}
           appName="Youtarr"
           logoSrc={toplogo}
-          versionLabel={clientVersion}
+          versionLabel={ytDlpVersion ? `${clientVersion} • yt-dlp: ${ytDlpVersion}` : clientVersion}
           onLogout={handleLogout}
         >
           <Container

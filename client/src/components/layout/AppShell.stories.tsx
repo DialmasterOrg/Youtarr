@@ -1,42 +1,36 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import React from 'react';
+import { expect, fn, userEvent, within } from '@storybook/test';
 import { MemoryRouter } from 'react-router-dom';
-import { Box, Typography } from '@mui/material';
 import { AppShell } from './AppShell';
 
 const meta: Meta<typeof AppShell> = {
   title: 'Layout/AppShell',
   component: AppShell,
-  tags: ['autodocs'],
-  decorators: [
-    (Story) => (
-      <MemoryRouter initialEntries={['/downloads']}>
-        <Story />
-      </MemoryRouter>
-    ),
-  ],
   args: {
     token: 'storybook-token',
     isPlatformManaged: false,
     appName: 'Youtarr',
-    versionLabel: 'v0.0.0',
+    versionLabel: 'v0.0.0-storybook',
+    onLogout: fn(),
   },
+  render: (args) => (
+    <MemoryRouter>
+      <AppShell {...args}>
+        <div>Page content</div>
+      </AppShell>
+    </MemoryRouter>
+  ),
 };
 
 export default meta;
 type Story = StoryObj<typeof AppShell>;
 
-export const Default: Story = {
-  args: {
-    children: (
-      <Box>
-        <Typography variant="h4" sx={{ mb: 1 }}>
-          Page Title
-        </Typography>
-        <Typography color="text.secondary">
-          This is placeholder content inside the new shell.
-        </Typography>
-      </Box>
-    ),
+export const Default: Story = {};
+
+export const Logout: Story = {
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: /logout/i }));
+    await expect(args.onLogout).toHaveBeenCalled();
   },
 };

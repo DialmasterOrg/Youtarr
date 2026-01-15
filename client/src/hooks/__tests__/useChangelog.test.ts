@@ -1,9 +1,9 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useChangelog } from '../useChangelog';
+import { vi } from 'vitest';
 
 // Mock global fetch
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
+const mockFetch = vi.fn();
 
 // Track a counter to ensure each test gets a unique "now" time
 // This ensures the cache from previous tests is always expired
@@ -13,24 +13,25 @@ describe('useChangelog', () => {
   const mockChangelogContent = '# Changelog\n\n## [1.0.0]\n- Initial release';
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.useFakeTimers();
-    jest.spyOn(console, 'error').mockImplementation(() => {});
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', mockFetch);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
     // Each test starts 1 hour after the previous one to ensure cache expiration
     testCounter++;
-    jest.setSystemTime(new Date(2024, 0, 1, testCounter, 0, 0));
+    vi.setSystemTime(new Date(2024, 0, 1, testCounter, 0, 0));
   });
 
   afterEach(() => {
-    jest.runOnlyPendingTimers();
-    jest.useRealTimers();
-    jest.restoreAllMocks();
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   test('fetches and returns changelog content', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      text: jest.fn().mockResolvedValueOnce(mockChangelogContent),
+      text: vi.fn().mockResolvedValueOnce(mockChangelogContent),
     });
 
     const { result } = renderHook(() => useChangelog());
@@ -64,7 +65,7 @@ describe('useChangelog', () => {
   test('uses cached content within cache duration', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      text: jest.fn().mockResolvedValueOnce(mockChangelogContent),
+      text: vi.fn().mockResolvedValueOnce(mockChangelogContent),
     });
 
     const { result: result1, unmount } = renderHook(() => useChangelog());
@@ -77,7 +78,7 @@ describe('useChangelog', () => {
     unmount();
 
     // Advance time but stay within cache duration (< 5 minutes)
-    jest.advanceTimersByTime(2 * 60 * 1000);
+    vi.advanceTimersByTime(2 * 60 * 1000);
 
     const { result: result2 } = renderHook(() => useChangelog());
 
@@ -96,11 +97,11 @@ describe('useChangelog', () => {
     mockFetch
       .mockResolvedValueOnce({
         ok: true,
-        text: jest.fn().mockResolvedValueOnce(mockChangelogContent),
+        text: vi.fn().mockResolvedValueOnce(mockChangelogContent),
       })
       .mockResolvedValueOnce({
         ok: true,
-        text: jest.fn().mockResolvedValueOnce(updatedContent),
+        text: vi.fn().mockResolvedValueOnce(updatedContent),
       });
 
     const { result } = renderHook(() => useChangelog());

@@ -1,41 +1,42 @@
-import { rest } from 'msw';
+import { http, HttpResponse } from 'msw';
+import type { RequestHandler } from 'msw';
 
 // Mock API handlers for all backend endpoints
-export const handlers = [
+export const handlers: RequestHandler[] = [
   // Setup endpoints
-  rest.get('/setup/status', (req, res, ctx) => {
-    return res(ctx.json({
+  http.get('/setup/status', () => {
+    return HttpResponse.json({
       requiresSetup: false,
       isLocalhost: true,
       message: null,
-    }));
+    });
   }),
 
-  rest.post('/setup/create-auth', (req, res, ctx) => {
-    return res(ctx.json({
+  http.post('/setup/create-auth', () => {
+    return HttpResponse.json({
       success: true,
       message: 'Authentication setup complete',
-    }));
+    });
   }),
 
   // Authentication endpoints
-  rest.post('/auth/login', (req, res, ctx) => {
-    return res(ctx.json({
+  http.post('/auth/login', () => {
+    return HttpResponse.json({
       token: 'mock-jwt-token',
       user: { username: 'admin' },
-    }));
+    });
   }),
 
-  rest.post('/auth/validate', (req, res, ctx) => {
-    return res(ctx.json({
+  http.post('/auth/validate', () => {
+    return HttpResponse.json({
       valid: true,
       user: { username: 'admin' },
-    }));
+    });
   }),
 
   // Configuration endpoints
-  rest.get('/getconfig', (req, res, ctx) => {
-    return res(ctx.json({
+  http.get('/getconfig', () => {
+    return HttpResponse.json({
       youtubeOutputDirectory: '/app/data',
       preferredResolution: '1080p',
       darkModeEnabled: false,
@@ -44,58 +45,129 @@ export const handlers = [
       autoRemovalEnabled: false,
       writeChannelPosters: true,
       writeVideoNfoFiles: true,
-    }));
+    });
   }),
 
-  rest.post('/updateconfig', (req, res, ctx) => {
-    return res(ctx.json({
+  http.post('/updateconfig', () => {
+    return HttpResponse.json({
       success: true,
       message: 'Configuration updated',
-    }));
+    });
   }),
 
   // Database status
-  rest.get('/api/db-status', (req, res, ctx) => {
-    return res(ctx.json({
+  http.get('/api/db-status', () => {
+    return HttpResponse.json({
       status: 'healthy',
       database: {
         connected: true,
         schemaValid: true,
         errors: [],
       },
-    }));
+    });
   }),
 
   // Channels endpoints
-  rest.get('/getchannels', (req, res, ctx) => {
-    return res(ctx.json([
-      {
-        id: 1,
-        name: 'Test Channel',
-        url: 'https://youtube.com/channel/test',
-        enabled: true,
-        video_quality: '1080p',
-        sub_folder: null,
-        last_fetched: new Date().toISOString(),
-      },
-    ]));
+  http.get('/getchannels', () => {
+    return HttpResponse.json({
+      channels: [
+        {
+          url: 'https://youtube.com/channel/UC_TEST',
+          uploader: 'Test Channel',
+          channel_id: 'UC_TEST',
+          description: 'A test channel',
+          sub_folder: null,
+          video_quality: '1080',
+          min_duration: null,
+          max_duration: null,
+          title_filter_regex: null,
+          available_tabs: 'videos,shorts,streams',
+          auto_download_enabled_tabs: 'video,short',
+        },
+      ],
+      total: 1,
+      totalPages: 1,
+      subFolders: ['Movies', 'TV Shows'],
+    });
   }),
 
-  rest.get('/getChannelInfo/:id', (req, res, ctx) => {
-    const { id } = req.params;
-    return res(ctx.json({
-      id: parseInt(id as string),
-      name: 'Test Channel',
-      url: 'https://youtube.com/channel/test',
+  http.get('/getChannelInfo/:id', ({ params }) => {
+    const { id } = params;
+    return HttpResponse.json({
+      url: `https://youtube.com/channel/${id}`,
+      uploader: 'Test Channel',
+      channel_id: id as string,
       description: 'A test channel',
-      subscriberCount: '100K',
-      videoCount: 500,
-      thumbnail: '/images/channel-thumb.jpg',
-    }));
+      sub_folder: null,
+      video_quality: '1080',
+      min_duration: null,
+      max_duration: null,
+      title_filter_regex: null,
+      available_tabs: 'videos,shorts,streams',
+      auto_download_enabled_tabs: 'video,livestream',
+    });
   }),
 
-  rest.post('/addchannel', (req, res, ctx) => {
-    return res(ctx.json({
+  // ChannelPage dependencies
+  http.get('/getchannelvideos/:channelId', ({ params }) => {
+    const { channelId } = params;
+    return HttpResponse.json({
+      videos: [
+        {
+          title: 'Channel Video 1',
+          youtube_id: 'chanvid1',
+          publishedAt: '2024-01-01T00:00:00Z',
+          thumbnail: 'https://img.youtube.com/vi/chanvid1/mqdefault.jpg',
+          added: false,
+          removed: false,
+          youtube_removed: false,
+          duration: 600,
+          availability: 'available',
+          media_type: 'video',
+          live_status: 'none',
+          ignored: false,
+          ignored_at: null,
+        },
+      ],
+      totalCount: 1,
+      oldestVideoDate: '2024-01-01',
+      videoFail: false,
+      autoDownloadsEnabled: true,
+      availableTabs: ['videos', 'shorts', 'streams'],
+    });
+  }),
+
+  http.get('/api/channels/:channelId/tabs', () => {
+    return HttpResponse.json({
+      availableTabs: ['videos', 'shorts', 'streams'],
+    });
+  }),
+
+  http.get('/api/channels/:channelId/settings', () => {
+    return HttpResponse.json({
+      sub_folder: null,
+      video_quality: '1080',
+      min_duration: null,
+      max_duration: null,
+      title_filter_regex: null,
+      auto_download_enabled_tabs: 'video,livestream',
+      available_tabs: 'videos,shorts,streams',
+    });
+  }),
+
+  http.post('/api/channels/:channelId/settings', async () => {
+    return HttpResponse.json({ success: true });
+  }),
+
+  http.get('/api/channels/subfolders', () => {
+    return HttpResponse.json({
+      subfolders: ['__Movies', '__TV Shows', '__Documentaries'],
+      defaultSubfolder: 'Movies',
+    });
+  }),
+
+  http.post('/addchannel', () => {
+    return HttpResponse.json({
       success: true,
       channel: {
         id: 2,
@@ -103,35 +175,46 @@ export const handlers = [
         url: 'https://youtube.com/channel/new',
         enabled: true,
       },
-    }));
+    });
   }),
 
-  rest.post('/updatechannels', (req, res, ctx) => {
-    return res(ctx.json({
+  http.post('/updatechannels', () => {
+    return HttpResponse.json({
       success: true,
       updated: 1,
-    }));
+    });
   }),
 
   // Videos endpoints
-  rest.get('/getVideos', (req, res, ctx) => {
-    return res(ctx.json([
-      {
-        id: 1,
-        youtube_id: 'test123',
-        title: 'Test Video',
-        channel_id: 1,
-        duration: 3600,
-        file_path: '/app/data/test.mp4',
-        thumbnail: '/images/video-thumb.jpg',
-        published_at: new Date().toISOString(),
-        downloaded_at: new Date().toISOString(),
-      },
-    ]));
+  http.get('/getVideos', () => {
+    return HttpResponse.json({
+      videos: [
+        {
+          id: 1,
+          youtubeId: 'test123',
+          youTubeChannelName: 'Test Channel',
+          youTubeVideoName: 'Test Video',
+          timeCreated: new Date().toISOString(),
+          originalDate: '20240101',
+          duration: 3600,
+          description: 'A test video for Storybook/MSW',
+          removed: false,
+          fileSize: '1073741824',
+        },
+      ],
+      total: 1,
+      totalPages: 1,
+      page: 1,
+      limit: 12,
+      channels: ['Test Channel'],
+      enabledChannels: [
+        { channel_id: 'UC_TEST', uploader: 'Test Channel', enabled: true },
+      ],
+    });
   }),
 
-  rest.get('/getvideos', (req, res, ctx) => {
-    return res(ctx.json({
+  http.get('/getvideos', () => {
+    return HttpResponse.json({
       videos: [
         {
           id: 1,
@@ -148,43 +231,42 @@ export const handlers = [
       total: 1,
       page: 1,
       limit: 20,
-    }));
+    });
   }),
 
   // Download manager endpoints
-  rest.get('/runningjobs', (req, res, ctx) => {
-    return res(ctx.json([]));
+  http.get('/runningjobs', () => {
+    return HttpResponse.json([]);
   }),
 
-  rest.get('/jobstatus', (req, res, ctx) => {
-    return res(ctx.json({
+  http.get('/jobstatus', () => {
+    return HttpResponse.json({
       active: [],
       queued: [],
       completed: [],
-    }));
+    });
   }),
 
-  rest.post('/triggerchanneldownloads', (req, res, ctx) => {
-    return res(ctx.json({
+  http.post('/triggerchanneldownloads', () => {
+    return HttpResponse.json({
       success: true,
       message: 'Download triggered',
       jobId: 'job-123',
-    }));
+    });
   }),
 
   // Storage status
-  rest.get('/storage-status', (req, res, ctx) => {
-    return res(ctx.json({
-      total: 1000000000, // 1GB
-      used: 500000000,   // 500MB
-      available: 500000000, // 500MB
+  http.get('/storage-status', () => {
+    return HttpResponse.json({
+      availableGB: '50',
+      totalGB: '100',
       percentFree: 50,
-    }));
+    });
   }),
 
   // Plex integration
-  rest.get('/getplexlibraries', (req, res, ctx) => {
-    return res(ctx.json([
+  http.get('/getplexlibraries', () => {
+    return HttpResponse.json([
       {
         id: 1,
         name: 'Movies',
@@ -195,44 +277,62 @@ export const handlers = [
         name: 'TV Shows',
         type: 'show',
       },
-    ]));
+    ]);
   }),
 
   // System endpoints
-  rest.get('/getCurrentReleaseVersion', (req, res, ctx) => {
-    return res(ctx.json({
+  http.get('/getCurrentReleaseVersion', () => {
+    return HttpResponse.json({
       version: '1.56.0',
       ytDlpVersion: '2024.01.01',
-    }));
+    });
   }),
 
-  rest.get('/getlogs', (req, res, ctx) => {
-    return res(ctx.json({
+  http.get('/getlogs', () => {
+    return HttpResponse.json({
       logs: [
         '[2024-01-01] INFO: Application started',
         '[2024-01-01] INFO: Database connected',
       ],
-    }));
+    });
   }),
 
   // Images endpoint (mock binary response)
-  rest.get('/images/:filename', (req, res, ctx) => {
-    return res(
-      ctx.set('Content-Type', 'image/jpeg'),
-      ctx.body(new ArrayBuffer(1024)) // Mock image data
-    );
+  http.get('/images/:filename', () => {
+    return new HttpResponse(new ArrayBuffer(1024), {
+      headers: { 'Content-Type': 'image/jpeg' },
+    });
   }),
 
   // Error scenarios for testing
-  rest.get('/api/error-500', (req, res, ctx) => {
-    return res(ctx.status(500), ctx.json({ error: 'Internal server error' }));
+  http.get('/api/error-500', () => {
+    return HttpResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }),
 
-  rest.get('/api/error-403', (req, res, ctx) => {
-    return res(ctx.status(403), ctx.json({ error: 'Forbidden' }));
+  http.get('/api/error-403', () => {
+    return HttpResponse.json(
+      { error: 'Forbidden' },
+      { status: 403 }
+    );
   }),
 
-  rest.get('/api/error-404', (req, res, ctx) => {
-    return res(ctx.status(404), ctx.json({ error: 'Not found' }));
+  http.get('/api/error-404', () => {
+    return HttpResponse.json(
+      { error: 'Not found' },
+      { status: 404 }
+    );
   }),
 ];
+
+/**
+ * Utility for Storybook stories: keep the global handler set, but allow story-level overrides.
+ *
+ * Note: when merging Storybook parameters, `parameters.msw.handlers` is replaced, not merged.
+ * Using this helper prevents accidental 404s during `test-storybook` runs.
+ */
+export function withMswHandlers(...overrides: RequestHandler[]): RequestHandler[] {
+  return [...overrides, ...handlers];
+}

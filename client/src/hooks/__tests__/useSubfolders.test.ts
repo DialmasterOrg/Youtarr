@@ -1,22 +1,23 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useSubfolders } from '../useSubfolders';
+import { vi } from 'vitest';
 
 // Mock global fetch
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
+const mockFetch = vi.fn();
 
 describe('useSubfolders', () => {
   const mockToken = 'test-token-123';
   const mockSubfolders = ['__Sports', '__Music', '__Tech'];
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', mockFetch);
     // Suppress console.error for expected errors
-    jest.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('Initial State', () => {
@@ -47,7 +48,7 @@ describe('useSubfolders', () => {
     test('fetches and returns subfolders successfully', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+        json: vi.fn().mockResolvedValueOnce(mockSubfolders),
       });
 
       const { result } = renderHook(() => useSubfolders(mockToken));
@@ -63,7 +64,7 @@ describe('useSubfolders', () => {
     test('includes correct authentication header', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+        json: vi.fn().mockResolvedValueOnce(mockSubfolders),
       });
 
       renderHook(() => useSubfolders(mockToken));
@@ -82,7 +83,7 @@ describe('useSubfolders', () => {
     test('handles empty subfolders array', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: jest.fn().mockResolvedValueOnce([]),
+        json: vi.fn().mockResolvedValueOnce([]),
       });
 
       const { result } = renderHook(() => useSubfolders(mockToken));
@@ -146,7 +147,7 @@ describe('useSubfolders', () => {
     test('re-fetches when token changes', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: jest.fn().mockResolvedValue(mockSubfolders),
+        json: vi.fn().mockResolvedValue(mockSubfolders),
       });
 
       const { result, rerender } = renderHook(
@@ -177,7 +178,7 @@ describe('useSubfolders', () => {
     test('does not fetch when token changes to null', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+        json: vi.fn().mockResolvedValueOnce(mockSubfolders),
       });
 
       const { result, rerender } = renderHook(
@@ -207,11 +208,11 @@ describe('useSubfolders', () => {
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
-          json: jest.fn().mockResolvedValueOnce(firstResponse),
+          json: vi.fn().mockResolvedValueOnce(firstResponse),
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: jest.fn().mockResolvedValueOnce(secondResponse),
+          json: vi.fn().mockResolvedValueOnce(secondResponse),
         });
 
       const { result } = renderHook(() => useSubfolders(mockToken));
@@ -241,7 +242,7 @@ describe('useSubfolders', () => {
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+          json: vi.fn().mockResolvedValueOnce(mockSubfolders),
         })
         .mockImplementationOnce(() => promise);
 
@@ -263,7 +264,7 @@ describe('useSubfolders', () => {
       await act(async () => {
         resolvePromise!({
           ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+          json: vi.fn().mockResolvedValueOnce(mockSubfolders),
         });
       });
 
@@ -290,7 +291,7 @@ describe('useSubfolders', () => {
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+          json: vi.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
       const { result } = renderHook(() => useSubfolders(mockToken));
@@ -328,7 +329,7 @@ describe('useSubfolders', () => {
       await act(async () => {
         resolvePromise!({
           ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+          json: vi.fn().mockResolvedValueOnce(mockSubfolders),
         });
       });
 

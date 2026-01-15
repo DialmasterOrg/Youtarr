@@ -244,6 +244,17 @@ git commit --no-verify
 
 ## Testing
 
+### Frontend (client)
+
+- **Unit tests (Vitest + jsdom)**: `cd client && npm run test:run`
+  - Focuses on hooks, utilities, providers, and app-level wiring.
+  - The unit config intentionally excludes legacy RTL component tests under `client/src/components/**/__tests__`.
+    Those tests predate the Storybook-first workflow and are being migrated to stories + play tests to avoid maintaining
+    two parallel UI test suites.
+
+- **Storybook tests (Vitest browser mode + Playwright)**: `cd client && npm run test-storybook`
+  - Runs stories as tests in a real browser environment and is the preferred place for UI interaction testing.
+
 ### Running Tests
 
 All tests run on your host machine (not in Docker) since they're isolated unit tests:
@@ -273,6 +284,102 @@ npm test                         # Watch mode
 npm test -- --coverage           # With coverage
 npm test -- --watchAll=false     # Run once
 ```
+
+## Component Development with Storybook
+
+### What is Storybook?
+
+Storybook is a development environment for UI components. It allows you to:
+- **Develop components in isolation** - Build and test components outside your main app
+- **Interactive component playground** - See how components look and behave with different props
+- **Visual testing** - Catch visual regressions and ensure consistent design
+- **Documentation** - Auto-generate component documentation
+- **Component library** - Browse all available components in one place
+
+### Starting Storybook
+
+Storybook runs on your host machine (not in Docker) and provides hot reload for rapid development:
+
+```bash
+# From the client directory
+cd client
+npm run storybook
+
+# Or directly with npx
+npx storybook dev -p 6006
+```
+
+**Access Storybook at:** `http://localhost:6006`
+
+### Current Storybook Setup
+
+- **Version:** Storybook 10.1.11 (latest stable)
+- **Framework:** React with Vite
+- **Port:** 6006
+- **Configuration:** `.storybook/main.js`
+- **Stories location:** `src/**/*.stories.@(js|jsx|mjs|ts|tsx)`
+
+### Creating Component Stories
+
+1. **Create a story file** next to your component:
+   ```bash
+   # For a component at src/components/Button/Button.tsx
+   # Create: src/components/Button/Button.stories.tsx
+   ```
+
+2. **Basic story structure:**
+   ```typescript
+   import type { Meta, StoryObj } from '@storybook/react';
+   import { Button } from './Button';
+
+   const meta: Meta<typeof Button> = {
+     title: 'Components/Button',
+     component: Button,
+     parameters: {
+       layout: 'centered',
+     },
+     tags: ['autodocs'],
+   };
+
+   export default meta;
+   type Story = StoryObj<typeof meta>;
+
+   export const Primary: Story = {
+     args: {
+       children: 'Click me',
+       variant: 'primary',
+     },
+   };
+
+   export const Secondary: Story = {
+     args: {
+       children: 'Click me',
+       variant: 'secondary',
+     },
+   };
+   ```
+
+3. **View your story** - It will automatically appear in Storybook at `http://localhost:6006`
+
+### Storybook Features
+
+- **Controls:** Interactive prop controls in the sidebar
+- **Actions:** See component events and callbacks
+- **Docs:** Auto-generated documentation with prop tables
+- **Responsive testing:** Test components at different screen sizes
+- **Theme switching:** Test components with different themes
+- **Accessibility:** Built-in accessibility checks
+
+### Integration with Development Workflow
+
+Storybook complements the Docker-based development workflow:
+
+1. **Develop components** in Storybook for rapid iteration
+2. **Test components** in isolation before integrating
+3. **Document components** automatically
+4. **Build the full app** using the Docker workflow when ready
+
+**Note:** Storybook runs independently of the main Youtarr application. Use it for component development, then test the full integration using the Docker development environment.
 
 ## Database Development
 

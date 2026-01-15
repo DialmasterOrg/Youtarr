@@ -1,9 +1,13 @@
-import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import '@testing-library/jest-dom/vitest';
+import { afterAll, afterEach, beforeAll, vi } from 'vitest';
 import { server } from './mocks/server';
 
 // Alias jest to vi for compatibility with legacy tests
 globalThis.jest = vi;
+
+// Provide a stable, mockable fetch for unit tests. Individual tests can
+// override via `vi.stubGlobal('fetch', ...)`.
+vi.stubGlobal('fetch', vi.fn());
 
 // Mock matchMedia for MUI/JSDOM
 Object.defineProperty(window, 'matchMedia', {
@@ -51,6 +55,7 @@ global.WebSocket = vi.fn().mockImplementation(() => ({
 // Mock Notification API
 Object.defineProperty(window, 'Notification', {
   writable: true,
+  configurable: true,
   value: vi.fn().mockImplementation(() => ({
     permission: 'granted',
   })),
