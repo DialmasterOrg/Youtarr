@@ -1,13 +1,16 @@
 import React from 'react';
 import App from './App';
+import { ThemeEngineProvider } from './contexts/ThemeEngineContext';
 import WebSocketProvider from './providers/WebSocketProvider';
 
 export function Root() {
   return (
     <React.StrictMode>
-      <WebSocketProvider>
-        <App />
-      </WebSocketProvider>
+      <ThemeEngineProvider>
+        <WebSocketProvider>
+          <App />
+        </WebSocketProvider>
+      </ThemeEngineProvider>
     </React.StrictMode>
   );
 }

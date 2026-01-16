@@ -16,12 +16,12 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import MenuIcon from '@mui/icons-material/Menu';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SubscriptionsIcon from '@mui/icons-material/Subscriptions';
 import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
 import DownloadIcon from '@mui/icons-material/Download';
 import SettingsIcon from '@mui/icons-material/Settings';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { StorageFooterWidget } from './StorageFooterWidget';
 
@@ -143,10 +143,15 @@ export function AppShell({
             >
               <ListItemIcon
                 sx={{
-                  minWidth: 40,
-                  width: 40,
+                  minWidth: 44,
+                  width: 44,
+                  height: 44,
+                  flex: '0 0 44px',
+                  display: 'flex',
                   justifyContent: 'center',
+                  alignItems: 'center',
                   color: 'text.primary',
+                  flexShrink: 0,
                   '& svg': { fontSize: 22 },
                 }}
               >
@@ -207,6 +212,7 @@ export function AppShell({
     <Box
       sx={{
         display: 'flex',
+        gap: 2,
         minHeight: '100vh',
         position: 'relative',
         bgcolor: 'background.default',
@@ -281,11 +287,21 @@ export function AppShell({
           zIndex: theme.zIndex.drawer + 1,
           backgroundImage: `radial-gradient(var(--dot-grid) 1px, transparent 1px)`,
           backgroundSize: '24px 24px',
+          width: '100%',
         }}
       >
-        <Toolbar sx={{ gap: 1 }}>
-          <IconButton edge="start" aria-label="toggle navigation" onClick={toggleDrawer} sx={{ color: 'text.primary' }}>
-            <MenuIcon />
+        <Toolbar sx={{ gap: 2, px: { xs: 1.5, sm: 2 } }}>
+          <IconButton 
+            className="pop-toggle" 
+            aria-label="toggle navigation" 
+            onClick={toggleDrawer}
+            sx={{ 
+              transform: (isMobile ? drawerOpenMobile : !collapsed) ? 'rotate(0deg)' : 'rotate(180deg)',
+              transition: 'transform 450ms var(--transition-bouncy)',
+              color: 'var(--foreground)'
+            }}
+          >
+            <ChevronLeftIcon sx={{ fontSize: 24 }} />
           </IconButton>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
@@ -318,9 +334,9 @@ export function AppShell({
         onClose={() => setDrawerOpenMobile(false)}
         ModalProps={{ keepMounted: true }}
         sx={{
-          width: drawerWidth,
+          width: isMobile ? 0 : 'var(--nav-width)',
           flexShrink: 0,
-          transition: isMobile ? 'none' : 'width 300ms var(--transition-bouncy)',
+          transition: 'width 300ms var(--transition-bouncy)',
           '& .MuiDrawer-paper': {
             width: drawerWidth,
             boxSizing: 'border-box',
@@ -342,15 +358,13 @@ export function AppShell({
           display: 'flex',
           flexDirection: 'column',
           minHeight: '100vh',
-          width: isMobile ? '100%' : 'calc(100% - var(--nav-width))',
-          ml: isMobile ? 0 : 'var(--nav-width)',
+          minWidth: 0,
           pt: 10,
           pb: 4,
           px: 2,
           boxSizing: 'border-box',
           position: 'relative',
           zIndex: 1,
-          transition: isMobile ? 'none' : 'margin-left 300ms var(--transition-bouncy), width 300ms var(--transition-bouncy)',
         }}
       >
         <Box
@@ -363,6 +377,7 @@ export function AppShell({
             py: { xs: 2.5, md: 3 },
             minHeight: { xs: 'calc(100vh - 220px)', md: 'calc(100vh - 200px)' },
             flex: 1,
+            width: '100%',
           }}
         >
           {children}

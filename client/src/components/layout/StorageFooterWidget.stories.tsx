@@ -32,6 +32,8 @@ export const Expanded: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(await canvas.findByText('Storage')).toBeInTheDocument();
-    await expect(await canvas.findByText('100 GB free of 200 GB')).toBeInTheDocument();
+    await expect(
+      await canvas.findByLabelText(/100 GB free of 200 GB/i)
+    ).toBeInTheDocument();
   },
 };

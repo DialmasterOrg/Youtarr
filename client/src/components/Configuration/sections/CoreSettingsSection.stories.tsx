@@ -3,6 +3,7 @@ import { expect, fn, userEvent, within } from '@storybook/test';
 import React, { useState } from 'react';
 import { http, HttpResponse } from 'msw';
 import { DEFAULT_CONFIG } from '../../../config/configSchema';
+import { ThemeEngineProvider } from '../../../contexts/ThemeEngineContext';
 import { CoreSettingsSection } from './CoreSettingsSection';
 
 const meta: Meta<typeof CoreSettingsSection> = {
@@ -28,15 +29,14 @@ const meta: Meta<typeof CoreSettingsSection> = {
       videoCodec: 'default',
       defaultSubfolder: '',
     });
-    const [wiggleEnabled, setWiggleEnabled] = useState(true);
     return (
-      <CoreSettingsSection
-        {...args}
-        config={config}
-        onConfigChange={(updates) => setConfig((prev) => ({ ...prev, ...updates }))}
-        wiggleEnabled={wiggleEnabled}
-        onWiggleToggle={setWiggleEnabled}
-      />
+      <ThemeEngineProvider>
+        <CoreSettingsSection
+          {...args}
+          config={config}
+          onConfigChange={(updates) => setConfig((prev) => ({ ...prev, ...updates }))}
+        />
+      </ThemeEngineProvider>
     );
   },
   args: {
@@ -44,8 +44,6 @@ const meta: Meta<typeof CoreSettingsSection> = {
     deploymentEnvironment: { platform: null, isWsl: false },
     isPlatformManaged: { plexUrl: false, authEnabled: true, useTmpForDownloads: false },
     onMobileTooltipClick: fn(),
-    wiggleEnabled: true,
-    onWiggleToggle: fn(),
   },
 };
 
@@ -66,5 +64,24 @@ export const ToggleAutoDownloads: Story = {
       ?.querySelector('[role="button"]');
     await expect(frequencySelect as HTMLElement).toBeInTheDocument();
     await expect(frequencySelect as HTMLElement).toBeEnabled();
+  },
+};
+
+export const ThemeSwitcher: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    const playfulCard = await canvas.findByRole('button', { name: /playful geometric theme/i });
+    const neumorphicCard = await canvas.findByRole('button', { name: /neumorphic soft ui theme/i });
+
+    await userEvent.click(neumorphicCard);
+    await expect(document.body.dataset.theme).toBe('neumorphic');
+
+    await userEvent.click(playfulCard);
+    await expect(document.body.dataset.theme).toBe('playful');
+
+    const motionToggle = await canvas.findByRole('checkbox', { name: /enable theme animations & wiggles/i });
+    await userEvent.click(motionToggle);
+    await expect(document.body.dataset.motion).toBe('off');
   },
 };

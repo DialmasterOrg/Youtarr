@@ -3,6 +3,7 @@ import { expect, userEvent, within, waitFor } from '@storybook/test';
 import { http, HttpResponse } from 'msw';
 import React from 'react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { ThemeEngineProvider } from '../../contexts/ThemeEngineContext';
 import { Settings } from './Settings';
 
 const meta: Meta<typeof Settings> = {
@@ -13,11 +14,13 @@ const meta: Meta<typeof Settings> = {
   },
   decorators: [
     (Story) => (
-      <MemoryRouter initialEntries={['/settings']}>
-        <Routes>
-          <Route path="/settings/*" element={<Story />} />
-        </Routes>
-      </MemoryRouter>
+      <ThemeEngineProvider>
+        <MemoryRouter initialEntries={['/settings']}>
+          <Routes>
+            <Route path="/settings/*" element={<Story />} />
+          </Routes>
+        </MemoryRouter>
+      </ThemeEngineProvider>
     ),
   ],
   parameters: {

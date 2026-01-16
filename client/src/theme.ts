@@ -40,13 +40,31 @@ const playfulTokens = {
   },
 };
 
+const neumorphicTokens = {
+  light: {
+    background: '#E0E5EC',
+    foreground: '#3D4852',
+    muted: '#E0E5EC',
+    mutedForeground: '#6B7280',
+    primary: '#6C63FF',
+    primaryForeground: '#FFFFFF',
+    secondary: '#8B84FF',
+    tertiary: '#6C63FF',
+    quaternary: '#38B2AC',
+    border: 'transparent',
+    input: '#E0E5EC',
+    card: '#E0E5EC',
+    ring: '#6C63FF',
+  },
+};
+
 /**
  * Common theme options shared between light and dark modes
  */
 const commonThemeOptions: ThemeOptions = {
   typography: {
     fontFamily: [
-      '"Plus Jakarta Sans"',
+      'var(--font-body)',
       'system-ui',
       '-apple-system',
       'BlinkMacSystemFont',
@@ -55,12 +73,12 @@ const commonThemeOptions: ThemeOptions = {
       '"Helvetica Neue"',
       'sans-serif',
     ].join(','),
-    h1: { fontFamily: '"Outfit", system-ui, sans-serif', fontWeight: 800 },
-    h2: { fontFamily: '"Outfit", system-ui, sans-serif', fontWeight: 800 },
-    h3: { fontFamily: '"Outfit", system-ui, sans-serif', fontWeight: 800 },
-    h4: { fontFamily: '"Outfit", system-ui, sans-serif', fontWeight: 700 },
-    h5: { fontFamily: '"Outfit", system-ui, sans-serif', fontWeight: 700 },
-    h6: { fontFamily: '"Outfit", system-ui, sans-serif', fontWeight: 700 },
+    h1: { fontFamily: 'var(--font-display)', fontWeight: 800 },
+    h2: { fontFamily: 'var(--font-display)', fontWeight: 800 },
+    h3: { fontFamily: 'var(--font-display)', fontWeight: 800 },
+    h4: { fontFamily: 'var(--font-display)', fontWeight: 700 },
+    h5: { fontFamily: 'var(--font-display)', fontWeight: 700 },
+    h6: { fontFamily: 'var(--font-display)', fontWeight: 700 },
     button: { fontWeight: 700 },
   },
   shape: {
@@ -80,7 +98,8 @@ const commonThemeOptions: ThemeOptions = {
       styleOverrides: {
         root: {
           borderRadius: 16,
-          border: '2px solid var(--border)',
+          border: '2px solid var(--border-strong)',
+          backgroundColor: 'var(--card)',
           backgroundImage: 'none',
         },
       },
@@ -89,7 +108,7 @@ const commonThemeOptions: ThemeOptions = {
       styleOverrides: {
         root: {
           borderRadius: 16,
-          border: '2px solid var(--foreground)',
+          border: '2px solid var(--border-strong)',
           boxShadow: 'var(--shadow-soft)',
           transition: 'transform 300ms var(--transition-bouncy), box-shadow 300ms var(--transition-bouncy)',
           '&:hover': {
@@ -103,7 +122,7 @@ const commonThemeOptions: ThemeOptions = {
       styleOverrides: {
         root: {
           borderRadius: 999,
-          border: '2px solid var(--foreground)',
+          border: '2px solid var(--border-strong)',
           boxShadow: 'var(--shadow-hard)',
           textTransform: 'none',
           fontWeight: 700,
@@ -127,7 +146,7 @@ const commonThemeOptions: ThemeOptions = {
           color: 'var(--foreground)',
         },
         outlined: {
-          border: '2px solid var(--foreground)',
+          border: '2px solid var(--border-strong)',
         },
       },
     },
@@ -136,16 +155,17 @@ const commonThemeOptions: ThemeOptions = {
         root: {
           borderRadius: 16,
           backgroundColor: 'var(--input)',
+          boxShadow: 'var(--shadow-input-rest)',
           transition: 'box-shadow 250ms var(--transition-bouncy), border-color 250ms var(--transition-bouncy)',
           '& .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'var(--border)',
+            borderColor: 'var(--input-border)',
             borderWidth: 2,
           },
           '&:hover .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'var(--foreground)',
+            borderColor: 'var(--input-border-hover)',
           },
           '&.Mui-focused': {
-            boxShadow: 'var(--shadow-hard-ring)',
+            boxShadow: 'var(--shadow-input-focus)',
           },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
             borderColor: 'var(--ring)',
@@ -158,7 +178,7 @@ const commonThemeOptions: ThemeOptions = {
       styleOverrides: {
         root: {
           borderRadius: 999,
-          border: '2px solid var(--foreground)',
+          border: '2px solid var(--border-strong)',
           fontWeight: 600,
         },
       },
@@ -234,6 +254,69 @@ export const lightTheme = createTheme({
       selected: 'rgba(139, 92, 246, 0.14)',
       disabled: 'rgba(100, 116, 139, 0.6)',
       disabledBackground: 'rgba(226, 232, 240, 0.7)',
+    },
+  },
+});
+
+/**
+ * Neumorphic theme configuration
+ */
+export const neumorphicTheme = createTheme({
+  ...commonThemeOptions,
+  palette: {
+    mode: 'light',
+    primary: {
+      main: neumorphicTokens.light.primary,
+      light: neumorphicTokens.light.secondary,
+      dark: neumorphicTokens.light.primary,
+      contrastText: neumorphicTokens.light.primaryForeground,
+    },
+    secondary: {
+      main: neumorphicTokens.light.secondary,
+      light: neumorphicTokens.light.secondary,
+      dark: neumorphicTokens.light.secondary,
+      contrastText: neumorphicTokens.light.primaryForeground,
+    },
+    success: {
+      main: neumorphicTokens.light.quaternary,
+      light: neumorphicTokens.light.quaternary,
+      dark: neumorphicTokens.light.quaternary,
+      contrastText: neumorphicTokens.light.foreground,
+    },
+    error: {
+      main: '#ef4444',
+      light: '#f87171',
+      dark: '#dc2626',
+      contrastText: '#ffffff',
+    },
+    warning: {
+      main: neumorphicTokens.light.secondary,
+      light: neumorphicTokens.light.secondary,
+      dark: neumorphicTokens.light.secondary,
+      contrastText: neumorphicTokens.light.primaryForeground,
+    },
+    info: {
+      main: neumorphicTokens.light.primary,
+      light: neumorphicTokens.light.secondary,
+      dark: neumorphicTokens.light.primary,
+      contrastText: neumorphicTokens.light.primaryForeground,
+    },
+    background: {
+      default: neumorphicTokens.light.background,
+      paper: neumorphicTokens.light.card,
+    },
+    text: {
+      primary: neumorphicTokens.light.foreground,
+      secondary: neumorphicTokens.light.mutedForeground,
+      disabled: 'rgba(107, 114, 128, 0.7)',
+    },
+    divider: 'transparent',
+    action: {
+      active: neumorphicTokens.light.foreground,
+      hover: 'rgba(108, 99, 255, 0.08)',
+      selected: 'rgba(108, 99, 255, 0.16)',
+      disabled: 'rgba(107, 114, 128, 0.7)',
+      disabledBackground: 'rgba(224, 229, 236, 0.6)',
     },
   },
 });

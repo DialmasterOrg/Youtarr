@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { expect, userEvent, within } from '@storybook/test';
 import App from './App';
 import { http, HttpResponse } from 'msw';
+import { ThemeEngineProvider } from './contexts/ThemeEngineContext';
 
 /**
  * App Component Story
@@ -16,6 +17,13 @@ import { http, HttpResponse } from 'msw';
 const meta: Meta<typeof App> = {
   title: 'Pages/App',
   component: App,
+  decorators: [
+    (Story) => (
+      <ThemeEngineProvider>
+        <Story />
+      </ThemeEngineProvider>
+    ),
+  ],
   parameters: {
     layout: 'fullscreen',
     docs: {

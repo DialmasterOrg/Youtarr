@@ -2,11 +2,19 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { expect, within, userEvent } from '@storybook/test';
 import { http, HttpResponse } from 'msw';
 import { DEFAULT_CONFIG } from '../config/configSchema';
+import { ThemeEngineProvider } from '../contexts/ThemeEngineContext';
 import Configuration from './Configuration';
 
 const meta: Meta<typeof Configuration> = {
   title: 'Pages/Configuration',
   component: Configuration,
+  decorators: [
+    (Story) => (
+      <ThemeEngineProvider>
+        <Story />
+      </ThemeEngineProvider>
+    ),
+  ],
   args: {
     token: 'storybook-token',
   },

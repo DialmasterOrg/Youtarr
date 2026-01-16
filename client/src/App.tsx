@@ -33,12 +33,14 @@ import ChangelogPage from './components/ChangelogPage';
 import { useConfig } from './hooks/useConfig';
 import ErrorBoundary from './components/ErrorBoundary';
 import DatabaseErrorOverlay from './components/DatabaseErrorOverlay';
-import { lightTheme, darkTheme } from './theme';
+import { useThemeEngine } from './contexts/ThemeEngineContext';
+import { lightTheme, neumorphicTheme } from './theme';
 
 // Event name for database error detection
 const DB_ERROR_EVENT = 'db-error-detected';
 
 function AppContent() {
+  const { themeMode } = useThemeEngine();
   const [token, setToken] = useState<string | null>(
     localStorage.getItem('authToken') // Only use the new authToken, no fallback to plexAuthToken
   );
@@ -63,21 +65,9 @@ function AppContent() {
   const clientVersion = `v${version}`; // Create a version with 'v' prefix for comparison
   const tmpDirectory = '/tmp';
 
-  // Select theme based on darkModeEnabled config
   const selectedTheme = useMemo(() => {
-    return appConfig.darkModeEnabled ? darkTheme : lightTheme;
-  }, [appConfig.darkModeEnabled]);
-
-  useEffect(() => {
-    document.body.dataset.theme = appConfig.darkModeEnabled ? 'dark' : 'light';
-  }, [appConfig.darkModeEnabled]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const stored = localStorage.getItem('uiWiggleEnabled');
-    const enabled = stored !== 'false';
-    document.body.dataset.wiggle = enabled ? 'on' : 'off';
-  }, []);
+    return themeMode === 'neumorphic' ? neumorphicTheme : lightTheme;
+  }, [themeMode]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
