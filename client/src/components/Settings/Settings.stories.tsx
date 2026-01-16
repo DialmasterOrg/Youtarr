@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { expect, userEvent, within } from '@storybook/test';
 import { http, HttpResponse } from 'msw';
 import React from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { Settings } from './Settings';
 
 const meta: Meta<typeof Settings> = {
@@ -14,7 +14,9 @@ const meta: Meta<typeof Settings> = {
   decorators: [
     (Story) => (
       <MemoryRouter initialEntries={['/settings']}>
-        <Story />
+        <Routes>
+          <Route path="/settings/*" element={<Story />} />
+        </Routes>
       </MemoryRouter>
     ),
   ],
@@ -48,8 +50,11 @@ type Story = StoryObj<typeof Settings>;
 export const IndexPage: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(await canvas.findByText('Settings')).toBeInTheDocument();
-    await expect(await canvas.findByText('Choose a settings area.')).toBeInTheDocument();
+    const body = within(canvasElement.ownerDocument.body);
+
+    const headings = await canvas.findAllByRole('heading', { name: /settings/i });
+    await expect(headings.length).toBeGreaterThan(0);
+    await expect(await body.findByText(/choose a settings area/i)).toBeInTheDocument();
 
     const coreLink = canvas.getByRole('link', { name: /core/i });
     await userEvent.click(coreLink);

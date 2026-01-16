@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, userEvent, within } from '@storybook/test';
+import { expect, userEvent, within, waitFor } from '@storybook/test';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter } from 'react-router-dom';
 import ChannelManager from './ChannelManager';
@@ -43,37 +43,66 @@ export const Default: Story = {  render: (args) => (
         ),
         http.get('/getchannels', () =>
           HttpResponse.json({
-            channels: [],
-            total: 0,
-            totalPages: 0,
-            subFolders: [],
+            channels: [
+              {
+                url: 'https://www.youtube.com/@alpha',
+                uploader: 'Alpha Channel',
+                channel_id: 'UC_ALPHA',
+                sub_folder: null,
+                video_quality: '1080',
+              },
+              {
+                url: 'https://www.youtube.com/@beta',
+                uploader: 'Beta Channel',
+                channel_id: 'UC_BETA',
+                sub_folder: 'MyFolder',
+                video_quality: '720',
+                title_filter_regex: 'beta',
+              },
+            ],
+            total: 2,
+            totalPages: 1,
+            subFolders: ['MyFolder'],
           })
         ),
       ],
     },
   },  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
     await expect(await canvas.findByText('Your Channels')).toBeInTheDocument();
+    await expect(await canvas.findByText(/alpha channel/i)).toBeInTheDocument();
+    await expect(await canvas.findByText(/beta channel/i)).toBeInTheDocument();
 
     // Test view mode toggle (list/grid)
-    const viewToggleButtons = canvas.queryAllByRole('button', { name: /list|grid|view/i });
-    if (viewToggleButtons.length > 0) {
-      await userEvent.click(viewToggleButtons[0]);
-      await new Promise((resolve) => setTimeout(resolve, 200));
+    const gridToggle = canvas.queryByRole('button', { name: /grid view/i });
+    if (gridToggle) {
+      await userEvent.click(gridToggle);
+      await expect(gridToggle).toHaveAttribute('aria-pressed', 'true');
     }
 
     // Test filter functionality
-    const filterButton = canvas.queryByRole('button', { name: /filter|search|find/i });
+    const filterButton = canvas.queryByRole('button', { name: /filter by channel name/i });
     if (filterButton) {
       await userEvent.click(filterButton);
-      await new Promise((resolve) => setTimeout(resolve, 150));
+      const filterInput = await body.findByLabelText(/filter channels/i);
+      await userEvent.type(filterInput, 'Beta');
+      await expect(filterInput).toHaveValue('Beta');
     }
 
     // Test sort functionality
-    const sortButton = canvas.queryByRole('button', { name: /sort|order|alpha/i });
+    const sortButton = canvas.queryByRole('button', { name: /sort alphabetically/i });
     if (sortButton) {
       await userEvent.click(sortButton);
-      await new Promise((resolve) => setTimeout(resolve, 150));
+      await expect(sortButton).toBeEnabled();
+    }
+
+    const folderButton = canvas.queryByRole('button', { name: /filter or group by folder/i });
+    if (folderButton) {
+      await userEvent.click(folderButton);
+      const folderItem = await canvas.findByRole('menuitem', { name: /myfolder/i });
+      await userEvent.click(folderItem);
+      await expect(canvas.getByText(/beta channel/i)).toBeInTheDocument();
     }
 
     // Test add channel button

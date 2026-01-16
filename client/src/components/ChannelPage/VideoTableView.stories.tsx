@@ -42,8 +42,9 @@ type Story = StoryObj<typeof VideoTableView>;
 export const ToggleSelection: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    const checkbox = canvas.getAllByRole('checkbox')[0];
-    await userEvent.click(checkbox);
+    const checkboxes = canvas.getAllByRole('checkbox');
+    const rowCheckbox = checkboxes[1];
+    await userEvent.click(rowCheckbox);
     await expect(args.onCheckChange).toHaveBeenCalledWith('vid1', true);
   },
 };

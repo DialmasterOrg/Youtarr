@@ -14,6 +14,10 @@ interface UseChangelogResult {
 // Simple in-memory cache
 let cache: { content: string; timestamp: number } | null = null;
 
+export const resetChangelogCache = () => {
+  cache = null;
+};
+
 export const useChangelog = (): UseChangelogResult => {
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);

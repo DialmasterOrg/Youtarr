@@ -1,7 +1,6 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, fn, userEvent, within } from '@storybook/test';
-import { BrowserRouter as Router } from 'react-router-dom';
+import { expect, userEvent, within } from '@storybook/test';
 import App from './App';
 import { http, HttpResponse } from 'msw';
 
@@ -30,6 +29,16 @@ const meta: Meta<typeof App> = {
             status: 'healthy',
           });
         }),
+        http.get('/setup/status', () => {
+          return HttpResponse.json({
+            requiresSetup: false,
+            isLocalhost: true,
+            platformManaged: false,
+          });
+        }),
+        http.get('/auth/validate', () => {
+          return HttpResponse.json({ valid: true });
+        }),
         http.get('/getconfig', () => {
           return HttpResponse.json({
             darkModeEnabled: false,
@@ -37,8 +46,17 @@ const meta: Meta<typeof App> = {
             channelFilesToDownload: 3,
           });
         }),
+        http.get('/api/channels/subfolders', () => {
+          return HttpResponse.json(['Default']);
+        }),
         http.get('/get-running-jobs', () => {
           return HttpResponse.json([]);
+        }),
+        http.get('/getCurrentReleaseVersion', () => {
+          return HttpResponse.json({
+            version: '1.0.0',
+            ytDlpVersion: '2024.01.01',
+          });
         }),
         http.get('/api/stats', () => {
           return HttpResponse.json({
@@ -62,35 +80,26 @@ type Story = StoryObj<typeof App>;
  */
 export const LoggedIn: Story = {
   decorators: [
-    (Story) => (
-      <Router>
-        <Story />
-      </Router>
-    ),
+    (Story) => {
+      localStorage.setItem('authToken', 'storybook-auth');
+      return <Story />;
+    },
   ],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // Wait for the app to load
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
     // Verify navigation toggle is actionable
-    const toggleButton = canvas.getByRole('button', { name: /toggle navigation/i });
+    const toggleButton = await canvas.findByRole('button', { name: /toggle navigation/i });
     await expect(toggleButton).toBeEnabled();
     await userEvent.click(toggleButton);
-
-    // Verify main navigation is visible and enabled
-    const navButtons = canvas.queryAllByRole('button', { name: /channels?|download|video|setting/i });
-    expect(navButtons.length).toBeGreaterThan(0);
-    if (navButtons[0]) {
-      await expect(navButtons[0]).toBeEnabled();
-    }
 
     // Verify main content area exists
     const mainContent = canvas.queryByRole('main') || canvas.queryByRole('region');
     if (mainContent) {
       expect(mainContent).toBeInTheDocument();
     }
+
+    localStorage.removeItem('authToken');
   },
 };
 
@@ -117,6 +126,13 @@ export const DatabaseError: Story = {
             { status: 503 }
           );
         }),
+        http.get('/setup/status', () => {
+          return HttpResponse.json({
+            requiresSetup: false,
+            isLocalhost: true,
+            platformManaged: false,
+          });
+        }),
         http.get('/getconfig', () => {
           return HttpResponse.json({
             darkModeEnabled: false,
@@ -124,28 +140,24 @@ export const DatabaseError: Story = {
             channelFilesToDownload: 3,
           });
         }),
+        http.get('/api/channels/subfolders', () => {
+          return HttpResponse.json(['Default']);
+        }),
+        http.get('/getCurrentReleaseVersion', () => {
+          return HttpResponse.json({
+            version: '1.0.0',
+            ytDlpVersion: '2024.01.01',
+          });
+        }),
       ],
     },
   },
-  decorators: [
-    (Story) => (
-      <Router>
-        <Story />
-      </Router>
-    ),
-  ],
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
 
-    // Wait for database check
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    // Verify error overlay or error message is visible
-    const errorText = canvas.queryByText(/database|error|connection/i);
-    // Note: Actual error UI depends on implementation; adjust assertion as needed
-    if (errorText) {
-      expect(errorText).toBeVisible();
-    }
+    const overlay = await body.findByTestId('database-error-overlay');
+    await expect(overlay).toBeVisible();
+    await expect(await body.findByText(/database issue detected/i)).toBeInTheDocument();
   },
 };
 
@@ -154,6 +166,14 @@ export const DatabaseError: Story = {
  * Tests redirect to setup page
  */
 export const RequiresSetup: Story = {
+  decorators: [
+    (Story) => {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('plexAuthToken');
+      window.history.replaceState({}, '', '/setup');
+      return <Story />;
+    },
+  ],
   parameters: {
     ...meta.parameters,
     msw: {
@@ -163,9 +183,11 @@ export const RequiresSetup: Story = {
             status: 'healthy',
           });
         }),
-        http.get('/checkrequiressetup', () => {
+        http.get('/setup/status', () => {
           return HttpResponse.json({
             requiresSetup: true,
+            isLocalhost: true,
+            platformManaged: false,
           });
         }),
         http.get('/getconfig', () => {
@@ -175,27 +197,22 @@ export const RequiresSetup: Story = {
             channelFilesToDownload: 3,
           });
         }),
+        http.get('/api/channels/subfolders', () => {
+          return HttpResponse.json(['Default']);
+        }),
+        http.get('/getCurrentReleaseVersion', () => {
+          return HttpResponse.json({
+            version: '1.0.0',
+            ytDlpVersion: '2024.01.01',
+          });
+        }),
       ],
     },
   },
-  decorators: [
-    (Story) => (
-      <Router>
-        <Story />
-      </Router>
-    ),
-  ],
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
 
-    // Wait for setup check
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
-    // Verify setup page or redirect message
-    const setupText = canvas.queryByText(/setup|initial|configuration/i);
-    // Adjust based on actual redirect UI
-    if (setupText) {
-      expect(setupText).toBeVisible();
-    }
+    await expect(await body.findByText(/welcome to youtarr setup/i)).toBeInTheDocument();
+    await expect(await body.findByRole('button', { name: /complete setup/i })).toBeInTheDocument();
   },
 };

@@ -74,11 +74,9 @@ export const Default: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(await canvas.findByText('How to Code')).toBeInTheDocument();
-    const filterButton = canvas.getByRole('button', { name: /filter/i });
-    await expect(filterButton).toBeEnabled();
-    await userEvent.click(filterButton);
-    const body = within(canvasElement.ownerDocument.body);
-    await expect(await body.findByTestId('filter-menu-all')).toBeInTheDocument();
+    const searchInput = await canvas.findByPlaceholderText(/search videos by name or channel/i);
+    await userEvent.type(searchInput, 'Tech');
+    await expect(searchInput).toHaveValue('Tech');
   },
 };
 

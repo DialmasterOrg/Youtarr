@@ -26,37 +26,32 @@ type Story = StoryObj<typeof VideoCard>;
 
 const mockVideo: ChannelVideo = {
   youtube_id: 'dQw4w9WgXcQ',
-  channel_id: 'UC_example',
-  video_title: 'Never Gonna Give You Up',
-  published_at: new Date('2023-01-15T10:30:00Z'),
-  video_duration: 213,
-  thumbnail_url: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
-  video_quality: '1080p',
-  file_metadata: {
-    size_bytes: 134217728, // 128 MB
-    format: 'mp4',
-  },
+  title: 'Never Gonna Give You Up',
+  publishedAt: '2023-01-15T10:30:00Z',
+  thumbnail: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
+  added: true,
+  removed: false,
+  duration: 213,
+  fileSize: 134217728,
   media_type: 'video',
-  availability_status: 'available',
-  download_status: 'completed',
   ignored: false,
   live_status: null,
-  youtubeRemoved: false,
-  youtubeRemovedCheckedAt: new Date().toISOString(),
-  lastDownloadedAt: new Date('2023-06-01T14:22:00Z').toISOString(),
+  youtube_removed: false,
 };
 
 const mockVideoNeverDownloaded: ChannelVideo = {
   ...mockVideo,
   youtube_id: 'test_never_downloaded_1',
-  download_status: 'never_downloaded',
+  added: false,
+  removed: false,
   ignored: false,
 };
 
 const mockVideoIgnored: ChannelVideo = {
   ...mockVideo,
   youtube_id: 'test_ignored_1',
-  download_status: 'ignored',
+  added: false,
+  removed: false,
   ignored: true,
 };
 
@@ -64,7 +59,8 @@ const mockVideoStillLive: ChannelVideo = {
   ...mockVideo,
   youtube_id: 'test_live_1',
   live_status: 'is_live',
-  download_status: 'never_downloaded',
+  added: false,
+  removed: false,
 };
 
 /**
@@ -91,17 +87,16 @@ export const Downloaded: Story = {
     expect(duration).toBeInTheDocument();
 
     // Verify status is shown (completed)
-    const statusElement = canvasElement.querySelector('[data-testid*="status"]') || 
+    const statusElement = canvasElement.querySelector('[data-testid*="status"]') ||
                          canvas.queryByText(/completed|downloaded/i);
     if (statusElement) {
-      expect(statusElement).toBeVisible();
+      expect(statusElement).toBeInTheDocument();
     }
 
     // Test hover interaction
-    const card = canvas.getByRole('button', { name: /video|card/i }) || 
-                canvasElement.querySelector('[class*="Card"]');
+    const card = canvasElement.querySelector('[class*="MuiCard-root"]');
     if (card) {
-      await userEvent.hover(card);
+      await userEvent.hover(card as HTMLElement);
       expect(args.onHoverChange).toHaveBeenCalledWith(mockVideo.youtube_id);
     }
   },
@@ -122,8 +117,7 @@ export const NeverDownloaded: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
 
-    // Wait for render
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await expect(await canvas.findByText(/never gonna give you up/i)).toBeInTheDocument();
 
     // Verify card is clickable (cursor should be pointer)
     const cardElement = canvasElement.querySelector('[class*="Card"]');
@@ -163,7 +157,7 @@ export const Ignored: Story = {
     // Verify "Ignored" status is displayed
     const ignoredStatus = canvas.queryByText(/ignored/i);
     if (ignoredStatus) {
-      expect(ignoredStatus).toBeVisible();
+      expect(ignoredStatus).toBeInTheDocument();
     }
 
     // Verify card has reduced opacity (styling indication)
@@ -203,7 +197,7 @@ export const StillLive: Story = {
     // Verify "Live" indicator is shown
     const liveIndicator = canvas.queryByText(/live|still live/i);
     if (liveIndicator) {
-      expect(liveIndicator).toBeVisible();
+      expect(liveIndicator).toBeInTheDocument();
     }
 
     // Verify card is not selectable

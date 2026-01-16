@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, fn, userEvent, within } from '@storybook/test';
+import { expect, fn, userEvent, within, waitFor } from '@storybook/test';
 import DownloadNew from './DownloadNew';
 import { http, HttpResponse } from 'msw';
 
@@ -23,8 +23,30 @@ const meta: Meta<typeof DownloadNew> = {
         http.post('/triggerchanneldownloads', () => {
           return HttpResponse.json({ success: true });
         }),
-        http.post('/manualdownload', () => {
+        http.get('/api/channels/subfolders', () => {
+          return HttpResponse.json(['Movies', 'Shows']);
+        }),
+        http.post('/triggerspecificdownloads', () => {
           return HttpResponse.json({ success: true, jobId: 'test-job-1' });
+        }),
+        http.post('/api/checkYoutubeVideoURL', async ({ request }) => {
+          const body = (await request.json()) as { url?: string };
+          const url = body.url || 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+          const youtubeId = url.includes('video2') ? 'video2' : 'video1';
+          return HttpResponse.json({
+            isValidUrl: true,
+            isAlreadyDownloaded: false,
+            isMembersOnly: false,
+            metadata: {
+              youtubeId,
+              url,
+              channelName: 'Storybook Channel',
+              videoTitle: youtubeId === 'video2' ? 'Second Story Video' : 'First Story Video',
+              duration: 213,
+              publishedAt: Date.now(),
+              media_type: 'video',
+            },
+          });
         }),
       ],
     },
@@ -56,24 +78,12 @@ export const Default: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
 
-    // Wait for component to render
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    const manualTab = await canvas.findByRole('tab', { name: /manual download/i });
+    const channelTab = await canvas.findByRole('tab', { name: /channel download/i });
 
-    // Verify tab navigation exists
-    const tabs = canvas.queryAllByRole('tab');
-    expect(tabs.length).toBeGreaterThan(0);
-
-    // Click on second tab (if available)
-    if (tabs.length > 1) {
-      await userEvent.click(tabs[1]);
-      // Component should update active tab
-      expect(tabs[1]).toHaveAttribute('aria-selected', 'true');
-    }
-
-    // Verify the first tab is initially selected
-    if (tabs.length > 0) {
-      expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
-    }
+    expect(manualTab).toHaveAttribute('aria-selected', 'true');
+    await userEvent.click(channelTab);
+    expect(channelTab).toHaveAttribute('aria-selected', 'true');
   },
 };
 
@@ -91,37 +101,23 @@ export const ManualDownloadTab: Story = {
   },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
 
-    // Click on Manual Download tab
-    const tabs = canvas.queryAllByRole('tab');
-    if (tabs.length > 1) {
-      await userEvent.click(tabs[1]);
-    }
+    const urlInput = await canvas.findByPlaceholderText(/paste youtube video url here/i);
+    await userEvent.type(urlInput, 'https://www.youtube.com/watch?v=video1{enter}');
 
-    // Wait for tab content
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    await expect(await canvas.findByText(/first story video/i)).toBeInTheDocument();
 
-    // Look for URL input field
-    const urlInput = canvas.queryByPlaceholderText(/url|link|youtube/i) ||
-                     canvas.queryByLabelText(/url|video/i);
+    const downloadButton = await canvas.findByRole('button', { name: /download videos/i });
+    await userEvent.click(downloadButton);
 
-    if (urlInput) {
-      // Type a video URL
-      const testUrl = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
-      await userEvent.click(urlInput);
-      await userEvent.type(urlInput, testUrl);
+    await expect(await body.findByRole('dialog', { name: /download settings/i })).toBeInTheDocument();
+    const startButton = await body.findByRole('button', { name: /start download/i });
+    await userEvent.click(startButton);
 
-      // Verify input value changed
-      expect(urlInput).toHaveValue(testUrl);
-
-      // Find and click download/submit button
-      const downloadButton = canvas.queryByRole('button', { name: /download|submit|add/i });
-      if (downloadButton) {
-        await userEvent.click(downloadButton);
-        // Should trigger manual download logic
-        expect(args.fetchRunningJobs).toBeDefined();
-      }
-    }
+    await waitFor(() => {
+      expect(args.fetchRunningJobs).toHaveBeenCalled();
+    }, { timeout: 2000 });
   },
 };
 
@@ -139,32 +135,21 @@ export const ChannelDownloadTab: Story = {
   },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
 
-    // Click on Channel Download tab (usually first tab)
-    const tabs = canvas.queryAllByRole('tab');
-    if (tabs.length > 0) {
-      await userEvent.click(tabs[0]);
-    }
+    const channelTab = await canvas.findByRole('tab', { name: /channel download/i });
+    await userEvent.click(channelTab);
 
-    // Wait for tab content
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    const triggerButton = await canvas.findByRole('button', { name: /download new from all channels/i });
+    await userEvent.click(triggerButton);
 
-    // Look for "Channel Download" or "Trigger Download" button
-    const triggerButton = canvas.queryByRole('button', { 
-      name: /channel|trigger|download|settings/i 
-    });
+    await expect(await body.findByRole('dialog', { name: /download settings/i })).toBeInTheDocument();
+    const startButton = await body.findByRole('button', { name: /start download/i });
+    await userEvent.click(startButton);
 
-    if (triggerButton) {
-      // Check button text
-      expect(triggerButton).toBeInTheDocument();
-
-      // Click to trigger channel download
-      await userEvent.click(triggerButton);
-
-      // Should call fetchRunningJobs after download initiation
-      await new Promise((resolve) => setTimeout(resolve, 300));
+    await waitFor(() => {
       expect(args.fetchRunningJobs).toHaveBeenCalled();
-    }
+    }, { timeout: 2000 });
   },
 };
 
@@ -182,54 +167,30 @@ export const SettingsDialogOpen: Story = {
   },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
 
-    // Wait for initial render
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    const urlInput = await canvas.findByPlaceholderText(/paste youtube video url here/i);
+    await userEvent.type(urlInput, 'https://www.youtube.com/watch?v=video1{enter}');
+    await expect(await canvas.findByText(/first story video/i)).toBeInTheDocument();
 
-    // Find settings button (usually next to channel download)
-    const settingsButton = canvas.queryByRole('button', {
-      name: /settings|gear|options|configure/i,
-    });
+    const downloadButton = await canvas.findByRole('button', { name: /download videos/i });
+    await userEvent.click(downloadButton);
 
-    if (settingsButton) {
-      // Click settings button to open dialog
-      await userEvent.click(settingsButton);
+    await expect(await body.findByRole('dialog', { name: /download settings/i })).toBeInTheDocument();
+    const customToggle = await body.findByLabelText(/use custom settings/i);
+    await userEvent.click(customToggle);
 
-      // Wait for dialog to appear
-      await new Promise((resolve) => setTimeout(resolve, 200));
+    const resolutionSelect = await body.findByLabelText(/maximum resolution/i);
+    await userEvent.click(resolutionSelect);
+    const resolutionOption = await body.findByRole('option', { name: /720p/i });
+    await userEvent.click(resolutionOption);
 
-      // Verify dialog elements are visible
-      const dialogContent = canvas.queryByRole('dialog') ||
-                           canvas.queryByText(/settings|configuration|options/i);
+    const startButton = await body.findByRole('button', { name: /start download/i });
+    await userEvent.click(startButton);
 
-      if (dialogContent) {
-        expect(dialogContent).toBeVisible();
-
-        // Look for resolution or quality selector
-        const resolutionSelect = canvas.queryByRole('combobox') ||
-                                canvas.queryByLabelText(/resolution|quality/i);
-
-        if (resolutionSelect) {
-          // Interact with resolution selector
-          await userEvent.click(resolutionSelect);
-          await new Promise((resolve) => setTimeout(resolve, 100));
-
-          // Try to select different resolution
-          const resolutionOption = canvas.queryByText(/1080|720|480/i);
-          if (resolutionOption) {
-            await userEvent.click(resolutionOption);
-          }
-        }
-
-        // Find and click confirm/submit button
-        const confirmButton = canvas.queryByRole('button', { name: /confirm|apply|save|ok/i });
-        if (confirmButton) {
-          await userEvent.click(confirmButton);
-          // Dialog should close and download should initiate
-          expect(args.fetchRunningJobs).toHaveBeenCalled();
-        }
-      }
-    }
+    await waitFor(() => {
+      expect(args.fetchRunningJobs).toHaveBeenCalled();
+    }, { timeout: 2000 });
   },
 };
 
@@ -247,31 +208,23 @@ export const WithUrls: Story = {
   },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
 
-    // Navigate to manual download tab
-    const tabs = canvas.queryAllByRole('tab');
-    if (tabs.length > 1) {
-      await userEvent.click(tabs[1]);
-      await new Promise((resolve) => setTimeout(resolve, 150));
-    }
+    const urlInput = await canvas.findByPlaceholderText(/paste youtube video url here/i);
+    await userEvent.type(urlInput, 'https://www.youtube.com/watch?v=video1{enter}');
+    await expect(await canvas.findByText(/first story video/i)).toBeInTheDocument();
 
-    // Verify URLs are displayed (either in input or as chips/pills)
-    const urlDisplay = canvas.queryByDisplayValue(/youtube.com/) ||
-                       canvas.queryByText(/video1|video2/i);
+    await userEvent.type(urlInput, 'https://www.youtube.com/watch?v=video2{enter}');
+    await expect(await canvas.findByText(/second story video/i)).toBeInTheDocument();
 
-    if (urlDisplay) {
-      expect(urlDisplay).toBeVisible();
-    }
+    const downloadButton = await canvas.findByRole('button', { name: /download videos/i });
+    await userEvent.click(downloadButton);
+    const startButton = await body.findByRole('button', { name: /start download/i });
+    await userEvent.click(startButton);
 
-    // Verify download button is available
-    const downloadButton = canvas.queryByRole('button', { name: /download|submit/i });
-    if (downloadButton) {
-      expect(downloadButton).toBeEnabled();
-
-      // Click download
-      await userEvent.click(downloadButton);
+    await waitFor(() => {
       expect(args.fetchRunningJobs).toHaveBeenCalled();
-    }
+    }, { timeout: 2000 });
   },
 };
 
@@ -310,33 +263,25 @@ export const AlreadyRunning: Story = {
   },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    const originalAlert = window.alert;
+    const alertSpy = fn();
+    window.alert = alertSpy;
 
-    // Wait for render
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    const channelTab = await canvas.findByRole('tab', { name: /channel download/i });
+    await userEvent.click(channelTab);
 
-    // Click channel download tab
-    const tabs = canvas.queryAllByRole('tab');
-    if (tabs.length > 0) {
-      await userEvent.click(tabs[0]);
-      await new Promise((resolve) => setTimeout(resolve, 150));
-    }
+    const triggerButton = await canvas.findByRole('button', { name: /download new from all channels/i });
+    await userEvent.click(triggerButton);
 
-    // Click trigger button
-    const triggerButton = canvas.queryByRole('button', {
-      name: /channel|trigger|download/i,
-    });
+    await expect(await body.findByRole('dialog', { name: /download settings/i })).toBeInTheDocument();
+    const startButton = await body.findByRole('button', { name: /start download/i });
+    await userEvent.click(startButton);
 
-    if (triggerButton) {
-      await userEvent.click(triggerButton);
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(expect.stringMatching(/already running/i));
+    }, { timeout: 2000 });
 
-      // Wait for error alert
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Verify error message appears
-      const errorMsg = canvas.queryByText(/already running|in progress|wait/i);
-      if (errorMsg) {
-        expect(errorMsg).toBeVisible();
-      }
-    }
+    window.alert = originalAlert;
   },
 };

@@ -21,10 +21,11 @@ export const ShowsPasswordForm: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: 'Change Password' }));
-    await expect(canvas.getByLabelText('Current Password')).toBeInTheDocument();
+    const passwordInputs = canvasElement.querySelectorAll('input[type="password"]');
+    await expect(passwordInputs.length).toBeGreaterThanOrEqual(3);
 
-    await userEvent.type(canvas.getByLabelText('New Password'), 'password123');
-    await userEvent.type(canvas.getByLabelText('Confirm New Password'), 'password124');
-    await expect(canvas.getByText("Passwords don't match")).toBeInTheDocument();
+    await userEvent.type(passwordInputs[1], 'password123');
+    await userEvent.type(passwordInputs[2], 'password124');
+    await expect(await canvas.findByText("Passwords don't match")).toBeInTheDocument();
   },
 };

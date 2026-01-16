@@ -24,7 +24,8 @@ export const Expanded: Story = {
     await expect(canvas.getByText('Enabled')).toBeInTheDocument();
     await expect(canvas.getByText('Accordion content goes here')).toBeInTheDocument();
 
-    await userEvent.click(canvas.getByText('Accordion Title'));
-    await expect(canvas.queryByText('Accordion content goes here')).not.toBeVisible();
+    const toggle = canvas.getByRole('button', { name: /accordion title/i });
+    await userEvent.click(toggle);
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   },
 };

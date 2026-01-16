@@ -50,11 +50,16 @@ type Story = StoryObj<typeof CoreSettingsSection>;
 export const ToggleAutoDownloads: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const checkbox = canvas.getByRole('checkbox', { name: /enable automatic downloads/i });
+    const checkbox = await canvas.findByRole('checkbox', { name: /enable automatic downloads/i });
     await userEvent.click(checkbox);
     await expect(checkbox).toBeChecked();
 
-    const frequencySelect = canvas.getByLabelText('Download Frequency');
-    await expect(frequencySelect).toBeEnabled();
+    const frequencyLabels = await canvas.findAllByText('Download Frequency');
+    const frequencyLabel = frequencyLabels.find((label) => label.tagName === 'LABEL') || frequencyLabels[0];
+    const frequencySelect = frequencyLabel
+      .closest('[class*="MuiFormControl"]')
+      ?.querySelector('[role="button"]');
+    expect(frequencySelect).toBeTruthy();
+    await expect(frequencySelect as HTMLElement).toBeEnabled();
   },
 };

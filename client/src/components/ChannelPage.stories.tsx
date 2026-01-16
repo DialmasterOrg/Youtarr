@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, userEvent, within } from '@storybook/test';
+import { expect, userEvent, within, waitFor } from '@storybook/test';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import ChannelPage from './ChannelPage';
@@ -35,16 +35,52 @@ export const Default: Story = {
             uploader: 'Test Channel',
             channel_id: 'UC_TEST',
             description: 'A test channel for Storybook',
-            video_quality: null,
-            sub_folder: null,
-            min_duration: null,
-            max_duration: null,
-            title_filter_regex: null,
+            video_quality: '720',
+            sub_folder: 'MySubFolder',
+            min_duration: 120,
+            max_duration: 600,
+            title_filter_regex: '(?i)^(?!.*short).*',
           })
         ),
         http.get('/api/channels/UC_TEST/tabs', () =>
           HttpResponse.json({
             availableTabs: ['videos'],
+          })
+        ),
+        http.get('/getconfig', () =>
+          HttpResponse.json({
+            preferredResolution: '1080',
+            channelFilesToDownload: 3,
+          })
+        ),
+        http.get('/api/channels/UC_TEST/settings', () =>
+          HttpResponse.json({
+            sub_folder: 'MySubFolder',
+            video_quality: '720',
+            min_duration: 120,
+            max_duration: 600,
+            title_filter_regex: '(?i)^(?!.*short).*',
+          })
+        ),
+        http.get('/api/channels/subfolders', () =>
+          HttpResponse.json(['Default', 'MySubFolder'])
+        ),
+        http.get('/api/channels/UC_TEST/filter-preview', () =>
+          HttpResponse.json({
+            videos: [],
+            totalCount: 0,
+            matchCount: 0,
+          })
+        ),
+        http.put('/api/channels/UC_TEST/settings', () =>
+          HttpResponse.json({
+            settings: {
+              sub_folder: 'MySubFolder',
+              video_quality: '720',
+              min_duration: 120,
+              max_duration: 600,
+              title_filter_regex: '(?i)^(?!.*short).*',
+            },
           })
         ),
         http.get('/getchannelvideos/UC_TEST', ({ request }) => {
@@ -84,21 +120,26 @@ export const Default: Story = {
     await expect(await body.findByRole('heading', { name: /test channel/i })).toBeInTheDocument();
 
     // Verify video list loads
-    await expect(await body.findByText(/channel video 1/i, undefined, { timeout: 5000 })).toBeInTheDocument();
+    await expect(await body.findByText(/channel video 1/i)).toBeInTheDocument();
+
+    await expect(await body.findByText(/720p/i)).toBeInTheDocument();
+    await expect(await body.findByText(/2-10 min/i)).toBeInTheDocument();
 
     // Test settings button interaction
-    const settingsButton = body.queryByRole('button', { name: /settings|gear|config/i });
-    if (settingsButton) {
-      await userEvent.click(settingsButton);
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      // Settings dialog should open (verify with expected dialog elements)
-    }
+    const settingsButton = await body.findByRole('button', { name: /channel settings/i });
+    await userEvent.click(settingsButton);
+    await expect(await body.findByText(/effective channel quality/i)).toBeInTheDocument();
 
     // Test filter/regex interactions
-    const filterButtons = body.queryAllByRole('button', { name: /filter|regex|quality/i });
-    if (filterButtons.length > 0) {
-      await userEvent.click(filterButtons[0]);
-      await new Promise((resolve) => setTimeout(resolve, 150));
-    }
+    const [filterLabel] = await body.findAllByText(/title filter/i);
+    const filterChip = filterLabel.closest('button') ?? filterLabel;
+    await userEvent.click(filterChip);
+    await expect(await body.findByText(/title filter regex pattern/i)).toBeInTheDocument();
+    await expect(await body.findByText(/\(\?i\)\^\(\?!\.\*short\)\.\*/i)).toBeInTheDocument();
+
+    await waitFor(async () => {
+      const popover = body.queryByText(/title filter regex pattern/i);
+      expect(popover).toBeInTheDocument();
+    });
   },
 };

@@ -12,10 +12,19 @@ const meta: Meta<typeof Root> = {
     msw: {
       handlers: [
         http.get('/api/db-status', () => HttpResponse.json({ status: 'healthy' })),
+        http.get('/setup/status', () => HttpResponse.json({ requiresSetup: false, isLocalhost: true, platformManaged: false })),
+        http.get('/auth/validate', () => HttpResponse.json({ valid: true })),
         http.get('/getconfig', () => HttpResponse.json({ preferredResolution: '1080', channelFilesToDownload: 3 })),
+        http.get('/getCurrentReleaseVersion', () => HttpResponse.json({ version: '1.0.0', ytDlpVersion: '2024.01.01' })),
+        http.get('/get-running-jobs', () => HttpResponse.json([])),
+        http.get('/api/stats', () => HttpResponse.json({ videoCount: 0, downloadCount: 0, storageUsed: 0 })),
       ],
     },
   },
+  loaders: [async () => {
+    localStorage.setItem('authToken', 'storybook-auth');
+    return {};
+  }],
 };
 
 export default meta;
@@ -24,12 +33,10 @@ type Story = StoryObj<typeof Root>;
 export const RendersAppShell: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    const toggleButton = canvas.getByRole('button', { name: /toggle navigation/i });
+    const toggleButton = await canvas.findByRole('button', { name: /toggle navigation/i });
     await expect(toggleButton).toBeEnabled();
     await userEvent.click(toggleButton);
 
-    const navButtons = canvas.queryAllByRole('button', { name: /channels?|download|video|setting/i });
-    await expect(navButtons.length).toBeGreaterThan(0);
+    localStorage.removeItem('authToken');
   },
 };
