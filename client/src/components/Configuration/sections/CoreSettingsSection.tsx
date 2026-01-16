@@ -38,6 +38,8 @@ interface CoreSettingsSectionProps {
   onConfigChange: (updates: Partial<ConfigState>) => void;
   onMobileTooltipClick?: (text: string) => void;
   token: string | null;
+  wiggleEnabled: boolean;
+  onWiggleToggle: (enabled: boolean) => void;
 }
 
 export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
@@ -47,6 +49,8 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
   onConfigChange,
   onMobileTooltipClick,
   token,
+  wiggleEnabled,
+  onWiggleToggle,
 }) => {
   // Fetch available subfolders
   const { subfolders, loading: subfoldersLoading } = useSubfolders(token);
@@ -382,6 +386,24 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                 />
               }
               label="Dark Mode"
+            />
+          </Box>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={wiggleEnabled}
+                  onChange={(event) => onWiggleToggle(event.target.checked)}
+                />
+              }
+              label="Playful Card Wiggle"
+            />
+            <InfoTooltip
+              text="Toggle the playful wiggle animation on hover across all cards."
+              onMobileClick={onMobileTooltipClick}
             />
           </Box>
         </Grid>

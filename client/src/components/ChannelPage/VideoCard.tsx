@@ -15,7 +15,6 @@ import StorageIcon from '@mui/icons-material/Storage';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import { useTheme } from '@mui/material/styles';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { formatFileSize, decodeHtml } from '../../utils/formatters';
@@ -33,6 +32,7 @@ interface VideoCardProps {
   onToggleDeletion: (youtubeId: string) => void;
   onToggleIgnore: (youtubeId: string) => void;
   onMobileTooltip?: (message: string) => void;
+  isInteractive?: boolean;
 }
 
 function VideoCard({
@@ -46,8 +46,8 @@ function VideoCard({
   onToggleDeletion,
   onToggleIgnore,
   onMobileTooltip,
+  isInteractive = false,
 }: VideoCardProps) {
-  const theme = useTheme();
   const status = getVideoStatus(video);
   // Check if video is still live (not "was_live" and not null/undefined)
   const isStillLive = video.live_status && video.live_status !== 'was_live';
@@ -60,6 +60,8 @@ function VideoCard({
     <Fade in timeout={300} key={video.youtube_id}>
       <Grid item xs={12} sm={6} md={4} lg={3}>
         <Card
+          /* toggle 'hover:animate-wiggle' here */
+          className={isInteractive ? 'wiggle-card' : undefined}
           sx={{
             height: '100%',
             display: 'flex',
@@ -68,10 +70,10 @@ function VideoCard({
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             cursor: isSelectable ? 'pointer' : 'default',
             opacity: status === 'members_only' || isIgnored ? 0.7 : 1,
-            transform: hoveredVideo === video.youtube_id ? 'translateY(-4px)' : 'translateY(0)',
-            boxShadow: hoveredVideo === video.youtube_id ? theme.shadows[8] : theme.shadows[1],
+            transform: hoveredVideo === video.youtube_id ? 'var(--card-hover-transform)' : 'translate(0, 0)',
+            boxShadow: hoveredVideo === video.youtube_id ? 'var(--card-hover-shadow)' : 'var(--shadow-soft)',
             '&:hover': {
-              boxShadow: theme.shadows[4],
+              boxShadow: 'var(--card-hover-shadow)',
             },
           }}
           onMouseEnter={() => onHoverChange(video.youtube_id)}

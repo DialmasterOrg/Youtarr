@@ -5,6 +5,7 @@ interface ConfigurationCardProps {
   title: string;
   subtitle?: string;
   children: React.ReactNode;
+  isInteractive?: boolean;
 }
 
 /**
@@ -14,14 +15,17 @@ export const ConfigurationCard: React.FC<ConfigurationCardProps> = ({
   title,
   subtitle,
   children,
+  isInteractive = false,
 }) => {
   return (
     <Card
+      /* toggle 'hover:animate-wiggle' here */
+      className={isInteractive ? 'wiggle-card' : undefined}
       elevation={2}
       sx={{
         mb: 3,
         border: 1,
-        borderColor: 'divider'
+        borderColor: 'divider',
       }}
     >
       <CardContent>

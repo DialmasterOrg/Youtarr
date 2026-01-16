@@ -119,11 +119,27 @@ export function AppShell({
               sx={{
                 borderRadius: 2,
                 justifyContent: collapsed ? 'center' : 'flex-start',
-                px: collapsed ? 1.25 : 2,
+                px: 1.5,
                 py: 1,
+                minHeight: 48,
+                border: '2px solid transparent',
+                bgcolor: selected ? 'var(--tertiary)' : 'transparent',
+                color: 'text.primary',
+                boxShadow: selected ? 'var(--shadow-hard)' : 'none',
+                '&:hover': {
+                  bgcolor: selected ? 'var(--tertiary)' : 'var(--muted)',
+                },
               }}
             >
-              <ListItemIcon sx={{ minWidth: collapsed ? 0 : 40, justifyContent: 'center' }}>
+              <ListItemIcon
+                sx={{
+                  minWidth: 40,
+                  width: 40,
+                  justifyContent: 'center',
+                  color: 'text.primary',
+                  '& svg': { fontSize: 22 },
+                }}
+              >
                 {item.icon}
               </ListItemIcon>
               {!collapsed && (
@@ -177,23 +193,81 @@ export function AppShell({
       sx={{
         display: 'flex',
         minHeight: '100vh',
+        position: 'relative',
         bgcolor: 'background.default',
         background: `linear-gradient(180deg, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 55%, ${theme.palette.background.default} 100%)`,
       }}
     >
       <CssBaseline />
 
+      <Box
+        aria-hidden
+        sx={{
+          position: 'absolute',
+          top: 92,
+          right: { xs: -120, md: -60 },
+          width: { xs: 180, md: 220 },
+          height: { xs: 180, md: 220 },
+          borderRadius: '50%',
+          bgcolor: 'var(--tertiary)',
+          border: '3px solid var(--foreground)',
+          boxShadow: 'var(--shadow-hard)',
+          opacity: 0.8,
+          zIndex: 0,
+          pointerEvents: 'none',
+        }}
+      />
+      <Box
+        aria-hidden
+        sx={{
+          position: 'absolute',
+          bottom: { xs: 80, md: 120 },
+          left: { xs: -140, md: -80 },
+          width: { xs: 200, md: 260 },
+          height: { xs: 120, md: 140 },
+          borderRadius: '999px',
+          bgcolor: 'var(--secondary)',
+          border: '3px solid var(--foreground)',
+          boxShadow: 'var(--shadow-hard)',
+          transform: 'rotate(-8deg)',
+          opacity: 0.7,
+          zIndex: 0,
+          pointerEvents: 'none',
+        }}
+      />
+      <Box
+        aria-hidden
+        sx={{
+          position: 'absolute',
+          top: { xs: 260, md: 220 },
+          left: { xs: 24, md: 120 },
+          width: { xs: 56, md: 72 },
+          height: { xs: 56, md: 72 },
+          borderRadius: 2,
+          bgcolor: 'var(--quaternary)',
+          border: '3px solid var(--foreground)',
+          boxShadow: 'var(--shadow-hard)',
+          transform: 'rotate(12deg)',
+          opacity: 0.65,
+          zIndex: 0,
+          pointerEvents: 'none',
+          display: { xs: 'none', md: 'block' },
+        }}
+      />
+
       <AppBar
         position="fixed"
         elevation={0}
         sx={{
           bgcolor: 'background.paper',
-          borderBottom: `1px solid ${theme.palette.divider}`,
+          borderBottom: `2px solid ${theme.palette.divider}`,
+          boxShadow: 'var(--shadow-hard)',
+          color: 'text.primary',
           zIndex: theme.zIndex.drawer + 1,
         }}
       >
         <Toolbar sx={{ gap: 1 }}>
-          <IconButton edge="start" color="inherit" aria-label="toggle navigation" onClick={toggleDrawer}>
+          <IconButton edge="start" aria-label="toggle navigation" onClick={toggleDrawer} sx={{ color: 'text.primary' }}>
             <MenuIcon />
           </IconButton>
 
@@ -214,7 +288,7 @@ export function AppShell({
           <Box sx={{ flexGrow: 1 }} />
 
           {token && !isPlatformManaged && onLogout && (
-            <IconButton color="inherit" aria-label="logout" onClick={onLogout}>
+            <IconButton aria-label="logout" onClick={onLogout} sx={{ color: 'text.primary' }}>
               <LogoutIcon />
             </IconButton>
           )}
@@ -232,7 +306,9 @@ export function AppShell({
           '& .MuiDrawer-paper': {
             width: drawerWidth,
             boxSizing: 'border-box',
-            borderRight: `1px solid ${theme.palette.divider}`,
+            borderRight: `2px solid ${theme.palette.divider}`,
+            boxShadow: 'var(--shadow-hard)',
+            bgcolor: 'background.paper',
             overflowX: 'hidden',
           },
         }}
@@ -244,16 +320,29 @@ export function AppShell({
         component="main"
         sx={{
           flexGrow: 1,
-          width: '100%',
+          width: { xs: '100%', md: `calc(100% - ${drawerWidth}px)` },
           px: { xs: 2, md: 4 },
           pt: 10,
           pb: 4,
           ml: isMobile ? 0 : `${drawerWidth}px`,
-          maxWidth: isMobile ? '100%' : `calc(100% - ${drawerWidth}px)`,
           boxSizing: 'border-box',
+          position: 'relative',
+          zIndex: 1,
         }}
       >
-        {children}
+        <Box
+          sx={{
+            bgcolor: 'background.paper',
+            border: '2px solid var(--foreground)',
+            borderRadius: 3,
+            boxShadow: 'var(--shadow-soft)',
+            px: { xs: 2, md: 3 },
+            py: { xs: 2, md: 3 },
+            minHeight: { xs: 'calc(100vh - 200px)', md: 'calc(100vh - 180px)' },
+          }}
+        >
+          {children}
+        </Box>
       </Box>
     </Box>
   );

@@ -14,6 +14,7 @@ interface ChannelCardProps {
     onDelete: () => void;
     onRegexClick: (event: React.MouseEvent<HTMLElement>, regex: string) => void;
     isPendingAddition?: boolean;
+    isInteractive?: boolean;
 }
 
 const ChannelCard: React.FC<ChannelCardProps> = ({
@@ -24,6 +25,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
     onDelete,
     onRegexClick,
     isPendingAddition,
+    isInteractive = false,
 }) => {
     const [thumbnailVisible, setThumbnailVisible] = useState(true);
     const [thumbnailLoaded, setThumbnailLoaded] = useState(false);
@@ -34,19 +36,21 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
 
     return (
         <Card
+            /* toggle 'hover:animate-wiggle' here */
+            className={isInteractive ? 'wiggle-card' : undefined}
             sx={{
                 height: '100%',
                 display: 'flex',
                 flexDirection: 'column',
-                borderColor: isPendingAddition ? 'warning.light' : 'transparent',
-                borderWidth: isPendingAddition ? 2 : 0,
+                borderColor: isPendingAddition ? 'warning.light' : 'var(--foreground)',
+                borderWidth: 2,
                 borderStyle: isPendingAddition ? 'dashed' : 'solid',
                 borderRadius: 3,
-                boxShadow: '0 6px 18px rgba(15, 23, 42, 0.08)',
-                transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+                boxShadow: 'var(--shadow-soft)',
+                transition: 'transform 300ms var(--transition-bouncy), box-shadow 300ms var(--transition-bouncy)',
                 '&:hover': {
-                    transform: 'translateY(-4px)',
-                    boxShadow: '0 18px 30px rgba(15, 23, 42, 0.15)',
+                    transform: 'var(--card-hover-transform)',
+                    boxShadow: 'var(--card-hover-shadow)',
                 },
                 overflow: 'hidden',
             }}

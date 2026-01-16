@@ -68,6 +68,17 @@ function AppContent() {
     return appConfig.darkModeEnabled ? darkTheme : lightTheme;
   }, [appConfig.darkModeEnabled]);
 
+  useEffect(() => {
+    document.body.dataset.theme = appConfig.darkModeEnabled ? 'dark' : 'light';
+  }, [appConfig.darkModeEnabled]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = localStorage.getItem('uiWiggleEnabled');
+    const enabled = stored !== 'false';
+    document.body.dataset.wiggle = enabled ? 'on' : 'off';
+  }, []);
+
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };

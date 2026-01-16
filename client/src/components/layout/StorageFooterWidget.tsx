@@ -17,15 +17,25 @@ export function StorageFooterWidget({ token, collapsed }: StorageFooterWidgetPro
   if (!token || error) return null;
 
   const percentFree = storageData?.percentFree ?? 0;
+  const percentUsed = storageData?.percentUsed ?? Math.max(0, Math.min(100, 100 - percentFree));
   const availableGB = storageData?.availableGB ?? 0;
   const totalGB = storageData?.totalGB ?? 0;
 
-  // Show free-space percentage as the bar fill.
-  const progressValue = Math.max(0, Math.min(100, percentFree));
+  // Show used-space percentage as the bar fill.
+  const progressValue = Math.max(0, Math.min(100, percentUsed));
+  const percentFreeLabel = Number.isFinite(percentFree) ? percentFree.toFixed(1) : '0.0';
 
   const content = (
     <Box sx={{ px: collapsed ? 1 : 2, py: 1.5 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          mb: 1,
+          justifyContent: collapsed ? 'center' : 'flex-start',
+        }}
+      >
         <HardDriveIcon fontSize="small" />
         {!collapsed && (
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -42,13 +52,15 @@ export function StorageFooterWidget({ token, collapsed }: StorageFooterWidgetPro
 
       {!collapsed && (
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-          {loading ? 'Loading…' : `${availableGB} GB free of ${totalGB} GB`}
+          {loading ? 'Loading…' : `${availableGB} GB free of ${totalGB} GB (${percentFreeLabel}% free)`}
         </Typography>
       )}
     </Box>
   );
 
-  const tooltipTitle = loading ? 'Loading storage…' : `${availableGB} GB free of ${totalGB} GB (${percentFree}% free)`;
+  const tooltipTitle = loading
+    ? 'Loading storage…'
+    : `${availableGB} GB free of ${totalGB} GB (${percentFreeLabel}% free)`;
 
   return (
     <Tooltip title={tooltipTitle} placement="right" arrow disableHoverListener={!collapsed}>

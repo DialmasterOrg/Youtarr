@@ -91,6 +91,10 @@ function Configuration({ token }: ConfigurationProps) {
     severity: 'success'
   });
   const [mobileTooltip, setMobileTooltip] = useState<string | null>(null);
+  const [wiggleEnabled, setWiggleEnabled] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('uiWiggleEnabled') !== 'false';
+  });
 
   const hasPlexServerConfigured = isPlatformManaged.plexUrl || Boolean(config.plexIP);
 
@@ -187,6 +191,12 @@ function Configuration({ token }: ConfigurationProps) {
     setHasUnsavedChanges(changed);
   }, [config, initialConfig]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    document.body.dataset.wiggle = wiggleEnabled ? 'on' : 'off';
+    localStorage.setItem('uiWiggleEnabled', String(wiggleEnabled));
+  }, [wiggleEnabled]);
+
   if (isLoading) {
     return <ConfigurationSkeleton />;
   }
@@ -200,6 +210,8 @@ function Configuration({ token }: ConfigurationProps) {
         onConfigChange={handleConfigChange}
         onMobileTooltipClick={setMobileTooltip}
         token={token}
+        wiggleEnabled={wiggleEnabled}
+        onWiggleToggle={setWiggleEnabled}
       />
 
       <PlexIntegrationSection

@@ -28,11 +28,14 @@ const meta: Meta<typeof CoreSettingsSection> = {
       videoCodec: 'default',
       defaultSubfolder: '',
     });
+    const [wiggleEnabled, setWiggleEnabled] = useState(true);
     return (
       <CoreSettingsSection
         {...args}
         config={config}
         onConfigChange={(updates) => setConfig((prev) => ({ ...prev, ...updates }))}
+        wiggleEnabled={wiggleEnabled}
+        onWiggleToggle={setWiggleEnabled}
       />
     );
   },
@@ -41,6 +44,8 @@ const meta: Meta<typeof CoreSettingsSection> = {
     deploymentEnvironment: { platform: null, isWsl: false },
     isPlatformManaged: { plexUrl: false, authEnabled: true, useTmpForDownloads: false },
     onMobileTooltipClick: fn(),
+    wiggleEnabled: true,
+    onWiggleToggle: fn(),
   },
 };
 

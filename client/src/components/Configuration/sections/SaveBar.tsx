@@ -54,7 +54,7 @@ export const SaveBar: React.FC<SaveBarProps> = ({
           variant="extended"
           color={hasUnsavedChanges ? 'warning' : 'primary'}
           onClick={onSave}
-          disabled={isLoading || Boolean(validationError)}
+          disabled={isLoading}
           sx={{
             position: 'fixed',
             bottom: 16,
