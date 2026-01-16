@@ -67,6 +67,17 @@ jest.mock('../chips', () => ({
       'Title Filter'
     );
   },
+  DownloadFormatConfigIndicator: function MockDownloadFormatConfigIndicator({ audioFormat }: any) {
+    const React = require('react');
+    return React.createElement(
+      'div',
+      {
+        'data-testid': 'download-format-config-indicator',
+        'data-audio-format': audioFormat,
+      },
+      'Format'
+    );
+  },
 }));
 
 describe('ChannelListRow', () => {

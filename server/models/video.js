@@ -48,6 +48,14 @@ Video.init(
       type: DataTypes.BIGINT,
       allowNull: true,
     },
+    audioFilePath: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    audioFileSize: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+    },
     removed: {
       type: DataTypes.BOOLEAN,
       allowNull: false,

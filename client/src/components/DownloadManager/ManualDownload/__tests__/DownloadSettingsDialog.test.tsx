@@ -484,6 +484,7 @@ describe('DownloadSettingsDialog', () => {
         videoCount: 0,
         allowRedownload: false,
         subfolder: null,
+        audioFormat: null,
       });
     });
 
@@ -607,6 +608,7 @@ describe('DownloadSettingsDialog', () => {
         videoCount: 0,
         allowRedownload: true,
         subfolder: null,
+        audioFormat: null,
       });
     });
 
@@ -629,6 +631,7 @@ describe('DownloadSettingsDialog', () => {
         videoCount: 0,
         allowRedownload: true,
         subfolder: null,
+        audioFormat: null,
       });
     });
 

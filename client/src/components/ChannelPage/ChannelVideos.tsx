@@ -54,13 +54,14 @@ interface ChannelVideosProps {
   channelAutoDownloadTabs?: string;
   channelId?: string;
   channelVideoQuality?: string | null;
+  channelAudioFormat?: string | null;
 }
 
 type ViewMode = 'table' | 'grid' | 'list';
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
 
-function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelId, channelVideoQuality }: ChannelVideosProps) {
+function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelId, channelVideoQuality, channelAudioFormat }: ChannelVideosProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -278,6 +279,10 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const defaultResolution = channelVideoQuality || config.preferredResolution || '1080';
   const defaultResolutionSource: 'channel' | 'global' = hasChannelOverride ? 'channel' : 'global';
 
+  const hasChannelAudioOverride = Boolean(channelAudioFormat);
+  const defaultAudioFormat = channelAudioFormat || null;
+  const defaultAudioFormatSource: 'channel' | 'global' = hasChannelAudioOverride ? 'channel' : 'global';
+
   const { triggerDownloads } = useTriggerDownloads(token);
 
   const {
@@ -367,6 +372,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           resolution: settings.resolution,
           allowRedownload: settings.allowRedownload,
           subfolder: settings.subfolder,
+          audioFormat: settings.audioFormat,
         }
       : undefined;
 
@@ -982,6 +988,8 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         selectedForDeletion={selectedForDeletion.length}
         defaultResolution={defaultResolution}
         defaultResolutionSource={defaultResolutionSource}
+        defaultAudioFormat={defaultAudioFormat}
+        defaultAudioFormatSource={defaultAudioFormatSource}
         selectedTab={selectedTab || 'videos'}
         tabLabel={getTabLabel(selectedTab || 'videos')}
         onDownloadDialogClose={() => setDownloadDialogOpen(false)}

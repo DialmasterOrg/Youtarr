@@ -3,7 +3,7 @@ import { Avatar, Box, Card, CardActionArea, CardContent, Chip, IconButton, Toolt
 import DeleteIcon from '@mui/icons-material/Delete';
 import ImageIcon from '@mui/icons-material/Image';
 import { Channel } from '../../../types/Channel';
-import { QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip } from './chips';
+import { QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator } from './chips';
 import FolderIcon from '@mui/icons-material/Folder';
 
 interface ChannelCardProps {
@@ -223,7 +223,8 @@ interface CardDetailsProps {
 const CardDetails: React.FC<CardDetailsProps> = ({ channel, isMobile, onRegexClick }) => {
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75 }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
+                <DownloadFormatConfigIndicator audioFormat={channel.audio_format} />
                 <AutoDownloadChips
                     availableTabs={channel.available_tabs}
                     autoDownloadTabs={channel.auto_download_enabled_tabs}

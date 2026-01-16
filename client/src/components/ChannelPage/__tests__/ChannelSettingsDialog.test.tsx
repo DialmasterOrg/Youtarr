@@ -35,6 +35,7 @@ describe('ChannelSettingsDialog', () => {
     min_duration: null,
     max_duration: null,
     title_filter_regex: null,
+    audio_format: null,
   };
 
   const mockSubfolders = ['__Sports', '__Music', '__Tech'];

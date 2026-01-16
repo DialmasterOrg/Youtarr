@@ -47,6 +47,13 @@ jest.mock('../chips', () => ({
       onClick: (e: any) => onRegexClick(e, titleFilterRegex),
     }, `Title Filter: ${titleFilterRegex}`);
   },
+  DownloadFormatConfigIndicator: function MockDownloadFormatConfigIndicator({ audioFormat }: any) {
+    const React = require('react');
+    return React.createElement('div', {
+      'data-testid': 'download-format-config-indicator',
+      'data-audio-format': audioFormat,
+    }, 'Format');
+  },
 }));
 
 describe('ChannelCard Component', () => {

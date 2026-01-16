@@ -11,7 +11,7 @@ import {
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { Channel } from '../../../types/Channel';
-import { SubFolderChip, QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip } from './chips';
+import { SubFolderChip, QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator } from './chips';
 
 interface ChannelListRowProps {
   channel: Channel;
@@ -103,6 +103,7 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
           </Tooltip>
         </Box>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'center' }}>
+          <DownloadFormatConfigIndicator audioFormat={channel.audio_format} />
           <AutoDownloadChips
             availableTabs={channel.available_tabs}
             autoDownloadTabs={channel.auto_download_enabled_tabs}
@@ -184,6 +185,7 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
             alignItems: 'center',
           }}
         >
+          <DownloadFormatConfigIndicator audioFormat={channel.audio_format} />
           <AutoDownloadChips
             availableTabs={channel.available_tabs}
             autoDownloadTabs={channel.auto_download_enabled_tabs}
