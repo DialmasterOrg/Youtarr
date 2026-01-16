@@ -9,7 +9,7 @@ describe('DownloadFormatIndicator', () => {
     test('returns null when no file paths are provided', () => {
       const { container } = render(<DownloadFormatIndicator />);
 
-      expect(container.firstChild).toBeNull();
+      expect(container).toBeEmptyDOMElement();
     });
 
     test('returns null when file paths are null', () => {
@@ -17,7 +17,7 @@ describe('DownloadFormatIndicator', () => {
         <DownloadFormatIndicator filePath={null} audioFilePath={null} />
       );
 
-      expect(container.firstChild).toBeNull();
+      expect(container).toBeEmptyDOMElement();
     });
 
     test('renders video chip when filePath is provided', () => {
