@@ -179,9 +179,11 @@ afterEach(() => {
   // Clear any pending timers that might be keeping the event loop alive.
   try {
     if (typeof jest !== 'undefined' && jest.useFakeTimers) {
-      // Small check to see if we're in a fake timers context
-      // but clearAllTimers is generally safe to call if jest is available.
-      jest.clearAllTimers();
+      if (jest.isMockFunction(setTimeout)) {
+        jest.runOnlyPendingTimers();
+        jest.clearAllTimers();
+      }
+      jest.useRealTimers();
     }
   } catch (e) {
     // Ignore if timers are not mockable in this context
@@ -189,4 +191,14 @@ afterEach(() => {
 });
 
 // Clean up after the tests are finished.
-afterAll(() => server.close());
+afterAll(() => {
+  try {
+    if (typeof jest !== 'undefined' && jest.useFakeTimers) {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
+  } catch (e) {
+    // Ignore if timers are not mockable in this context
+  }
+  server.close();
+});
