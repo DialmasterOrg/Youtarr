@@ -81,9 +81,9 @@ export const Default: Story = {
     const manualTab = await canvas.findByRole('tab', { name: /manual download/i });
     const channelTab = await canvas.findByRole('tab', { name: /channel download/i });
 
-    expect(manualTab).toHaveAttribute('aria-selected', 'true');
+    await expect(manualTab).toHaveAttribute('aria-selected', 'true');
     await userEvent.click(channelTab);
-    expect(channelTab).toHaveAttribute('aria-selected', 'true');
+    await expect(channelTab).toHaveAttribute('aria-selected', 'true');
   },
 };
 
@@ -115,8 +115,8 @@ export const ManualDownloadTab: Story = {
     const startButton = await body.findByRole('button', { name: /start download/i });
     await userEvent.click(startButton);
 
-    await waitFor(() => {
-      expect(args.fetchRunningJobs).toHaveBeenCalled();
+    await waitFor(async () => {
+      await expect(args.fetchRunningJobs).toHaveBeenCalled();
     }, { timeout: 2000 });
   },
 };
@@ -147,8 +147,8 @@ export const ChannelDownloadTab: Story = {
     const startButton = await body.findByRole('button', { name: /start download/i });
     await userEvent.click(startButton);
 
-    await waitFor(() => {
-      expect(args.fetchRunningJobs).toHaveBeenCalled();
+    await waitFor(async () => {
+      await expect(args.fetchRunningJobs).toHaveBeenCalled();
     }, { timeout: 2000 });
   },
 };
@@ -188,8 +188,8 @@ export const SettingsDialogOpen: Story = {
     const startButton = await body.findByRole('button', { name: /start download/i });
     await userEvent.click(startButton);
 
-    await waitFor(() => {
-      expect(args.fetchRunningJobs).toHaveBeenCalled();
+    await waitFor(async () => {
+      await expect(args.fetchRunningJobs).toHaveBeenCalled();
     }, { timeout: 2000 });
   },
 };
@@ -222,8 +222,8 @@ export const WithUrls: Story = {
     const startButton = await body.findByRole('button', { name: /start download/i });
     await userEvent.click(startButton);
 
-    await waitFor(() => {
-      expect(args.fetchRunningJobs).toHaveBeenCalled();
+    await waitFor(async () => {
+      await expect(args.fetchRunningJobs).toHaveBeenCalled();
     }, { timeout: 2000 });
   },
 };
@@ -278,8 +278,8 @@ export const AlreadyRunning: Story = {
     const startButton = await body.findByRole('button', { name: /start download/i });
     await userEvent.click(startButton);
 
-    await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith(expect.stringMatching(/already running/i));
+    await waitFor(async () => {
+      await expect(alertSpy).toHaveBeenCalledWith(expect.stringMatching(/already running/i));
     }, { timeout: 2000 });
 
     window.alert = originalAlert;

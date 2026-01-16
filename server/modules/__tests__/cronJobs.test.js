@@ -349,6 +349,8 @@ describe('CronJobs', () => {
       );
 
       expect(scheduleCall).toBeDefined();
+      expect(scheduleCall[0]).toBe('0 2 * * *');
+      expect(scheduleCall[1]).toEqual(expect.any(Function));
     });
 
     test('should use correct cron schedule for session cleanup (3:00 AM daily)', () => {
@@ -359,6 +361,8 @@ describe('CronJobs', () => {
       );
 
       expect(scheduleCall).toBeDefined();
+      expect(scheduleCall[0]).toBe('0 3 * * *');
+      expect(scheduleCall[1]).toEqual(expect.any(Function));
     });
 
     test('should use correct cron schedule for metadata backfill (3:30 AM daily)', () => {
@@ -369,6 +373,8 @@ describe('CronJobs', () => {
       );
 
       expect(scheduleCall).toBeDefined();
+      expect(scheduleCall[0]).toBe('30 3 * * *');
+      expect(scheduleCall[1]).toEqual(expect.any(Function));
     });
   });
 

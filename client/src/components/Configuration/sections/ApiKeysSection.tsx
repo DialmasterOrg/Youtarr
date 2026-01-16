@@ -453,7 +453,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
         <DialogTitle>Delete API Key?</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete the API key <strong>"{deleteConfirmDialog.keyName}"</strong>?
+            Are you sure you want to delete the API key <strong>&quot;{deleteConfirmDialog.keyName}&quot;</strong>?
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
             This action cannot be undone. Any integrations using this key will stop working.

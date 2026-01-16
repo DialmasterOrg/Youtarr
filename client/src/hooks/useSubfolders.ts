@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 interface UseSubfoldersResult {
   subfolders: string[];
@@ -16,12 +16,21 @@ export function useSubfolders(token: string | null): UseSubfoldersResult {
   const [subfolders, setSubfolders] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const fetchSubfolders = useCallback(async () => {
-    if (!token) return;
+    if (!token || !isMounted.current) return;
 
-    setLoading(true);
-    setError(null);
+    if (isMounted.current) {
+      setLoading(true);
+      setError(null);
+    }
 
     try {
       const response = await fetch('/api/channels/subfolders', {
@@ -37,12 +46,18 @@ export function useSubfolders(token: string | null): UseSubfoldersResult {
       const data = await response.json();
       // API may return either an array (legacy) or an object containing subfolders.
       const subfolderList = Array.isArray(data) ? data : data?.subfolders;
-      setSubfolders(Array.isArray(subfolderList) ? subfolderList : []);
+      if (isMounted.current) {
+        setSubfolders(Array.isArray(subfolderList) ? subfolderList : []);
+      }
     } catch (err) {
-      console.error('Failed to fetch subfolders:', err);
-      setError(err instanceof Error ? err : new Error('Unknown error'));
+      if (isMounted.current) {
+        console.error('Failed to fetch subfolders:', err);
+        setError(err instanceof Error ? err : new Error('Unknown error'));
+      }
     } finally {
-      setLoading(false);
+      if (isMounted.current) {
+        setLoading(false);
+      }
     }
   }, [token]);
 

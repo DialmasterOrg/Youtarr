@@ -78,7 +78,7 @@ function HelpDialog({ open, onClose, isMobile }: HelpDialogProps) {
                 Settings Column
               </DialogContentText>
               <DialogContentText style={{ fontSize: isMobile ? '13px' : '15px' }}>
-                <FolderIcon sx={{ fontSize: '0.85rem', verticalAlign: 'middle' }} /> Download folder ("default" places channel directory in the root for Youtarr)
+                <FolderIcon sx={{ fontSize: '0.85rem', verticalAlign: 'middle' }} /> Download folder (&quot;default&quot; places channel directory in the root for Youtarr)
                 <br />
                 Green chip with <SettingsIcon sx={{ fontSize: '0.8rem', verticalAlign: 'middle' }} /> = channel-specific quality override. Gray = global default.
               </DialogContentText>

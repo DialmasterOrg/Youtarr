@@ -59,7 +59,7 @@ export const ToggleAutoDownloads: Story = {
     const frequencySelect = frequencyLabel
       .closest('[class*="MuiFormControl"]')
       ?.querySelector('[role="button"]');
-    expect(frequencySelect).toBeTruthy();
+    await expect(frequencySelect as HTMLElement).toBeInTheDocument();
     await expect(frequencySelect as HTMLElement).toBeEnabled();
   },
 };

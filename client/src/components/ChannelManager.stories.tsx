@@ -1,3 +1,4 @@
+import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, userEvent, within, waitFor } from '@storybook/test';
 import { http, HttpResponse } from 'msw';
@@ -102,13 +103,13 @@ export const Default: Story = {  render: (args) => (
       await userEvent.click(folderButton);
       const folderItem = await canvas.findByRole('menuitem', { name: /myfolder/i });
       await userEvent.click(folderItem);
-      await expect(canvas.getByText(/beta channel/i)).toBeInTheDocument();
+      await expect(await canvas.findByText(/beta channel/i)).toBeInTheDocument();
     }
 
     // Test add channel button
     const addButton = canvas.queryByRole('button', { name: /add|new|plus/i });
     if (addButton) {
-      expect(addButton).toBeInTheDocument();
+      await expect(addButton).toBeInTheDocument();
     }
   },
 };

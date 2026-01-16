@@ -41,7 +41,7 @@ export const AccountSecuritySection: React.FC<AccountSecuritySectionProps> = ({
         <Alert severity="info" sx={{ mt: 2 }}>
           <Typography variant="body2">
             Username and password authentication is managed by your platform deployment or environment configuration.
-            To change your login credentials, update the authentication settings in your platform's configuration or .env file.
+            To change your login credentials, update the authentication settings in your platform&apos;s configuration or .env file.
           </Typography>
         </Alert>
       </ConfigurationCard>

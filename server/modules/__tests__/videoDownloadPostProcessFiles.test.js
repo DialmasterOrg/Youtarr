@@ -112,6 +112,7 @@ describe('videoDownloadPostProcessFiles', () => {
   const jsonPath = '/library/Channel/Video Title [abc123].info.json';
   const tempPath = `${videoPath}.metadata_temp.mp4`;
   let setTimeoutSpy;
+  let consoleLogSpy;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -120,6 +121,7 @@ describe('videoDownloadPostProcessFiles', () => {
     logger.error.mockClear();
     JobVideoDownload.update.mockResolvedValue([0]);
     Channel.findOne.mockResolvedValue(null);
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
     process.env.YOUTARR_JOB_ID = 'test-job-id';
     configModule.__setConfig({
       writeChannelPosters: false,
@@ -177,6 +179,7 @@ describe('videoDownloadPostProcessFiles', () => {
     process.argv = [...ORIGINAL_ARGV];
     process.exit = ORIGINAL_EXIT;
     setTimeoutSpy?.mockRestore();
+    consoleLogSpy?.mockRestore();
     delete process.env.YOUTARR_JOB_ID;
   });
 

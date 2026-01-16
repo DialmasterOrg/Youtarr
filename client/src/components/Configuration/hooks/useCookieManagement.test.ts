@@ -23,7 +23,7 @@ describe('useCookieManagement', () => {
   });
 
   describe('Hook Initialization', () => {
-    test('returns expected functions and state', () => {
+    test('returns expected functions and state', async () => {
       const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -44,6 +44,10 @@ describe('useCookieManagement', () => {
       expect(result.current.deleteCookies).toBeDefined();
       expect(typeof result.current.deleteCookies).toBe('function');
       expect(result.current.uploadingCookie).toBe(false);
+
+      await waitFor(() => {
+        expect(result.current.cookieStatus).toEqual(mockCookieStatus);
+      });
     });
 
     test('works with null token', () => {
@@ -67,7 +71,7 @@ describe('useCookieManagement', () => {
       expect(result.current.uploadingCookie).toBe(false);
     });
 
-    test('initializes with null cookie status', () => {
+    test('initializes with null cookie status', async () => {
       const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -85,6 +89,10 @@ describe('useCookieManagement', () => {
 
       // Initially null until useEffect runs
       expect(result.current.cookieStatus).toBeNull();
+
+      await waitFor(() => {
+        expect(result.current.cookieStatus).toEqual(mockCookieStatus);
+      });
     });
   });
 

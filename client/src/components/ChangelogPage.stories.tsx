@@ -48,8 +48,8 @@ export const Default: Story = {
     const refreshButton = await body.findByRole('button', { name: /refresh/i });
     await userEvent.click(refreshButton);
 
-    await waitFor(() => {
-      expect(refreshButton).toBeDisabled();
+    await waitFor(async () => {
+      await expect(refreshButton).toBeDisabled();
     });
 
     await expect(await body.findByText(/added features/i)).toBeInTheDocument();
@@ -86,6 +86,9 @@ export const ErrorState: Story = {
   },
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
+    const originalConsoleError = console.error;
+    console.error = () => {};
+    try {
 
     await expect(await body.findByText(/unable to load changelog/i)).toBeInTheDocument();
     await expect(await body.findByRole('link', { name: /https:\/\/github.com\/dialmasterorg\/youtarr/i })).toBeInTheDocument();
@@ -93,5 +96,8 @@ export const ErrorState: Story = {
     const retryButton = await body.findByRole('button', { name: /retry/i });
     await userEvent.click(retryButton);
     await expect(await body.findByRole('progressbar')).toBeInTheDocument();
+    } finally {
+      console.error = originalConsoleError;
+    }
   },
 };

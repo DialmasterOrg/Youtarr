@@ -1,3 +1,4 @@
+import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, userEvent, within, waitFor } from '@storybook/test';
 import { http, HttpResponse } from 'msw';
@@ -139,7 +140,7 @@ export const Default: Story = {
 
     await waitFor(async () => {
       const popover = body.queryByText(/title filter regex pattern/i);
-      expect(popover).toBeInTheDocument();
+      await expect(popover).toBeInTheDocument();
     });
   },
 };

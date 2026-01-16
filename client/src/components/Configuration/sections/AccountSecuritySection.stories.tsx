@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, fn, userEvent, within } from '@storybook/test';
+import { expect, fn, userEvent, within, waitFor } from '@storybook/test';
 import React from 'react';
 import { AccountSecuritySection } from './AccountSecuritySection';
 
@@ -26,6 +26,16 @@ export const ShowsPasswordForm: Story = {
 
     await userEvent.type(passwordInputs[1], 'password123');
     await userEvent.type(passwordInputs[2], 'password124');
-    await expect(await canvas.findByText("Passwords don't match")).toBeInTheDocument();
+    const confirmInput = passwordInputs[2] as HTMLInputElement;
+    await waitFor(() => {
+      expect(confirmInput.getAttribute('aria-describedby')).toBeTruthy();
+    });
+    const describedBy = confirmInput.getAttribute('aria-describedby');
+    if (describedBy) {
+      await waitFor(() => {
+        const helperText = canvasElement.ownerDocument.getElementById(describedBy);
+        expect(helperText).toHaveTextContent(/Passwords don'?t match/i);
+      });
+    }
   },
 };

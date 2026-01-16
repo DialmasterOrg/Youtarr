@@ -275,10 +275,12 @@ export function SubfolderAutocomplete({
   };
 
   // Render option with icons for special options
+  // eslint-disable-next-line react/prop-types
   const renderOption = (
     props: React.HTMLAttributes<HTMLLIElement>,
     option: SubfolderOption
   ) => {
+    // eslint-disable-next-line react/prop-types
     const { key, ...otherProps } = props as { key?: string } & React.HTMLAttributes<HTMLLIElement>;
 
     // Render "Add Subfolder" distinctly

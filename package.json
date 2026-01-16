@@ -12,7 +12,7 @@
     "lint:fix": "eslint ./client/src/. --ext .ts,.tsx --fix && eslint ./server/. --ext .js --fix",
     "lint-staged": "lint-staged",
     "prepare": "husky install",
-    "test": "npm run test:backend && npm run test:frontend",
+    "test": "concurrently -n BACK,FRONT \"npm run test:backend\" \"npm run test:frontend\"",
     "test:backend": "jest --config jest.config.js",
     "test:frontend": "cd client && npm run test",
     "test:coverage": "jest --config jest.config.js --coverage && cd client && npm run test:coverage",

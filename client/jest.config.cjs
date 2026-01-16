@@ -39,5 +39,8 @@ module.exports = {
     ],
   },
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts', '<rootDir>/src/setupTests.ts'],
+  transformIgnorePatterns: [
+    '/node_modules/(?!until-async|msw|@mswjs|@mswjs\/interceptors|@mswjs\/.*)/',
+  ],
   testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/dist/', '<rootDir>/storybook-static/'],
 };

@@ -5,11 +5,7 @@ import { jest } from '@jest/globals';
 import axios from 'axios';
 
 // Mock axios
-jest.mock('axios', () => ({
-  default: {
-    get: jest.fn(),
-  },
-}));
+jest.mock('axios');
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
@@ -33,6 +29,7 @@ describe('useStorageStatus', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
+    mockedAxios.get = jest.fn();
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   });
 

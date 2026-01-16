@@ -1,12 +1,14 @@
 import React from 'react';
 import type { Preview } from '@storybook/react';
 import { initialize, mswLoader } from 'msw-storybook-addon';
+import { http, HttpResponse } from 'msw';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import WebSocketContext from '../src/contexts/WebSocketContext';
 import { lightTheme, darkTheme } from '../src/theme';
+import { DEFAULT_CONFIG } from '../src/config/configSchema';
 
 initialize({
   onUnhandledRequest: 'bypass',
@@ -18,9 +20,92 @@ const mockWebSocketContext = {
   unsubscribe: () => {},
 };
 
+const defaultMswHandlers = [
+  http.get('/getconfig', () =>
+    HttpResponse.json({
+      ...DEFAULT_CONFIG,
+      preferredResolution: '1080',
+      channelFilesToDownload: 3,
+      youtubeOutputDirectory: '/downloads/youtube',
+      isPlatformManaged: {
+        plexUrl: false,
+        authEnabled: true,
+        useTmpForDownloads: false,
+      },
+      deploymentEnvironment: {
+        platform: null,
+        isWsl: false,
+      },
+    })
+  ),
+  http.get('/storage-status', () =>
+    HttpResponse.json({
+      availableGB: '100',
+      percentFree: 50,
+      totalGB: '200',
+    })
+  ),
+  http.get('/api/channels/subfolders', () => HttpResponse.json(['Movies', 'Shows'])),
+  http.get('/api/cookies/status', () =>
+    HttpResponse.json({
+      cookiesEnabled: false,
+      customCookiesUploaded: false,
+      customFileExists: false,
+    })
+  ),
+  http.get('/api/keys', () => HttpResponse.json({ keys: [] })),
+  http.get('/api/db-status', () => HttpResponse.json({ status: 'healthy' })),
+  http.get('/setup/status', () =>
+    HttpResponse.json({
+      requiresSetup: false,
+      isLocalhost: true,
+      platformManaged: false,
+    })
+  ),
+  http.get('/getCurrentReleaseVersion', () =>
+    HttpResponse.json({
+      version: '1.0.0',
+      ytDlpVersion: '2024.01.01',
+    })
+  ),
+  http.get('/get-running-jobs', () => HttpResponse.json([])),
+  http.get('/runningjobs', () => HttpResponse.json([])),
+];
+
+const normalizeHandlers = (value: unknown): any[] => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'object') {
+    return Object.values(value as Record<string, any[]>).flat().filter(Boolean);
+  }
+  return [];
+};
+
+const mergeMswHandlersLoader = async (context: any) => {
+  const existingMsw = context.parameters?.msw;
+  const existingHandlers = normalizeHandlers(
+    existingMsw && typeof existingMsw === 'object' && 'handlers' in existingMsw
+      ? (existingMsw as { handlers?: unknown }).handlers
+      : existingMsw
+  );
+
+  context.parameters = {
+    ...context.parameters,
+    msw: {
+      ...(typeof existingMsw === 'object' ? existingMsw : {}),
+      handlers: [...existingHandlers, ...defaultMswHandlers],
+    },
+  };
+
+  return {};
+};
+
 const preview: Preview = {
-  loaders: [mswLoader],
+  loaders: [mergeMswHandlersLoader, mswLoader],
   parameters: {
+    a11y: {
+      disable: true,
+    },
     actions: { argTypesRegex: "^on[A-Z].*" },
     controls: {
       matchers: {

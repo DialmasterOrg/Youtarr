@@ -441,7 +441,7 @@ function ChannelSettingsDialog({
             />
 
             <Typography variant="caption" color="text.secondary">
-              Note: Changing the subfolder will move the channel's existing folder and files!</Typography>
+              Note: Changing the subfolder will move the channel&apos;s existing folder and files!</Typography>
 
             {/* Download Filters Section */}
             <Divider sx={{ my: 0 }} />

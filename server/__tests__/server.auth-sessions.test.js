@@ -878,15 +878,17 @@ describe('server routes - setup', () => {
 describe('server - WSL environment detection', () => {
   test('detects WSL environment based on environment variables', async () => {
     process.env.WSL_INTEROP = '/run/WSL/8_interop';
-    const { serverModule } = await createServerModule({ skipInitialize: true });
+    const { serverModule, app } = await createServerModule({ skipInitialize: true });
     // Since isWslEnvironment is evaluated at module load time and is not exported,
     // we can't test it directly. This test is mainly to ensure no errors occur.
-    expect(serverModule).toBeDefined();
+    expect(app).toHaveProperty('get');
+    expect(typeof serverModule.initialize).toBe('function');
     delete process.env.WSL_INTEROP;
   });
 
   test('handles non-WSL Linux environment', async () => {
-    const { serverModule } = await createServerModule({ skipInitialize: true });
-    expect(serverModule).toBeDefined();
+    const { serverModule, app } = await createServerModule({ skipInitialize: true });
+    expect(app).toHaveProperty('get');
+    expect(typeof serverModule.initialize).toBe('function');
   });
 });

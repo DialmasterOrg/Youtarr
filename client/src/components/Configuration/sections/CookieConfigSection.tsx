@@ -71,7 +71,7 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
 
       <Alert severity="info" sx={{ mb: 2 }}>
         <Typography variant="body2">
-          Cookies help bypass YouTube's bot detection. If you encounter "Sign in to confirm you're not a bot" errors,
+          Cookies help bypass YouTube&apos;s bot detection. If you encounter &quot;Sign in to confirm you&apos;re not a bot&quot; errors,
           enabling cookies can resolve the issue.
         </Typography>
       </Alert>

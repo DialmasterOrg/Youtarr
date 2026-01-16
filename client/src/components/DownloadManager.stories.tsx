@@ -1,5 +1,6 @@
+import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, userEvent, within } from '@storybook/test';
+import { expect, userEvent, within, waitFor } from '@storybook/test';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter } from 'react-router-dom';
 import DownloadManager from './DownloadManager';
@@ -61,6 +62,9 @@ export const Empty: Story = {
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
     await expect(await body.findByText(/no jobs currently running/i)).toBeInTheDocument();
+    
+    // Allow state updates from potential polling or intervals to settle
+    await waitFor(() => {}, { timeout: 1100 }).catch(() => {});
   },
 };
 

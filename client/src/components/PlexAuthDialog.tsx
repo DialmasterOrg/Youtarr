@@ -122,7 +122,7 @@ const PlexAuthDialog: React.FC<PlexAuthDialogProps> = ({
             </Typography>
             <Alert severity="info" sx={{ mt: 2, textAlign: 'left' }}>
               <strong>Next step:</strong>
-              <br />Click "Test Connection" to verify and auto-save your Plex credentials
+              <br />Click &quot;Test Connection&quot; to verify and auto-save your Plex credentials
             </Alert>
           </Box>
         ) : (

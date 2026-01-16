@@ -31,7 +31,7 @@ export const ShowsHistoryPopover: Story = {
     const canvas = within(canvasElement);
     const historyIcon = canvasElement.querySelector('button svg[data-testid="HistoryIcon"]');
     const historyButton = historyIcon?.closest('button');
-    expect(historyButton).toBeTruthy();
+    await expect(historyButton as HTMLElement).toBeInTheDocument();
     await userEvent.click(historyButton as HTMLElement);
 
     const body = within(canvasElement.ownerDocument.body);

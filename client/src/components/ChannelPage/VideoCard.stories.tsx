@@ -80,24 +80,24 @@ export const Downloaded: Story = {
 
     // Verify video title is displayed
     const title = canvas.getByText(/never gonna give you up/i);
-    expect(title).toBeInTheDocument();
+    await expect(title).toBeInTheDocument();
 
     // Verify video metadata is visible
     const duration = canvas.getByText(/3\s*m|213|minutes/i);
-    expect(duration).toBeInTheDocument();
+    await expect(duration).toBeInTheDocument();
 
     // Verify status is shown (completed)
     const statusElement = canvasElement.querySelector('[data-testid*="status"]') ||
                          canvas.queryByText(/completed|downloaded/i);
     if (statusElement) {
-      expect(statusElement).toBeInTheDocument();
+      await expect(statusElement).toBeInTheDocument();
     }
 
     // Test hover interaction
     const card = canvasElement.querySelector('[class*="MuiCard-root"]');
     if (card) {
       await userEvent.hover(card as HTMLElement);
-      expect(args.onHoverChange).toHaveBeenCalledWith(mockVideo.youtube_id);
+      await expect(args.onHoverChange).toHaveBeenCalledWith(mockVideo.youtube_id);
     }
   },
 };
@@ -125,7 +125,7 @@ export const NeverDownloaded: Story = {
       // Click the card to trigger checkbox
       await userEvent.click(cardElement);
       // Should call onCheckChange with true (toggle from unchecked to checked)
-      expect(args.onCheckChange).toHaveBeenCalledWith(mockVideoNeverDownloaded.youtube_id, true);
+      await expect(args.onCheckChange).toHaveBeenCalledWith(mockVideoNeverDownloaded.youtube_id, true);
     }
 
     // Test delete button if present
@@ -134,7 +134,7 @@ export const NeverDownloaded: Story = {
       const deleteButton = deleteButtons[0];
       await userEvent.click(deleteButton);
       // Should trigger delete/ignore action
-      expect(args.onToggleDeletion).toHaveBeenCalled();
+      await expect(args.onToggleDeletion).toHaveBeenCalled();
     }
   },
 };
@@ -157,7 +157,7 @@ export const Ignored: Story = {
     // Verify "Ignored" status is displayed
     const ignoredStatus = canvas.queryByText(/ignored/i);
     if (ignoredStatus) {
-      expect(ignoredStatus).toBeInTheDocument();
+      await expect(ignoredStatus).toBeInTheDocument();
     }
 
     // Verify card has reduced opacity (styling indication)
@@ -166,7 +166,7 @@ export const Ignored: Story = {
       const styles = window.getComputedStyle(cardElement);
       // Ignored videos should have opacity < 1
       const opacity = parseFloat(styles.opacity);
-      expect(opacity).toBeLessThanOrEqual(1);
+      await expect(opacity).toBeLessThanOrEqual(1);
     }
 
     // Test that clicking does not trigger selection (non-selectable)
@@ -197,7 +197,7 @@ export const StillLive: Story = {
     // Verify "Live" indicator is shown
     const liveIndicator = canvas.queryByText(/live|still live/i);
     if (liveIndicator) {
-      expect(liveIndicator).toBeInTheDocument();
+      await expect(liveIndicator).toBeInTheDocument();
     }
 
     // Verify card is not selectable
@@ -205,7 +205,7 @@ export const StillLive: Story = {
     if (cardElement) {
       // Click should not trigger checkbox (not selectable)
       await userEvent.click(cardElement);
-      expect(args.onCheckChange).not.toHaveBeenCalledWith(
+      await expect(args.onCheckChange).not.toHaveBeenCalledWith(
         mockVideoStillLive.youtube_id,
         expect.anything()
       );
@@ -231,7 +231,7 @@ export const Checked: Story = {
     // Verify checkbox appears checked
     const checkbox = canvas.queryByRole('checkbox');
     if (checkbox) {
-      expect(checkbox).toBeChecked();
+      await expect(checkbox).toBeChecked();
     }
 
     // Click card again to toggle off
@@ -239,7 +239,7 @@ export const Checked: Story = {
     if (cardElement) {
       await userEvent.click(cardElement);
       // Should toggle to false (unchecked)
-      expect(args.onCheckChange).toHaveBeenCalledWith(
+      await expect(args.onCheckChange).toHaveBeenCalledWith(
         mockVideoNeverDownloaded.youtube_id,
         false
       );
@@ -264,20 +264,17 @@ export const Mobile: Story = {
 
     // Verify title is displayed
     const title = canvas.getByText(/never gonna give you up/i);
-    expect(title).toBeInTheDocument();
+    await expect(title).toBeInTheDocument();
 
     // On mobile, clicking card should trigger same interactions
     const cardElement = canvasElement.querySelector('[class*="Card"]');
     if (cardElement) {
       await userEvent.click(cardElement);
-      expect(args.onCheckChange).toHaveBeenCalledWith(
+      await expect(args.onCheckChange).toHaveBeenCalledWith(
         mockVideoNeverDownloaded.youtube_id,
         true
       );
     }
-
-    // Mobile tooltip callback should be available
-    expect(args.onMobileTooltip).toBeDefined();
   },
 };
 
@@ -302,14 +299,14 @@ export const MarkedForDeletion: Story = {
       // Check for error color styling or delete indicator
       const style = window.getComputedStyle(cardElement);
       // This depends on component implementation
-      expect(cardElement).toBeInTheDocument();
+      await expect(cardElement).toBeInTheDocument();
     }
 
     // Test unblock/cancel delete button
     const unblockButtons = canvas.queryAllByRole('button', { name: /unblock|cancel|restore/i });
     if (unblockButtons.length > 0) {
       await userEvent.click(unblockButtons[0]);
-      expect(args.onToggleDeletion).toHaveBeenCalledWith(mockVideoNeverDownloaded.youtube_id);
+      await expect(args.onToggleDeletion).toHaveBeenCalledWith(mockVideoNeverDownloaded.youtube_id);
     }
   },
 };

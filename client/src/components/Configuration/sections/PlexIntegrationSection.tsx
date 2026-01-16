@@ -99,7 +99,7 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
           • Automatic library refresh after downloads
           <br />• Direct library selection from Plex server
           <br />
-          If you don't use Plex, your videos will still download to your specified directory.
+          If you don&apos;t use Plex, your videos will still download to your specified directory.
           <br />
           You <b>must</b> select a library once connected for automatic refresh to work.
         </Typography>
@@ -108,13 +108,13 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
       {plexConnectionStatus === 'not_connected' && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           Unable to connect to Plex server. Library refresh will not work.
-          Please check your IP and API key, then click "Test Connection".
+          Please check your IP and API key, then click &quot;Test Connection&quot;.
         </Alert>
       )}
 
       {plexConnectionStatus === 'not_tested' && hasPlexServerConfigured && config.plexApiKey && (
         <Alert severity="info" sx={{ mb: 2 }}>
-          Plex configuration has changed. Click "Test Connection" to verify your settings.
+          Plex configuration has changed. Click &quot;Test Connection&quot; to verify your settings.
         </Alert>
       )}
 

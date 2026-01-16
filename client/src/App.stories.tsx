@@ -96,7 +96,7 @@ export const LoggedIn: Story = {
     // Verify main content area exists
     const mainContent = canvas.queryByRole('main') || canvas.queryByRole('region');
     if (mainContent) {
-      expect(mainContent).toBeInTheDocument();
+      await expect(mainContent).toBeInTheDocument();
     }
 
     localStorage.removeItem('authToken');

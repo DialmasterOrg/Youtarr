@@ -643,7 +643,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
         <DialogTitle>Remove channel?</DialogTitle>
         <DialogContent>
           <Typography>
-            Removing this channel will stop automatic downloads but won't delete existing videos or history.
+            Removing this channel will stop automatic downloads but won&apos;t delete existing videos or history.
           </Typography>
         </DialogContent>
         <DialogActions>

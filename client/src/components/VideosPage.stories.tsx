@@ -1,5 +1,6 @@
+import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, userEvent, within } from '@storybook/test';
+import { expect, userEvent, within, waitFor } from '@storybook/test';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter } from 'react-router-dom';
 import VideosPage from './VideosPage';
@@ -77,6 +78,11 @@ export const Default: Story = {
     const searchInput = await canvas.findByPlaceholderText(/search videos by name or channel/i);
     await userEvent.type(searchInput, 'Tech');
     await expect(searchInput).toHaveValue('Tech');
+    
+    // Wait for debounced search to trigger state update and prevent 'act' warning
+    await waitFor(async () => {
+      await expect(await canvas.findByText('How to Code')).toBeInTheDocument();
+    }, { timeout: 2000 });
   },
 };
 
@@ -114,8 +120,14 @@ export const Error: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const originalConsoleError = console.error;
+    console.error = () => {};
+    try {
     await expect(
       await canvas.findByText(/failed to load videos/i)
     ).toBeInTheDocument();
+    } finally {
+      console.error = originalConsoleError;
+    }
   },
 };

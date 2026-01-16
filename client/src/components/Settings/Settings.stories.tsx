@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, userEvent, within } from '@storybook/test';
+import { expect, userEvent, within, waitFor } from '@storybook/test';
 import { http, HttpResponse } from 'msw';
 import React from 'react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -59,5 +59,10 @@ export const IndexPage: Story = {
     const coreLink = canvas.getByRole('link', { name: /core/i });
     await userEvent.click(coreLink);
     await expect(await canvas.findByText('Core Settings')).toBeInTheDocument();
+
+    // Wait for other potential background fetches like storage status to prevent 'act' warnings
+    await waitFor(() => {
+      // Small timeout or just allowing effects to flush
+    }, { timeout: 1000 }).catch(() => {});
   },
 };

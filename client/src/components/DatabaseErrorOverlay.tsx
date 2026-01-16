@@ -147,11 +147,11 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
               )}
               {!hasConnectionError && hasSchemaError && (
                 <>
-                  The database is running but the schema doesn't match the application code. This typically happens when:
+                  The database is running but the schema doesn&apos;t match the application code. This typically happens when:
                   <Box component="ul" sx={{ mt: 1, mb: 0, pl: 2 }}>
-                    <li>Database migrations haven't been run after updating the code</li>
+                    <li>Database migrations haven&apos;t been run after updating the code</li>
                     <li>Old database migrations are being mounted instead of using the migrations built into the docker image</li>
-                    <li>The code was updated but the database wasn't migrated</li>
+                    <li>The code was updated but the database wasn&apos;t migrated</li>
                     <li>Manual changes were made to the database structure</li>
                   </Box>
                 </>
@@ -244,7 +244,7 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
                 </ListItem>
                 <ListItem>
                   <ListItemText
-                    primary={<Typography fontWeight="bold">2. Start the database if it's not running</Typography>}
+                    primary={<Typography fontWeight="bold">2. Start the database if it&apos;s not running</Typography>}
                     secondary={
                       <Box component="code" sx={{ display: 'block', mt: 1, p: 1, backgroundColor: customColors.codeBlockInner, borderRadius: 1 }}>
                         docker compose up -d youtarr-db
@@ -354,7 +354,7 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
         {/* Footer Note */}
         <Alert severity="info" icon={false} sx={{ textAlign: 'center' }}>
           <Typography variant="body2" fontWeight="medium">
-            After fixing the issue, click "Refresh & Check Again" to reload the application.
+            After fixing the issue, click &quot;Refresh &amp; Check Again&quot; to reload the application.
           </Typography>
         </Alert>
       </Paper>

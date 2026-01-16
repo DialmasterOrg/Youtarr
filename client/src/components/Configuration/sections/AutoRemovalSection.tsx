@@ -162,7 +162,7 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
                     storage-based auto-removal will not work.
                   </Typography>
                   <Typography variant="body2">
-                    <strong>You can still use Age-Based Removal</strong> (see below), which doesn't require storage reporting.
+                    <strong>You can still use Age-Based Removal</strong> (see below), which doesn&apos;t require storage reporting.
                   </Typography>
                 </Alert>
               </Grid>
