@@ -24,6 +24,10 @@
   --card-hover-transform: translate(-2px, -2px) rotate(-0.5deg);
   --card-hover-shadow: var(--shadow-hard-hover);
   --wiggle-animation: wiggle 320ms var(--transition-bouncy);
+  /* Navigation width variables */
+  --nav-width-expanded: 260px;
+  --nav-width-collapsed: 72px;
+  --nav-width: var(--nav-width-expanded);
 }
 
 body[data-theme='dark'] {
@@ -69,6 +73,12 @@ body[data-wiggle='off'] {
     --shadow-hard-active: 1px 1px 0px 0px #0f172a;
     --shadow-hard-ring: 2px 2px 0px 0px #a78bfa;
     --shadow-soft: 4px 4px 0px 0px #1e293b;
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --nav-width: 0px;
   }
 }
 

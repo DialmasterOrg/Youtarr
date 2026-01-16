@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AppBar,
   Box,
@@ -51,12 +51,17 @@ export function AppShell({
 }: AppShellProps) {
   const location = useLocation();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery('(max-width: 767px)');
 
   const [drawerOpenMobile, setDrawerOpenMobile] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
-  const drawerWidth = collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
+  const drawerWidth = isMobile ? EXPANDED_WIDTH : collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
+
+  useEffect(() => {
+    const navWidth = isMobile ? 0 : collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
+    document.documentElement.style.setProperty('--nav-width', `${navWidth}px`);
+  }, [collapsed, isMobile]);
 
   const navItems = useMemo(
     () =>
@@ -104,7 +109,7 @@ export function AppShell({
   const drawerContent = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Toolbar />
-      <List sx={{ px: 1, pt: 0.5, gap: 0.5, display: 'flex', flexDirection: 'column' }}>
+      <List sx={{ px: 1, pt: 0.5, gap: 0.25, display: 'flex', flexDirection: 'column' }}>
         {navItems.map((item) => {
           const selected = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
           const button = (
@@ -118,16 +123,21 @@ export function AppShell({
               }}
               sx={{
                 borderRadius: 2,
-                justifyContent: collapsed ? 'center' : 'flex-start',
+                justifyContent: 'flex-start',
                 px: 1.5,
                 py: 1,
                 minHeight: 48,
-                border: '2px solid transparent',
+                width: '100%',
+                border: selected ? '2px solid var(--foreground)' : '2px solid transparent',
                 bgcolor: selected ? 'var(--tertiary)' : 'transparent',
                 color: 'text.primary',
                 boxShadow: selected ? 'var(--shadow-hard)' : 'none',
+                transition: 'all 300ms var(--transition-bouncy)',
+                cursor: 'pointer',
                 '&:hover': {
                   bgcolor: selected ? 'var(--tertiary)' : 'var(--muted)',
+                  transform: selected ? 'translate(-2px, -2px)' : 'translate(0, 0)',
+                  boxShadow: selected ? 'var(--shadow-hard-hover)' : 'none',
                 },
               }}
             >
@@ -146,7 +156,12 @@ export function AppShell({
                 <ListItemText
                   primary={item.label}
                   secondary={item.oldLabel}
-                  secondaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
+                  primaryTypographyProps={{ sx: { transition: 'opacity 200ms var(--transition-bouncy)' } }}
+                  secondaryTypographyProps={{ 
+                    variant: 'caption', 
+                    color: 'text.secondary',
+                    sx: { transition: 'opacity 200ms var(--transition-bouncy)' }
+                  }}
                 />
               )}
             </ListItemButton>
@@ -264,6 +279,8 @@ export function AppShell({
           boxShadow: 'var(--shadow-hard)',
           color: 'text.primary',
           zIndex: theme.zIndex.drawer + 1,
+          backgroundImage: `radial-gradient(var(--dot-grid) 1px, transparent 1px)`,
+          backgroundSize: '24px 24px',
         }}
       >
         <Toolbar sx={{ gap: 1 }}>
@@ -280,7 +297,7 @@ export function AppShell({
                 sx={{ width: 28, height: 28, objectFit: 'contain' }}
               />
             ) : null}
-            <Typography variant="h6" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+            <Typography variant="h6" sx={{ fontWeight: 800, whiteSpace: 'nowrap', fontFamily: 'Outfit' }}>
               {appName}
             </Typography>
           </Box>
@@ -303,13 +320,15 @@ export function AppShell({
         sx={{
           width: drawerWidth,
           flexShrink: 0,
+          transition: isMobile ? 'none' : 'width 300ms var(--transition-bouncy)',
           '& .MuiDrawer-paper': {
             width: drawerWidth,
             boxSizing: 'border-box',
-            borderRight: `2px solid ${theme.palette.divider}`,
+            borderRight: '2px solid var(--foreground)',
             boxShadow: 'var(--shadow-hard)',
             bgcolor: 'background.paper',
             overflowX: 'hidden',
+            transition: 'width 300ms var(--transition-bouncy), padding 300ms var(--transition-bouncy)',
           },
         }}
       >
@@ -320,14 +339,18 @@ export function AppShell({
         component="main"
         sx={{
           flexGrow: 1,
-          width: { xs: '100%', md: `calc(100% - ${drawerWidth}px)` },
-          px: { xs: 2, md: 4 },
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: '100vh',
+          width: isMobile ? '100%' : 'calc(100% - var(--nav-width))',
+          ml: isMobile ? 0 : 'var(--nav-width)',
           pt: 10,
           pb: 4,
-          ml: isMobile ? 0 : `${drawerWidth}px`,
+          px: 2,
           boxSizing: 'border-box',
           position: 'relative',
           zIndex: 1,
+          transition: isMobile ? 'none' : 'margin-left 300ms var(--transition-bouncy), width 300ms var(--transition-bouncy)',
         }}
       >
         <Box
@@ -336,9 +359,10 @@ export function AppShell({
             border: '2px solid var(--foreground)',
             borderRadius: 3,
             boxShadow: 'var(--shadow-soft)',
-            px: { xs: 2, md: 3 },
-            py: { xs: 2, md: 3 },
-            minHeight: { xs: 'calc(100vh - 200px)', md: 'calc(100vh - 180px)' },
+            px: 2,
+            py: { xs: 2.5, md: 3 },
+            minHeight: { xs: 'calc(100vh - 220px)', md: 'calc(100vh - 200px)' },
+            flex: 1,
           }}
         >
           {children}

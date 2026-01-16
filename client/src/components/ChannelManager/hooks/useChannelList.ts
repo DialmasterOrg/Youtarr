@@ -13,10 +13,11 @@ interface UseChannelListParams {
 }
 
 interface ChannelListResponse {
-  channels: Channel[];
-  total: number;
-  totalPages: number;
-  subFolders?: Array<string | null>;
+  channels: Channel[] | { rows?: Channel[]; count?: number; totalPages?: number } | null;
+  total?: number | null;
+  totalPages?: number | null;
+  subFolders?: Array<string | null> | null;
+  subfolders?: Array<string | null> | null;
 }
 
 export const useChannelList = ({
@@ -47,6 +48,9 @@ export const useChannelList = ({
       setChannels([]);
       setTotal(0);
       setTotalPages(0);
+      setSubFolders([]);
+      setError(null);
+      setLoading(false);
       return;
     }
 
@@ -68,16 +72,36 @@ export const useChannelList = ({
 
       const payload = response.data;
       if (!isMountedRef.current) return;
-      setChannels(payload.channels || []);
-      setTotal(payload.total || 0);
-      setTotalPages(payload.totalPages || 0);
-      setSubFolders(
-        (payload.subFolders || []).map((value) => normalizeSubFolderKey(value)).filter(Boolean)
-      );
+
+      const rawChannels = Array.isArray(payload?.channels)
+        ? payload.channels
+        : payload?.channels && typeof payload.channels === 'object'
+        ? payload.channels.rows || []
+        : [];
+      const rawTotal = typeof payload?.total === 'number'
+        ? payload.total
+        : payload?.channels && typeof payload.channels === 'object' && typeof payload.channels.count === 'number'
+        ? payload.channels.count
+        : 0;
+      const rawTotalPages = typeof payload?.totalPages === 'number'
+        ? payload.totalPages
+        : payload?.channels && typeof payload.channels === 'object' && typeof payload.channels.totalPages === 'number'
+        ? payload.channels.totalPages
+        : 0;
+      const rawSubFolders = (payload?.subFolders || payload?.subfolders || []) as Array<string | null>;
+
+      setChannels(rawChannels || []);
+      setTotal(rawTotal || 0);
+      setTotalPages(rawTotalPages || 0);
+      setSubFolders(rawSubFolders.map((value) => normalizeSubFolderKey(value)).filter(Boolean));
     } catch (err: any) {
       const message = err?.response?.data?.error || 'Failed to load channels';
       if (isMountedRef.current) {
         setError(message);
+        setChannels([]);
+        setTotal(0);
+        setTotalPages(0);
+        setSubFolders([]);
       }
     } finally {
       if (isMountedRef.current) {

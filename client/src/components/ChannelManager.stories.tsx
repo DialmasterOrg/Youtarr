@@ -63,6 +63,8 @@ export const Default: Story = {  render: (args) => (
             ],
             total: 2,
             totalPages: 1,
+            page: 1,
+            pageSize: 20,
             subFolders: ['MyFolder'],
           })
         ),
@@ -71,9 +73,12 @@ export const Default: Story = {  render: (args) => (
   },  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = within(canvasElement.ownerDocument.body);
-    await expect(await canvas.findByText('Your Channels')).toBeInTheDocument();
-    await expect(await canvas.findByText(/alpha channel/i)).toBeInTheDocument();
-    await expect(await canvas.findByText(/beta channel/i)).toBeInTheDocument();
+    await expect(await canvas.findByText('Your Channels', {}, { timeout: 3000 })).toBeInTheDocument();
+    await expect(await canvas.findByText(/alpha channel/i, {}, { timeout: 3000 })).toBeInTheDocument();
+    await expect(await canvas.findByText(/beta channel/i, {}, { timeout: 3000 })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(canvas.queryByRole('progressbar')).not.toBeInTheDocument();
+    }, { timeout: 3000 });
 
     // Test view mode toggle (list/grid)
     const gridToggle = canvas.queryByRole('button', { name: /grid view/i });

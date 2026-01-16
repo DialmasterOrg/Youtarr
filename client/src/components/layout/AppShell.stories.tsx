@@ -43,16 +43,16 @@ type Story = StoryObj<typeof AppShell>;
 export const Default: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    // Wait for StorageFooterWidget to finish loading
-    await expect(await canvas.findByText('100 GB free of 200 GB')).toBeInTheDocument();
+    // Wait for StorageFooterWidget to finish loading (now includes percentage)
+    await expect(await canvas.findByText(/100 GB free of 200 GB \(50.0% free\)/)).toBeInTheDocument();
   },
 };
 
 export const Logout: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    // Wait for StorageFooterWidget to finish loading to prevent 'act' warning
-    await expect(await canvas.findByText('100 GB free of 200 GB')).toBeInTheDocument();
+    // Wait for StorageFooterWidget to finish loading to prevent 'act' warning (now includes percentage)
+    await expect(await canvas.findByText(/100 GB free of 200 GB \(50.0% free\)/)).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: /logout/i }));
     await expect(args.onLogout).toHaveBeenCalled();
   },
