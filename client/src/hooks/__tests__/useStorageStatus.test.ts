@@ -1,24 +1,24 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useStorageStatus } from '../useStorageStatus';
 import type { StorageData } from '../useStorageStatus';
-import { vi } from 'vitest';
+import { jest } from '@jest/globals';
 import axios from 'axios';
 
 // Mock axios
-vi.mock('axios', () => ({
+jest.mock('axios', () => ({
   default: {
-    get: vi.fn(),
+    get: jest.fn(),
   },
 }));
 
-const mockedAxios = axios as unknown as { get: ReturnType<typeof vi.fn> };
+const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('useStorageStatus', () => {
   const mockToken = 'test-token-123';
 
   const advanceTimers = async (ms: number) => {
     await act(async () => {
-      vi.advanceTimersByTime(ms);
+      jest.advanceTimersByTime(ms);
     });
   };
 
@@ -28,19 +28,19 @@ describe('useStorageStatus', () => {
     totalGB: '500',
   };
 
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn> | undefined;
+  let consoleErrorSpy: ReturnType<typeof jest.spyOn> | undefined;
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.useFakeTimers();
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
     act(() => {
-      vi.runOnlyPendingTimers();
+      jest.runOnlyPendingTimers();
     });
-    vi.useRealTimers();
+    jest.useRealTimers();
     consoleErrorSpy?.mockRestore();
   });
 
@@ -145,7 +145,7 @@ describe('useStorageStatus', () => {
 
   describe('CheckOnly Mode', () => {
     test('sets available to true when storage data exists', async () => {
-      axios.get.mockResolvedValueOnce({
+      mockedAxios.get.mockResolvedValueOnce({
         data: mockStorageData,
       });
 
@@ -163,7 +163,7 @@ describe('useStorageStatus', () => {
     });
 
     test('sets available to true when availableGB exists', async () => {
-      axios.get.mockResolvedValueOnce({
+      mockedAxios.get.mockResolvedValueOnce({
         data: {
           availableGB: '100',
           percentFree: 25,
@@ -184,7 +184,7 @@ describe('useStorageStatus', () => {
     });
 
     test('does not set data in checkOnly mode', async () => {
-      axios.get.mockResolvedValueOnce({
+      mockedAxios.get.mockResolvedValueOnce({
         data: mockStorageData,
       });
 
@@ -200,7 +200,7 @@ describe('useStorageStatus', () => {
     });
 
     test('handles response without availableGB in checkOnly mode', async () => {
-      axios.get.mockResolvedValueOnce({
+      mockedAxios.get.mockResolvedValueOnce({
         data: {},
       });
 
@@ -216,7 +216,7 @@ describe('useStorageStatus', () => {
     });
 
     test('handles null response data in checkOnly mode', async () => {
-      axios.get.mockResolvedValueOnce({
+      mockedAxios.get.mockResolvedValueOnce({
         data: null,
       });
 
@@ -238,7 +238,7 @@ describe('useStorageStatus', () => {
     test('handles network errors', async () => {
       const networkError = new Error('Network error');
 
-      axios.get.mockRejectedValueOnce(networkError);
+      mockedAxios.get.mockRejectedValueOnce(networkError);
 
       const { result } = renderHook(() => useStorageStatus(mockToken));
 
@@ -253,7 +253,7 @@ describe('useStorageStatus', () => {
     test('handles API errors', async () => {
       const apiError = new Error('Internal server error');
 
-      axios.get.mockRejectedValueOnce(apiError);
+      mockedAxios.get.mockRejectedValueOnce(apiError);
 
       const { result } = renderHook(() => useStorageStatus(mockToken));
 
@@ -266,7 +266,7 @@ describe('useStorageStatus', () => {
     });
 
     test('sets available to false on error in checkOnly mode', async () => {
-      axios.get.mockRejectedValueOnce(new Error('Fetch failed'));
+      mockedAxios.get.mockRejectedValueOnce(new Error('Fetch failed'));
 
       const { result } = renderHook(() =>
         useStorageStatus(mockToken, { checkOnly: true })
@@ -282,7 +282,7 @@ describe('useStorageStatus', () => {
 
     test('clears previous error on successful refetch', async () => {
       // First call fails
-      axios.get.mockRejectedValueOnce(new Error('First error'));
+      mockedAxios.get.mockRejectedValueOnce(new Error('First error'));
 
       const { result, rerender } = renderHook(
         ({ token }) => useStorageStatus(token),
@@ -294,7 +294,7 @@ describe('useStorageStatus', () => {
       });
 
       // Second call succeeds
-      axios.get.mockResolvedValueOnce({
+      mockedAxios.get.mockResolvedValueOnce({
         data: mockStorageData,
       });
 
@@ -314,19 +314,19 @@ describe('useStorageStatus', () => {
     test('does not fetch when token is null', () => {
       const { result } = renderHook(() => useStorageStatus(null));
 
-      expect(axios.get).not.toHaveBeenCalled();
+      expect(mockedAxios.get).not.toHaveBeenCalled();
       expect(result.current.loading).toBe(false);
     });
 
     test('does not fetch when token is empty string', () => {
       const { result } = renderHook(() => useStorageStatus(''));
 
-      expect(axios.get).not.toHaveBeenCalled();
+      expect(mockedAxios.get).not.toHaveBeenCalled();
       expect(result.current.loading).toBe(false);
     });
 
     test('fetches when token becomes available', async () => {
-      axios.get.mockResolvedValueOnce({
+      mockedAxios.get.mockResolvedValueOnce({
         data: mockStorageData,
       });
 
@@ -602,7 +602,7 @@ describe('useStorageStatus', () => {
     });
 
     test('sets loading to false after failed fetch', async () => {
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
       axios.get.mockRejectedValueOnce(new Error('Fetch error'));
 

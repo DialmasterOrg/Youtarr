@@ -1,50 +1,49 @@
-import '@testing-library/jest-dom/vitest';
-import { afterAll, afterEach, beforeAll, vi } from 'vitest';
+import '@testing-library/jest-dom';
+import { jest } from '@jest/globals';
 import { server } from './mocks/server';
 
-// Alias jest to vi for compatibility with legacy tests
-globalThis.jest = vi;
-
-// Provide a stable, mockable fetch for unit tests. Individual tests can
-// override via `vi.stubGlobal('fetch', ...)`.
-vi.stubGlobal('fetch', vi.fn());
+// Provide a stable, mockable fetch for unit tests.
+Object.defineProperty(globalThis, 'fetch', {
+  writable: true,
+  value: jest.fn(),
+});
 
 // Mock matchMedia for MUI/JSDOM
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
-  value: vi.fn().mockImplementation(query => ({
+  value: jest.fn().mockImplementation(query => ({
     matches: false,
     media: query,
     onchange: null,
-    addListener: vi.fn(), // deprecated
-    removeListener: vi.fn(), // deprecated
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
+    addListener: jest.fn(), // deprecated
+    removeListener: jest.fn(), // deprecated
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+    dispatchEvent: jest.fn(),
   })),
 });
 
 // Mock ResizeObserver
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
+global.ResizeObserver = jest.fn().mockImplementation(() => ({
+  observe: jest.fn(),
+  unobserve: jest.fn(),
+  disconnect: jest.fn(),
 }));
 
 // Mock IntersectionObserver
-global.IntersectionObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
+global.IntersectionObserver = jest.fn().mockImplementation(() => ({
+  observe: jest.fn(),
+  unobserve: jest.fn(),
+  disconnect: jest.fn(),
 }));
 
 // Mock WebSocket
-global.WebSocket = vi.fn().mockImplementation(() => ({
-  addEventListener: vi.fn(),
-  removeEventListener: vi.fn(),
-  dispatchEvent: vi.fn(),
-  send: vi.fn(),
-  close: vi.fn(),
+global.WebSocket = jest.fn().mockImplementation(() => ({
+  addEventListener: jest.fn(),
+  removeEventListener: jest.fn(),
+  dispatchEvent: jest.fn(),
+  send: jest.fn(),
+  close: jest.fn(),
   readyState: 1,
   CONNECTING: 0,
   OPEN: 1,
@@ -56,14 +55,14 @@ global.WebSocket = vi.fn().mockImplementation(() => ({
 Object.defineProperty(window, 'Notification', {
   writable: true,
   configurable: true,
-  value: vi.fn().mockImplementation(() => ({
+  value: jest.fn().mockImplementation(() => ({
     permission: 'granted',
   })),
 });
 
 Object.defineProperty(window.Notification, 'requestPermission', {
   writable: true,
-  value: vi.fn().mockResolvedValue('granted'),
+  value: jest.fn().mockResolvedValue('granted'),
 });
 
 // Establish API mocking before all tests

@@ -2,7 +2,7 @@ import React from 'react';
 import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { vi } from 'vitest';
+import { jest } from '@jest/globals';
 import WebSocketContext from './contexts/WebSocketContext';
 
 type WebSocketValue = {
@@ -14,8 +14,8 @@ type WebSocketValue = {
 export function createMockWebSocketContext(): NonNullable<WebSocketValue> {
   return {
     socket: null,
-    subscribe: vi.fn(),
-    unsubscribe: vi.fn(),
+    subscribe: jest.fn(),
+    unsubscribe: jest.fn(),
   };
 }
 
@@ -109,10 +109,10 @@ export const waitForLoadingToFinish = async () => {
 
 export const mockLocalStorage = () => {
   const localStorageMock = {
-    getItem: vi.fn(),
-    setItem: vi.fn(),
-    removeItem: vi.fn(),
-    clear: vi.fn(),
+    getItem: jest.fn(),
+    setItem: jest.fn(),
+    removeItem: jest.fn(),
+    clear: jest.fn(),
   };
   Object.defineProperty(window, 'localStorage', {
     value: localStorageMock,
