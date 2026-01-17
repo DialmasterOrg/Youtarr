@@ -133,14 +133,17 @@ describe('VideoTableView Component', () => {
       expect(allNAs.length).toBeGreaterThanOrEqual(2);
     });
 
-    test('renders file size when available', () => {
-      renderWithProviders(<VideoTableView {...defaultProps} />);
+    test('renders file size chip when video file exists', () => {
+      const videoWithFile = { ...mockVideo, filePath: '/path/to/video.mp4' };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[videoWithFile]} />);
+      // File size shown in format indicator chip
       expect(screen.getByText(/50/)).toBeInTheDocument();
+      expect(screen.getByTestId('MovieOutlinedIcon')).toBeInTheDocument();
     });
 
-    test('renders dash when file size is not available', () => {
-      const videoNoSize = { ...mockVideo, fileSize: undefined };
-      renderWithProviders(<VideoTableView {...defaultProps} videos={[videoNoSize]} />);
+    test('renders dash when no file path exists', () => {
+      const videoNoFile = { ...mockVideo, filePath: undefined };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[videoNoFile]} />);
       expect(screen.getByText('-')).toBeInTheDocument();
     });
   });
@@ -803,9 +806,15 @@ describe('VideoTableView Component', () => {
     });
 
     test('handles video with very large file size', () => {
-      const largeVideo = { ...mockVideo, fileSize: 1024 * 1024 * 1024 * 5.5 };
+      const largeVideo = {
+        ...mockVideo,
+        filePath: '/path/to/video.mp4',
+        fileSize: 1024 * 1024 * 1024 * 5.5
+      };
       renderWithProviders(<VideoTableView {...defaultProps} videos={[largeVideo]} />);
+      // File size shown in format indicator chip
       expect(screen.getByText(/GB/)).toBeInTheDocument();
+      expect(screen.getByTestId('MovieOutlinedIcon')).toBeInTheDocument();
     });
 
     test('handles video in both selectedForDeletion and checkedBoxes', () => {

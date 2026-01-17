@@ -11,16 +11,16 @@ import {
   Tooltip,
 } from '@mui/material';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import StorageIcon from '@mui/icons-material/Storage';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { useTheme } from '@mui/material/styles';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
-import { formatFileSize, decodeHtml } from '../../utils/formatters';
+import { decodeHtml } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
+import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 
 interface VideoListItemProps {
   video: ChannelVideo;
@@ -249,11 +249,13 @@ function VideoListItem({
               {new Date(video.publishedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' })}
             </Typography>
           )}
-            {video.fileSize && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.3, fontSize: '0.7rem' }}>
-                <StorageIcon sx={{ fontSize: 11 }} />
-                {formatFileSize(video.fileSize)}
-              </Typography>
+            {video.added && !video.removed && (
+              <DownloadFormatIndicator
+                filePath={video.filePath}
+                audioFilePath={video.audioFilePath}
+                fileSize={video.fileSize}
+                audioFileSize={video.audioFileSize}
+              />
             )}
             {mediaTypeInfo && (
               <Chip

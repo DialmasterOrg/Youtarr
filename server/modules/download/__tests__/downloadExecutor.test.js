@@ -1043,9 +1043,9 @@ describe('DownloadExecutor', () => {
       expect(logger.warn).toHaveBeenCalledWith(
         expect.objectContaining({
           youtubeId: 'failed456',
-          error: 'Video file not found or incomplete'
+          error: 'Media file not found or incomplete'
         }),
-        'Video download failed'
+        'Download failed'
       );
 
       // Job data should include failedVideos
@@ -1061,7 +1061,7 @@ describe('DownloadExecutor', () => {
                 youtubeId: 'failed456',
                 title: 'Failed Video',
                 channel: 'Test Channel',
-                error: 'Video file not found or incomplete'
+                error: 'Media file not found or incomplete'
               })
             ])
           })

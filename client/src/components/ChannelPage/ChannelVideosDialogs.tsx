@@ -27,6 +27,8 @@ export interface ChannelVideosDialogsProps {
   selectedForDeletion: number;
   defaultResolution: string;
   defaultResolutionSource: 'channel' | 'global';
+  defaultAudioFormat?: string | null;
+  defaultAudioFormatSource?: 'channel' | 'global';
   selectedTab: string;
   tabLabel: string;
   onDownloadDialogClose: () => void;
@@ -55,6 +57,8 @@ function ChannelVideosDialogs({
   selectedForDeletion,
   defaultResolution,
   defaultResolutionSource,
+  defaultAudioFormat,
+  defaultAudioFormatSource,
   selectedTab,
   tabLabel,
   onDownloadDialogClose,
@@ -79,6 +83,8 @@ function ChannelVideosDialogs({
         missingVideoCount={missingVideoCount}
         defaultResolution={defaultResolution}
         defaultResolutionSource={defaultResolutionSource}
+        defaultAudioFormat={defaultAudioFormat}
+        defaultAudioFormatSource={defaultAudioFormatSource}
         mode="manual"
         token={token}
       />

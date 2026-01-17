@@ -808,14 +808,19 @@ class DownloadExecutor {
           // Check if this video was explicitly marked as failed during download
           const wasMarkedFailed = failedVideos.has(video.youtubeId);
 
-          // Check if video file actually exists and has size
+          // Check if video or audio file actually exists and has size
+          // For video_mp3 mode: both fileSize and audioFileSize will be set
+          // For mp3_only mode: only audioFileSize will be set
+          // For standard video: only fileSize will be set
           const hasVideoFile = video.fileSize && video.fileSize !== 'null' && video.fileSize !== '0';
+          const hasAudioFile = video.audioFileSize && video.audioFileSize !== 'null' && video.audioFileSize !== '0';
+          const hasAnyFile = hasVideoFile || hasAudioFile;
 
-          if (wasMarkedFailed || !hasVideoFile) {
+          if (wasMarkedFailed || !hasAnyFile) {
             // This video failed
             const failureInfo = failedVideos.get(video.youtubeId) || {
               youtubeId: video.youtubeId,
-              error: hasVideoFile ? 'Unknown error' : 'Video file not found or incomplete',
+              error: hasAnyFile ? 'Unknown error' : 'Media file not found or incomplete',
               url: urlsToProcess.find(u => u.includes(video.youtubeId))
             };
 
@@ -830,8 +835,9 @@ class DownloadExecutor {
             logger.warn({
               youtubeId: video.youtubeId,
               error: failureInfo.error,
-              hasVideoFile
-            }, 'Video download failed');
+              hasVideoFile,
+              hasAudioFile
+            }, 'Download failed');
           } else {
             // This video succeeded
             successfulVideos.push(video);
@@ -861,10 +867,12 @@ class DownloadExecutor {
           logger.debug({ videoCount: videoData.length }, 'Updating archive for videos (allowRedownload was true)');
 
           for (const video of videoData) {
-            if (video.youtubeId && video.filePath) {
-              // Only add to archive if the video file actually exists (was successfully downloaded)
+            // Check for either video file or audio file (supports mp3_only mode)
+            const fileToCheck = video.filePath || video.audioFilePath;
+            if (video.youtubeId && fileToCheck) {
+              // Only add to archive if the file actually exists (was successfully downloaded)
               const fs = require('fs');
-              if (fs.existsSync(video.filePath)) {
+              if (fs.existsSync(fileToCheck)) {
                 await archiveModule.addVideoToArchive(video.youtubeId);
               } else {
                 logger.debug({ youtubeId: video.youtubeId }, 'Skipping archive update - file not found');

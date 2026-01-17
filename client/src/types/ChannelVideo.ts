@@ -17,6 +17,9 @@ export interface ChannelVideo {
   duration: number;
   availability?: string | null;
   fileSize?: number | null;
+  filePath?: string | null;
+  audioFilePath?: string | null;
+  audioFileSize?: number | null;
   media_type?: string | null;
   live_status?: string | null;
   ignored?: boolean;

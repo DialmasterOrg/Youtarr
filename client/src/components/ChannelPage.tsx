@@ -29,6 +29,7 @@ function ChannelPage({ token }: ChannelPageProps) {
   const handleSettingsSaved = (updated: {
     sub_folder: string | null;
     video_quality: string | null;
+    audio_format: string | null;
     min_duration: number | null;
     max_duration: number | null;
     title_filter_regex: string | null;
@@ -41,6 +42,7 @@ function ChannelPage({ token }: ChannelPageProps) {
         ...prev,
         sub_folder: updated.sub_folder,
         video_quality: updated.video_quality,
+        audio_format: updated.audio_format,
         min_duration: updated.min_duration,
         max_duration: updated.max_duration,
         title_filter_regex: updated.title_filter_regex,
@@ -331,6 +333,7 @@ function ChannelPage({ token }: ChannelPageProps) {
         channelAutoDownloadTabs={channel?.auto_download_enabled_tabs}
         channelId={channel_id || undefined}
         channelVideoQuality={channel?.video_quality || null}
+        channelAudioFormat={channel?.audio_format || null}
       />
 
       {channel && channel_id && (

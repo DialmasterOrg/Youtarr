@@ -12,9 +12,10 @@ const { moveWithRetries, safeRemove, buildChannelPath, cleanupEmptyParents } = r
 
 const activeJobId = process.env.YOUTARR_JOB_ID;
 
-const videoPath = process.argv[2]; // get the video file path
+const videoPath = process.argv[2]; // get the media file path (video or audio)
 const parsedPath = path.parse(videoPath);
-// Note that the mp4 video itself contains embedded metadata for Plex
+// Note that MP4 videos contain embedded metadata for Plex
+// MP3 audio files have their own embedded metadata from yt-dlp
 // We only need the .info.json for Youtarr to use
 const jsonPath = path.format({
   dir: parsedPath.dir,
@@ -277,9 +278,28 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       nfoGenerator.writeVideoNfoFile(videoPath, jsonData);
     }
 
+    // Check if this is an audio file (MP3) - skip video-specific metadata embedding
+    const isAudioFile = parsedPath.ext.toLowerCase() === '.mp3';
+
+    // Detect companion video file for dual-format downloads (video_mp3 mode)
+    // When yt-dlp runs with --extract-audio --keep-video, it produces both MP4 and MP3
+    // but only calls --exec for the final MP3 file. We need to track the MP4 as well.
+    let companionVideoPath = null;
+    if (isAudioFile) {
+      const potentialVideoPath = path.join(parsedPath.dir, parsedPath.name + '.mp4');
+      if (fs.existsSync(potentialVideoPath)) {
+        companionVideoPath = potentialVideoPath;
+        logger.info({ audioPath: videoPath, videoPath: companionVideoPath },
+          '[Post-Process] Dual-format download detected (video_mp3 mode)');
+      }
+    }
+
     // Add additional metadata to the MP4 file that yt-dlp might have missed
     // yt-dlp already embeds basic metadata, but we can add more for better Plex compatibility
-    try {
+    // Skip for audio-only downloads (MP3 files)
+    if (isAudioFile) {
+      logger.info('[Post-Process] Audio file detected, skipping video metadata embedding');
+    } else try {
       const tempPath = videoPath + '.metadata_temp.mp4';
 
       // Build metadata arguments as an array to avoid shell escaping issues
@@ -408,13 +428,23 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
 
     // Set the file timestamps to match the upload date
     if (uploadDate) {
-      // Set timestamp for the video file
+      // Set timestamp for the video/audio file (whatever was passed to post-processor)
       if (fs.existsSync(videoPath)) {
         try {
           fs.utimesSync(videoPath, uploadDate, uploadDate);
-          logger.info({ timestamp: uploadDate.toISOString() }, 'Set video timestamp');
+          logger.info({ timestamp: uploadDate.toISOString() }, 'Set primary file timestamp');
         } catch (err) {
-          logger.warn({ err }, 'Error setting video timestamp');
+          logger.warn({ err }, 'Error setting primary file timestamp');
+        }
+      }
+
+      // Set timestamp for companion video file (dual-format downloads)
+      if (companionVideoPath && fs.existsSync(companionVideoPath)) {
+        try {
+          fs.utimesSync(companionVideoPath, uploadDate, uploadDate);
+          logger.info({ timestamp: uploadDate.toISOString() }, 'Set companion video timestamp');
+        } catch (err) {
+          logger.warn({ err }, 'Error setting companion video timestamp');
         }
       }
 
@@ -472,6 +502,31 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         // Ensure parent channel directory exists
         await fs.ensureDir(targetChannelFolderForMove);
 
+        // Clean up yt-dlp intermediate files before moving
+        // In video_mp3 mode with --extract-audio --keep-video, yt-dlp doesn't always
+        // clean up these intermediate files as it normally would
+        const filesInDir = await fs.readdir(videoDirectory);
+        for (const file of filesInDir) {
+          // Match yt-dlp fragment patterns: .f###.ext or .f###-###.ext where ext is mp4/m4a/webm/mkv
+          if (/\.f[\d-]+\.(mp4|m4a|webm|mkv)$/i.test(file)) {
+            const fragmentPath = path.join(videoDirectory, file);
+            logger.info({ fragmentPath }, '[Post-Process] Removing yt-dlp fragment file');
+            await fs.remove(fragmentPath);
+          }
+          // Remove original thumbnail files (.webp) - these should have been converted to .jpg
+          else if (/\.webp$/i.test(file)) {
+            const webpPath = path.join(videoDirectory, file);
+            logger.info({ webpPath }, '[Post-Process] Removing original webp thumbnail');
+            await fs.remove(webpPath);
+          }
+          // Remove original subtitle files (.vtt) - these should have been converted to .srt
+          else if (/\.vtt$/i.test(file)) {
+            const vttPath = path.join(videoDirectory, file);
+            logger.info({ vttPath }, '[Post-Process] Removing original vtt subtitle');
+            await fs.remove(vttPath);
+          }
+        }
+
         // Check if target video directory already exists (rare, but handle gracefully)
         const targetExists = await fs.pathExists(targetVideoDirectory);
 
@@ -509,9 +564,37 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     // Update the JSON file with the final path (after all moves are complete)
     // This ensures videoMetadataProcessor gets the correct location
     try {
-      jsonData._actual_filepath = finalVideoPath;
+      // Handle dual-format downloads (video_mp3 mode): track both video and audio paths
+      if (isAudioFile && companionVideoPath) {
+        // Calculate final path for companion video (same directory as the audio file)
+        const finalCompanionVideoPath = path.join(
+          path.dirname(finalVideoPath),
+          path.basename(companionVideoPath)
+        );
+
+        // Store both paths for videoMetadataProcessor
+        jsonData._actual_video_filepath = finalCompanionVideoPath;
+        jsonData._actual_audio_filepath = finalVideoPath;
+        // Keep _actual_filepath as video for backward compatibility
+        jsonData._actual_filepath = finalCompanionVideoPath;
+
+        logger.info({
+          videoPath: finalCompanionVideoPath,
+          audioPath: finalVideoPath
+        }, '[Post-Process] Updated dual-format paths in JSON');
+      } else if (isAudioFile) {
+        // Audio-only download (mp3_only mode)
+        jsonData._actual_audio_filepath = finalVideoPath;
+        jsonData._actual_filepath = finalVideoPath;
+        logger.info({ finalVideoPath }, '[Post-Process] Updated _actual_filepath in JSON (audio-only)');
+      } else {
+        // Standard video download
+        jsonData._actual_video_filepath = finalVideoPath;
+        jsonData._actual_filepath = finalVideoPath;
+        logger.info({ finalVideoPath }, '[Post-Process] Updated _actual_filepath in JSON');
+      }
+
       fs.writeFileSync(newJsonPath, JSON.stringify(jsonData, null, 2));
-      logger.info({ finalVideoPath }, '[Post-Process] Updated _actual_filepath in JSON');
     } catch (jsonErr) {
       logger.error({ err: jsonErr }, '[Post-Process] Error updating JSON file with final path');
       // Don't fail the process, but log the error

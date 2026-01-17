@@ -31,8 +31,6 @@ import {
 import Pagination from '@mui/material/Pagination';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import StorageIcon from '@mui/icons-material/Storage';
 import DeleteIcon from '@mui/icons-material/Delete';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
@@ -49,6 +47,7 @@ import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import DeleteVideosDialog from './shared/DeleteVideosDialog';
 import { useVideoDeletion } from './shared/useVideoDeletion';
+import DownloadFormatIndicator from './shared/DownloadFormatIndicator';
 
 interface VideosPageProps {
   token: string | null;
@@ -174,23 +173,6 @@ function VideosPage({ token }: VideosPageProps) {
       setSortOrder('desc');
     }
     setPage(1);
-  };
-
-  const formatFileSize = (bytes: string | null | undefined): string => {
-    if (!bytes) return '';
-    const size = parseInt(bytes);
-    if (isNaN(size)) return '';
-
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    let unitIndex = 0;
-    let formattedSize = size;
-
-    while (formattedSize >= 1024 && unitIndex < units.length - 1) {
-      formattedSize /= 1024;
-      unitIndex++;
-    }
-
-    return `${formattedSize.toFixed(1)} ${units[unitIndex]}`;
   };
 
   const getMediaTypeInfo = (mediaType?: string) => {
@@ -710,6 +692,14 @@ function VideosPage({ token }: VideosPageProps) {
                               alignItems="center"
                               sx={{ mt: 0.5 }}
                             >
+                              {!video.removed && (video.filePath || video.audioFilePath) && (
+                                <DownloadFormatIndicator
+                                  filePath={video.filePath}
+                                  audioFilePath={video.audioFilePath}
+                                  fileSize={video.fileSize}
+                                  audioFileSize={video.audioFileSize}
+                                />
+                              )}
                               {(() => {
                                 const mediaTypeInfo = getMediaTypeInfo(video.media_type);
                                 return mediaTypeInfo ? (
@@ -723,18 +713,7 @@ function VideosPage({ token }: VideosPageProps) {
                                   />
                                 ) : null;
                               })()}
-                              {video.fileSize && (
-                                <Tooltip title="File size on disk" enterTouchDelay={0}>
-                                  <Chip
-                                    size="small"
-                                    icon={<StorageIcon />}
-                                    label={formatFileSize(video.fileSize)}
-                                    variant="outlined"
-                                    sx={{ height: 20, fontSize: '0.7rem' }}
-                                  />
-                                </Tooltip>
-                              )}
-                              {video.removed ? (
+                              {!!video.removed && (
                                 <Tooltip title="Video file not found on disk" enterTouchDelay={0}>
                                   <Chip
                                     size="small"
@@ -745,18 +724,7 @@ function VideosPage({ token }: VideosPageProps) {
                                     sx={{ height: 20, fontSize: '0.7rem' }}
                                   />
                                 </Tooltip>
-                              ) : video.fileSize ? (
-                                <Tooltip title="Video file exists on disk" enterTouchDelay={0}>
-                                  <Chip
-                                    size="small"
-                                    icon={<CheckCircleOutlineIcon />}
-                                    label="Available"
-                                    color="success"
-                                    variant="outlined"
-                                    sx={{ height: 20, fontSize: '0.7rem' }}
-                                  />
-                                </Tooltip>
-                              ) : null}
+                              )}
                             </Stack>
                           </Box>
                         </TableCell>
@@ -903,6 +871,14 @@ function VideosPage({ token }: VideosPageProps) {
                           </TableCell>
                           <TableCell>
                             <Stack direction={isMobile ? "row" : "column"} spacing={1}>
+                              {!video.removed && (video.filePath || video.audioFilePath) && (
+                                <DownloadFormatIndicator
+                                  filePath={video.filePath}
+                                  audioFilePath={video.audioFilePath}
+                                  fileSize={video.fileSize}
+                                  audioFileSize={video.audioFileSize}
+                                />
+                              )}
                               {(() => {
                                 const mediaTypeInfo = getMediaTypeInfo(video.media_type);
                                 return mediaTypeInfo ? (
@@ -915,17 +891,7 @@ function VideosPage({ token }: VideosPageProps) {
                                   />
                                 ) : null;
                               })()}
-                              {video.fileSize && (
-                                <Tooltip title="File size on disk" enterTouchDelay={0}>
-                                  <Chip
-                                    size="small"
-                                    icon={<StorageIcon />}
-                                    label={formatFileSize(video.fileSize)}
-                                    variant="outlined"
-                                  />
-                                </Tooltip>
-                              )}
-                              {video.removed ? (
+                              {!!video.removed && (
                                 <Tooltip title="Video file not found on disk. It may have been deleted or moved." enterTouchDelay={0}>
                                   <Chip
                                     size="small"
@@ -935,17 +901,7 @@ function VideosPage({ token }: VideosPageProps) {
                                     variant="outlined"
                                   />
                                 </Tooltip>
-                              ) : video.fileSize ? (
-                                <Tooltip title="Video file exists on disk" enterTouchDelay={0}>
-                                  <Chip
-                                    size="small"
-                                    icon={<CheckCircleOutlineIcon />}
-                                    label="Available"
-                                    color="success"
-                                    variant="outlined"
-                                  />
-                                </Tooltip>
-                              ) : null}
+                              )}
                             </Stack>
                           </TableCell>
                           <TableCell>

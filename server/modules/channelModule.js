@@ -295,6 +295,7 @@ class ChannelModule {
       available_tabs: channel.available_tabs || null,
       sub_folder: channel.sub_folder || null,
       video_quality: channel.video_quality || null,
+      audio_format: channel.audio_format || null,
       min_duration: channel.min_duration || null,
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
@@ -318,6 +319,7 @@ class ChannelModule {
       min_duration: channel.min_duration || null,
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
+      audio_format: channel.audio_format || null,
     };
   }
 
@@ -1244,7 +1246,7 @@ class ChannelModule {
       where: {
         youtubeId: youtubeIds
       },
-      attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+      attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize']
     });
 
     // Create Maps for O(1) lookup of download status
@@ -1257,11 +1259,13 @@ class ChannelModule {
         added: true,
         removed: v.removed,
         fileSize: v.fileSize,
-        filePath: v.filePath
+        filePath: v.filePath,
+        audioFilePath: v.audioFilePath,
+        audioFileSize: v.audioFileSize
       });
 
-      // Collect videos that need file checking (only if checkFiles is true)
-      if (checkFiles && v.filePath) {
+      // Collect videos that need file checking (only if checkFiles is true and have any file path)
+      if (checkFiles && (v.filePath || v.audioFilePath)) {
         videosToCheck.push(v);
       }
     });
@@ -1276,6 +1280,7 @@ class ChannelModule {
         if (status) {
           status.removed = v.removed;
           status.fileSize = v.fileSize;
+          status.audioFileSize = v.audioFileSize;
         }
       });
 
@@ -1295,11 +1300,17 @@ class ChannelModule {
         plainVideoObject.added = true;
         plainVideoObject.removed = status.removed;
         plainVideoObject.fileSize = status.fileSize;
+        plainVideoObject.filePath = status.filePath;
+        plainVideoObject.audioFilePath = status.audioFilePath;
+        plainVideoObject.audioFileSize = status.audioFileSize;
       } else {
         // Video never downloaded
         plainVideoObject.added = false;
         plainVideoObject.removed = false;
         plainVideoObject.fileSize = null;
+        plainVideoObject.filePath = null;
+        plainVideoObject.audioFilePath = null;
+        plainVideoObject.audioFileSize = null;
       }
 
       // Replace thumbnail with template format (unless video is removed from YouTube)

@@ -116,6 +116,9 @@ const mockPaginatedResponse = (videos: VideoData[], page = 1, limit = 12) => {
   };
 };
 
+// Use delay: null to prevent timer-related flakiness when running with other tests
+const setupUser = () => userEvent.setup({ delay: null });
+
 describe('VideosPage Component', () => {
   const mockToken = 'test-token';
   const useMediaQuery = require('@mui/material/useMediaQuery');
@@ -196,7 +199,7 @@ describe('VideosPage Component', () => {
     });
 
     test('filters videos by channel name', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       // First call returns all videos
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
       // Second call returns filtered videos
@@ -223,7 +226,7 @@ describe('VideosPage Component', () => {
     });
 
     test('resets filter when "All" is selected', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       // Initial load
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
       // After filtering to Tech Channel
@@ -257,7 +260,7 @@ describe('VideosPage Component', () => {
     });
 
     test('sorts videos by published date', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       // Initial load
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
       // After sort click
@@ -279,7 +282,7 @@ describe('VideosPage Component', () => {
     });
 
     test('sorts videos by added date', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       // Initial load
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
       // After sort click
@@ -301,7 +304,7 @@ describe('VideosPage Component', () => {
     });
 
     test('handles pagination correctly', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const manyVideos = Array.from({ length: 15 }, (_, i) => ({
         id: i,
         youtubeId: `video${i}`,
@@ -452,7 +455,7 @@ describe('VideosPage Component', () => {
     });
 
     test('handles mobile filter menu interaction', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
 
       render(<VideosPage token={mockToken} />);
@@ -472,7 +475,7 @@ describe('VideosPage Component', () => {
 
   describe('Search and File Status Features', () => {
     test('displays search bar and allows searching videos', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       // Initial load - all videos
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
 
@@ -508,7 +511,11 @@ describe('VideosPage Component', () => {
     });
 
     test('displays file size information when available', async () => {
-      axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[0]]) });
+      const videoWithFile = {
+        ...mockVideos[0],
+        filePath: '/path/to/video.mp4'
+      };
+      axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([videoWithFile]) });
 
       render(<VideosPage token={mockToken} />);
 
@@ -516,9 +523,9 @@ describe('VideosPage Component', () => {
         expect(screen.getByText('How to Code')).toBeInTheDocument();
       });
 
-      // Check file size display (1GB formatted)
-      expect(screen.getByText('1.0 GB')).toBeInTheDocument();
-      expect(screen.getByText('Available')).toBeInTheDocument();
+      // Check file size display in format indicator chip (1GB formatted)
+      expect(screen.getByText('1.0GB')).toBeInTheDocument();
+      expect(screen.getByTestId('MovieOutlinedIcon')).toBeInTheDocument();
     });
 
     test('displays missing file status for removed videos', async () => {
@@ -639,7 +646,7 @@ describe('VideosPage Component', () => {
     });
 
     test('handles multiple sort operations', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       // Mock multiple API calls for sort operations
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
@@ -667,7 +674,7 @@ describe('VideosPage Component', () => {
     });
 
     test('resets page to 1 when filter changes', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const manyVideos = Array.from({ length: 15 }, (_, i) => ({
         id: i,
         youtubeId: `video${i}`,
@@ -739,7 +746,7 @@ describe('VideosPage Component', () => {
       });
 
       test('allows selecting and deselecting individual videos', async () => {
-        const user = userEvent.setup();
+        const user = setupUser();
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
 
         render(<VideosPage token={mockToken} />);
@@ -772,7 +779,7 @@ describe('VideosPage Component', () => {
       });
 
       test('select all checkbox selects all non-removed videos', async () => {
-        const user = userEvent.setup();
+        const user = setupUser();
         const videosWithRemoved = [
           ...mockVideos,
           {
@@ -808,7 +815,7 @@ describe('VideosPage Component', () => {
       });
 
       test('shows delete button when videos are selected', async () => {
-        const user = userEvent.setup();
+        const user = setupUser();
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
 
         render(<VideosPage token={mockToken} />);
@@ -831,7 +838,7 @@ describe('VideosPage Component', () => {
       });
 
       test('clears selection when clear button is clicked', async () => {
-        const user = userEvent.setup();
+        const user = setupUser();
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
 
         render(<VideosPage token={mockToken} />);
@@ -858,7 +865,7 @@ describe('VideosPage Component', () => {
       });
 
       test('opens delete dialog when delete button is clicked', async () => {
-        const user = userEvent.setup();
+        const user = setupUser();
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
 
         render(<VideosPage token={mockToken} />);
@@ -892,7 +899,7 @@ describe('VideosPage Component', () => {
       });
 
       test('single video delete button opens dialog with one video', async () => {
-        const user = userEvent.setup();
+        const user = setupUser();
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
 
         render(<VideosPage token={mockToken} />);
@@ -957,7 +964,7 @@ describe('VideosPage Component', () => {
       });
 
       test('toggles video selection when delete icon is clicked in mobile', async () => {
-        const user = userEvent.setup();
+        const user = setupUser();
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[0]]) });
 
         render(<VideosPage token={mockToken} />);
@@ -980,7 +987,7 @@ describe('VideosPage Component', () => {
       });
 
       test('shows FAB with badge when videos are selected for deletion in mobile', async () => {
-        const user = userEvent.setup();
+        const user = setupUser();
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos.slice(0, 2)) });
 
         render(<VideosPage token={mockToken} />);
@@ -1002,7 +1009,7 @@ describe('VideosPage Component', () => {
 
     describe('Delete Confirmation and Execution', () => {
       test('successfully deletes videos and shows success message', async () => {
-        const user = userEvent.setup();
+        const user = setupUser();
 
         // Initial load
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
@@ -1050,7 +1057,7 @@ describe('VideosPage Component', () => {
       });
 
       test('handles partial deletion failure', async () => {
-        const user = userEvent.setup();
+        const user = setupUser();
 
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[1], mockVideos[2]]) });
@@ -1084,7 +1091,7 @@ describe('VideosPage Component', () => {
       });
 
       test('handles complete deletion failure', async () => {
-        const user = userEvent.setup();
+        const user = setupUser();
 
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
 
@@ -1118,7 +1125,7 @@ describe('VideosPage Component', () => {
       });
 
       test('cancels deletion when cancel button is clicked', async () => {
-        const user = userEvent.setup();
+        const user = setupUser();
 
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
 
@@ -1146,7 +1153,7 @@ describe('VideosPage Component', () => {
       });
 
       test('clears selection after successful deletion', async () => {
-        const user = userEvent.setup();
+        const user = setupUser();
 
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[2]]) });
@@ -1180,7 +1187,7 @@ describe('VideosPage Component', () => {
       });
 
       test('disables delete button while deletion is in progress', async () => {
-        const user = userEvent.setup();
+        const user = setupUser();
 
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
 
@@ -1210,7 +1217,7 @@ describe('VideosPage Component', () => {
 
     describe('Snackbar Messages', () => {
       test('success snackbar can be dismissed', async () => {
-        const user = userEvent.setup();
+        const user = setupUser();
 
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[2]]) });
@@ -1240,7 +1247,7 @@ describe('VideosPage Component', () => {
       });
 
       test('error snackbar shows when deletion fails', async () => {
-        const user = userEvent.setup();
+        const user = setupUser();
 
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
 
