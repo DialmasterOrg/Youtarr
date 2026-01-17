@@ -48,9 +48,6 @@ type Story = StoryObj<typeof CookieConfigSection>;
 export const EnableCookies: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const accordionToggle = await canvas.findByRole('button', { name: /cookie configuration/i });
-    await userEvent.click(accordionToggle);
-
     const switchInput = await canvas.findByRole('checkbox', { name: /enable cookies/i });
     await userEvent.click(switchInput);
     await expect(switchInput).toBeChecked();

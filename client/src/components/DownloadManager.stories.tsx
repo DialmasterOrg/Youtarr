@@ -2,7 +2,7 @@ import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, userEvent, within, waitFor } from '@storybook/test';
 import { http, HttpResponse } from 'msw';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import DownloadManager from './DownloadManager';
 
 const meta: Meta<typeof DownloadManager> = {
@@ -16,8 +16,10 @@ const meta: Meta<typeof DownloadManager> = {
   },
   decorators: [
     (Story) => (
-      <MemoryRouter>
-        <Story />
+      <MemoryRouter initialEntries={['/downloads/history']}>
+        <Routes>
+          <Route path="/downloads/*" element={<Story />} />
+        </Routes>
       </MemoryRouter>
     ),
   ],

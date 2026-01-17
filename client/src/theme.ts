@@ -14,12 +14,11 @@ const playfulTokens = {
     muted: '#F1F5F9',
     mutedForeground: '#64748B',
     primary: '#8B5CF6',
-    primaryForeground: '#FFFFFF',
-    secondary: '#F472B6',
-    tertiary: '#FBBF24',
+    primaryForeground: '#0F172A',
+    secondary: '#FB7185',
+    tertiary: '#FACC15',
     quaternary: '#34D399',
-    border: '#E2E8F0',
-    input: '#FFFFFF',
+    border: '#E5E7EB',
     card: '#FFFFFF',
     ring: '#8B5CF6',
   },
@@ -317,6 +316,68 @@ export const neumorphicTheme = createTheme({
       selected: 'rgba(108, 99, 255, 0.16)',
       disabled: 'rgba(107, 114, 128, 0.7)',
       disabledBackground: 'rgba(224, 229, 236, 0.6)',
+    },
+  },
+  components: {
+    ...commonThemeOptions.components,
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          position: 'relative',
+          transform: 'none',
+          top: 'auto',
+          left: 'auto',
+          marginBottom: 8,
+          fontWeight: 700,
+          textTransform: 'none',
+          letterSpacing: '0.02em',
+          color: 'var(--foreground)',
+          '&.MuiInputLabel-shrink': {
+            transform: 'none',
+          },
+        },
+      },
+    },
+    MuiFormLabel: {
+      styleOverrides: {
+        root: {
+          position: 'relative',
+          transform: 'none',
+          top: 'auto',
+          left: 'auto',
+          marginBottom: 8,
+          fontWeight: 700,
+          textTransform: 'none',
+          letterSpacing: '0.02em',
+          color: 'var(--foreground)',
+        },
+      },
+    },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          borderRadius: 18,
+          backgroundColor: 'var(--input)',
+          boxShadow: 'var(--shadow-input-rest)',
+          transition: 'box-shadow 250ms var(--transition-bouncy)',
+          '& .MuiOutlinedInput-notchedOutline': {
+            border: 'none',
+          },
+          '&:hover .MuiOutlinedInput-notchedOutline': {
+            border: 'none',
+          },
+          '&.Mui-focused': {
+            boxShadow: 'var(--shadow-input-focus)',
+          },
+          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+            border: 'none',
+          },
+        },
+        input: {
+          paddingTop: 14,
+          paddingBottom: 14,
+        },
+      },
     },
   },
 });

@@ -29,9 +29,6 @@ type Story = StoryObj<typeof KodiCompatibilitySection>;
 export const ToggleMetadata: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const accordionToggle = await canvas.findByRole('button', { name: /kodi, emby and jellyfin compatibility/i });
-    await userEvent.click(accordionToggle);
-
     const checkbox = await canvas.findByRole('checkbox', { name: /generate video \.nfo files/i });
     await userEvent.click(checkbox);
     await expect(checkbox).not.toBeChecked();

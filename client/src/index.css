@@ -4,10 +4,32 @@
   --transition-bouncy: cubic-bezier(0.34, 1.56, 0.64, 1);
   --transition-base: 300ms;
   --transition-fast: 180ms;
+  --shell-gap: 16px;
+  --appbar-radius: 24px;
+  --nav-radius: 24px;
   --background-pattern: radial-gradient(var(--dot-grid) 1px, transparent 1px);
   --card-hover-transform: translate(-2px, -2px) rotate(-0.5deg);
   --card-hover-shadow: var(--shadow-hard-hover);
   --wiggle-animation: wiggle 320ms var(--transition-bouncy);
+  --sticker-rest-transform: rotate(var(--sticker-tilt, 0deg));
+  --sticker-hover-transform: rotate(0deg) scale(1.03);
+  --chip-shadow-hover: var(--shadow-hard-hover);
+  --nav-border: 2px solid var(--foreground);
+  --nav-shadow: var(--shadow-hard);
+  --nav-item-border: 2px solid var(--foreground);
+  --nav-item-border-selected: 2px solid var(--foreground);
+  --nav-item-bg: transparent;
+  --nav-item-bg-selected: var(--tertiary);
+  --nav-item-bg-hover: var(--muted);
+  --nav-item-shadow: none;
+  --nav-item-shadow-selected: var(--shadow-hard);
+  --nav-item-shadow-hover: var(--shadow-hard-hover);
+  --nav-item-transform: translate(0, 0);
+  --nav-item-transform-hover: translate(-2px, -2px);
+  --appbar-border: 2px solid var(--foreground);
+  --appbar-shadow: var(--shadow-hard);
+  --appbar-pattern: radial-gradient(var(--dot-grid) 1px, transparent 1px);
+  --neumo-breathe: none;
   /* Navigation width variables */
   --nav-width-expanded: 260px;
   --nav-width-collapsed: 72px;
@@ -44,6 +66,24 @@ body[data-theme='playful'] {
   --input-border: var(--border);
   --input-border-hover: var(--foreground);
   --dot-grid: rgba(30, 41, 59, 0.12);
+  --sticker-rest-transform: rotate(var(--sticker-tilt, 0deg));
+  --sticker-hover-transform: rotate(0deg) scale(1.03);
+  --chip-shadow-hover: var(--shadow-hard-hover);
+  --nav-border: 2px solid var(--foreground);
+  --nav-shadow: var(--shadow-hard);
+  --nav-item-border: 2px solid var(--foreground);
+  --nav-item-border-selected: 2px solid var(--foreground);
+  --nav-item-bg: transparent;
+  --nav-item-bg-selected: var(--tertiary);
+  --nav-item-bg-hover: var(--muted);
+  --nav-item-shadow: none;
+  --nav-item-shadow-selected: var(--shadow-hard);
+  --nav-item-shadow-hover: var(--shadow-hard-hover);
+  --nav-item-transform: translate(0, 0);
+  --nav-item-transform-hover: translate(-2px, -2px);
+  --appbar-border: 2px solid var(--foreground);
+  --appbar-shadow: var(--shadow-hard);
+  --appbar-pattern: radial-gradient(var(--dot-grid) 1px, transparent 1px);
 }
 
 body:not([data-theme]) {
@@ -103,8 +143,8 @@ body[data-theme='neumorphic'] {
   --shadow-hard-active: inset 6px 6px 10px rgba(163, 177, 198, 0.6), inset -6px -6px 10px rgba(255, 255, 255, 0.5);
   --shadow-hard-ring: 0 0 0 2px var(--ring);
   --shadow-soft: 9px 9px 16px rgba(163, 177, 198, 0.6), -9px -9px 16px rgba(255, 255, 255, 0.5);
-  --shadow-input-rest: inset 6px 6px 10px rgba(163, 177, 198, 0.6), inset -6px -6px 10px rgba(255, 255, 255, 0.5);
-  --shadow-input-focus: inset 10px 10px 20px rgba(163, 177, 198, 0.7), inset -10px -10px 20px rgba(255, 255, 255, 0.6), 0 0 0 2px var(--ring);
+  --shadow-input-rest: inset 8px 8px 16px rgba(163, 177, 198, 0.65), inset -8px -8px 16px rgba(255, 255, 255, 0.7);
+  --shadow-input-focus: inset 12px 12px 22px rgba(163, 177, 198, 0.75), inset -12px -12px 22px rgba(255, 255, 255, 0.75), inset 0 0 0 2px rgba(108, 99, 255, 0.35), inset 0 0 10px rgba(108, 99, 255, 0.2);
   --input-border: transparent;
   --input-border-hover: transparent;
   --dot-grid: transparent;
@@ -112,6 +152,27 @@ body[data-theme='neumorphic'] {
   --card-hover-transform: translateY(-2px);
   --card-hover-shadow: var(--shadow-hard-hover);
   --wiggle-animation: none;
+  --sticker-rest-transform: translate(0, 0);
+  --sticker-hover-transform: translate(0, 0);
+  --chip-shadow-hover: var(--shadow-soft);
+  --nav-border: none;
+  --nav-shadow: var(--shadow-hard);
+  --nav-item-border: none;
+  --nav-item-border-selected: none;
+  --nav-item-bg: var(--background);
+  --nav-item-bg-selected: var(--background);
+  --nav-item-bg-hover: var(--background);
+  --nav-item-shadow: var(--shadow-hard);
+  --nav-item-shadow-selected: var(--shadow-input-rest);
+  --nav-item-shadow-hover: var(--shadow-hard-hover);
+  --nav-item-transform: translate(0, 0);
+  --nav-item-transform-hover: translate(0, 0);
+  --appbar-border: none;
+  --appbar-shadow: var(--shadow-soft);
+  --appbar-pattern: none;
+  --appbar-radius: 32px;
+  --nav-radius: 32px;
+  --neumo-breathe: neumo-breathe 6s ease-in-out infinite;
 }
 
 body[data-motion='off'],
@@ -119,6 +180,9 @@ body[data-wiggle='off'] {
   --card-hover-transform: none;
   --card-hover-shadow: var(--shadow-soft);
   --wiggle-animation: none;
+  --sticker-rest-transform: none;
+  --sticker-hover-transform: none;
+  --neumo-breathe: none;
   --transition-bouncy: ease;
   --transition-base: 0ms;
   --transition-fast: 0ms;
@@ -162,6 +226,7 @@ body {
   background-color: var(--background);
   background-image: var(--background-pattern);
   background-size: 24px 24px;
+  transition: background-color var(--transition-base) ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -213,14 +278,47 @@ h6 {
   }
 }
 
+@keyframes neumo-breathe {
+  0% {
+    box-shadow: var(--shadow-hard);
+  }
+  50% {
+    box-shadow: var(--shadow-hard-hover);
+  }
+  100% {
+    box-shadow: var(--shadow-hard);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .wiggle-card:hover {
+  .wiggle-card:hover,
+  .MuiChip-root:hover,
+  .sticker:hover {
     animation: none;
   }
 }
 
-.wiggle-card:hover {
-  animation: var(--wiggle-animation);
+body[data-theme='playful'] .MuiChip-root,
+body[data-theme='playful'] .sticker {
+  transform: var(--sticker-rest-transform);
+  transition: transform 200ms var(--transition-bouncy), box-shadow 250ms var(--transition-bouncy);
+}
+
+body[data-theme='playful'] .MuiChip-root:hover,
+body[data-theme='playful'] .MuiChip-root:focus-visible,
+body[data-theme='playful'] .sticker:hover,
+body[data-theme='playful'] .sticker:focus-visible,
+body[data-theme='playful'] .sticker:focus-within {
+  transform: var(--sticker-hover-transform);
+  box-shadow: var(--chip-shadow-hover);
+}
+
+.neumo-breathe {
+  animation: var(--neumo-breathe);
+}
+
+body[data-theme='neumorphic'] .playful-shape {
+  display: none !important;
 }
 
 .neumo-float {

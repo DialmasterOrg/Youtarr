@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { expect, userEvent, within } from '@storybook/test';
+import { expect, within } from '@storybook/test';
 import { ConfigurationAccordion } from './ConfigurationAccordion';
 
 const meta: Meta<typeof ConfigurationAccordion> = {
@@ -23,9 +23,5 @@ export const Expanded: Story = {
     await expect(canvas.getByText('Accordion Title')).toBeInTheDocument();
     await expect(canvas.getByText('Enabled')).toBeInTheDocument();
     await expect(canvas.getByText('Accordion content goes here')).toBeInTheDocument();
-
-    const toggle = canvas.getByRole('button', { name: /accordion title/i });
-    await userEvent.click(toggle);
-    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   },
 };

@@ -26,8 +26,6 @@ type Story = StoryObj<typeof ApiKeysSection>;
 export const OpensCreateDialog: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const accordionToggle = await canvas.findByRole('button', { name: /api keys & external access/i });
-    await userEvent.click(accordionToggle);
     await userEvent.click(await canvas.findByRole('button', { name: /create key/i }));
     const body = within(canvasElement.ownerDocument.body);
     await expect(await body.findByText('Create API Key')).toBeInTheDocument();

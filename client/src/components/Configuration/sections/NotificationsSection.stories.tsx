@@ -33,9 +33,6 @@ type Story = StoryObj<typeof NotificationsSection>;
 export const AddService: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const accordionToggle = await canvas.findByRole('button', { name: /notifications/i });
-    await userEvent.click(accordionToggle);
-
     const urlInput = await canvas.findByLabelText('Notification URL');
     await userEvent.type(urlInput, 'discord://webhook_id/token');
     await userEvent.click(canvas.getByRole('button', { name: 'Add Service' }));

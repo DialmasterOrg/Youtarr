@@ -55,6 +55,7 @@ function VideoCard({
   const isChecked = checkedBoxes.includes(video.youtube_id);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
   const isIgnored = status === 'ignored';
+  const baseTransform = isInteractive ? 'var(--sticker-rest-transform)' : 'translate(0, 0)';
 
   return (
     <Fade in timeout={300} key={video.youtube_id}>
@@ -70,7 +71,7 @@ function VideoCard({
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             cursor: isSelectable ? 'pointer' : 'default',
             opacity: status === 'members_only' || isIgnored ? 0.7 : 1,
-            transform: hoveredVideo === video.youtube_id ? 'var(--card-hover-transform)' : 'translate(0, 0)',
+            transform: hoveredVideo === video.youtube_id ? 'var(--sticker-hover-transform)' : baseTransform,
             boxShadow: hoveredVideo === video.youtube_id ? 'var(--card-hover-shadow)' : 'var(--shadow-soft)',
             '&:hover': {
               boxShadow: 'var(--card-hover-shadow)',

@@ -43,6 +43,45 @@ export function ThemeEngineProvider({ children }: { children: React.ReactNode })
     localStorage.setItem(MOTION_STORAGE_KEY, String(motionEnabled));
   }, [motionEnabled]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const selector = '.MuiChip-root, .sticker, .wiggle-card';
+    const tiltOptions = [-2, 2];
+
+    const applyTilt = (element: HTMLElement) => {
+      if (themeMode !== 'playful' || !motionEnabled) {
+        element.style.setProperty('--sticker-tilt', '0deg');
+        return;
+      }
+
+      if (!element.dataset.stickerTilt) {
+        const tilt = tiltOptions[Math.floor(Math.random() * tiltOptions.length)];
+        element.dataset.stickerTilt = String(tilt);
+      }
+
+      element.style.setProperty('--sticker-tilt', `${element.dataset.stickerTilt}deg`);
+    };
+
+    const applyAllTilts = () => {
+      document.querySelectorAll(selector).forEach((node) => {
+        applyTilt(node as HTMLElement);
+      });
+    };
+
+    applyAllTilts();
+
+    const observer = new MutationObserver(() => {
+      applyAllTilts();
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [themeMode, motionEnabled]);
+
   const value = useMemo(
     () => ({
       themeMode,

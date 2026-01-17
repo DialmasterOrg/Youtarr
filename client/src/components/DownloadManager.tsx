@@ -9,6 +9,7 @@ import { Grid } from '@mui/material';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import axios from 'axios';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import DownloadProgress from './DownloadManager/DownloadProgress';
 import DownloadHistory from './DownloadManager/DownloadHistory';
 import DownloadNew from './DownloadManager/DownloadNew';
@@ -97,30 +98,52 @@ function DownloadManager({ token }: DownloadManagerProps) {
   const pendingJobs = jobs.filter(job => job.status === 'Pending');
 
   return (
-    <Grid container spacing={2}>
-      <DownloadNew
-        videoUrls={videoUrls}
-        setVideoUrls={setVideoUrls}
-        token={token}
-        fetchRunningJobs={fetchRunningJobs}
-        downloadInitiatedRef={downloadInitiatedRef}
+    <Routes>
+      <Route
+        index
+        element={
+          <Grid container spacing={2}>
+            <DownloadNew
+              videoUrls={videoUrls}
+              setVideoUrls={setVideoUrls}
+              token={token}
+              fetchRunningJobs={fetchRunningJobs}
+              downloadInitiatedRef={downloadInitiatedRef}
+            />
+          </Grid>
+        }
       />
-      <DownloadProgress
-        downloadProgressRef={downloadProgressRef}
-        downloadInitiatedRef={downloadInitiatedRef}
-        pendingJobs={pendingJobs}
-        token={token}
+      <Route
+        path="activity"
+        element={
+          <Grid container spacing={2}>
+            <DownloadProgress
+              downloadProgressRef={downloadProgressRef}
+              downloadInitiatedRef={downloadInitiatedRef}
+              pendingJobs={pendingJobs}
+              token={token}
+            />
+          </Grid>
+        }
       />
-      <DownloadHistory
-        jobs={jobs}
-        expanded={expanded}
-        handleExpandCell={handleExpandCell}
-        anchorEl={anchorEl}
-        setAnchorEl={setAnchorEl}
-        currentTime={currentTime}
-        isMobile={isMobile}
+      <Route
+        path="history"
+        element={
+          <Grid container spacing={2}>
+            <DownloadHistory
+              jobs={jobs}
+              expanded={expanded}
+              handleExpandCell={handleExpandCell}
+              anchorEl={anchorEl}
+              setAnchorEl={setAnchorEl}
+              currentTime={currentTime}
+              isMobile={isMobile}
+            />
+          </Grid>
+        }
       />
-    </Grid>
+      <Route path="*" element={<Navigate to="." replace />} />
+    </Routes>
   );
 }
 

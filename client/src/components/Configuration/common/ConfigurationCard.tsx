@@ -26,6 +26,11 @@ export const ConfigurationCard: React.FC<ConfigurationCardProps> = ({
         mb: 3,
         border: 1,
         borderColor: 'divider',
+        transform: isInteractive ? 'var(--sticker-rest-transform)' : 'translate(0, 0)',
+        transition: 'transform 300ms var(--transition-bouncy), box-shadow 300ms var(--transition-bouncy)',
+        '&:hover': {
+          transform: isInteractive ? 'var(--sticker-hover-transform)' : 'translate(0, 0)',
+        },
       }}
     >
       <CardContent>

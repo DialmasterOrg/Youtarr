@@ -24,6 +24,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { StorageFooterWidget } from './StorageFooterWidget';
+import { SETTINGS_PAGES } from '../Settings/SettingsIndex';
 
 export type AppNavKey = 'channels' | 'videos' | 'downloads' | 'settings';
 
@@ -57,11 +58,31 @@ export function AppShell({
   const [collapsed, setCollapsed] = useState(false);
 
   const drawerWidth = isMobile ? EXPANDED_WIDTH : collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
+  const isNavCollapsed = !isMobile && collapsed;
 
   useEffect(() => {
     const navWidth = isMobile ? 0 : collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
     document.documentElement.style.setProperty('--nav-width', `${navWidth}px`);
   }, [collapsed, isMobile]);
+
+  const downloadsSubItems = useMemo(
+    () => [
+      { key: 'download-video', label: 'Download Video', to: '/downloads' },
+      { key: 'download-activity', label: 'Activity', to: '/downloads/activity' },
+      { key: 'download-history', label: 'History', to: '/downloads/history' },
+    ],
+    []
+  );
+
+  const settingsSubItems = useMemo(
+    () =>
+      SETTINGS_PAGES.map((page) => ({
+        key: page.key,
+        label: page.title,
+        to: `/settings/${page.key}`,
+      })),
+    []
+  );
 
   const navItems = useMemo(
     () =>
@@ -82,10 +103,11 @@ export function AppShell({
         },
         {
           key: 'downloads' as const,
-          label: 'Downloads',
+          label: 'Download Video',
           oldLabel: 'Manage Downloads',
           icon: <DownloadIcon />,
           to: '/downloads',
+          subItems: downloadsSubItems,
         },
         {
           key: 'settings' as const,
@@ -93,9 +115,10 @@ export function AppShell({
           oldLabel: 'Configuration',
           icon: <SettingsIcon />,
           to: '/settings',
+          subItems: settingsSubItems,
         },
       ],
-    []
+    [downloadsSubItems, settingsSubItems]
   );
 
   const toggleDrawer = () => {
@@ -108,71 +131,114 @@ export function AppShell({
 
   const drawerContent = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Toolbar />
-      <List sx={{ px: 1, pt: 0.5, gap: 0.25, display: 'flex', flexDirection: 'column' }}>
+      <Toolbar sx={{ minHeight: 'calc(64px + var(--shell-gap))' }} />
+      <List sx={{ px: 1, pt: 3, gap: 0.5, display: 'flex', flexDirection: 'column' }}>
         {navItems.map((item) => {
           const selected = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
           const button = (
-            <ListItemButton
-              key={item.key}
-              component={RouterLink}
-              to={item.to}
-              selected={selected}
-              onClick={() => {
-                if (isMobile) setDrawerOpenMobile(false);
-              }}
-              sx={{
-                borderRadius: 2,
-                justifyContent: 'flex-start',
-                px: 1.5,
-                py: 1,
-                minHeight: 48,
-                width: '100%',
-                border: selected ? '2px solid var(--foreground)' : '2px solid transparent',
-                bgcolor: selected ? 'var(--tertiary)' : 'transparent',
-                color: 'text.primary',
-                boxShadow: selected ? 'var(--shadow-hard)' : 'none',
-                transition: 'all 300ms var(--transition-bouncy)',
-                cursor: 'pointer',
-                '&:hover': {
-                  bgcolor: selected ? 'var(--tertiary)' : 'var(--muted)',
-                  transform: selected ? 'translate(-2px, -2px)' : 'translate(0, 0)',
-                  boxShadow: selected ? 'var(--shadow-hard-hover)' : 'none',
-                },
-              }}
-            >
-              <ListItemIcon
+            <Box key={item.key}>
+              <ListItemButton
+                component={RouterLink}
+                to={item.to}
+                selected={selected}
+                onClick={() => {
+                  if (isMobile) setDrawerOpenMobile(false);
+                }}
                 sx={{
-                  minWidth: 44,
-                  width: 44,
-                  height: 44,
-                  flex: '0 0 44px',
-                  display: 'flex',
-                  justifyContent: 'center',
+                  borderRadius: 2.5,
+                  justifyContent: 'flex-start',
                   alignItems: 'center',
+                  px: 1,
+                  py: 0.5,
+                  minHeight: 56,
+                  width: '100%',
+                  border: selected ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)',
+                  bgcolor: selected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
                   color: 'text.primary',
-                  flexShrink: 0,
-                  '& svg': { fontSize: 22 },
+                  boxShadow: selected ? 'var(--nav-item-shadow-selected)' : 'var(--nav-item-shadow)',
+                  transition: 'all 300ms var(--transition-bouncy)',
+                  cursor: 'pointer',
+                  '&:hover': {
+                    bgcolor: selected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg-hover)',
+                    transform: selected ? 'var(--nav-item-transform-hover)' : 'var(--nav-item-transform)',
+                    boxShadow: selected ? 'var(--nav-item-shadow-hover)' : 'var(--nav-item-shadow)',
+                  },
                 }}
               >
-                {item.icon}
-              </ListItemIcon>
-              {!collapsed && (
+                <ListItemIcon
+                  sx={{
+                    minWidth: 56,
+                    width: 56,
+                    height: 56,
+                    flex: '0 0 56px',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    color: 'text.primary',
+                    flexShrink: 0,
+                    '& svg': { fontSize: 24 },
+                  }}
+                >
+                  {item.icon}
+                </ListItemIcon>
                 <ListItemText
                   primary={item.label}
                   secondary={item.oldLabel}
-                  primaryTypographyProps={{ sx: { transition: 'opacity 200ms var(--transition-bouncy)' } }}
-                  secondaryTypographyProps={{ 
-                    variant: 'caption', 
+                  sx={{
+                    opacity: isNavCollapsed ? 0 : 1,
+                    maxWidth: isNavCollapsed ? 0 : 220,
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap',
+                    transition: 'opacity 200ms var(--transition-bouncy), max-width 200ms var(--transition-bouncy)',
+                  }}
+                  primaryTypographyProps={{ sx: { fontWeight: 700 } }}
+                  secondaryTypographyProps={{
+                    variant: 'caption',
                     color: 'text.secondary',
-                    sx: { transition: 'opacity 200ms var(--transition-bouncy)' }
                   }}
                 />
+              </ListItemButton>
+              {!isNavCollapsed && item.subItems && selected && (
+                <List disablePadding sx={{ mt: 0.5, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                  {item.subItems.map((subItem) => {
+                    const subSelected = location.pathname === subItem.to;
+                    return (
+                      <ListItemButton
+                        key={subItem.key}
+                        component={RouterLink}
+                        to={subItem.to}
+                        selected={subSelected}
+                        onClick={() => {
+                          if (isMobile) setDrawerOpenMobile(false);
+                        }}
+                        sx={{
+                          borderRadius: 2,
+                          pl: 9,
+                          pr: 1.5,
+                          py: 0.25,
+                          minHeight: 40,
+                          border: subSelected ? 'var(--nav-item-border-selected)' : '1px solid transparent',
+                          bgcolor: subSelected ? 'var(--nav-item-bg-selected)' : 'transparent',
+                          boxShadow: subSelected ? 'var(--nav-item-shadow-selected)' : 'none',
+                          color: subSelected ? 'text.primary' : 'text.secondary',
+                        }}
+                      >
+                        <ListItemText
+                          primary={subItem.label}
+                          primaryTypographyProps={{
+                            variant: 'body2',
+                            sx: { fontWeight: subSelected ? 700 : 500 },
+                          }}
+                        />
+                      </ListItemButton>
+                    );
+                  })}
+                </List>
               )}
-            </ListItemButton>
+            </Box>
           );
 
-          if (!collapsed) return button;
+          if (!isNavCollapsed) return button;
 
           return (
             <Tooltip key={item.key} title={`${item.label} — ${item.oldLabel}`} placement="right" arrow>
@@ -212,7 +278,7 @@ export function AppShell({
     <Box
       sx={{
         display: 'flex',
-        gap: 2,
+          gap: 'var(--shell-gap)',
         minHeight: '100vh',
         position: 'relative',
         bgcolor: 'background.default',
@@ -223,6 +289,7 @@ export function AppShell({
 
       <Box
         aria-hidden
+        className="playful-shape"
         sx={{
           position: 'absolute',
           top: 92,
@@ -240,6 +307,7 @@ export function AppShell({
       />
       <Box
         aria-hidden
+        className="playful-shape"
         sx={{
           position: 'absolute',
           bottom: { xs: 80, md: 120 },
@@ -258,6 +326,7 @@ export function AppShell({
       />
       <Box
         aria-hidden
+        className="playful-shape"
         sx={{
           position: 'absolute',
           top: { xs: 260, md: 220 },
@@ -281,16 +350,25 @@ export function AppShell({
         elevation={0}
         sx={{
           bgcolor: 'background.paper',
-          borderBottom: `2px solid ${theme.palette.divider}`,
-          boxShadow: 'var(--shadow-hard)',
+          border: 'var(--appbar-border)',
+          boxShadow: 'var(--appbar-shadow)',
           color: 'text.primary',
           zIndex: theme.zIndex.drawer + 1,
-          backgroundImage: `radial-gradient(var(--dot-grid) 1px, transparent 1px)`,
+          backgroundImage: 'var(--appbar-pattern)',
           backgroundSize: '24px 24px',
-          width: '100%',
+          top: 'var(--shell-gap)',
+          right: 'var(--shell-gap)',
+          left: isMobile
+            ? 'var(--shell-gap)'
+            : 'calc(var(--nav-width) + (var(--shell-gap) * 2))',
+          width: isMobile
+            ? 'calc(100% - (var(--shell-gap) * 2))'
+            : 'calc(100% - var(--nav-width) - (var(--shell-gap) * 3))',
+          borderRadius: 'var(--appbar-radius)',
+          overflow: 'hidden',
         }}
       >
-        <Toolbar sx={{ gap: 2, px: { xs: 1.5, sm: 2 } }}>
+        <Toolbar sx={{ gap: 2, px: { xs: 1.5, sm: 2 }, minHeight: 64 }}>
           <IconButton 
             className="pop-toggle" 
             aria-label="toggle navigation" 
@@ -333,17 +411,27 @@ export function AppShell({
         open={isMobile ? drawerOpenMobile : true}
         onClose={() => setDrawerOpenMobile(false)}
         ModalProps={{ keepMounted: true }}
+        PaperProps={{
+          className: 'app-nav-paper neumo-breathe',
+          sx: {
+            borderRadius: isMobile ? 0 : 'var(--nav-radius)',
+            border: 'var(--nav-border)',
+            boxShadow: 'var(--nav-shadow)',
+            bgcolor: 'background.paper',
+            mt: isMobile ? 0 : 'var(--shell-gap)',
+            mb: isMobile ? 0 : 'var(--shell-gap)',
+            ml: isMobile ? 0 : 'var(--shell-gap)',
+            height: isMobile ? '100%' : 'calc(100% - (var(--shell-gap) * 2))',
+            overflowX: 'hidden',
+          },
+        }}
         sx={{
-          width: isMobile ? 0 : 'var(--nav-width)',
+          width: isMobile ? 0 : 'calc(var(--nav-width) + var(--shell-gap))',
           flexShrink: 0,
           transition: 'width 300ms var(--transition-bouncy)',
           '& .MuiDrawer-paper': {
             width: drawerWidth,
             boxSizing: 'border-box',
-            borderRight: '2px solid var(--foreground)',
-            boxShadow: 'var(--shadow-hard)',
-            bgcolor: 'background.paper',
-            overflowX: 'hidden',
             transition: 'width 300ms var(--transition-bouncy), padding 300ms var(--transition-bouncy)',
           },
         }}
@@ -359,9 +447,9 @@ export function AppShell({
           flexDirection: 'column',
           minHeight: '100vh',
           minWidth: 0,
-          pt: 10,
-          pb: 4,
-          px: 2,
+          pt: 'calc(64px + (var(--shell-gap) * 2))',
+          pb: 'var(--shell-gap)',
+          px: 'var(--shell-gap)',
           boxSizing: 'border-box',
           position: 'relative',
           zIndex: 1,

@@ -39,8 +39,6 @@ type Story = StoryObj<typeof PlexIntegrationSection>;
 export const LaunchGetKey: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    const accordionToggle = await canvas.findByRole('button', { name: /plex media server integration/i });
-    await userEvent.click(accordionToggle);
     await userEvent.click(canvas.getByTestId('get-key-button'));
     await expect(args.onOpenPlexAuthDialog).toHaveBeenCalledTimes(1);
   },

@@ -47,9 +47,10 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                 borderStyle: isPendingAddition ? 'dashed' : 'solid',
                 borderRadius: 3,
                 boxShadow: 'var(--shadow-soft)',
+                transform: isInteractive ? 'var(--sticker-rest-transform)' : 'translate(0, 0)',
                 transition: 'transform 300ms var(--transition-bouncy), box-shadow 300ms var(--transition-bouncy)',
                 '&:hover': {
-                    transform: 'var(--card-hover-transform)',
+                    transform: isInteractive ? 'var(--sticker-hover-transform)' : 'var(--card-hover-transform)',
                     boxShadow: 'var(--card-hover-shadow)',
                 },
                 overflow: 'hidden',

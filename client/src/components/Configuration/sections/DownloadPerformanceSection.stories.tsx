@@ -28,9 +28,6 @@ type Story = StoryObj<typeof DownloadPerformanceSection>;
 export const ToggleStallDetection: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const accordionToggle = await canvas.findByRole('button', { name: /download performance settings/i });
-    await userEvent.click(accordionToggle);
-
     const switchInput = await canvas.findByRole('checkbox', { name: /enable stall detection/i });
     await userEvent.click(switchInput);
     await expect(switchInput).not.toBeChecked();

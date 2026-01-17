@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Card, CardActionArea, CardContent, Grid, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 
-const SETTINGS_PAGES = [
+export const SETTINGS_PAGES = [
   { key: 'core', title: 'Core', description: 'Downloads folder, quality, defaults, and core behavior.' },
   { key: 'plex', title: 'Plex', description: 'Plex integration and library configuration.' },
   { key: 'sponsorblock', title: 'SponsorBlock', description: 'Skip segments and SponsorBlock settings.' },
@@ -28,10 +28,22 @@ export function SettingsIndex() {
 
       <Grid container spacing={2}>
         {SETTINGS_PAGES.map((page) => (
-          <Grid item xs={12} md={6} lg={4} key={page.key}>
-            <Card variant="outlined" sx={{ borderRadius: 3 }}>
-              <CardActionArea component={RouterLink} to={`/settings/${page.key}`}>
-                <CardContent>
+          <Grid item xs={12} md={6} lg={4} key={page.key} sx={{ display: 'flex' }}>
+            <Card variant="outlined" sx={{ borderRadius: 3, width: '100%', height: '100%' }}>
+              <CardActionArea
+                component={RouterLink}
+                to={`/settings/${page.key}`}
+                sx={{ height: '100%', display: 'flex' }}
+              >
+                <CardContent
+                  sx={{
+                    flex: 1,
+                    minHeight: 160,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                  }}
+                >
                   <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
                     {page.title}
                   </Typography>
