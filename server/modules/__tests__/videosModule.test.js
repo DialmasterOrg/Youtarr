@@ -557,12 +557,16 @@ describe('VideosModule', () => {
 
       expect(fileMap.size).toBe(2);
       expect(fileMap.get('root123')).toEqual({
-        filePath: '/test/dir/video [root123].mp4',
-        fileSize: 1000
+        videoFilePath: '/test/dir/video [root123].mp4',
+        videoFileSize: 1000,
+        audioFilePath: null,
+        audioFileSize: null
       });
       expect(fileMap.get('channel1_123')).toEqual({
-        filePath: '/test/dir/Channel1/video [channel1_123].mp4',
-        fileSize: 2000
+        videoFilePath: '/test/dir/Channel1/video [channel1_123].mp4',
+        videoFileSize: 2000,
+        audioFilePath: null,
+        audioFileSize: null
       });
       expect(duplicates.size).toBe(0);
     });
@@ -580,9 +584,9 @@ describe('VideosModule', () => {
       const { fileMap, duplicates } = await VideosModule.scanForVideoFiles('/test');
 
       expect(fileMap.size).toBe(1);
-      expect(fileMap.get('abc123').fileSize).toBe(2000);
+      expect(fileMap.get('abc123').videoFileSize).toBe(2000);
       expect(duplicates.size).toBe(1);
-      expect(duplicates.get('abc123')).toHaveLength(2);
+      expect(duplicates.get('abc123')).toHaveLength(1); // Only one duplicate path tracked (the smaller one)
     });
 
     test('should ignore non-mp4 files', async () => {
@@ -716,7 +720,6 @@ describe('VideosModule', () => {
 
       // Mock large number of videos
       mockVideo.count.mockResolvedValueOnce(2500);
-
       // Mock findAll to return videos in chunks
       const chunk1 = Array(1000).fill({
         id: 1,

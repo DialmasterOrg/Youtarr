@@ -30,6 +30,12 @@ const MEDIA_TAB_TYPE_MAP = {
   'streams': 'livestream',
 };
 
+// Maximum number of videos to load when user clicks "Load More"
+// Limit set here because some channels have tens or hundreds of thousands of videos...
+// which effectively is not "loadable", so we had to set some reasonable limit.
+// Unfortunately, yt-dlp ALWAYS starts a fetch with the newest video, so there is no way to "page" through
+const MAX_LOAD_MORE_VIDEOS = 5000;
+
 class ChannelModule {
   constructor() {
     this.channelAutoDownload = this.channelAutoDownload.bind(this);
@@ -95,6 +101,41 @@ class ChannelModule {
 
     // Reload channel to sync in-memory state with database
     await channel.reload();
+  }
+
+  /**
+   * Check if a fetch operation is currently in progress for a channel/tab combination
+   * @param {string} channelId - Channel ID to check
+   * @param {string} tabType - Tab type to check (optional, defaults to checking any tab)
+   * @returns {Object} - Object with isFetching boolean and operation details if fetching
+   */
+  isFetchInProgress(channelId, tabType = null) {
+    if (tabType) {
+      // Check for specific tab
+      const key = `${channelId}:${tabType}`;
+      if (this.activeFetches.has(key)) {
+        const activeOperation = this.activeFetches.get(key);
+        return {
+          isFetching: true,
+          startTime: activeOperation.startTime,
+          type: activeOperation.type,
+          tabType: tabType
+        };
+      }
+    } else {
+      // Check for any tab on this channel (legacy behavior)
+      for (const [key, value] of this.activeFetches.entries()) {
+        if (key.startsWith(`${channelId}:`)) {
+          return {
+            isFetching: true,
+            startTime: value.startTime,
+            type: value.type,
+            tabType: key.split(':')[1]
+          };
+        }
+      }
+    }
+    return { isFetching: false };
   }
 
 
@@ -254,6 +295,7 @@ class ChannelModule {
       available_tabs: channel.available_tabs || null,
       sub_folder: channel.sub_folder || null,
       video_quality: channel.video_quality || null,
+      audio_format: channel.audio_format || null,
       min_duration: channel.min_duration || null,
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
@@ -277,6 +319,7 @@ class ChannelModule {
       min_duration: channel.min_duration || null,
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
+      audio_format: channel.audio_format || null,
     };
   }
 
@@ -1203,7 +1246,7 @@ class ChannelModule {
       where: {
         youtubeId: youtubeIds
       },
-      attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+      attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize']
     });
 
     // Create Maps for O(1) lookup of download status
@@ -1216,11 +1259,13 @@ class ChannelModule {
         added: true,
         removed: v.removed,
         fileSize: v.fileSize,
-        filePath: v.filePath
+        filePath: v.filePath,
+        audioFilePath: v.audioFilePath,
+        audioFileSize: v.audioFileSize
       });
 
-      // Collect videos that need file checking (only if checkFiles is true)
-      if (checkFiles && v.filePath) {
+      // Collect videos that need file checking (only if checkFiles is true and have any file path)
+      if (checkFiles && (v.filePath || v.audioFilePath)) {
         videosToCheck.push(v);
       }
     });
@@ -1235,6 +1280,7 @@ class ChannelModule {
         if (status) {
           status.removed = v.removed;
           status.fileSize = v.fileSize;
+          status.audioFileSize = v.audioFileSize;
         }
       });
 
@@ -1254,11 +1300,17 @@ class ChannelModule {
         plainVideoObject.added = true;
         plainVideoObject.removed = status.removed;
         plainVideoObject.fileSize = status.fileSize;
+        plainVideoObject.filePath = status.filePath;
+        plainVideoObject.audioFilePath = status.audioFilePath;
+        plainVideoObject.audioFileSize = status.audioFileSize;
       } else {
         // Video never downloaded
         plainVideoObject.added = false;
         plainVideoObject.removed = false;
         plainVideoObject.fileSize = null;
+        plainVideoObject.filePath = null;
+        plainVideoObject.audioFilePath = null;
+        plainVideoObject.audioFileSize = null;
       }
 
       // Replace thumbnail with template format (unless video is removed from YouTube)
@@ -1268,6 +1320,45 @@ class ChannelModule {
 
       return plainVideoObject;
     });
+  }
+
+  /**
+   * Apply duration and date filters to a list of videos.
+   * @param {Array} videos - Array of video objects to filter
+   * @param {number|null} minDuration - Minimum duration in seconds
+   * @param {number|null} maxDuration - Maximum duration in seconds
+   * @param {string|null} dateFrom - Filter videos from this date (ISO string)
+   * @param {string|null} dateTo - Filter videos to this date (ISO string)
+   * @returns {Array} - Filtered array of videos
+   */
+  _applyDurationAndDateFilters(videos, minDuration, maxDuration, dateFrom, dateTo) {
+    let filtered = videos;
+
+    if (minDuration !== null) {
+      filtered = filtered.filter(video =>
+        video.duration && video.duration >= minDuration
+      );
+    }
+    if (maxDuration !== null) {
+      filtered = filtered.filter(video =>
+        video.duration && video.duration <= maxDuration
+      );
+    }
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom);
+      filtered = filtered.filter(video =>
+        video.publishedAt && new Date(video.publishedAt) >= fromDate
+      );
+    }
+    if (dateTo) {
+      const toDate = new Date(dateTo);
+      toDate.setHours(23, 59, 59, 999); // Include entire day
+      filtered = filtered.filter(video =>
+        video.publishedAt && new Date(video.publishedAt) <= toDate
+      );
+    }
+
+    return filtered;
   }
 
   /**
@@ -1282,9 +1373,13 @@ class ChannelModule {
    * @param {string} sortOrder - Sort order: 'asc' or 'desc' (default 'desc')
    * @param {boolean} checkFiles - Whether to check file existence for current page (default false)
    * @param {string} mediaType - Media type to filter by: 'video', 'short', 'livestream' (default 'video')
+   * @param {number|null} minDuration - Minimum duration in seconds (default null)
+   * @param {number|null} maxDuration - Maximum duration in seconds (default null)
+   * @param {string|null} dateFrom - Filter videos from this date (ISO string, default null)
+   * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Array>} - Array of video objects with download status
    */
-  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, excludeDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video') {
+  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, excludeDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null) {
     // First get all videos to enrich with download status
     const allChannelVideos = await ChannelVideo.findAll({
       where: {
@@ -1311,6 +1406,9 @@ class ChannelModule {
         video.title && video.title.toLowerCase().includes(searchLower)
       );
     }
+
+    // Apply duration and date filters
+    filteredVideos = this._applyDurationAndDateFilters(filteredVideos, minDuration, maxDuration, dateFrom, dateTo);
 
     // Apply sorting
     filteredVideos.sort((a, b) => {
@@ -1379,11 +1477,15 @@ class ChannelModule {
    * @param {boolean} excludeDownloaded - Whether to exclude downloaded videos (default false)
    * @param {string} searchQuery - Search query to filter videos by title (default '')
    * @param {string} mediaType - Media type to filter by: 'video', 'short', 'livestream' (default 'video')
+   * @param {number|null} minDuration - Minimum duration in seconds (default null)
+   * @param {number|null} maxDuration - Maximum duration in seconds (default null)
+   * @param {string|null} dateFrom - Filter videos from this date (ISO string, default null)
+   * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Object>} - Object with totalCount and oldestVideoDate
    */
-  async getChannelVideoStats(channelId, excludeDownloaded = false, searchQuery = '', mediaType = 'video') {
+  async getChannelVideoStats(channelId, excludeDownloaded = false, searchQuery = '', mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null) {
     // If we have search or filter, we need to get all videos
-    if (excludeDownloaded || searchQuery) {
+    if (excludeDownloaded || searchQuery || minDuration !== null || maxDuration !== null || dateFrom || dateTo) {
       // Need to filter by download status and/or search
       const allChannelVideos = await ChannelVideo.findAll({
         where: {
@@ -1409,6 +1511,9 @@ class ChannelModule {
           video.title && video.title.toLowerCase().includes(searchLower)
         );
       }
+
+      // Apply duration and date filters
+      filteredVideos = this._applyDurationAndDateFilters(filteredVideos, minDuration, maxDuration, dateFrom, dateTo);
 
       return {
         totalCount: filteredVideos.length,
@@ -1860,9 +1965,13 @@ class ChannelModule {
    * @param {string} sortBy - Field to sort by: 'date', 'title', 'duration', 'size' (default 'date')
    * @param {string} sortOrder - Sort order: 'asc' or 'desc' (default 'desc')
    * @param {string} tabType - Tab type to fetch: 'videos', 'shorts', or 'streams' (default 'videos')
+   * @param {number|null} minDuration - Minimum duration in seconds (default null)
+   * @param {number|null} maxDuration - Maximum duration in seconds (default null)
+   * @param {string|null} dateFrom - Filter videos from this date (ISO string, default null)
+   * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Object>} - Response object with videos and metadata
    */
-  async getChannelVideos(channelId, page = 1, pageSize = 50, hideDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS) {
+  async getChannelVideos(channelId, page = 1, pageSize = 50, hideDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS, minDuration = null, maxDuration = null, dateFrom = null, dateTo = null) {
     const channel = await Channel.findOne({
       where: { channel_id: channelId },
     });
@@ -1896,14 +2005,18 @@ class ChannelModule {
       const mostRecentVideoDate = allVideos.length > 0 ? allVideos[0].publishedAt : null;
 
       if (shouldFetchFromYoutube && this.shouldRefreshChannelVideos(channel, allVideos.length, mediaType)) {
-        // Check if there's already an active fetch for this channel
-        if (this.activeFetches.has(channelId)) {
-          logger.info({ channelId }, 'Skipping auto-refresh - fetch already in progress');
+        // Use composite key to allow concurrent fetches for different tabs
+        const fetchKey = `${channelId}:${tabType}`;
+
+        // Check if there's already an active fetch for this channel/tab
+        if (this.activeFetches.has(fetchKey)) {
+          logger.info({ channelId, tabType }, 'Skipping auto-refresh - fetch already in progress for this tab');
         } else {
           // Register this fetch operation
-          this.activeFetches.set(channelId, {
+          this.activeFetches.set(fetchKey, {
             startTime: new Date().toISOString(),
-            type: 'autoRefresh'
+            type: 'autoRefresh',
+            tabType: tabType
           });
 
           try {
@@ -1911,14 +2024,14 @@ class ChannelModule {
             await this.fetchAndSaveVideosViaYtDlp(channel, channelId, tabType, mostRecentVideoDate);
           } finally {
             // Clear the active fetch record
-            this.activeFetches.delete(channelId);
+            this.activeFetches.delete(fetchKey);
           }
         }
       }
 
       // Now fetch the requested page of videos with file checking enabled
       const offset = (page - 1) * pageSize;
-      const paginatedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType);
+      const paginatedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo);
 
       // Check if videos still exist on YouTube and mark as removed if they don't
       const videoValidationModule = require('./videoValidationModule');
@@ -1988,15 +2101,15 @@ class ChannelModule {
       }
 
       // Get stats for the response
-      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType);
+      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo);
 
       return this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
 
     } catch (error) {
       logger.error({ err: error, channelId }, 'Error fetching channel videos');
       const offset = (page - 1) * pageSize;
-      const cachedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType);
-      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType);
+      const cachedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo);
+      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo);
       return this.buildChannelVideosResponse(cachedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
     }
   }
@@ -2055,16 +2168,20 @@ class ChannelModule {
    * @returns {Promise<Object>} - Response with success status and paginated data
    */
   async fetchAllChannelVideos(channelId, requestedPage = 1, requestedPageSize = 50, hideDownloaded = false, tabType = TAB_TYPES.VIDEOS) {
-    // Check if there's already an active fetch for this channel
-    if (this.activeFetches.has(channelId)) {
-      const activeOperation = this.activeFetches.get(channelId);
-      throw new Error(`A fetch operation is already in progress for this channel (started ${activeOperation.startTime})`);
+    // Use composite key to allow concurrent fetches for different tabs
+    const fetchKey = `${channelId}:${tabType}`;
+
+    // Check if there's already an active fetch for this channel/tab combination
+    if (this.activeFetches.has(fetchKey)) {
+      const activeOperation = this.activeFetches.get(fetchKey);
+      throw new Error(`A fetch operation is already in progress for this channel tab (started ${activeOperation.startTime})`);
     }
 
     // Register this fetch operation
-    this.activeFetches.set(channelId, {
+    this.activeFetches.set(fetchKey, {
       startTime: new Date().toISOString(),
-      type: 'fetchAll'
+      type: 'fetchAll',
+      tabType: tabType
     });
 
     try {
@@ -2080,14 +2197,15 @@ class ChannelModule {
         logger.info({ channelId, channelTitle: channel.title, tabType }, 'Starting full video fetch for channel');
         const startTime = Date.now();
 
-        // Fetch ALL videos from YouTube (no --playlist-end parameter)
+        // Fetch videos from YouTube (limited to MAX_LOAD_MORE_VIDEOS to prevent hanging on large channels)
         const canonicalUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
 
         const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
         const result = await this.withTempFile('channel-all-videos', async (outputFilePath) => {
           const args = YtdlpCommandBuilder.buildMetadataFetchArgs(canonicalUrl, {
             flatPlaylist: true,
-            extractorArgs: 'youtubetab:approximate_date'
+            extractorArgs: 'youtubetab:approximate_date',
+            playlistEnd: MAX_LOAD_MORE_VIDEOS
           });
           const content = await this.executeYtDlpCommand(args, outputFilePath);
 
@@ -2148,7 +2266,7 @@ class ChannelModule {
       }
     } finally {
       // Always clear the active fetch record, whether successful or failed
-      this.activeFetches.delete(channelId);
+      this.activeFetches.delete(fetchKey);
     }
   }
 }

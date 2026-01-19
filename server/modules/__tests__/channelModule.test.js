@@ -439,6 +439,7 @@ describe('ChannelModule', () => {
           available_tabs: null,
           sub_folder: null,
           video_quality: null,
+          audio_format: null,
           min_duration: null,
           max_duration: null,
           title_filter_regex: null,
@@ -788,7 +789,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2', 'video3']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -817,7 +818,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -874,7 +875,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -903,7 +904,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2', 'video3']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize']
         });
 
         // Video1 - not downloaded
@@ -931,7 +932,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: []
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize']
         });
         expect(result).toEqual([]);
       });
@@ -1037,7 +1038,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -1597,6 +1598,7 @@ describe('ChannelModule', () => {
             min_duration: null,
             max_duration: null,
             title_filter_regex: null,
+            audio_format: null,
           },
           {
             url: 'https://youtube.com/@channel2',
@@ -1609,6 +1611,7 @@ describe('ChannelModule', () => {
             min_duration: null,
             max_duration: null,
             title_filter_regex: null,
+            audio_format: null,
           }
         ]);
       });
@@ -1694,6 +1697,7 @@ describe('ChannelModule', () => {
               min_duration: null,
               max_duration: null,
               title_filter_regex: null,
+              audio_format: null,
             }
           ],
           total: 25,
@@ -2198,10 +2202,11 @@ describe('ChannelModule', () => {
         ChannelVideo.count.mockResolvedValue(0);
         Video.findAll = jest.fn().mockResolvedValue([]);
 
-        // Simulate an active fetch
-        ChannelModule.activeFetches.set('UC123', {
+        // Simulate an active fetch using composite key (channelId:tabType)
+        ChannelModule.activeFetches.set('UC123:videos', {
           startTime: new Date().toISOString(),
-          type: 'fetchAll'
+          type: 'fetchAll',
+          tabType: 'videos'
         });
 
         const result = await ChannelModule.getChannelVideos('UC123');
@@ -2209,12 +2214,12 @@ describe('ChannelModule', () => {
         // Should not throw, should return cached data
         expect(result.videos).toBeDefined();
         expect(logger.info).toHaveBeenCalledWith(
-          expect.objectContaining({ channelId: 'UC123' }),
-          'Skipping auto-refresh - fetch already in progress'
+          expect.objectContaining({ channelId: 'UC123', tabType: 'videos' }),
+          'Skipping auto-refresh - fetch already in progress for this tab'
         );
 
         // Clean up
-        ChannelModule.activeFetches.delete('UC123');
+        ChannelModule.activeFetches.delete('UC123:videos');
       });
 
       test('should handle errors and return cached data', async () => {
@@ -2279,15 +2284,17 @@ describe('ChannelModule', () => {
       });
 
       test('should throw error when fetch already in progress', async () => {
-        ChannelModule.activeFetches.set('UC123', {
+        // Use composite key (channelId:tabType) since we now track per-tab
+        ChannelModule.activeFetches.set('UC123:videos', {
           startTime: new Date().toISOString(),
-          type: 'autoRefresh'
+          type: 'autoRefresh',
+          tabType: 'videos'
         });
 
         await expect(ChannelModule.fetchAllChannelVideos('UC123')).rejects.toThrow('fetch operation is already in progress');
 
         // Clean up
-        ChannelModule.activeFetches.delete('UC123');
+        ChannelModule.activeFetches.delete('UC123:videos');
       });
 
       test('should throw error when channel not found', async () => {

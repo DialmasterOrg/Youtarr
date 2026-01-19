@@ -4,6 +4,7 @@ interface DownloadOverrideSettings {
   resolution: string;
   allowRedownload?: boolean;
   subfolder?: string | null;
+  audioFormat?: string | null;
 }
 
 interface TriggerDownloadsParams {
@@ -40,6 +41,7 @@ export function useTriggerDownloads(token: string | null): UseTriggerDownloadsRe
             resolution: overrideSettings.resolution,
             allowRedownload: overrideSettings.allowRedownload,
             subfolder: overrideSettings.subfolder,
+            audioFormat: overrideSettings.audioFormat,
           };
         }
 

@@ -813,7 +813,11 @@ describe('server routes - channels', () => {
         '',   // default searchQuery
         'date', // default sortBy
         'desc', // default sortOrder
-        'videos' // default tabType
+        'videos', // default tabType
+        null, // default minDuration
+        null, // default maxDuration
+        null, // default dateFrom
+        null  // default dateTo
       );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -875,7 +879,11 @@ describe('server routes - channels', () => {
         'test search',
         'title',
         'asc',
-        'videos' // default tabType
+        'videos', // default tabType
+        null, // default minDuration
+        null, // default maxDuration
+        null, // default dateFrom
+        null  // default dateTo
       );
       expect(res.statusCode).toBe(200);
     });
@@ -910,7 +918,11 @@ describe('server routes - channels', () => {
         '',
         'date',
         'desc',
-        'shorts'
+        'shorts',
+        null, // default minDuration
+        null, // default maxDuration
+        null, // default dateFrom
+        null  // default dateTo
       );
       expect(res.statusCode).toBe(200);
     });

@@ -150,17 +150,24 @@ describe('VideoCard Component', () => {
   });
 
   describe('File Size Display', () => {
-    test('renders file size when available', () => {
-      const videoWithSize = { ...mockVideo, fileSize: 1024 * 1024 * 50 };
-      renderWithProviders(<VideoCard {...defaultProps} video={videoWithSize} />);
+    test('renders file size chip when video file exists', () => {
+      const videoWithFile = {
+        ...mockVideo,
+        added: true,
+        removed: false,
+        filePath: '/path/to/video.mp4',
+        fileSize: 1024 * 1024 * 50
+      };
+      renderWithProviders(<VideoCard {...defaultProps} video={videoWithFile} />);
+      // File size shown in format indicator chip
       expect(screen.getByText(/50/)).toBeInTheDocument();
-      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('MovieOutlinedIcon')).toBeInTheDocument();
     });
 
-    test('does not render file size when not available', () => {
+    test('does not render format indicator when no file path exists', () => {
       renderWithProviders(<VideoCard {...defaultProps} />);
-      const storageIcons = screen.queryAllByTestId('StorageIcon');
-      expect(storageIcons.length).toBe(0);
+      const movieIcons = screen.queryAllByTestId('MovieOutlinedIcon');
+      expect(movieIcons.length).toBe(0);
     });
   });
 
@@ -638,11 +645,17 @@ describe('VideoCard Component', () => {
     });
 
     test('handles video with very large file size', () => {
-      const largeVideo = { ...mockVideo, fileSize: 1024 * 1024 * 1024 * 5.5 };
+      const largeVideo = {
+        ...mockVideo,
+        added: true,
+        removed: false,
+        filePath: '/path/to/video.mp4',
+        fileSize: 1024 * 1024 * 1024 * 5.5
+      };
       renderWithProviders(<VideoCard {...defaultProps} video={largeVideo} />);
-      // Check for file size presence - look for GB text
+      // Check for file size presence in format indicator chip
       expect(screen.getByText(/GB/)).toBeInTheDocument();
-      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('MovieOutlinedIcon')).toBeInTheDocument();
     });
 
     test('handles video in both selectedForDeletion and checkedBoxes', () => {

@@ -81,6 +81,11 @@ Channel.init(
       allowNull: true,
       defaultValue: null,
     },
+    audio_format: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     sequelize,

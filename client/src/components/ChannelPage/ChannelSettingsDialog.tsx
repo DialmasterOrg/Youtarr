@@ -36,6 +36,7 @@ interface ChannelSettings {
   min_duration: number | null;
   max_duration: number | null;
   title_filter_regex: string | null;
+  audio_format: string | null;
 }
 
 interface FilterPreviewVideo {
@@ -91,14 +92,16 @@ function ChannelSettingsDialog({
     video_quality: null,
     min_duration: null,
     max_duration: null,
-    title_filter_regex: null
+    title_filter_regex: null,
+    audio_format: null
   });
   const [originalSettings, setOriginalSettings] = useState<ChannelSettings>({
     sub_folder: null,
     video_quality: null,
     min_duration: null,
     max_duration: null,
-    title_filter_regex: null
+    title_filter_regex: null,
+    audio_format: null
   });
   const [subfolders, setSubfolders] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -174,7 +177,8 @@ function ChannelSettingsDialog({
           video_quality: settingsData.video_quality || null,
           min_duration: settingsData.min_duration || null,
           max_duration: settingsData.max_duration || null,
-          title_filter_regex: settingsData.title_filter_regex || null
+          title_filter_regex: settingsData.title_filter_regex || null,
+          audio_format: settingsData.audio_format || null
         };
         setSettings(loadedSettings);
         setOriginalSettings(loadedSettings);
@@ -229,7 +233,8 @@ function ChannelSettingsDialog({
           video_quality: settings.video_quality || null,
           min_duration: settings.min_duration,
           max_duration: settings.max_duration,
-          title_filter_regex: settings.title_filter_regex || null
+          title_filter_regex: settings.title_filter_regex || null,
+          audio_format: settings.audio_format || null
         })
       });
 
@@ -256,7 +261,8 @@ function ChannelSettingsDialog({
         video_quality: result?.settings?.video_quality ?? settings.video_quality ?? null,
         min_duration: result?.settings?.min_duration ?? settings.min_duration ?? null,
         max_duration: result?.settings?.max_duration ?? settings.max_duration ?? null,
-        title_filter_regex: result?.settings?.title_filter_regex ?? settings.title_filter_regex ?? null
+        title_filter_regex: result?.settings?.title_filter_regex ?? settings.title_filter_regex ?? null,
+        audio_format: result?.settings?.audio_format ?? settings.audio_format ?? null
       };
 
       setSettings(updatedSettings);
@@ -294,7 +300,8 @@ function ChannelSettingsDialog({
            settings.video_quality !== originalSettings.video_quality ||
            settings.min_duration !== originalSettings.min_duration ||
            settings.max_duration !== originalSettings.max_duration ||
-           settings.title_filter_regex !== originalSettings.title_filter_regex;
+           settings.title_filter_regex !== originalSettings.title_filter_regex ||
+           settings.audio_format !== originalSettings.audio_format;
   };
 
   const handlePreviewFilter = async () => {
@@ -414,6 +421,33 @@ function ChannelSettingsDialog({
             <Typography variant="body2" color="text.secondary">
               Effective channel quality: {effectiveQualityDisplay}.
             </Typography>
+
+            <FormControl fullWidth sx={{ mt: 1 }}>
+              <InputLabel id="audio-format-label" shrink>Download Type</InputLabel>
+              <Select
+                labelId="audio-format-label"
+                value={settings.audio_format || ''}
+                label="Download Type"
+                onChange={(e) => setSettings({
+                  ...settings,
+                  audio_format: e.target.value || null
+                })}
+                displayEmpty
+                notched
+              >
+                <MenuItem value="">
+                  <em>Video Only (default)</em>
+                </MenuItem>
+                <MenuItem value="video_mp3">Video + MP3</MenuItem>
+                <MenuItem value="mp3_only">MP3 Only</MenuItem>
+              </Select>
+            </FormControl>
+
+            {settings.audio_format && (
+              <Typography variant="caption" color="text.secondary">
+                MP3 files are saved at 192kbps in the same folder as videos.
+              </Typography>
+            )}
 
             <Alert severity="info" sx={{ mb: 2 }}>
               <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>

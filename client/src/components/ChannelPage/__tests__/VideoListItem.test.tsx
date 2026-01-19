@@ -131,17 +131,24 @@ describe('VideoListItem Component', () => {
   });
 
   describe('File Size Display', () => {
-    test('renders file size when available', () => {
-      const videoWithSize = { ...mockVideo, fileSize: 1024 * 1024 * 50 };
-      renderWithProviders(<VideoListItem {...defaultProps} video={videoWithSize} />);
-      expect(screen.getByText('50MB')).toBeInTheDocument();
-      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
+    test('renders file size chip when video file exists', () => {
+      const videoWithFile = {
+        ...mockVideo,
+        added: true,
+        removed: false,
+        filePath: '/path/to/video.mp4',
+        fileSize: 1024 * 1024 * 50
+      };
+      renderWithProviders(<VideoListItem {...defaultProps} video={videoWithFile} />);
+      // File size shown in format indicator chip
+      expect(screen.getByText(/50/)).toBeInTheDocument();
+      expect(screen.getByTestId('MovieOutlinedIcon')).toBeInTheDocument();
     });
 
-    test('does not render file size when not available', () => {
+    test('does not render format indicator when no file path exists', () => {
       renderWithProviders(<VideoListItem {...defaultProps} />);
-      const storageIcons = screen.queryAllByTestId('StorageIcon');
-      expect(storageIcons.length).toBe(0);
+      const movieIcons = screen.queryAllByTestId('MovieOutlinedIcon');
+      expect(movieIcons.length).toBe(0);
     });
   });
 
@@ -608,10 +615,17 @@ describe('VideoListItem Component', () => {
     });
 
     test('handles video with very large file size', () => {
-      const largeVideo = { ...mockVideo, fileSize: 1024 * 1024 * 1024 * 5.5 };
+      const largeVideo = {
+        ...mockVideo,
+        added: true,
+        removed: false,
+        filePath: '/path/to/video.mp4',
+        fileSize: 1024 * 1024 * 1024 * 5.5
+      };
       renderWithProviders(<VideoListItem {...defaultProps} video={largeVideo} />);
-      expect(screen.getByText('5.5GB')).toBeInTheDocument();
-      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
+      // File size shown in format indicator chip
+      expect(screen.getByText(/GB/)).toBeInTheDocument();
+      expect(screen.getByTestId('MovieOutlinedIcon')).toBeInTheDocument();
     });
 
     test('handles video in both selectedForDeletion and checkedBoxes', () => {

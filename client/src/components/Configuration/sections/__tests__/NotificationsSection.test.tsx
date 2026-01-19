@@ -33,6 +33,9 @@ const expandAccordion = async (user: ReturnType<typeof userEvent.setup>) => {
   await user.click(accordionButton);
 };
 
+// Use delay: null to prevent timer-related flakiness when running with other tests
+const setupUser = () => userEvent.setup({ delay: null });
+
 describe('NotificationsSection Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -53,7 +56,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('renders Apprise link and info text', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps();
       renderWithProviders(<NotificationsSection {...props} />);
 
@@ -90,7 +93,7 @@ describe('NotificationsSection Component', () => {
 
   describe('Enable Notifications Switch', () => {
     test('renders Enable Notifications switch', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps();
       renderWithProviders(<NotificationsSection {...props} />);
 
@@ -100,7 +103,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('switch reflects notificationsEnabled state when false', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: false })
       });
@@ -113,7 +116,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('switch reflects notificationsEnabled state when true', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: true })
       });
@@ -126,7 +129,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('calls onConfigChange when switch is toggled on', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const onConfigChange = jest.fn();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: false }),
@@ -144,7 +147,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('calls onConfigChange when switch is toggled off', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const onConfigChange = jest.fn();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: true }),
@@ -164,7 +167,7 @@ describe('NotificationsSection Component', () => {
 
   describe('Apprise URLs Management - Visibility', () => {
     test('does not show URL input field when notifications are disabled', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: false })
       });
@@ -176,7 +179,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('shows URL input field when notifications are enabled', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: true })
       });
@@ -188,7 +191,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('does not show add service section when notifications are disabled', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: false })
       });
@@ -200,7 +203,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('shows add service section when notifications are enabled', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: true })
       });
@@ -214,7 +217,7 @@ describe('NotificationsSection Component', () => {
 
   describe('Apprise URLs List', () => {
     test('displays configured URLs count', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps({
         config: createConfig({
           notificationsEnabled: true,
@@ -233,7 +236,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('displays user-friendly names for known services', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps({
         config: createConfig({
           notificationsEnabled: true,
@@ -252,7 +255,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('shows delete button for each URL', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps({
         config: createConfig({
           notificationsEnabled: true,
@@ -269,7 +272,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('removes URL when delete button is clicked and confirmed', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const onConfigChange = jest.fn();
       const props = createSectionProps({
         config: createConfig({
@@ -301,7 +304,7 @@ describe('NotificationsSection Component', () => {
 
   describe('Adding New URLs', () => {
     test('adds URL when Add button is clicked', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const onConfigChange = jest.fn();
       const props = createSectionProps({
         config: createConfig({
@@ -326,7 +329,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('adds URL when Enter is pressed', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const onConfigChange = jest.fn();
       const props = createSectionProps({
         config: createConfig({
@@ -348,7 +351,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('shows warning when trying to add empty URL', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const setSnackbar = jest.fn();
       const props = createSectionProps({
         config: createConfig({
@@ -372,7 +375,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('shows warning when trying to add duplicate URL', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const setSnackbar = jest.fn();
       const props = createSectionProps({
         config: createConfig({
@@ -401,7 +404,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('clears input after successful add', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const onConfigChange = jest.fn();
       const props = createSectionProps({
         config: createConfig({
@@ -426,7 +429,7 @@ describe('NotificationsSection Component', () => {
 
   describe('Individual Webhook Test Buttons', () => {
     test('renders test button for each configured webhook', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps({
         config: createConfig({
           notificationsEnabled: true,
@@ -445,7 +448,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('displays configured webhooks count when webhooks are configured', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps({
         config: createConfig({
           notificationsEnabled: true,
@@ -460,7 +463,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('sends test notification to single webhook on click', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
@@ -498,7 +501,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('shows success message after successful test', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
@@ -524,7 +527,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('shows error message when test fails', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -552,7 +555,7 @@ describe('NotificationsSection Component', () => {
 
   describe('Supported URL Formats', () => {
     test('displays supported URL format examples', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: true })
       });
@@ -571,7 +574,7 @@ describe('NotificationsSection Component', () => {
 
   describe('InfoTooltip Integration', () => {
     test('renders section with InfoTooltip support', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps();
       renderWithProviders(<NotificationsSection {...props} />);
 
@@ -581,7 +584,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('works without onMobileTooltipClick prop', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps({ onMobileTooltipClick: undefined });
       renderWithProviders(<NotificationsSection {...props} />);
 
@@ -593,7 +596,7 @@ describe('NotificationsSection Component', () => {
 
   describe('Integration Tests', () => {
     test('enabling notifications shows URL input', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: false })
       });
@@ -615,7 +618,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('disabling notifications hides URL input', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: true })
       });
@@ -639,7 +642,7 @@ describe('NotificationsSection Component', () => {
 
   describe('Accessibility', () => {
     test('switch has accessible structure', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps();
       renderWithProviders(<NotificationsSection {...props} />);
 
@@ -650,7 +653,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('text input has accessible label', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: true })
       });
@@ -662,7 +665,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('add button has accessible text', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps({
         config: createConfig({ notificationsEnabled: true })
       });
@@ -674,7 +677,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('info text is present', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps();
       renderWithProviders(<NotificationsSection {...props} />);
 
@@ -693,7 +696,7 @@ describe('NotificationsSection Component', () => {
     });
 
     test('delete buttons have accessible labels', async () => {
-      const user = userEvent.setup();
+      const user = setupUser();
       const props = createSectionProps({
         config: createConfig({
           notificationsEnabled: true,

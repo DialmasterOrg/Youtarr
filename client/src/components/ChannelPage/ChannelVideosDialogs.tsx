@@ -27,6 +27,8 @@ export interface ChannelVideosDialogsProps {
   selectedForDeletion: number;
   defaultResolution: string;
   defaultResolutionSource: 'channel' | 'global';
+  defaultAudioFormat?: string | null;
+  defaultAudioFormatSource?: 'channel' | 'global';
   selectedTab: string;
   tabLabel: string;
   onDownloadDialogClose: () => void;
@@ -55,6 +57,8 @@ function ChannelVideosDialogs({
   selectedForDeletion,
   defaultResolution,
   defaultResolutionSource,
+  defaultAudioFormat,
+  defaultAudioFormatSource,
   selectedTab,
   tabLabel,
   onDownloadDialogClose,
@@ -79,11 +83,13 @@ function ChannelVideosDialogs({
         missingVideoCount={missingVideoCount}
         defaultResolution={defaultResolution}
         defaultResolutionSource={defaultResolutionSource}
+        defaultAudioFormat={defaultAudioFormat}
+        defaultAudioFormatSource={defaultAudioFormatSource}
         mode="manual"
         token={token}
       />
 
-      {/* Refresh Confirmation Dialog */}
+      {/* Load More Confirmation Dialog */}
       <Dialog
         open={refreshConfirmOpen}
         onClose={onRefreshCancel}
@@ -91,11 +97,11 @@ function ChannelVideosDialogs({
         aria-describedby="refresh-dialog-description"
       >
         <DialogTitle id="refresh-dialog-title">
-          Refresh All {tabLabel} Videos
+          Load More {tabLabel}
         </DialogTitle>
         <DialogContent>
           <DialogContentText id="refresh-dialog-description">
-            This will refresh all &apos;{tabLabel}&apos; videos for this Channel. This may take some time to complete.
+            This will load up to 5000 additional videos from this channel&apos;s &apos;{tabLabel}&apos; tab on YouTube. <i>This can take quite some time to complete, depending on the size of the channel and your internet connection!</i>
           </DialogContentText>
         </DialogContent>
         <DialogActions>

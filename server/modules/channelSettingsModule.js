@@ -219,6 +219,28 @@ class ChannelSettingsModule {
   }
 
   /**
+   * Validate audio format setting
+   * @param {string|null} audioFormat - Audio format setting to validate
+   * @returns {Object} - { valid: boolean, error?: string }
+   */
+  validateAudioFormat(audioFormat) {
+    // NULL is valid (video only - default)
+    if (audioFormat === null || audioFormat === undefined) {
+      return { valid: true };
+    }
+
+    const validFormats = ['video_mp3', 'mp3_only'];
+    if (!validFormats.includes(audioFormat)) {
+      return {
+        valid: false,
+        error: 'Invalid audio format. Valid values: video_mp3, mp3_only, or null for video only',
+      };
+    }
+
+    return { valid: true };
+  }
+
+  /**
    * Get the full directory path for a channel, including subfolder if set
    * @param {Object} channel - Channel database record
    * @returns {string} - Full directory path
@@ -347,13 +369,13 @@ class ChannelSettingsModule {
       throw new Error(validation.error);
     }
 
-    // Get recent 20 videos for this channel from channelvideos table
+    // Get recent 50 videos for this channel from channelvideos table
     // This table is populated when browsing channel page, before any downloads
     const channelVideos = await ChannelVideo.findAll({
       where: { channel_id: channelId },
       attributes: ['youtube_id', 'title', 'publishedAt'],
       order: [['publishedAt', 'DESC']],
-      limit: 20,
+      limit: 50,
     });
 
     // If no regex pattern provided or empty, all videos match
@@ -440,6 +462,7 @@ class ChannelSettingsModule {
       min_duration: channel.min_duration,
       max_duration: channel.max_duration,
       title_filter_regex: channel.title_filter_regex,
+      audio_format: channel.audio_format,
     };
   }
 
@@ -512,6 +535,14 @@ class ChannelSettingsModule {
       }
     }
 
+    // Validate audio format if provided
+    if (settings.audio_format !== undefined) {
+      const validation = this.validateAudioFormat(settings.audio_format);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+    }
+
     // Store old subfolder for potential move
     const oldSubFolder = channel.sub_folder;
     const newSubFolder = settings.sub_folder !== undefined ?
@@ -539,6 +570,9 @@ class ChannelSettingsModule {
       updateData.title_filter_regex = settings.title_filter_regex
         ? settings.title_filter_regex.trim()
         : null;
+    }
+    if (settings.audio_format !== undefined) {
+      updateData.audio_format = settings.audio_format;
     }
 
     // Update database FIRST to ensure changes are persisted before slow file operations
@@ -584,6 +618,7 @@ class ChannelSettingsModule {
         min_duration: updatedChannel.min_duration,
         max_duration: updatedChannel.max_duration,
         title_filter_regex: updatedChannel.title_filter_regex,
+        audio_format: updatedChannel.audio_format,
       },
       folderMoved: subFolderChanged,
       moveResult

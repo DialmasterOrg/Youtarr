@@ -388,7 +388,9 @@ class DownloadModule {
 
       // Do NOT pass subfolder to download - post-processing handles subfolder routing with __ prefix
       // Pass filter config for channel-specific duration and title filtering
-      const args = YtdlpCommandBuilder.getBaseCommandArgs(group.quality, allowRedownload, null, group.filterConfig);
+      // Pass audioFormat from filterConfig for MP3 downloads
+      const audioFormat = group.filterConfig?.audioFormat || null;
+      const args = YtdlpCommandBuilder.getBaseCommandArgs(group.quality, allowRedownload, null, group.filterConfig, audioFormat);
       args.push('-a', tempChannelsFile);
       args.push('--playlist-end', String(videoCount));
 
@@ -447,15 +449,16 @@ class DownloadModule {
 
       const channelId = this.getJobDataValue(jobData, 'channelId');
 
-      if (!effectiveQuality && channelId) {
+      let channelRecord = null;
+      if (channelId) {
         try {
           const Channel = require('../models/channel');
-          const channelRecord = await Channel.findOne({
+          channelRecord = await Channel.findOne({
             where: { channel_id: channelId },
-            attributes: ['video_quality'],
+            attributes: ['video_quality', 'audio_format'],
           });
 
-          if (channelRecord && channelRecord.video_quality) {
+          if (!effectiveQuality && channelRecord && channelRecord.video_quality) {
             effectiveQuality = channelRecord.video_quality;
           }
         } catch (channelErr) {
@@ -466,13 +469,18 @@ class DownloadModule {
       const resolution = effectiveQuality || configModule.config.preferredResolution || '1080';
       const allowRedownload = overrideSettings.allowRedownload || false;
       const subfolderOverride = overrideSettings.subfolder !== undefined ? overrideSettings.subfolder : null;
+      // Use override audioFormat if explicitly provided (even if null), otherwise fall back to channel's audio_format setting
+      const audioFormat = overrideSettings.audioFormat !== undefined
+        ? overrideSettings.audioFormat
+        : (channelRecord && channelRecord.audio_format) || null;
 
       // Persist resolved quality for any subsequent retries of this job
       this.setJobDataValue(jobData, 'effectiveQuality', resolution);
 
       // For manual downloads, we don't apply duration filters but still exclude members-only
       // Subfolder override is passed to post-processor via environment variable
-      const args = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload(resolution, allowRedownload);
+      // Pass audioFormat for MP3 downloads
+      const args = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload(resolution, allowRedownload, audioFormat);
 
       // Check if any URLs are for videos marked as ignored, and remove them from archive
       // This allows users to manually download videos they've marked to ignore for channel downloads

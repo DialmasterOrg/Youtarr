@@ -126,13 +126,13 @@ describe('ChannelVideosHeader Component', () => {
     });
   });
 
-  describe('Refresh All Button', () => {
-    test('renders refresh all button', () => {
+  describe('Load More Button', () => {
+    test('renders load more button', () => {
       renderWithProviders(<ChannelVideosHeader {...defaultProps} />);
-      expect(screen.getByRole('button', { name: /Refresh All/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Load More/i })).toBeInTheDocument();
     });
 
-    test('calls onRefreshClick when refresh all button is clicked', async () => {
+    test('calls onRefreshClick when load more button is clicked', async () => {
       const user = userEvent.setup();
       const onRefreshClick = jest.fn();
 
@@ -140,33 +140,33 @@ describe('ChannelVideosHeader Component', () => {
         <ChannelVideosHeader {...defaultProps} onRefreshClick={onRefreshClick} />
       );
 
-      await user.click(screen.getByRole('button', { name: /Refresh All/i }));
+      await user.click(screen.getByRole('button', { name: /Load More/i }));
       expect(onRefreshClick).toHaveBeenCalledTimes(1);
     });
 
-    test('disables refresh all button when fetching', () => {
+    test('disables load more button when fetching', () => {
       renderWithProviders(
         <ChannelVideosHeader {...defaultProps} fetchingAllVideos={true} />
       );
 
-      const button = screen.getByRole('button', { name: /Refreshing.../i });
+      const button = screen.getByRole('button', { name: /Loading.../i });
       expect(button).toBeDisabled();
     });
 
-    test('shows "Refreshing..." text when fetching videos', () => {
+    test('shows "Loading..." text when fetching videos', () => {
       renderWithProviders(
         <ChannelVideosHeader {...defaultProps} fetchingAllVideos={true} />
       );
 
-      expect(screen.getByText('Refreshing...')).toBeInTheDocument();
+      expect(screen.getByText('Loading...')).toBeInTheDocument();
     });
 
-    test('shows "Refresh All" text when not fetching', () => {
+    test('shows "Load More" text when not fetching', () => {
       renderWithProviders(
         <ChannelVideosHeader {...defaultProps} fetchingAllVideos={false} />
       );
 
-      expect(screen.getByText('Refresh All')).toBeInTheDocument();
+      expect(screen.getByText('Load More')).toBeInTheDocument();
     });
   });
 

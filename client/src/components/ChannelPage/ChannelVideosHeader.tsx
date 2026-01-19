@@ -13,6 +13,7 @@ import {
   Chip,
   LinearProgress,
   IconButton,
+  Badge,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ViewModuleIcon from '@mui/icons-material/ViewModule';
@@ -23,6 +24,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BlockIcon from '@mui/icons-material/Block';
 import InfoIcon from '@mui/icons-material/Info';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import { getVideoStatus } from '../../utils/videoStatus';
 import { ChannelVideo } from '../../types/ChannelVideo';
 
@@ -53,6 +55,10 @@ interface ChannelVideosHeaderProps {
   onDeleteClick: () => void;
   onBulkIgnoreClick: () => void;
   onInfoIconClick: (tooltip: string) => void;
+  // Filter-related props (desktop only)
+  activeFilterCount?: number;
+  filtersExpanded?: boolean;
+  onFiltersExpandedChange?: (expanded: boolean) => void;
 }
 
 function ChannelVideosHeader({
@@ -80,6 +86,9 @@ function ChannelVideosHeader({
   onDeleteClick,
   onBulkIgnoreClick,
   onInfoIconClick,
+  activeFilterCount = 0,
+  filtersExpanded = false,
+  onFiltersExpandedChange,
 }: ChannelVideosHeaderProps) {
   const renderInfoIcon = (message: string) => {
     const handleClick = (e: React.MouseEvent) => {
@@ -150,7 +159,7 @@ function ChannelVideosHeader({
             disabled={fetchingAllVideos}
             startIcon={<RefreshIcon />}
           >
-            {fetchingAllVideos ? 'Refreshing...' : 'Refresh All'}
+            {fetchingAllVideos ? 'Loading...' : 'Load More'}
           </Button>
         </Box>
 
@@ -236,7 +245,21 @@ function ChannelVideosHeader({
 
         {/* Action buttons for desktop */}
         {!isMobile && (
-          <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+          <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}>
+            {onFiltersExpandedChange && (
+              <Button
+                variant={filtersExpanded ? 'contained' : 'outlined'}
+                size="small"
+                startIcon={
+                  <Badge badgeContent={activeFilterCount} color="primary" invisible={activeFilterCount === 0}>
+                    <FilterListIcon />
+                  </Badge>
+                }
+                onClick={() => onFiltersExpandedChange(!filtersExpanded)}
+              >
+                Filters
+              </Button>
+            )}
             <Button
               variant="contained"
               size="small"
