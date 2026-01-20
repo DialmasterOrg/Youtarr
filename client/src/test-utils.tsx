@@ -40,17 +40,24 @@ export function renderWithProviders(
     },
   });
 
-  return render(
+  const wrap = (node: React.ReactElement) => (
     <MemoryRouter>
       <ThemeEngineProvider>
         <ThemeProvider theme={theme}>
           <WebSocketContext.Provider value={value}>
-            {ui}
+            {node}
           </WebSocketContext.Provider>
         </ThemeProvider>
       </ThemeEngineProvider>
     </MemoryRouter>
   );
+
+  const renderResult = render(wrap(ui));
+
+  return {
+    ...renderResult,
+    rerender: (nextUi: React.ReactElement) => renderResult.rerender(wrap(nextUi)),
+  };
 }
 
 // Enhanced render function with proper theme
@@ -60,17 +67,24 @@ export const customRender = (
 ) => {
   const value = options?.websocketValue ?? createMockWebSocketContext();
 
-  return render(
+  const wrap = (node: React.ReactElement) => (
     <MemoryRouter>
       <ThemeEngineProvider>
         <ThemeProvider theme={lightTheme}>
           <WebSocketContext.Provider value={value}>
-            {ui}
+            {node}
           </WebSocketContext.Provider>
         </ThemeProvider>
       </ThemeEngineProvider>
     </MemoryRouter>
   );
+
+  const renderResult = render(wrap(ui));
+
+  return {
+    ...renderResult,
+    rerender: (nextUi: React.ReactElement) => renderResult.rerender(wrap(nextUi)),
+  };
 };
 
 // Test data factories

@@ -1,6 +1,7 @@
 const path = require('path');
 const configModule = require('../configModule');
 const tempPathManager = require('./tempPathManager');
+const ratingMapper = require('../ratingMapper');
 const {
   CHANNEL_TEMPLATE,
   VIDEO_FOLDER_TEMPLATE,
@@ -263,6 +264,7 @@ class YtdlpCommandBuilder {
    * @returns {string} - Complete match filter string for yt-dlp
    */
   static buildMatchFilters(filterConfig = null) {
+    const config = configModule.getConfig();
     // Base filters - always applied for channel downloads
     const baseFilters = [
       'availability!=subscriber_only',
@@ -281,6 +283,11 @@ class YtdlpCommandBuilder {
     }
 
     const additionalFilters = [];
+
+    const maxRatingLimit = ratingMapper.getRatingAgeLimit(config.maxContentRating);
+    if (maxRatingLimit !== null && maxRatingLimit !== undefined) {
+      additionalFilters.push(`(age_limit is None or age_limit <= ${maxRatingLimit})`);
+    }
 
     // Add duration filters if specified
     if (
@@ -423,13 +430,15 @@ class YtdlpCommandBuilder {
       args.push('--download-archive', './config/complete.list');
     }
 
+    const matchFilter = this.buildMatchFilters();
+
     args.push(
       '--ignore-errors',
       '--embed-metadata',
       '--write-info-json',
       '--no-write-playlist-metafiles',
       '--extractor-args', 'youtubetab:tab=videos;sort=dd',
-      '--match-filter', 'availability!=subscriber_only & !is_live & live_status!=is_upcoming',
+      '--match-filter', matchFilter,
       '-o', outputPath,
       '--datebefore', 'now',
       '-o', `thumbnail:${thumbnailPath}`,

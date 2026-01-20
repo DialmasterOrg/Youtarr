@@ -9,6 +9,7 @@ import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { Channel } from '../types/Channel';
+import RatingBadge from './shared/RatingBadge';
 import ChannelVideos from './ChannelPage/ChannelVideos';
 import ChannelSettingsDialog from './ChannelPage/ChannelSettingsDialog';
 import { isUsingDefaultSubfolder, isExplicitlyNoSubfolder } from '../utils/channelHelpers';
@@ -32,6 +33,7 @@ function ChannelPage({ token }: ChannelPageProps) {
     min_duration: number | null;
     max_duration: number | null;
     title_filter_regex: string | null;
+    default_rating: string | null;
   }) => {
     setChannel((prev) => {
       if (!prev) {
@@ -44,6 +46,7 @@ function ChannelPage({ token }: ChannelPageProps) {
         min_duration: updated.min_duration,
         max_duration: updated.max_duration,
         title_filter_regex: updated.title_filter_regex,
+        default_rating: updated.default_rating,
       };
     });
   };
@@ -131,8 +134,9 @@ function ChannelPage({ token }: ChannelPageProps) {
     const hasQualityOverride = channel.video_quality;
     const hasDurationFilter = channel.min_duration || channel.max_duration;
     const hasRegexFilter = channel.title_filter_regex;
+    const hasDefaultRating = channel.default_rating;
 
-    if (!hasQualityOverride && !hasDurationFilter && !hasRegexFilter) {
+    if (!hasQualityOverride && !hasDurationFilter && !hasRegexFilter && !hasDefaultRating) {
       return null;
     }
 
@@ -183,6 +187,15 @@ function ChannelPage({ token }: ChannelPageProps) {
               }}
             />
           </Tooltip>
+        )}
+
+        {hasDefaultRating && (
+          <RatingBadge
+            rating={channel.default_rating}
+            ratingSource="Channel Default"
+            size="small"
+            sx={{ height: isMobile ? 20 : 24, fontSize: isMobile ? '0.65rem' : '0.75rem' }}
+          />
         )}
 
         {/* Popover for desktop */}

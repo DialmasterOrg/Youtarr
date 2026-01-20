@@ -138,6 +138,8 @@ describe('VideoMetadataProcessor', () => {
         filePath: '/output/directory/Test Channel/Test Channel - Test Video Title - abc123/Test Channel - Test Video Title [abc123].mp4',
         fileSize: '1024000',
         media_type: 'video',
+        normalized_rating: null,
+        rating_source: null,
         removed: false
       });
 
@@ -385,6 +387,8 @@ describe('VideoMetadataProcessor', () => {
         filePath: '/output/directory/Unknown Channel/Unknown Channel - Incomplete Video - incomplete123/Unknown Channel - Incomplete Video [incomplete123].mp4',
         fileSize: null,
         media_type: 'video',
+        normalized_rating: null,
+        rating_source: null,
         removed: false
       });
     });

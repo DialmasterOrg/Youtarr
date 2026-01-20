@@ -5,6 +5,7 @@ const path = require('path');
 const configModule = require('./configModule');
 const fileCheckModule = require('./fileCheckModule');
 const logger = require('../logger');
+const ratingMapper = require('./ratingMapper');
 
 class VideosModule {
   constructor() {}
@@ -18,7 +19,8 @@ class VideosModule {
       dateTo = null,
       sortBy = 'added',
       sortOrder = 'desc',
-      channelFilter = ''
+      channelFilter = '',
+      maxRating = ''
     } = options;
 
     try {
@@ -46,6 +48,21 @@ class VideosModule {
       if (dateTo) {
         whereConditions.push('Videos.originalDate <= :dateTo');
         replacements.dateTo = dateTo.replace(/-/g, '');
+      }
+
+      const maxRatingLimit = ratingMapper.getRatingAgeLimit(maxRating);
+      const ratingRankCase = `CASE
+        WHEN Videos.normalized_rating IN ('TV-Y','TV-G','G') THEN 0
+        WHEN Videos.normalized_rating IN ('TV-Y7','TV-PG','PG') THEN 7
+        WHEN Videos.normalized_rating IN ('TV-14') THEN 13
+        WHEN Videos.normalized_rating IN ('PG-13') THEN 16
+        WHEN Videos.normalized_rating IN ('R','TV-MA','NC-17') THEN 18
+        ELSE NULL
+      END`;
+
+      if (maxRatingLimit !== null && maxRatingLimit !== undefined) {
+        whereConditions.push(`(${ratingRankCase} IS NULL OR ${ratingRankCase} <= :maxRatingLimit)`);
+        replacements.maxRatingLimit = maxRatingLimit;
       }
 
       const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
@@ -91,6 +108,8 @@ class VideosModule {
           Videos.removed,
           Videos.youtube_removed,
           Videos.media_type,
+          Videos.normalized_rating,
+          Videos.rating_source,
           COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) AS timeCreated
         FROM Videos
         LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
@@ -254,6 +273,72 @@ class VideosModule {
       logger.error({ err }, 'Error in getAllUniqueChannels');
       return [];
     }
+  }
+
+  /**
+   * Bulk update video ratings
+   * @param {number[]} videoIds - List of database IDs
+   * @param {string} rating - The new rating value
+   */
+  async bulkUpdateVideoRatings(videoIds, rating) {
+    const results = {
+      success: [],
+      failed: []
+    };
+
+    const nfoGenerator = require('./nfoGenerator');
+    const normalizedRating = rating && rating !== 'NR' ? rating : null;
+
+    for (const id of videoIds) {
+      try {
+        const video = await Video.findByPk(id);
+        if (!video) {
+          results.failed.push({ id, error: 'Video not found' });
+          continue;
+        }
+
+        await video.update({
+          normalized_rating: normalizedRating,
+          rating_source: 'Manual Override'
+        });
+
+        if (video.filePath) {
+          const parsedPath = path.parse(video.filePath);
+          const jsonPath = path.format({
+            dir: parsedPath.dir,
+            name: parsedPath.name,
+            ext: '.info.json'
+          });
+
+          const jsonExists = await fs.access(jsonPath).then(() => true).catch(() => false);
+
+          if (jsonExists) {
+            const content = await fs.readFile(jsonPath, 'utf8');
+            let jsonData;
+            try {
+              jsonData = JSON.parse(content);
+            } catch (parseError) {
+              logger.warn({ parseError, jsonPath }, 'Failed to parse .info.json for rating update');
+              results.success.push(id);
+              continue;
+            }
+
+            jsonData.normalized_rating = normalizedRating;
+            jsonData.rating_source = 'Manual Override';
+
+            await fs.writeFile(jsonPath, JSON.stringify(jsonData, null, 2), 'utf8');
+            nfoGenerator.writeVideoNfoFile(video.filePath, jsonData);
+          }
+        }
+
+        results.success.push(id);
+      } catch (err) {
+        logger.error({ err, videoId: id }, 'Failed to update video rating');
+        results.failed.push({ id, error: err.message });
+      }
+    }
+
+    return results;
   }
 
   async scanForVideoFiles(dir, fileMap = new Map(), duplicates = new Map()) {

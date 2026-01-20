@@ -631,7 +631,8 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     const sortBy = req.query.sortBy || 'date';
     const sortOrder = req.query.sortOrder || 'desc';
     const tabType = req.query.tabType || 'videos';
-    const result = await channelModule.getChannelVideos(channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType);
+    const maxRating = req.query.maxRating || '';
+    const result = await channelModule.getChannelVideos(channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, maxRating);
 
     if (Array.isArray(result)) {
       res.status(200).json({

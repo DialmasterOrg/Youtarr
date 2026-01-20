@@ -110,7 +110,7 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
     req.log.info('Getting videos');
 
     try {
-      const { page, limit, search, dateFrom, dateTo, sortBy, sortOrder, channelFilter } = req.query;
+      const { page, limit, search, dateFrom, dateTo, sortBy, sortOrder, channelFilter, maxRating } = req.query;
 
       const options = {
         page: parseInt(page) || 1,
@@ -120,7 +120,8 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
         dateTo: dateTo || null,
         sortBy: sortBy || 'added',
         sortOrder: sortOrder || 'desc',
-        channelFilter: channelFilter || ''
+        channelFilter: channelFilter || '',
+        maxRating: maxRating || ''
       };
 
       const result = await videosModule.getVideosPaginated(options);
@@ -194,6 +195,50 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
         success: false,
         error: error.message
       });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/videos/rating:
+   *   post:
+   *     summary: Update content ratings for videos
+   *     description: Bulk update content ratings for selected videos.
+   *     tags: [Videos]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               videoIds:
+   *                 type: array
+   *                 items:
+   *                   type: integer
+   *               rating:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: Ratings updated successfully
+   *       400:
+   *         description: Invalid request
+   *       500:
+   *         description: Failed to update ratings
+   */
+  router.post('/api/videos/rating', verifyToken, async (req, res) => {
+    try {
+      const { videoIds, rating } = req.body;
+
+      if (!videoIds || !Array.isArray(videoIds) || videoIds.length === 0) {
+        return res.status(400).json({ error: 'videoIds array is required' });
+      }
+
+      const result = await videosModule.bulkUpdateVideoRatings(videoIds, rating);
+      return res.json(result);
+    } catch (error) {
+      req.log.error({ err: error }, 'Failed to update video ratings');
+      return res.status(500).json({ error: error.message });
     }
   });
 

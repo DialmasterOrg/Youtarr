@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Alert,
   Box,
@@ -91,13 +91,20 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
   const [regexPopoverAnchor, setRegexPopoverAnchor] = useState<{ el: HTMLElement; regex: string } | null>(null);
   const [folderMenuAnchor, setFolderMenuAnchor] = useState<null | HTMLElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const pageSize = useMemo(() => {
+    if (viewMode === 'list') {
+      return 25;
+    }
     if (isMobile) {
       return 16;
     }
-    return viewMode === 'grid' ? 27 : 20;
+    return 27;
   }, [isMobile, viewMode]);
+
+  const useInfiniteScroll = viewMode === 'list';
 
   const {
     channels: serverChannels,
@@ -114,6 +121,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
     searchTerm: filterValue,
     sortOrder,
     subFolder: selectedSubFolder || undefined,
+    append: useInfiniteScroll,
   });
 
   const {
@@ -170,6 +178,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const hasPendingAdditions = pendingAdditions.length > 0;
 
   const pageCount = Math.max(totalPages, 1);
+  const hasNextPage = page < pageCount;
 
   const showDesktopListColumns = !isMobile && viewMode === 'list';
   const listColumnLabels = ['Channel', 'Quality / Folder', 'Auto downloads', 'Filters'];
@@ -198,6 +207,35 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
       setPage(pageCount);
     }
   }, [page, pageCount]);
+
+  useEffect(() => {
+    if (!useInfiniteScroll || !loadMoreRef.current || !scrollContainerRef.current) {
+      return;
+    }
+    if (loading || !hasNextPage) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting && !loading && hasNextPage) {
+          setPage((prev) => prev + 1);
+        }
+      },
+      {
+        root: scrollContainerRef.current,
+        rootMargin: '25% 0px',
+        threshold: 0,
+      }
+    );
+
+    observer.observe(loadMoreRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [useInfiniteScroll, loading, hasNextPage]);
 
   const handleMessage = useCallback(() => {
     if (!hasPendingChanges) {
@@ -436,15 +474,27 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
 
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             {loading ? (
-              <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <Box
+                sx={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: 1,
+                }}
+              >
                 <CircularProgress />
+                <Typography variant="body2" color="text.secondary">
+                  Syncing channels...
+                </Typography>
               </Box>
             ) : displayChannels.length === 0 ? (
               <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography color="text.secondary">No channels found. Try adjusting your filter.</Typography>
               </Box>
             ) : (
-              <Box sx={{ flex: 1, overflowY: 'auto', pr: { md: 1 }, pb: 2 }}>
+              <Box ref={scrollContainerRef} sx={{ flex: 1, overflowY: 'auto', pr: { md: 1 }, pb: 2 }}>
                 {viewMode === 'list' ? (
                   <List disablePadding>
                     {showDesktopListColumns && (
@@ -506,32 +556,49 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
                     </Grid>
                   </Box>
                 )}
+                {useInfiniteScroll && (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, pt: 1 }}>
+                    <Box ref={loadMoreRef} sx={{ height: 1 }} />
+                    {loading && displayChannels.length > 0 && (
+                      <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+                        <CircularProgress size={20} />
+                      </Box>
+                    )}
+                    {!hasNextPage && displayChannels.length > 0 && (
+                      <Typography variant="caption" color="text.secondary" align="center" sx={{ pb: 1 }}>
+                        You&apos;re all caught up.
+                      </Typography>
+                    )}
+                  </Box>
+                )}
               </Box>
             )}
 
-            <Box
-              sx={{
-                position: 'sticky',
-                bottom: 0,
-                borderTop: '1px solid',
-                borderColor: 'divider',
-                pt: isMobile ? 1 : 1.5,
-                pb: isMobile ? 1 : 1.5,
-                bgcolor: 'background.paper',
-                display: 'flex',
-                justifyContent: 'center',
-                zIndex: 1,
-              }}
-            >
-              <Pagination
-                count={pageCount}
-                page={page}
-                color="primary"
-                onChange={(_, value) => setPage(value)}
-                showFirstButton
-                showLastButton
-              />
-            </Box>
+            {!useInfiniteScroll && (
+              <Box
+                sx={{
+                  position: 'sticky',
+                  bottom: 0,
+                  borderTop: '1px solid',
+                  borderColor: 'divider',
+                  pt: isMobile ? 1 : 1.5,
+                  pb: isMobile ? 1 : 1.5,
+                  bgcolor: 'background.paper',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  zIndex: 1,
+                }}
+              >
+                <Pagination
+                  count={pageCount}
+                  page={page}
+                  color="primary"
+                  onChange={(_, value) => setPage(value)}
+                  showFirstButton
+                  showLastButton
+                />
+              </Box>
+            )}
           </Box>
         </Box>
       </Card>

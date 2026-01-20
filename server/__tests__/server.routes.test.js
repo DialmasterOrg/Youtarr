@@ -813,7 +813,8 @@ describe('server routes - channels', () => {
         '',   // default searchQuery
         'date', // default sortBy
         'desc', // default sortOrder
-        'videos' // default tabType
+        'videos', // default tabType
+        '' // default maxRating
       );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -875,7 +876,8 @@ describe('server routes - channels', () => {
         'test search',
         'title',
         'asc',
-        'videos' // default tabType
+        'videos', // default tabType
+        ''
       );
       expect(res.statusCode).toBe(200);
     });
@@ -910,7 +912,8 @@ describe('server routes - channels', () => {
         '',
         'date',
         'desc',
-        'shorts'
+        'shorts',
+        ''
       );
       expect(res.statusCode).toBe(200);
     });
@@ -1189,7 +1192,8 @@ describe('server routes - videos', () => {
         dateTo: null,
         sortBy: 'added',
         sortOrder: 'desc',
-        channelFilter: ''
+        channelFilter: '',
+        maxRating: ''
       });
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -1236,7 +1240,8 @@ describe('server routes - videos', () => {
         dateTo: '2024-12-31',
         sortBy: 'title',
         sortOrder: 'asc',
-        channelFilter: 'channel123'
+        channelFilter: 'channel123',
+        maxRating: ''
       });
       expect(res.statusCode).toBe(200);
     });

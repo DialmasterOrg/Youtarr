@@ -20,6 +20,8 @@ export interface VideoData {
   youtube_removed?: boolean;
   channel_id?: string | null;
   media_type?: string;
+  normalized_rating?: string | null;
+  rating_source?: string | null;
 }
 
 export interface EnabledChannel {

@@ -7,6 +7,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import WebSocketContext from '../src/contexts/WebSocketContext';
+import { ThemeEngineProvider } from '../src/contexts/ThemeEngineContext';
 import { lightTheme, darkTheme } from '../src/theme';
 import { DEFAULT_CONFIG } from '../src/config/configSchema';
 
@@ -134,12 +135,14 @@ const preview: Preview = {
 
       return (
         <LocalizationProvider dateAdapter={AdapterDateFns}>
-          <ThemeProvider theme={selectedTheme}>
-            <CssBaseline />
-            <WebSocketContext.Provider value={mockWebSocketContext}>
-              <Story />
-            </WebSocketContext.Provider>
-          </ThemeProvider>
+          <ThemeEngineProvider>
+            <ThemeProvider theme={selectedTheme}>
+              <CssBaseline />
+              <WebSocketContext.Provider value={mockWebSocketContext}>
+                <Story />
+              </WebSocketContext.Provider>
+            </ThemeProvider>
+          </ThemeEngineProvider>
         </LocalizationProvider>
       );
     },

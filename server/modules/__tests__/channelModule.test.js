@@ -442,6 +442,7 @@ describe('ChannelModule', () => {
           min_duration: null,
           max_duration: null,
           title_filter_regex: null,
+          default_rating: null,
         });
       });
 
@@ -611,7 +612,11 @@ describe('ChannelModule', () => {
           media_type: 'video',
           publishedAt: mockVideoData.publishedAt,
           availability: mockVideoData.availability,
-          live_status: null
+          live_status: null,
+          content_rating: null,
+          age_limit: null,
+          normalized_rating: null,
+          rating_source: null
         });
       });
 
@@ -788,7 +793,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2', 'video3']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'normalized_rating']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -817,7 +822,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'normalized_rating']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -874,7 +879,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'normalized_rating']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -903,7 +908,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2', 'video3']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'normalized_rating']
         });
 
         // Video1 - not downloaded
@@ -931,7 +936,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: []
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'normalized_rating']
         });
         expect(result).toEqual([]);
       });
@@ -1037,7 +1042,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'normalized_rating']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -1372,7 +1377,11 @@ describe('ChannelModule', () => {
           duration: 300,
           media_type: 'video',
           availability: 'public',
-          live_status: 'not_live'
+          live_status: 'not_live',
+          content_rating: null,
+          age_limit: null,
+          normalized_rating: null,
+          rating_source: null
         });
       });
 
@@ -1391,7 +1400,11 @@ describe('ChannelModule', () => {
           duration: 0,
           media_type: 'video',
           availability: null,
-          live_status: null
+          live_status: null,
+          content_rating: null,
+          age_limit: null,
+          normalized_rating: null,
+          rating_source: null
         });
       });
 
@@ -1597,6 +1610,7 @@ describe('ChannelModule', () => {
             min_duration: null,
             max_duration: null,
             title_filter_regex: null,
+            default_rating: null,
           },
           {
             url: 'https://youtube.com/@channel2',
@@ -1609,6 +1623,7 @@ describe('ChannelModule', () => {
             min_duration: null,
             max_duration: null,
             title_filter_regex: null,
+            default_rating: null,
           }
         ]);
       });
@@ -1694,6 +1709,7 @@ describe('ChannelModule', () => {
               min_duration: null,
               max_duration: null,
               title_filter_regex: null,
+              default_rating: null,
             }
           ],
           total: 25,

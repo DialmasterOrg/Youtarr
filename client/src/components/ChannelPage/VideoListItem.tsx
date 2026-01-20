@@ -22,6 +22,7 @@ import { formatFileSize, decodeHtml } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
 
+import RatingBadge from '../shared/RatingBadge';
 interface VideoListItemProps {
   video: ChannelVideo;
   checkedBoxes: string[];

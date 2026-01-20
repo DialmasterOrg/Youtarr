@@ -28,6 +28,7 @@ export const CONFIG_FIELDS = {
   preferredResolution: { default: '1080', trackChanges: true },
   videoCodec: { default: 'default', trackChanges: true },
   defaultSubfolder: { default: '', trackChanges: true },
+  maxContentRating: { default: '', trackChanges: true },
 
   // Plex integration
   plexApiKey: { default: '', trackChanges: true },
@@ -122,6 +123,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   preferredResolution: CONFIG_FIELDS.preferredResolution.default,
   videoCodec: CONFIG_FIELDS.videoCodec.default,
   defaultSubfolder: CONFIG_FIELDS.defaultSubfolder.default,
+  maxContentRating: CONFIG_FIELDS.maxContentRating.default,
   plexApiKey: CONFIG_FIELDS.plexApiKey.default,
   plexYoutubeLibraryId: CONFIG_FIELDS.plexYoutubeLibraryId.default,
   plexIP: CONFIG_FIELDS.plexIP.default,

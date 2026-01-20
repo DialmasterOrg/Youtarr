@@ -4,6 +4,7 @@ const Channel = require('../models/channel');
 const configModule = require('./configModule');
 const { Op } = require('sequelize');
 const logger = require('../logger');
+const ratingMapper = require('./ratingMapper');
 const {
   GLOBAL_DEFAULT_SENTINEL,
   ROOT_SENTINEL,
@@ -213,6 +214,33 @@ class ChannelSettingsModule {
         valid: false,
         error: `Invalid Python regex pattern: ${err.message}`,
       };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Validate default rating override
+   * @param {string|null} defaultRating - Default rating value
+   * @returns {Object} - { valid: boolean, error?: string }
+   */
+  validateDefaultRating(defaultRating) {
+    if (defaultRating === null || defaultRating === undefined || defaultRating === '') {
+      return { valid: true };
+    }
+
+    const trimmed = String(defaultRating).trim();
+    if (!trimmed) {
+      return { valid: true };
+    }
+
+    if (trimmed.toUpperCase() === 'NR') {
+      return { valid: true };
+    }
+
+    const allowedRatings = Object.keys(ratingMapper.RATING_AGE_LIMITS);
+    if (!allowedRatings.includes(trimmed.toUpperCase())) {
+      return { valid: false, error: 'Invalid default rating value' };
     }
 
     return { valid: true };
@@ -440,6 +468,7 @@ class ChannelSettingsModule {
       min_duration: channel.min_duration,
       max_duration: channel.max_duration,
       title_filter_regex: channel.title_filter_regex,
+      default_rating: channel.default_rating || null,
     };
   }
 
@@ -512,6 +541,13 @@ class ChannelSettingsModule {
       }
     }
 
+    if (settings.default_rating !== undefined) {
+      const validation = this.validateDefaultRating(settings.default_rating);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+    }
+
     // Store old subfolder for potential move
     const oldSubFolder = channel.sub_folder;
     const newSubFolder = settings.sub_folder !== undefined ?
@@ -538,6 +574,11 @@ class ChannelSettingsModule {
     if (settings.title_filter_regex !== undefined) {
       updateData.title_filter_regex = settings.title_filter_regex
         ? settings.title_filter_regex.trim()
+        : null;
+    }
+    if (settings.default_rating !== undefined) {
+      updateData.default_rating = settings.default_rating
+        ? String(settings.default_rating).trim()
         : null;
     }
 
@@ -584,6 +625,7 @@ class ChannelSettingsModule {
         min_duration: updatedChannel.min_duration,
         max_duration: updatedChannel.max_duration,
         title_filter_regex: updatedChannel.title_filter_regex,
+        default_rating: updatedChannel.default_rating || null,
       },
       folderMoved: subFolderChanged,
       moveResult

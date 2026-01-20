@@ -4,6 +4,7 @@ const { execSync, spawnSync } = require('child_process');
 const configModule = require('./configModule');
 const channelSettingsModule = require('./channelSettingsModule');
 const nfoGenerator = require('./nfoGenerator');
+const ratingMapper = require('./ratingMapper');
 const tempPathManager = require('./download/tempPathManager');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { JobVideoDownload } = require('../models');
@@ -122,6 +123,17 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     // Read the JSON file to get the upload_date
     const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
 
+    // Extract and map rating information
+    const contentRating = jsonData.contentRating || jsonData.content_rating || null;
+    const ageLimit = jsonData.age_limit || null;
+    const ratingInfo = ratingMapper.mapFromEntry(contentRating, ageLimit);
+    jsonData.content_rating = contentRating;
+    jsonData.age_limit = ageLimit;
+    if (ratingInfo.normalized_rating) {
+      jsonData.normalized_rating = ratingInfo.normalized_rating;
+      jsonData.rating_source = ratingInfo.source;
+    }
+
     // Parse the upload_date (format: YYYYMMDD) into a Date object
     let uploadDate = null;
     if (jsonData.upload_date) {
@@ -192,10 +204,23 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         const Channel = require('../models/channel');
         let channel = await Channel.findOne({
           where: { channel_id: jsonData.channel_id },
-          attributes: ['id', 'sub_folder', 'uploader', 'folder_name']
+          attributes: ['id', 'sub_folder', 'uploader', 'folder_name', 'default_rating']
         });
 
         if (channel) {
+          // Apply channel-level default rating if none exists in metadata
+          if (!jsonData.normalized_rating) {
+            const mapped = ratingMapper.mapFromEntry(jsonData.content_rating, jsonData.age_limit);
+            if (mapped.normalized_rating) {
+              jsonData.normalized_rating = mapped.normalized_rating;
+              jsonData.rating_source = mapped.source;
+            } else if (channel.default_rating && channel.default_rating !== 'NR') {
+              jsonData.normalized_rating = channel.default_rating;
+              jsonData.rating_source = 'Channel Default';
+              console.log(`[Post-Process] Applying channel default rating: ${channel.default_rating}`);
+            }
+          }
+
           // Tracked channel - resolve effective subfolder using centralized logic
           channelSubFolder = channelSettingsModule.resolveEffectiveSubfolder(channel.sub_folder);
 
@@ -322,6 +347,18 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         ffmpegArgs.push('-metadata', `date=${releaseDate}`);
         ffmpegArgs.push('-metadata', `year=${year}`);
         ffmpegArgs.push('-metadata', `originaldate=${releaseDate}`);
+      }
+
+      // Add rating metadata if available
+      if (jsonData.normalized_rating) {
+        ffmpegArgs.push('-metadata', `rating=${jsonData.normalized_rating}`);
+      }
+      if (jsonData.content_rating) {
+        const ratingSource = jsonData.rating_source || 'youtube';
+        ffmpegArgs.push('-metadata', `content_rating=${ratingSource}`);
+      }
+      if (jsonData.age_limit) {
+        ffmpegArgs.push('-metadata', `age_limit=${jsonData.age_limit}`);
       }
 
       // Add media type hint for Plex (9 = Home Video)

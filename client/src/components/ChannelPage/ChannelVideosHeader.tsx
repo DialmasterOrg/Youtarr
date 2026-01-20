@@ -13,6 +13,10 @@ import {
   Chip,
   LinearProgress,
   IconButton,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ViewModuleIcon from '@mui/icons-material/ViewModule';
@@ -25,6 +29,7 @@ import BlockIcon from '@mui/icons-material/Block';
 import InfoIcon from '@mui/icons-material/Info';
 import { getVideoStatus } from '../../utils/videoStatus';
 import { ChannelVideo } from '../../types/ChannelVideo';
+import { RATING_OPTIONS } from '../../utils/ratings';
 
 type ViewMode = 'table' | 'grid' | 'list';
 
@@ -42,6 +47,7 @@ interface ChannelVideosHeaderProps {
   paginatedVideos: ChannelVideo[];
   autoDownloadsEnabled: boolean;
   selectedTab: string;
+  maxRating: string;
   onViewModeChange: (event: React.MouseEvent<HTMLElement>, newMode: ViewMode | null) => void;
   onSearchChange: (query: string) => void;
   onHideDownloadedChange: (hide: boolean) => void;
@@ -53,6 +59,7 @@ interface ChannelVideosHeaderProps {
   onDeleteClick: () => void;
   onBulkIgnoreClick: () => void;
   onInfoIconClick: (tooltip: string) => void;
+  onMaxRatingChange: (value: string) => void;
 }
 
 function ChannelVideosHeader({
@@ -69,6 +76,7 @@ function ChannelVideosHeader({
   paginatedVideos,
   autoDownloadsEnabled,
   selectedTab,
+  maxRating,
   onViewModeChange,
   onSearchChange,
   onHideDownloadedChange,
@@ -80,6 +88,7 @@ function ChannelVideosHeader({
   onDeleteClick,
   onBulkIgnoreClick,
   onInfoIconClick,
+  onMaxRatingChange,
 }: ChannelVideosHeaderProps) {
   const renderInfoIcon = (message: string) => {
     const handleClick = (e: React.MouseEvent) => {
@@ -191,6 +200,21 @@ function ChannelVideosHeader({
             }}
             sx={{ flexGrow: 1, minWidth: 200, width: isMobile ? '50%' : 'auto' }}
           />
+
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <InputLabel>Max Rating</InputLabel>
+            <Select
+              value={maxRating}
+              label="Max Rating"
+              onChange={(event) => onMaxRatingChange(event.target.value)}
+            >
+              {RATING_OPTIONS.map(option => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
           {/* View mode toggle - mobile shows list/grid, desktop shows table/grid */}
           <ToggleButtonGroup

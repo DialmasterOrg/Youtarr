@@ -29,6 +29,7 @@ import InfoIcon from '@mui/icons-material/Info';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { useConfig } from '../../hooks/useConfig';
 import { SubfolderAutocomplete } from '../shared/SubfolderAutocomplete';
+import { RATING_OPTIONS } from '../../utils/ratings';
 
 interface ChannelSettings {
   sub_folder: string | null;
@@ -36,6 +37,7 @@ interface ChannelSettings {
   min_duration: number | null;
   max_duration: number | null;
   title_filter_regex: string | null;
+  default_rating: string | null;
 }
 
 interface FilterPreviewVideo {
@@ -91,14 +93,16 @@ function ChannelSettingsDialog({
     video_quality: null,
     min_duration: null,
     max_duration: null,
-    title_filter_regex: null
+    title_filter_regex: null,
+    default_rating: null
   });
   const [originalSettings, setOriginalSettings] = useState<ChannelSettings>({
     sub_folder: null,
     video_quality: null,
     min_duration: null,
     max_duration: null,
-    title_filter_regex: null
+    title_filter_regex: null,
+    default_rating: null
   });
   const [subfolders, setSubfolders] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -170,11 +174,12 @@ function ChannelSettingsDialog({
 
         const settingsData = await settingsResponse.json();
         const loadedSettings = {
-          sub_folder: settingsData.sub_folder || null,
-          video_quality: settingsData.video_quality || null,
-          min_duration: settingsData.min_duration || null,
-          max_duration: settingsData.max_duration || null,
-          title_filter_regex: settingsData.title_filter_regex || null
+          sub_folder: settingsData.sub_folder ?? null,
+          video_quality: settingsData.video_quality ?? null,
+          min_duration: settingsData.min_duration ?? null,
+          max_duration: settingsData.max_duration ?? null,
+          title_filter_regex: settingsData.title_filter_regex ?? null,
+          default_rating: settingsData.default_rating ?? null
         };
         setSettings(loadedSettings);
         setOriginalSettings(loadedSettings);
@@ -229,7 +234,8 @@ function ChannelSettingsDialog({
           video_quality: settings.video_quality || null,
           min_duration: settings.min_duration,
           max_duration: settings.max_duration,
-          title_filter_regex: settings.title_filter_regex || null
+          title_filter_regex: settings.title_filter_regex || null,
+          default_rating: settings.default_rating || null
         })
       });
 
@@ -256,7 +262,8 @@ function ChannelSettingsDialog({
         video_quality: result?.settings?.video_quality ?? settings.video_quality ?? null,
         min_duration: result?.settings?.min_duration ?? settings.min_duration ?? null,
         max_duration: result?.settings?.max_duration ?? settings.max_duration ?? null,
-        title_filter_regex: result?.settings?.title_filter_regex ?? settings.title_filter_regex ?? null
+        title_filter_regex: result?.settings?.title_filter_regex ?? settings.title_filter_regex ?? null,
+        default_rating: result?.settings?.default_rating ?? settings.default_rating ?? null
       };
 
       setSettings(updatedSettings);
@@ -294,7 +301,8 @@ function ChannelSettingsDialog({
            settings.video_quality !== originalSettings.video_quality ||
            settings.min_duration !== originalSettings.min_duration ||
            settings.max_duration !== originalSettings.max_duration ||
-           settings.title_filter_regex !== originalSettings.title_filter_regex;
+           settings.title_filter_regex !== originalSettings.title_filter_regex ||
+           settings.default_rating !== originalSettings.default_rating;
   };
 
   const handlePreviewFilter = async () => {
@@ -515,6 +523,36 @@ function ChannelSettingsDialog({
                 <InfoIcon fontSize="small" />
               </IconButton>
             </Box>
+
+            <Divider sx={{ my: 2 }} />
+
+            <Typography variant="h6" sx={{ mb: 1 }}>
+              Content Ratings
+            </Typography>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <Typography variant="body2">
+                Set a default rating for this channel when a video has no rating metadata.
+              </Typography>
+            </Alert>
+
+            <FormControl fullWidth>
+              <InputLabel>Default Rating</InputLabel>
+              <Select
+                value={settings.default_rating || ''}
+                label="Default Rating"
+                onChange={(event) => setSettings({
+                  ...settings,
+                  default_rating: event.target.value || null
+                })}
+              >
+                <MenuItem value="">No Override</MenuItem>
+                {RATING_OPTIONS.filter(option => option.value !== '').map(option => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
             {/* Regex examples toggle and collapsible section */}
             <Box sx={{ display: 'flex', alignItems: 'center' }}>

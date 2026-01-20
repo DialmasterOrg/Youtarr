@@ -6,6 +6,7 @@
   "preferredResolution": "1080",
   "videoCodec": "default",
   "defaultSubfolder": "",
+  "maxContentRating": "",
   "plexIP": "",
   "plexPort": "32400",
   "plexViaHttps": false,

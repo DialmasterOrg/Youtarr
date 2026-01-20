@@ -10,6 +10,7 @@ interface UseChannelListParams {
   searchTerm: string;
   sortOrder: 'asc' | 'desc';
   subFolder?: string;
+  append?: boolean;
 }
 
 interface ChannelListResponse {
@@ -27,6 +28,7 @@ export const useChannelList = ({
   searchTerm,
   sortOrder,
   subFolder,
+  append = false,
 }: UseChannelListParams) => {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [total, setTotal] = useState(0);
@@ -35,12 +37,28 @@ export const useChannelList = ({
   const [error, setError] = useState<string | null>(null);
   const [subFolders, setSubFolders] = useState<string[]>([]);
   const isMountedRef = useRef(true);
+  const filterKeyRef = useRef('');
+
+  const filterKey = JSON.stringify({ token, searchTerm, sortOrder, subFolder, pageSize });
 
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!append) {
+      filterKeyRef.current = filterKey;
+      return;
+    }
+    if (filterKeyRef.current !== filterKey) {
+      filterKeyRef.current = filterKey;
+      setChannels([]);
+      setTotal(0);
+      setTotalPages(0);
+    }
+  }, [append, filterKey]);
 
   const fetchChannels = useCallback(async () => {
     if (!token) {
@@ -90,7 +108,19 @@ export const useChannelList = ({
         : 0;
       const rawSubFolders = (payload?.subFolders || payload?.subfolders || []) as Array<string | null>;
 
-      setChannels(rawChannels || []);
+      setChannels((prev) => {
+        if (!append || page === 1) {
+          return rawChannels || [];
+        }
+        const combined = [...prev, ...(rawChannels || [])];
+        const seen = new Set<string>();
+        return combined.filter((channel) => {
+          const key = channel.channel_id ? String(channel.channel_id) : channel.url;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      });
       setTotal(rawTotal || 0);
       setTotalPages(rawTotalPages || 0);
       setSubFolders(rawSubFolders.map((value) => normalizeSubFolderKey(value)).filter(Boolean));
@@ -98,17 +128,19 @@ export const useChannelList = ({
       const message = err?.response?.data?.error || 'Failed to load channels';
       if (isMountedRef.current) {
         setError(message);
-        setChannels([]);
-        setTotal(0);
-        setTotalPages(0);
-        setSubFolders([]);
+        if (!append || page === 1) {
+          setChannels([]);
+          setTotal(0);
+          setTotalPages(0);
+          setSubFolders([]);
+        }
       }
     } finally {
       if (isMountedRef.current) {
         setLoading(false);
       }
     }
-  }, [token, page, pageSize, searchTerm, sortOrder, subFolder]);
+  }, [token, page, pageSize, searchTerm, sortOrder, subFolder, append]);
 
   useEffect(() => {
     fetchChannels();

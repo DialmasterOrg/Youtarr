@@ -81,6 +81,11 @@ Channel.init(
       allowNull: true,
       defaultValue: null,
     },
+    default_rating: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      defaultValue: null,
+    },
   },
   {
     sequelize,

@@ -36,6 +36,7 @@ import { useThemeEngine } from '../../../contexts/ThemeEngineContext';
 import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../types';
 import { reverseFrequencyMapping, getChannelFilesOptions } from '../helpers';
 import { FREQUENCY_MAPPING } from '../constants';
+import { RATING_OPTIONS } from '../../../utils/ratings';
 
 interface CoreSettingsSectionProps {
   config: ConfigState;
@@ -305,6 +306,31 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
             />
             <InfoTooltip
               text="Set the default download location for untracked channels and channels using 'Default Subfolder'. Leave empty to download to the root directory by default."
+              onMobileClick={onMobileTooltipClick}
+            />
+          </Box>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <FormControl fullWidth>
+              <InputLabel>Max Content Rating</InputLabel>
+              <Select
+                value={config.maxContentRating}
+                onChange={(e: SelectChangeEvent<string>) =>
+                  onConfigChange({ maxContentRating: e.target.value })
+                }
+                label="Max Content Rating"
+              >
+                {RATING_OPTIONS.map(option => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <InfoTooltip
+              text="Globally block videos above this content rating during downloads. Applies to channel and manual downloads."
               onMobileClick={onMobileTooltipClick}
             />
           </Box>

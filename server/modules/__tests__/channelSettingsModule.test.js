@@ -545,7 +545,8 @@ describe('ChannelSettingsModule', () => {
         video_quality: '1080',
         min_duration: 60,
         max_duration: 3600,
-        title_filter_regex: 'test.*'
+        title_filter_regex: 'test.*',
+        default_rating: null
       });
     });
 

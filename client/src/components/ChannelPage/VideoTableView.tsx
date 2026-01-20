@@ -22,6 +22,7 @@ import { ChannelVideo } from '../../types/ChannelVideo';
 import { formatFileSize, decodeHtml } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
+import RatingBadge from '../shared/RatingBadge';
 
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
@@ -98,6 +99,7 @@ function VideoTableView({
                 )}
               </Box>
             </TableCell>
+            <TableCell>Rating</TableCell>
             <TableCell onClick={() => onSortChange('size')} sx={{ cursor: 'pointer' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 Size
@@ -225,6 +227,14 @@ function VideoTableView({
                 </TableCell>
                 <TableCell>
                   {video.media_type === 'short' ? 'N/A' : formatDuration(video.duration)}
+                </TableCell>
+                <TableCell>
+                  <RatingBadge
+                    rating={video.normalized_rating}
+                    ratingSource={video.rating_source}
+                    showNA={true}
+                    size="small"
+                  />
                 </TableCell>
                 <TableCell>
                   {video.fileSize ? formatFileSize(video.fileSize) : '-'}

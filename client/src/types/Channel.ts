@@ -11,4 +11,5 @@ export interface Channel {
   min_duration?: number | null;
   max_duration?: number | null;
   title_filter_regex?: string | null;
+  default_rating?: string | null;
 }

@@ -8,6 +8,7 @@ const os = require('os');
 const Channel = require('../models/channel');
 const ChannelVideo = require('../models/channelvideo');
 const MessageEmitter = require('./messageEmitter.js');
+const ratingMapper = require('./ratingMapper');
 const { Op, fn, col, where } = require('sequelize');
 const fileCheckModule = require('./fileCheckModule');
 const logger = require('../logger');
@@ -257,6 +258,7 @@ class ChannelModule {
       min_duration: channel.min_duration || null,
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
+      default_rating: channel.default_rating || null,
     };
   }
 
@@ -277,6 +279,7 @@ class ChannelModule {
       min_duration: channel.min_duration || null,
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
+      default_rating: channel.default_rating || null,
     };
   }
 
@@ -1178,6 +1181,10 @@ class ChannelModule {
           media_type: mediaType,
           live_status: video.live_status || null,
           publishedAt: video.publishedAt || syntheticPublishedAt,
+          content_rating: video.content_rating || null,
+          age_limit: video.age_limit || null,
+          normalized_rating: video.normalized_rating || null,
+          rating_source: video.rating_source || null,
         };
 
         await videoRecord.update(updates);
@@ -1203,7 +1210,7 @@ class ChannelModule {
       where: {
         youtubeId: youtubeIds
       },
-      attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath']
+      attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'normalized_rating']
     });
 
     // Create Maps for O(1) lookup of download status
@@ -1216,7 +1223,8 @@ class ChannelModule {
         added: true,
         removed: v.removed,
         fileSize: v.fileSize,
-        filePath: v.filePath
+        filePath: v.filePath,
+        normalized_rating: v.normalized_rating
       });
 
       // Collect videos that need file checking (only if checkFiles is true)
@@ -1254,6 +1262,9 @@ class ChannelModule {
         plainVideoObject.added = true;
         plainVideoObject.removed = status.removed;
         plainVideoObject.fileSize = status.fileSize;
+        if (status.normalized_rating) {
+          plainVideoObject.normalized_rating = status.normalized_rating;
+        }
       } else {
         // Video never downloaded
         plainVideoObject.added = false;
@@ -1280,11 +1291,12 @@ class ChannelModule {
    * @param {string} searchQuery - Search query to filter videos by title (default '')
    * @param {string} sortBy - Field to sort by: 'date', 'title', 'duration', 'size' (default 'date')
    * @param {string} sortOrder - Sort order: 'asc' or 'desc' (default 'desc')
-   * @param {boolean} checkFiles - Whether to check file existence for current page (default false)
-   * @param {string} mediaType - Media type to filter by: 'video', 'short', 'livestream' (default 'video')
+  * @param {boolean} checkFiles - Whether to check file existence for current page (default false)
+  * @param {string} mediaType - Media type to filter by: 'video', 'short', 'livestream' (default 'video')
+  * @param {string} maxRating - Maximum allowed rating filter (default '')
    * @returns {Promise<Array>} - Array of video objects with download status
    */
-  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, excludeDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video') {
+  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, excludeDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video', maxRating = '') {
     // First get all videos to enrich with download status
     const allChannelVideos = await ChannelVideo.findAll({
       where: {
@@ -1310,6 +1322,14 @@ class ChannelModule {
       filteredVideos = filteredVideos.filter(video =>
         video.title && video.title.toLowerCase().includes(searchLower)
       );
+    }
+
+    const maxRatingLimit = ratingMapper.getRatingAgeLimit(maxRating);
+    if (maxRatingLimit !== null && maxRatingLimit !== undefined) {
+      filteredVideos = filteredVideos.filter(video => {
+        const videoLimit = ratingMapper.getRatingAgeLimit(video.normalized_rating);
+        return videoLimit === null || videoLimit <= maxRatingLimit;
+      });
     }
 
     // Apply sorting
@@ -1349,7 +1369,10 @@ class ChannelModule {
         availability: v.availability,
         youtube_removed: v.youtube_removed,
         ignored: v.ignored,
-        ignored_at: v.ignored_at
+        ignored_at: v.ignored_at,
+        normalized_rating: v.normalized_rating,
+        media_type: v.media_type,
+        live_status: v.live_status
       }));
 
       // This will check files for only the current page
@@ -1378,10 +1401,11 @@ class ChannelModule {
    * @param {string} channelId - Channel ID
    * @param {boolean} excludeDownloaded - Whether to exclude downloaded videos (default false)
    * @param {string} searchQuery - Search query to filter videos by title (default '')
-   * @param {string} mediaType - Media type to filter by: 'video', 'short', 'livestream' (default 'video')
+  * @param {string} mediaType - Media type to filter by: 'video', 'short', 'livestream' (default 'video')
+  * @param {string} maxRating - Maximum allowed rating filter (default '')
    * @returns {Promise<Object>} - Object with totalCount and oldestVideoDate
    */
-  async getChannelVideoStats(channelId, excludeDownloaded = false, searchQuery = '', mediaType = 'video') {
+  async getChannelVideoStats(channelId, excludeDownloaded = false, searchQuery = '', mediaType = 'video', maxRating = '') {
     // If we have search or filter, we need to get all videos
     if (excludeDownloaded || searchQuery) {
       // Need to filter by download status and/or search
@@ -1408,6 +1432,14 @@ class ChannelModule {
         filteredVideos = filteredVideos.filter(video =>
           video.title && video.title.toLowerCase().includes(searchLower)
         );
+      }
+
+      const maxRatingLimit = ratingMapper.getRatingAgeLimit(maxRating);
+      if (maxRatingLimit !== null && maxRatingLimit !== undefined) {
+        filteredVideos = filteredVideos.filter(video => {
+          const videoLimit = ratingMapper.getRatingAgeLimit(video.normalized_rating);
+          return videoLimit === null || videoLimit <= maxRatingLimit;
+        });
       }
 
       return {
@@ -1486,6 +1518,13 @@ class ChannelModule {
    * @returns {Object} - Parsed video object
    */
   parseVideoMetadata(entry) {
+    // Extract rating information
+    const contentRating = entry.contentRating || entry.content_rating || null;
+    const ageLimit = entry.age_limit || null;
+
+    // Map to normalized rating
+    const ratingInfo = ratingMapper.mapFromEntry(contentRating, ageLimit);
+
     return {
       title: entry.title || 'Untitled',
       youtube_id: entry.id,
@@ -1495,6 +1534,10 @@ class ChannelModule {
       availability: entry.availability || null,
       media_type: entry.media_type || 'video',
       live_status: entry.live_status || null,
+      content_rating: contentRating,
+      age_limit: ageLimit,
+      normalized_rating: ratingInfo.normalized_rating,
+      rating_source: ratingInfo.source,
     };
   }
 
@@ -1859,10 +1902,11 @@ class ChannelModule {
    * @param {string} searchQuery - Search query to filter videos by title (default '')
    * @param {string} sortBy - Field to sort by: 'date', 'title', 'duration', 'size' (default 'date')
    * @param {string} sortOrder - Sort order: 'asc' or 'desc' (default 'desc')
-   * @param {string} tabType - Tab type to fetch: 'videos', 'shorts', or 'streams' (default 'videos')
+  * @param {string} tabType - Tab type to fetch: 'videos', 'shorts', or 'streams' (default 'videos')
+  * @param {string} maxRating - Maximum allowed rating filter (default '')
    * @returns {Promise<Object>} - Response object with videos and metadata
    */
-  async getChannelVideos(channelId, page = 1, pageSize = 50, hideDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS) {
+  async getChannelVideos(channelId, page = 1, pageSize = 50, hideDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS, maxRating = '') {
     const channel = await Channel.findOne({
       where: { channel_id: channelId },
     });
@@ -1918,7 +1962,7 @@ class ChannelModule {
 
       // Now fetch the requested page of videos with file checking enabled
       const offset = (page - 1) * pageSize;
-      const paginatedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType);
+      const paginatedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, maxRating);
 
       // Check if videos still exist on YouTube and mark as removed if they don't
       const videoValidationModule = require('./videoValidationModule');
@@ -1988,15 +2032,15 @@ class ChannelModule {
       }
 
       // Get stats for the response
-      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType);
+      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, maxRating);
 
       return this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
 
     } catch (error) {
       logger.error({ err: error, channelId }, 'Error fetching channel videos');
       const offset = (page - 1) * pageSize;
-      const cachedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType);
-      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType);
+      const cachedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, maxRating);
+      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, maxRating);
       return this.buildChannelVideosResponse(cachedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
     }
   }

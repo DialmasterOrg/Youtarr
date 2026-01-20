@@ -67,6 +67,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const [sortBy, setSortBy] = useState<SortBy>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [maxRating, setMaxRating] = useState('');
 
   // Tab states
   const [selectedTab, setSelectedTab] = useState<string | null>(null);
@@ -231,6 +232,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     sortBy,
     sortOrder,
     tabType: selectedTab,
+    maxRating,
     token,
   });
 
@@ -244,7 +246,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   // Clear local ignore status overrides when videos are refetched (page change, tab change, etc)
   useEffect(() => {
     setLocalIgnoreStatus({});
-  }, [page, selectedTab, hideDownloaded, searchQuery, sortBy, sortOrder]);
+  }, [page, selectedTab, hideDownloaded, searchQuery, sortBy, sortOrder, maxRating]);
 
   const { config } = useConfig(token);
   const hasChannelOverride = Boolean(channelVideoQuality);
@@ -743,6 +745,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           paginatedVideos={paginatedVideos}
           autoDownloadsEnabled={selectedTab ? (tabAutoDownloadStatus[selectedTab] ?? autoDownloadsEnabled) : autoDownloadsEnabled}
           selectedTab={selectedTab || 'videos'}
+          maxRating={maxRating}
           onViewModeChange={handleViewModeChange}
           onSearchChange={(query) => {
             setSearchQuery(query);
@@ -760,6 +763,10 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           onDeleteClick={handleDeleteClick}
           onBulkIgnoreClick={handleBulkIgnore}
           onInfoIconClick={(tooltip) => setMobileTooltip(tooltip)}
+          onMaxRatingChange={(value) => {
+            setMaxRating(value);
+            setPage(1);
+          }}
         />
 
         {/* Tabs */}

@@ -10,6 +10,7 @@ interface UseChannelVideosParams {
   sortBy: string;
   sortOrder: string;
   tabType: string | null;
+  maxRating: string;
   token: string | null;
 }
 
@@ -34,6 +35,7 @@ export function useChannelVideos({
   sortBy,
   sortOrder,
   tabType,
+  maxRating,
   token,
 }: UseChannelVideosParams): UseChannelVideosResult {
   const [videos, setVideos] = useState<ChannelVideo[]>([]);
@@ -62,6 +64,10 @@ export function useChannelVideos({
         tabType: tabType,
       });
 
+      if (maxRating) {
+        queryParams.set('maxRating', maxRating);
+      }
+
       const response = await fetch(`/getchannelvideos/${channelId}?${queryParams}`, {
         headers: {
           'x-access-token': token,
@@ -88,7 +94,7 @@ export function useChannelVideos({
     } finally {
       setLoading(false);
     }
-  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, token]);
+  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, maxRating, token]);
 
   useEffect(() => {
     fetchVideos();

@@ -70,6 +70,18 @@ ChannelVideo.init(
       allowNull: true,
       defaultValue: null,
     },
+    content_rating: {
+      type: DataTypes.JSON,
+      allowNull: true,
+    },
+    age_limit: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    normalized_rating: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
   },
   {
     sequelize,

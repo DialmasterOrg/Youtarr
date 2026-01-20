@@ -59,6 +59,7 @@ export function AppShell({
 
   const drawerWidth = isMobile ? EXPANDED_WIDTH : collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
   const isNavCollapsed = !isMobile && collapsed;
+  const iconBoxSize = isNavCollapsed ? 56 : 64;
 
   useEffect(() => {
     const navWidth = isMobile ? 0 : collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
@@ -131,7 +132,7 @@ export function AppShell({
 
   const drawerContent = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Toolbar sx={{ minHeight: 'calc(64px + var(--shell-gap))' }} />
+      <Toolbar sx={{ minHeight: 'var(--shell-gap)' }} />
       <List sx={{ px: 1, pt: 3, gap: 0.5, display: 'flex', flexDirection: 'column' }}>
         {navItems.map((item) => {
           const selected = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
@@ -167,10 +168,10 @@ export function AppShell({
               >
                 <ListItemIcon
                   sx={{
-                    minWidth: 56,
-                    width: 56,
-                    height: 56,
-                    flex: '0 0 56px',
+                    minWidth: iconBoxSize,
+                    width: iconBoxSize,
+                    height: iconBoxSize,
+                    flex: `0 0 ${iconBoxSize}px`,
                     display: 'flex',
                     justifyContent: 'center',
                     alignItems: 'center',
@@ -356,15 +357,11 @@ export function AppShell({
           zIndex: theme.zIndex.drawer + 1,
           backgroundImage: 'var(--appbar-pattern)',
           backgroundSize: '24px 24px',
-          top: 'var(--shell-gap)',
-          right: 'var(--shell-gap)',
-          left: isMobile
-            ? 'var(--shell-gap)'
-            : 'calc(var(--nav-width) + (var(--shell-gap) * 2))',
-          width: isMobile
-            ? 'calc(100% - (var(--shell-gap) * 2))'
-            : 'calc(100% - var(--nav-width) - (var(--shell-gap) * 3))',
-          borderRadius: 'var(--appbar-radius)',
+          top: 0,
+          right: 0,
+          left: 0,
+          width: '100vw',
+          borderRadius: 0,
           overflow: 'hidden',
         }}
       >
@@ -418,10 +415,10 @@ export function AppShell({
             border: 'var(--nav-border)',
             boxShadow: 'var(--nav-shadow)',
             bgcolor: 'background.paper',
-            mt: isMobile ? 0 : 'var(--shell-gap)',
+            mt: isMobile ? 0 : '64px',
             mb: isMobile ? 0 : 'var(--shell-gap)',
             ml: isMobile ? 0 : 'var(--shell-gap)',
-            height: isMobile ? '100%' : 'calc(100% - (var(--shell-gap) * 2))',
+            height: isMobile ? '100%' : 'calc(100% - 64px - var(--shell-gap))',
             overflowX: 'hidden',
           },
         }}
@@ -447,7 +444,7 @@ export function AppShell({
           flexDirection: 'column',
           minHeight: '100vh',
           minWidth: 0,
-          pt: 'calc(64px + (var(--shell-gap) * 2))',
+          pt: 'calc(64px + var(--shell-gap))',
           pb: 'var(--shell-gap)',
           px: 'var(--shell-gap)',
           boxSizing: 'border-box',
