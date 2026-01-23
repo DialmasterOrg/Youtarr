@@ -41,6 +41,29 @@ interface AppShellProps {
 const EXPANDED_WIDTH = 260;
 const COLLAPSED_WIDTH = 72;
 
+const NAV_MAIN_MIN_HEIGHT = 40; // target height for each main nav button (px)
+const NAV_SUB_MIN_HEIGHT = 16; // sub-item buttons stay slightly smaller
+const NAV_EXPANDED_HORIZONTAL_PADDING = 2;
+const NAV_COLLAPSED_HORIZONTAL_PADDING = 2;
+const NAV_ICON_SIZE = 25; // same icon size collapsed vs expanded
+const NAV_ICON_MARGIN = 0.35; // keeps text offset consistent
+const NAV_PRIMARY_FONT_SIZE = '0.85rem';
+const NAV_PRIMARY_LINE_HEIGHT = 1.15;
+const NAV_SECONDARY_FONT_SIZE = '0.65rem';
+const NAV_SECONDARY_LINE_HEIGHT = 1.1;
+const NAV_MAIN_GAP = 0.25;
+const NAV_SUB_VERTICAL_GAP = .75;
+const NAV_SUB_PADDING_LEFT = 3.5;
+const NAV_SUB_PADDING_RIGHT = 2;
+const NAV_SUB_FONT_SIZE = '0.75rem';
+const NAV_SUB_LINE_HEIGHT = 1.2;
+const NAV_DRAWER_DESKTOP_TOP_OFFSET = 'calc(80px + var(--shell-gap))';
+const NAV_DRAWER_DESKTOP_BOTTOM_GAP = 'calc(20px + var(--shell-gap))';
+const NAV_DRAWER_DESKTOP_MAX_HEIGHT = 'calc(100vh - (64px + (var(--shell-gap) * 2)))';
+const NAV_DRAWER_MOBILE_TOP_OFFSET = 'calc(64px + var(--shell-gap))';
+const NAV_DRAWER_MOBILE_BOTTOM_GAP = 'calc(20px + var(--shell-gap))';
+const NAV_DRAWER_MOBILE_MAX_HEIGHT = 'calc(100vh - (var(--shell-gap) * 2))';
+
 export function AppShell({
   token,
   isPlatformManaged,
@@ -59,7 +82,8 @@ export function AppShell({
 
   const drawerWidth = isMobile ? EXPANDED_WIDTH : collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
   const isNavCollapsed = !isMobile && collapsed;
-  const iconBoxSize = isNavCollapsed ? 56 : 64;
+  // icon box size stays constant so the icon doesn't shift during collapse
+  const iconBoxSize = NAV_ICON_SIZE;
 
   useEffect(() => {
     const navWidth = isMobile ? 0 : collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
@@ -131,13 +155,13 @@ export function AppShell({
   };
 
   const drawerContent = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Toolbar sx={{ minHeight: 'var(--shell-gap)' }} />
-      <List sx={{ px: 1, pt: 3, gap: 0.5, display: 'flex', flexDirection: 'column' }}>
-        {navItems.map((item) => {
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      <Box sx={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto' }}>
+        <List sx={{ px: 0, pt: 0.5, gap: NAV_MAIN_GAP, display: 'flex', flexDirection: 'column' }}>
+          {navItems.map((item) => {
           const selected = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
           const button = (
-            <Box key={item.key}>
+            <Box key={item.key} sx={{ px: 0.5, py: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
               <ListItemButton
                 component={RouterLink}
                 to={item.to}
@@ -149,9 +173,13 @@ export function AppShell({
                   borderRadius: 2.5,
                   justifyContent: 'flex-start',
                   alignItems: 'center',
-                  px: 1,
-                  py: 0.5,
-                  minHeight: 56,
+                  pl: isNavCollapsed ? NAV_COLLAPSED_HORIZONTAL_PADDING : NAV_EXPANDED_HORIZONTAL_PADDING,
+                  pr: isNavCollapsed ? NAV_COLLAPSED_HORIZONTAL_PADDING : NAV_EXPANDED_HORIZONTAL_PADDING,
+                  py: 0,
+                  // explicit control of main nav button height
+                  minHeight: NAV_MAIN_MIN_HEIGHT,
+                  height: NAV_MAIN_MIN_HEIGHT,
+                  // always fill available width to avoid overflowing the collapsed drawer
                   width: '100%',
                   border: selected ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)',
                   bgcolor: selected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
@@ -177,7 +205,8 @@ export function AppShell({
                     alignItems: 'center',
                     color: 'text.primary',
                     flexShrink: 0,
-                    '& svg': { fontSize: 24 },
+                    mr: NAV_ICON_MARGIN,
+                    '& svg': { fontSize: iconBoxSize - 4 },
                   }}
                 >
                   {item.icon}
@@ -187,20 +216,34 @@ export function AppShell({
                   secondary={item.oldLabel}
                   sx={{
                     opacity: isNavCollapsed ? 0 : 1,
-                    maxWidth: isNavCollapsed ? 0 : 220,
+                    maxWidth: isNavCollapsed ? 0 : '100%',
+                    flex: 1,
+                    minWidth: 0,
                     overflow: 'hidden',
                     whiteSpace: 'nowrap',
                     transition: 'opacity 200ms var(--transition-bouncy), max-width 200ms var(--transition-bouncy)',
                   }}
-                  primaryTypographyProps={{ sx: { fontWeight: 700 } }}
+                  primaryTypographyProps={{
+                    sx: {
+                      fontWeight: 700,
+                      fontSize: NAV_PRIMARY_FONT_SIZE,
+                      lineHeight: NAV_PRIMARY_LINE_HEIGHT,
+                    },
+                    noWrap: true,
+                  }}
                   secondaryTypographyProps={{
                     variant: 'caption',
                     color: 'text.secondary',
+                    sx: {
+                      fontSize: NAV_SECONDARY_FONT_SIZE,
+                      lineHeight: NAV_SECONDARY_LINE_HEIGHT,
+                    },
+                    noWrap: true,
                   }}
                 />
               </ListItemButton>
-              {!isNavCollapsed && item.subItems && selected && (
-                <List disablePadding sx={{ mt: 0.5, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+              {!isNavCollapsed && item.subItems && selected && item.key === 'settings' && (
+                <List disablePadding sx={{ mt: NAV_SUB_VERTICAL_GAP, display: 'flex', flexDirection: 'column', gap: NAV_SUB_VERTICAL_GAP }}>
                   {item.subItems.map((subItem) => {
                     const subSelected = location.pathname === subItem.to;
                     return (
@@ -212,25 +255,43 @@ export function AppShell({
                         onClick={() => {
                           if (isMobile) setDrawerOpenMobile(false);
                         }}
-                        sx={{
-                          borderRadius: 2,
-                          pl: 9,
-                          pr: 1.5,
-                          py: 0.25,
-                          minHeight: 40,
-                          border: subSelected ? 'var(--nav-item-border-selected)' : '1px solid transparent',
-                          bgcolor: subSelected ? 'var(--nav-item-bg-selected)' : 'transparent',
-                          boxShadow: subSelected ? 'var(--nav-item-shadow-selected)' : 'none',
-                          color: subSelected ? 'text.primary' : 'text.secondary',
-                        }}
+                         sx={{
+                           borderRadius: 2,
+                           pl: NAV_SUB_PADDING_LEFT,
+                           pr: NAV_SUB_PADDING_RIGHT,
+                           py: 0,
+                           minHeight: NAV_SUB_MIN_HEIGHT,
+                           border: subSelected ? 'var(--nav-item-border-selected)' : '1px solid transparent',
+                           bgcolor: subSelected ? 'var(--nav-item-bg-selected)' : 'transparent',
+                           boxShadow: subSelected ? 'var(--nav-item-shadow-selected)' : 'none',
+                           color: subSelected ? 'text.primary' : 'text.secondary',
+                           '&:hover': {
+                             bgcolor: 'transparent',
+                             transform: 'none',
+                             boxShadow: 'none',
+                           },
+                         }}
                       >
-                        <ListItemText
-                          primary={subItem.label}
-                          primaryTypographyProps={{
-                            variant: 'body2',
-                            sx: { fontWeight: subSelected ? 700 : 500 },
-                          }}
-                        />
+                         <ListItemText
+                           primary={subItem.label}
+                           sx={{
+                             minWidth: 0,
+                             overflow: 'hidden',
+                             whiteSpace: 'nowrap',
+                             textOverflow: 'ellipsis',
+                           }}
+                           primaryTypographyProps={{
+                             variant: 'body2',
+                             sx: {
+                               fontWeight: subSelected ? 700 : 500,
+                               fontSize: NAV_SUB_FONT_SIZE,
+                               lineHeight: NAV_SUB_LINE_HEIGHT,
+                               overflow: 'hidden',
+                               textOverflow: 'ellipsis',
+                             },
+                             noWrap: true,
+                           }}
+                         />
                       </ListItemButton>
                     );
                   })}
@@ -247,9 +308,8 @@ export function AppShell({
             </Tooltip>
           );
         })}
-      </List>
-
-      <Box sx={{ flexGrow: 1 }} />
+        </List>
+      </Box>
 
       <Divider sx={{ my: 1 }} />
 
@@ -357,11 +417,12 @@ export function AppShell({
           zIndex: theme.zIndex.drawer + 1,
           backgroundImage: 'var(--appbar-pattern)',
           backgroundSize: '24px 24px',
-          top: 0,
-          right: 0,
-          left: 0,
-          width: '100vw',
-          borderRadius: 0,
+          // inset from the very top to provide top padding on desktop
+          top: isMobile ? 0 : 'var(--shell-gap)',
+          left: isMobile ? 0 : 'var(--shell-gap)',
+          right: isMobile ? 0 : 'var(--shell-gap)',
+          width: isMobile ? '100vw' : 'calc(100vw - (var(--shell-gap) * 2))',
+          borderRadius: 3,
           overflow: 'hidden',
         }}
       >
@@ -415,10 +476,12 @@ export function AppShell({
             border: 'var(--nav-border)',
             boxShadow: 'var(--nav-shadow)',
             bgcolor: 'background.paper',
-            mt: isMobile ? 0 : '64px',
-            mb: isMobile ? 0 : 'var(--shell-gap)',
+            // keep the drawer tucked beneath the AppBar regardless of width
+            mt: isMobile ? NAV_DRAWER_MOBILE_TOP_OFFSET : NAV_DRAWER_DESKTOP_TOP_OFFSET,
+            mb: isMobile ? NAV_DRAWER_MOBILE_BOTTOM_GAP : NAV_DRAWER_DESKTOP_BOTTOM_GAP,
             ml: isMobile ? 0 : 'var(--shell-gap)',
-            height: isMobile ? '100%' : 'calc(100% - 64px - var(--shell-gap))',
+            maxHeight: isMobile ? NAV_DRAWER_MOBILE_MAX_HEIGHT : NAV_DRAWER_DESKTOP_MAX_HEIGHT,
+            overflow: 'hidden',
             overflowX: 'hidden',
           },
         }}
@@ -444,7 +507,7 @@ export function AppShell({
           flexDirection: 'column',
           minHeight: '100vh',
           minWidth: 0,
-          pt: 'calc(64px + var(--shell-gap))',
+          pt: isMobile ? NAV_DRAWER_MOBILE_TOP_OFFSET : NAV_DRAWER_DESKTOP_TOP_OFFSET,
           pb: 'var(--shell-gap)',
           px: 'var(--shell-gap)',
           boxSizing: 'border-box',

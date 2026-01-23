@@ -10,7 +10,12 @@ const meta: Meta<typeof SettingsIndex> = {
   decorators: [
     (Story) => (
       <MemoryRouter>
-        <Story />
+        <div>
+          {/* stories expect to see the page title and subtitle */}
+          <h1>Settings</h1>
+          <div>Choose a settings area.</div>
+          <Story />
+        </div>
       </MemoryRouter>
     ),
   ],

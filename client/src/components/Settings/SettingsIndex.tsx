@@ -19,31 +19,23 @@ export const SETTINGS_PAGES = [
 export function SettingsIndex() {
   return (
     <Box>
-      <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>
-        Settings
-      </Typography>
-      <Typography color="text.secondary" sx={{ mb: 2 }}>
-        Choose a settings area.
-      </Typography>
+      {/* Page title is rendered by the parent Settings page; keep this index compact */}
 
       <Grid container spacing={2}>
         {SETTINGS_PAGES.map((page) => (
           <Grid item xs={12} md={6} lg={4} key={page.key} sx={{ display: 'flex' }}>
             <Card variant="outlined" sx={{ borderRadius: 3, width: '100%', height: '100%' }}>
-              <CardActionArea
-                component={RouterLink}
-                to={`/settings/${page.key}`}
-                sx={{ height: '100%', display: 'flex' }}
-              >
-                <CardContent
-                  sx={{
-                    flex: 1,
-                    minHeight: 160,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                  }}
-                >
+                <CardActionArea component={RouterLink} to={`/settings/${page.key}`} sx={{ height: '100%', display: 'flex' }}>
+                  <CardContent
+                    sx={{
+                      flex: 1,
+                      // reduce visual height per request (about 50%) but keep layout spacing
+                      minHeight: 80,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                    }}
+                  >
                   <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
                     {page.title}
                   </Typography>

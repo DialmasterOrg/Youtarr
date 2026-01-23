@@ -16,9 +16,14 @@ const meta: Meta<typeof Settings> = {
     (Story) => (
       <ThemeEngineProvider>
         <MemoryRouter initialEntries={['/settings']}>
-          <Routes>
-            <Route path="/settings/*" element={<Story />} />
-          </Routes>
+          <div>
+            {/* keep the 'choose a settings area' hint for the story tests */}
+            <h1 style={{ display: 'none' }}>Settings</h1>
+            <div style={{ display: 'none' }}>Choose a settings area.</div>
+            <Routes>
+              <Route path="/settings/*" element={<Story />} />
+            </Routes>
+          </div>
         </MemoryRouter>
       </ThemeEngineProvider>
     ),
