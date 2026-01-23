@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChannelVideo } from '../../../types/ChannelVideo';
 
 interface UseChannelVideosParams {
@@ -12,6 +12,8 @@ interface UseChannelVideosParams {
   tabType: string | null;
   maxRating: string;
   token: string | null;
+  append?: boolean;
+  resetKey?: string;
 }
 
 interface UseChannelVideosResult {
@@ -37,6 +39,8 @@ export function useChannelVideos({
   tabType,
   maxRating,
   token,
+  append = false,
+  resetKey,
 }: UseChannelVideosParams): UseChannelVideosResult {
   const [videos, setVideos] = useState<ChannelVideo[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
@@ -46,6 +50,18 @@ export function useChannelVideos({
   const [error, setError] = useState<Error | null>(null);
   const [autoDownloadsEnabled, setAutoDownloadsEnabled] = useState<boolean>(false);
   const [availableTabs, setAvailableTabs] = useState<string[]>([]);
+  const resetKeyRef = useRef<string | undefined>(resetKey);
+
+  useEffect(() => {
+    if (!resetKey) return;
+    if (resetKeyRef.current !== resetKey) {
+      resetKeyRef.current = resetKey;
+      setVideos([]);
+      setTotalCount(0);
+      setOldestVideoDate(null);
+      setVideoFailed(false);
+    }
+  }, [resetKey]);
 
   const fetchVideos = useCallback(async () => {
     if (!channelId || !token || !tabType) return;
@@ -80,8 +96,21 @@ export function useChannelVideos({
 
       const data = await response.json();
 
+      const incomingVideos: ChannelVideo[] = data.videos || [];
       if (data.videos !== undefined) {
-        setVideos(data.videos || []);
+        if (append && page > 1) {
+          setVideos((prev) => {
+            const combined = [...prev, ...incomingVideos];
+            const seen = new Set<string>();
+            return combined.filter((video) => {
+              if (seen.has(video.youtube_id)) return false;
+              seen.add(video.youtube_id);
+              return true;
+            });
+          });
+        } else {
+          setVideos(incomingVideos);
+        }
       }
       setVideoFailed(data.videoFail || false);
       setTotalCount(data.totalCount || 0);
@@ -94,7 +123,7 @@ export function useChannelVideos({
     } finally {
       setLoading(false);
     }
-  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, maxRating, token]);
+  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, maxRating, token, append]);
 
   useEffect(() => {
     fetchVideos();

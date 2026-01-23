@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Card,
@@ -17,7 +17,6 @@ import {
   ListItemText,
   Divider,
   IconButton,
-  Pagination,
   Tabs,
   Tab,
 } from '@mui/material';
@@ -32,7 +31,6 @@ import AlarmOnIcon from '@mui/icons-material/AlarmOn';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
-import { useSwipeable } from 'react-swipeable';
 import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
 import { useVideoDeletion } from '../shared/useVideoDeletion';
 import { getVideoStatus } from '../../utils/videoStatus';
@@ -88,6 +86,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   // Local state to track ignore status changes without refetching
   const [localIgnoreStatus, setLocalIgnoreStatus] = useState<Record<string, boolean>>({});
@@ -234,6 +233,8 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     tabType: selectedTab,
     maxRating,
     token,
+    append: page > 1,
+    resetKey: JSON.stringify({ channelId, hideDownloaded, searchQuery, sortBy, sortOrder, selectedTab, maxRating, pageSize }),
   });
 
   // Update available tabs from video fetch response if available
@@ -281,8 +282,9 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   // Videos are already filtered, sorted, and paginated by the server
   const paginatedVideos = videosWithOverrides;
 
-  // Use server-provided total count for pagination
+  // Use server-provided total count for pagination/infinite scroll
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
+  const hasNextPage = page < totalPages;
 
   // Event handlers
   const handleCheckChange = useCallback((videoId: string, isChecked: boolean) => {
@@ -539,10 +541,6 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     }
   };
 
-  const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
-    setPage(value);
-  };
-
   const handleViewModeChange = (event: React.MouseEvent<HTMLElement>, newMode: ViewMode | null) => {
     if (newMode !== null) {
       setViewMode(newMode);
@@ -604,20 +602,32 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     );
   };
 
-  // Swipe handlers for mobile
-  const handlers = useSwipeable({
-    onSwipedLeft: () => {
-      if (page < totalPages) {
-        setPage(page + 1);
+  useEffect(() => {
+    if (!loadMoreRef.current) return;
+    if (videosLoading || !hasNextPage) return;
+
+    let didTrigger = false;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting && !didTrigger) {
+          didTrigger = true;
+          setPage((prev) => prev + 1);
+        }
+      },
+      {
+        root: null,
+        rootMargin: '25% 0px',
+        threshold: 0,
       }
-    },
-    onSwipedRight: () => {
-      if (page > 1) {
-        setPage(page - 1);
-      }
-    },
-    trackMouse: false,
-  });
+    );
+
+    observer.observe(loadMoreRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [videosLoading, hasNextPage]);
 
   // Mobile drawer render
   const renderDrawer = () => (
@@ -786,27 +796,13 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           </Box>
         )}
 
-        {/* Pagination - directly under tabs */}
-        {totalPages > 1 && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2, px: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-            <Pagination
-              count={totalPages}
-              page={page}
-              onChange={handlePageChange}
-              color="primary"
-              size={isMobile ? 'small' : 'medium'}
-              siblingCount={isMobile ? 0 : 1}
-            />
-          </Box>
-        )}
-
         {/* Content area */}
-        <Box sx={{ p: 2 }} {...(isMobile ? handlers : {})}>
+        <Box sx={{ p: 2 }}>
           {videoFailed && videos.length === 0 ? (
             <Alert severity="error">
               Failed to fetch channel videos. Please try again later.
             </Alert>
-          ) : videosLoading ? (
+          ) : videosLoading && videos.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <Typography variant="body1" color="text.secondary" gutterBottom>
                 Loading and fetching/indexing new videos for this channel tab...
@@ -884,18 +880,19 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                 />
               )}
 
-              {/* Pagination */}
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-                <Pagination
-                  count={totalPages}
-                  page={page}
-                  onChange={handlePageChange}
-                  color="primary"
-                  size={isMobile ? 'small' : 'medium'}
-                  siblingCount={isMobile ? 0 : 1}
-                />
-              </Box>
             </>
+          )}
+
+          <Box ref={loadMoreRef} sx={{ height: 1 }} />
+          {videosLoading && videos.length > 0 && hasNextPage && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+              <Skeleton variant="circular" width={28} height={28} />
+            </Box>
+          )}
+          {!hasNextPage && videos.length > 0 && (
+            <Typography variant="caption" color="text.secondary" align="center" sx={{ display: 'block', py: 2 }}>
+              You're all caught up.
+            </Typography>
           )}
         </Box>
       </Card>

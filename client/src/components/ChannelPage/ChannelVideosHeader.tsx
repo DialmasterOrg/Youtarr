@@ -260,10 +260,11 @@ function ChannelVideosHeader({
 
         {/* Action buttons for desktop */}
         {!isMobile && (
-          <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+          <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}>
             <Button
-              variant="contained"
+              variant="outlined"
               size="small"
+              color="primary"
               startIcon={<DownloadIcon />}
               onClick={onDownloadClick}
               disabled={checkedBoxes.length === 0}
@@ -300,7 +301,7 @@ function ChannelVideosHeader({
               Ignore Selected
             </Button>
             <Button
-              variant="contained"
+              variant="outlined"
               color="error"
               size="small"
               startIcon={<DeleteIcon />}

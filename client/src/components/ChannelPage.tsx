@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Card, CardContent, Grid, Typography, Box, IconButton, Tooltip, Chip, Popover, Dialog, DialogTitle, DialogContent } from '@mui/material';
+import { Card, CardContent, Grid, Typography, Box, IconButton, Tooltip, Chip, Popover, Dialog, DialogTitle, DialogContent, Button } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import FolderIcon from '@mui/icons-material/Folder';
 import VideocamIcon from '@mui/icons-material/Videocam';
@@ -52,7 +52,7 @@ function ChannelPage({ token }: ChannelPageProps) {
   };
 
   useEffect(() => {
-    fetch(`/getChannelInfo/${channel_id}`, {
+    fetch(`/getchannelinfo/${channel_id}`, {
       headers: {
         'x-access-token': token || '',
       },
@@ -60,6 +60,10 @@ function ChannelPage({ token }: ChannelPageProps) {
       .then((response) => {
         if (!response.ok) {
           throw new Error(response.statusText);
+        }
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new Error('Unexpected response format');
         }
         return response.json();
       })
@@ -338,6 +342,40 @@ function ChannelPage({ token }: ChannelPageProps) {
           </Grid>
         </CardContent>
       </Card>
+
+      {channel && (
+        <Card elevation={3} sx={{ mb: 2 }}>
+          <CardContent sx={{ py: 2 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: isMobile ? 'column' : 'row',
+                alignItems: isMobile ? 'flex-start' : 'center',
+                justifyContent: 'space-between',
+                gap: 2,
+              }}
+            >
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Channel settings
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1, alignItems: 'center' }}>
+                  {renderSubFolder(channel.sub_folder)}
+                  {renderFilterIndicators()}
+                </Box>
+              </Box>
+              <Button
+                variant="outlined"
+                startIcon={<SettingsIcon />}
+                onClick={() => setSettingsOpen(true)}
+                sx={{ alignSelf: isMobile ? 'stretch' : 'center' }}
+              >
+                Edit settings
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
 
       <ChannelVideos
         token={token}

@@ -50,7 +50,7 @@ import { Channel } from '../types/Channel';
 import { useChannelList } from './ChannelManager/hooks/useChannelList';
 import { useChannelMutations } from './ChannelManager/hooks/useChannelMutations';
 import ChannelCard from './ChannelManager/components/ChannelCard';
-import ChannelListRow, { CHANNEL_LIST_DESKTOP_TEMPLATE } from './ChannelManager/components/ChannelListRow';
+import ChannelListRow from './ChannelManager/components/ChannelListRow';
 import {
   channelMatchesFilter,
   DEFAULT_SUBFOLDER_KEY,
@@ -183,8 +183,6 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const pageCount = Math.max(totalPages, 1);
   const hasNextPage = page < pageCount;
 
-  const showDesktopListColumns = !isMobile && viewMode === 'list';
-  const listColumnLabels = ['Channel', 'Quality / Folder', 'Auto downloads', 'Filters'];
   const showSkeletons = loading && displayChannels.length === 0;
   const showInlineLoader = loading && displayChannels.length > 0;
 
@@ -568,28 +566,6 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
               <Box ref={scrollContainerRef} sx={{ flex: 1, overflowY: 'auto', pr: { md: 1 }, pb: 2 }}>
                 {viewMode === 'list' ? (
                   <List disablePadding>
-                    {showDesktopListColumns && (
-                      <Box
-                        sx={{
-                          display: 'grid',
-                          gridTemplateColumns: CHANNEL_LIST_DESKTOP_TEMPLATE,
-                          columnGap: 2,
-                          px: { xs: 1, md: 2 },
-                          py: 1,
-                          color: 'text.secondary',
-                          textTransform: 'uppercase',
-                          letterSpacing: 0.4,
-                          fontSize: '0.75rem',
-                        }}
-                      >
-                        {listColumnLabels.map((label) => (
-                          <Typography key={label} variant="caption" sx={{ fontWeight: 600 }}>
-                            {label}
-                          </Typography>
-                        ))}
-                        <Box />
-                      </Box>
-                    )}
                     {displayChannels.map((channel) => {
                       const rowIndex = listRowIndex;
                       listRowIndex += 1;
