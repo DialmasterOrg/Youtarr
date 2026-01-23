@@ -1,7 +1,7 @@
 import './App.css';
 import packageJson from '../package.json';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import toplogo from './Youtarr_text.png';
+import toplogo from './youtarr_logo.svg';
 import axios from 'axios';
 import {
   BrowserRouter as Router,
@@ -64,6 +64,15 @@ function AppContent() {
   const { version } = packageJson;
   const clientVersion = `v${version}`; // Create a version with 'v' prefix for comparison
   const tmpDirectory = '/tmp';
+  const isElfHosted = platformName?.toLowerCase() === 'elfhosted';
+  const updateAvailable = Boolean(
+    serverVersion &&
+    serverVersion !== clientVersion &&
+    !isElfHosted
+  );
+  const updateTooltip = updateAvailable
+    ? `New version (${serverVersion}) available! Please shut down and pull the latest image and files to update.`
+    : undefined;
 
   const selectedTheme = useMemo(() => {
     return themeMode === 'neumorphic' ? neumorphicTheme : lightTheme;
@@ -368,6 +377,8 @@ function AppContent() {
           appName="Youtarr"
           logoSrc={toplogo}
           versionLabel={ytDlpVersion ? `${clientVersion} • yt-dlp: ${ytDlpVersion}` : clientVersion}
+          updateAvailable={updateAvailable}
+          updateTooltip={updateTooltip}
           onLogout={handleLogout}
         >
           <Container
@@ -431,31 +442,16 @@ function AppContent() {
           </Container>
         </AppShell>
 
-        <Box
-          component="footer"
-          sx={{
-            position: 'fixed',
-            bottom: 0,
-            width: '100%',
-            bgcolor: 'background.paper',
-            textAlign: 'center',
-            borderTop: (theme) => `1px solid ${theme.palette.divider}`,
-          }}
-        >
-          <Typography variant='subtitle1' color='textSecondary'>
-            {serverVersion && serverVersion !== clientVersion && platformName?.toLowerCase() !== 'elfhosted' && (
-              <Typography color='error'>
-                New version ({serverVersion}) available! Please shut down and pull the latest image and files to update.
-              </Typography>
-            )}
-          </Typography>
-        </Box>
-
         {/* Persistent warning for temp directory */}
         <Snackbar
           open={showTmpWarning}
           anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-          sx={{ mt: 8 }}
+          sx={{
+            mt: 8,
+            width: '100%',
+            justifyContent: 'center',
+            zIndex: (theme) => theme.zIndex.drawer + 10,
+          }}
           onClose={() => setShowTmpWarning(false)}
         >
           <Alert

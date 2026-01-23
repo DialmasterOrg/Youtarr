@@ -108,7 +108,7 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
             <Tabs value={tabValue} onChange={handleTabChange} centered>
               <Tab label="Manual Download" />
-              <Tab label="Channel Download" />
+              <Tab label="ForceChannel Download" />
             </Tabs>
           </Box>
 

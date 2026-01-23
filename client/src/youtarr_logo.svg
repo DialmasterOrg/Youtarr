@@ -1,0 +1,45 @@
+<svg width="250" height="200" viewBox="0 0 125 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Modern Gradient: Deep Indigo to Bright Cyan -->
+    <linearGradient id="mainGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4338CA" /> <!-- Indigo -->
+      <stop offset="100%" stop-color="#06B6D4" /> <!-- Cyan -->
+    </linearGradient>
+
+    <!-- 
+      SMART FILTER: Adjusted blur for thinner lines.
+      Reduced stdDeviation to 1.5 (half of 3) to keep rounding proportional.
+    -->
+    <filter id="roundCorners" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur" />
+      <feColorMatrix in="blur" mode="matrix" values="
+        1 0 0 0 0  
+        0 1 0 0 0  
+        0 0 1 0 0  
+        0 0 0 19 -9" result="goo" />
+      <feComposite in="SourceGraphic" in2="goo" operator="atop" />
+    </filter>
+
+    <!-- Negative Space Mask -->
+    <mask id="yMask">
+      <!-- 1. The White Rectangle -->
+      <rect x="0" y="0" width="125" height="100" rx="24" fill="white" />
+      
+      <!-- 2. The Black Y: Thinner Stroke -->
+      <g filter="url(#roundCorners)">
+        <!-- 
+           Stroke Width reduced from 16 to 8.
+        -->
+        <path d="M -8 -8 L 62.5 50 L -8 108 M 133 50 L 62.5 50" 
+              stroke="black" 
+              stroke-width="8" 
+              stroke-linecap="round" />
+      </g>
+    </mask>
+  </defs>
+
+  <!-- The Final Shape -->
+  <rect x="0" y="0" width="125" height="100" rx="24" 
+        fill="url(#mainGradient)" 
+        mask="url(#yMask)" />
+</svg>

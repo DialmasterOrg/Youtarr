@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Card,
@@ -87,6 +87,8 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const scrollAnchorRef = useRef<number | null>(null);
+  const pendingScrollAdjustmentRef = useRef(false);
 
   // Local state to track ignore status changes without refetching
   const [localIgnoreStatus, setLocalIgnoreStatus] = useState<Record<string, boolean>>({});
@@ -612,6 +614,8 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         const [entry] = entries;
         if (entry.isIntersecting && !didTrigger) {
           didTrigger = true;
+          scrollAnchorRef.current = window.scrollY;
+          pendingScrollAdjustmentRef.current = true;
           setPage((prev) => prev + 1);
         }
       },
@@ -628,6 +632,16 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
       observer.disconnect();
     };
   }, [videosLoading, hasNextPage]);
+
+  useLayoutEffect(() => {
+    if (!pendingScrollAdjustmentRef.current) return;
+    if (videosLoading) return;
+    if (scrollAnchorRef.current === null) return;
+
+    window.scrollTo({ top: scrollAnchorRef.current, behavior: 'auto' });
+    pendingScrollAdjustmentRef.current = false;
+    scrollAnchorRef.current = null;
+  }, [videosLoading]);
 
   // Mobile drawer render
   const renderDrawer = () => (

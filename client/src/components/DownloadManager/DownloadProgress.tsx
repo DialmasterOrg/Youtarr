@@ -28,6 +28,7 @@ import { useNavigate } from 'react-router-dom';
 import WebSocketContext from '../../contexts/WebSocketContext';
 import { Job } from '../../types/Job';
 import TerminateJobDialog from './TerminateJobDialog';
+import { useTheme } from '@mui/material/styles';
 
 interface DownloadProgressProps {
   downloadProgressRef: React.MutableRefObject<{
@@ -128,21 +129,27 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     throw new Error('WebSocketContext not found');
   }
   const { subscribe, unsubscribe } = wsContext;
+  const theme = useTheme();
 
   // Derive color from state
   const progressColor = useMemo(() => {
-    if (!currentProgress) return '#9e9e9e';
+    if (!currentProgress) return theme.palette.action.disabled;
 
-    if (currentProgress.stalled) return '#ffca28'; // Yellow
+    if (currentProgress.stalled) return theme.palette.warning.main;
 
-    switch(currentProgress.state) {
-      case 'initiating': return '#9e9e9e'; // Grey
-      case 'complete': return '#66bb6a'; // Green
-      case 'terminated': return '#ff9800'; // Orange (warning)
-      case 'error': return '#ef5350'; // Red
-      default: return '#42a5f5'; // Blue
+    switch (currentProgress.state) {
+      case 'initiating':
+        return theme.palette.action.disabled;
+      case 'complete':
+        return theme.palette.success.main;
+      case 'terminated':
+        return theme.palette.warning.dark;
+      case 'error':
+        return theme.palette.error.main;
+      default:
+        return theme.palette.primary.main;
     }
-  }, [currentProgress]);
+  }, [currentProgress, theme.palette]);
 
   const overlayContent = useMemo(() => {
     if (!currentProgress) {
@@ -170,6 +177,19 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
       eta: formattedEta
     };
   }, [currentProgress]);
+
+  const overlayTextColor = useMemo(() => {
+    const percent = currentProgress?.progress?.percent ?? 0;
+    return percent > 50 ? theme.palette.common.white : theme.palette.text.primary;
+  }, [currentProgress?.progress?.percent, theme.palette]);
+
+  const overlayTextShadow = useMemo(
+    () =>
+      overlayTextColor === theme.palette.common.white
+        ? '1px 1px 2px rgba(0, 0, 0, 0.55)'
+        : '1px 1px 2px rgba(255, 255, 255, 0.65)',
+    [overlayTextColor]
+  );
 
   // Derive status message from state
   const statusMessage = useMemo(() => {
@@ -638,11 +658,12 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                 sx={{
                   height: 32,
                   borderRadius: 1,
-                  bgcolor: 'action.hover',
+                  bgcolor: theme.palette.action.hover,
+                  boxShadow: theme.shadows[1],
                   '& .MuiLinearProgress-bar': {
                     backgroundColor: progressColor,
-                    transition: 'background-color 0.3s ease'
-                  }
+                    transition: 'background-color 0.3s ease, width 0.3s ease',
+                  },
                 }}
               />
 
@@ -672,11 +693,9 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                       sx={{
                         flex: 1,
                         minWidth: 0,
-                        color: (currentProgress.progress?.percent ?? 0) > 50 ? 'white' : 'black',
+                        color: overlayTextColor,
                         fontWeight: 'bold',
-                        textShadow: (currentProgress.progress?.percent ?? 0) > 50 ?
-                          '1px 1px 2px rgba(0,0,0,0.7)' :
-                          '1px 1px 2px rgba(255,255,255,0.7)'
+                        textShadow: overlayTextShadow,
                       }}
                     >
                       {overlayContent.title}
@@ -688,11 +707,9 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                       sx={{
                         flexShrink: 0,
                         whiteSpace: 'nowrap',
-                        color: (currentProgress.progress?.percent ?? 0) > 50 ? 'white' : 'black',
+                        color: overlayTextColor,
                         fontWeight: 'bold',
-                        textShadow: (currentProgress.progress?.percent ?? 0) > 50 ?
-                          '1px 1px 2px rgba(0,0,0,0.7)' :
-                          '1px 1px 2px rgba(255,255,255,0.7)'
+                        textShadow: overlayTextShadow,
                       }}
                     >
                       {overlayContent.title ? `· ETA ${overlayContent.eta}` : `ETA ${overlayContent.eta}`}
@@ -728,16 +745,21 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
             {/* Video count display with context */}
             {videoCount.total > 0 && (
-              <Box sx={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                mt: 1,
-                p: 1,
-                bgcolor: 'action.hover',
-                borderRadius: 1
-              }}>
-                <Typography variant="body2" color="text.secondary">
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  mt: 1,
+                  px: 1.25,
+                  py: 0.75,
+                  bgcolor: theme.palette.background.paper,
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderRadius: 2,
+                  boxShadow: theme.shadows[1],
+                }}
+              >
+                <Typography variant="body2" color="text.primary" sx={{ fontWeight: 600 }}>
                   {(() => {
                     const isChannelDownload = currentProgress.downloadType?.includes('Channel Downloads');
 

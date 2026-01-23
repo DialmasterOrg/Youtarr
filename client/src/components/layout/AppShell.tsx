@@ -35,6 +35,8 @@ interface AppShellProps {
   logoSrc?: string;
   versionLabel?: string;
   onLogout?: () => void;
+  updateAvailable?: boolean;
+  updateTooltip?: string;
   children: React.ReactNode;
 }
 
@@ -61,10 +63,10 @@ const NAV_SUB_FONT_SIZE = '0.8rem';
 const NAV_SUB_LINE_HEIGHT = 1.2;
 const NAV_DRAWER_BORDER_RADIUS = 'var(--nav-radius)';
 const NAV_DRAWER_DESKTOP_TOP_OFFSET = 'calc(80px + var(--shell-gap))';
-const NAV_DRAWER_DESKTOP_BOTTOM_GAP = 'calc(20px + var(--shell-gap))';
+const NAV_DRAWER_DESKTOP_BOTTOM_GAP = 'calc(60px + var(--shell-gap))';
 const NAV_DRAWER_DESKTOP_MAX_HEIGHT = 'calc(100vh - (64px + (var(--shell-gap) * 2)))';
 const NAV_DRAWER_MOBILE_TOP_OFFSET = 'calc(60px + var(--shell-gap))';
-const NAV_DRAWER_MOBILE_BOTTOM_GAP = 'calc(20px + var(--shell-gap))';
+const NAV_DRAWER_MOBILE_BOTTOM_GAP = 'calc(60px + var(--shell-gap))';
 const NAV_DRAWER_MOBILE_MAX_HEIGHT = 'calc(100vh - 64px - var(--shell-gap))';
 
 export function AppShell({
@@ -74,6 +76,8 @@ export function AppShell({
   logoSrc,
   versionLabel,
   onLogout,
+  updateAvailable = false,
+  updateTooltip,
   children,
 }: AppShellProps) {
   const location = useLocation();
@@ -464,6 +468,25 @@ export function AppShell({
           </Box>
 
           <Box sx={{ flexGrow: 1 }} />
+
+          {token && !isPlatformManaged && updateAvailable && updateTooltip && (
+            <Tooltip title={updateTooltip} placement="bottom" arrow>
+              <IconButton
+                aria-label="new version available"
+                sx={{
+                  color: 'common.white',
+                  bgcolor: 'warning.main',
+                  borderRadius: '50%',
+                  '&:hover': {
+                    bgcolor: 'warning.dark',
+                  },
+                  mr: 0.5,
+                }}
+              >
+                <DownloadIcon />
+              </IconButton>
+            </Tooltip>
+          )}
 
           {token && !isPlatformManaged && onLogout && (
             <IconButton aria-label="logout" onClick={onLogout} sx={{ color: 'text.primary' }}>

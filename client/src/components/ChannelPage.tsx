@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Card, CardContent, Grid, Typography, Box, IconButton, Tooltip, Chip, Popover, Dialog, DialogTitle, DialogContent, Button } from '@mui/material';
+import { Card, CardContent, Grid, Typography, Box, Tooltip, Chip, Popover, Dialog, DialogTitle, DialogContent, Button } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import FolderIcon from '@mui/icons-material/Folder';
 import VideocamIcon from '@mui/icons-material/Videocam';
@@ -25,6 +25,7 @@ function ChannelPage({ token }: ChannelPageProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [regexAnchorEl, setRegexAnchorEl] = useState<HTMLElement | null>(null);
   const [regexDialogOpen, setRegexDialogOpen] = useState(false);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const { channel_id } = useParams();
 
   const handleSettingsSaved = (updated: {
@@ -71,6 +72,10 @@ function ChannelPage({ token }: ChannelPageProps) {
       .catch((error) => console.error(error));
   }, [token, channel_id]);
 
+  useEffect(() => {
+    setDescriptionExpanded(false);
+  }, [channel?.description]);
+
   function textToHTML(text: string) {
     return text
 
@@ -78,30 +83,32 @@ function ChannelPage({ token }: ChannelPageProps) {
       .replace(/(?:\r\n|\r|\n)/g, '<br />'); // replace newlines with <br />
   }
 
-  const renderSubFolder = (subFolder: string | null | undefined) => {
-    let displayText: string;
-    let isSpecial = false;
-
+  const getSubFolderLabel = (subFolder: string | null | undefined) => {
     if (isExplicitlyNoSubfolder(subFolder)) {
-      // null/empty = root (backwards compatible)
-      displayText = 'root';
-      isSpecial = true;
-    } else if (isUsingDefaultSubfolder(subFolder)) {
-      // ##USE_GLOBAL_DEFAULT## = use global default
-      displayText = 'global default';
-      isSpecial = true;
-    } else {
-      // Specific subfolder
-      displayText = `__${subFolder}/`;
+      return { label: 'root', isSpecial: true };
     }
+    if (isUsingDefaultSubfolder(subFolder)) {
+      return { label: 'global default', isSpecial: true };
+    }
+    return { label: `__${subFolder}/`, isSpecial: false };
+  };
 
+  const renderSubFolder = () => {
+    if (!channel) {
+      return null;
+    }
+    const { label, isSpecial } = getSubFolderLabel(channel.sub_folder);
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <FolderIcon sx={{ fontSize: isMobile ? '0.75rem' : '0.85rem', color: 'text.secondary' }} />
-        <Typography sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem', color: 'text.secondary', fontStyle: isSpecial ? 'italic' : 'normal' }}>
-          {displayText}
-        </Typography>
-      </Box>
+      <Chip
+        icon={<FolderIcon sx={{ fontSize: isMobile ? '0.75rem' : '0.85rem' }} />}
+        label={label}
+        size={isMobile ? 'small' : 'small'}
+        variant="outlined"
+        sx={{
+          fontSize: isMobile ? '0.65rem' : '0.75rem',
+          fontStyle: isSpecial ? 'italic' : 'normal',
+        }}
+      />
     );
   };
 
@@ -132,7 +139,7 @@ function ChannelPage({ token }: ChannelPageProps) {
     return '';
   };
 
-  const renderFilterIndicators = () => {
+  const renderFilterIndicators = ({ includeRating = true } = {}) => {
     if (!channel) return null;
 
     const hasQualityOverride = channel.video_quality;
@@ -193,7 +200,7 @@ function ChannelPage({ token }: ChannelPageProps) {
           </Tooltip>
         )}
 
-        {hasDefaultRating && (
+        {includeRating && hasDefaultRating && (
           <RatingBadge
             rating={channel.default_rating}
             ratingSource="Channel Default"
@@ -285,58 +292,62 @@ function ChannelPage({ token }: ChannelPageProps) {
               </Box>
             </Grid>
             <Grid item xs={12} sm={8} marginTop={isMobile ? '-16px' : '0px'}>
-              <Box display="flex" justifyContent="center" alignItems="center" gap={1}>
+              <Box display="flex" flexDirection="column" gap={1}>
                 <Typography
                   variant={isMobile ? 'h5' : 'h4'}
                   component='h2'
                   gutterBottom
-                  align='center'
+                  align='left'
                   sx={{ mb: 0 }}
                 >
                   {channel ? channel.uploader : 'Loading...'}
                 </Typography>
                 {channel && (
-                  <Tooltip title="Channel Settings">
-                    <IconButton
-                      onClick={() => setSettingsOpen(true)}
-                      size={isMobile ? 'small' : 'medium'}
-                      sx={{ mb: 1 }}
-                    >
-                      <SettingsIcon />
-                    </IconButton>
-                  </Tooltip>
+                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {renderFilterIndicators({ includeRating: false })}
+                  </Box>
                 )}
               </Box>
-              {channel && (
-                <Box display="flex" justifyContent="center" flexDirection="column" alignItems="center">
-                  <Box display="flex" gap={0.5} flexWrap="wrap" justifyContent="center" alignItems="center">
-                    {renderSubFolder(channel.sub_folder)}
-                    {renderFilterIndicators()}
-                  </Box>
-                </Box>
-              )}
-              <Box
-                sx={{
-                  maxHeight: isMobile ? '84px' : '172px',
-                  minHeight: isMobile ? '16px' : '172px',
-                  overflowY: 'scroll',
-                  border: 1,
-                  borderColor: 'divider',
-                  padding: isMobile ? '12px' : '24px',
-                  borderRadius: 1
-                }}
-              >
-                <Typography variant={isMobile ? 'body2' : 'body1'} align='center' color='text.secondary'>
-                  {channel ? (
-                    <span
-                      dangerouslySetInnerHTML={{
-                        __html: textToHTML(channel.description || '** No description available **'),
-                      }}
-                    />
-                  ) : (
-                    'Loading...'
-                  )}
+              <Box sx={{ mt: 3 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Description
                 </Typography>
+                <Box
+                  sx={{
+                    backgroundColor: 'background.paper',
+                    borderRadius: 2,
+                    boxShadow: 1,
+                    px: isMobile ? 2 : 3,
+                    py: isMobile ? 1.5 : 2.5,
+                    maxHeight: descriptionExpanded ? 'none' : isMobile ? 160 : 220,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <Typography
+                    variant={isMobile ? 'body2' : 'body1'}
+                    align='left'
+                    color='text.secondary'
+                    sx={{ lineHeight: 1.6 }}
+                    dangerouslySetInnerHTML={{
+                      __html: textToHTML(
+                        channel
+                          ? (() => {
+                            const rawDescription = channel.description?.trim() || '** No description available **';
+                            const limit = isMobile ? 400 : 900;
+                            const shouldTruncate = rawDescription.length > limit;
+                            const truncated = shouldTruncate ? `${rawDescription.slice(0, limit)}...` : rawDescription;
+                            return descriptionExpanded || !shouldTruncate ? rawDescription : truncated;
+                          })()
+                          : 'Loading...'
+                      ),
+                    }}
+                  />
+                </Box>
+                {channel && (channel.description?.trim().length ?? 0) > (isMobile ? 400 : 900) && (
+                  <Button size='small' onClick={() => setDescriptionExpanded((prev) => !prev)} sx={{ mt: 1 }}>
+                    {descriptionExpanded ? 'Show less' : 'Read more'}
+                  </Button>
+                )}
               </Box>
             </Grid>
           </Grid>
@@ -355,13 +366,27 @@ function ChannelPage({ token }: ChannelPageProps) {
                 gap: 2,
               }}
             >
-              <Box sx={{ minWidth: 0 }}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Channel settings
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1, alignItems: 'center' }}>
-                  {renderSubFolder(channel.sub_folder)}
-                  {renderFilterIndicators()}
+              <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Channel settings
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Content Rating:
+                  </Typography>
+                  <RatingBadge
+                    rating={channel.default_rating}
+                    ratingSource="Channel Default"
+                    size="small"
+                    sx={{ height: isMobile ? 20 : 24, fontSize: isMobile ? '0.65rem' : '0.75rem' }}
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    Folder:
+                  </Typography>
+                  {renderSubFolder()}
+                </Box>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'center' }}>
+                  {renderFilterIndicators({ includeRating: false })}
                 </Box>
               </Box>
               <Button
