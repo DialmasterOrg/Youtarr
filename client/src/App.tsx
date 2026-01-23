@@ -1,7 +1,6 @@
 import './App.css';
 import packageJson from '../package.json';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import toplogo from './youtarr_logo.svg';
 import axios from 'axios';
 import {
   BrowserRouter as Router,
@@ -375,7 +374,6 @@ function AppContent() {
           token={requiresSetup ? null : token}
           isPlatformManaged={isPlatformManaged}
           appName="Youtarr"
-          logoSrc={toplogo}
           versionLabel={ytDlpVersion ? `${clientVersion} • yt-dlp: ${ytDlpVersion}` : clientVersion}
           updateAvailable={updateAvailable}
           updateTooltip={updateTooltip}

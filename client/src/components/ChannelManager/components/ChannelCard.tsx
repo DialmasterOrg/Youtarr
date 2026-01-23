@@ -5,6 +5,7 @@ import ImageIcon from '@mui/icons-material/Image';
 import { Channel } from '../../../types/Channel';
 import { QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip } from './chips';
 import FolderIcon from '@mui/icons-material/Folder';
+import { isExplicitlyNoSubfolder, isUsingDefaultSubfolder } from '../../../utils/channelHelpers';
 
 interface ChannelCardProps {
     channel: Channel;
@@ -33,6 +34,12 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
     const thumbnailSrc = channel.channel_id
         ? `/images/channelthumb-${channel.channel_id}.jpg`
         : '/images/channelthumb-default.jpg';
+
+    const hasCustomFolder = Boolean(
+        channel.sub_folder &&
+        !isExplicitlyNoSubfolder(channel.sub_folder) &&
+        !isUsingDefaultSubfolder(channel.sub_folder)
+    );
 
     return (
         <Card
@@ -85,7 +92,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                         width: '100%',
                         pt: '56.25%',
                         overflow: 'hidden',
-                        bgcolor: 'rgba(64,64,64,0.5)',
+                        bgcolor: 'common.white',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -144,17 +151,18 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                     >
                     </Box>
 
-                    <Box sx={{ position: 'absolute', top: 8, left: 8 }}>
+                    <Box sx={{ position: 'absolute', bottom: 8, left: 8, zIndex: 1 }}>
                         <QualityChip videoQuality={channel.video_quality} globalPreferredResolution={globalPreferredResolution} />
                     </Box>
                     <Box
                         sx={{
                             position: 'absolute',
                             bottom: 8,
-                            left: 8,
+                            right: 8,
                             display: 'flex',
                             flexDirection: 'column',
                             gap: 0.75,
+                            alignItems: 'flex-end',
                         }}
                     >
                         <DurationFilterChip
@@ -198,12 +206,14 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                                     {channel.uploader || 'Unknown Channel'}
                                 </Typography>
                             </Box>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
-                                <FolderIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                                <Typography variant="body2" color="text.secondary" noWrap>
-                                    {channel.sub_folder ? `/${channel.sub_folder}` : 'Default Folder'}
-                                </Typography>
-                            </Box>
+                            {hasCustomFolder && (
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                                    <FolderIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                    <Typography variant="body2" color="text.secondary" noWrap>
+                                        {`/${channel.sub_folder}`}
+                                    </Typography>
+                                </Box>
+                            )}
                         </Box>
                         {isPendingAddition && <Chip label="Pending" size="small" color="warning" />}
                     </Box>

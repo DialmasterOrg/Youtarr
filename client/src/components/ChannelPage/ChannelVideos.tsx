@@ -332,7 +332,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     await triggerDownloads({ urls, overrideSettings, channelId });
 
     setCheckedBoxes([]);
-    navigate('/downloads');
+    navigate('/downloads/activity');
   };
 
   const handleRefreshClick = () => {

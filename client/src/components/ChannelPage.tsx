@@ -195,7 +195,7 @@ function ChannelPage({ token }: ChannelPageProps) {
     }
 
     return (
-      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', marginBottom: 0.5, alignItems: 'center' }}>
+      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
         {hasQualityOverride && (
           <Tooltip title={`Auto-download quality override: ${channel.video_quality}p`}>
             <Chip
@@ -315,7 +315,6 @@ function ChannelPage({ token }: ChannelPageProps) {
     );
   };
 
-  const thumbnailHeight = isMobile ? 180 : 220;
   const descriptionLimit = isMobile ? 320 : 600;
   const descriptionCollapsedHeight = isMobile ? 150 : 200;
   const trimmedDescription = channel?.description?.trim();
@@ -342,13 +341,10 @@ function ChannelPage({ token }: ChannelPageProps) {
                 sx={{
                   width: '100%',
                   height: '100%',
-                  minHeight: thumbnailHeight,
                   objectFit: 'cover',
                   borderRadius: 3,
                   backgroundColor: 'action.hover',
                   display: 'block',
-                  border: 1,
-                  borderColor: 'divider',
                 }}
               />
             </Grid>
@@ -360,7 +356,6 @@ function ChannelPage({ token }: ChannelPageProps) {
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 1.25,
-                minHeight: thumbnailHeight,
               }}
             >
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
@@ -394,7 +389,6 @@ function ChannelPage({ token }: ChannelPageProps) {
                   sx={{
                     backgroundColor: 'background.paper',
                     borderRadius: 2,
-                    boxShadow: 1,
                     pl: 0,
                     pr: isMobile ? 2 : 3,
                     py: isMobile ? 1.5 : 2.25,
@@ -429,7 +423,16 @@ function ChannelPage({ token }: ChannelPageProps) {
 
       {channel && (
         <Card elevation={3} sx={{ mb: 2 }}>
-          <CardContent sx={{ px: isMobile ? 2 : 3, py: isMobile ? 1.25 : 1.75 }}>
+          <CardContent
+            sx={{
+              px: isMobile ? 2 : 3,
+              pt: isMobile ? 1 : 1.25,
+              pb: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: isMobile ? 0.75 : 1,
+            }}
+          >
             <Box
               sx={{
                 display: 'flex',
@@ -450,7 +453,7 @@ function ChannelPage({ token }: ChannelPageProps) {
                 }}
               >
                 <Typography variant="h6" sx={{ fontWeight: 700, mr: isMobile ? 0 : 1 }}>
-                  Channel settings
+                  Channel Settings
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
                   <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
@@ -481,20 +484,31 @@ function ChannelPage({ token }: ChannelPageProps) {
                 startIcon={<SettingsIcon />}
                 onClick={() => setSettingsOpen(true)}
                 size="small"
+                aria-label="Edit settings"
                 sx={{
                   alignSelf: isMobile ? 'stretch' : 'center',
                   textTransform: 'none',
+                  minWidth: 0,
                   px: 2,
                   py: 0.75,
                   ml: isMobile ? 0 : 'auto',
                 }}
               >
-                Edit settings
+                <Box
+                  component="span"
+                  sx={{
+                    display: {
+                      xs: 'none',
+                      sm: 'inline-flex',
+                    },
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Edit Settings
+                </Box>
               </Button>
             </Box>
-            <Box sx={{ mt: isMobile ? 1 : 1.25, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-              {renderFilterIndicators({ includeRating: false })}
-            </Box>
+            {renderFilterIndicators({ includeRating: false })}
           </CardContent>
         </Card>
       )}

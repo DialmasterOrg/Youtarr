@@ -32,7 +32,6 @@ interface AppShellProps {
   token: string | null;
   isPlatformManaged: boolean;
   appName?: string;
-  logoSrc?: string;
   versionLabel?: string;
   onLogout?: () => void;
   updateAvailable?: boolean;
@@ -74,7 +73,6 @@ export function AppShell({
   token,
   isPlatformManaged,
   appName = 'Youtarr',
-  logoSrc,
   versionLabel,
   onLogout,
   updateAvailable = false,
@@ -420,84 +418,61 @@ export function AppShell({
         }}
       />
 
-        <AppBar
-          position="fixed"
-          elevation={0}
-          sx={{
-            backgroundColor: 'var(--background)',
-            border: 'var(--appbar-border)',
-            boxShadow: 'var(--appbar-shadow)',
-            color: 'text.primary',
-            zIndex: theme.zIndex.drawer + 1,
-            // background: 'var(--background)',
-            // inset from the very top to provide top padding on desktop
-            top: isMobile ? 0 : 'var(--shell-gap)',
-            left: isMobile ? 0 : 'var(--shell-gap)',
-            right: isMobile ? 0 : 'var(--shell-gap)',
-            width: isMobile ? '100vw' : 'calc(100vw - (var(--shell-gap) * 2))',
-            borderRadius: 3,
-            overflow: 'hidden',
-          }}
-        >
-          <Toolbar sx={{ gap: 2, px: { xs: 1.5, sm: 2 }, minHeight: 64, alignItems: 'center' }}>
-            <IconButton 
-              className="pop-toggle" 
-              aria-label="toggle navigation" 
-              onClick={toggleDrawer}
-              sx={{ 
-                width: APP_BAR_TOGGLE_SIZE,
-                height: APP_BAR_TOGGLE_SIZE,
-                p: 0,
-                borderRadius: '50%',
-                transform: (isMobile ? drawerOpenMobile : !collapsed) ? 'rotate(0deg)' : 'rotate(180deg)',
-                transition: 'transform 450ms var(--transition-bouncy)',
-                color: 'var(--foreground)'
+      <AppBar
+        position="fixed"
+        elevation={0}
+        sx={{
+          backgroundColor: 'background.paper',
+          border: 'var(--appbar-border)',
+          boxShadow: 'var(--appbar-shadow)',
+          backgroundImage: 'var(--appbar-pattern)',
+          backgroundSize: '24px 24px',
+          color: 'text.primary',
+          zIndex: theme.zIndex.drawer + 1,
+          top: isMobile ? 0 : 'var(--shell-gap)',
+          left: isMobile ? 0 : 'var(--shell-gap)',
+          right: isMobile ? 0 : 'var(--shell-gap)',
+          width: isMobile ? '100vw' : 'calc(100vw - (var(--shell-gap) * 2))',
+          borderRadius: 3,
+          overflow: 'hidden',
+        }}
+      >
+        <Toolbar sx={{ gap: 2, px: { xs: 1.5, sm: 2 }, minHeight: 64, alignItems: 'center' }}>
+          <IconButton
+            className="pop-toggle"
+            aria-label="toggle navigation"
+            onClick={toggleDrawer}
+            sx={{
+              width: APP_BAR_TOGGLE_SIZE,
+              height: APP_BAR_TOGGLE_SIZE,
+              p: 0,
+              borderRadius: '50%',
+              transform: (isMobile ? drawerOpenMobile : !collapsed) ? 'rotate(0deg)' : 'rotate(180deg)',
+              transition: 'transform 450ms var(--transition-bouncy)',
+              color: 'var(--foreground)',
+            }}
+          >
+            <ChevronLeftIcon sx={{ fontSize: 24 }} />
+          </IconButton>
+
+          <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', height: APP_BAR_TOGGLE_SIZE, minWidth: 0 }}>
+            <Typography
+              variant="h6"
+              component="span"
+              sx={{
+                fontWeight: 800,
+                fontFamily: 'Outfit',
+                whiteSpace: 'nowrap',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                lineHeight: `${APP_BAR_TOGGLE_SIZE}px`,
+                fontSize: '1.35rem',
               }}
             >
-              <ChevronLeftIcon sx={{ fontSize: 24 }} />
-            </IconButton>
-
-            <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', height: APP_BAR_TOGGLE_SIZE, minWidth: 0 }}>
-              <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1, height: '100%' }}>
-                {logoSrc ? (
-                  <Box
-                    sx={{ 
-                      height: '100%', 
-                      width: APP_BAR_TOGGLE_SIZE,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: '12px',
-                      overflow: 'hidden',
-                      backgroundImage: 'var(--appbar-gradient), var(--appbar-pattern)',
-                      backgroundSize: '24px 24px',
-                      boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.1)',
-                      p: 0.5
-                    }}
-                  >
-                    <Box
-                      component="img"
-                      src={logoSrc}
-                      alt={appName}
-                      sx={{ height: '120%', width: 'auto', objectFit: 'contain', display: 'block' }}
-                    />
-                  </Box>
-                ) : null}
-                <Typography
-                  variant="h6"
-                  component="span"
-                  sx={{
-                    fontWeight: 800,
-                    fontFamily: 'Outfit',
-                    whiteSpace: 'nowrap',
-                    lineHeight: 1,
-                    mb: 0.5 // minor adjustment for baseline alignment
-                  }}
-                >
-                  {appName}
-                </Typography>
-              </Box>
-            </Box>
+              {appName}
+            </Typography>
+          </Box>
 
           <Box sx={{ flexGrow: 1 }} />
 

@@ -35,7 +35,7 @@ import {
 import Pagination from '@mui/material/Pagination';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import StorageIcon from '@mui/icons-material/Storage';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -822,11 +822,16 @@ function VideosPage({ token }: VideosPageProps) {
                                 <Tooltip title="Video file exists on disk" enterTouchDelay={0}>
                                   <Chip
                                     size="small"
-                                    icon={<CheckCircleOutlineIcon />}
+                                    icon={<CheckCircleIcon />}
                                     label="Available"
                                     color="success"
-                                    variant="outlined"
-                                    sx={{ height: 20, fontSize: '0.7rem' }}
+                                    variant="filled"
+                                    sx={{
+                                      height: 20,
+                                      fontSize: '0.7rem',
+                                      '& .MuiChip-icon': { fontSize: 14, ml: 0.5 },
+                                      '& .MuiChip-label': { px: 0.75 },
+                                    }}
                                   />
                                 </Tooltip>
                               ) : null}
@@ -988,6 +993,7 @@ function VideosPage({ token }: VideosPageProps) {
                                       label={mediaTypeInfo.label}
                                       color={mediaTypeInfo.color}
                                       variant="outlined"
+                                      sx={{ height: 20, fontSize: '0.7rem' }}
                                     />
                                   ) : null;
                                 })()}
@@ -996,7 +1002,7 @@ function VideosPage({ token }: VideosPageProps) {
                                   ratingSource={video.rating_source}
                                   showNA={true}
                                   size="small"
-                                  sx={{ boxShadow: 'none' }}
+                                  sx={{ height: 20, fontSize: '0.7rem', boxShadow: 'none' }}
                                 />
                                 {video.fileSize && (
                                   <Tooltip title="File size on disk" enterTouchDelay={0}>
@@ -1005,6 +1011,7 @@ function VideosPage({ token }: VideosPageProps) {
                                       icon={<StorageIcon />}
                                       label={formatFileSize(video.fileSize)}
                                       variant="outlined"
+                                      sx={{ height: 20, fontSize: '0.7rem' }}
                                     />
                                   </Tooltip>
                                 )}
@@ -1016,16 +1023,23 @@ function VideosPage({ token }: VideosPageProps) {
                                       label="Missing"
                                       color="error"
                                       variant="outlined"
+                                      sx={{ height: 20, fontSize: '0.7rem' }}
                                     />
                                   </Tooltip>
                                 ) : video.fileSize ? (
                                   <Tooltip title="Video file exists on disk" enterTouchDelay={0}>
                                     <Chip
                                       size="small"
-                                      icon={<CheckCircleOutlineIcon />}
+                                      icon={<CheckCircleIcon />}
                                       label="Available"
                                       color="success"
-                                      variant="outlined"
+                                      variant="filled"
+                                      sx={{
+                                        height: 20,
+                                        fontSize: '0.7rem',
+                                        '& .MuiChip-icon': { fontSize: 14, ml: 0.5 },
+                                        '& .MuiChip-label': { px: 0.75 },
+                                      }}
                                     />
                                   </Tooltip>
                                 ) : null}
