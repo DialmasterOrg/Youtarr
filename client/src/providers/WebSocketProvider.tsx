@@ -126,8 +126,10 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     };
   }, [connect, socket]);
 
+  const contextValue = React.useMemo(() => ({ socket, subscribe, unsubscribe }), [socket, subscribe, unsubscribe]);
+
   return (
-    <WebSocketContext.Provider value={{ socket, subscribe, unsubscribe }}>
+    <WebSocketContext.Provider value={contextValue}>
       {children}
     </WebSocketContext.Provider>
   );

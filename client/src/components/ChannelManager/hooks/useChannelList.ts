@@ -37,13 +37,17 @@ export const useChannelList = ({
   const [error, setError] = useState<string | null>(null);
   const [subFolders, setSubFolders] = useState<string[]>([]);
   const isMountedRef = useRef(true);
+  const hookInstanceId = useRef(Math.random().toString(36).substring(7));
   const filterKeyRef = useRef('');
 
   const filterKey = JSON.stringify({ token, searchTerm, sortOrder, subFolder, pageSize });
 
   useEffect(() => {
+    isMountedRef.current = true;
+    console.log(`[useChannelList] Hook instance ${hookInstanceId.current} mounted`);
     return () => {
       isMountedRef.current = false;
+      console.log(`[useChannelList] Hook instance ${hookInstanceId.current} unmounted`);
     };
   }, []);
 
@@ -60,7 +64,10 @@ export const useChannelList = ({
     }
   }, [append, filterKey]);
 
+  // Removed noisy per-render diagnostic log that flooded the console.
+
   const fetchChannels = useCallback(async () => {
+
     if (!token) {
       if (!isMountedRef.current) return;
       setChannels([]);
@@ -77,8 +84,18 @@ export const useChannelList = ({
     setError(null);
 
     const requestStartedAt = performance.now();
+    const requestId = Math.random().toString(36).substring(7);
 
     try {
+      console.log(`[useChannelList] [${hookInstanceId.current}] [Req:${requestId}] Fetching channels...`, { 
+        page, 
+        pageSize, 
+        searchTerm, 
+        sortOrder, 
+        subFolder, 
+        append,
+        tokenPrefix: token ? token.substring(0, 8) : 'null'
+      });
       const response = await axios.get<ChannelListResponse>('/getchannels', {
         headers: { 'x-access-token': token },
         timeout: 15000,
@@ -88,48 +105,66 @@ export const useChannelList = ({
           search: searchTerm || undefined,
           sortOrder,
           subFolder: subFolder || undefined,
+          _t: Date.now() // Cache buster to bypass potentially problematic 304s in some environments
         },
       });
 
       const requestDurationMs = Math.round(performance.now() - requestStartedAt);
+      console.log(`[useChannelList] [${hookInstanceId.current}] [Req:${requestId}] API Response received`, { 
+        status: response.status, 
+        durationMs: requestDurationMs,
+        hasData: !!response.data,
+        dataType: typeof response.data,
+        channelCount: Array.isArray(response.data?.channels) ? response.data.channels.length : 
+                     (response.data?.channels as any)?.rows?.length ?? 'N/A',
+        fullPayload: response.data // Added to explore object shape
+      });
 
       const payload = response.data;
-      if (!isMountedRef.current) return;
+      if (!isMountedRef.current) {
+        console.log(`[useChannelList] [${hookInstanceId.current}] [Req:${requestId}] Hook unmounted before response processed`);
+        return;
+      }
 
-      const rawChannels = Array.isArray(payload?.channels)
-        ? payload.channels
-        : payload?.channels && typeof payload.channels === 'object'
-        ? payload.channels.rows || []
-        : [];
-      const rawTotal = typeof payload?.total === 'number'
-        ? payload.total
-        : payload?.channels && typeof payload.channels === 'object' && typeof payload.channels.count === 'number'
-        ? payload.channels.count
-        : 0;
-      const rawTotalPages = typeof payload?.totalPages === 'number'
-        ? payload.totalPages
-        : payload?.channels && typeof payload.channels === 'object' && typeof payload.channels.totalPages === 'number'
-        ? payload.channels.totalPages
-        : 0;
+      // Robust check for channels array in different possible response shapes
+      let rawChannels: Channel[] = [];
+      if (Array.isArray(payload?.channels)) {
+        rawChannels = payload.channels;
+      } else if (payload?.channels && typeof payload.channels === 'object' && Array.isArray((payload.channels as any).rows)) {
+        rawChannels = (payload.channels as any).rows;
+      }
+
+      // Robust check for total count
+      let rawTotal = 0;
+      if (typeof payload?.total === 'number') {
+        rawTotal = payload.total;
+      } else if (payload?.channels && typeof payload.channels === 'object' && typeof (payload.channels as any).count === 'number') {
+        rawTotal = (payload.channels as any).count;
+      }
+
+      // Robust check for total pages
+      let rawTotalPages = 0;
+      if (typeof payload?.totalPages === 'number') {
+        rawTotalPages = payload.totalPages;
+      } else if (payload?.channels && typeof payload.channels === 'object' && typeof (payload.channels as any).totalPages === 'number') {
+        rawTotalPages = (payload.channels as any).totalPages;
+      }
+
       const rawSubFolders = (payload?.subFolders || payload?.subfolders || []) as Array<string | null>;
 
-      if (!Array.isArray(rawChannels)) {
-        console.warn('Channel list payload shape unexpected', {
-          page,
-          pageSize,
-          searchTerm,
-          sortOrder,
-          subFolder,
-          durationMs: requestDurationMs,
-          payload,
-        });
-      }
+      console.log(`[useChannelList] [${hookInstanceId.current}] [Req:${requestId}] State update starting`, { 
+        rawChannelsCount: rawChannels.length, 
+        rawTotal, 
+        rawTotalPages,
+        rawSubFoldersCount: rawSubFolders.length,
+        firstChannelSample: rawChannels[0]
+      });
 
       setChannels((prev) => {
         if (!append || page === 1) {
-          return rawChannels || [];
+          return rawChannels;
         }
-        const combined = [...prev, ...(rawChannels || [])];
+        const combined = [...prev, ...rawChannels];
         const seen = new Set<string>();
         return combined.filter((channel) => {
           const key = channel.channel_id ? String(channel.channel_id) : channel.url;
@@ -143,12 +178,7 @@ export const useChannelList = ({
       setSubFolders(rawSubFolders.map((value) => normalizeSubFolderKey(value)).filter(Boolean));
     } catch (err: any) {
       const requestDurationMs = Math.round(performance.now() - requestStartedAt);
-      console.error('Channel list request failed', {
-        page,
-        pageSize,
-        searchTerm,
-        sortOrder,
-        subFolder,
+      console.error(`[useChannelList] [${hookInstanceId.current}] [Req:${requestId}] Fetch failed`, { 
         durationMs: requestDurationMs,
         error: {
           message: err?.message,
