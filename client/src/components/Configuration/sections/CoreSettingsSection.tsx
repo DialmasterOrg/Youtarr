@@ -32,7 +32,6 @@ import { InfoTooltip } from '../common/InfoTooltip';
 import SubtitleLanguageSelector from '../SubtitleLanguageSelector';
 import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
 import { useSubfolders } from '../../../hooks/useSubfolders';
-import { useThemeEngine } from '../../../contexts/ThemeEngineContext';
 import { ConfigState, DeploymentEnvironment, PlatformManagedState } from '../types';
 import { reverseFrequencyMapping, getChannelFilesOptions } from '../helpers';
 import { FREQUENCY_MAPPING } from '../constants';
@@ -55,7 +54,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
   onMobileTooltipClick,
   token,
 }) => {
-  const { themeMode, setThemeMode, motionEnabled, setMotionEnabled } = useThemeEngine();
+  // appearance controls (theme & motion) have moved to the Appearance settings page
   // Fetch available subfolders
   const { subfolders, loading: subfoldersLoading } = useSubfolders(token);
 
@@ -524,23 +523,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
           </Card>
         </Grid>
 
-        <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={motionEnabled}
-                  onChange={(event) => setMotionEnabled(event.target.checked)}
-                />
-              }
-              label="Enable Theme Animations & Wiggles"
-            />
-            <InfoTooltip
-              text="Master toggle for all theme animations, wiggles, and motion accents. Disabling this forces transitions to 0ms."
-              onMobileClick={onMobileTooltipClick}
-            />
-          </Box>
-        </Grid>
+        {/* Appearance controls moved to Appearance settings page */}
       </Grid>
 
       {/* Confirmation Dialog for Default Subfolder */}

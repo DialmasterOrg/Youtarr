@@ -42,7 +42,7 @@ const EXPANDED_WIDTH = 260;
 const COLLAPSED_WIDTH = 72;
 
 const NAV_MAIN_MIN_HEIGHT = 40; // target height for each main nav button (px)
-const NAV_SUB_MIN_HEIGHT = 16; // sub-item buttons stay slightly smaller
+const NAV_SUB_MIN_HEIGHT = 20; // sub-item buttons stay slightly smaller
 const NAV_EXPANDED_HORIZONTAL_PADDING = 2;
 const NAV_COLLAPSED_HORIZONTAL_PADDING = 2;
 const NAV_ICON_SIZE = 25; // same icon size collapsed vs expanded
@@ -52,17 +52,20 @@ const NAV_PRIMARY_LINE_HEIGHT = 1.15;
 const NAV_SECONDARY_FONT_SIZE = '0.65rem';
 const NAV_SECONDARY_LINE_HEIGHT = 1.1;
 const NAV_MAIN_GAP = 0.25;
-const NAV_SUB_VERTICAL_GAP = .75;
+const NAV_SUB_VERTICAL_GAP = 0.75;
 const NAV_SUB_PADDING_LEFT = 3.5;
 const NAV_SUB_PADDING_RIGHT = 2;
-const NAV_SUB_FONT_SIZE = '0.75rem';
+const NAV_SUB_TEXT_INDENT = 3.5;
+const NAV_SUB_HIGHLIGHT_LEFT_PADDING = 1.25; // spacing between left border (highlight) and sub-item text
+const NAV_SUB_FONT_SIZE = '0.8rem';
 const NAV_SUB_LINE_HEIGHT = 1.2;
+const NAV_DRAWER_BORDER_RADIUS = 'var(--nav-radius)';
 const NAV_DRAWER_DESKTOP_TOP_OFFSET = 'calc(80px + var(--shell-gap))';
 const NAV_DRAWER_DESKTOP_BOTTOM_GAP = 'calc(20px + var(--shell-gap))';
 const NAV_DRAWER_DESKTOP_MAX_HEIGHT = 'calc(100vh - (64px + (var(--shell-gap) * 2)))';
-const NAV_DRAWER_MOBILE_TOP_OFFSET = 'calc(64px + var(--shell-gap))';
+const NAV_DRAWER_MOBILE_TOP_OFFSET = 'calc(60px + var(--shell-gap))';
 const NAV_DRAWER_MOBILE_BOTTOM_GAP = 'calc(20px + var(--shell-gap))';
-const NAV_DRAWER_MOBILE_MAX_HEIGHT = 'calc(100vh - (var(--shell-gap) * 2))';
+const NAV_DRAWER_MOBILE_MAX_HEIGHT = 'calc(100vh - 64px - var(--shell-gap))';
 
 export function AppShell({
   token,
@@ -84,6 +87,7 @@ export function AppShell({
   const isNavCollapsed = !isMobile && collapsed;
   // icon box size stays constant so the icon doesn't shift during collapse
   const iconBoxSize = NAV_ICON_SIZE;
+  const toggleRotateDeg = (isMobile ? drawerOpenMobile : !collapsed) ? 0 : 180;
 
   useEffect(() => {
     const navWidth = isMobile ? 0 : collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
@@ -255,43 +259,47 @@ export function AppShell({
                         onClick={() => {
                           if (isMobile) setDrawerOpenMobile(false);
                         }}
-                         sx={{
-                           borderRadius: 2,
-                           pl: NAV_SUB_PADDING_LEFT,
-                           pr: NAV_SUB_PADDING_RIGHT,
-                           py: 0,
-                           minHeight: NAV_SUB_MIN_HEIGHT,
-                           border: subSelected ? 'var(--nav-item-border-selected)' : '1px solid transparent',
-                           bgcolor: subSelected ? 'var(--nav-item-bg-selected)' : 'transparent',
-                           boxShadow: subSelected ? 'var(--nav-item-shadow-selected)' : 'none',
-                           color: subSelected ? 'text.primary' : 'text.secondary',
-                           '&:hover': {
-                             bgcolor: 'transparent',
-                             transform: 'none',
-                             boxShadow: 'none',
-                           },
-                         }}
+                        sx={(theme) => ({
+                          borderRadius: 2,
+                          pl: 0,
+                          pr: NAV_SUB_PADDING_RIGHT,
+                          py: 0,
+                          minHeight: NAV_SUB_MIN_HEIGHT,
+                          height: NAV_SUB_MIN_HEIGHT,
+                          width: `calc(100% - ${theme.spacing(NAV_SUB_TEXT_INDENT)})`,
+                          ml: theme.spacing(NAV_SUB_TEXT_INDENT),
+                          border: subSelected ? 'var(--nav-item-border-selected)' : '1px solid transparent',
+                          bgcolor: subSelected ? 'var(--nav-item-bg-selected)' : 'transparent',
+                          boxShadow: subSelected ? 'var(--nav-item-shadow-selected)' : 'none',
+                          color: subSelected ? 'text.primary' : 'text.secondary',
+                          '&:hover': {
+                            bgcolor: 'transparent',
+                            transform: 'none',
+                            boxShadow: 'none',
+                          },
+                        })}
                       >
-                         <ListItemText
-                           primary={subItem.label}
-                           sx={{
-                             minWidth: 0,
-                             overflow: 'hidden',
-                             whiteSpace: 'nowrap',
-                             textOverflow: 'ellipsis',
-                           }}
-                           primaryTypographyProps={{
-                             variant: 'body2',
-                             sx: {
-                               fontWeight: subSelected ? 700 : 500,
-                               fontSize: NAV_SUB_FONT_SIZE,
-                               lineHeight: NAV_SUB_LINE_HEIGHT,
-                               overflow: 'hidden',
-                               textOverflow: 'ellipsis',
-                             },
-                             noWrap: true,
-                           }}
-                         />
+                        <ListItemText
+                          primary={subItem.label}
+                          sx={(theme) => ({
+                            minWidth: 0,
+                            pl: theme.spacing(NAV_SUB_HIGHLIGHT_LEFT_PADDING),
+                            overflow: 'hidden',
+                            whiteSpace: 'nowrap',
+                            textOverflow: 'ellipsis',
+                          })}
+                          primaryTypographyProps={{
+                            variant: 'body2',
+                            sx: {
+                              fontWeight: subSelected ? 700 : 500,
+                              fontSize: NAV_SUB_FONT_SIZE,
+                              lineHeight: NAV_SUB_LINE_HEIGHT,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            },
+                            noWrap: true,
+                          }}
+                        />
                       </ListItemButton>
                     );
                   })}
@@ -464,27 +472,29 @@ export function AppShell({
         </Toolbar>
       </AppBar>
 
-      <Drawer
-        variant={isMobile ? 'temporary' : 'permanent'}
-        open={isMobile ? drawerOpenMobile : true}
-        onClose={() => setDrawerOpenMobile(false)}
-        ModalProps={{ keepMounted: true }}
-        PaperProps={{
-          className: 'app-nav-paper neumo-breathe',
-          sx: {
-            borderRadius: isMobile ? 0 : 'var(--nav-radius)',
-            border: 'var(--nav-border)',
-            boxShadow: 'var(--nav-shadow)',
-            bgcolor: 'background.paper',
-            // keep the drawer tucked beneath the AppBar regardless of width
-            mt: isMobile ? NAV_DRAWER_MOBILE_TOP_OFFSET : NAV_DRAWER_DESKTOP_TOP_OFFSET,
-            mb: isMobile ? NAV_DRAWER_MOBILE_BOTTOM_GAP : NAV_DRAWER_DESKTOP_BOTTOM_GAP,
-            ml: isMobile ? 0 : 'var(--shell-gap)',
-            maxHeight: isMobile ? NAV_DRAWER_MOBILE_MAX_HEIGHT : NAV_DRAWER_DESKTOP_MAX_HEIGHT,
-            overflow: 'hidden',
-            overflowX: 'hidden',
-          },
-        }}
+        <Drawer
+          variant={isMobile ? 'temporary' : 'permanent'}
+          open={isMobile ? drawerOpenMobile : true}
+          onClose={() => setDrawerOpenMobile(false)}
+          ModalProps={{ keepMounted: true }}
+          PaperProps={{
+            className: 'app-nav-paper neumo-breathe',
+            sx: {
+              borderRadius: NAV_DRAWER_BORDER_RADIUS,
+              borderBottomLeftRadius: NAV_DRAWER_BORDER_RADIUS,
+              borderBottomRightRadius: NAV_DRAWER_BORDER_RADIUS,
+              border: 'var(--nav-border)',
+              boxShadow: 'var(--nav-shadow)',
+              bgcolor: 'background.paper',
+              // keep the drawer tucked beneath the AppBar regardless of width
+              mt: isMobile ? NAV_DRAWER_MOBILE_TOP_OFFSET : NAV_DRAWER_DESKTOP_TOP_OFFSET,
+              mb: isMobile ? NAV_DRAWER_MOBILE_BOTTOM_GAP : NAV_DRAWER_DESKTOP_BOTTOM_GAP,
+              ml: isMobile ? 0 : 'var(--shell-gap)',
+              maxHeight: isMobile ? NAV_DRAWER_MOBILE_MAX_HEIGHT : NAV_DRAWER_DESKTOP_MAX_HEIGHT,
+              overflow: 'hidden',
+              overflowX: 'hidden',
+            },
+          }}
         sx={{
           width: isMobile ? 0 : 'calc(var(--nav-width) + var(--shell-gap))',
           flexShrink: 0,

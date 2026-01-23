@@ -15,6 +15,7 @@ import PlexLibrarySelector from '../PlexLibrarySelector';
 import PlexAuthDialog from '../PlexAuthDialog';
 import ConfigurationSkeleton from '../Configuration/common/ConfigurationSkeleton';
 import { CoreSettingsSection } from '../Configuration/sections/CoreSettingsSection';
+import AppearanceSettingsSection from '../Configuration/sections/AppearanceSettingsSection';
 import { PlexIntegrationSection } from '../Configuration/sections/PlexIntegrationSection';
 import { SponsorBlockSection } from '../Configuration/sections/SponsorBlockSection';
 import { KodiCompatibilitySection } from '../Configuration/sections/KodiCompatibilitySection';
@@ -175,6 +176,10 @@ export function Settings({ token }: SettingsProps) {
               token={token}
             />
           }
+        />
+        <Route
+          path="appearance"
+          element={<AppearanceSettingsSection />}
         />
         <Route
           path="plex"

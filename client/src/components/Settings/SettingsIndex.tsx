@@ -4,6 +4,7 @@ import { Link as RouterLink } from 'react-router-dom';
 
 export const SETTINGS_PAGES = [
   { key: 'core', title: 'Core', description: 'Downloads folder, quality, defaults, and core behavior.' },
+  { key: 'appearance', title: 'Appearance', description: 'Theme, animations, and visual preferences.' },
   { key: 'plex', title: 'Plex', description: 'Plex integration and library configuration.' },
   { key: 'sponsorblock', title: 'SponsorBlock', description: 'Skip segments and SponsorBlock settings.' },
   { key: 'kodi', title: 'Kodi', description: 'Kodi compatibility and metadata options.' },
@@ -25,23 +26,43 @@ export function SettingsIndex() {
         {SETTINGS_PAGES.map((page) => (
           <Grid item xs={12} md={6} lg={4} key={page.key} sx={{ display: 'flex' }}>
             <Card variant="outlined" sx={{ borderRadius: 3, width: '100%', height: '100%' }}>
-                <CardActionArea component={RouterLink} to={`/settings/${page.key}`} sx={{ height: '100%', display: 'flex' }}>
-                  <CardContent
-                    sx={{
-                      flex: 1,
-                      // reduce visual height per request (about 50%) but keep layout spacing
-                      minHeight: 80,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-                    {page.title}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {page.description}
-                  </Typography>
+              <CardActionArea
+                component={RouterLink}
+                to={`/settings/${page.key}`}
+                sx={{ height: '100%', display: 'flex' }}
+              >
+                <CardContent
+                  sx={{
+                    flex: 1,
+                    // fixed height so all cards are uniform; allow two-line descriptions
+                    height: { xs: 80, md: 72 },
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'flex-start',
+                    gap: 0.5,
+                    px: { xs: 2, md: 1.5 },
+                    py: { xs: 1.5, md: 1 },
+                  }}
+                >
+                  <Box sx={{ ml: '25px', minWidth: 0 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.25, lineHeight: 1 }}>
+                      {page.title}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        lineHeight: 1.15,
+                      }}
+                    >
+                      {page.description}
+                    </Typography>
+                  </Box>
                 </CardContent>
               </CardActionArea>
             </Card>
