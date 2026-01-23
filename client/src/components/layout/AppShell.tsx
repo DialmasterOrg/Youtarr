@@ -247,7 +247,7 @@ export function AppShell({
                   }}
                 />
               </ListItemButton>
-              {!isNavCollapsed && item.subItems && selected && item.key === 'settings' && (
+              {!isNavCollapsed && item.subItems && selected && (item.key === 'settings' || item.key === 'downloads') && (
                 <List disablePadding sx={{ mt: NAV_SUB_VERTICAL_GAP, display: 'flex', flexDirection: 'column', gap: NAV_SUB_VERTICAL_GAP }}>
                   {item.subItems.map((subItem) => {
                     const subSelected = location.pathname === subItem.to;
