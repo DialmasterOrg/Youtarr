@@ -12,7 +12,8 @@ import axios from 'axios';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import DownloadProgress from './DownloadManager/DownloadProgress';
 import DownloadHistory from './DownloadManager/DownloadHistory';
-import DownloadNew from './DownloadManager/DownloadNew';
+import DownloadManualPage from './DownloadManager/DownloadManualPage';
+import DownloadChannelPage from './DownloadManager/DownloadChannelPage';
 import WebSocketContext from '../contexts/WebSocketContext';
 import { Job } from '../types/Job';
 
@@ -21,7 +22,6 @@ interface DownloadManagerProps {
 }
 
 function DownloadManager({ token }: DownloadManagerProps) {
-  const [videoUrls, setVideoUrls] = useState('');
   const [jobs, setJobs] = useState<Job[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -99,13 +99,24 @@ function DownloadManager({ token }: DownloadManagerProps) {
 
   return (
     <Routes>
+      <Route index element={<Navigate to="manual" replace />} />
       <Route
-        index
+        path="manual"
         element={
           <Grid container spacing={2}>
-            <DownloadNew
-              videoUrls={videoUrls}
-              setVideoUrls={setVideoUrls}
+            <DownloadManualPage
+              token={token}
+              fetchRunningJobs={fetchRunningJobs}
+              downloadInitiatedRef={downloadInitiatedRef}
+            />
+          </Grid>
+        }
+      />
+      <Route
+        path="channel"
+        element={
+          <Grid container spacing={2}>
+            <DownloadChannelPage
               token={token}
               fetchRunningJobs={fetchRunningJobs}
               downloadInitiatedRef={downloadInitiatedRef}

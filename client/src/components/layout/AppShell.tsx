@@ -96,7 +96,8 @@ export function AppShell({
 
   const downloadsSubItems = useMemo(
     () => [
-      { key: 'download-video', label: 'Download Video', to: '/downloads' },
+      { key: 'download-manual', label: 'Manual Download', to: '/downloads/manual' },
+      { key: 'download-channel', label: 'Channel Download', to: '/downloads/channel' },
       { key: 'download-activity', label: 'Activity', to: '/downloads/activity' },
       { key: 'download-history', label: 'History', to: '/downloads/history' },
     ],

@@ -680,6 +680,43 @@ function VideosPage({ token }: VideosPageProps) {
                                   />
                                 </Box>
                               ) : null}
+                              <Box
+                                sx={{
+                                  position: 'absolute',
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  bgcolor: 'rgba(0, 0, 0, 0.6)',
+                                  color: 'common.white',
+                                  px: 1,
+                                  py: 0.5,
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  textOverflow: 'ellipsis',
+                                  overflow: 'hidden',
+                                  whiteSpace: 'nowrap',
+                                  zIndex: 2,
+                                }}
+                              >
+                                {(() => {
+                                  const channelId = getEnabledChannelId(video.youTubeChannelName, video.channel_id);
+                                  return channelId ? (
+                                    <Typography
+                                      component={RouterLink}
+                                      to={`/channel/${channelId}`}
+                                      sx={{
+                                        color: 'inherit',
+                                        textDecoration: 'none',
+                                        '&:hover': { textDecoration: 'underline' },
+                                      }}
+                                    >
+                                      {video.youTubeChannelName}
+                                    </Typography>
+                                  ) : (
+                                    <Box component="span">{video.youTubeChannelName}</Box>
+                                  );
+                                })()}
+                              </Box>
                               {/* Delete icon for downloaded videos on mobile */}
                               {!video.removed && video.fileSize && (
                                 <IconButton
@@ -784,7 +821,7 @@ function VideosPage({ token }: VideosPageProps) {
                                 ratingSource={video.rating_source}
                                 showNA={true}
                                 size="small"
-                                sx={{ height: 20, fontSize: '0.7rem' }}
+                                sx={{ height: 20, fontSize: '0.7rem', boxShadow: 'none' }}
                               />
                               {video.fileSize && (
                                 <Tooltip title="File size on disk" enterTouchDelay={0}>
@@ -912,6 +949,43 @@ function VideosPage({ token }: VideosPageProps) {
                                   />
                                 </Box>
                               ) : null}
+                              <Box
+                                sx={{
+                                  position: 'absolute',
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  bgcolor: 'rgba(0, 0, 0, 0.6)',
+                                  color: 'common.white',
+                                  px: 1,
+                                  py: 0.5,
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  textOverflow: 'ellipsis',
+                                  overflow: 'hidden',
+                                  whiteSpace: 'nowrap',
+                                  zIndex: 2,
+                                }}
+                              >
+                                {(() => {
+                                  const channelId = getEnabledChannelId(video.youTubeChannelName, video.channel_id);
+                                  return channelId ? (
+                                    <Typography
+                                      component={RouterLink}
+                                      to={`/channel/${channelId}`}
+                                      sx={{
+                                        color: 'inherit',
+                                        textDecoration: 'none',
+                                        '&:hover': { textDecoration: 'underline' },
+                                      }}
+                                    >
+                                      {video.youTubeChannelName}
+                                    </Typography>
+                                  ) : (
+                                    <Box component="span">{video.youTubeChannelName}</Box>
+                                  );
+                                })()}
+                              </Box>
                             </Box>
                           </TableCell>
                           <TableCell style={{ fontSize: 'medium' }}>
@@ -983,6 +1057,7 @@ function VideosPage({ token }: VideosPageProps) {
                                 ratingSource={video.rating_source}
                                 showNA={true}
                                 size="small"
+                                sx={{ boxShadow: 'none' }}
                               />
                               {video.fileSize && (
                                 <Tooltip title="File size on disk" enterTouchDelay={0}>
