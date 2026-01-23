@@ -422,12 +422,11 @@ function ChannelPage({ token }: ChannelPageProps) {
       </Card>
 
       {channel && (
-        <Card elevation={3} sx={{ mb: 2 }}>
+        <Card elevation={3} sx={{ mb: 2, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <CardContent
             sx={{
               px: isMobile ? 2 : 3,
-              pt: isMobile ? 1 : 1.25,
-              pb: 0,
+              py: isMobile ? 1 : 1.25,
               display: 'flex',
               flexDirection: 'column',
               gap: isMobile ? 0.75 : 1,
@@ -440,6 +439,7 @@ function ChannelPage({ token }: ChannelPageProps) {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 gap: isMobile ? 1.25 : 2,
+                m: 0,
               }}
             >
               <Box
@@ -492,6 +492,7 @@ function ChannelPage({ token }: ChannelPageProps) {
                   px: 2,
                   py: 0.75,
                   ml: isMobile ? 0 : 'auto',
+                  m: 0,
                 }}
               >
                 <Box
@@ -504,11 +505,10 @@ function ChannelPage({ token }: ChannelPageProps) {
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  Edit Settings
+                  Edit
                 </Box>
               </Button>
             </Box>
-            {renderFilterIndicators({ includeRating: false })}
           </CardContent>
         </Card>
       )}
