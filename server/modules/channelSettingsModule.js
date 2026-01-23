@@ -581,6 +581,9 @@ class ChannelSettingsModule {
         ? String(settings.default_rating).trim()
         : null;
     }
+    if (settings.auto_download_enabled_tabs !== undefined) {
+      updateData.auto_download_enabled_tabs = settings.auto_download_enabled_tabs;
+    }
 
     // Update database FIRST to ensure changes are persisted before slow file operations
     // This prevents issues where HTTP requests timeout during file operations
@@ -626,6 +629,7 @@ class ChannelSettingsModule {
         max_duration: updatedChannel.max_duration,
         title_filter_regex: updatedChannel.title_filter_regex,
         default_rating: updatedChannel.default_rating || null,
+        auto_download_enabled_tabs: updatedChannel.auto_download_enabled_tabs,
       },
       folderMoved: subFolderChanged,
       moveResult

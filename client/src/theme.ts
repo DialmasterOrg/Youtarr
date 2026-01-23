@@ -122,7 +122,7 @@ const commonThemeOptions: ThemeOptions = {
         root: {
           borderRadius: 999,
           border: '2px solid var(--border-strong)',
-          boxShadow: 'var(--shadow-hard)',
+          boxShadow: 'none',
           textTransform: 'none',
           fontWeight: 700,
           transition:
@@ -178,6 +178,8 @@ const commonThemeOptions: ThemeOptions = {
         root: {
           borderRadius: 999,
           border: '2px solid var(--border-strong)',
+          boxShadow: 'none',
+          transition: 'box-shadow 250ms var(--transition-bouncy)',
           fontWeight: 600,
         },
       },

@@ -83,6 +83,17 @@ function ChannelPage({ token }: ChannelPageProps) {
       .replace(/(?:\r\n|\r|\n)/g, '<br />'); // replace newlines with <br />
   }
 
+  const chipHeight = isMobile ? 22 : 26;
+  const chipFontSize = isMobile ? '0.65rem' : '0.75rem';
+  const channelChipSx = {
+    height: chipHeight,
+    fontSize: chipFontSize,
+    borderRadius: 999,
+    boxShadow: 'none',
+    textTransform: 'none',
+    px: 1.25,
+  } as const;
+
   const getSubFolderLabel = (subFolder: string | null | undefined) => {
     if (isExplicitlyNoSubfolder(subFolder)) {
       return { label: 'root', isSpecial: true };
@@ -102,13 +113,45 @@ function ChannelPage({ token }: ChannelPageProps) {
       <Chip
         icon={<FolderIcon sx={{ fontSize: isMobile ? '0.75rem' : '0.85rem' }} />}
         label={label}
-        size={isMobile ? 'small' : 'small'}
+        size="small"
         variant="outlined"
         sx={{
-          fontSize: isMobile ? '0.65rem' : '0.75rem',
+          ...channelChipSx,
           fontStyle: isSpecial ? 'italic' : 'normal',
         }}
       />
+    );
+  };
+
+  const renderAutoDownloadChips = () => {
+    if (!channel) return null;
+    const enabledTabs = channel.auto_download_enabled_tabs
+      ? channel.auto_download_enabled_tabs.split(',').map((tab) => tab.trim())
+      : [];
+
+    return (
+      <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+        <Chip
+          label="Videos"
+          size="small"
+          variant={enabledTabs.includes('video') ? 'filled' : 'outlined'}
+          color={enabledTabs.includes('video') ? 'primary' : 'default'}
+          sx={{
+            ...channelChipSx,
+            opacity: enabledTabs.includes('video') ? 1 : 0.5,
+          }}
+        />
+        <Chip
+          label="Shorts"
+          size="small"
+          variant={enabledTabs.includes('short') ? 'filled' : 'outlined'}
+          color={enabledTabs.includes('short') ? 'primary' : 'default'}
+          sx={{
+            ...channelChipSx,
+            opacity: enabledTabs.includes('short') ? 1 : 0.5,
+          }}
+        />
+      </Box>
     );
   };
 
@@ -161,7 +204,9 @@ function ChannelPage({ token }: ChannelPageProps) {
               size="small"
               variant="outlined"
               color="primary"
-              sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem', height: isMobile ? '20px' : '24px' }}
+              sx={{
+                ...channelChipSx,
+              }}
             />
           </Tooltip>
         )}
@@ -174,7 +219,9 @@ function ChannelPage({ token }: ChannelPageProps) {
               size="small"
               variant="outlined"
               color="primary"
-              sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem', height: isMobile ? '20px' : '24px' }}
+              sx={{
+                ...channelChipSx,
+              }}
             />
           </Tooltip>
         )}
@@ -189,8 +236,7 @@ function ChannelPage({ token }: ChannelPageProps) {
               color="primary"
               onClick={handleRegexClick}
               sx={{
-                fontSize: isMobile ? '0.65rem' : '0.75rem',
-                height: isMobile ? '20px' : '24px',
+                ...channelChipSx,
                 cursor: 'pointer',
                 '&:hover': {
                   backgroundColor: 'rgba(25, 118, 210, 0.08)',
@@ -205,7 +251,7 @@ function ChannelPage({ token }: ChannelPageProps) {
             rating={channel.default_rating}
             ratingSource="Channel Default"
             size="small"
-            sx={{ height: isMobile ? 20 : 24, fontSize: isMobile ? '0.65rem' : '0.75rem' }}
+            sx={{ ...channelChipSx }}
           />
         )}
 
@@ -269,47 +315,79 @@ function ChannelPage({ token }: ChannelPageProps) {
     );
   };
 
+  const thumbnailHeight = isMobile ? 180 : 220;
+  const descriptionLimit = isMobile ? 320 : 600;
+  const descriptionCollapsedHeight = isMobile ? 150 : 200;
+  const trimmedDescription = channel?.description?.trim();
+  const descriptionText = channel
+    ? trimmedDescription || '** No description available **'
+    : 'Loading...';
+  const descriptionIsLong = Boolean(trimmedDescription && trimmedDescription.length > descriptionLimit);
+  const displayedDescription =
+    descriptionExpanded || !descriptionIsLong
+      ? descriptionText
+      : `${descriptionText.slice(0, descriptionLimit)}...`;
+  const shouldShowExpandButton = Boolean(channel && descriptionIsLong);
+
   return (
     <>
-      <Card elevation={8} style={{ marginBottom: '16px' }}>
-        <CardContent>
-          <Grid container spacing={3} justifyContent='center'>
-            <Grid item xs={12} sm={4}
-              display="flex" alignItems="center"
-              marginLeft={isMobile ? 'auto' : '-32px'}>
+      <Card elevation={8} sx={{ mb: 2 }}>
+        <CardContent sx={{ px: isMobile ? 2 : 3, py: isMobile ? 2 : 2.5 }}>
+          <Grid container spacing={2} alignItems="stretch">
+            <Grid item xs={12} sm={4}>
               <Box
-                paddingX={isMobile ? '0px' : 3}
-                maxWidth={isMobile ? '75%' : 'auto'}
-                marginX={isMobile ? 'auto' : 3}>
-                <Box
-                  component="img"
-                  src={channel ? `/images/channelthumb-${channel_id}.jpg` : ''}
-                  alt='Channel thumbnail'
-                  width={isMobile ? '100%' : 'auto'}
-                  height={isMobile ? 'auto' : '285px'}
-                  sx={{ border: 1, borderColor: 'divider' }}
-                />
-              </Box>
+                component="img"
+                src={channel ? `/images/channelthumb-${channel_id}.jpg` : ''}
+                alt="Channel thumbnail"
+                sx={{
+                  width: '100%',
+                  height: '100%',
+                  minHeight: thumbnailHeight,
+                  objectFit: 'cover',
+                  borderRadius: 3,
+                  backgroundColor: 'action.hover',
+                  display: 'block',
+                  border: 1,
+                  borderColor: 'divider',
+                }}
+              />
             </Grid>
-            <Grid item xs={12} sm={8} marginTop={isMobile ? '-16px' : '0px'}>
-              <Box display="flex" flexDirection="column" gap={1}>
+            <Grid
+              item
+              xs={12}
+              sm={8}
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1.25,
+                minHeight: thumbnailHeight,
+              }}
+            >
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
                 <Typography
                   variant={isMobile ? 'h5' : 'h4'}
-                  component='h2'
+                  component="h2"
                   gutterBottom
-                  align='left'
                   sx={{ mb: 0 }}
                 >
                   {channel ? channel.uploader : 'Loading...'}
                 </Typography>
                 {channel && (
-                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
                     {renderFilterIndicators({ includeRating: false })}
                   </Box>
                 )}
               </Box>
-              <Box sx={{ mt: 3 }}>
-                <Typography variant="subtitle1" gutterBottom>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  flexGrow: 1,
+                  minHeight: 0,
+                  gap: 0,
+                }}
+              >
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 0 }}>
                   Description
                 </Typography>
                 <Box
@@ -317,34 +395,29 @@ function ChannelPage({ token }: ChannelPageProps) {
                     backgroundColor: 'background.paper',
                     borderRadius: 2,
                     boxShadow: 1,
-                    px: isMobile ? 2 : 3,
-                    py: isMobile ? 1.5 : 2.5,
-                    maxHeight: descriptionExpanded ? 'none' : isMobile ? 160 : 220,
+                    pl: 0,
+                    pr: isMobile ? 2 : 3,
+                    py: isMobile ? 1.5 : 2.25,
+                    flexGrow: 1,
+                    minHeight: 0,
+                    maxHeight: descriptionExpanded ? 'none' : descriptionCollapsedHeight,
                     overflow: 'hidden',
                   }}
                 >
                   <Typography
                     variant={isMobile ? 'body2' : 'body1'}
-                    align='left'
-                    color='text.secondary'
-                    sx={{ lineHeight: 1.6 }}
-                    dangerouslySetInnerHTML={{
-                      __html: textToHTML(
-                        channel
-                          ? (() => {
-                            const rawDescription = channel.description?.trim() || '** No description available **';
-                            const limit = isMobile ? 400 : 900;
-                            const shouldTruncate = rawDescription.length > limit;
-                            const truncated = shouldTruncate ? `${rawDescription.slice(0, limit)}...` : rawDescription;
-                            return descriptionExpanded || !shouldTruncate ? rawDescription : truncated;
-                          })()
-                          : 'Loading...'
-                      ),
-                    }}
+                    align="left"
+                    color="text.secondary"
+                    sx={{ lineHeight: 1.6, pl: 0 }}
+                    dangerouslySetInnerHTML={{ __html: textToHTML(displayedDescription) }}
                   />
                 </Box>
-                {channel && (channel.description?.trim().length ?? 0) > (isMobile ? 400 : 900) && (
-                  <Button size='small' onClick={() => setDescriptionExpanded((prev) => !prev)} sx={{ mt: 1 }}>
+                {shouldShowExpandButton && (
+                  <Button
+                    size="small"
+                    onClick={() => setDescriptionExpanded((prev) => !prev)}
+                    sx={{ alignSelf: 'flex-start', mt: 0.5, textTransform: 'none' }}
+                  >
                     {descriptionExpanded ? 'Show less' : 'Read more'}
                   </Button>
                 )}
@@ -356,47 +429,71 @@ function ChannelPage({ token }: ChannelPageProps) {
 
       {channel && (
         <Card elevation={3} sx={{ mb: 2 }}>
-          <CardContent sx={{ py: 2 }}>
+          <CardContent sx={{ px: isMobile ? 2 : 3, py: isMobile ? 1.25 : 1.75 }}>
             <Box
               sx={{
                 display: 'flex',
                 flexDirection: isMobile ? 'column' : 'row',
-                alignItems: isMobile ? 'flex-start' : 'center',
+                alignItems: 'center',
                 justifyContent: 'space-between',
-                gap: 2,
+                gap: isMobile ? 1.25 : 2,
               }}
             >
-              <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    Channel settings
+              <Box
+                sx={{
+                  minWidth: 0,
+                  display: 'flex',
+                  flexDirection: isMobile ? 'column' : 'row',
+                  alignItems: 'center',
+                  gap: isMobile ? 0.75 : 1.5,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <Typography variant="h6" sx={{ fontWeight: 700, mr: isMobile ? 0 : 1 }}>
+                  Channel settings
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                    Auto Download:
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Content Rating:
+                  {renderAutoDownloadChips()}
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                    Rating:
                   </Typography>
                   <RatingBadge
                     rating={channel.default_rating}
                     ratingSource="Channel Default"
                     size="small"
-                    sx={{ height: isMobile ? 20 : 24, fontSize: isMobile ? '0.65rem' : '0.75rem' }}
+                    sx={{ ...channelChipSx }}
                   />
-                  <Typography variant="body2" color="text.secondary">
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
                     Folder:
                   </Typography>
                   {renderSubFolder()}
-                </Box>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'center' }}>
-                  {renderFilterIndicators({ includeRating: false })}
                 </Box>
               </Box>
               <Button
                 variant="outlined"
                 startIcon={<SettingsIcon />}
                 onClick={() => setSettingsOpen(true)}
-                sx={{ alignSelf: isMobile ? 'stretch' : 'center' }}
+                size="small"
+                sx={{
+                  alignSelf: isMobile ? 'stretch' : 'center',
+                  textTransform: 'none',
+                  px: 2,
+                  py: 0.75,
+                  ml: isMobile ? 0 : 'auto',
+                }}
               >
                 Edit settings
               </Button>
+            </Box>
+            <Box sx={{ mt: isMobile ? 1 : 1.25, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+              {renderFilterIndicators({ includeRating: false })}
             </Box>
           </CardContent>
         </Card>

@@ -45,8 +45,8 @@ const COLLAPSED_WIDTH = 65;
 
 const NAV_MAIN_MIN_HEIGHT = 40; // target height for each main nav button (px)
 const NAV_SUB_MIN_HEIGHT = 20; // sub-item buttons stay slightly smaller
-const NAV_EXPANDED_HORIZONTAL_PADDING = 1.6;
-const NAV_COLLAPSED_HORIZONTAL_PADDING = 1.6;
+const NAV_EXPANDED_HORIZONTAL_PADDING = 1.55;
+const NAV_COLLAPSED_HORIZONTAL_PADDING = 1.55;
 const NAV_ICON_SIZE = 25; // same icon size collapsed vs expanded
 const NAV_ICON_MARGIN = 0.35; // keeps text offset consistent
 const NAV_PRIMARY_FONT_SIZE = '0.85rem';
@@ -68,6 +68,7 @@ const NAV_DRAWER_DESKTOP_MAX_HEIGHT = 'calc(100vh - (64px + (var(--shell-gap) * 
 const NAV_DRAWER_MOBILE_TOP_OFFSET = 'calc(60px + var(--shell-gap))';
 const NAV_DRAWER_MOBILE_BOTTOM_GAP = 'calc(60px + var(--shell-gap))';
 const NAV_DRAWER_MOBILE_MAX_HEIGHT = 'calc(100vh - 64px - var(--shell-gap))';
+const APP_BAR_TOGGLE_SIZE = 44;
 
 export function AppShell({
   token,
@@ -419,53 +420,84 @@ export function AppShell({
         }}
       />
 
-      <AppBar
-        position="fixed"
-        elevation={0}
-        sx={{
-          bgcolor: 'background.paper',
-          border: 'var(--appbar-border)',
-          boxShadow: 'var(--appbar-shadow)',
-          color: 'text.primary',
-          zIndex: theme.zIndex.drawer + 1,
-          backgroundImage: 'var(--appbar-pattern)',
-          backgroundSize: '24px 24px',
-          // inset from the very top to provide top padding on desktop
-          top: isMobile ? 0 : 'var(--shell-gap)',
-          left: isMobile ? 0 : 'var(--shell-gap)',
-          right: isMobile ? 0 : 'var(--shell-gap)',
-          width: isMobile ? '100vw' : 'calc(100vw - (var(--shell-gap) * 2))',
-          borderRadius: 3,
-          overflow: 'hidden',
-        }}
-      >
-        <Toolbar sx={{ gap: 2, px: { xs: 1.5, sm: 2 }, minHeight: 64 }}>
-          <IconButton 
-            className="pop-toggle" 
-            aria-label="toggle navigation" 
-            onClick={toggleDrawer}
-            sx={{ 
-              transform: (isMobile ? drawerOpenMobile : !collapsed) ? 'rotate(0deg)' : 'rotate(180deg)',
-              transition: 'transform 450ms var(--transition-bouncy)',
-              color: 'var(--foreground)'
-            }}
-          >
-            <ChevronLeftIcon sx={{ fontSize: 24 }} />
-          </IconButton>
+        <AppBar
+          position="fixed"
+          elevation={0}
+          sx={{
+            backgroundColor: 'var(--background)',
+            border: 'var(--appbar-border)',
+            boxShadow: 'var(--appbar-shadow)',
+            color: 'text.primary',
+            zIndex: theme.zIndex.drawer + 1,
+            // background: 'var(--background)',
+            // inset from the very top to provide top padding on desktop
+            top: isMobile ? 0 : 'var(--shell-gap)',
+            left: isMobile ? 0 : 'var(--shell-gap)',
+            right: isMobile ? 0 : 'var(--shell-gap)',
+            width: isMobile ? '100vw' : 'calc(100vw - (var(--shell-gap) * 2))',
+            borderRadius: 3,
+            overflow: 'hidden',
+          }}
+        >
+          <Toolbar sx={{ gap: 2, px: { xs: 1.5, sm: 2 }, minHeight: 64, alignItems: 'center' }}>
+            <IconButton 
+              className="pop-toggle" 
+              aria-label="toggle navigation" 
+              onClick={toggleDrawer}
+              sx={{ 
+                width: APP_BAR_TOGGLE_SIZE,
+                height: APP_BAR_TOGGLE_SIZE,
+                p: 0,
+                borderRadius: '50%',
+                transform: (isMobile ? drawerOpenMobile : !collapsed) ? 'rotate(0deg)' : 'rotate(180deg)',
+                transition: 'transform 450ms var(--transition-bouncy)',
+                color: 'var(--foreground)'
+              }}
+            >
+              <ChevronLeftIcon sx={{ fontSize: 24 }} />
+            </IconButton>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
-            {logoSrc ? (
-              <Box
-                component="img"
-                src={logoSrc}
-                alt={appName}
-                sx={{ width: 28, height: 28, objectFit: 'contain' }}
-              />
-            ) : null}
-            <Typography variant="h6" sx={{ fontWeight: 800, whiteSpace: 'nowrap', fontFamily: 'Outfit' }}>
-              {appName}
-            </Typography>
-          </Box>
+            <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', height: APP_BAR_TOGGLE_SIZE, minWidth: 0 }}>
+              <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1, height: '100%' }}>
+                {logoSrc ? (
+                  <Box
+                    sx={{ 
+                      height: '100%', 
+                      width: APP_BAR_TOGGLE_SIZE,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: '12px',
+                      overflow: 'hidden',
+                      backgroundImage: 'var(--appbar-gradient), var(--appbar-pattern)',
+                      backgroundSize: '24px 24px',
+                      boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.1)',
+                      p: 0.5
+                    }}
+                  >
+                    <Box
+                      component="img"
+                      src={logoSrc}
+                      alt={appName}
+                      sx={{ height: '120%', width: 'auto', objectFit: 'contain', display: 'block' }}
+                    />
+                  </Box>
+                ) : null}
+                <Typography
+                  variant="h6"
+                  component="span"
+                  sx={{
+                    fontWeight: 800,
+                    fontFamily: 'Outfit',
+                    whiteSpace: 'nowrap',
+                    lineHeight: 1,
+                    mb: 0.5 // minor adjustment for baseline alignment
+                  }}
+                >
+                  {appName}
+                </Typography>
+              </Box>
+            </Box>
 
           <Box sx={{ flexGrow: 1 }} />
 

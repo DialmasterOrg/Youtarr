@@ -29,6 +29,7 @@
   --appbar-border: 2px solid var(--foreground);
   --appbar-shadow: var(--shadow-hard);
   --appbar-pattern: radial-gradient(var(--dot-grid) 1px, transparent 1px);
+  --appbar-gradient: linear-gradient(135deg, rgba(139, 92, 246, 0.45), rgba(251, 113, 133, 0.45));
   --neumo-breathe: none;
   /* Navigation width variables */
   --nav-width-expanded: 260px;
@@ -84,6 +85,7 @@ body[data-theme='playful'] {
   --appbar-border: 2px solid var(--foreground);
   --appbar-shadow: var(--shadow-hard);
   --appbar-pattern: radial-gradient(var(--dot-grid) 1px, transparent 1px);
+  --appbar-gradient: linear-gradient(135deg, rgba(139, 92, 246, 0.55), rgba(251, 113, 133, 0.5));
 }
 
 body:not([data-theme]) {
@@ -116,6 +118,7 @@ body:not([data-theme]) {
   --input-border: var(--border);
   --input-border-hover: var(--foreground);
   --dot-grid: rgba(30, 41, 59, 0.12);
+  --appbar-gradient: linear-gradient(135deg, rgba(139, 92, 246, 0.45), rgba(251, 113, 133, 0.45));
 }
 
 body[data-theme='neumorphic'] {
@@ -170,6 +173,7 @@ body[data-theme='neumorphic'] {
   --appbar-border: none;
   --appbar-shadow: var(--shadow-soft);
   --appbar-pattern: none;
+  --appbar-gradient: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(224, 229, 236, 0.9));
   --appbar-radius: 32px;
   --nav-radius: 32px;
   --neumo-breathe: neumo-breathe 6s ease-in-out infinite;

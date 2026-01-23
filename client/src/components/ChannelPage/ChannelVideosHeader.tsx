@@ -51,7 +51,6 @@ interface ChannelVideosHeaderProps {
   onViewModeChange: (event: React.MouseEvent<HTMLElement>, newMode: ViewMode | null) => void;
   onSearchChange: (query: string) => void;
   onHideDownloadedChange: (hide: boolean) => void;
-  onAutoDownloadChange: (enabled: boolean) => void;
   onRefreshClick: () => void;
   onDownloadClick: () => void;
   onSelectAll: () => void;
@@ -80,7 +79,6 @@ function ChannelVideosHeader({
   onViewModeChange,
   onSearchChange,
   onHideDownloadedChange,
-  onAutoDownloadChange,
   onRefreshClick,
   onDownloadClick,
   onSelectAll,
@@ -161,27 +159,6 @@ function ChannelVideosHeader({
           >
             {fetchingAllVideos ? 'Refreshing...' : 'Refresh All'}
           </Button>
-        </Box>
-
-        {/* Auto-download setting for this tab */}
-        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={autoDownloadsEnabled}
-                onChange={(e) => onAutoDownloadChange(e.target.checked)}
-                size="small"
-              />
-            }
-            label="Enable Channel Downloads for this tab"
-            sx={{
-              '& .MuiFormControlLabel-label': {
-                fontSize: isMobile ? '0.75rem' : '1rem',
-                marginRight: -1,
-              }
-            }}
-          />
-          {renderInfoIcon(autoDownloadTooltip)}
         </Box>
 
         {/* Search and filters */}
