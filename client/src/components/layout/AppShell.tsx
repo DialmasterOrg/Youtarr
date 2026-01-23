@@ -39,19 +39,19 @@ interface AppShellProps {
 }
 
 const EXPANDED_WIDTH = 260;
-const COLLAPSED_WIDTH = 72;
+const COLLAPSED_WIDTH = 65;
 
 const NAV_MAIN_MIN_HEIGHT = 40; // target height for each main nav button (px)
 const NAV_SUB_MIN_HEIGHT = 20; // sub-item buttons stay slightly smaller
-const NAV_EXPANDED_HORIZONTAL_PADDING = 2;
-const NAV_COLLAPSED_HORIZONTAL_PADDING = 2;
+const NAV_EXPANDED_HORIZONTAL_PADDING = 1.6;
+const NAV_COLLAPSED_HORIZONTAL_PADDING = 1.6;
 const NAV_ICON_SIZE = 25; // same icon size collapsed vs expanded
 const NAV_ICON_MARGIN = 0.35; // keeps text offset consistent
 const NAV_PRIMARY_FONT_SIZE = '0.85rem';
 const NAV_PRIMARY_LINE_HEIGHT = 1.15;
 const NAV_SECONDARY_FONT_SIZE = '0.65rem';
 const NAV_SECONDARY_LINE_HEIGHT = 1.1;
-const NAV_MAIN_GAP = 0.25;
+const NAV_MAIN_GAP = .75;
 const NAV_SUB_VERTICAL_GAP = 0.75;
 const NAV_SUB_PADDING_LEFT = 3.5;
 const NAV_SUB_PADDING_RIGHT = 2;
@@ -132,8 +132,8 @@ export function AppShell({
         },
         {
           key: 'downloads' as const,
-          label: 'Download Video',
-          oldLabel: 'Manage Downloads',
+          label: 'Downloads',
+          oldLabel: 'Manage Video Downloads',
           icon: <DownloadIcon />,
           to: '/downloads',
           subItems: downloadsSubItems,

@@ -50,7 +50,7 @@ const neumorphicTokens = {
     secondary: '#8B84FF',
     tertiary: '#6C63FF',
     quaternary: '#38B2AC',
-    border: 'transparent',
+    border: 'rgba(0, 0, 0, 0)',
     input: '#E0E5EC',
     card: '#E0E5EC',
     ring: '#6C63FF',
@@ -309,7 +309,7 @@ export const neumorphicTheme = createTheme({
       secondary: neumorphicTokens.light.mutedForeground,
       disabled: 'rgba(107, 114, 128, 0.7)',
     },
-    divider: 'transparent',
+    divider: 'rgba(0, 0, 0, 0)',
     action: {
       active: neumorphicTokens.light.foreground,
       hover: 'rgba(108, 99, 255, 0.08)',
