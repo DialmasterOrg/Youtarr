@@ -15,10 +15,12 @@ import {
   Grid,
   IconButton,
   List,
+  LinearProgress,
   Menu,
   MenuItem,
   Pagination,
   Popover,
+  Skeleton,
   Stack,
   TextField,
   ToggleButton,
@@ -91,6 +93,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
   const [regexPopoverAnchor, setRegexPopoverAnchor] = useState<{ el: HTMLElement; regex: string } | null>(null);
   const [folderMenuAnchor, setFolderMenuAnchor] = useState<null | HTMLElement>(null);
+  const [showStalledLoading, setShowStalledLoading] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
@@ -182,6 +185,8 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
 
   const showDesktopListColumns = !isMobile && viewMode === 'list';
   const listColumnLabels = ['Channel', 'Quality / Folder', 'Auto downloads', 'Filters'];
+  const showSkeletons = loading && displayChannels.length === 0;
+  const showInlineLoader = loading && displayChannels.length > 0;
   const folderControlActive = Boolean(selectedSubFolder);
   const availableFolderOptions = useMemo(() => {
     const folderSet = new Set<string>([DEFAULT_SUBFOLDER_KEY]);
@@ -236,6 +241,19 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
       observer.disconnect();
     };
   }, [useInfiniteScroll, loading, hasNextPage]);
+
+  useEffect(() => {
+    if (!loading) {
+      setShowStalledLoading(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setShowStalledLoading(true);
+    }, 15000);
+
+    return () => window.clearTimeout(timer);
+  }, [loading, page, filterValue, sortOrder, selectedSubFolder]);
 
   const handleMessage = useCallback(() => {
     if (!hasPendingChanges) {
@@ -473,21 +491,66 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
           <Divider sx={{ mb: 2 }} />
 
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            {loading ? (
+            {showInlineLoader && <LinearProgress sx={{ mb: 1 }} />}
+            {showStalledLoading && (
+              <Alert
+                severity="info"
+                sx={{ mb: 2, display: 'flex', alignItems: 'center' }}
+                action={
+                  <Button color="inherit" size="small" onClick={refetch}>
+                    Retry
+                  </Button>
+                }
+              >
+                Channel sync is taking longer than expected. You can keep waiting or retry the sync.
+              </Alert>
+            )}
+            {showSkeletons ? (
               <Box
                 sx={{
                   flex: 1,
                   display: 'flex',
                   flexDirection: 'column',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  gap: 1,
+                  gap: 1.5,
+                  px: { xs: 1, md: 2 },
+                  py: 2,
                 }}
               >
-                <CircularProgress />
-                <Typography variant="body2" color="text.secondary">
-                  Syncing channels...
-                </Typography>
+                {Array.from({ length: isMobile ? 4 : 6 }).map((_, index) => (
+                  <Box
+                    key={`channel-skeleton-${index}`}
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: isMobile ? '56px 1fr' : '56px 1fr 140px 140px 140px 56px',
+                      gap: 2,
+                      alignItems: 'center',
+                      py: 1,
+                      px: 1,
+                      borderRadius: 2,
+                      bgcolor: 'action.hover',
+                    }}
+                  >
+                    <Skeleton variant="circular" width={56} height={56} />
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                      <Skeleton variant="text" width="60%" height={24} />
+                      <Skeleton variant="text" width="40%" height={18} />
+                    </Box>
+                    {!isMobile && (
+                      <>
+                        <Skeleton variant="rounded" width="100%" height={28} />
+                        <Skeleton variant="rounded" width="100%" height={28} />
+                        <Skeleton variant="rounded" width="100%" height={28} />
+                        <Skeleton variant="circular" width={32} height={32} />
+                      </>
+                    )}
+                  </Box>
+                ))}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifyContent: 'center', pt: 1 }}>
+                  <CircularProgress size={18} />
+                  <Typography variant="body2" color="text.secondary">
+                    Syncing channels...
+                  </Typography>
+                </Box>
               </Box>
             ) : displayChannels.length === 0 ? (
               <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

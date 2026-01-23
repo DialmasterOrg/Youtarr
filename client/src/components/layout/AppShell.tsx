@@ -38,7 +38,7 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
-const EXPANDED_WIDTH = 260;
+const EXPANDED_WIDTH = 200;
 const COLLAPSED_WIDTH = 65;
 
 const NAV_MAIN_MIN_HEIGHT = 40; // target height for each main nav button (px)

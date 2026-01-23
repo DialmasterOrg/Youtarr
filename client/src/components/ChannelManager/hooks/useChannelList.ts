@@ -76,9 +76,12 @@ export const useChannelList = ({
     setLoading(true);
     setError(null);
 
+    const requestStartedAt = performance.now();
+
     try {
       const response = await axios.get<ChannelListResponse>('/getchannels', {
         headers: { 'x-access-token': token },
+        timeout: 15000,
         params: {
           page,
           pageSize,
@@ -87,6 +90,8 @@ export const useChannelList = ({
           subFolder: subFolder || undefined,
         },
       });
+
+      const requestDurationMs = Math.round(performance.now() - requestStartedAt);
 
       const payload = response.data;
       if (!isMountedRef.current) return;
@@ -108,6 +113,18 @@ export const useChannelList = ({
         : 0;
       const rawSubFolders = (payload?.subFolders || payload?.subfolders || []) as Array<string | null>;
 
+      if (!Array.isArray(rawChannels)) {
+        console.warn('Channel list payload shape unexpected', {
+          page,
+          pageSize,
+          searchTerm,
+          sortOrder,
+          subFolder,
+          durationMs: requestDurationMs,
+          payload,
+        });
+      }
+
       setChannels((prev) => {
         if (!append || page === 1) {
           return rawChannels || [];
@@ -125,7 +142,24 @@ export const useChannelList = ({
       setTotalPages(rawTotalPages || 0);
       setSubFolders(rawSubFolders.map((value) => normalizeSubFolderKey(value)).filter(Boolean));
     } catch (err: any) {
-      const message = err?.response?.data?.error || 'Failed to load channels';
+      const requestDurationMs = Math.round(performance.now() - requestStartedAt);
+      console.error('Channel list request failed', {
+        page,
+        pageSize,
+        searchTerm,
+        sortOrder,
+        subFolder,
+        durationMs: requestDurationMs,
+        error: {
+          message: err?.message,
+          code: err?.code,
+          status: err?.response?.status,
+          data: err?.response?.data,
+        },
+      });
+      const message = err?.code === 'ECONNABORTED'
+        ? 'Channel sync timed out. Please try again.'
+        : err?.response?.data?.error || 'Failed to load channels';
       if (isMountedRef.current) {
         setError(message);
         if (!append || page === 1) {
