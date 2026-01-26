@@ -30,6 +30,7 @@ import {
   Tab,
   Tabs,
 } from '@mui/material';
+import Chip from '@mui/material/Chip';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import InfoIcon from '@mui/icons-material/Info';
@@ -704,7 +705,10 @@ function ChannelSettingsDialog({
             )}
           </Box>
         );
-      case 'ratings':
+      case 'ratings': {
+        const effectiveRatingLabel = settings.default_rating
+          ? (RATING_OPTIONS.find((option) => option.value === settings.default_rating)?.label || settings.default_rating)
+          : 'Global';
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
@@ -733,8 +737,20 @@ function ChannelSettingsDialog({
                 ))}
               </Select>
             </FormControl>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              <Typography variant="caption" color="text.secondary">
+                Effective default rating:
+              </Typography>
+              <Chip
+                size="small"
+                label={effectiveRatingLabel}
+                color={settings.default_rating ? 'warning' : 'default'}
+                sx={{ fontWeight: 700 }}
+              />
+            </Box>
           </Box>
         );
+      }
       default:
         return null;
     }

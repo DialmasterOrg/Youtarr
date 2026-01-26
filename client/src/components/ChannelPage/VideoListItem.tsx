@@ -12,7 +12,6 @@ import {
 } from '@mui/material';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import StorageIcon from '@mui/icons-material/Storage';
-import DeleteIcon from '@mui/icons-material/Delete';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { useTheme } from '@mui/material/styles';
@@ -27,8 +26,9 @@ interface VideoListItemProps {
   video: ChannelVideo;
   checkedBoxes: string[];
   selectedForDeletion: string[];
+  selectionMode: 'download' | 'delete' | null;
   onCheckChange: (videoId: string, isChecked: boolean) => void;
-  onToggleDeletion: (youtubeId: string) => void;
+  onDeletionChange: (videoId: string, isChecked: boolean) => void;
   onToggleIgnore: (youtubeId: string) => void;
   onMobileTooltip?: (message: string) => void;
 }
@@ -37,8 +37,9 @@ function VideoListItem({
   video,
   checkedBoxes,
   selectedForDeletion,
+  selectionMode,
   onCheckChange,
-  onToggleDeletion,
+  onDeletionChange,
   onToggleIgnore,
   onMobileTooltip,
 }: VideoListItemProps) {
@@ -46,10 +47,15 @@ function VideoListItem({
   const status = getVideoStatus(video);
   // Check if video is still live (not "was_live" and not null/undefined)
   const isStillLive = video.live_status && video.live_status !== 'was_live';
-  const isSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !isStillLive;
+  const isDownloadSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !isStillLive;
+  const isDeleteSelectable = video.added && !video.removed && !isStillLive;
+  const isDownloadAllowed = selectionMode !== 'delete';
+  const isDeleteAllowed = selectionMode !== 'download';
   const isChecked = checkedBoxes.includes(video.youtube_id);
+  const isDeleteChecked = selectedForDeletion.includes(video.youtube_id);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
   const isIgnored = status === 'ignored';
+  const isClickable = (isDownloadSelectable && isDownloadAllowed) || (isDeleteSelectable && isDeleteAllowed);
 
   return (
     <Fade in timeout={300} key={video.youtube_id}>
@@ -59,13 +65,21 @@ function VideoListItem({
           display: 'flex',
           position: 'relative',
           transition: 'all 0.2s ease',
-          cursor: isSelectable ? 'pointer' : 'default',
+          cursor: isClickable ? 'pointer' : 'default',
           opacity: status === 'members_only' || isIgnored ? 0.7 : 1,
           '&:hover': {
             boxShadow: theme.shadows[3],
           },
         }}
-        onClick={() => isSelectable && onCheckChange(video.youtube_id, !isChecked)}
+        onClick={() => {
+          if (isDownloadSelectable && isDownloadAllowed) {
+            onCheckChange(video.youtube_id, !isChecked);
+            return;
+          }
+          if (isDeleteSelectable && isDeleteAllowed) {
+            onDeletionChange(video.youtube_id, !isDeleteChecked);
+          }
+        }}
       >
         {/* Thumbnail */}
         <Box
@@ -141,7 +155,7 @@ function VideoListItem({
             >
               <StillLiveDot isMobile onMobileClick={onMobileTooltip} />
             </Box>
-          ) : isSelectable && (
+          ) : isDownloadSelectable && isDownloadAllowed && (
             <Checkbox
               checked={isChecked}
               onClick={(e) => e.stopPropagation()}
@@ -165,29 +179,29 @@ function VideoListItem({
             />
           )}
 
-          {/* Delete icon for downloaded videos that exist on disk */}
-          {video.added && !video.removed && (
-            <IconButton
-              onClick={(e) => {
+          {/* Delete checkbox for downloaded videos */}
+          {isDeleteSelectable && isDeleteAllowed && (
+            <Checkbox
+              checked={isDeleteChecked}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => {
                 e.stopPropagation();
-                onToggleDeletion(video.youtube_id);
+                onDeletionChange(video.youtube_id, e.target.checked);
               }}
               sx={{
                 position: 'absolute',
                 top: 2,
                 left: 2,
-                bgcolor: selectedForDeletion.includes(video.youtube_id) ? 'error.main' : 'rgba(0,0,0,0.6)',
                 color: 'white',
+                bgcolor: 'rgba(0,0,0,0.5)',
                 padding: 0.5,
-                '&:hover': {
-                  bgcolor: selectedForDeletion.includes(video.youtube_id) ? 'error.dark' : 'rgba(0,0,0,0.8)',
+                '&.Mui-checked': {
+                  color: 'error.main',
+                  bgcolor: 'rgba(0,0,0,0.7)',
                 },
-                transition: 'all 0.2s',
+                '& .MuiSvgIcon-root': { fontSize: 20 },
               }}
-              size="small"
-            >
-              <DeleteIcon sx={{ fontSize: 18 }} />
-            </IconButton>
+            />
           )}
 
           {/* Ignore/Unignore button - for videos not currently on disk (never downloaded or missing) */}

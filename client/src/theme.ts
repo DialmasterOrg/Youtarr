@@ -161,12 +161,24 @@ const commonThemeOptions: ThemeOptions = {
             borderWidth: 2,
           },
           '& .MuiOutlinedInput-notchedOutline legend': {
-            maxWidth: '100%',
-            padding: '0 10px',
+            maxWidth: 'none',
+            padding: '0 20px',
+            transition: 'width 150ms var(--transition-bouncy)',
+            '& > span': {
+              paddingLeft: 8,
+              paddingRight: 8,
+            },
+            '& > span:empty': {
+              display: 'none',
+            },
+          },
+          '& .MuiOutlinedInput-notchedOutline legend:has(> span:empty)': {
+            width: '0.01px',
+            padding: '0',
           },
           '& .MuiOutlinedInput-notchedOutline legend > span': {
-            paddingLeft: 4,
-            paddingRight: 4,
+            paddingLeft: 8,
+            paddingRight: 8,
           },
           '&:hover .MuiOutlinedInput-notchedOutline': {
             borderColor: 'var(--input-border-hover)',
@@ -372,6 +384,20 @@ export const neumorphicTheme = createTheme({
           transition: 'box-shadow 250ms var(--transition-bouncy)',
           '& .MuiOutlinedInput-notchedOutline': {
             border: 'none',
+          },
+          '& .MuiOutlinedInput-notchedOutline legend': {
+            transition: 'width 150ms var(--transition-bouncy)',
+            '& > span': {
+              paddingLeft: 8,
+              paddingRight: 8,
+            },
+            '& > span:empty': {
+              display: 'none',
+            },
+          },
+          '& .MuiOutlinedInput-notchedOutline legend:has(> span:empty)': {
+            width: '0.01px',
+            padding: '0',
           },
           '&:hover .MuiOutlinedInput-notchedOutline': {
             border: 'none',

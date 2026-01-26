@@ -311,9 +311,16 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   // Use server-provided total count for pagination/infinite scroll
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
   const hasNextPage = page < totalPages;
+  const selectionMode = checkedBoxes.length > 0 ? 'download' : selectedForDeletion.length > 0 ? 'delete' : null;
+  const canSelectDownload = selectionMode !== 'delete';
+  const canSelectDeletion = selectionMode !== 'download';
 
   // Event handlers
   const handleCheckChange = useCallback((videoId: string, isChecked: boolean) => {
+    if (selectedForDeletion.length > 0 && isChecked) {
+      setErrorMessage('Clear delete selections before choosing videos to download.');
+      return;
+    }
     setCheckedBoxes((prevState) => {
       if (isChecked) {
         return [...prevState, videoId];
@@ -321,9 +328,36 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         return prevState.filter((id) => id !== videoId);
       }
     });
-  }, []);
+  }, [selectedForDeletion.length]);
+
+  const handleDeletionChange = useCallback((videoId: string, isChecked: boolean) => {
+    if (checkedBoxes.length > 0 && isChecked) {
+      setErrorMessage('Clear download selections before choosing videos to delete.');
+      return;
+    }
+    setSelectedForDeletion((prevState) => {
+      if (isChecked) {
+        return [...prevState, videoId];
+      }
+      return prevState.filter((id) => id !== videoId);
+    });
+  }, [checkedBoxes.length]);
 
   const handleSelectAll = useCallback(() => {
+    if (!canSelectDownload && !canSelectDeletion) {
+      return;
+    }
+
+    if (selectionMode === 'delete') {
+      const deletableVideos = paginatedVideos.filter((video) => video.added && !video.removed);
+      const videoIds = deletableVideos.map((video) => video.youtube_id);
+      setSelectedForDeletion((prevState) => {
+        const newIds = videoIds.filter((id) => !prevState.includes(id));
+        return [...prevState, ...newIds];
+      });
+      return;
+    }
+
     const selectableVideos = paginatedVideos.filter((video) => {
       const status = getVideoStatus(video);
       return status === 'never_downloaded' || status === 'missing' || status === 'ignored';
@@ -333,10 +367,11 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
       const newIds = videoIds.filter((id) => !prevState.includes(id));
       return [...prevState, ...newIds];
     });
-  }, [paginatedVideos]);
+  }, [canSelectDeletion, canSelectDownload, paginatedVideos, selectionMode]);
 
   const handleClearSelection = useCallback(() => {
     setCheckedBoxes([]);
+    setSelectedForDeletion([]);
   }, []);
 
   const handleDownloadClick = useCallback(() => {
@@ -378,13 +413,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   };
 
   const toggleDeletionSelection = (youtubeId: string) => {
-    setSelectedForDeletion(prev => {
-      if (prev.includes(youtubeId)) {
-        return prev.filter(id => id !== youtubeId);
-      } else {
-        return [...prev, youtubeId];
-      }
-    });
+    handleDeletionChange(youtubeId, !selectedForDeletion.includes(youtubeId));
   };
 
   const handleDeleteClick = () => {
@@ -629,49 +658,53 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   }, [videosLoading, hasNextPage, useInfiniteScroll]);
 
   const renderSelectionAction = () => {
-    const hasDownloadSelection = checkedBoxes.length > 0;
-    const hasDeletionSelection = selectedForDeletion.length > 0;
+    if (!selectionMode) return null;
 
-    if (!hasDownloadSelection && !hasDeletionSelection) return null;
-
-    const isDownloadAction = hasDownloadSelection;
+    const isDownloadAction = selectionMode === 'download';
     const count = isDownloadAction ? checkedBoxes.length : selectedForDeletion.length;
-    const badgeColor = isDownloadAction ? 'primary' : 'error';
     const icon = isDownloadAction ? <DownloadIcon /> : <DeleteIcon />;
     const handleActionClick = isDownloadAction ? handleDownloadClick : handleDeleteClick;
 
     return (
       <Zoom in>
-        <Box
+        <Badge
+          badgeContent={count}
+          overlap="circular"
           sx={{
             position: 'fixed',
-            top: '50%',
-            left: 'calc(var(--nav-width) + (100vw - var(--nav-width)) / 2)',
-            transform: 'translate(-50%, -50%)',
-            pointerEvents: 'none',
+            bottom: { xs: 16, sm: 24 },
+            right: { xs: 16, sm: 24 },
             zIndex: theme.zIndex.fab,
+            '& .MuiBadge-badge': {
+              bgcolor: 'common.black',
+              color: isDownloadAction ? 'primary.main' : 'error.main',
+              fontSize: '0.95rem',
+              fontWeight: 700,
+              minWidth: 22,
+              height: 22,
+              border: '2px solid',
+              borderColor: isDownloadAction ? 'primary.main' : 'error.main',
+              boxShadow: 'var(--shadow-hard)',
+              zIndex: theme.zIndex.fab + 1,
+            },
           }}
         >
-          <Badge badgeContent={count} color={badgeColor} overlap="circular">
-            <Fab
-              onClick={handleActionClick}
-              sx={{
-                pointerEvents: 'auto',
-                bgcolor: 'background.paper',
-                color: isDownloadAction ? 'primary.main' : 'error.main',
-                border: '2px solid',
-                borderColor: isDownloadAction ? 'primary.main' : 'error.main',
-                boxShadow: 'var(--shadow-soft)',
-                '&:hover': {
-                  bgcolor: isDownloadAction ? 'primary.main' : 'error.main',
-                  color: isDownloadAction ? 'primary.contrastText' : 'error.contrastText',
-                },
-              }}
-            >
-              {icon}
-            </Fab>
-          </Badge>
-        </Box>
+          <Fab
+            onClick={handleActionClick}
+            sx={{
+              bgcolor: isDownloadAction ? 'primary.main' : 'error.main',
+              color: 'common.black',
+              border: '2px solid',
+              borderColor: isDownloadAction ? 'primary.main' : 'error.main',
+              boxShadow: 'var(--shadow-hard)',
+              '&:hover': {
+                bgcolor: isDownloadAction ? 'primary.dark' : 'error.dark',
+              },
+            }}
+          >
+            {icon}
+          </Fab>
+        </Badge>
       </Zoom>
     );
   };
@@ -689,6 +722,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           fetchingAllVideos={fetchingAllVideos}
           checkedBoxes={checkedBoxes}
           selectedForDeletion={selectedForDeletion}
+          selectionMode={selectionMode}
           deleteLoading={deleteLoading}
           paginatedVideos={paginatedVideos}
           autoDownloadsEnabled={selectedTab ? (tabAutoDownloadStatus[selectedTab] ?? autoDownloadsEnabled) : autoDownloadsEnabled}
@@ -773,9 +807,10 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                       checkedBoxes={checkedBoxes}
                       hoveredVideo={hoveredVideo}
                       selectedForDeletion={selectedForDeletion}
+                      selectionMode={selectionMode}
                       onCheckChange={handleCheckChange}
                       onHoverChange={setHoveredVideo}
-                      onToggleDeletion={toggleDeletionSelection}
+                      onDeletionChange={handleDeletionChange}
                       onToggleIgnore={toggleIgnore}
                       onMobileTooltip={setMobileTooltip}
                     />
@@ -791,8 +826,9 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                       video={video}
                       checkedBoxes={checkedBoxes}
                       selectedForDeletion={selectedForDeletion}
+                      selectionMode={selectionMode}
                       onCheckChange={handleCheckChange}
-                      onToggleDeletion={toggleDeletionSelection}
+                      onDeletionChange={handleDeletionChange}
                       onToggleIgnore={toggleIgnore}
                       onMobileTooltip={setMobileTooltip}
                     />
@@ -805,13 +841,14 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                   videos={paginatedVideos}
                   checkedBoxes={checkedBoxes}
                   selectedForDeletion={selectedForDeletion}
+                  selectionMode={selectionMode}
                   sortBy={sortBy}
                   sortOrder={sortOrder}
                   onCheckChange={handleCheckChange}
                   onSelectAll={handleSelectAll}
                   onClearSelection={handleClearSelection}
                   onSortChange={handleSortChange}
-                  onToggleDeletion={toggleDeletionSelection}
+                  onDeletionChange={handleDeletionChange}
                   onToggleIgnore={toggleIgnore}
                   onMobileTooltip={setMobileTooltip}
                 />

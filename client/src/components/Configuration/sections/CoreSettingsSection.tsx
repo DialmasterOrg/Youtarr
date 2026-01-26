@@ -21,6 +21,7 @@ import {
   DialogContentText,
   DialogActions,
   Button,
+  Divider,
   Collapse,
   CircularProgress,
   Link,
@@ -144,286 +145,320 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
       title="Core Settings"
       subtitle="Required settings for YouTube video downloads"
     >
-      <Grid container spacing={2} sx={{ mt: 1 }}>
-        <Grid item xs={12}>
-          <TextField
-            fullWidth
-            label={
+      <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <Box>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            Storage & Organization
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    YouTube Output Directory
+                    <Chip
+                      label="Docker Volume"
+                      size="small"
+                      sx={{ ml: 1 }}
+                    />
+                  </Box>
+                }
+                name="youtubeOutputDirectory"
+                value={config.youtubeOutputDirectory}
+                onChange={handleInputChange}
+                disabled={true}
+                helperText={
+                  deploymentEnvironment.platform?.toLowerCase() === "elfhosted"
+                    ? "This path is configured by your platform deployment and cannot be changed here."
+                    : "Configured via YOUTUBE_OUTPUT_DIR environment variable. Edit .env and restart to change."
+                }
+              />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                YouTube Output Directory
-                <Chip
-                  label="Docker Volume"
-                  size="small"
-                  sx={{ ml: 1 }}
+                <SubfolderAutocomplete
+                  mode="global"
+                  value={config.defaultSubfolder || null}
+                  onChange={handleDefaultSubfolderChange}
+                  subfolders={subfolders}
+                  loading={subfoldersLoading}
+                  label="Default Subfolder"
+                  helperText="Default download location for channels using 'Default Subfolder'"
+                />
+                <InfoTooltip
+                  text="Set the default download location for untracked channels and channels using 'Default Subfolder'. Leave empty to download to the root directory by default."
+                  onMobileClick={onMobileTooltipClick}
                 />
               </Box>
-            }
-            name="youtubeOutputDirectory"
-            value={config.youtubeOutputDirectory}
-            onChange={handleInputChange}
-            disabled={true}
-            helperText={
-              deploymentEnvironment.platform?.toLowerCase() === "elfhosted"
-                ? "This path is configured by your platform deployment and cannot be changed here."
-                : "Configured via YOUTUBE_OUTPUT_DIR environment variable. Edit .env and restart to change."
-            }
-          />
-        </Grid>
+            </Grid>
 
-        <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  name="channelAutoDownload"
-                  checked={config.channelAutoDownload}
-                  onChange={handleCheckboxChange}
-                />
-              }
-              label="Enable Automatic Downloads"
-            />
-            <InfoTooltip
-              text="Globally enable or disable automatic scheduled downloading of videos from your channels. Only tabs that are enabled for your Channels will be checked and downloaded."
-              onMobileClick={onMobileTooltipClick}
-            />
-          </Box>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <FormControl fullWidth>
-              <InputLabel>Download Frequency</InputLabel>
-              <Select
-                value={currentFrequency}
-                onChange={(e: SelectChangeEvent<string>) =>
-                  handleSelectChange(e as any, 'channelDownloadFrequency')
-                }
-                label="Download Frequency"
-                disabled={!config.channelAutoDownload}
-              >
-                {Object.keys(FREQUENCY_MAPPING).map((key) => (
-                  <MenuItem key={key} value={key}>
-                    {key}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <InfoTooltip
-              text="How often to run automatic channel video downloads."
-              onMobileClick={onMobileTooltipClick}
-            />
-          </Box>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <FormControl fullWidth>
-              <InputLabel>Files to Download per Channel</InputLabel>
-              <Select
-                value={config.channelFilesToDownload}
-                onChange={handleChannelFilesChange}
-                label="Videos to Download per Channel Tab"
-              >
-                {getChannelFilesOptions(config.channelFilesToDownload).map(count => (
-                  <MenuItem key={count} value={count}>
-                    {count} {count === 1 ? 'video' : 'videos'}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <InfoTooltip
-              text="How many videos (starting from most recently uploaded) Youtarr will attempt to download per tab when channel downloads run. Already downloaded videos will be skipped."
-              onMobileClick={onMobileTooltipClick}
-            />
-          </Box>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <FormControl fullWidth>
-              <InputLabel>Preferred Resolution</InputLabel>
-              <Select
-                value={config.preferredResolution}
-                onChange={(e: SelectChangeEvent<string>) =>
-                  onConfigChange({ preferredResolution: e.target.value })
-                }
-                label="Preferred Resolution"
-              >
-                <MenuItem value="2160">4K (2160p)</MenuItem>
-                <MenuItem value="1440">1440p</MenuItem>
-                <MenuItem value="1080">1080p</MenuItem>
-                <MenuItem value="720">720p</MenuItem>
-                <MenuItem value="480">480p</MenuItem>
-                <MenuItem value="360">360p</MenuItem>
-              </Select>
-            </FormControl>
-            <InfoTooltip
-              text="The resolution we will try to download from YouTube. Note that this is not guaranteed as YouTube may not have your preferred resolution available."
-              onMobileClick={onMobileTooltipClick}
-            />
-          </Box>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <FormControl fullWidth>
-                <InputLabel>Preferred Video Codec</InputLabel>
-                <Select
-                  value={config.videoCodec}
-                  onChange={(e: SelectChangeEvent<string>) =>
-                    onConfigChange({ videoCodec: e.target.value })
-                  }
-                  label="Preferred Video Codec"
-                >
-                  <MenuItem value="default">Default (No Preference)</MenuItem>
-                  <MenuItem value="h264">H.264/AVC (Best Compatibility)</MenuItem>
-                  <MenuItem value="h265">H.265/HEVC (Balanced)</MenuItem>
-                </Select>
-              </FormControl>
-              <InfoTooltip
-                text="Select your preferred video codec. Youtarr will download this codec when available, and fall back to other codecs if your preference is not available for a video. H.264 is recommended for Apple TV and maximum device compatibility. VP9 is the default codec for most YouTube videos."
-                onMobileClick={onMobileTooltipClick}
-              />
-            </Box>
-            <Box component="span" sx={{ mt: 0.5, fontSize: '0.75rem', color: 'text.secondary' }}>
-              Note: H.264 produces larger file sizes but offers maximum compatibility for Apple TV. This is a preference and will fall back to available codecs.
-            </Box>
-          </Box>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <SubfolderAutocomplete
-              mode="global"
-              value={config.defaultSubfolder || null}
-              onChange={handleDefaultSubfolderChange}
-              subfolders={subfolders}
-              loading={subfoldersLoading}
-              label="Default Subfolder"
-              helperText="Default download location for channels using 'Default Subfolder'"
-            />
-            <InfoTooltip
-              text="Set the default download location for untracked channels and channels using 'Default Subfolder'. Leave empty to download to the root directory by default."
-              onMobileClick={onMobileTooltipClick}
-            />
-          </Box>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <FormControl fullWidth>
-              <InputLabel>Max Content Rating</InputLabel>
-              <Select
-                value={config.maxContentRating}
-                onChange={(e: SelectChangeEvent<string>) =>
-                  onConfigChange({ maxContentRating: e.target.value })
-                }
-                label="Max Content Rating"
-              >
-                {RATING_OPTIONS.map(option => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <InfoTooltip
-              text="Globally block videos above this content rating during downloads. Applies to channel and manual downloads."
-              onMobileClick={onMobileTooltipClick}
-            />
-          </Box>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  name="channelVideosHotLoad"
-                  checked={config.channelVideosHotLoad}
-                  onChange={handleCheckboxChange}
-                />
-              }
-              label="Hot-load channel videos"
-            />
-            <InfoTooltip
-              text="When enabled, channel pages use infinite scroll to load more videos. Turn off to use pagination controls instead."
-              onMobileClick={onMobileTooltipClick}
-            />
-          </Box>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  name="useTmpForDownloads"
-                  checked={config.useTmpForDownloads}
-                  onChange={handleCheckboxChange}
-                  disabled={isPlatformManaged.useTmpForDownloads}
-                />
-              }
-              label={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  Use external temp directory
-                  {isPlatformManaged.useTmpForDownloads && (
-                    <Chip
-                      label={deploymentEnvironment.platform?.toLowerCase() === "elfhosted" ? "Managed by Elfhosted" : "Platform Managed"}
-                      size="small"
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      name="useTmpForDownloads"
+                      checked={config.useTmpForDownloads}
+                      onChange={handleCheckboxChange}
+                      disabled={isPlatformManaged.useTmpForDownloads}
                     />
-                  )}
-                </Box>
-              }
-            />
-            <InfoTooltip
-              text={
-                isPlatformManaged.useTmpForDownloads
-                  ? 'This setting is managed by your platform deployment and cannot be changed.'
-                  : 'Controls where downloads are staged before moving to final location. When enabled, uses external /tmp path (useful for slow network storage). When disabled, uses a hidden .youtarr_tmp/ folder in your output directory (faster for local/SSD storage). Both options hide in-progress files from media servers.'
-              }
-              onMobileClick={onMobileTooltipClick}
-            />
-          </Box>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  name="subtitlesEnabled"
-                  checked={config.subtitlesEnabled}
-                  onChange={handleCheckboxChange}
+                  }
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      Use external temp directory
+                      {isPlatformManaged.useTmpForDownloads && (
+                        <Chip
+                          label={deploymentEnvironment.platform?.toLowerCase() === "elfhosted" ? "Managed by Elfhosted" : "Platform Managed"}
+                          size="small"
+                        />
+                      )}
+                    </Box>
+                  }
                 />
-              }
-              label="Enable Subtitle Downloads"
-            />
-            <InfoTooltip
-              text="Download subtitles in SRT format when available. Manual subtitles are preferred, with auto-generated subtitles as fallback."
-              onMobileClick={onMobileTooltipClick}
-            />
-          </Box>
-        </Grid>
-
-        {config.subtitlesEnabled && (
-          <Grid item xs={12} md={6}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <SubtitleLanguageSelector
-                value={config.subtitleLanguage}
-                onChange={(value) => onConfigChange({ subtitleLanguage: value })}
-              />
-              <InfoTooltip
-                text="Select one or more subtitle languages. Subtitles will be downloaded when available; videos without subtitles will still download successfully."
-                onMobileClick={onMobileTooltipClick}
-              />
-            </Box>
+                <InfoTooltip
+                  text={
+                    isPlatformManaged.useTmpForDownloads
+                      ? 'This setting is managed by your platform deployment and cannot be changed.'
+                      : 'Controls where downloads are staged before moving to final location. When enabled, uses external /tmp path (useful for slow network storage). When disabled, uses a hidden .youtarr_tmp/ folder in your output directory (faster for local/SSD storage). Both options hide in-progress files from media servers.'
+                  }
+                  onMobileClick={onMobileTooltipClick}
+                />
+              </Box>
+            </Grid>
           </Grid>
-        )}
+        </Box>
+
+        <Divider />
+
+        <Box>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            Automation & Scheduling
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      name="channelAutoDownload"
+                      checked={config.channelAutoDownload}
+                      onChange={handleCheckboxChange}
+                    />
+                  }
+                  label="Enable Automatic Downloads"
+                />
+                <InfoTooltip
+                  text="Globally enable or disable automatic scheduled downloading of videos from your channels. Only tabs that are enabled for your Channels will be checked and downloaded."
+                  onMobileClick={onMobileTooltipClick}
+                />
+              </Box>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <FormControl fullWidth>
+                  <InputLabel>Download Frequency</InputLabel>
+                  <Select
+                    value={currentFrequency}
+                    onChange={(e: SelectChangeEvent<string>) =>
+                      handleSelectChange(e as any, 'channelDownloadFrequency')
+                    }
+                    label="Download Frequency"
+                    disabled={!config.channelAutoDownload}
+                  >
+                    {Object.keys(FREQUENCY_MAPPING).map((key) => (
+                      <MenuItem key={key} value={key}>
+                        {key}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <InfoTooltip
+                  text="How often to run automatic channel video downloads."
+                  onMobileClick={onMobileTooltipClick}
+                />
+              </Box>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <FormControl fullWidth>
+                  <InputLabel>Files to Download per Channel</InputLabel>
+                  <Select
+                    value={config.channelFilesToDownload}
+                    onChange={handleChannelFilesChange}
+                    label="Videos to Download per Channel Tab"
+                  >
+                    {getChannelFilesOptions(config.channelFilesToDownload).map(count => (
+                      <MenuItem key={count} value={count}>
+                        {count} {count === 1 ? 'video' : 'videos'}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <InfoTooltip
+                  text="How many videos (starting from most recently uploaded) Youtarr will attempt to download per tab when channel downloads run. Already downloaded videos will be skipped."
+                  onMobileClick={onMobileTooltipClick}
+                />
+              </Box>
+            </Grid>
+          </Grid>
+        </Box>
+
+        <Divider />
+
+        <Box>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            Quality & Language
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <FormControl fullWidth>
+                  <InputLabel>Preferred Resolution</InputLabel>
+                  <Select
+                    value={config.preferredResolution}
+                    onChange={(e: SelectChangeEvent<string>) =>
+                      onConfigChange({ preferredResolution: e.target.value })
+                    }
+                    label="Preferred Resolution"
+                  >
+                    <MenuItem value="2160">4K (2160p)</MenuItem>
+                    <MenuItem value="1440">1440p</MenuItem>
+                    <MenuItem value="1080">1080p</MenuItem>
+                    <MenuItem value="720">720p</MenuItem>
+                    <MenuItem value="480">480p</MenuItem>
+                    <MenuItem value="360">360p</MenuItem>
+                  </Select>
+                </FormControl>
+                <InfoTooltip
+                  text="The resolution we will try to download from YouTube. Note that this is not guaranteed as YouTube may not have your preferred resolution available."
+                  onMobileClick={onMobileTooltipClick}
+                />
+              </Box>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <FormControl fullWidth>
+                    <InputLabel>Preferred Video Codec</InputLabel>
+                    <Select
+                      value={config.videoCodec}
+                      onChange={(e: SelectChangeEvent<string>) =>
+                        onConfigChange({ videoCodec: e.target.value })
+                      }
+                      label="Preferred Video Codec"
+                    >
+                      <MenuItem value="default">Default (No Preference)</MenuItem>
+                      <MenuItem value="h264">H.264/AVC (Best Compatibility)</MenuItem>
+                      <MenuItem value="h265">H.265/HEVC (Balanced)</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <InfoTooltip
+                    text="Select your preferred video codec. Youtarr will download this codec when available, and fall back to other codecs if your preference is not available for a video. H.264 is recommended for Apple TV and maximum device compatibility. VP9 is the default codec for most YouTube videos."
+                    onMobileClick={onMobileTooltipClick}
+                  />
+                </Box>
+                <Box component="span" sx={{ mt: 0.5, fontSize: '0.75rem', color: 'text.secondary' }}>
+                  Note: H.264 produces larger file sizes but offers maximum compatibility for Apple TV. This is a preference and will fall back to available codecs.
+                </Box>
+              </Box>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      name="subtitlesEnabled"
+                      checked={config.subtitlesEnabled}
+                      onChange={handleCheckboxChange}
+                    />
+                  }
+                  label="Enable Subtitle Downloads"
+                />
+                <InfoTooltip
+                  text="Download subtitles in SRT format when available. Manual subtitles are preferred, with auto-generated subtitles as fallback."
+                  onMobileClick={onMobileTooltipClick}
+                />
+              </Box>
+            </Grid>
+
+            {config.subtitlesEnabled && (
+              <Grid item xs={12} md={6}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <SubtitleLanguageSelector
+                    value={config.subtitleLanguage}
+                    onChange={(value) => onConfigChange({ subtitleLanguage: value })}
+                  />
+                  <InfoTooltip
+                    text="Select one or more subtitle languages. Subtitles will be downloaded when available; videos without subtitles will still download successfully."
+                    onMobileClick={onMobileTooltipClick}
+                  />
+                </Box>
+              </Grid>
+            )}
+          </Grid>
+        </Box>
+
+        <Divider />
+
+        <Box>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            Content & Interface
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <FormControl fullWidth>
+                  <InputLabel>Max Content Rating</InputLabel>
+                  <Select
+                    value={config.maxContentRating}
+                    onChange={(e: SelectChangeEvent<string>) =>
+                      onConfigChange({ maxContentRating: e.target.value })
+                    }
+                    label="Max Content Rating"
+                  >
+                    {RATING_OPTIONS.map(option => (
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <InfoTooltip
+                  text="Globally block videos above this content rating during downloads. Applies to channel and manual downloads."
+                  onMobileClick={onMobileTooltipClick}
+                />
+              </Box>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      name="channelVideosHotLoad"
+                      checked={config.channelVideosHotLoad}
+                      onChange={handleCheckboxChange}
+                    />
+                  }
+                  label="Hot-load channel videos"
+                />
+                <InfoTooltip
+                  text="When enabled, channel pages use infinite scroll to load more videos. Turn off to use pagination controls instead."
+                  onMobileClick={onMobileTooltipClick}
+                />
+              </Box>
+            </Grid>
+          </Grid>
+        </Box>
 
         {/* Visual Style theme selection moved to Appearance settings page */}
-      </Grid>
+      </Box>
 
       {/* Confirmation Dialog for Default Subfolder */}
       <Dialog open={showConfirmDialog} onClose={handleCancelDefaultSubfolder}>

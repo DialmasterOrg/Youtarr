@@ -14,7 +14,6 @@ import {
 } from '@mui/material';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
-import DeleteIcon from '@mui/icons-material/Delete';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { formatDuration } from '../../utils';
@@ -31,13 +30,14 @@ interface VideoTableViewProps {
   videos: ChannelVideo[];
   checkedBoxes: string[];
   selectedForDeletion: string[];
+  selectionMode: 'download' | 'delete' | null;
   sortBy: SortBy;
   sortOrder: SortOrder;
   onCheckChange: (videoId: string, isChecked: boolean) => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
   onSortChange: (newSortBy: SortBy) => void;
-  onToggleDeletion: (youtubeId: string) => void;
+  onDeletionChange: (videoId: string, isChecked: boolean) => void;
   onToggleIgnore: (youtubeId: string) => void;
   onMobileTooltip?: (message: string) => void;
 }
@@ -46,25 +46,37 @@ function VideoTableView({
   videos,
   checkedBoxes,
   selectedForDeletion,
+  selectionMode,
   sortBy,
   sortOrder,
   onCheckChange,
   onSelectAll,
   onClearSelection,
   onSortChange,
-  onToggleDeletion,
+  onDeletionChange,
   onToggleIgnore,
   onMobileTooltip,
 }: VideoTableViewProps) {
+  const isDeleteMode = selectionMode === 'delete';
+  const effectiveSelection = isDeleteMode ? selectedForDeletion : checkedBoxes;
+  const selectableVideos = videos.filter((video) => {
+    const status = getVideoStatus(video);
+    const isStillLive = video.live_status && video.live_status !== 'was_live';
+    if (isDeleteMode) {
+      return video.added && !video.removed && !isStillLive;
+    }
+    return (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !video.youtube_removed && !isStillLive;
+  });
+
   return (
     <TableContainer>
-      <Table size="small">
+      <Table size="small" sx={{ tableLayout: 'fixed' }}>
         <TableHead>
           <TableRow>
-            <TableCell padding="checkbox">
+            <TableCell padding="checkbox" sx={{ width: 48, maxWidth: 48 }}>
               <Checkbox
-                indeterminate={checkedBoxes.length > 0 && checkedBoxes.length < videos.length}
-                checked={videos.length > 0 && checkedBoxes.length === videos.length}
+                indeterminate={effectiveSelection.length > 0 && effectiveSelection.length < selectableVideos.length}
+                checked={selectableVideos.length > 0 && effectiveSelection.length === selectableVideos.length}
                 onChange={(e) => {
                   if (e.target.checked) {
                     onSelectAll();
@@ -74,8 +86,8 @@ function VideoTableView({
                 }}
               />
             </TableCell>
-            <TableCell>Thumbnail</TableCell>
-            <TableCell onClick={() => onSortChange('title')} sx={{ cursor: 'pointer' }}>
+            <TableCell sx={{ width: 140 }}>Thumbnail</TableCell>
+            <TableCell onClick={() => onSortChange('title')} sx={{ cursor: 'pointer', width: '36%' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 Title
                 {sortBy === 'title' && (
@@ -83,7 +95,7 @@ function VideoTableView({
                 )}
               </Box>
             </TableCell>
-            <TableCell onClick={() => onSortChange('date')} sx={{ cursor: 'pointer' }}>
+            <TableCell onClick={() => onSortChange('date')} sx={{ cursor: 'pointer', whiteSpace: 'nowrap', width: 110 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 Published
                 {sortBy === 'date' && (
@@ -91,7 +103,7 @@ function VideoTableView({
                 )}
               </Box>
             </TableCell>
-            <TableCell onClick={() => onSortChange('duration')} sx={{ cursor: 'pointer' }}>
+            <TableCell onClick={() => onSortChange('duration')} sx={{ cursor: 'pointer', whiteSpace: 'nowrap', width: 90 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 Duration
                 {sortBy === 'duration' && (
@@ -99,8 +111,8 @@ function VideoTableView({
                 )}
               </Box>
             </TableCell>
-            <TableCell>Rating</TableCell>
-            <TableCell onClick={() => onSortChange('size')} sx={{ cursor: 'pointer' }}>
+            <TableCell sx={{ width: 90, whiteSpace: 'normal' }}>Rating</TableCell>
+            <TableCell onClick={() => onSortChange('size')} sx={{ cursor: 'pointer', whiteSpace: 'nowrap', width: 90 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 Size
                 {sortBy === 'size' && (
@@ -108,7 +120,7 @@ function VideoTableView({
                 )}
               </Box>
             </TableCell>
-            <TableCell>Status</TableCell>
+            <TableCell sx={{ whiteSpace: 'nowrap', width: 140 }}>Status</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -116,9 +128,14 @@ function VideoTableView({
             const status = getVideoStatus(video);
             // Check if video is still live (not "was_live" and not null/undefined)
             const isStillLive = video.live_status && video.live_status !== 'was_live';
-            const isSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !video.youtube_removed && !isStillLive;
+            const isDownloadSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !video.youtube_removed && !isStillLive;
+            const isDeleteSelectable = video.added && !video.removed && !isStillLive;
+            const isDownloadAllowed = selectionMode !== 'delete';
+            const isDeleteAllowed = selectionMode !== 'download';
             const isChecked = checkedBoxes.includes(video.youtube_id);
+            const isDeleteChecked = selectedForDeletion.includes(video.youtube_id);
             const mediaTypeInfo = getMediaTypeInfo(video.media_type);
+            const isClickable = (isDownloadSelectable && isDownloadAllowed) || (isDeleteSelectable && isDeleteAllowed);
 
             return (
               <TableRow
@@ -126,59 +143,53 @@ function VideoTableView({
                 hover
                 sx={{
                   opacity: status === 'members_only' || status === 'ignored' ? 0.7 : 1,
-                  cursor: isSelectable ? 'pointer' : 'default',
+                  cursor: isClickable ? 'pointer' : 'default',
                 }}
               >
-                <TableCell padding="checkbox">
-                  {isStillLive ? (
-                    <StillLiveDot isMobile={false} onMobileClick={onMobileTooltip} />
-                  ) : isSelectable && (
-                    <Checkbox
-                      checked={isChecked}
-                      onChange={(e) => onCheckChange(video.youtube_id, e.target.checked)}
-                    />
-                  )}
-                  {/* Delete icon for downloaded videos that exist on disk */}
-                  {video.added && !video.removed && (
-                    <IconButton
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleDeletion(video.youtube_id);
-                      }}
-                      sx={{
-                        color: selectedForDeletion.includes(video.youtube_id) ? 'error.main' : 'action.active',
-                        '&:hover': {
-                          color: 'error.main',
-                          bgcolor: 'error.light',
-                        },
-                      }}
-                      size="small"
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                  {/* Ignore/Unignore button - for videos not currently on disk (never downloaded or missing) */}
-                  {!isStillLive && (!video.added || video.removed) && (
-                    <IconButton
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleIgnore(video.youtube_id);
-                      }}
-                      sx={{
-                        color: status === 'ignored' ? 'warning.main' : 'action.active',
-                        '&:hover': {
-                          color: status === 'ignored' ? 'warning.dark' : 'warning.main',
-                          bgcolor: 'warning.light',
-                        },
-                      }}
-                      size="small"
-                      title={status === 'ignored' ? 'Unignore' : 'Ignore'}
-                    >
-                      {status === 'ignored' ? <CheckCircleOutlineIcon fontSize="small" /> : <BlockIcon fontSize="small" />}
-                    </IconButton>
-                  )}
+                <TableCell padding="checkbox" sx={{ width: 48, maxWidth: 48 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.25 }}>
+                    {isStillLive ? (
+                      <StillLiveDot isMobile={false} onMobileClick={onMobileTooltip} />
+                    ) : isDownloadSelectable && isDownloadAllowed && (
+                      <Checkbox
+                        checked={isChecked}
+                        onChange={(e) => onCheckChange(video.youtube_id, e.target.checked)}
+                      />
+                    )}
+                    {isDeleteSelectable && isDeleteAllowed && (
+                      <Checkbox
+                        checked={isDeleteChecked}
+                        onChange={(e) => onDeletionChange(video.youtube_id, e.target.checked)}
+                        sx={{
+                          '&.Mui-checked': {
+                            color: 'error.main',
+                          },
+                        }}
+                      />
+                    )}
+                    {/* Ignore/Unignore button - for videos not currently on disk (never downloaded or missing) */}
+                    {!isStillLive && (!video.added || video.removed) && (
+                      <IconButton
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleIgnore(video.youtube_id);
+                        }}
+                        sx={{
+                          color: status === 'ignored' ? 'warning.main' : 'action.active',
+                          '&:hover': {
+                            color: status === 'ignored' ? 'warning.dark' : 'warning.main',
+                            bgcolor: 'warning.light',
+                          },
+                        }}
+                        size="small"
+                        title={status === 'ignored' ? 'Unignore' : 'Ignore'}
+                      >
+                        {status === 'ignored' ? <CheckCircleOutlineIcon fontSize="small" /> : <BlockIcon fontSize="small" />}
+                      </IconButton>
+                    )}
+                  </Box>
                 </TableCell>
-                <TableCell>
+                <TableCell sx={{ width: 140 }}>
                   <Box sx={{ position: 'relative', display: 'inline-block', bgcolor: 'grey.900', borderRadius: '4px' }}>
                     <img
                       src={video.thumbnail}
@@ -215,32 +226,43 @@ function VideoTableView({
                     )}
                   </Box>
                 </TableCell>
-                <TableCell>
-                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                <TableCell sx={{ width: '36%' }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      mb: 0.5,
+                      whiteSpace: 'normal',
+                      overflow: 'hidden',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                    }}
+                  >
                     {decodeHtml(video.title)}
                   </Typography>
                 </TableCell>
-                <TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>
                   {video.media_type === 'short' || !video.publishedAt
                     ? 'N/A'
                     : new Date(video.publishedAt).toLocaleDateString()}
                 </TableCell>
-                <TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>
                   {video.media_type === 'short' ? 'N/A' : formatDuration(video.duration)}
                 </TableCell>
-                <TableCell>
+                <TableCell sx={{ width: 90, whiteSpace: 'nowrap' }}>
                   <RatingBadge
                     rating={video.normalized_rating}
                     ratingSource={video.rating_source}
                     showNA={true}
                     size="small"
+                    sx={{ flexWrap: 'nowrap', justifyContent: 'center' }}
                   />
                 </TableCell>
-                <TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>
                   {video.fileSize ? formatFileSize(video.fileSize) : '-'}
                 </TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap', overflow: 'hidden' }}>
                     {mediaTypeInfo && (
                       <Chip
                         size="small"

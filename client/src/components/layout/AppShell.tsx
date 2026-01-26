@@ -62,11 +62,11 @@ const NAV_SUB_FONT_SIZE = '0.8rem';
 const NAV_SUB_LINE_HEIGHT = 1.2;
 const NAV_DRAWER_BORDER_RADIUS = 'var(--nav-radius)';
 const NAV_DRAWER_DESKTOP_TOP_OFFSET = 'calc(80px + var(--shell-gap))';
-const NAV_DRAWER_DESKTOP_BOTTOM_GAP = 'calc(60px + var(--shell-gap))';
-const NAV_DRAWER_DESKTOP_MAX_HEIGHT = 'calc(100vh - (64px + (var(--shell-gap) * 2)))';
+const NAV_DRAWER_DESKTOP_BOTTOM_GAP = 'var(--shell-gap)';
+const NAV_DRAWER_DESKTOP_MAX_HEIGHT = 'calc(100vh - (80px + var(--shell-gap)) - var(--shell-gap))';
 const NAV_DRAWER_MOBILE_TOP_OFFSET = 'calc(60px + var(--shell-gap))';
-const NAV_DRAWER_MOBILE_BOTTOM_GAP = 'calc(60px + var(--shell-gap))';
-const NAV_DRAWER_MOBILE_MAX_HEIGHT = 'calc(100vh - 64px - var(--shell-gap))';
+const NAV_DRAWER_MOBILE_BOTTOM_GAP = 'var(--shell-gap)';
+const NAV_DRAWER_MOBILE_MAX_HEIGHT = 'calc(100vh - (60px + var(--shell-gap)) - var(--shell-gap))';
 const APP_BAR_TOGGLE_SIZE = 44;
 
 export function AppShell({
@@ -153,6 +153,13 @@ export function AppShell({
       ],
     [downloadsSubItems, settingsSubItems]
   );
+
+  const collapsedVersionLabel = useMemo(() => {
+    if (!versionLabel) return '';
+    return versionLabel.split('•')[0].trim();
+  }, [versionLabel]);
+
+  const displayVersionLabel = isNavCollapsed ? collapsedVersionLabel : (versionLabel || '');
 
   const toggleDrawer = () => {
     if (isMobile) {
@@ -332,12 +339,15 @@ export function AppShell({
           sx={{
             display: 'block',
             whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
+            overflow: isNavCollapsed ? 'visible' : 'hidden',
+            textOverflow: isNavCollapsed ? 'clip' : 'ellipsis',
+            textAlign: isNavCollapsed ? 'center' : 'left',
+            fontSize: isNavCollapsed ? 'clamp(0.55rem, 1.6vw, 0.75rem)' : NAV_SECONDARY_FONT_SIZE,
+            letterSpacing: isNavCollapsed ? '-0.01em' : 'normal',
           }}
           title={versionLabel}
         >
-          {versionLabel}
+          {displayVersionLabel}
         </Typography>
       </Box>
 

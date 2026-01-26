@@ -16,6 +16,9 @@ import {
   FormControlLabel,
   Box,
   Pagination,
+  Card,
+  CardHeader,
+  CardContent,
 } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
 import { formatDuration } from '../../utils';
@@ -125,40 +128,6 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
           <TableContainer>
             <div {...handlers}>
               <Table>
-                return (
-                  <Grid item xs={12} md={12} paddingBottom={'48px'}>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <Typography variant="h5" sx={{ fontWeight: 800, textAlign: 'center' }}>
-                        Download History
-                      </Typography>
-                      <Grid container spacing={2} justifyContent='center'>
-                        <Grid item>
-                          <Pagination
-                            count={totalPages}
-                            page={currentPage}
-                            onChange={(event, page) => handlePageChange(page)}
-                          />
-                        </Grid>
-                      </Grid>
-
-                      <Box>
-                        <Toolbar style={{ minHeight: '42px' }}>
-                          <Box display='flex' justifyContent='center' width='100%'>
-                            <FormControlLabel
-                              control={
-                                <Checkbox
-                                  checked={showNoVideoJobs}
-                                  onChange={(event) => {
-                                    setShowNoVideoJobs(event.target.checked);
-                                    setCurrentPage(1); // Reset the page number to 1
-                                  }}
-                                />
-                              }
-                              label='Show Jobs with no videos'
-                            />
-                          </Box>
-                        </Toolbar>
-                </TableHead>
                 {jobs.length === 0 && (
                   <TableBody>
                     <TableRow>
@@ -360,8 +329,8 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
               </Table>
             </div>
           </TableContainer>
-        </Box>
-      </Box>
+        </CardContent>
+      </Card>
     </Grid>
   );
 };

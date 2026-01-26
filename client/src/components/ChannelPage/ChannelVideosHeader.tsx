@@ -43,6 +43,7 @@ interface ChannelVideosHeaderProps {
   fetchingAllVideos: boolean;
   checkedBoxes: string[];
   selectedForDeletion: string[];
+  selectionMode: 'download' | 'delete' | null;
   deleteLoading: boolean;
   paginatedVideos: ChannelVideo[];
   autoDownloadsEnabled: boolean;
@@ -71,6 +72,7 @@ function ChannelVideosHeader({
   fetchingAllVideos,
   checkedBoxes,
   selectedForDeletion,
+  selectionMode,
   deleteLoading,
   paginatedVideos,
   autoDownloadsEnabled,
@@ -124,6 +126,12 @@ function ChannelVideosHeader({
   const dateTooltipText = selectedTab === 'shorts'
     ? "Shorts do not expose publish dates via yt-dlp, so dates are hidden. " + dateTooltipBase
     : dateTooltipBase;
+
+  const selectableDownloadCount = paginatedVideos.filter((video) => {
+    const status = getVideoStatus(video);
+    return status === 'never_downloaded' || status === 'missing' || status === 'ignored';
+  }).length;
+  const selectableDeleteCount = paginatedVideos.filter((video) => video.added && !video.removed).length;
 
   return (
     <Box
@@ -252,10 +260,11 @@ function ChannelVideosHeader({
               variant="outlined"
               size="small"
               onClick={onSelectAll}
-              disabled={checkedBoxes.length === 0 && paginatedVideos.filter(v => {
-                const status = getVideoStatus(v);
-                return status === 'never_downloaded' || status === 'missing' || status === 'ignored';
-              }).length === 0}
+              disabled={
+                selectionMode === 'delete'
+                  ? selectableDeleteCount === 0
+                  : checkedBoxes.length === 0 && selectableDownloadCount === 0
+              }
             >
               Select All This Page
             </Button>

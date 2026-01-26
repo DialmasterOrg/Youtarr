@@ -84,8 +84,11 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
           bgcolor: 'var(--card)',
           color: 'var(--foreground)',
           border: themeMode === 'neumorphic' ? '1px solid transparent' : '2px solid var(--foreground)',
-          boxShadow: themeMode === 'neumorphic' ? 'var(--shadow-input-rest)' : 'var(--shadow-hard)',
+          boxShadow: 'none',
           transition: 'transform 200ms var(--transition-bouncy), box-shadow 200ms var(--transition-bouncy)',
+          '&:hover': {
+            boxShadow: themeMode === 'neumorphic' ? 'var(--shadow-input-rest)' : 'var(--shadow-hard)',
+          },
           ...sx,
         }}
       >
