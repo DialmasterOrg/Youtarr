@@ -23,6 +23,7 @@ export const CONFIG_FIELDS = {
   channelAutoDownload: { default: false, trackChanges: true },
   channelDownloadFrequency: { default: '', trackChanges: true },
   channelFilesToDownload: { default: 3, trackChanges: true },
+  channelVideosHotLoad: { default: true, trackChanges: true },
 
   // Video settings
   preferredResolution: { default: '1080', trackChanges: true },
@@ -120,6 +121,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   channelAutoDownload: CONFIG_FIELDS.channelAutoDownload.default,
   channelDownloadFrequency: CONFIG_FIELDS.channelDownloadFrequency.default,
   channelFilesToDownload: CONFIG_FIELDS.channelFilesToDownload.default,
+  channelVideosHotLoad: CONFIG_FIELDS.channelVideosHotLoad.default,
   preferredResolution: CONFIG_FIELDS.preferredResolution.default,
   videoCodec: CONFIG_FIELDS.videoCodec.default,
   defaultSubfolder: CONFIG_FIELDS.defaultSubfolder.default,

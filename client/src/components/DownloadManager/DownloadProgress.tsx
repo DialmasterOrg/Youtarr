@@ -7,7 +7,6 @@ import React, {
 } from 'react';
 import {
   Grid,
-  Card,
   Typography,
   LinearProgress,
   Box,
@@ -406,7 +405,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
   return (
     <Grid item xs={12} md={12} paddingBottom={'8px'}>
-      <Card elevation={8}>
+      <Box>
         <Box sx={{
           display: 'flex',
           alignItems: 'center',
@@ -803,7 +802,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
           onClose={() => setShowTerminateDialog(false)}
           onConfirm={handleTerminate}
         />
-      </Card>
+      </Box>
     </Grid>
   );
 };

@@ -7,6 +7,7 @@
   "videoCodec": "default",
   "defaultSubfolder": "",
   "maxContentRating": "",
+  "channelVideosHotLoad": true,
   "plexIP": "",
   "plexPort": "32400",
   "plexViaHttps": false,

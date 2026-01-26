@@ -10,21 +10,12 @@ import {
   Zoom,
   Fab,
   Badge,
-  Drawer,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  Divider,
-  IconButton,
   Tabs,
   Tab,
+  Pagination,
 } from '@mui/material';
 
 import DownloadIcon from '@mui/icons-material/Download';
-import SelectAllIcon from '@mui/icons-material/SelectAll';
-import ClearIcon from '@mui/icons-material/Clear';
-import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AlarmOnIcon from '@mui/icons-material/AlarmOn';
 
@@ -64,7 +55,6 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortBy>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [maxRating, setMaxRating] = useState('');
 
   // Tab states
@@ -87,6 +77,8 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const scrollRestoreRef = useRef<{ top: number | null; armed: boolean }>({ top: null, armed: false });
+  const lastVideosCountRef = useRef<number>(0);
 
   // Local state to track ignore status changes without refetching
   const [localIgnoreStatus, setLocalIgnoreStatus] = useState<Record<string, boolean>>({});
@@ -212,6 +204,12 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     });
   }, [channelAutoDownloadTabs, availableTabs]);
 
+  const { config } = useConfig(token);
+  const hasChannelOverride = Boolean(channelVideoQuality);
+  const defaultResolution = channelVideoQuality || config.preferredResolution || '1080';
+  const defaultResolutionSource: 'channel' | 'global' = hasChannelOverride ? 'channel' : 'global';
+  const useInfiniteScroll = config.channelVideosHotLoad ?? true;
+
   // Use custom hooks for data fetching
   const {
     videos,
@@ -233,7 +231,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     tabType: selectedTab,
     maxRating,
     token,
-    append: page > 1,
+    append: useInfiniteScroll && page > 1,
     resetKey: JSON.stringify({ channelId, hideDownloaded, searchQuery, sortBy, sortOrder, selectedTab, maxRating, pageSize }),
   });
 
@@ -249,10 +247,38 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     setLocalIgnoreStatus({});
   }, [page, selectedTab, hideDownloaded, searchQuery, sortBy, sortOrder, maxRating]);
 
-  const { config } = useConfig(token);
-  const hasChannelOverride = Boolean(channelVideoQuality);
-  const defaultResolution = channelVideoQuality || config.preferredResolution || '1080';
-  const defaultResolutionSource: 'channel' | 'global' = hasChannelOverride ? 'channel' : 'global';
+  useEffect(() => {
+    setPage(1);
+  }, [useInfiniteScroll]);
+
+  useEffect(() => {
+    if (!useInfiniteScroll) {
+      scrollRestoreRef.current = { top: null, armed: false };
+      lastVideosCountRef.current = videos.length;
+      return;
+    }
+
+    if (videosLoading) {
+      return;
+    }
+
+    const previousCount = lastVideosCountRef.current;
+    if (
+      scrollRestoreRef.current.armed &&
+      scrollRestoreRef.current.top !== null &&
+      videos.length > previousCount
+    ) {
+      if (typeof window !== 'undefined') {
+        const currentTop = window.scrollY || 0;
+        if (Math.abs(currentTop - scrollRestoreRef.current.top) < 24) {
+          window.scrollTo({ top: scrollRestoreRef.current.top, behavior: 'auto' });
+        }
+      }
+      scrollRestoreRef.current = { top: null, armed: false };
+    }
+
+    lastVideosCountRef.current = videos.length;
+  }, [videos.length, videosLoading, useInfiniteScroll]);
 
   const { triggerDownloads } = useTriggerDownloads(token);
 
@@ -574,6 +600,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   useEffect(() => {
     if (!loadMoreRef.current) return;
     if (videosLoading || !hasNextPage) return;
+    if (!useInfiniteScroll) return;
 
     let didTrigger = false;
     const observer = new IntersectionObserver(
@@ -581,6 +608,9 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         const [entry] = entries;
         if (entry.isIntersecting && !didTrigger) {
           didTrigger = true;
+          if (typeof window !== 'undefined') {
+            scrollRestoreRef.current = { top: window.scrollY || 0, armed: true };
+          }
           setPage((prev) => prev + 1);
         }
       },
@@ -596,114 +626,53 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     return () => {
       observer.disconnect();
     };
-  }, [videosLoading, hasNextPage]);
+  }, [videosLoading, hasNextPage, useInfiniteScroll]);
 
-  // Mobile drawer render
-  const renderDrawer = () => (
-    <Drawer
-      anchor="bottom"
-      open={mobileDrawerOpen}
-      onClose={() => setMobileDrawerOpen(false)}
-      sx={{
-        '& .MuiDrawer-paper': {
-          borderTopLeftRadius: 16,
-          borderTopRightRadius: 16,
-          maxHeight: '70vh',
-        },
-      }}
-    >
-      <Box sx={{ p: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">Batch Actions</Typography>
-          <IconButton onClick={() => setMobileDrawerOpen(false)}>
-            <CloseIcon />
-          </IconButton>
-        </Box>
-
-        <List>
-          <ListItem button onClick={handleSelectAll}>
-            <ListItemIcon><SelectAllIcon /></ListItemIcon>
-            <ListItemText primary="Select All This Page" secondary={`Select videos that can be downloaded`} />
-          </ListItem>
-
-          <ListItem button onClick={handleClearSelection}>
-            <ListItemIcon><ClearIcon /></ListItemIcon>
-            <ListItemText primary="Clear Selection" secondary={`${checkedBoxes.length} selected`} />
-          </ListItem>
-
-          <Divider sx={{ my: 1 }} />
-
-          <ListItem button onClick={handleDownloadClick} disabled={checkedBoxes.length === 0}>
-            <ListItemIcon><DownloadIcon /></ListItemIcon>
-            <ListItemText
-              primary={`Download ${checkedBoxes.length} ${checkedBoxes.length === 1 ? 'Video' : 'Videos'}`}
-              secondary={getMissingVideoCount() > 0 ? `${getMissingVideoCount()} missing files will be re-downloaded` : undefined}
-            />
-          </ListItem>
-
-          <ListItem button onClick={handleDeleteClick} disabled={selectedForDeletion.length === 0 || deleteLoading}>
-            <ListItemIcon><DeleteIcon color={selectedForDeletion.length > 0 ? "error" : "disabled"} /></ListItemIcon>
-            <ListItemText
-              primary={`Delete ${selectedForDeletion.length} ${selectedForDeletion.length === 1 ? 'Video' : 'Videos'}`}
-              secondary={selectedForDeletion.length > 0 ? `Remove videos from disk` : 'No videos selected for deletion'}
-            />
-          </ListItem>
-        </List>
-      </Box>
-    </Drawer>
-  );
-
-  // Mobile floating action buttons
-  const renderFAB = () => {
-    // if (!isMobile) return null;
-
+  const renderSelectionAction = () => {
     const hasDownloadSelection = checkedBoxes.length > 0;
     const hasDeletionSelection = selectedForDeletion.length > 0;
 
     if (!hasDownloadSelection && !hasDeletionSelection) return null;
 
-    return (
-      <>
-        {/* Download FAB */}
-        {hasDownloadSelection && (
-          <Zoom in={hasDownloadSelection}>
-            <Fab
-              color="primary"
-              sx={{
-                position: 'fixed',
-                bottom: hasDeletionSelection ? 88 : 16,
-                right: 16,
-                zIndex: theme.zIndex.fab,
-              }}
-              onClick={() => setMobileDrawerOpen(true)}
-            >
-              <Badge badgeContent={checkedBoxes.length} color="error">
-                <DownloadIcon />
-              </Badge>
-            </Fab>
-          </Zoom>
-        )}
+    const isDownloadAction = hasDownloadSelection;
+    const count = isDownloadAction ? checkedBoxes.length : selectedForDeletion.length;
+    const badgeColor = isDownloadAction ? 'primary' : 'error';
+    const icon = isDownloadAction ? <DownloadIcon /> : <DeleteIcon />;
+    const handleActionClick = isDownloadAction ? handleDownloadClick : handleDeleteClick;
 
-        {/* Delete FAB */}
-        {hasDeletionSelection && (
-          <Zoom in={hasDeletionSelection}>
+    return (
+      <Zoom in>
+        <Box
+          sx={{
+            position: 'fixed',
+            top: '50%',
+            left: 'calc(var(--nav-width) + (100vw - var(--nav-width)) / 2)',
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none',
+            zIndex: theme.zIndex.fab,
+          }}
+        >
+          <Badge badgeContent={count} color={badgeColor} overlap="circular">
             <Fab
-              color="error"
+              onClick={handleActionClick}
               sx={{
-                position: 'fixed',
-                bottom: 16,
-                right: 16,
-                zIndex: theme.zIndex.fab,
+                pointerEvents: 'auto',
+                bgcolor: 'background.paper',
+                color: isDownloadAction ? 'primary.main' : 'error.main',
+                border: '2px solid',
+                borderColor: isDownloadAction ? 'primary.main' : 'error.main',
+                boxShadow: 'var(--shadow-soft)',
+                '&:hover': {
+                  bgcolor: isDownloadAction ? 'primary.main' : 'error.main',
+                  color: isDownloadAction ? 'primary.contrastText' : 'error.contrastText',
+                },
               }}
-              onClick={handleDeleteClick}
             >
-              <Badge badgeContent={selectedForDeletion.length} color="primary">
-                <DeleteIcon />
-              </Badge>
+              {icon}
             </Fab>
-          </Zoom>
-        )}
-      </>
+          </Badge>
+        </Box>
+      </Zoom>
     );
   };
 
@@ -765,7 +734,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         )}
 
         {/* Content area */}
-        <Box sx={{ p: 2 }}>
+        <Box sx={{ p: 2, position: 'relative' }}>
           {videoFailed && videos.length === 0 ? (
             <Alert severity="error">
               Failed to fetch channel videos. Please try again later.
@@ -851,23 +820,43 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
             </>
           )}
 
-          <Box ref={loadMoreRef} sx={{ height: 1 }} />
-          {videosLoading && videos.length > 0 && hasNextPage && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-              <Skeleton variant="circular" width={28} height={28} />
-            </Box>
+          {renderSelectionAction()}
+
+          {useInfiniteScroll && (
+            <>
+              <Box ref={loadMoreRef} sx={{ height: 1 }} />
+              {videosLoading && videos.length > 0 && hasNextPage && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                  <Skeleton variant="circular" width={28} height={28} />
+                </Box>
+              )}
+              {!hasNextPage && videos.length > 0 && (
+                <Typography variant="caption" color="text.secondary" align="center" sx={{ display: 'block', py: 2 }}>
+                  You're all caught up.
+                </Typography>
+              )}
+            </>
           )}
-          {!hasNextPage && videos.length > 0 && (
-            <Typography variant="caption" color="text.secondary" align="center" sx={{ display: 'block', py: 2 }}>
-              You're all caught up.
-            </Typography>
+
+          {!useInfiniteScroll && totalPages > 1 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+              <Pagination
+                count={totalPages}
+                page={page}
+                color="primary"
+                onChange={(_, value) => {
+                  setPage(value);
+                  if (typeof window !== 'undefined') {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }
+                }}
+                showFirstButton
+                showLastButton
+              />
+            </Box>
           )}
         </Box>
       </Card>
-
-      {/* Mobile components */}
-      {renderFAB()}
-      {renderDrawer()}
 
       {/* Dialogs and Snackbars */}
       <ChannelVideosDialogs

@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
-  Card,
-  CardContent,
   Grid,
   Typography,
   Table,
@@ -344,8 +342,8 @@ function VideosPage({ token }: VideosPageProps) {
   });
 
   return (
-    <Card elevation={8} style={{ marginBottom: '16px' }}>
-      <CardContent>
+    <Box sx={{ mb: 2 }}>
+      <Box>
         <Typography
           variant={isMobile ? 'h6' : 'h5'}
           component='h2'
@@ -1083,7 +1081,7 @@ function VideosPage({ token }: VideosPageProps) {
             </Table>
           </div>
         </TableContainer>
-      </CardContent>
+      </Box>
 
       {/* Delete Confirmation Dialog */}
       <DeleteVideosDialog
@@ -1159,7 +1157,7 @@ function VideosPage({ token }: VideosPageProps) {
           {errorMessage}
         </Alert>
       </Snackbar>
-    </Card>
+    </Box>
   );
 }
 

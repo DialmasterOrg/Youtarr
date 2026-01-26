@@ -160,6 +160,14 @@ const commonThemeOptions: ThemeOptions = {
             borderColor: 'var(--input-border)',
             borderWidth: 2,
           },
+          '& .MuiOutlinedInput-notchedOutline legend': {
+            maxWidth: '100%',
+            padding: '0 10px',
+          },
+          '& .MuiOutlinedInput-notchedOutline legend > span': {
+            paddingLeft: 4,
+            paddingRight: 4,
+          },
           '&:hover .MuiOutlinedInput-notchedOutline': {
             borderColor: 'var(--input-border-hover)',
           },

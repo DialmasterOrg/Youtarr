@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Card, CardContent, CardHeader, Grid } from '@mui/material';
+import { Box, Grid, Typography } from '@mui/material';
 import ManualDownload from './ManualDownload/ManualDownload';
 import { DownloadSettings } from './ManualDownload/types';
 import { useConfig } from '../../hooks/useConfig';
@@ -46,16 +46,16 @@ const DownloadManualPage: React.FC<DownloadManualPageProps> = ({
 
   return (
     <Grid item xs={12} md={12}>
-      <Card elevation={8}>
-        <CardHeader title="Manual Download" align="center" style={{ marginBottom: '-16px' }} />
-        <CardContent>
-          <ManualDownload
-            onStartDownload={handleManualDownload}
-            token={token}
-            defaultResolution={defaultResolution}
-          />
-        </CardContent>
-      </Card>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Typography variant="h5" sx={{ fontWeight: 800, textAlign: 'center' }}>
+          Manual Download
+        </Typography>
+        <ManualDownload
+          onStartDownload={handleManualDownload}
+          token={token}
+          defaultResolution={defaultResolution}
+        />
+      </Box>
     </Grid>
   );
 };

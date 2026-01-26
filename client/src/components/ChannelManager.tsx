@@ -3,8 +3,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardHeader,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -371,17 +369,17 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
 
   return (
     <>
-      <Card sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <CardHeader
-          title="Your Channels"
-          action={
-            <Tooltip title="Learn how channel downloads work">
-              <IconButton onClick={() => setHelpDialogOpen(true)}>
-                <HelpOutlineIcon />
-              </IconButton>
-            </Tooltip>
-          }
-        />
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography variant="h5" sx={{ fontWeight: 800 }}>
+            Your Channels
+          </Typography>
+          <Tooltip title="Learn how channel downloads work">
+            <IconButton onClick={() => setHelpDialogOpen(true)}>
+              <HelpOutlineIcon />
+            </IconButton>
+          </Tooltip>
+        </Box>
         <Divider />
         <Box
           sx={{
@@ -648,7 +646,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
             )}
           </Box>
         </Box>
-      </Card>
+      </Box>
 
       <Menu anchorEl={folderMenuAnchor} open={Boolean(folderMenuAnchor)} onClose={handleFolderMenuClose}>
         <MenuItem selected={!selectedSubFolder} onClick={() => handleSubFolderSelect(null)}>

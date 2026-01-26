@@ -124,6 +124,13 @@ Configuration can be modified through:
 - **Default**: `false`
 - **Description**: Enable dark mode in web UI
 
+### Channel Videos Hot-Loading
+- **Config Key**: `channelVideosHotLoad`
+- **Type**: `boolean`
+- **Default**: `true`
+- **Description**: Use infinite scroll on channel video pages
+- **Note**: When disabled, channel videos use paginated navigation instead of hot-loading
+
 ## Plex Integration
 
 ### Plex API Key

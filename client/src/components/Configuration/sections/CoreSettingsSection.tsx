@@ -339,6 +339,25 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <FormControlLabel
               control={
+                <Switch
+                  name="channelVideosHotLoad"
+                  checked={config.channelVideosHotLoad}
+                  onChange={handleCheckboxChange}
+                />
+              }
+              label="Hot-load channel videos"
+            />
+            <InfoTooltip
+              text="When enabled, channel pages use infinite scroll to load more videos. Turn off to use pagination controls instead."
+              onMobileClick={onMobileTooltipClick}
+            />
+          </Box>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <FormControlLabel
+              control={
                 <Checkbox
                   name="useTmpForDownloads"
                   checked={config.useTmpForDownloads}

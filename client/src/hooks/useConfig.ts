@@ -82,7 +82,8 @@ export function useConfig(token: string | null): UseConfigResult {
         ...data,
         writeChannelPosters: data.writeChannelPosters ?? true,
         writeVideoNfoFiles: data.writeVideoNfoFiles ?? true,
-        plexPort: data.plexPort ? String(data.plexPort) : '32400'
+        plexPort: data.plexPort ? String(data.plexPort) : '32400',
+        channelVideosHotLoad: data.channelVideosHotLoad ?? true,
       };
 
       setConfig(resolvedConfig);

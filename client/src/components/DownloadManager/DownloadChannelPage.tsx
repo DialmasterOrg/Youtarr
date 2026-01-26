@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Card, CardContent, CardHeader, Grid, Box } from '@mui/material';
+import { Button, Grid, Box, Typography } from '@mui/material';
 import DownloadSettingsDialog from './ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from './ManualDownload/types';
 import ErrorBoundary from '../ErrorBoundary';
@@ -53,28 +53,28 @@ const DownloadChannelPage: React.FC<DownloadChannelPageProps> = ({
 
   return (
     <Grid item xs={12} md={12}>
-      <Card elevation={8}>
-        <CardHeader title="Channel Download" align="center" style={{ marginBottom: '-16px' }} />
-        <CardContent>
-          <ErrorBoundary
-            fallbackMessage="An error occurred with channel downloads. Please refresh the page and try again."
-            onReset={() => setShowChannelSettingsDialog(false)}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Typography variant="h5" sx={{ fontWeight: 800, textAlign: 'center' }}>
+          Channel Download
+        </Typography>
+        <ErrorBoundary
+          fallbackMessage="An error occurred with channel downloads. Please refresh the page and try again."
+          onReset={() => setShowChannelSettingsDialog(false)}
+        >
+          <Box
+            display="flex"
+            flexDirection="column"
+            justifyContent="center"
+            alignItems="center"
+            gap={2}
+            mt={3}
           >
-            <Box
-              display="flex"
-              flexDirection="column"
-              justifyContent="center"
-              alignItems="center"
-              gap={2}
-              mt={3}
-            >
-              <Button variant="contained" onClick={handleOpenChannelSettings} size="large">
-                Download new from all channels
-              </Button>
-            </Box>
-          </ErrorBoundary>
-        </CardContent>
-      </Card>
+            <Button variant="contained" onClick={handleOpenChannelSettings} size="large">
+              Download new from all channels
+            </Button>
+          </Box>
+        </ErrorBoundary>
+      </Box>
 
       <DownloadSettingsDialog
         open={showChannelSettingsDialog}
