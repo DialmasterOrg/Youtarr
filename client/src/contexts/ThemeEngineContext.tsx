@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-
-export type ThemeMode = 'playful' | 'neumorphic';
+import { ALL_THEMES, ThemeMode, getThemeById } from '../themes';
 
 interface ThemeEngineState {
   themeMode: ThemeMode;
@@ -19,21 +18,62 @@ export function ThemeEngineProvider({ children }: { children: React.ReactNode })
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     if (typeof window === 'undefined') return 'playful';
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return stored === 'neumorphic' ? 'neumorphic' : 'playful';
+    return stored && stored in ALL_THEMES ? (stored as ThemeMode) : 'playful';
   });
 
   const [motionEnabled, setMotionEnabled] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
+    if (typeof window === 'undefined') return false;
     const stored = localStorage.getItem(MOTION_STORAGE_KEY);
     if (stored === null) {
-      return localStorage.getItem(LEGACY_WIGGLE_KEY) !== 'false';
+      // Default to false now as requested, but respect legacy wiggle if it was specifically set to true?
+      // Actually user said: "I want... the default animation to be off."
+      const legacy = localStorage.getItem(LEGACY_WIGGLE_KEY);
+      if (legacy === 'true') return true;
+      return false;
     }
-    return stored !== 'false';
+    return stored === 'true';
   });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    
+    const theme = getThemeById(themeMode);
     document.body.dataset.theme = themeMode;
+    document.body.dataset.layout = theme.layoutMode;
+    
+    // Inject CSS variables for the theme
+    const root = document.documentElement;
+    const mode = document.body.classList.contains('dark') ? 'dark' : 'light';
+    const tokens = theme.tokens[mode];
+    
+    const isHslTriplet = (val: string) =>
+      /^-?[\d.]+\s+-?[\d.]+%\s+-?[\d.]+%$/.test(val.trim());
+
+    const color = (val: string) => {
+      if (
+        val.includes('hsl') ||
+        val.includes('#') ||
+        val.includes('rgb') ||
+        val.includes('var(') ||
+        val.includes('gradient') ||
+        val.includes('px') ||
+        val.includes('rem') ||
+        val.includes('ms') ||
+        val.includes('deg') ||
+        val.includes('cubic-bezier') ||
+        val.includes('shadow') ||
+        val.includes('(')
+      ) {
+        return val;
+      }
+
+      return isHslTriplet(val) ? `hsl(${val})` : val;
+    };
+
+    Object.entries(tokens).forEach(([key, value]) => {
+      root.style.setProperty(`--${key}`, color(value as string));
+    });
+
     localStorage.setItem(THEME_STORAGE_KEY, themeMode);
   }, [themeMode]);
 

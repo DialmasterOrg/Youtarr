@@ -5,7 +5,9 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { fn as jestFn } from 'jest-mock';
 import { ThemeEngineProvider } from './contexts/ThemeEngineContext';
 import WebSocketContext from './contexts/WebSocketContext';
-import { lightTheme } from './theme';
+import { createAppTheme } from './themes';
+
+const lightTheme = createAppTheme('light', 'playful');
 
 type WebSocketValue = {
   socket: any;

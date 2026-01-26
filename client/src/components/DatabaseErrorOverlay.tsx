@@ -19,7 +19,6 @@ import StorageIcon from '@mui/icons-material/Storage';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import { getCustomColors } from '../theme';
 
 interface DatabaseErrorOverlayProps {
   errors: string[];
@@ -45,7 +44,6 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
   countdown = 15
 }) => {
   const theme = useTheme();
-  const customColors = getCustomColors(theme.palette.mode);
   const hasConnectionError = errors.some(e => categorizeError(e) === 'connection');
   const hasSchemaError = errors.some(e => categorizeError(e) === 'schema');
 
@@ -57,7 +55,7 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
         left: 0,
         width: '100vw',
         height: '100vh',
-        backgroundColor: customColors.errorOverlayBackdrop,
+        backgroundColor: theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0.5)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

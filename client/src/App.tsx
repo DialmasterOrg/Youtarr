@@ -33,7 +33,7 @@ import { useConfig } from './hooks/useConfig';
 import ErrorBoundary from './components/ErrorBoundary';
 import DatabaseErrorOverlay from './components/DatabaseErrorOverlay';
 import { useThemeEngine } from './contexts/ThemeEngineContext';
-import { lightTheme, neumorphicTheme } from './theme';
+import { createAppTheme } from './themes';
 
 // Event name for database error detection
 const DB_ERROR_EVENT = 'db-error-detected';
@@ -74,7 +74,7 @@ function AppContent() {
     : undefined;
 
   const selectedTheme = useMemo(() => {
-    return themeMode === 'neumorphic' ? neumorphicTheme : lightTheme;
+    return createAppTheme('light', themeMode); // Mode hardcoded for now, can be dynamic later
   }, [themeMode]);
 
   const handleDrawerToggle = () => {

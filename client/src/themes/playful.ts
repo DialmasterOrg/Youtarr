@@ -1,0 +1,111 @@
+import React from 'react';
+import { Box } from '@mui/material';
+import { ThemeDefinition } from './types';
+
+export const playfulTheme: ThemeDefinition = {
+  id: 'playful',
+  name: 'Playful (Classic)',
+  description: 'Bold colors, rounded corners, and expressive shadows.',
+  layoutMode: 'sidebar',
+  preview: React.createElement(Box, {
+    sx: {
+      p: 2,
+      borderRadius: 3,
+      bgcolor: '#fffdf5',
+      border: '2px solid #1e293b',
+      boxShadow: '4px 4px 0px 0px #1e293b',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    }
+  }, [
+    React.createElement(Box, { key: 'b1', sx: { width: 24, height: 24, borderRadius: 1, bgcolor: '#f472b6' } }),
+    React.createElement(Box, { key: 'b2', sx: { width: 32, height: 8, borderRadius: 999, bgcolor: '#fbbf24' } })
+  ]),
+  tokens: {
+    light: {
+      'font-body': "'Plus Jakarta Sans'",
+      'font-display': "'Outfit'",
+      background: '48 100% 98%', // #fffdf5
+      foreground: '222 47% 11%', // #1e293b
+      card: '0 0% 100%',
+      'card-foreground': '222 47% 11%',
+      popover: '0 0% 100%',
+      'popover-foreground': '222 47% 11%',
+      primary: '262 83% 58%', // #8b5cf6
+      'primary-foreground': '0 0% 100%',
+      secondary: '340 82% 70%', // #f472b6
+      muted: '210 40% 96%', // #f1f5f9
+      'muted-foreground': '215 16% 47%', // #64748b
+      accent: '210 40% 96%',
+      'accent-foreground': '222 47% 11%',
+      destructive: '0 84% 60%',
+      'destructive-foreground': '0 0% 100%',
+      border: '214 32% 91%', // #e2e8f0
+      'border-strong': '222 47% 11%',
+      input: '0 0% 100%',
+      'input-border': '214 32% 91%',
+      'input-border-hover': '222 47% 11%',
+      ring: '262 83% 58%',
+      radius: '1.25rem',
+      shadow: '222 47% 11%',
+      'shadow-soft': '8px 8px 0px 0px #e2e8f0',
+      'shadow-hard': '4px 4px 0px 0px #1e293b',
+      'shadow-hard-hover': '6px 6px 0px 0px #1e293b',
+      'shadow-hard-active': '2px 2px 0px 0px #1e293b',
+      'transition-bouncy': 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+      'card-hover-transform': 'translate(-2px, -2px) rotate(-0.5deg)',
+      'card-hover-shadow': 'var(--shadow-hard-hover)',
+      'shadow-input-rest': 'none',
+      'shadow-input-focus': '0 0 0 2px var(--ring)',
+      'dot-grid': 'rgba(30, 41, 59, 0.12)',
+      'nav-border': '2px solid var(--foreground)',
+      'nav-shadow': 'var(--shadow-hard)',
+      'nav-item-bg-selected': '#fbbf24', // tertiary in playful
+      'appbar-border': '2px solid var(--foreground)',
+      'appbar-shadow': 'var(--shadow-hard)',
+    },
+    dark: {
+      'font-body': "'Plus Jakarta Sans'",
+      'font-display': "'Outfit'",
+      background: '222 47% 11%', // #0f172a
+      foreground: '48 100% 98%', // #fffdf5
+      card: '222 47% 11%',
+      'card-foreground': '48 100% 98%',
+      popover: '222 47% 11%',
+      'popover-foreground': '48 100% 98%',
+      primary: '258 90% 66%', // #8b5cf6
+      'primary-foreground': '222 47% 11%',
+      secondary: '340 82% 70%',
+      muted: '222 47% 20%',
+      'muted-foreground': '215 16% 70%',
+      accent: '222 47% 20%',
+      'accent-foreground': '48 100% 98%',
+      destructive: '0 84% 40%',
+      'destructive-foreground': '0 0% 100%',
+      border: '222 47% 25%',
+      'border-strong': '48 100% 98%',
+      input: '222 47% 11%',
+      'input-border': '222 47% 25%',
+      'input-border-hover': '48 100% 98%',
+      ring: '258 90% 66%',
+      radius: '1.25rem',
+      shadow: '48 100% 98%',
+      'shadow-soft': '8px 8px 0px 0px rgba(0,0,0,0.3)',
+      'shadow-hard': '4px 4px 0px 0px #fffdf5',
+      'shadow-hard-hover': '6px 6px 0px 0px #fffdf5',
+      'shadow-hard-active': '2px 2px 0px 0px #fffdf5',
+      'transition-bouncy': 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+      'card-hover-transform': 'translate(-2px, -2px) rotate(-0.5deg)',
+      'card-hover-shadow': 'var(--shadow-hard-hover)',
+      'shadow-input-rest': 'none',
+      'shadow-input-focus': '0 0 0 2px var(--ring)',
+      'dot-grid': 'rgba(255, 255, 255, 0.1)',
+      'nav-border': '2px solid var(--foreground)',
+      'nav-shadow': 'var(--shadow-hard)',
+      'nav-item-bg-selected': '#fbbf24',
+      'appbar-border': '2px solid var(--foreground)',
+      'appbar-shadow': 'var(--shadow-hard)',
+    },
+  },
+};

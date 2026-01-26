@@ -8,8 +8,11 @@ import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import WebSocketContext from '../src/contexts/WebSocketContext';
 import { ThemeEngineProvider } from '../src/contexts/ThemeEngineContext';
-import { lightTheme, darkTheme } from '../src/theme';
+import { createAppTheme } from '../src/themes';
 import { DEFAULT_CONFIG } from '../src/config/configSchema';
+
+const lightTheme = createAppTheme('light', 'playful');
+const darkTheme = createAppTheme('dark', 'playful');
 
 initialize({
   onUnhandledRequest: 'bypass',

@@ -1,0 +1,157 @@
+import { ThemeOptions } from '@mui/material/styles';
+
+export const commonThemeOptions: ThemeOptions = {
+  typography: {
+    fontFamily: [
+      'var(--font-body)',
+      'system-ui',
+      '-apple-system',
+      'BlinkMacSystemFont',
+      '"Segoe UI"',
+      'Roboto',
+      '"Helvetica Neue"',
+      'sans-serif',
+    ].join(','),
+    h1: { fontFamily: 'var(--font-display)', fontWeight: 800 },
+    h2: { fontFamily: 'var(--font-display)', fontWeight: 800 },
+    h3: { fontFamily: 'var(--font-display)', fontWeight: 800 },
+    h4: { fontFamily: 'var(--font-display)', fontWeight: 700 },
+    h5: { fontFamily: 'var(--font-display)', fontWeight: 700 },
+    h6: { fontFamily: 'var(--font-display)', fontWeight: 700 },
+    button: { fontWeight: 700 },
+  },
+  shape: {
+    borderRadius: 16,
+  },
+  components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: {
+          margin: 0,
+          WebkitFontSmoothing: 'antialiased',
+          MozOsxFontSmoothing: 'grayscale',
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          borderRadius: 16,
+          border: '2px solid var(--border-strong)',
+          backgroundColor: 'var(--card)',
+          backgroundImage: 'none',
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: 16,
+          border: '2px solid var(--border-strong)',
+          boxShadow: 'var(--shadow-soft)',
+          transition: 'transform 300ms var(--transition-bouncy), box-shadow 300ms var(--transition-bouncy)',
+          '&:hover': {
+            transform: 'var(--card-hover-transform)',
+            boxShadow: 'var(--card-hover-shadow)',
+          },
+        },
+      },
+    },
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 999,
+          border: '2px solid var(--border-strong)',
+          boxShadow: 'none',
+          textTransform: 'none',
+          fontWeight: 700,
+          transition:
+            'transform 300ms var(--transition-bouncy), box-shadow 300ms var(--transition-bouncy), background-color 300ms var(--transition-bouncy)',
+          '&:hover': {
+            transform: 'translate(-2px, -2px)',
+            boxShadow: 'var(--shadow-hard-hover)',
+          },
+          '&:active': {
+            transform: 'translate(2px, 2px)',
+            boxShadow: 'var(--shadow-hard-active)',
+          },
+        },
+        containedPrimary: {
+          backgroundColor: 'var(--primary)',
+          color: 'var(--primary-foreground)',
+        },
+        containedSecondary: {
+          backgroundColor: 'var(--secondary)',
+          color: 'var(--foreground)',
+        },
+        outlined: {
+          border: '2px solid var(--border-strong)',
+        },
+      },
+    },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          borderRadius: 16,
+          backgroundColor: 'var(--input)',
+          boxShadow: 'var(--shadow-input-rest)',
+          transition: 'box-shadow 250ms var(--transition-bouncy), border-color 250ms var(--transition-bouncy)',
+          '& .MuiOutlinedInput-notchedOutline': {
+            borderColor: 'var(--input-border)',
+            borderWidth: 2,
+          },
+          '& .MuiOutlinedInput-notchedOutline legend': {
+            maxWidth: 'none',
+            padding: '0 20px',
+            transition: 'width 150ms var(--transition-bouncy)',
+            '& > span': {
+              paddingLeft: 8,
+              paddingRight: 8,
+            },
+            '& > span:empty': {
+              display: 'none',
+            },
+          },
+          '& .MuiOutlinedInput-notchedOutline legend:has(> span:empty)': {
+            width: '0.01px',
+            padding: '0',
+          },
+          '& .MuiOutlinedInput-notchedOutline legend > span': {
+            paddingLeft: 8,
+            paddingRight: 8,
+          },
+          '&:hover .MuiOutlinedInput-notchedOutline': {
+            borderColor: 'var(--input-border-hover)',
+          },
+          '&.Mui-focused': {
+            boxShadow: 'var(--shadow-input-focus)',
+          },
+          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+            borderColor: 'var(--ring)',
+            borderWidth: 2,
+          },
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderRadius: 999,
+          border: '2px solid var(--border-strong)',
+          boxShadow: 'none',
+          transition: 'box-shadow 250ms var(--transition-bouncy)',
+          fontWeight: 600,
+        },
+      },
+    },
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+        },
+      },
+    },
+  },
+};
