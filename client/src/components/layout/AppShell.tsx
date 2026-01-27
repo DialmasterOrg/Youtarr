@@ -213,8 +213,6 @@ export function AppShell({
               boxShadow: 'var(--shadow-soft)',
               px: 2,
               py: { xs: 2.5, md: 3 },
-              minHeight: { xs: 'calc(100vh - 220px)', md: 'calc(100vh - 200px)' },
-              flex: 1,
               width: '100%',
             }}
           >

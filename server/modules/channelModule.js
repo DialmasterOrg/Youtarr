@@ -1297,12 +1297,19 @@ class ChannelModule {
    * @returns {Promise<Array>} - Array of video objects with download status
    */
   async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, excludeDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video', maxRating = '') {
+    const whereClause = {
+      channel_id: channelId,
+    };
+
+    if (mediaType === 'video') {
+      whereClause.media_type = { [Op.or]: ['video', null, ''] };
+    } else {
+      whereClause.media_type = mediaType;
+    }
+
     // First get all videos to enrich with download status
     const allChannelVideos = await ChannelVideo.findAll({
-      where: {
-        channel_id: channelId,
-        media_type: mediaType,
-      },
+      where: whereClause,
       order: [['publishedAt', 'DESC']],
     });
 
@@ -1408,12 +1415,19 @@ class ChannelModule {
   async getChannelVideoStats(channelId, excludeDownloaded = false, searchQuery = '', mediaType = 'video', maxRating = '') {
     // If we have search or filter, we need to get all videos
     if (excludeDownloaded || searchQuery) {
+      const whereClause = {
+        channel_id: channelId,
+      };
+
+      if (mediaType === 'video') {
+        whereClause.media_type = { [Op.or]: ['video', null, ''] };
+      } else {
+        whereClause.media_type = mediaType;
+      }
+
       // Need to filter by download status and/or search
       const allChannelVideos = await ChannelVideo.findAll({
-        where: {
-          channel_id: channelId,
-          media_type: mediaType,
-        },
+        where: whereClause,
         order: [['publishedAt', 'DESC']],
       });
 
@@ -1448,13 +1462,22 @@ class ChannelModule {
           filteredVideos[filteredVideos.length - 1].publishedAt : null
       };
     } else {
+      const countWhereClause = {
+        channel_id: channelId,
+      };
+
+      if (mediaType === 'video') {
+        countWhereClause.media_type = { [Op.or]: ['video', null, ''] };
+      } else {
+        countWhereClause.media_type = mediaType;
+      }
+
       // Fast path - just use database counts when no filters
       const totalCount = await ChannelVideo.count({
-        where: {
-          channel_id: channelId,
-          media_type: mediaType,
-        }
+        where: countWhereClause
       });
+
+      logger.info({ channelId, mediaType, countWhereClause, totalCount }, 'getChannelVideoStats - fast path');
 
       const oldestVideo = await ChannelVideo.findOne({
         where: {
