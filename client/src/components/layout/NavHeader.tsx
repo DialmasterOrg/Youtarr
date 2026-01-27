@@ -149,7 +149,8 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
         <Box sx={{ display: 'flex', alignItems: 'center', height: APP_BAR_TOGGLE_SIZE, minWidth: 0, mr: showTopNavItems ? 4 : 0 }}>
           <Typography
             variant="h6"
-            component="span"
+            component={RouterLink}
+            to="/channels"
             sx={{
               fontWeight: isFlat ? 800 : 700,
               fontFamily: 'Outfit',
@@ -161,6 +162,11 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
               fontSize: '1.35rem',
               color: navTextPrimary,
               letterSpacing: isFlat ? '-0.02em' : 'normal',
+              textDecoration: 'none',
+              cursor: 'pointer',
+              '&:hover': {
+                opacity: 0.8,
+              },
             }}
           >
             {appName}

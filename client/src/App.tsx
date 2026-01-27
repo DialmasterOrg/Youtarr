@@ -29,6 +29,7 @@ import LocalLogin from './components/LocalLogin';
 import InitialSetup from './components/InitialSetup';
 import ChannelPage from './components/ChannelPage';
 import ChangelogPage from './components/ChangelogPage';
+import { AuthSplash } from './components/AuthSplash';
 import { useConfig } from './hooks/useConfig';
 import ErrorBoundary from './components/ErrorBoundary';
 import DatabaseErrorOverlay from './components/DatabaseErrorOverlay';
@@ -84,6 +85,8 @@ function AppContent() {
   const handleLogout = () => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('plexAuthToken');
+    // Redirect to login splash screen
+    window.location.href = '/login';
     setToken(null);
   };
 
@@ -370,75 +373,93 @@ function AppContent() {
           />
         )}
 
-        <AppShell
-          token={requiresSetup ? null : token}
-          isPlatformManaged={isPlatformManaged}
-          appName="Youtarr"
-          versionLabel={ytDlpVersion ? `${clientVersion} • yt-dlp: ${ytDlpVersion}` : clientVersion}
-          updateAvailable={updateAvailable}
-          updateTooltip={updateTooltip}
-          onLogout={handleLogout}
-        >
-          <Container
-            maxWidth={false}
-            sx={{
-              width: '100%',
-              ...(location.pathname === '/channels'
-                ? {
-                    display: 'flex',
-                    flexDirection: 'column',
-                    minHeight: 'calc(100vh - 140px)',
-                  }
-                : {}),
-            }}
-          >
-            {checkingSetup ? (
-              <div>Loading...</div>
-            ) : (
-              <ErrorBoundary fallbackMessage="An unexpected error occurred. Please refresh the page to continue.">
-                <Routes>
-                  <Route
-                    path='/setup'
-                    element={
-                      <InitialSetup
-                        onSetupComplete={(newToken) => {
-                          setToken(newToken);
-                          setRequiresSetup(false);
-                          window.location.href = '/settings';
-                        }}
-                      />
-                    }
+        {checkingSetup ? (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+            <Typography>Loading...</Typography>
+          </Box>
+        ) : (
+          <Routes>
+            {/* Setup Route - Full Screen */}
+            <Route
+              path="/setup"
+              element={
+                requiresSetup ? (
+                  <InitialSetup
+                    onSetupComplete={(newToken) => {
+                      setToken(newToken);
+                      setRequiresSetup(false);
+                      window.location.href = '/channels';
+                    }}
                   />
-                  <Route
-                    path='/login'
-                    element={
-                      isPlatformManaged ? (
-                        <Navigate to='/settings' replace />
-                      ) : (
-                        <LocalLogin setToken={setToken} />
-                      )
-                    }
-                  />
-                  <Route path='/changelog' element={<ChangelogPage />} />
+                ) : (
+                  <Navigate to="/channels" replace />
+                )
+              }
+            />
 
-                  {token ? (
-                    <>
-                      <Route path='/settings/*' element={<Settings token={token} />} />
-                      <Route path='/configuration' element={<Navigate to='/settings' replace />} />
-                      <Route path='/channels' element={<ChannelManager token={token} />} />
-                      <Route path='/downloads/*' element={<DownloadManager token={token} />} />
-                      <Route path='/videos' element={<VideosPage token={token} />} />
-                      <Route path='/channel/:channel_id' element={<ChannelPage token={token} />} />
-                      <Route path='/*' element={<Navigate to='/downloads' />} />
-                    </>
-                  ) : (
-                    <Route path='/*' element={<Navigate to={requiresSetup ? '/setup' : '/login'} />} />
-                  )}
-                </Routes>
-              </ErrorBoundary>
-            )}
-          </Container>
-        </AppShell>
+            {/* Login Route - Full Screen Splash */}
+            <Route
+              path="/login"
+              element={
+                isPlatformManaged ? (
+                  <Navigate to="/channels" replace />
+                ) : token ? (
+                  <Navigate to="/channels" replace />
+                ) : (
+                  <AuthSplash setToken={setToken} />
+                )
+              }
+            />
+
+            {/* Authenticated Routes - Wrapped in AppShell */}
+            <Route
+              path="*"
+              element={
+                token ? (
+                  <AppShell
+                    token={token}
+                    isPlatformManaged={isPlatformManaged}
+                    appName="Youtarr"
+                    versionLabel={ytDlpVersion ? `${clientVersion} • yt-dlp: ${ytDlpVersion}` : clientVersion}
+                    updateAvailable={updateAvailable}
+                    updateTooltip={updateTooltip}
+                    onLogout={handleLogout}
+                  >
+                    <Container
+                      maxWidth={false}
+                      sx={{
+                        width: '100%',
+                        ...(location.pathname === '/channels'
+                          ? {
+                              display: 'flex',
+                              flexDirection: 'column',
+                              minHeight: 'calc(100vh - 140px)',
+                            }
+                          : {}),
+                      }}
+                    >
+                      <ErrorBoundary fallbackMessage="An unexpected error occurred. Please refresh the page to continue.">
+                        <Routes>
+                          <Route path="/changelog" element={<ChangelogPage />} />
+                          <Route path="/settings/*" element={<Settings token={token} />} />
+                          <Route path="/configuration" element={<Navigate to="/settings" replace />} />
+                          <Route path="/channels" element={<ChannelManager token={token} />} />
+                          <Route path="/downloads/*" element={<DownloadManager token={token} />} />
+                          <Route path="/videos" element={<VideosPage token={token} />} />
+                          <Route path="/channel/:channel_id" element={<ChannelPage token={token} />} />
+                          <Route path="/" element={<Navigate to="/channels" replace />} />
+                          <Route path="/*" element={<Navigate to="/channels" replace />} />
+                        </Routes>
+                      </ErrorBoundary>
+                    </Container>
+                  </AppShell>
+                ) : (
+                  <Navigate to={requiresSetup ? '/setup' : '/login'} replace />
+                )
+              }
+            />
+          </Routes>
+        )}
 
         {/* Persistent warning for temp directory */}
         <Snackbar

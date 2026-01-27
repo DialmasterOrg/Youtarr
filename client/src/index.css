@@ -104,6 +104,49 @@ h6 {
   }
 }
 
+/* Playful Theme: Pop/Bounce Animation */
+@keyframes pop-in {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Neumorphic Theme: Breathe/Shadow Animation */
+@keyframes neumo-breathe {
+  0%, 100% {
+    box-shadow: 10px 10px 20px rgba(163, 177, 198, 0.6), -10px -10px 20px rgba(255, 255, 255, 0.6);
+  }
+  50% {
+    box-shadow: 5px 5px 10px rgba(163, 177, 198, 0.4), -5px -5px 10px rgba(255, 255, 255, 0.4);
+  }
+}
+
+@keyframes neumo-breathe-dark {
+  0%, 100% {
+    box-shadow: 10px 10px 20px rgba(0, 0, 0, 0.5), -10px -10px 20px rgba(255, 255, 255, 0.05);
+  }
+  50% {
+    box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.3), -5px -5px 10px rgba(255, 255, 255, 0.03);
+  }
+}
+
 @keyframes neumo-float {
   0% {
     transform: translateY(0px);
@@ -125,15 +168,68 @@ h6 {
   }
 }
 
-@keyframes neumo-breathe {
+/* Industrial/Linear Theme: Slide/Linear Animation */
+@keyframes slide-in-left {
   0% {
-    box-shadow: var(--shadow-hard);
-  }
-  50% {
-    box-shadow: var(--shadow-hard-hover);
+    transform: translateX(-100%);
+    opacity: 0;
   }
   100% {
-    box-shadow: var(--shadow-hard);
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-right {
+  0% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-up {
+  0% {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Flat Theme: Scale Animation */
+@keyframes scale-in {
+  0% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Universal Spinner Animation */
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
   }
 }
 
@@ -214,6 +310,106 @@ body[data-theme='playful'] .sticker:focus-visible,
 body[data-theme='playful'] .sticker:focus-within {
   transform: var(--sticker-hover-transform);
   box-shadow: var(--chip-shadow-hover);
+}
+
+.neumo-breathe {
+  animation: var(--neumo-breathe);
+}
+
+body[data-theme='neumorphic'] .playful-shape {
+  display: none !important;
+}
+
+.neumo-float {
+  animation: neumo-float 3s ease-in-out infinite;
+}
+
+.neumo-rotate {
+  animation: neumo-rotate 500ms ease-out;
+}
+
+.pop-toggle {
+  transition: all var(--transition-base) var(--transition-bouncy) !important;
+  border: 2px solid var(--border-strong) !important;
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+  box-shadow: var(--shadow-hard) !important;
+}
+
+.pop-toggle:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-hard-hover) !important;
+  animation: var(--wiggle-animation);
+}
+
+.pop-toggle:active {
+  transform: translate(2px, 2px);
+  box-shadow: var(--shadow-hard-active) !important;
+}
+
+body[data-motion='off'] {
+  --card-hover-transform: none;
+  --card-hover-shadow: var(--shadow-soft);
+  --wiggle-animation: none;
+  --sticker-rest-transform: none;
+  --sticker-hover-transform: none;
+  --neumo-breathe: none;
+  --transition-bouncy: ease;
+  --transition-base: 0ms;
+  --transition-fast: 0ms;
+}
+
+body[data-motion='off'] *,
+body[data-motion='off'] *::before,
+body[data-motion='off'] *::after {
+  animation-duration: 0ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0ms !important;
+}
+
+/* Theme-Specific Animations - Only Active When Motion is On */
+body[data-motion='on'][data-theme='playful'] .animate-on-mount {
+  animation: pop-in 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+body[data-motion='on'][data-theme='playful'] .animate-bounce {
+  animation: bounce 600ms cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+}
+
+body[data-motion='on'][data-theme='neumorphic'] .animate-on-mount {
+  animation: neumo-float 3s ease-in-out infinite;
+}
+
+body[data-motion='on'][data-theme='neumorphic'] .animate-breathe {
+  animation: neumo-breathe 3s ease-in-out infinite;
+}
+
+body[data-motion='on'][data-theme='linear'] .animate-on-mount {
+  animation: slide-in-up 250ms linear;
+}
+
+body[data-motion='on'][data-theme='linear'] .animate-slide-left {
+  animation: slide-in-left 250ms linear;
+}
+
+body[data-motion='on'][data-theme='linear'] .animate-slide-right {
+  animation: slide-in-right 250ms linear;
+}
+
+body[data-motion='on'][data-theme='flat'] .animate-on-mount {
+  animation: scale-in 200ms ease-out;
+}
+
+/* Loading Spinner - Always Animated (Even with Motion Off) */
+.loading-spinner,
+.MuiCircularProgress-root {
+  animation: spin 1s linear infinite !important;
+}
+
+.MuiCircularProgress-circle {
+  stroke-dasharray: 80px, 200px;
+  stroke-dashoffset: 0;
+  animation: spin 1.4s ease-in-out infinite !important;
 }
 
 .neumo-breathe {
