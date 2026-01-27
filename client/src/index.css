@@ -202,17 +202,6 @@ h6 {
   }
 }
 
-/* Flat Theme: Scale Animation */
-@keyframes scale-in {
-  0% {
-    transform: scale(0.9);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
 
 /* Universal Spinner Animation */
 @keyframes spin {
@@ -394,10 +383,6 @@ body[data-motion='on'][data-theme='linear'] .animate-slide-left {
 
 body[data-motion='on'][data-theme='linear'] .animate-slide-right {
   animation: slide-in-right 250ms linear;
-}
-
-body[data-motion='on'][data-theme='flat'] .animate-on-mount {
-  animation: scale-in 200ms ease-out;
 }
 
 /* Loading Spinner - Always Animated (Even with Motion Off) */

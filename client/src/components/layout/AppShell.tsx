@@ -134,9 +134,7 @@ export function AppShell({
         bgcolor: 'background.default',
         background: themeMode === 'linear'
           ? '#050506'
-          : themeMode === 'flat'
-            ? '#F9FAFB'
-            : `linear-gradient(180deg, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 55%, ${theme.palette.background.default} 100%)`,
+          : `linear-gradient(180deg, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 55%, ${theme.palette.background.default} 100%)`,
       }}
     >
       <CssBaseline />

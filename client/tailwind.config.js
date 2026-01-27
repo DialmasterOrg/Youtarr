@@ -40,9 +40,10 @@ export default {
         2: '2px',
       },
       borderRadius: {
-        sm: '8px',
-        md: '16px',
-        lg: '24px',
+        DEFAULT: 'var(--radius-ui)',
+        sm: 'var(--radius-ui)',
+        md: 'var(--radius-ui)',
+        lg: 'var(--radius-ui)',
         full: '9999px',
       },
     },

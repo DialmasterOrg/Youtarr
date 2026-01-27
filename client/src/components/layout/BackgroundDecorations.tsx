@@ -103,38 +103,5 @@ export const BackgroundDecorations: React.FC<BackgroundDecorationsProps> = ({ th
     );
   }
 
-  if (themeMode === 'flat') {
-    return (
-      <>
-        <Box
-          sx={{
-            position: 'absolute',
-            top: '-5%',
-            right: '-5%',
-            width: '40vw',
-            height: '40vw',
-            borderRadius: '50%',
-            bgcolor: 'rgba(59, 130, 246, 0.03)',
-            pointerEvents: 'none',
-            zIndex: 0,
-          }}
-        />
-        <Box
-          sx={{
-            position: 'absolute',
-            bottom: '10%',
-            left: '-10%',
-            width: '30vw',
-            height: '30vw',
-            bgcolor: 'rgba(16, 185, 129, 0.03)',
-            transform: 'rotate(15deg)',
-            pointerEvents: 'none',
-            zIndex: 0,
-          }}
-        />
-      </>
-    );
-  }
-
   return null;
 };

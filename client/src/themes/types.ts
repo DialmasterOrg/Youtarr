@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type ThemeMode = 'playful' | 'neumorphic' | 'linear' | 'flat';
+export type ThemeMode = 'playful' | 'neumorphic' | 'linear';
 
 export interface ThemeTokens {
   [key: string]: string;

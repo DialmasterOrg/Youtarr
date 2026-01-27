@@ -10,7 +10,6 @@ interface ThemeEngineState {
 
 const THEME_STORAGE_KEY = 'uiThemeMode';
 const MOTION_STORAGE_KEY = 'uiMotionEnabled';
-const LEGACY_WIGGLE_KEY = 'uiWiggleEnabled';
 
 const ThemeEngineContext = createContext<ThemeEngineState | undefined>(undefined);
 
@@ -25,10 +24,6 @@ export function ThemeEngineProvider({ children }: { children: React.ReactNode })
     if (typeof window === 'undefined') return false;
     const stored = localStorage.getItem(MOTION_STORAGE_KEY);
     if (stored === null) {
-      // Default to false now as requested, but respect legacy wiggle if it was specifically set to true?
-      // Actually user said: "I want... the default animation to be off."
-      const legacy = localStorage.getItem(LEGACY_WIGGLE_KEY);
-      if (legacy === 'true') return true;
       return false;
     }
     return stored === 'true';

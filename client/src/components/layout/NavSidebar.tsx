@@ -83,7 +83,10 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
       <Box sx={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto' }}>
         <List sx={{ px: 0, pt: 0.5, gap: NAV_MAIN_GAP, display: 'flex', flexDirection: 'column' }}>
           {navItems.map((item) => {
-            const selected = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
+            const hasSubMatch = item.subItems?.some((subItem: any) => (
+              location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/')
+            ));
+            const selected = location.pathname === item.to || location.pathname.startsWith(item.to + '/') || Boolean(hasSubMatch);
             const button = (
               <Box key={item.key} sx={{ px: 0.5, py: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
                 <ListItemButton
@@ -167,7 +170,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                 {!isNavCollapsed && item.subItems && selected && (item.key === 'settings' || item.key === 'downloads') && (
                   <List disablePadding sx={{ mt: NAV_SUB_VERTICAL_GAP, display: 'flex', flexDirection: 'column', gap: NAV_SUB_VERTICAL_GAP }}>
                     {item.subItems.map((subItem: any) => {
-                      const subSelected = location.pathname === subItem.to;
+                      const subSelected = location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/');
                       return (
                         <ListItemButton
                           key={subItem.key}

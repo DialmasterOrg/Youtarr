@@ -13,6 +13,7 @@ import {
   Tabs,
   Tab,
   Pagination,
+  Portal,
 } from '@mui/material';
 
 import DownloadIcon from '@mui/icons-material/Download';
@@ -666,48 +667,51 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     const handleActionClick = isDownloadAction ? handleDownloadClick : handleDeleteClick;
 
     return (
-      <Zoom in>
-        <Badge
-          badgeContent={count}
-          overlap="circular"
-          sx={(theme) => ({
-            position: 'fixed',
-            bottom: { xs: 16, sm: 24 },
-            right: { xs: 16, sm: 24 },
-            zIndex: theme.zIndex.fab,
-            '& .MuiBadge-badge': {
-              bgcolor: 'background.paper',
-              color: isDownloadAction ? 'primary.main' : 'error.main',
-              fontSize: '0.95rem',
-              fontWeight: 700,
-              minWidth: 22,
-              height: 22,
-              border: '2px solid',
-              borderColor: isDownloadAction ? 'primary.main' : 'error.main',
-              boxShadow: 'var(--shadow-hard)',
-              zIndex: theme.zIndex.fab + 1,
-            },
-          })}
-        >
-          <Fab
-            onClick={handleActionClick}
+      <Portal>
+        <Zoom in>
+          <Badge
+            badgeContent={count}
+            overlap="circular"
             sx={(theme) => ({
-              bgcolor: isDownloadAction ? 'primary.main' : 'error.main',
-              color: theme.palette.getContrastText(
-                isDownloadAction ? theme.palette.primary.main : theme.palette.error.main
-              ),
-              border: '2px solid',
-              borderColor: isDownloadAction ? 'primary.main' : 'error.main',
-              boxShadow: 'var(--shadow-hard)',
-              '&:hover': {
-                bgcolor: isDownloadAction ? 'primary.dark' : 'error.dark',
+              position: 'fixed',
+              bottom: { xs: 16, sm: 24 },
+              right: { xs: 16, sm: 24 },
+              zIndex: theme.zIndex.modal + 1,
+              pointerEvents: 'auto',
+              '& .MuiBadge-badge': {
+                bgcolor: 'background.paper',
+                color: isDownloadAction ? 'primary.main' : 'error.main',
+                fontSize: '0.95rem',
+                fontWeight: 700,
+                minWidth: 22,
+                height: 22,
+                border: '2px solid',
+                borderColor: isDownloadAction ? 'primary.main' : 'error.main',
+                boxShadow: 'var(--shadow-hard)',
+                zIndex: theme.zIndex.modal + 2,
               },
             })}
           >
-            {icon}
-          </Fab>
-        </Badge>
-      </Zoom>
+            <Fab
+              onClick={handleActionClick}
+              sx={(theme) => ({
+                bgcolor: isDownloadAction ? 'primary.main' : 'error.main',
+                color: theme.palette.getContrastText(
+                  isDownloadAction ? theme.palette.primary.main : theme.palette.error.main
+                ),
+                border: '2px solid',
+                borderColor: isDownloadAction ? 'primary.main' : 'error.main',
+                boxShadow: 'var(--shadow-hard)',
+                '&:hover': {
+                  bgcolor: isDownloadAction ? 'primary.dark' : 'error.dark',
+                },
+              })}
+            >
+              {icon}
+            </Fab>
+          </Badge>
+        </Zoom>
+      </Portal>
     );
   };
 

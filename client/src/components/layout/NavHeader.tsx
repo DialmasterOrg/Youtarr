@@ -55,8 +55,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
 
   const isLinear = themeMode === 'linear';
   const isNeumorphic = themeMode === 'neumorphic';
-  const isFlat = themeMode === 'flat';
-  const isTopNav = isLinear || isNeumorphic || isFlat;
+  const isTopNav = isLinear || isNeumorphic;
   const showTopNavItems = isTopNav && !isMobile;
   const navTextPrimary = theme.palette.text.primary;
   const navTextSecondary = theme.palette.text.secondary;
@@ -101,12 +100,12 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
       position="fixed"
       elevation={0}
       sx={{
-        backgroundColor: isLinear ? 'rgba(5, 5, 6, 0.8)' : isFlat ? '#FFFFFF' : 'background.paper',
+        backgroundColor: isLinear ? 'rgba(5, 5, 6, 0.8)' : 'background.paper',
         backdropFilter: isLinear ? 'blur(12px)' : 'none',
-        border: isLinear || isFlat || isNeumorphic ? 'none' : 'var(--appbar-border)',
-        borderBottom: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : isFlat ? '1px solid #E5E7EB' : 'var(--appbar-border)',
-        boxShadow: isLinear || isFlat || isNeumorphic ? 'none' : 'var(--appbar-shadow)',
-        backgroundImage: isLinear || isFlat || isNeumorphic ? 'none' : 'var(--appbar-pattern)',
+        border: isLinear || isNeumorphic ? 'none' : 'var(--appbar-border)',
+        borderBottom: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : 'var(--appbar-border)',
+        boxShadow: isLinear || isNeumorphic ? 'none' : 'var(--appbar-shadow)',
+        backgroundImage: isLinear || isNeumorphic ? 'none' : 'var(--appbar-pattern)',
         backgroundSize: '24px 24px',
         color: 'text.primary',
         zIndex: (theme) => theme.zIndex.drawer + 1,
@@ -152,7 +151,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
             component={RouterLink}
             to="/channels"
             sx={{
-              fontWeight: isFlat ? 800 : 700,
+              fontWeight: 700,
               fontFamily: 'Outfit',
               whiteSpace: 'nowrap',
               height: '100%',
@@ -161,7 +160,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
               lineHeight: `${APP_BAR_TOGGLE_SIZE}px`,
               fontSize: '1.35rem',
               color: navTextPrimary,
-              letterSpacing: isFlat ? '-0.02em' : 'normal',
+              letterSpacing: 'normal',
               textDecoration: 'none',
               cursor: 'pointer',
               '&:hover': {
@@ -179,8 +178,15 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
             onMouseLeave={scheduleClose}
             onMouseEnter={keepDropdownOpen}
           >
-            <Box sx={{ display: 'flex', gap: isFlat ? 1 : 1, alignItems: 'center' }}>
-              {navItems.map((item) => (
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              {navItems.map((item) => {
+                const isParentActive = location.pathname === item.to
+                  || location.pathname.startsWith(item.to + '/')
+                  || item.subItems?.some((subItem: any) => (
+                    location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/')
+                  ));
+
+                return (
                 <Box
                   key={item.key}
                   onMouseEnter={(e) => item.subItems && openDropdown(e, item.key)}
@@ -192,15 +198,15 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                     variant="text"
                     startIcon={item.icon}
                     sx={{
-                      color: location.pathname.startsWith(item.to) ? (isLinear ? theme.palette.primary.main : navTextPrimary) : navTextSecondary,
-                      fontWeight: isFlat ? 800 : 600,
+                      color: isParentActive ? (isLinear ? theme.palette.primary.main : navTextPrimary) : navTextSecondary,
+                      fontWeight: 600,
                       fontSize: '0.85rem',
                       textTransform: 'none',
-                      px: isFlat ? 2 : 1.5,
+                      px: 1.5,
                       py: 1,
                       borderRadius: 'var(--radius-ui)',
                       position: 'relative',
-                      '&::after': isLinear && location.pathname.startsWith(item.to) ? {
+                      '&::after': isLinear && isParentActive ? {
                         content: '""',
                         position: 'absolute',
                         bottom: 0,
@@ -214,7 +220,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                       '&:hover': {
                         color: isLinear ? theme.palette.primary.main : navTextPrimary,
                         bgcolor: isLinear ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
-                        transform: isFlat ? 'scale(1.05)' : 'none',
+                        transform: 'none',
                       },
                       '& .MuiButton-startIcon': {
                         mr: 0.8,
@@ -243,29 +249,32 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                       }}
                       MenuListProps={{
                         sx: {
-                          py: isLinear ? 0.5 : 0.75,
-                          px: isLinear ? 0.5 : 0.75,
-                          minWidth: 170,
+                          py: isLinear ? 0.75 : 1,
+                          px: isLinear ? 0.75 : 1,
+                          minWidth: 200,
+                          width: 'max-content',
                           display: 'flex',
                           flexDirection: 'column',
                           gap: isLinear ? 0.25 : 0.5,
                         },
                       }}
                       TransitionComponent={Fade}
+                      TransitionProps={{ timeout: { enter: 150, exit: 150 } }}
                       anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
                       transformOrigin={{ vertical: 'top', horizontal: 'center' }}
-                      elevation={isFlat ? 0 : isLinear ? 0 : 8}
+                      elevation={isLinear ? 0 : 8}
                       PaperProps={{
                         sx: {
                           position: 'relative',
+                          overflow: 'visible',
+                          width: 'max-content',
+                          minWidth: 200,
                           borderRadius: 'var(--radius-ui)',
                           border: isLinear 
                             ? 'var(--border-weight) solid #333'
-                            : isFlat
-                              ? `var(--border-weight) solid ${theme.palette.divider}`
-                              : isNeumorphic
-                                ? 'none'
-                                : '1px solid rgba(255,255,255,0.1)',
+                            : isNeumorphic
+                              ? 'none'
+                              : '1px solid rgba(255,255,255,0.1)',
                           bgcolor: isLinear
                             ? '#09090b'
                             : isNeumorphic
@@ -277,16 +286,16 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                               ? '12px 12px 20px rgba(163, 177, 198, 0.6), -12px -12px 20px rgba(255, 255, 255, 0.6)'
                               : 'none',
                           mt: 0,
-                          transform: 'translateY(-4px)',
+                          transform: 'none',
                           px: isLinear ? 0.5 : 1,
                           py: isLinear ? 0.5 : 0.75,
                           '&::before': {
                             content: '""',
                             position: 'absolute',
-                            top: -8,
+                            top: -15,
                             left: 0,
                             right: 0,
-                            height: 8,
+                            height: 15,
                             background: 'transparent',
                           },
                         },
@@ -301,7 +310,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                           sx={{
                             borderRadius: 'var(--radius-ui)',
                             fontSize: '0.85rem',
-                            fontWeight: isFlat ? 700 : 500,
+                            fontWeight: 500,
                             color: location.pathname === subItem.to ? (isLinear ? theme.palette.primary.main : navTextPrimary) : navTextSecondary,
                             '&:hover': {
                               color: isLinear ? theme.palette.primary.main : navTextPrimary,
@@ -325,7 +334,8 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
 
                   )}
                 </Box>
-              ))}
+              );
+              })}
             </Box>
           </Box>
         )}
@@ -351,7 +361,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                 sx={{
                   color: 'common.white',
                   bgcolor: 'warning.main',
-                  borderRadius: isFlat ? 1 : '50%',
+                  borderRadius: '50%',
                   '&:hover': {
                     bgcolor: 'warning.dark',
                   },

@@ -28,7 +28,6 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
 
   const isPlayful = themeMode === 'playful';
   const isNeumorphic = themeMode === 'neumorphic';
-  const isFlat = themeMode === 'flat';
   const isLinear = themeMode === 'linear';
 
   useEffect(() => {
@@ -98,13 +97,11 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
             ? 'linear-gradient(135deg, #09090b 0%, #1a1a1f 100%)'
             : isNeumorphic
               ? '#E0E5EC'
-              : isFlat
-                ? '#F3F4F6'
-                : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
         }}
       >
         <Container maxWidth="sm">
-          <Paper elevation={isLinear || isFlat ? 0 : isNeumorphic ? 0 : 3} sx={{ p: 4, borderRadius: 'var(--radius-ui)', border: isFlat ? '2px solid var(--border-strong)' : isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : 'none', boxShadow: isLinear ? '0 8px 32px rgba(0, 0, 0, 0.5)' : isNeumorphic ? '20px 20px 40px rgba(163, 177, 198, 0.6), -20px -20px 40px rgba(255, 255, 255, 0.6)' : undefined, bgcolor: isLinear ? 'rgba(18, 18, 20, 0.95)' : 'background.paper' }}>
+          <Paper elevation={isLinear ? 0 : isNeumorphic ? 0 : 3} sx={{ p: 4, borderRadius: 'var(--radius-ui)', border: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : 'none', boxShadow: isLinear ? '0 8px 32px rgba(0, 0, 0, 0.5)' : isNeumorphic ? '20px 20px 40px rgba(163, 177, 198, 0.6), -20px -20px 40px rgba(255, 255, 255, 0.6)' : undefined, bgcolor: isLinear ? 'rgba(18, 18, 20, 0.95)' : 'background.paper' }}>
           <Typography variant="h5" color="error" gutterBottom>
             🔒 Security Protection Active
           </Typography>
@@ -141,13 +138,11 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
           ? 'linear-gradient(135deg, #09090b 0%, #1a1a1f 100%)'
           : isNeumorphic
             ? '#E0E5EC'
-            : isFlat
-              ? '#F3F4F6'
-              : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       }}
     >
       <Container maxWidth="sm">
-        <Paper elevation={isLinear || isFlat ? 0 : isNeumorphic ? 0 : 3} sx={{ p: isPlayful ? 5 : 4, borderRadius: 'var(--radius-ui)', border: isPlayful ? '4px solid var(--border-strong)' : isFlat ? '2px solid var(--border-strong)' : isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : 'none', boxShadow: isLinear ? '0 8px 32px rgba(0, 0, 0, 0.5)' : isNeumorphic ? '20px 20px 40px rgba(163, 177, 198, 0.6), -20px -20px 40px rgba(255, 255, 255, 0.6)' : undefined, bgcolor: isLinear ? 'rgba(18, 18, 20, 0.95)' : 'background.paper', backdropFilter: isLinear ? 'blur(20px)' : 'none', transform: isPlayful ? 'rotate(-0.5deg)' : 'none' }}>
+        <Paper elevation={isLinear ? 0 : isNeumorphic ? 0 : 3} sx={{ p: isPlayful ? 5 : 4, borderRadius: 'var(--radius-ui)', border: isPlayful ? '4px solid var(--border-strong)' : isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : 'none', boxShadow: isLinear ? '0 8px 32px rgba(0, 0, 0, 0.5)' : isNeumorphic ? '20px 20px 40px rgba(163, 177, 198, 0.6), -20px -20px 40px rgba(255, 255, 255, 0.6)' : undefined, bgcolor: isLinear ? 'rgba(18, 18, 20, 0.95)' : 'background.paper', backdropFilter: isLinear ? 'blur(20px)' : 'none', transform: isPlayful ? 'rotate(-0.5deg)' : 'none' }}>
         <Typography variant="h4" gutterBottom>
           Welcome to Youtarr Setup
         </Typography>
