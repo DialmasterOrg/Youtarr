@@ -82,7 +82,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                         transform: isPendingAddition ? 'translateY(10px)' : 'translateY(0)',
                     },
                     '&:hover .avatarImage': {
-                        transform: isPendingAddition ? 'scale(1)' : 'scale(1.05)',
+                        transform: isPendingAddition ? 'scale(1)' : 'scale(var(--avatar-hover-scale))',
                     },
                 }}
             >

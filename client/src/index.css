@@ -38,6 +38,7 @@
   --appbar-pattern: radial-gradient(var(--dot-grid) 1px, transparent 1px);
   --appbar-gradient: linear-gradient(135deg, rgba(139, 92, 246, 0.45), rgba(251, 113, 133, 0.45));
   --neumo-breathe: none;
+  --avatar-hover-scale: 1.05;
   /* Navigation width variables */
   --nav-width-expanded: 260px;
   --nav-width-collapsed: 72px;
@@ -240,6 +241,9 @@ h6 {
   opacity: 0.15;
   pointer-events: none;
   z-index: 0;
+}
+
+body[data-motion='on'] .linear-blob {
   animation: linear-blob-float 20s ease-in-out infinite;
 }
 
@@ -274,8 +278,11 @@ h6 {
   width: 100%;
   height: 100%;
   background: linear-gradient(90deg, transparent, #fff, transparent);
-  animation: linear-shine 8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   opacity: 0.3;
+}
+
+body[data-motion='on'] .linear-top-rail::after {
+  animation: linear-shine 8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -301,19 +308,20 @@ body[data-theme='playful'] .sticker:focus-within {
   box-shadow: var(--chip-shadow-hover);
 }
 
-.neumo-breathe {
-  animation: var(--neumo-breathe);
-}
-
 body[data-theme='neumorphic'] .playful-shape {
   display: none !important;
 }
 
-.neumo-float {
+/* Animation classes - only apply when motion is enabled */
+body[data-motion='on'] .neumo-breathe {
+  animation: var(--neumo-breathe);
+}
+
+body[data-motion='on'] .neumo-float {
   animation: neumo-float 3s ease-in-out infinite;
 }
 
-.neumo-rotate {
+body[data-motion='on'] .neumo-rotate {
   animation: neumo-rotate 500ms ease-out;
 }
 
@@ -325,7 +333,7 @@ body[data-theme='neumorphic'] .playful-shape {
   box-shadow: var(--shadow-hard) !important;
 }
 
-.pop-toggle:hover {
+body[data-motion='on'] .pop-toggle:hover {
   transform: translate(-2px, -2px);
   box-shadow: var(--shadow-hard-hover) !important;
   animation: var(--wiggle-animation);
@@ -342,6 +350,8 @@ body[data-motion='off'] {
   --wiggle-animation: none;
   --sticker-rest-transform: none;
   --sticker-hover-transform: none;
+  --avatar-hover-scale: 1;
+  --nav-item-transform-hover: none;
   --neumo-breathe: none;
   --transition-bouncy: ease;
   --transition-base: 0ms;
@@ -354,6 +364,13 @@ body[data-motion='off'] *::after {
   animation-duration: 0ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0ms !important;
+  transition: none !important;
+}
+
+/* Force disable specific hover transforms (like Linear Theme MuiCard/MuiButton) */
+body[data-motion='off'] .MuiCard-root:hover,
+body[data-motion='off'] .MuiButton-root:hover {
+  transform: none !important;
 }
 
 /* Theme-Specific Animations - Only Active When Motion is On */
@@ -395,59 +412,6 @@ body[data-motion='on'][data-theme='linear'] .animate-slide-right {
   stroke-dasharray: 80px, 200px;
   stroke-dashoffset: 0;
   animation: spin 1.4s ease-in-out infinite !important;
-}
-
-.neumo-breathe {
-  animation: var(--neumo-breathe);
-}
-
-body[data-theme='neumorphic'] .playful-shape {
-  display: none !important;
-}
-
-.neumo-float {
-  animation: neumo-float 3s ease-in-out infinite;
-}
-
-.neumo-rotate {
-  animation: neumo-rotate 500ms ease-out;
-}
-
-.pop-toggle {
-  transition: all var(--transition-base) var(--transition-bouncy) !important;
-  border: 2px solid var(--border-strong) !important;
-  background-color: var(--background) !important;
-  color: var(--foreground) !important;
-  box-shadow: var(--shadow-hard) !important;
-}
-
-.pop-toggle:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: var(--shadow-hard-hover) !important;
-  animation: var(--wiggle-animation);
-}
-
-.pop-toggle:active {
-  transform: translate(2px, 2px);
-  box-shadow: var(--shadow-hard-active) !important;
-}
-
-body[data-motion='off'] {
-  --card-hover-transform: none;
-  --card-hover-shadow: var(--shadow-soft);
-  --wiggle-animation: none;
-  --sticker-rest-transform: none;
-  --sticker-hover-transform: none;
-  --neumo-breathe: none;
-  --transition-bouncy: ease;
-  --transition-base: 0ms;
-  --transition-fast: 0ms;
-}
-
-body[data-motion='off'] * {
-  animation-duration: 0ms !important;
-  animation-iteration-count: 1 !important;
-  transition-duration: 0ms !important;
 }
 
 /* Structural Layout Anchors */
