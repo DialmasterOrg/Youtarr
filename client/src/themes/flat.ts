@@ -1,4 +1,3 @@
-/*
 import React from 'react';
 import { Box } from '@mui/material';
 import { ThemeDefinition } from './types';
@@ -199,5 +198,4 @@ export const flatTheme: ThemeDefinition = {
     },
   },
 };
-*/
-export {};
+

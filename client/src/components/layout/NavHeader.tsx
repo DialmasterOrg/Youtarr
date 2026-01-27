@@ -11,8 +11,9 @@ import {
   MenuItem,
   Fade,
   useTheme,
+  Portal,
 } from '@mui/material';
-import { Link as RouterLink, useLocation } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import LogoutIcon from '@mui/icons-material/Logout';
 import DownloadIcon from '@mui/icons-material/Download';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -48,10 +49,12 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   APP_BAR_TOGGLE_SIZE,
 }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const theme = useTheme();
 
   const [activeDropdown, setActiveDropdown] = useState<{ key: string; anchor: HTMLElement | null } | null>(null);
   const hoverTimeoutRef = useRef<number | null>(null);
+  const portalRootRef = useRef<HTMLDivElement | null>(null);
 
   const isLinear = themeMode === 'linear';
   const isNeumorphic = themeMode === 'neumorphic';
@@ -78,10 +81,11 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
 
   const scheduleClose = () => {
     clearHoverTimeout();
+    // Give user a bit more leeway to move from nav to menu
     hoverTimeoutRef.current = window.setTimeout(() => {
       setActiveDropdown(null);
       hoverTimeoutRef.current = null;
-    }, 150);
+    }, 250);
   };
 
   const keepDropdownOpen = () => {
@@ -189,10 +193,10 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                 return (
                 <Box
                   key={item.key}
-                  onMouseEnter={(e) => item.subItems && openDropdown(e, item.key)}
                   sx={{ position: 'relative' }}
                 >
                   <Button
+                    onMouseEnter={(e) => item.subItems && openDropdown(e, item.key)}
                     component={RouterLink}
                     to={item.to}
                     variant="text"
@@ -238,11 +242,12 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                       onClose={closeDropdown}
                       disableScrollLock
                       hideBackdrop
-                      // HEADLESS-LIKE BEHAVIOR: Enable pass-through when menu is open
                       slotProps={{
-                        root: { sx: { pointerEvents: 'none' } },
                         paper: { 
-                          sx: { pointerEvents: 'auto' },
+                          sx: { 
+                            pointerEvents: 'auto',
+                            zIndex: (theme) => theme.zIndex.modal + 100,
+                          },
                           onMouseEnter: keepDropdownOpen,
                           onMouseLeave: scheduleClose,
                         },
@@ -304,9 +309,11 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                       {item.subItems.map((subItem: any) => (
                         <MenuItem
                           key={subItem.key}
-                          component={RouterLink}
-                          to={subItem.to}
-                          onClick={closeDropdown}
+                          onClick={() => {
+                            closeDropdown();
+                            // Use navigate instead of RouterLink for reliability in Portal context
+                            navigate(subItem.to);
+                          }}
                           sx={{
                             borderRadius: 'var(--radius-ui)',
                             fontSize: '0.85rem',
@@ -325,6 +332,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                             },
                             py: 0.85,
                             minWidth: 160,
+                            cursor: 'pointer',
                           }}
                         >
                           {subItem.label}

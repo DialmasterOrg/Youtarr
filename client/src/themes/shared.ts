@@ -100,26 +100,10 @@ export const commonThemeOptions: ThemeOptions = {
             borderColor: 'var(--input-border)',
             borderWidth: 'var(--border-weight)',
           },
-          '& .MuiOutlinedInput-notchedOutline legend': {
-            maxWidth: 'none',
-            padding: '0 20px',
-            transition: 'width 150ms var(--transition-bouncy)',
-            '& > span': {
-              paddingLeft: 8,
-              paddingRight: 8,
-            },
-            '& > span:empty': {
-              display: 'none',
-            },
-          },
-          '& .MuiOutlinedInput-notchedOutline legend:has(> span:empty)': {
-            width: '0.01px',
-            padding: '0',
-          },
-          '& .MuiOutlinedInput-notchedOutline legend > span': {
-            paddingLeft: 8,
-            paddingRight: 8,
-          },
+          /* 
+             Removed aggressive legend overrides here to allow index.css 
+             to handle the notch width based on .MuiInputLabel-shrink state 
+          */
           '&:hover .MuiOutlinedInput-notchedOutline': {
             borderColor: 'var(--input-border-hover)',
           },

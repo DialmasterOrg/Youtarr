@@ -102,7 +102,7 @@ function VideoCard({
             // Keep container size consistent - shorts use contain to show with black bars
             paddingTop: isMobile ? '52%' : '56.25%',
             bgcolor: 'grey.900',
-            borderRadius: 'var(--radius-thumb)',
+            borderRadius: 'var(--radius-ui)',
             overflow: 'hidden',
           }}>
             <img
@@ -116,7 +116,7 @@ function VideoCard({
                 height: '100%',
                 // Shorts use contain to show full portrait thumbnail with black bars
                 objectFit: video.media_type === 'short' ? 'contain' : 'cover',
-                borderRadius: 'var(--radius-thumb)',
+                borderRadius: 'var(--radius-ui)',
               }}
               loading="lazy"
             />

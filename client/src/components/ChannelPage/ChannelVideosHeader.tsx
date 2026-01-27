@@ -249,10 +249,17 @@ function ChannelVideosHeader({
             <Button
               variant="outlined"
               size="small"
-              color="primary"
               startIcon={<DownloadIcon />}
               onClick={onDownloadClick}
               disabled={checkedBoxes.length === 0}
+              sx={{
+                color: 'text.primary',
+                borderColor: 'divider',
+                '&:hover:not(:disabled)': {
+                  borderColor: 'primary.main',
+                  bgcolor: 'rgba(138, 92, 246, 0.08)',
+                },
+              }}
             >
               Download {checkedBoxes.length > 0 ? `${checkedBoxes.length} ${checkedBoxes.length === 1 ? 'Video' : 'Videos'}` : 'Selected'}
             </Button>
@@ -265,6 +272,14 @@ function ChannelVideosHeader({
                   ? selectableDeleteCount === 0
                   : checkedBoxes.length === 0 && selectableDownloadCount === 0
               }
+              sx={{
+                color: 'text.primary',
+                borderColor: 'divider',
+                '&:hover:not(:disabled)': {
+                  borderColor: 'text.primary',
+                  bgcolor: 'action.hover',
+                },
+              }}
             >
               Select All This Page
             </Button>
@@ -273,26 +288,48 @@ function ChannelVideosHeader({
               size="small"
               onClick={onClearSelection}
               disabled={checkedBoxes.length === 0}
+              sx={{
+                color: 'text.primary',
+                borderColor: 'divider',
+                '&:hover:not(:disabled)': {
+                  borderColor: 'text.primary',
+                  bgcolor: 'action.hover',
+                },
+              }}
             >
               Clear
             </Button>
             <Button
               variant="outlined"
               size="small"
-              color="warning"
               startIcon={<BlockIcon />}
               onClick={onBulkIgnoreClick}
               disabled={checkedBoxes.length === 0}
+              sx={{
+                color: 'text.primary',
+                borderColor: 'divider',
+                '&:hover:not(:disabled)': {
+                  borderColor: 'warning.main',
+                  bgcolor: 'rgba(251, 146, 60, 0.08)',
+                },
+              }}
             >
               Ignore Selected
             </Button>
             <Button
               variant="outlined"
-              color="error"
               size="small"
               startIcon={<DeleteIcon />}
               onClick={onDeleteClick}
               disabled={selectedForDeletion.length === 0 || deleteLoading}
+              sx={{
+                color: 'error.main',
+                borderColor: 'error.main',
+                '&:hover:not(:disabled)': {
+                  borderColor: 'error.dark',
+                  bgcolor: 'rgba(239, 68, 68, 0.08)',
+                },
+              }}
             >
               Delete {selectedForDeletion.length > 0 ? `${selectedForDeletion.length}` : 'Selected'}
             </Button>

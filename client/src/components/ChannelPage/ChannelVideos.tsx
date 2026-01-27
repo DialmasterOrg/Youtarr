@@ -774,7 +774,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         )}
 
         {/* Content area */}
-        <Box sx={{ p: 2, position: 'relative' }}>
+        <Box sx={{ p: 2, position: 'relative', minHeight: '100vh' }}>
           {videoFailed && videos.length === 0 ? (
             <Alert severity="error">
               Failed to fetch channel videos. Please try again later.
@@ -867,7 +867,8 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
           {useInfiniteScroll && (
             <>
-              <Box ref={loadMoreRef} sx={{ height: 1 }} />
+              {/* Sentinel for infinite scroll - needs height and safe padding to ensure intersection triggers */}
+              <Box ref={loadMoreRef} sx={{ height: 20, width: '100%', mt: 4, mb: 4 }} />
               {videosLoading && videos.length > 0 && hasNextPage && (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
                   <Skeleton variant="circular" width={28} height={28} />
