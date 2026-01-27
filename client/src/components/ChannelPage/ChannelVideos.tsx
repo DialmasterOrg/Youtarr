@@ -670,13 +670,13 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         <Badge
           badgeContent={count}
           overlap="circular"
-          sx={{
+          sx={(theme) => ({
             position: 'fixed',
             bottom: { xs: 16, sm: 24 },
             right: { xs: 16, sm: 24 },
             zIndex: theme.zIndex.fab,
             '& .MuiBadge-badge': {
-              bgcolor: 'common.black',
+              bgcolor: 'background.paper',
               color: isDownloadAction ? 'primary.main' : 'error.main',
               fontSize: '0.95rem',
               fontWeight: 700,
@@ -687,20 +687,22 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
               boxShadow: 'var(--shadow-hard)',
               zIndex: theme.zIndex.fab + 1,
             },
-          }}
+          })}
         >
           <Fab
             onClick={handleActionClick}
-            sx={{
+            sx={(theme) => ({
               bgcolor: isDownloadAction ? 'primary.main' : 'error.main',
-              color: 'common.black',
+              color: theme.palette.getContrastText(
+                isDownloadAction ? theme.palette.primary.main : theme.palette.error.main
+              ),
               border: '2px solid',
               borderColor: isDownloadAction ? 'primary.main' : 'error.main',
               boxShadow: 'var(--shadow-hard)',
               '&:hover': {
                 bgcolor: isDownloadAction ? 'primary.dark' : 'error.dark',
               },
-            }}
+            })}
           >
             {icon}
           </Fab>

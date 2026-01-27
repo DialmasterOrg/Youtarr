@@ -65,6 +65,11 @@ export const neumorphicTheme: ThemeDefinition = {
       'input-border-hover': 'transparent',
       ring: '210 20% 20%',
       radius: '2rem',
+      'radius-ui': '16px',
+      'radius-input': '16px',
+      'radius-thumb': '16px',
+      'border-weight': '0px',
+      'nav-hover-style': 'inset-glow',
       shadow: '0 0% 0%',
       'shadow-soft': '8px 8px 16px #bebebe, -8px -8px 16px #ffffff',
       'shadow-hard': '12px 12px 24px #bebebe, -12px -12px 24px #ffffff',
@@ -102,6 +107,11 @@ export const neumorphicTheme: ThemeDefinition = {
       'input-border-hover': 'transparent',
       ring: '210 20% 90%',
       radius: '2rem',
+      'radius-ui': '16px',
+      'radius-input': '16px',
+      'radius-thumb': '16px',
+      'border-weight': '0px',
+      'nav-hover-style': 'inset-glow',
       shadow: '0 0% 0%',
       'shadow-soft': '8px 8px 16px #0a0a0a, -8px -8px 16px #1e1e1e',
       'shadow-hard': '12px 12px 24px #0a0a0a, -12px -12px 24px #1e1e1e',
@@ -118,7 +128,7 @@ export const neumorphicTheme: ThemeDefinition = {
     MuiPaper: {
       styleOverrides: {
         root: {
-          borderRadius: 32,
+          borderRadius: 'var(--radius-ui)',
           border: 'none',
           boxShadow: 'var(--shadow-soft)',
           backgroundColor: 'hsl(var(--card))',
@@ -128,12 +138,83 @@ export const neumorphicTheme: ThemeDefinition = {
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 32,
+          borderRadius: 'var(--radius-ui)',
           border: 'none',
           boxShadow: 'var(--shadow-soft)',
           '&:hover': {
             transform: 'var(--card-hover-transform)',
             boxShadow: 'var(--card-hover-shadow)',
+          },
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderRadius: 'var(--radius-ui)',
+          border: 'none',
+          backgroundColor: '#E0E5EC',
+          boxShadow: 'inset 3px 3px 6px rgba(163, 177, 198, 0.6), inset -3px -3px 6px rgba(255, 255, 255, 0.5)',
+          color: '#3D4852',
+          fontWeight: 600,
+        },
+      },
+    },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          borderRadius: 16,
+          backgroundColor: '#E0E5EC',
+          '& .MuiOutlinedInput-notchedOutline': {
+            borderColor: 'transparent',
+          },
+          boxShadow:
+            'inset 6px 6px 10px rgba(163, 177, 198, 0.6), inset -6px -6px 10px rgba(255, 255, 255, 0.5)',
+          '&.Mui-focused': {
+            boxShadow:
+              'inset 10px 10px 20px rgba(163, 177, 198, 0.7), inset -10px -10px 20px rgba(255, 255, 255, 0.6), 0 0 0 2px rgba(108, 99, 255, 0.35)',
+          },
+        },
+      },
+    },
+    MuiSwitch: {
+      styleOverrides: {
+        switchBase: {
+          '&.Mui-checked': {
+            color: '#6C63FF',
+            '& + .MuiSwitch-track': {
+              backgroundColor: '#E0E5EC',
+              opacity: 1,
+              boxShadow:
+                'inset 3px 3px 6px rgba(163, 177, 198, 0.6), inset -3px -3px 6px rgba(255, 255, 255, 0.5)',
+            },
+          },
+        },
+        track: {
+          backgroundColor: '#E0E5EC',
+          opacity: 1,
+          boxShadow:
+            'inset 3px 3px 6px rgba(163, 177, 198, 0.6), inset -3px -3px 6px rgba(255, 255, 255, 0.5)',
+        },
+        thumb: {
+          boxShadow: '5px 5px 10px rgba(163, 177, 198, 0.6), -5px -5px 10px rgba(255, 255, 255, 0.5)',
+        },
+      },
+    },
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 16,
+          border: 'none',
+          boxShadow: '9px 9px 16px rgba(163, 177, 198, 0.6), -9px -9px 16px rgba(255, 255, 255, 0.5)',
+          transition: 'transform 300ms ease-out, box-shadow 300ms ease-out',
+          '&:hover': {
+            transform: 'translateY(-1px)',
+            boxShadow: '12px 12px 20px rgba(163, 177, 198, 0.7), -12px -12px 20px rgba(255, 255, 255, 0.6)',
+          },
+          '&:active': {
+            transform: 'translateY(0.5px)',
+            boxShadow: 'inset 3px 3px 6px rgba(163, 177, 198, 0.6), inset -3px -3px 6px rgba(255, 255, 255, 0.5)',
           },
         },
       },

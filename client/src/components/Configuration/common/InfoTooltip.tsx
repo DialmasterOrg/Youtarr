@@ -30,7 +30,7 @@ export const InfoTooltip: React.FC<InfoTooltipProps> = ({ text, onMobileClick })
     return (
       <IconButton
         size="small"
-        sx={{ ml: 0.5, p: 0.5 }}
+        sx={{ ml: 0.5, p: 0.5, color: 'var(--foreground)' }}
         onClick={handleClick}
       >
         <InfoIcon fontSize="small" />
@@ -40,7 +40,7 @@ export const InfoTooltip: React.FC<InfoTooltipProps> = ({ text, onMobileClick })
 
   return (
     <Tooltip title={text} arrow placement="top">
-      <IconButton size="small" sx={{ ml: 0.5, p: 0.5 }}>
+      <IconButton size="small" sx={{ ml: 0.5, p: 0.5, color: 'var(--foreground)' }}>
         <InfoIcon fontSize="small" />
       </IconButton>
     </Tooltip>

@@ -36,7 +36,7 @@ const NAV_SUB_LINE_HEIGHT = 1.2;
 const NAV_DRAWER_BORDER_RADIUS = 'var(--nav-radius)';
 const NAV_DRAWER_DESKTOP_TOP_OFFSET = 'calc(80px + var(--shell-gap))';
 const NAV_DRAWER_DESKTOP_BOTTOM_GAP = 'var(--shell-gap)';
-const NAV_DRAWER_DESKTOP_MAX_HEIGHT = 'calc(100vh - (64px + (var(--shell-gap) * 3)))';
+const NAV_DRAWER_DESKTOP_MAX_HEIGHT = 'calc(100vh - (80px + var(--shell-gap)) - var(--shell-gap))';
 const NAV_DRAWER_MOBILE_TOP_OFFSET = 'calc(60px + var(--shell-gap))';
 const NAV_DRAWER_MOBILE_BOTTOM_GAP = 'var(--shell-gap)';
 const NAV_DRAWER_MOBILE_MAX_HEIGHT = 'calc(100vh - (60px + (var(--shell-gap) * 2)))';
@@ -94,7 +94,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                     if (isMobile) onCloseMobile();
                   }}
                   sx={{
-                    borderRadius: 2.5,
+                    borderRadius: 'var(--radius-ui)',
                     justifyContent: 'flex-start',
                     alignItems: 'center',
                     pl: isNavCollapsed ? NAV_COLLAPSED_HORIZONTAL_PADDING : NAV_EXPANDED_HORIZONTAL_PADDING,
@@ -178,7 +178,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                             if (isMobile) onCloseMobile();
                           }}
                           sx={(theme) => ({
-                            borderRadius: 2,
+                            borderRadius: 'var(--radius-ui)',
                             pl: 0,
                             pr: NAV_SUB_PADDING_RIGHT,
                             py: 0,

@@ -103,7 +103,7 @@ function ChannelVideosHeader({
       return (
         <IconButton
           size="small"
-          sx={{ ml: 0.5, p: 0.5 }}
+          sx={{ ml: 0.5, p: 0.5, color: 'var(--foreground)' }}
           onClick={handleClick}
         >
           <InfoIcon fontSize="small" />
@@ -113,7 +113,7 @@ function ChannelVideosHeader({
 
     return (
       <Tooltip title={message} arrow placement="top">
-        <IconButton size="small" sx={{ ml: 0.5, p: 0.5 }} onClick={(e) => e.stopPropagation()}>
+        <IconButton size="small" sx={{ ml: 0.5, p: 0.5, color: 'var(--foreground)' }} onClick={(e) => e.stopPropagation()}>
           <InfoIcon fontSize="small" />
         </IconButton>
       </Tooltip>

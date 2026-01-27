@@ -26,9 +26,11 @@ const RatingChip: React.FC<RatingChipProps> = ({ rating, size = 'small' }) => {
           height: size === 'small' ? 22 : 26,
           fontSize: size === 'small' ? '0.65rem' : '0.75rem',
           fontWeight: 700,
-          borderRadius: 999,
+          borderRadius: 'var(--radius-ui)',
           backgroundColor: 'var(--card)',
-          border: isNeumorphic ? '1px solid transparent' : '2px solid var(--border-strong)',
+          border: isNeumorphic
+            ? 'var(--border-weight) solid transparent'
+            : 'var(--border-weight) solid var(--border-strong)',
           boxShadow: isNeumorphic ? 'var(--shadow-input-rest)' : 'var(--shadow-hard)',
           color: 'var(--foreground)',
           '& .MuiChip-label': {

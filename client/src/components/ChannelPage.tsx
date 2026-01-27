@@ -88,7 +88,7 @@ function ChannelPage({ token }: ChannelPageProps) {
   const channelChipSx = {
     height: chipHeight,
     fontSize: chipFontSize,
-    borderRadius: 999,
+    borderRadius: 'var(--radius-ui)',
     boxShadow: 'none',
     textTransform: 'none',
     px: 1.25,

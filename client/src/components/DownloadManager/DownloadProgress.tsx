@@ -459,7 +459,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
               sx={{
                 bgcolor: 'action.hover',
                 '&:before': { display: 'none' },
-                borderRadius: 1,
+                borderRadius: 'var(--radius-ui)',
               }}
             >
               <AccordionSummary
@@ -550,7 +550,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             <Box sx={{
               p: 1,
               backgroundColor: (finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'warning.light' : 'success.light',
-              borderRadius: 1,
+              borderRadius: 'var(--radius-ui)',
               textAlign: 'center'
             }}>
               <Typography variant="h6" color={(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'warning.contrastText' : 'success.contrastText'}>
@@ -656,7 +656,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                 value={currentProgress.progress?.percent ?? 0}
                 sx={{
                   height: 32,
-                  borderRadius: 1,
+                  borderRadius: 'var(--radius-ui)',
                   bgcolor: theme.palette.action.hover,
                   boxShadow: theme.shadows[1],
                   '& .MuiLinearProgress-bar': {
@@ -754,7 +754,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                   py: 0.75,
                   bgcolor: theme.palette.background.paper,
                   border: `1px solid ${theme.palette.divider}`,
-                  borderRadius: 2,
+                  borderRadius: 'var(--radius-ui)',
                   boxShadow: theme.shadows[1],
                 }}
               >

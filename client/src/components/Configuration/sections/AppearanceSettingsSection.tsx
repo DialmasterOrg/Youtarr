@@ -64,7 +64,7 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
             <Card
               sx={{
                 height: '100%',
-                borderRadius: 3,
+                borderRadius: theme.tokens.light['radius-ui'] || 'var(--radius-ui)',
                 border: themeMode === theme.id ? '2px solid var(--primary)' : '2px solid var(--border-strong)',
                 boxShadow: themeMode === theme.id ? 'var(--shadow-hard)' : 'var(--shadow-soft)',
                 transition: 'all 300ms var(--transition-bouncy)',

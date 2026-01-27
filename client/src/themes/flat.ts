@@ -51,6 +51,12 @@ export const flatTheme: ThemeDefinition = {
       'shadow-soft': 'none',
       'shadow-hard': 'none',
       'shadow-hard-hover': 'none',
+        'radius-input': '6px',
+        'radius-thumb': '6px',
+        'border-weight': '2px',
+        'radius-input': '6px',
+        'radius-thumb': '6px',
+        'border-weight': '2px',
     },
     dark: {
       'font-body': "'Plus Jakarta Sans'",
@@ -78,6 +84,10 @@ export const flatTheme: ThemeDefinition = {
       'input-border-hover': '210 40% 98%',
       ring: '213 27% 84%',
       radius: '0.25rem',
+      'radius-ui': '6px',
+      'border-weight': '2px',
+      'nav-hover-style': 'flat-solid',
+      shadow: '0 0% 0%',
       'shadow-soft': 'none',
       'shadow-hard': 'none',
       'shadow-hard-hover': 'none',
@@ -87,9 +97,84 @@ export const flatTheme: ThemeDefinition = {
     MuiPaper: {
       styleOverrides: {
         root: {
-          borderRadius: 0,
-          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-ui)',
+          border: 'var(--border-weight) solid var(--border)',
           boxShadow: 'none',
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: 'var(--radius-ui)',
+          border: 'none',
+          boxShadow: 'none',
+          backgroundColor: '#FFFFFF',
+          transition: 'transform 200ms ease, background-color 200ms ease',
+          '&:hover': {
+            transform: 'scale(1.02)',
+            backgroundColor: '#F3F4F6',
+            boxShadow: 'none',
+          },
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderRadius: 'var(--radius-ui)',
+          border: 'none',
+          boxShadow: 'none',
+          backgroundColor: '#F3F4F6',
+          color: '#111827',
+          fontWeight: 600,
+        },
+      },
+    },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          backgroundColor: '#F3F4F6',
+          '& .MuiOutlinedInput-notchedOutline': {
+            borderColor: 'transparent',
+          },
+          '&:hover .MuiOutlinedInput-notchedOutline': {
+            borderColor: '#E5E7EB',
+          },
+          '&.Mui-focused': {
+            backgroundColor: '#FFFFFF',
+          },
+          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+            borderColor: '#3B82F6',
+            borderWidth: 2,
+          },
+        },
+      },
+    },
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          fontWeight: 600,
+          letterSpacing: '0.03em',
+          textTransform: 'uppercase',
+        },
+      },
+    },
+    MuiSwitch: {
+      styleOverrides: {
+        switchBase: {
+          '&.Mui-checked': {
+            color: '#3B82F6',
+            '& + .MuiSwitch-track': {
+              backgroundColor: '#3B82F6',
+              opacity: 1,
+            },
+          },
+        },
+        track: {
+          backgroundColor: '#E5E7EB',
+          opacity: 1,
         },
       },
     },
@@ -98,8 +183,11 @@ export const flatTheme: ThemeDefinition = {
         root: {
           borderRadius: 0,
           boxShadow: 'none',
+          border: 'none',
+          transition: 'transform 200ms ease, background-color 200ms ease',
           '&:hover': {
             boxShadow: 'none',
+            transform: 'scale(1.05)',
           },
         },
         containedPrimary: {

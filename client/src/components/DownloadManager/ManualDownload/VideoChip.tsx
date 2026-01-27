@@ -122,7 +122,7 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
           bgcolor: 'action.selected',
           px: 0.5,
           py: 0.25,
-          borderRadius: 1
+          borderRadius: 'var(--radius-ui)'
         }}>
           {formatDuration(video.duration)}
         </Box>

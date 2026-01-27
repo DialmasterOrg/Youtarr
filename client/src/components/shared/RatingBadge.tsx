@@ -80,10 +80,12 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
           gap: 0.5,
           px: size === 'small' ? 1 : 1.25,
           py: size === 'small' ? 0.35 : 0.5,
-          borderRadius: 999,
+          borderRadius: 'var(--radius-ui)',
           bgcolor: 'var(--card)',
           color: 'var(--foreground)',
-          border: themeMode === 'neumorphic' ? '1px solid transparent' : '2px solid var(--foreground)',
+          border: themeMode === 'neumorphic'
+            ? 'var(--border-weight) solid transparent'
+            : 'var(--border-weight) solid var(--foreground)',
           boxShadow: 'none',
           transition: 'transform 200ms var(--transition-bouncy), box-shadow 200ms var(--transition-bouncy)',
           '&:hover': {

@@ -25,7 +25,16 @@ export function SettingsIndex() {
       <Grid container spacing={2}>
         {SETTINGS_PAGES.map((page) => (
           <Grid item xs={12} md={6} lg={4} key={page.key} sx={{ display: 'flex' }}>
-            <Card variant="outlined" sx={{ borderRadius: 3, width: '100%', height: '100%' }}>
+            <Card 
+              variant="outlined" 
+              sx={{ 
+                borderRadius: 'var(--radius-ui)', 
+                width: '100%', 
+                height: '100%',
+                // Ensure border weight respects theme
+                border: 'var(--border-weight) solid var(--border)',
+              }}
+            >
               <CardActionArea
                 component={RouterLink}
                 to={`/settings/${page.key}`}

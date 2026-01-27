@@ -376,7 +376,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
           </Collapse>
 
           {/* Note about YouTube quality */}
-          <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+          <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 'var(--radius-ui)' }}>
             <Typography variant="caption" color="text.secondary">
               <strong>Note:</strong> YouTube will provide the best available quality up to your selected resolution.
             </Typography>

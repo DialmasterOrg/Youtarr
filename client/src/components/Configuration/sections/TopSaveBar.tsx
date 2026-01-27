@@ -73,7 +73,7 @@ export const TopSaveBar: React.FC<TopSaveBarProps> = ({
           ) : null
         }
         sx={{
-          borderRadius: 2,
+          borderRadius: 'var(--radius-ui)',
           '& .MuiAlert-message': {
             width: '100%',
           },

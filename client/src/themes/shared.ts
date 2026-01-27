@@ -21,7 +21,7 @@ export const commonThemeOptions: ThemeOptions = {
     button: { fontWeight: 700 },
   },
   shape: {
-    borderRadius: 16,
+    borderRadius: 0,
   },
   components: {
     MuiCssBaseline: {
@@ -36,8 +36,8 @@ export const commonThemeOptions: ThemeOptions = {
     MuiPaper: {
       styleOverrides: {
         root: {
-          borderRadius: 16,
-          border: '2px solid var(--border-strong)',
+          borderRadius: 'var(--radius-ui)',
+          border: 'var(--border-weight) solid var(--border-strong)',
           backgroundColor: 'var(--card)',
           backgroundImage: 'none',
         },
@@ -46,8 +46,8 @@ export const commonThemeOptions: ThemeOptions = {
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 16,
-          border: '2px solid var(--border-strong)',
+          borderRadius: 'var(--radius-ui)',
+          border: 'var(--border-weight) solid var(--border-strong)',
           boxShadow: 'var(--shadow-soft)',
           transition: 'transform 300ms var(--transition-bouncy), box-shadow 300ms var(--transition-bouncy)',
           '&:hover': {
@@ -60,8 +60,8 @@ export const commonThemeOptions: ThemeOptions = {
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 999,
-          border: '2px solid var(--border-strong)',
+          borderRadius: 'var(--radius-ui)',
+          border: 'var(--border-weight) solid var(--border-strong)',
           boxShadow: 'none',
           textTransform: 'none',
           fontWeight: 700,
@@ -85,20 +85,20 @@ export const commonThemeOptions: ThemeOptions = {
           color: 'var(--foreground)',
         },
         outlined: {
-          border: '2px solid var(--border-strong)',
+          border: 'var(--border-weight) solid var(--border-strong)',
         },
       },
     },
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
-          borderRadius: 16,
+          borderRadius: 'var(--radius-input)',
           backgroundColor: 'var(--input)',
           boxShadow: 'var(--shadow-input-rest)',
           transition: 'box-shadow 250ms var(--transition-bouncy), border-color 250ms var(--transition-bouncy)',
           '& .MuiOutlinedInput-notchedOutline': {
             borderColor: 'var(--input-border)',
-            borderWidth: 2,
+            borderWidth: 'var(--border-weight)',
           },
           '& .MuiOutlinedInput-notchedOutline legend': {
             maxWidth: 'none',
@@ -128,7 +128,7 @@ export const commonThemeOptions: ThemeOptions = {
           },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
             borderColor: 'var(--ring)',
-            borderWidth: 2,
+            borderWidth: 'var(--border-weight)',
           },
         },
       },
@@ -136,8 +136,8 @@ export const commonThemeOptions: ThemeOptions = {
     MuiChip: {
       styleOverrides: {
         root: {
-          borderRadius: 999,
-          border: '2px solid var(--border-strong)',
+          borderRadius: 'var(--radius-ui)',
+          border: 'var(--border-weight) solid var(--border-strong)',
           boxShadow: 'none',
           transition: 'box-shadow 250ms var(--transition-bouncy)',
           fontWeight: 600,

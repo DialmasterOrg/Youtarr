@@ -48,6 +48,11 @@ export const playfulTheme: ThemeDefinition = {
       'input-border-hover': '222 47% 11%',
       ring: '262 83% 58%',
       radius: '1.25rem',
+      'radius-ui': '24px',
+      'radius-input': '16px',
+      'radius-thumb': '16px',
+      'border-weight': '2px',
+      'nav-hover-style': 'hard-shadow',
       shadow: '222 47% 11%',
       'shadow-soft': '8px 8px 0px 0px #e2e8f0',
       'shadow-hard': '4px 4px 0px 0px #1e293b',
@@ -90,6 +95,11 @@ export const playfulTheme: ThemeDefinition = {
       'input-border-hover': '48 100% 98%',
       ring: '258 90% 66%',
       radius: '1.25rem',
+      'radius-ui': '24px',
+      'radius-input': '16px',
+      'radius-thumb': '16px',
+      'border-weight': '2px',
+      'nav-hover-style': 'hard-shadow',
       shadow: '48 100% 98%',
       'shadow-soft': '8px 8px 0px 0px rgba(0,0,0,0.3)',
       'shadow-hard': '4px 4px 0px 0px #fffdf5',
@@ -106,6 +116,57 @@ export const playfulTheme: ThemeDefinition = {
       'nav-item-bg-selected': '#fbbf24',
       'appbar-border': '2px solid var(--foreground)',
       'appbar-shadow': 'var(--shadow-hard)',
+    },
+  },
+  muiOverrides: {
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: 'var(--radius-ui)',
+          border: 'var(--border-weight) solid var(--border)',
+          boxShadow: 'var(--shadow-hard)',
+          transition: 'all 300ms var(--transition-bouncy)',
+          '&:hover': {
+            transform: 'var(--card-hover-transform)',
+            boxShadow: 'var(--card-hover-shadow)',
+          },
+        },
+      },
+    },
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 'var(--radius-ui)',
+          textTransform: 'none',
+          fontWeight: 700,
+          border: '2px solid transparent',
+          boxShadow: 'none',
+          '&:hover': {
+            boxShadow: 'none',
+          },
+        },
+        contained: {
+          border: '2px solid var(--foreground)',
+          boxShadow: 'var(--shadow-hard)',
+          '&:hover': {
+            transform: 'translate(-2px, -2px)',
+            boxShadow: 'var(--shadow-hard-hover)',
+          },
+          '&:active': {
+            transform: 'translate(0, 0)',
+            boxShadow: 'var(--shadow-hard-active)',
+          },
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderRadius: 'var(--radius-ui)',
+          border: '2px solid var(--foreground)',
+          fontWeight: 700,
+        },
+      },
     },
   },
 };

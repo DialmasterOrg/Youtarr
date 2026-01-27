@@ -50,9 +50,9 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
                 borderColor: isPendingAddition ? 'warning.light' : 'var(--foreground)',
-                borderWidth: 2,
+                borderWidth: 'var(--border-weight)',
                 borderStyle: isPendingAddition ? 'dashed' : 'solid',
-                borderRadius: 3,
+                borderRadius: 'var(--radius-ui)',
                 boxShadow: 'var(--shadow-soft)',
                 transform: isInteractive ? 'var(--sticker-rest-transform)' : 'translate(0, 0)',
                 transition: 'transform 300ms var(--transition-bouncy), box-shadow 300ms var(--transition-bouncy)',
@@ -92,6 +92,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                         width: '100%',
                         pt: '56.25%',
                         overflow: 'hidden',
+                        borderRadius: 'var(--radius-thumb)',
                         bgcolor: 'common.white',
                         display: 'flex',
                         alignItems: 'center',
@@ -109,12 +110,14 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                     >
                         {thumbnailVisible ? (
                             <Avatar
+                                variant="rounded"
                                 src={thumbnailSrc}
                                 alt={`${channel.uploader || 'Channel'} thumbnail`}
                                 className="avatarImage"
                                 sx={{
                                     width: 190,
                                     height: 190,
+                                    borderRadius: 'var(--radius-thumb)',
                                     transition: 'transform 0.35s ease',
                                     filter: thumbnailLoaded ? 'none' : 'grayscale(0.2)',
                                     boxShadow: '0 4px 12px rgba(15, 23, 42, 0.2)',

@@ -190,7 +190,7 @@ function VideoTableView({
                   </Box>
                 </TableCell>
                 <TableCell sx={{ width: 140 }}>
-                  <Box sx={{ position: 'relative', display: 'inline-block', bgcolor: 'grey.900', borderRadius: '4px' }}>
+                  <Box sx={{ position: 'relative', display: 'inline-block', bgcolor: 'grey.900', borderRadius: 'var(--radius-thumb)', overflow: 'hidden' }}>
                     <img
                       src={video.thumbnail}
                       alt={decodeHtml(video.title)}
@@ -199,7 +199,7 @@ function VideoTableView({
                         width: 120,
                         height: 67,
                         objectFit: video.media_type === 'short' ? 'contain' : 'cover',
-                        borderRadius: 4,
+                        borderRadius: 'var(--radius-thumb)',
                         display: 'block'
                       }}
                       loading="lazy"
@@ -217,8 +217,8 @@ function VideoTableView({
                           fontSize: '0.65rem',
                           fontWeight: 'bold',
                           textAlign: 'center',
-                          borderTopLeftRadius: 4,
-                          borderTopRightRadius: 4,
+                          borderTopLeftRadius: 'var(--radius-thumb)',
+                          borderTopRightRadius: 'var(--radius-thumb)',
                         }}
                       >
                         Removed From YouTube

@@ -101,7 +101,7 @@ export function AppShell({
           label: 'Downloads',
           oldLabel: 'Manage Video Downloads',
           icon: <DownloadIcon />,
-          to: '/downloads',
+          to: '/downloads/manual',
           subItems: downloadsSubItems,
         },
         {
@@ -150,6 +150,7 @@ export function AppShell({
         navItems={navItems}
         token={token}
         isPlatformManaged={isPlatformManaged}
+        versionLabel={versionLabel}
         updateAvailable={updateAvailable}
         updateTooltip={updateTooltip}
         onLogout={onLogout}
@@ -196,7 +197,7 @@ export function AppShell({
                 flexDirection: 'column',
                 minHeight: '100vh',
                 minWidth: 0,
-                pt: isMobile ? 'calc(60px + var(--shell-gap))' : 'calc(80px + var(--shell-gap))',
+              pt: isMobile ? 'calc(60px + var(--shell-gap))' : 'calc(80px + var(--shell-gap))',
                 pb: 'var(--shell-gap)',
                 px: 'var(--shell-gap)',
                 boxSizing: 'border-box',
@@ -210,7 +211,7 @@ export function AppShell({
             sx={{
               bgcolor: 'background.paper',
               border: '2px solid var(--foreground)',
-              borderRadius: 3,
+              borderRadius: 'var(--radius-ui)',
               boxShadow: 'var(--shadow-soft)',
               px: 2,
               py: { xs: 2.5, md: 3 },

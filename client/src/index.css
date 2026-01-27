@@ -9,6 +9,11 @@
   --shell-gap: 8px;
   --appbar-radius: 24px;
   --nav-radius: 24px;
+  --radius-ui: 16px;
+  --radius-input: 12px;
+  --radius-thumb: 12px;
+  --border-weight: 2px;
+  --nav-hover-style: flat-highlight;
   --background-pattern: radial-gradient(var(--dot-grid) 1px, transparent 1px);
   --card-hover-transform: translate(-2px, -2px) rotate(-0.5deg);
   --card-hover-shadow: var(--shadow-hard-hover);
@@ -60,6 +65,17 @@ body::before {
   pointer-events: none;
   z-index: -1;
   opacity: 0.5;
+}
+
+/* Outlined input notch should only appear when label is floated */
+.MuiFormControl-root .MuiInputLabel-root:not(.MuiInputLabel-shrink) + .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline legend {
+  max-width: 0.01px;
+  padding: 0;
+}
+
+.MuiFormControl-root .MuiInputLabel-root.MuiInputLabel-shrink + .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline legend {
+  max-width: 100%;
+  padding: 0 20px;
 }
 
 h1,
