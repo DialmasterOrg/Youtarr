@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   AppBar,
   Box,
@@ -11,9 +11,8 @@ import {
   MenuItem,
   Fade,
   useTheme,
-  Portal,
 } from '@mui/material';
-import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
 import LogoutIcon from '@mui/icons-material/Logout';
 import DownloadIcon from '@mui/icons-material/Download';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -49,16 +48,16 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   APP_BAR_TOGGLE_SIZE,
 }) => {
   const location = useLocation();
-  const navigate = useNavigate();
   const theme = useTheme();
 
   const [activeDropdown, setActiveDropdown] = useState<{ key: string; anchor: HTMLElement | null } | null>(null);
   const hoverTimeoutRef = useRef<number | null>(null);
-  const portalRootRef = useRef<HTMLDivElement | null>(null);
+  const lastPointerTypeRef = useRef<'mouse' | 'touch' | 'pen'>('mouse');
 
   const isLinear = themeMode === 'linear';
+  const isFlat = themeMode === 'flat';
   const isNeumorphic = themeMode === 'neumorphic';
-  const isTopNav = isLinear || isNeumorphic;
+  const isTopNav = isLinear || isFlat || isNeumorphic;
   const showTopNavItems = isTopNav && !isMobile;
   const navTextPrimary = theme.palette.text.primary;
   const navTextSecondary = theme.palette.text.secondary;
@@ -81,11 +80,11 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
 
   const scheduleClose = () => {
     clearHoverTimeout();
-    // Give user a bit more leeway to move from nav to menu
+    // Delay to allow mouse to move from button to menu without flicker
     hoverTimeoutRef.current = window.setTimeout(() => {
       setActiveDropdown(null);
       hoverTimeoutRef.current = null;
-    }, 250);
+    }, 150);
   };
 
   const keepDropdownOpen = () => {
@@ -99,17 +98,36 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
     setActiveDropdown(null);
   };
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!activeDropdown) return;
+      
+      // Check if click is outside any nav elements
+      const navBar = (event.currentTarget as Document).querySelector('[data-nav-container]');
+      if (navBar && !navBar.contains(event.target as Node)) {
+        closeDropdown();
+      }
+    };
+
+    if (activeDropdown) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [activeDropdown]);
+
   return (
     <AppBar
+      data-nav-container
       position="fixed"
       elevation={0}
       sx={{
-        backgroundColor: isLinear ? 'rgba(5, 5, 6, 0.8)' : 'background.paper',
+        backgroundColor: isLinear ? 'rgba(5, 5, 6, 0.8)' : isFlat ? '#FFFFFF' : 'background.paper',
         backdropFilter: isLinear ? 'blur(12px)' : 'none',
-        border: isLinear || isNeumorphic ? 'none' : 'var(--appbar-border)',
-        borderBottom: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : 'var(--appbar-border)',
-        boxShadow: isLinear || isNeumorphic ? 'none' : 'var(--appbar-shadow)',
-        backgroundImage: isLinear || isNeumorphic ? 'none' : 'var(--appbar-pattern)',
+        border: isLinear ? 'none' : isFlat ? '2px solid #E5E7EB' : isNeumorphic ? 'none' : 'var(--appbar-border)',
+        borderBottom: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : isFlat ? '2px solid #E5E7EB' : 'var(--appbar-border)',
+        boxShadow: 'none',
+        backgroundImage: isLinear || isFlat || isNeumorphic ? 'none' : 'var(--appbar-pattern)',
         backgroundSize: '24px 24px',
         color: 'text.primary',
         zIndex: (theme) => theme.zIndex.drawer + 1,
@@ -126,7 +144,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
           <IconButton
             aria-label="open drawer"
             onClick={toggleDrawer}
-            sx={{ color: isLinear ? '#fff' : 'inherit', mr: 1 }}
+            sx={{ color: isLinear ? '#FFFFFF' : isFlat ? '#111827' : 'inherit', mr: 1 }}
           >
             <MenuIcon />
           </IconButton>
@@ -196,13 +214,29 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                   sx={{ position: 'relative' }}
                 >
                   <Button
-                    onMouseEnter={(e) => item.subItems && openDropdown(e, item.key)}
+                    onPointerDown={(event) => {
+                      lastPointerTypeRef.current = event.pointerType as 'mouse' | 'touch' | 'pen';
+                    }}
+                    onMouseEnter={(e) => {
+                      if (item.subItems && lastPointerTypeRef.current === 'mouse') {
+                        openDropdown(e, item.key);
+                      }
+                    }}
+                    onClick={(event) => {
+                      if (!item.subItems) return;
+                      if (lastPointerTypeRef.current !== 'mouse') {
+                        if (!isDropdownOpen(item.key)) {
+                          event.preventDefault();
+                          openDropdown(event as unknown as React.MouseEvent<HTMLElement>, item.key);
+                        }
+                      }
+                    }}
                     component={RouterLink}
                     to={item.to}
                     variant="text"
                     startIcon={item.icon}
                     sx={{
-                      color: isParentActive ? (isLinear ? theme.palette.primary.main : navTextPrimary) : navTextSecondary,
+                      color: isParentActive ? ((isLinear || isFlat) ? theme.palette.primary.main : navTextPrimary) : navTextSecondary,
                       fontWeight: 600,
                       fontSize: '0.85rem',
                       textTransform: 'none',
@@ -210,20 +244,20 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                       py: 1,
                       borderRadius: 'var(--radius-ui)',
                       position: 'relative',
-                      '&::after': isLinear && isParentActive ? {
+                      '&::after': (isLinear || isFlat) && isParentActive ? {
                         content: '""',
                         position: 'absolute',
-                        bottom: 0,
+                        bottom: 4,
                         left: '50%',
                         transform: 'translateX(-50%)',
                         width: '20px',
-                        height: '2px',
+                        height: '3px',
                         bgcolor: theme.palette.primary.main,
                         borderRadius: '2px',
                       } : {},
                       '&:hover': {
-                        color: isLinear ? theme.palette.primary.main : navTextPrimary,
-                        bgcolor: isLinear ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+                        color: (isLinear || isFlat) ? theme.palette.primary.main : navTextPrimary,
+                        bgcolor: isLinear ? 'rgba(255, 255, 255, 0.05)' : isFlat ? 'rgba(59, 130, 246, 0.08)' : 'rgba(0, 0, 0, 0.04)',
                         transform: 'none',
                       },
                       '& .MuiButton-startIcon': {
@@ -242,11 +276,13 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                       onClose={closeDropdown}
                       disableScrollLock
                       hideBackdrop
+                      disableAutoFocus
+                      keepMounted
                       slotProps={{
-                        paper: { 
-                          sx: { 
+                        paper: {
+                          sx: {
                             pointerEvents: 'auto',
-                            zIndex: (theme) => theme.zIndex.modal + 100,
+                            zIndex: theme.zIndex.modal + 1,
                           },
                           onMouseEnter: keepDropdownOpen,
                           onMouseLeave: scheduleClose,
@@ -254,92 +290,93 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                       }}
                       MenuListProps={{
                         sx: {
-                          py: isLinear ? 0.75 : 1,
-                          px: isLinear ? 0.75 : 1,
-                          minWidth: 200,
+                          py: (isLinear || isFlat) ? 0.5 : 0.75,
+                          px: (isLinear || isFlat) ? 0.5 : 0.75,
+                          minWidth: 180,
                           width: 'max-content',
                           display: 'flex',
                           flexDirection: 'column',
-                          gap: isLinear ? 0.25 : 0.5,
+                          gap: (isLinear || isFlat) ? 0.2 : 0.4,
                         },
                       }}
                       TransitionComponent={Fade}
                       TransitionProps={{ timeout: { enter: 150, exit: 150 } }}
+                      PopperProps={{
+                        modifiers: [
+                          {
+                            name: 'preventOverflow',
+                            options: {
+                              padding: 8,
+                            },
+                          },
+                          {
+                            name: 'offset',
+                            options: {
+                              offset: [0, 8],
+                            },
+                          },
+                        ],
+                      }}
                       anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
                       transformOrigin={{ vertical: 'top', horizontal: 'center' }}
-                      elevation={isLinear ? 0 : 8}
+                      elevation={0}
                       PaperProps={{
                         sx: {
-                          position: 'relative',
                           overflow: 'visible',
                           width: 'max-content',
-                          minWidth: 200,
-                          borderRadius: 'var(--radius-ui)',
-                          border: isLinear 
-                            ? 'var(--border-weight) solid #333'
-                            : isNeumorphic
-                              ? 'none'
-                              : '1px solid rgba(255,255,255,0.1)',
+                          minWidth: 180,
+                          borderRadius: isLinear ? '12px' : isFlat ? '8px' : isNeumorphic ? '16px' : 'var(--radius-ui)',
+                          border: isLinear
+                            ? '1px solid rgba(255, 255, 255, 0.1)'
+                            : isFlat
+                              ? '2px solid #E5E7EB'
+                              : isNeumorphic
+                                ? 'none'
+                                : '2px solid var(--border-strong)',
                           bgcolor: isLinear
                             ? '#09090b'
-                            : isNeumorphic
-                              ? '#E0E5EC'
-                              : '#FFFFFF',
-                          boxShadow: isLinear
-                            ? '0 4px 20px rgba(0,0,0,0.5)'
-                            : isNeumorphic
-                              ? '12px 12px 20px rgba(163, 177, 198, 0.6), -12px -12px 20px rgba(255, 255, 255, 0.6)'
-                              : 'none',
+                            : isFlat
+                              ? '#FFFFFF'
+                              : isNeumorphic
+                                ? '#E0E5EC'
+                                : '#FFFFFF',
+                          boxShadow: isLinear ? '0 10px 40px rgba(0,0,0,0.5)' : 'none',
                           mt: 0,
-                          transform: 'none',
-                          px: isLinear ? 0.5 : 1,
-                          py: isLinear ? 0.5 : 0.75,
-                          '&::before': {
-                            content: '""',
-                            position: 'absolute',
-                            top: -15,
-                            left: 0,
-                            right: 0,
-                            height: 15,
-                            background: 'transparent',
-                          },
+                          px: (isLinear || isFlat) ? 1 : 1,
+                          py: (isLinear || isFlat) ? 0.75 : 0.75,
                         },
                       }}
                     >
                       {item.subItems.map((subItem: any) => (
                         <MenuItem
                           key={subItem.key}
-                          onClick={() => {
-                            closeDropdown();
-                            // Use navigate instead of RouterLink for reliability in Portal context
-                            navigate(subItem.to);
-                          }}
+                          component={RouterLink}
+                          to={subItem.to}
+                          onClick={closeDropdown}
                           sx={{
-                            borderRadius: 'var(--radius-ui)',
+                            borderRadius: (isLinear || isFlat) ? '6px' : 'var(--radius-ui)',
                             fontSize: '0.85rem',
                             fontWeight: 500,
-                            color: location.pathname === subItem.to ? (isLinear ? theme.palette.primary.main : navTextPrimary) : navTextSecondary,
+                            color: location.pathname === subItem.to ? ((isLinear || isFlat) ? theme.palette.primary.main : navTextPrimary) : navTextSecondary,
                             '&:hover': {
-                              color: isLinear ? theme.palette.primary.main : navTextPrimary,
+                              color: (isLinear || isFlat) ? theme.palette.primary.main : navTextPrimary,
                               bgcolor: isLinear
                                 ? 'rgba(255, 255, 255, 0.08)'
-                                : isNeumorphic
-                                  ? 'rgba(108, 99, 255, 0.12)'
-                                  : '#F3F4F6',
-                              boxShadow: isNeumorphic
-                                ? 'inset 3px 3px 6px rgba(163, 177, 198, 0.6), inset -3px -3px 6px rgba(255, 255, 255, 0.5)'
-                                : 'none',
+                                : isFlat
+                                  ? '#F3F4F6'
+                                  : isNeumorphic
+                                    ? 'rgba(108, 99, 255, 0.12)'
+                                    : '#F3F4F6',
+                              boxShadow: 'none',
                             },
-                            py: 0.85,
+                            py: 0.75,
                             minWidth: 160,
-                            cursor: 'pointer',
                           }}
                         >
                           {subItem.label}
                         </MenuItem>
                       ))}
                     </Menu>
-
                   )}
                 </Box>
               );
@@ -350,7 +387,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
 
         {!showTopNavItems && <Box sx={{ flexGrow: 1 }} />}
         <Box sx={{ display: 'flex', alignItems: 'center', ml: showTopNavItems ? 'auto' : 0 }}>
-          {isLinear && versionParts.length > 0 && (
+          {(isLinear || isFlat) && versionParts.length > 0 && (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', mr: 1.5, lineHeight: 1.1 }}>
               <Typography variant="caption" sx={{ color: navTextSecondary, fontWeight: 600, fontSize: '0.6rem' }}>
                 {versionParts[0]}

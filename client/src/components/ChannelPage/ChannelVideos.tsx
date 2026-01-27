@@ -696,14 +696,13 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
               onClick={handleActionClick}
               sx={(theme) => ({
                 bgcolor: isDownloadAction ? 'primary.main' : 'error.main',
-                color: theme.palette.getContrastText(
-                  isDownloadAction ? theme.palette.primary.main : theme.palette.error.main
-                ),
+                color: isDownloadAction ? 'primary.contrastText' : 'error.contrastText',
                 border: '2px solid',
                 borderColor: isDownloadAction ? 'primary.main' : 'error.main',
                 boxShadow: 'var(--shadow-hard)',
                 '&:hover': {
                   bgcolor: isDownloadAction ? 'primary.dark' : 'error.dark',
+                  borderColor: isDownloadAction ? 'primary.dark' : 'error.dark',
                 },
               })}
             >

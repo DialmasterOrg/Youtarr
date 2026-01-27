@@ -5,90 +5,108 @@ import { ThemeDefinition } from './types';
 export const flatTheme: ThemeDefinition = {
   id: 'flat',
   name: 'Bold Flat',
-  description: 'Zero depth, bold colors, and geometric precision. No shadows.',
+  description: 'Zero depth, bold colors, and geometric precision. No shadows, pure flat design with color as structure.',
   layoutMode: 'top-nav',
   preview: React.createElement(Box, {
     key: 'preview-root',
     sx: {
       p: 2,
-      borderRadius: 1.5,
-      bgcolor: '#3B82F6',
+      borderRadius: '8px',
+      bgcolor: '#FFFFFF',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
+      overflow: 'hidden',
+      position: 'relative',
+      border: '2px solid #E5E7EB',
     }
   }, [
-    React.createElement(Box, { key: 'b1', sx: { width: 24, height: 24, borderRadius: '50%', bgcolor: '#FFFFFF' } }),
-    React.createElement(Box, { key: 'b2', sx: { width: 40, height: 10, borderRadius: 1.5, bgcolor: '#FFFFFF', opacity: 0.8 } })
+    React.createElement(Box, {
+      key: 'b1',
+      sx: {
+        width: 32,
+        height: 32,
+        borderRadius: '50%',
+        bgcolor: '#3B82F6',
+      }
+    }),
+    React.createElement(Box, {
+      key: 'b2',
+      sx: { width: 48, height: 12, borderRadius: '6px', bgcolor: '#F3F4F6' }
+    })
   ]),
   tokens: {
     light: {
       'font-body': "'Plus Jakarta Sans'",
       'font-display': "'Outfit'",
-      background: '0 0% 100%',
-      foreground: '240 10% 3.9%',
+      background: '0 0% 100%', // Pure White
+      foreground: '217 32% 10%', // Dark Gray 900 (#111827)
       card: '0 0% 100%',
-      'card-foreground': '240 10% 3.9%',
+      'card-foreground': '217 32% 10%',
       popover: '0 0% 100%',
-      'popover-foreground': '240 10% 3.9%',
-      primary: '221.2 83.2% 53.3%', // #3B82F6
-      'primary-foreground': '210 40% 98%',
-      secondary: '210 40% 96.1%',
-      'secondary-foreground': '222.2 47.4% 11.2%',
-      muted: '210 40% 96.1%',
-      'muted-foreground': '215.4 16.3% 46.9%',
-      accent: '210 40% 96.1%',
-      'accent-foreground': '222.2 47.4% 11.2%',
-      destructive: '0 84.2% 60.2%',
-      'destructive-foreground': '210 40% 98%',
-      border: '214.3 31.8% 91.4%',
-      'border-strong': '0 0% 0%',
-      input: '214.3 31.8% 91.4%',
-      'input-border': '221.2 83.2% 53.3%',
-      'input-border-hover': '221.2 83.2% 53.3%',
-      ring: '221.2 83.2% 53.3%',
+      'popover-foreground': '217 32% 10%',
+      primary: '217 92% 52%', // #3B82F6 - Bold Blue
+      'primary-foreground': '210 40% 98%', // White
+      secondary: '160 84% 39%', // #10B981 - Emerald
+      'secondary-foreground': '0 0% 100%',
+      muted: '210 40% 96.1%', // #F3F4F6 - Gray 100
+      'muted-foreground': '215 13% 34%', // Gray 600
+      accent: '38 92% 50%', // #F59E0B - Amber
+      'accent-foreground': '0 0% 100%',
+      destructive: '0 84% 60%', // Red
+      'destructive-foreground': '0 0% 100%',
+      border: '210 14% 90%', // #E5E7EB - Gray 200
+      'border-strong': '217 32% 10%', // Dark Gray
+      input: '210 40% 96%', // #F3F4F6 - Gray 100
+      'input-border': '210 14% 90%', // Gray 200
+      'input-border-hover': '217 92% 52%', // Primary Blue
+      ring: '217 92% 52%', // Primary Blue
       radius: '0.25rem',
+      'radius-ui': '8px', // 8px for consistency
+      'radius-input': '8px',
+      'radius-thumb': '8px',
+      'border-weight': '2px',
+      'nav-hover-style': 'flat-solid',
       'shadow-soft': 'none',
       'shadow-hard': 'none',
       'shadow-hard-hover': 'none',
-      'radius-ui': '6px',
-      'radius-input': '6px',
-      'radius-thumb': '6px',
-      'border-weight': '2px',
+      'transition-smooth': 'all 0.2s ease',
     },
     dark: {
       'font-body': "'Plus Jakarta Sans'",
       'font-display': "'Outfit'",
-      background: '224 71% 4%',
-      foreground: '213 31% 91%',
-      card: '224 71% 4%',
-      'card-foreground': '213 31% 91%',
-      popover: '224 71% 4%',
-      'popover-foreground': '213 31% 91%',
-      primary: '210 40% 98%',
-      'primary-foreground': '222.2 47.4% 1.2%',
-      secondary: '222.2 47.4% 11.2%',
-      'secondary-foreground': '210 40% 98%',
-      muted: '222.2 47.4% 11.2%',
-      'muted-foreground': '215.4 16.3% 56.9%',
-      accent: '222.2 47.4% 11.2%',
-      'accent-foreground': '210 40% 98%',
-      destructive: '0 62.8% 30.6%',
-      'destructive-foreground': '210 40% 98%',
-      border: '216 34% 17%',
-      'border-strong': '0 0% 100%',
-      input: '216 34% 17%',
-      'input-border': '210 40% 98%',
-      'input-border-hover': '210 40% 98%',
-      ring: '213 27% 84%',
+      background: '0 0% 100%', // Light mode only
+      foreground: '217 32% 10%',
+      card: '0 0% 100%',
+      'card-foreground': '217 32% 10%',
+      popover: '0 0% 100%',
+      'popover-foreground': '217 32% 10%',
+      primary: '217 92% 52%',
+      'primary-foreground': '210 40% 98%',
+      secondary: '160 84% 39%',
+      'secondary-foreground': '0 0% 100%',
+      muted: '210 40% 96.1%',
+      'muted-foreground': '215 13% 34%',
+      accent: '38 92% 50%',
+      'accent-foreground': '0 0% 100%',
+      destructive: '0 84% 60%',
+      'destructive-foreground': '0 0% 100%',
+      border: '210 14% 90%',
+      'border-strong': '217 32% 10%',
+      input: '210 40% 96%',
+      'input-border': '210 14% 90%',
+      'input-border-hover': '217 92% 52%',
+      ring: '217 92% 52%',
       radius: '0.25rem',
-      'radius-ui': '6px',
+      'radius-ui': '8px',
+      'radius-input': '8px',
+      'radius-thumb': '8px',
       'border-weight': '2px',
       'nav-hover-style': 'flat-solid',
-      shadow: '0 0% 0%',
       'shadow-soft': 'none',
       'shadow-hard': 'none',
       'shadow-hard-hover': 'none',
+      'transition-smooth': 'all 0.2s ease',
     },
   },
   muiOverrides: {
@@ -98,6 +116,7 @@ export const flatTheme: ThemeDefinition = {
           borderRadius: 'var(--radius-ui)',
           border: 'var(--border-weight) solid var(--border)',
           boxShadow: 'none',
+          backgroundColor: '#FFFFFF',
         },
       },
     },
@@ -132,8 +151,9 @@ export const flatTheme: ThemeDefinition = {
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: 'var(--radius-input)',
           backgroundColor: '#F3F4F6',
+          color: '#111827',
           '& .MuiOutlinedInput-notchedOutline': {
             borderColor: 'transparent',
           },
@@ -156,6 +176,7 @@ export const flatTheme: ThemeDefinition = {
           fontWeight: 600,
           letterSpacing: '0.03em',
           textTransform: 'uppercase',
+          color: '#111827',
         },
       },
     },
@@ -179,23 +200,68 @@ export const flatTheme: ThemeDefinition = {
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 0,
-          boxShadow: 'none',
+          textTransform: 'none',
+          fontWeight: 600,
+          borderRadius: 'var(--radius-ui)',
           border: 'none',
-          transition: 'transform 200ms ease, background-color 200ms ease',
+          boxShadow: 'none',
+          transition: 'transform 200ms ease, background-color 200ms ease, border-color 200ms ease',
           '&:hover': {
             boxShadow: 'none',
             transform: 'scale(1.05)',
           },
+          '&:active': {
+            transform: 'scale(0.98)',
+          },
         },
         containedPrimary: {
           backgroundColor: '#3B82F6',
+          color: '#FFFFFF',
           '&:hover': {
             backgroundColor: '#2563EB',
+          },
+        },
+        outlinedPrimary: {
+          borderWidth: '2px',
+          borderColor: '#3B82F6',
+          color: '#3B82F6',
+          '&:hover': {
+            backgroundColor: '#3B82F6',
+            color: '#FFFFFF',
+            borderColor: '#3B82F6',
+          },
+        },
+      },
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          transition: 'transform 200ms ease, background-color 200ms ease',
+          '&:hover': {
+            transform: 'scale(1.08)',
+            backgroundColor: 'rgba(59, 130, 246, 0.08)',
+          },
+        },
+      },
+    },
+    MuiFab: {
+      styleOverrides: {
+        primary: {
+          backgroundColor: '#3B82F6',
+          color: '#FFFFFF',
+          boxShadow: 'none',
+          border: '2px solid #3B82F6',
+          transition: 'transform 200ms ease, background-color 200ms ease, border-color 200ms ease',
+          '&:hover': {
+            backgroundColor: '#2563EB',
+            borderColor: '#2563EB',
+            transform: 'scale(1.08)',
+            boxShadow: 'none',
           },
         },
       },
     },
   },
 };
+
 
