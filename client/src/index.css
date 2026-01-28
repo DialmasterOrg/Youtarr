@@ -223,6 +223,15 @@ h6 {
   }
 }
 
+@keyframes playful-dot-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
 @keyframes linear-blob-float {
   0%, 100% { transform: translate(0, 0) scale(1); }
   33% { transform: translate(30px, -50px) scale(1.1); }
@@ -400,6 +409,33 @@ body[data-motion='on'][data-theme='linear'] .animate-slide-left {
 
 body[data-motion='on'][data-theme='linear'] .animate-slide-right {
   animation: slide-in-right 250ms linear;
+}
+
+/* Playful loading dots (always animated) */
+.playful-loading-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.playful-loading-dots span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--foreground);
+  background: var(--secondary);
+  box-shadow: var(--shadow-hard);
+  animation: playful-dot-bounce 0.8s ease-in-out infinite;
+}
+
+.playful-loading-dots span:nth-child(2) {
+  background: var(--tertiary);
+  animation-delay: 0.15s;
+}
+
+.playful-loading-dots span:nth-child(3) {
+  background: var(--primary);
+  animation-delay: 0.3s;
 }
 
 /* Loading Spinner - Always Animated (Even with Motion Off) */

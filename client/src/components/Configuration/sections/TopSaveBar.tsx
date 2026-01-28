@@ -67,28 +67,36 @@ export const TopSaveBar: React.FC<TopSaveBarProps> = ({
               onClick={onSave}
               disabled={isLoading}
               startIcon={isLoading ? <CircularProgress size={16} /> : <SaveIcon />}
+              sx={{ display: 'inline-flex', alignItems: 'center' }}
             >
-              Save Now
+              Save Changes
             </Button>
           ) : null
         }
         sx={{
           borderRadius: 'var(--radius-ui)',
+          display: 'flex',
+          alignItems: 'center',
           '& .MuiAlert-message': {
             width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
           },
         }}
       >
-        <AlertTitle sx={{ fontWeight: 600 }}>
-          {isLoading
-            ? 'Saving configuration…'
-            : isError
-              ? 'Configuration Error'
-              : hasUnsavedChanges
-                ? 'You have unsaved changes'
-                : 'Configuration saved successfully'}
-        </AlertTitle>
-        {validationError && <span>{validationError}</span>}
+        <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <AlertTitle sx={{ fontWeight: 600, mb: 0 }}>
+            {isLoading
+              ? 'Saving configuration…'
+              : isError
+                ? 'Configuration Error'
+                : hasUnsavedChanges
+                  ? 'You have unsaved changes'
+                  : 'Configuration saved successfully'}
+          </AlertTitle>
+          {validationError && <span>{validationError}</span>}
+        </Box>
       </Alert>
     </Box>
   );

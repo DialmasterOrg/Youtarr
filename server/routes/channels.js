@@ -645,8 +645,9 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
   });
 
   /**
-   * @swagger
-   * /fetchallchannelvideos/{channelId}:
+   * Diagnostic endpoint to check media_type distribution
+   */
+  /**
    *   post:
    *     summary: Fetch all channel videos
    *     description: Trigger a full fetch of all videos from a channel's YouTube page.

@@ -1297,21 +1297,34 @@ class ChannelModule {
    * @returns {Promise<Array>} - Array of video objects with download status
    */
   async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, excludeDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video', maxRating = '') {
-    const whereClause = {
+    let whereClause = {
       channel_id: channelId,
     };
 
     if (mediaType === 'video') {
-      whereClause.media_type = { [Op.or]: ['video', null, ''] };
+      // For 'video' type, we want records where media_type is 'video', NULL, or ''
+      // Since NULL can't be in Op.in, we use an OR condition
+      whereClause = {
+        channel_id: channelId,
+        [Op.or]: [
+          { media_type: 'video' },
+          { media_type: null },
+          { media_type: '' }
+        ]
+      };
     } else {
       whereClause.media_type = mediaType;
     }
+
+    logger.info({ channelId, mediaType, whereClause }, 'fetchNewestVideosFromDb - query clause');
 
     // First get all videos to enrich with download status
     const allChannelVideos = await ChannelVideo.findAll({
       where: whereClause,
       order: [['publishedAt', 'DESC']],
     });
+
+    logger.info({ channelId, mediaType, videoCount: allChannelVideos.length }, 'fetchNewestVideosFromDb - videos found');
 
     // Enrich all videos with download status, but only check files for the current page
     // We'll determine which videos are on the current page after filtering and sorting
@@ -1415,15 +1428,24 @@ class ChannelModule {
   async getChannelVideoStats(channelId, excludeDownloaded = false, searchQuery = '', mediaType = 'video', maxRating = '') {
     // If we have search or filter, we need to get all videos
     if (excludeDownloaded || searchQuery) {
-      const whereClause = {
+      let whereClause = {
         channel_id: channelId,
       };
 
       if (mediaType === 'video') {
-        whereClause.media_type = { [Op.or]: ['video', null, ''] };
+        whereClause = {
+          channel_id: channelId,
+          [Op.or]: [
+            { media_type: 'video' },
+            { media_type: null },
+            { media_type: '' }
+          ]
+        };
       } else {
         whereClause.media_type = mediaType;
       }
+
+      logger.info({ channelId, mediaType, whereClause }, 'getChannelVideoStats - filtered path');
 
       // Need to filter by download status and/or search
       const allChannelVideos = await ChannelVideo.findAll({
@@ -2218,6 +2240,12 @@ class ChannelModule {
       this.activeFetches.delete(channelId);
     }
   }
+
+  /**
+   * Diagnostic helper to check what media_type values exist in database for a channel
+   * @param {string} channelId - Channel ID
+   * @returns {Promise<Object>} - Count by media_type value
+   */
 }
 
 module.exports = new ChannelModule();

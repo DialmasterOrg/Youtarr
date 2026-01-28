@@ -34,6 +34,7 @@ import ChannelVideosDialogs from './ChannelVideosDialogs';
 import { useChannelVideos } from './hooks/useChannelVideos';
 import { useRefreshChannelVideos } from './hooks/useRefreshChannelVideos';
 import { useConfig } from '../../hooks/useConfig';
+import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
 
 interface ChannelVideosProps {
@@ -50,6 +51,7 @@ type SortOrder = 'asc' | 'desc';
 function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelId, channelVideoQuality }: ChannelVideosProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { themeMode } = useThemeEngine();
 
   // View and display states
   const [viewMode, setViewMode] = useState<ViewMode>(isMobile ? 'list' : 'grid');
@@ -80,6 +82,8 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const scrollRestoreRef = useRef<{ top: number | null; armed: boolean }>({ top: null, armed: false });
   const lastVideosCountRef = useRef<number>(0);
+  const lastTriggerTimeRef = useRef<number>(0);
+  const lastTriggerScrollTopRef = useRef<number>(0);
 
   // Local state to track ignore status changes without refetching
   const [localIgnoreStatus, setLocalIgnoreStatus] = useState<Record<string, boolean>>({});
@@ -269,12 +273,15 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
       scrollRestoreRef.current.top !== null &&
       videos.length > previousCount
     ) {
+      // Disabled scroll restore as it conflicts with infinite scroll behavior
+      /*
       if (typeof window !== 'undefined') {
         const currentTop = window.scrollY || 0;
         if (Math.abs(currentTop - scrollRestoreRef.current.top) < 24) {
           window.scrollTo({ top: scrollRestoreRef.current.top, behavior: 'auto' });
         }
       }
+      */
       scrollRestoreRef.current = { top: null, armed: false };
     }
 
@@ -636,27 +643,74 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     const observer = new IntersectionObserver(
       (entries) => {
         const [entry] = entries;
-        if (entry.isIntersecting && !didTrigger) {
+        const now = Date.now();
+        const currentTop = typeof window !== 'undefined' ? window.scrollY || 0 : 0;
+        if (
+          entry.isIntersecting &&
+          !didTrigger &&
+          now - lastTriggerTimeRef.current > 500 &&
+          currentTop > lastTriggerScrollTopRef.current + 4
+        ) {
           didTrigger = true;
+          lastTriggerTimeRef.current = now;
+          lastTriggerScrollTopRef.current = currentTop;
           if (typeof window !== 'undefined') {
-            scrollRestoreRef.current = { top: window.scrollY || 0, armed: true };
+            // scrollRestoreRef.current = { top: window.scrollY || 0, armed: true };
           }
           setPage((prev) => prev + 1);
+        }
+
+        if (themeMode === 'playful' && typeof window !== 'undefined') {
+          const rect = entry.boundingClientRect;
+          console.debug('[Playful Observer]', {
+            isIntersecting: entry.isIntersecting,
+            top: rect.top,
+            bottom: rect.bottom,
+            height: rect.height,
+            rootTop: entry.rootBounds?.top,
+            rootHeight: entry.rootBounds?.height,
+            scrollY: window.scrollY,
+          });
         }
       },
       {
         root: null,
-        rootMargin: '25% 0px',
+        rootMargin: '120px 0px 0px 0px',
         threshold: 0,
       }
     );
 
     observer.observe(loadMoreRef.current);
 
+    if (typeof window !== 'undefined' && themeMode === 'playful') {
+      const rect = loadMoreRef.current?.getBoundingClientRect();
+      console.debug('[Playful Sentinel]', {
+        top: rect?.top,
+        bottom: rect?.bottom,
+        height: rect?.height,
+        viewportHeight: window.innerHeight,
+        scrollY: window.scrollY,
+        page,
+      });
+    }
+
     return () => {
       observer.disconnect();
     };
-  }, [videosLoading, hasNextPage, useInfiniteScroll]);
+  }, [videosLoading, hasNextPage, useInfiniteScroll, page, themeMode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || themeMode !== 'playful') return;
+    const rect = loadMoreRef.current?.getBoundingClientRect();
+    console.debug('[Playful Sentinel Ping]', {
+      top: rect?.top,
+      bottom: rect?.bottom,
+      height: rect?.height,
+      viewportHeight: window.innerHeight,
+      scrollY: window.scrollY,
+      videosLoading,
+    });
+  }, [videosLoading, page, themeMode]);
 
   const renderSelectionAction = () => {
     if (!selectionMode) return null;
@@ -667,44 +721,59 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     const handleActionClick = isDownloadAction ? handleDownloadClick : handleDeleteClick;
 
     return (
-      <Portal>
+      <Portal container={typeof window !== 'undefined' ? document.body : undefined}>
         <Zoom in>
           <Badge
             badgeContent={count}
+            color={isDownloadAction ? 'primary' : 'error'}
             overlap="circular"
+            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
             sx={(theme) => ({
               position: 'fixed',
-              bottom: { xs: 16, sm: 24 },
-              right: { xs: 16, sm: 24 },
-              zIndex: theme.zIndex.modal + 1,
-              pointerEvents: 'auto',
+              bottom: isMobile ? 84 : 56,
+              right: isMobile ? 20 : 56,
+              transform: 'translateY(-50%)',
+              zIndex: theme.zIndex.snackbar - 1,
               '& .MuiBadge-badge': {
-                bgcolor: 'background.paper',
-                color: isDownloadAction ? 'primary.main' : 'error.main',
-                fontSize: '0.95rem',
-                fontWeight: 700,
+                border: `2px solid ${theme.palette.background.paper}`,
+                fontWeight: 800,
                 minWidth: 22,
                 height: 22,
-                border: '2px solid',
-                borderColor: isDownloadAction ? 'primary.main' : 'error.main',
+                fontSize: '0.75rem',
+                zIndex: theme.zIndex.snackbar + 1,
                 boxShadow: 'var(--shadow-hard)',
-                zIndex: theme.zIndex.modal + 2,
               },
             })}
+            slotProps={{
+              badge: {
+                sx: (theme) => ({
+                  zIndex: theme.zIndex.snackbar + 1,
+                }),
+              },
+            }}
           >
             <Fab
               onClick={handleActionClick}
-              sx={(theme) => ({
-                bgcolor: isDownloadAction ? 'primary.main' : 'error.main',
-                color: isDownloadAction ? 'primary.contrastText' : 'error.contrastText',
-                border: '2px solid',
-                borderColor: isDownloadAction ? 'primary.main' : 'error.main',
-                boxShadow: 'var(--shadow-hard)',
-                '&:hover': {
-                  bgcolor: isDownloadAction ? 'primary.dark' : 'error.dark',
-                  borderColor: isDownloadAction ? 'primary.dark' : 'error.dark',
-                },
-              })}
+              sx={(theme) => {
+                const paletteKey = isDownloadAction ? 'primary' : 'error';
+                const palette = theme.palette[paletteKey];
+                return {
+                  bgcolor: palette.main,
+                  color: palette.contrastText,
+                  border: '2px solid',
+                  borderColor: palette.main,
+                  boxShadow: 'var(--shadow-hard)',
+                  '&:hover': {
+                    bgcolor: palette.dark,
+                    borderColor: palette.dark,
+                    color: palette.contrastText,
+                  },
+                  '&:focus-visible': {
+                    outline: `3px solid ${theme.palette.primary.main}`,
+                    outlineOffset: 3,
+                  },
+                };
+              }}
             >
               {icon}
             </Fab>
@@ -867,10 +936,22 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           {useInfiniteScroll && (
             <>
               {/* Sentinel for infinite scroll - needs height and safe padding to ensure intersection triggers */}
-              <Box ref={loadMoreRef} sx={{ height: 20, width: '100%', mt: 4, mb: 4 }} />
+              <Box
+                ref={loadMoreRef}
+                sx={{
+                  height: 24,
+                  width: '100%',
+                  mt: 4,
+                  mb: 4,
+                }}
+              />
               {videosLoading && videos.length > 0 && hasNextPage && (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-                  <Skeleton variant="circular" width={28} height={28} />
+                  <Box className="playful-loading-dots" aria-label="Loading more videos">
+                    <span />
+                    <span />
+                    <span />
+                  </Box>
                 </Box>
               )}
               {!hasNextPage && videos.length > 0 && (

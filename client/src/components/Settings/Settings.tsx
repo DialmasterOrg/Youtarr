@@ -105,16 +105,41 @@ export function Settings({ token }: SettingsProps) {
     hasPlexServerConfigured,
   });
 
-  const { handleSave, handleConfirmSave } = useConfigSave({
+  const { saveConfig } = useConfigSave({
     token,
     config,
-    setConfig,
     setInitialConfig,
     setSnackbar,
-    setOpenConfirmDialog,
-    setHasUnsavedChanges,
-    validationError,
+    hasPlexServerConfigured,
+    checkPlexConnection: () => {},
   });
+
+  const handleConfirmSave = () => {
+    setOpenConfirmDialog(false);
+
+    if (validationError) {
+      setSnackbar({
+        open: true,
+        message: validationError,
+        severity: 'error',
+      });
+      return;
+    }
+
+    saveConfig();
+  };
+
+  const handleSave = () => {
+    if (validationError) {
+      setSnackbar({
+        open: true,
+        message: validationError,
+        severity: 'error',
+      });
+      return;
+    }
+    setOpenConfirmDialog(true);
+  };
 
   const handleConfigChange = (updates: Partial<ConfigState>) => {
     setConfig((prev) => ({ ...prev, ...updates }));
@@ -177,10 +202,7 @@ export function Settings({ token }: SettingsProps) {
             />
           }
         />
-        <Route
-          path="appearance"
-          element={<AppearanceSettingsSection />}
-        />
+        <Route path="appearance" element={<AppearanceSettingsSection />} />
         <Route
           path="plex"
           element={
@@ -300,7 +322,7 @@ export function Settings({ token }: SettingsProps) {
       </Routes>
 
       <Dialog open={openConfirmDialog} onClose={() => setOpenConfirmDialog(false)}>
-        <DialogTitle>Confirm Save Configuration</DialogTitle>
+        <DialogTitle>Save configuration changes?</DialogTitle>
         <DialogActions>
           <Button onClick={() => setOpenConfirmDialog(false)}>Cancel</Button>
           <Button onClick={handleConfirmSave} autoFocus>
@@ -314,6 +336,12 @@ export function Settings({ token }: SettingsProps) {
         handleClose={closeLibrarySelector}
         setLibraryId={setLibraryId}
         token={token}
+      />
+
+      <PlexAuthDialog
+        open={openPlexAuthDialog}
+        onClose={() => setOpenPlexAuthDialog(false)}
+        onSuccess={handlePlexAuthSuccess}
       />
 
       <Snackbar
@@ -336,13 +364,8 @@ export function Settings({ token }: SettingsProps) {
           {mobileTooltip}
         </Alert>
       </Snackbar>
-
-      <PlexAuthDialog
-        open={openPlexAuthDialog}
-        onClose={() => setOpenPlexAuthDialog(false)}
-        onSuccess={handlePlexAuthSuccess}
-        currentApiKey={config.plexApiKey}
-      />
     </Box>
   );
 }
+
+export default Settings;

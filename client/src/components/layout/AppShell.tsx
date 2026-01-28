@@ -204,23 +204,25 @@ export function AppShell({
               }
         }
       >
-        {themeMode === 'playful' ? (
-          <Box
-            sx={{
-              bgcolor: 'background.paper',
-              border: '2px solid var(--foreground)',
-              borderRadius: 'var(--radius-ui)',
-              boxShadow: 'var(--shadow-soft)',
-              px: 2,
-              py: { xs: 2.5, md: 3 },
-              width: '100%',
-            }}
-          >
-            <Box sx={{ maxWidth: 1400, mx: 'auto' }}>{children}</Box>
-          </Box>
-        ) : (
-          <Box sx={{ maxWidth: 1400, mx: 'auto' }}>{children}</Box>
-        )}
+        <Box
+          sx={(theme) => ({
+            maxWidth: 1400,
+            mx: 'auto',
+            width: '100%',
+            px: { xs: 2, sm: 3, md: 4 },
+            py: { xs: 2.5, md: 3 },
+            ...(themeMode === 'playful'
+              ? {
+                  bgcolor: 'background.paper',
+                  border: '2px solid var(--foreground)',
+                  borderRadius: 'var(--radius-ui)',
+                  boxShadow: 'var(--shadow-soft)',
+                }
+              : {}),
+          })}
+        >
+          {children}
+        </Box>
       </Box>
     </Box>
   );

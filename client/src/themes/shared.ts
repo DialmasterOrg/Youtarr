@@ -128,6 +128,16 @@ export const commonThemeOptions: ThemeOptions = {
         },
       },
     },
+    MuiSnackbar: {
+      defaultProps: {
+        anchorOrigin: { vertical: 'top', horizontal: 'center' },
+      },
+      styleOverrides: {
+        root: {
+          zIndex: 1700,
+        },
+      },
+    },
     MuiInputLabel: {
       styleOverrides: {
         root: {

@@ -8,7 +8,7 @@ interface UseConfigSaveParams {
   setInitialConfig: React.Dispatch<React.SetStateAction<ConfigState | null>>;
   setSnackbar: React.Dispatch<React.SetStateAction<SnackbarState>>;
   hasPlexServerConfigured: boolean;
-  checkPlexConnection: () => void;
+  checkPlexConnection?: () => void;
 }
 
 export const useConfigSave = ({
@@ -48,7 +48,7 @@ export const useConfigSave = ({
         });
 
         // Re-check Plex connection if IP changed
-        if (hasPlexServerConfigured) {
+        if (hasPlexServerConfigured && checkPlexConnection) {
           checkPlexConnection();
         }
       } else {

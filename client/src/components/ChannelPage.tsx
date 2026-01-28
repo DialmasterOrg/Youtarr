@@ -430,6 +430,7 @@ function ChannelPage({ token }: ChannelPageProps) {
               display: 'flex',
               flexDirection: 'column',
               gap: isMobile ? 0.75 : 1,
+              justifyContent: 'center',
             }}
           >
             <Box
@@ -456,13 +457,23 @@ function ChannelPage({ token }: ChannelPageProps) {
                   Channel Settings
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                  <Typography
+                    variant="body2"
+                    component="span"
+                    color="text.secondary"
+                    sx={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', lineHeight: 1.2 }}
+                  >
                     Auto Download:
                   </Typography>
                   {renderAutoDownloadChips()}
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                  <Typography
+                    variant="body2"
+                    component="span"
+                    color="text.secondary"
+                    sx={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', lineHeight: 1.2 }}
+                  >
                     Rating:
                   </Typography>
                   <RatingBadge
@@ -473,7 +484,12 @@ function ChannelPage({ token }: ChannelPageProps) {
                   />
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                  <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                  <Typography
+                    variant="body2"
+                    component="span"
+                    color="text.secondary"
+                    sx={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', lineHeight: 1.2 }}
+                  >
                     Folder:
                   </Typography>
                   {renderSubFolder()}
@@ -486,13 +502,14 @@ function ChannelPage({ token }: ChannelPageProps) {
                 size="small"
                 aria-label="Edit settings"
                 sx={{
-                  alignSelf: isMobile ? 'stretch' : 'center',
+                  alignSelf: 'center',
                   textTransform: 'none',
                   minWidth: 0,
                   px: 2,
                   py: 0.75,
                   ml: isMobile ? 0 : 'auto',
                   m: 0,
+                  width: isMobile ? '100%' : 'auto',
                 }}
               >
                 <Box
