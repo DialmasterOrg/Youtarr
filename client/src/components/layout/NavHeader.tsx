@@ -223,7 +223,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
       >
         
         {/* Toggle (Mobile/Side) */}
-        {(!isTopNav || isMobile) && (
+        {(!isTopNav || isMobile) && !(isNeumorphic && isMobile) && (
           <IconButton
             className="pop-toggle"
             aria-label="toggle navigation"
@@ -399,7 +399,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
 
         {/* Right Actions */}
         <Box sx={{ display: 'flex', alignItems: 'center', ml: showTopNavItems ? 'auto' : 0 }}>
-           {(isLinear || isFlat) && versionParts.length > 0 && (
+          {(isLinear || isFlat) && !isMobile && versionParts.length > 0 && (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', mr: 1.5, lineHeight: 1.1 }}>
               <Typography variant="caption" sx={{ color: navTextSecondary, fontWeight: 600, fontSize: '0.6rem' }}>
                 {versionParts[0]}
@@ -429,7 +429,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
             </Tooltip>
           )}
 
-          {token && !isPlayful && <StorageHeaderWidget token={token} />}
+          {token && !isPlayful && !(isMobile && (isLinear || isFlat)) && <StorageHeaderWidget token={token} />}
 
           {token && !isPlatformManaged && onLogout && (
             <IconButton aria-label="logout" onClick={onLogout} sx={{ color: navTextPrimary }}>

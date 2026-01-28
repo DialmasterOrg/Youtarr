@@ -68,6 +68,163 @@ import { useSwipeable } from 'react-swipeable';
       trackMouse: true,
     });
 
+    if (isMobile) {
+      return (
+        <Grid item xs={12}>
+          <Card>
+            <CardHeader title="Download History" />
+            <CardContent>
+              <Toolbar disableGutters sx={{ justifyContent: 'space-between', mb: 1, gap: 1, flexWrap: 'wrap' }}>
+                <FormControlLabel
+                  control={<Checkbox checked={showNoVideoJobs} onChange={(e) => { setShowNoVideoJobs(e.target.checked); setCurrentPage(1); }} />}
+                  label="Show jobs without videos"
+                />
+                <Pagination count={totalPages} page={currentPage} onChange={(_, p) => setCurrentPage(p)} />
+              </Toolbar>
+
+              <Box {...handlers}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                  {currentJobs.length === 0 && (
+                    <Typography variant="body2">No jobs currently</Typography>
+                  )}
+
+                  {currentJobs.map((job) => {
+                    const isExpanded = !!expanded[job.id];
+
+                    let durationString = '';
+                    if (job.status !== 'In Progress') {
+                      durationString = job.status;
+                    } else {
+                      const jobStartTime = new Date(job.timeInitiated).getTime();
+                      const duration = new Date(currentTime.getTime() - jobStartTime);
+                      const mm = String(duration.getUTCMinutes()).padStart(2, '0');
+                      const ss = String(duration.getUTCSeconds()).padStart(2, '0');
+                      durationString = `${mm}m${ss}s`;
+                    }
+
+                    const timeCreated = new Date(job.timeCreated);
+                    const month = String(timeCreated.getMonth() + 1).padStart(2, '0');
+                    const day = String(timeCreated.getDate()).padStart(2, '0');
+                    const minutes = String(timeCreated.getMinutes()).padStart(2, '0');
+                    let hours = timeCreated.getHours();
+                    const period = hours >= 12 ? 'PM' : 'AM';
+
+                    let formattedJobType = '';
+                    if (job.jobType.includes('Channel Downloads')) formattedJobType = 'Channels';
+                    else if (job.jobType.includes('Manually Added Urls')) {
+                      const apiKeyMatch = job.jobType.match(/\(via API: (.+)\)/);
+                      formattedJobType = apiKeyMatch ? `API: ${apiKeyMatch[1]}` : 'Manual Videos';
+                    }
+
+                    hours = hours % 12;
+                    hours = hours ? hours : 12;
+                    const formattedTimeCreated = `${month}-${day} ${hours}:${minutes} ${period}`;
+
+                    const videos = job.data?.videos || [];
+                    const singleVideo = videos[0];
+                    const hasMultiple = videos.length > 1;
+                    const titleText = singleVideo?.youTubeVideoName || (hasMultiple ? `Multiple (${videos.length})` : job.jobType);
+                    const channelText = singleVideo?.youTubeChannelName;
+                    const thumbnailSrc = singleVideo?.youtubeId
+                      ? `https://i.ytimg.com/vi/${singleVideo.youtubeId}/mqdefault.jpg`
+                      : null;
+
+                    return (
+                      <Box
+                        key={job.id}
+                        sx={{
+                          border: 'var(--border-weight) solid var(--border)',
+                          borderRadius: 'var(--radius-ui)',
+                          p: 1.5,
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                            {singleVideo ? (
+                              <Link href={`https://www.youtube.com/watch?v=${singleVideo.youtubeId}`} target="_blank" rel="noopener noreferrer">
+                                {singleVideo.youTubeVideoName}
+                              </Link>
+                            ) : (
+                              titleText
+                            )}
+                          </Typography>
+                          {hasMultiple && (
+                            <IconButton size="small" onClick={() => handleExpandCell(job.id)}>
+                              {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                            </IconButton>
+                          )}
+                        </Box>
+
+                        {thumbnailSrc && (
+                          <Box
+                            sx={{
+                              mt: 0.75,
+                              width: 96,
+                              height: 72,
+                              borderRadius: 'var(--radius-thumb)',
+                              overflow: 'hidden',
+                              bgcolor: 'grey.900',
+                            }}
+                          >
+                            <img
+                              src={thumbnailSrc}
+                              alt={titleText}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              loading="lazy"
+                            />
+                          </Box>
+                        )}
+
+                        <Box sx={{ mt: 0.75, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                          {channelText && (
+                            <Typography variant="caption" color="text.secondary">
+                              {channelText}
+                            </Typography>
+                          )}
+                          <Typography variant="caption" color="text.secondary">
+                            Date: {formattedTimeCreated}
+                          </Typography>
+                          {formattedJobType && (
+                            <Typography variant="caption" color="text.secondary">
+                              Source: {formattedJobType}
+                            </Typography>
+                          )}
+                          <Typography variant="caption" color="text.secondary">
+                            Status: {durationString}
+                          </Typography>
+                        </Box>
+
+                        {hasMultiple && (
+                          <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                            <Box sx={{ mt: 0.75, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                              {videos.map((video: any) => (
+                                <Box key={video.youtubeId} sx={{ display: 'flex', flexDirection: 'column' }}>
+                                  <Link href={`https://www.youtube.com/watch?v=${video.youtubeId}`} target="_blank" rel="noopener noreferrer">
+                                    {video.youTubeVideoName}
+                                  </Link>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {video.youTubeChannelName}
+                                  </Typography>
+                                </Box>
+                              ))}
+                            </Box>
+                          </Collapse>
+                        )}
+                      </Box>
+                    );
+                  })}
+                </Box>
+              </Box>
+
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                <Pagination count={totalPages} page={currentPage} onChange={(_, p) => setCurrentPage(p)} />
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      );
+    }
+
     return (
       <Grid item xs={12}>
         <Card>
