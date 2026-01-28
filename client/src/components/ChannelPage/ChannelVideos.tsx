@@ -751,30 +751,16 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
             }}
           >
             <Fab
+              color={isDownloadAction ? 'primary' : 'error'}
               onClick={handleActionClick}
-              sx={(theme) => {
-                const paletteKey = isDownloadAction ? 'primary' : 'error';
-                const palette = theme.palette[paletteKey];
-                const contrastText = palette.contrastText || '#ffffff';
-                return {
-                  bgcolor: palette.main,
-                  color: contrastText,
-                  border: '2px solid',
-                  borderColor: palette.main,
-                  boxShadow: 'var(--shadow-hard)',
-                  '&:hover': {
-                    bgcolor: palette.dark,
-                    borderColor: palette.dark,
-                    color: contrastText,
-                    // If the background is too light on hover, darken it
-                    filter: theme.palette.mode === 'light' ? 'brightness(0.9)' : 'brightness(1.1)',
-                  },
-                  '&:focus-visible': {
-                    outline: `3px solid ${theme.palette.primary.main}`,
-                    outlineOffset: 3,
-                  },
-                };
-              }}
+              sx={(theme) => ({
+                boxShadow: 'var(--shadow-hard)',
+                border: theme.palette.mode === 'light' ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                '&:focus-visible': {
+                  outline: `3px solid ${theme.palette.primary.main}`,
+                  outlineOffset: 3,
+                },
+              })}
             >
               {icon}
             </Fab>

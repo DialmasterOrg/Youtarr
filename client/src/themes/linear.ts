@@ -317,17 +317,18 @@ export const linearTheme: ThemeDefinition = {
           color: '#E5E7EB',
           borderColor: 'rgba(255, 255, 255, 0.2)',
           '&:hover': {
-            backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            borderColor: 'rgba(255, 255, 255, 0.3)',
+            backgroundColor: 'var(--foreground)',
+            color: 'var(--background)',
+            borderColor: 'var(--foreground)',
           },
         },
         outlinedPrimary: {
           color: '#5E6AD2',
           borderColor: 'rgba(94, 106, 210, 0.5)',
           '&:hover': {
-            backgroundColor: 'rgba(94, 106, 210, 0.15)',
-            borderColor: '#5E6AD2',
-            color: '#F3F4FF',
+            backgroundColor: 'var(--foreground)',
+            color: 'var(--background)',
+            borderColor: 'var(--foreground)',
           },
           '&.Mui-disabled': {
             borderColor: 'rgba(255, 255, 255, 0.1)',
@@ -338,9 +339,9 @@ export const linearTheme: ThemeDefinition = {
           color: '#F59E0B',
           borderColor: 'rgba(245, 158, 11, 0.5)',
           '&:hover': {
-            backgroundColor: 'rgba(245, 158, 11, 0.15)',
-            borderColor: '#F59E0B',
-            color: '#FFFFFF',
+            backgroundColor: 'var(--foreground)',
+            color: 'var(--background)',
+            borderColor: 'var(--foreground)',
           },
           '&.Mui-disabled': {
             borderColor: 'rgba(255, 255, 255, 0.1)',
@@ -351,9 +352,9 @@ export const linearTheme: ThemeDefinition = {
           color: '#EF4444',
           borderColor: 'rgba(239, 68, 68, 0.5)',
           '&:hover': {
-            backgroundColor: 'rgba(239, 68, 68, 0.15)',
-            borderColor: '#EF4444',
-            color: '#FFFFFF',
+            backgroundColor: 'var(--foreground)',
+            color: 'var(--background)',
+            borderColor: 'var(--foreground)',
           },
           '&.Mui-disabled': {
             borderColor: 'rgba(255, 255, 255, 0.1)',
@@ -364,16 +365,44 @@ export const linearTheme: ThemeDefinition = {
     },
     MuiFab: {
       styleOverrides: {
-        root: {
-          backgroundColor: 'hsl(var(--primary))',
-          color: 'hsl(var(--primary-foreground))',
+        primary: {
+          backgroundColor: 'var(--primary)',
+          color: 'var(--primary-foreground)',
           boxShadow: 'var(--shadow-hard)',
           transition: 'all 240ms cubic-bezier(0.16, 1, 0.3, 1)',
           '&:hover': {
-            backgroundColor: 'hsl(var(--primary))',
-            filter: 'brightness(1.1)',
+            backgroundColor: 'var(--primary-foreground)',
+            color: 'var(--primary)',
             transform: 'translateY(-4px) scale(1.05)',
-            boxShadow: '0 12px 32px rgba(94, 106, 210, 0.4)',
+            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.2)',
+            border: '2px solid var(--primary)',
+            '& .MuiSvgIcon-root': {
+              color: 'inherit',
+            },
+          },
+        },
+        secondary: {
+          backgroundColor: 'var(--secondary)',
+          color: 'var(--secondary-foreground)',
+          '&:hover': {
+            backgroundColor: 'var(--secondary-foreground)',
+            color: 'var(--secondary)',
+            border: '2px solid var(--secondary)',
+            '& .MuiSvgIcon-root': {
+              color: 'inherit',
+            },
+          },
+        },
+        error: {
+          backgroundColor: 'var(--destructive)',
+          color: 'var(--destructive-foreground)',
+          '&:hover': {
+            backgroundColor: 'var(--destructive-foreground)',
+            color: 'var(--destructive)',
+            border: '2px solid var(--destructive)',
+            '& .MuiSvgIcon-root': {
+              color: 'inherit',
+            },
           },
         },
       },
@@ -381,13 +410,13 @@ export const linearTheme: ThemeDefinition = {
     MuiLinearProgress: {
       styleOverrides: {
         root: {
-          backgroundColor: 'rgba(255, 255, 255, 0.12)',
+          backgroundColor: 'var(--muted)',
           borderRadius: 'var(--radius-ui)',
           overflow: 'hidden',
           height: 8,
         },
         bar: {
-          backgroundColor: 'hsl(var(--primary))',
+          backgroundColor: 'var(--primary)',
           borderRadius: 'var(--radius-ui)',
         },
       },

@@ -133,7 +133,7 @@ export const neumorphicTheme: ThemeDefinition = {
           borderRadius: 'var(--radius-ui)',
           border: 'none',
           boxShadow: 'var(--shadow-soft)',
-          backgroundColor: 'hsl(var(--card))',
+          backgroundColor: 'var(--card)',
         },
       },
     },

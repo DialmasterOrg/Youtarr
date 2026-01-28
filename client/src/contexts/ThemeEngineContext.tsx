@@ -66,7 +66,11 @@ export function ThemeEngineProvider({ children }: { children: React.ReactNode })
     };
 
     Object.entries(tokens).forEach(([key, value]) => {
-      root.style.setProperty(`--${key}`, color(value as string));
+      const val = value as string;
+      root.style.setProperty(`--${key}`, color(val));
+      if (isHslTriplet(val)) {
+        root.style.setProperty(`--${key}-raw`, val);
+      }
     });
 
     localStorage.setItem(THEME_STORAGE_KEY, themeMode);

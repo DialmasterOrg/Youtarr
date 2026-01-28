@@ -279,19 +279,6 @@ function ChannelVideosHeader({
                   ? selectableDeleteCount === 0
                   : checkedBoxes.length === 0 && selectableDownloadCount === 0
               }
-              sx={{
-                color: 'text.primary',
-                borderColor: 'divider',
-                '&:hover:not(:disabled)': {
-                  borderColor: 'text.primary',
-                  bgcolor: 'action.hover',
-                },
-                '&.Mui-disabled': {
-                  color: 'text.secondary',
-                  borderColor: 'divider',
-                  opacity: 0.5,
-                },
-              }}
             >
               Select All This Page
             </Button>
@@ -300,19 +287,6 @@ function ChannelVideosHeader({
               size="small"
               onClick={onClearSelection}
               disabled={checkedBoxes.length === 0}
-              sx={{
-                color: 'text.primary',
-                borderColor: 'divider',
-                '&:hover:not(:disabled)': {
-                  borderColor: 'text.primary',
-                  bgcolor: 'action.hover',
-                },
-                '&.Mui-disabled': {
-                  color: 'text.secondary',
-                  borderColor: 'divider',
-                  opacity: 0.5,
-                },
-              }}
             >
               Clear
             </Button>

@@ -60,13 +60,14 @@ export function StorageFooterWidget({ token, collapsed, compact = false, inline 
         <LinearProgress
           variant={loading ? 'indeterminate' : 'determinate'}
           value={loading ? undefined : progressValue}
-          sx={{
+          sx={(theme) => ({
             height: compact ? 4 : collapsed ? 6 : 8,
             borderRadius: 'var(--radius-ui)',
+            backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)',
             '& .MuiLinearProgress-bar': {
-              borderRadius: 'var(--radius-ui)',
+              backgroundColor: theme.palette.primary.main,
             }
-          }}
+          })}
         />
       )}
 

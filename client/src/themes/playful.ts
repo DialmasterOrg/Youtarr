@@ -161,6 +161,14 @@ export const playfulTheme: ThemeDefinition = {
             boxShadow: 'var(--shadow-hard-active)',
           },
         },
+        outlined: {
+          border: '2px solid var(--foreground)',
+          color: 'var(--foreground)',
+          '&:hover': {
+            backgroundColor: 'var(--foreground)',
+            color: 'var(--background)',
+          },
+        },
         outlinedPrimary: {
           color: 'var(--primary)',
           borderColor: 'var(--primary)',
@@ -180,7 +188,7 @@ export const playfulTheme: ThemeDefinition = {
           borderColor: '#fbbf24',
           '&:hover': {
             backgroundColor: '#fbbf24',
-            color: 'var(--foreground)',
+            color: 'var(--background)',
             borderColor: 'var(--foreground)',
           },
           '&.Mui-disabled': {
@@ -226,6 +234,70 @@ export const playfulTheme: ThemeDefinition = {
         bar: {
           backgroundColor: '#f472b6',
           borderRadius: 'var(--radius-ui)',
+        },
+      },
+    },
+    MuiFab: {
+      styleOverrides: {
+        primary: {
+          backgroundColor: 'var(--primary)',
+          color: 'var(--primary-foreground)',
+          border: '2px solid var(--foreground)',
+          boxShadow: 'var(--shadow-hard)',
+          transition: 'all 300ms var(--transition-bouncy)',
+          '&:hover': {
+            backgroundColor: 'var(--primary-foreground)',
+            color: 'var(--primary)',
+            transform: 'translate(-2px, -2px) scale(1.05)',
+            boxShadow: 'var(--shadow-hard-hover)',
+            '& .MuiSvgIcon-root': {
+              color: 'inherit',
+            },
+          },
+          '&:active': {
+            transform: 'translate(0, 0)',
+            boxShadow: 'var(--shadow-hard-active)',
+          },
+        },
+        secondary: {
+          backgroundColor: 'var(--secondary)',
+          color: 'var(--primary-foreground)',
+          border: '2px solid var(--foreground)',
+          boxShadow: 'var(--shadow-hard)',
+          transition: 'all 300ms var(--transition-bouncy)',
+          '&:hover': {
+            backgroundColor: 'var(--primary-foreground)',
+            color: 'var(--secondary)',
+            transform: 'translate(-2px, -2px) scale(1.05)',
+            boxShadow: 'var(--shadow-hard-hover)',
+            '& .MuiSvgIcon-root': {
+              color: 'inherit',
+            },
+          },
+          '&:active': {
+            transform: 'translate(0, 0)',
+            boxShadow: 'var(--shadow-hard-active)',
+          },
+        },
+        error: {
+          backgroundColor: 'var(--destructive)',
+          color: 'var(--destructive-foreground)',
+          border: '2px solid var(--foreground)',
+          boxShadow: 'var(--shadow-hard)',
+          transition: 'all 300ms var(--transition-bouncy)',
+          '&:hover': {
+            backgroundColor: 'var(--destructive-foreground)',
+            color: 'var(--destructive)',
+            transform: 'translate(-2px, -2px) scale(1.05)',
+            boxShadow: 'var(--shadow-hard-hover)',
+            '& .MuiSvgIcon-root': {
+              color: 'inherit',
+            },
+          },
+          '&:active': {
+            transform: 'translate(0, 0)',
+            boxShadow: 'var(--shadow-hard-active)',
+          },
         },
       },
     },

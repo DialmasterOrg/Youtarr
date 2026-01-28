@@ -34,8 +34,10 @@ export function StorageHeaderWidget({ token }: StorageHeaderWidgetProps) {
           height: 8, 
           borderRadius: 'var(--radius-ui)',
           mb: 1.5,
+          backgroundColor: 'rgba(255, 255, 255, 0.1)',
           '& .MuiLinearProgress-bar': {
             borderRadius: 'var(--radius-ui)',
+            backgroundColor: theme.palette.primary.main,
           }
         }}
       />
@@ -89,8 +91,9 @@ export function StorageHeaderWidget({ token }: StorageHeaderWidgetProps) {
             sx={{ 
               height: 6, 
               borderRadius: 'var(--radius-ui)',
+              backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)',
               '& .MuiLinearProgress-bar': {
-                borderRadius: 'var(--radius-ui)',
+                backgroundColor: theme.palette.primary.main,
               }
             }}
           />

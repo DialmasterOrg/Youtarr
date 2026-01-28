@@ -177,13 +177,47 @@ export const commonThemeOptions: ThemeOptions = {
         },
       },
     },
-    MuiSnackbar: {
-      defaultProps: {
-        anchorOrigin: { vertical: 'top', horizontal: 'center' },
+    MuiFab: {
+      styleOverrides: {
+        primary: {
+          backgroundColor: 'var(--primary)',
+          color: 'var(--primary-foreground)',
+          transition: 'all 200ms ease',
+          border: '1px solid transparent',
+          '&:hover': {
+            backgroundColor: 'var(--primary-foreground)',
+            color: 'var(--primary)',
+            borderColor: 'var(--primary)',
+          },
+          '& .MuiSvgIcon-root': {
+            color: 'inherit',
+          },
+        },
+        error: {
+          backgroundColor: 'var(--destructive)',
+          color: 'var(--destructive-foreground)',
+          border: '1px solid transparent',
+          '&:hover': {
+            backgroundColor: 'var(--destructive-foreground)',
+            color: 'var(--destructive)',
+            borderColor: 'var(--destructive)',
+          },
+          '& .MuiSvgIcon-root': {
+            color: 'inherit',
+          },
+        },
       },
+    },
+    MuiLinearProgress: {
       styleOverrides: {
         root: {
-          zIndex: 1700,
+          borderRadius: 'var(--radius-ui)',
+          backgroundColor: 'var(--muted)',
+          opacity: 0.6,
+        },
+        bar: {
+          borderRadius: 'var(--radius-ui)',
+          backgroundColor: 'var(--primary)',
         },
       },
     },
