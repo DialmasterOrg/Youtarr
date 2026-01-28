@@ -170,5 +170,20 @@ export const playfulTheme: ThemeDefinition = {
         },
       },
     },
+    MuiLinearProgress: {
+      styleOverrides: {
+        root: {
+          backgroundColor: 'rgba(0, 0, 0, 0.08)',
+          borderRadius: 'var(--radius-ui)',
+          border: '1.5px solid #1e293b',
+          overflow: 'hidden',
+          height: 10,
+        },
+        bar: {
+          backgroundColor: '#f472b6',
+          borderRadius: 'var(--radius-ui)',
+        },
+      },
+    },
   },
 };

@@ -291,5 +291,21 @@ export const neumorphicTheme: ThemeDefinition = {
         },
       },
     },
+    MuiLinearProgress: {
+      styleOverrides: {
+        root: {
+          backgroundColor: '#E0E5EC',
+          borderRadius: 'var(--radius-ui)',
+          boxShadow: 'inset 2px 2px 5px rgba(163, 177, 198, 0.6), inset -2px -2px 5px rgba(255, 255, 255, 0.5)',
+          overflow: 'hidden',
+          height: 10,
+        },
+        bar: {
+          backgroundColor: '#8B5CF6',
+          borderRadius: 'var(--radius-ui)',
+          boxShadow: '3px 3px 6px rgba(163, 177, 198, 0.4)',
+        },
+      },
+    },
   },
 };

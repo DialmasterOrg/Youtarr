@@ -34,7 +34,6 @@ export function StorageHeaderWidget({ token }: StorageHeaderWidgetProps) {
           height: 8, 
           borderRadius: 'var(--radius-ui)',
           mb: 1.5,
-          bgcolor: 'rgba(255, 255, 255, 0.2)',
           '& .MuiLinearProgress-bar': {
             borderRadius: 'var(--radius-ui)',
           }
@@ -83,14 +82,13 @@ export function StorageHeaderWidget({ token }: StorageHeaderWidgetProps) {
         }}
       >
         <StorageIcon sx={{ fontSize: '1.2rem', color: 'text.secondary' }} />
-        <Box sx={{ width: '24px', mt: 0.5 }}>
+        <Box sx={{ width: '32px', mt: 0.5 }}>
           <LinearProgress
             variant={loading ? 'indeterminate' : 'determinate'}
             value={loading ? undefined : progressValue}
             sx={{ 
-              height: 4, 
+              height: 6, 
               borderRadius: 'var(--radius-ui)',
-              bgcolor: 'rgba(0, 0, 0, 0.08)',
               '& .MuiLinearProgress-bar': {
                 borderRadius: 'var(--radius-ui)',
               }

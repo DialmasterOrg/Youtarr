@@ -297,5 +297,19 @@ export const linearTheme: ThemeDefinition = {
         },
       },
     },
+    MuiLinearProgress: {
+      styleOverrides: {
+        root: {
+          backgroundColor: 'rgba(255, 255, 255, 0.12)',
+          borderRadius: 'var(--radius-ui)',
+          overflow: 'hidden',
+          height: 8,
+        },
+        bar: {
+          backgroundColor: '#5E6AD2',
+          borderRadius: 'var(--radius-ui)',
+        },
+      },
+    },
   },
 };

@@ -211,13 +211,16 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
         overflow: 'visible',
       }}
     >
-      <Toolbar sx={{ 
-        gap: 2, 
-        px: (isPlayful && !isMobile) ? 0.5 : { xs: 1.5, sm: 2 }, 
-        minHeight: 64, 
-        alignItems: 'center', 
-        position: 'relative' 
-      }}>
+      <Toolbar 
+        disableGutters
+        sx={{ 
+          gap: 2, 
+          px: (isPlayful && !isMobile) ? 0.5 : { xs: 1.5, sm: 2 }, 
+          minHeight: 64, 
+          alignItems: 'center', 
+          position: 'relative' 
+        }}
+      >
         
         {/* Toggle (Mobile/Side) */}
         {(!isTopNav || isMobile) && (
@@ -226,10 +229,10 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
             aria-label="toggle navigation"
             onClick={toggleDrawer}
             sx={{
-              width: isTopNav ? undefined : APP_BAR_TOGGLE_SIZE,
-              height: isTopNav ? undefined : APP_BAR_TOGGLE_SIZE,
+              width: isTopNav ? undefined : (isPlayful && !isMobile ? 57 : APP_BAR_TOGGLE_SIZE),
+              height: isTopNav ? undefined : (isPlayful && !isMobile ? 40 : APP_BAR_TOGGLE_SIZE),
               p: isTopNav ? 1 : 0,
-              borderRadius: isTopNav ? 'var(--radius-ui)' : '50%',
+              borderRadius: (isTopNav || isPlayful) ? 'var(--radius-ui)' : '50%',
               color: isLinear ? '#FFFFFF' : isFlat ? '#111827' : 'inherit',
               mr: isTopNav ? 1 : 0,
               transition: isPlayful ? 'all 300ms var(--transition-bouncy)' : 'all 0.2s ease',
@@ -426,7 +429,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
             </Tooltip>
           )}
 
-          {token && <StorageHeaderWidget token={token} />}
+          {token && !isPlayful && <StorageHeaderWidget token={token} />}
 
           {token && !isPlatformManaged && onLogout && (
             <IconButton aria-label="logout" onClick={onLogout} sx={{ color: navTextPrimary }}>

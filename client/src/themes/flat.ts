@@ -329,6 +329,20 @@ export const flatTheme: ThemeDefinition = {
         },
       },
     },
+    MuiLinearProgress: {
+      styleOverrides: {
+        root: {
+          backgroundColor: '#E5E7EB',
+          borderRadius: 'var(--radius-ui)',
+          overflow: 'hidden',
+          height: 8,
+        },
+        bar: {
+          backgroundColor: '#3B82F6',
+          borderRadius: 0,
+        },
+      },
+    },
   },
 };
 
