@@ -308,6 +308,10 @@ body[data-theme='playful'] .sticker {
   transition: transform 200ms var(--transition-bouncy), box-shadow 250ms var(--transition-bouncy);
 }
 
+body[data-theme='playful'] {
+  overflow-anchor: none;
+}
+
 body[data-theme='playful'] .MuiChip-root:hover,
 body[data-theme='playful'] .MuiChip-root:focus-visible,
 body[data-theme='playful'] .sticker:hover,

@@ -84,6 +84,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const lastVideosCountRef = useRef<number>(0);
   const lastTriggerTimeRef = useRef<number>(0);
   const lastTriggerScrollTopRef = useRef<number>(0);
+  const canTriggerNextRef = useRef<boolean>(true);
 
   // Local state to track ignore status changes without refetching
   const [localIgnoreStatus, setLocalIgnoreStatus] = useState<Record<string, boolean>>({});
@@ -645,13 +646,24 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         const [entry] = entries;
         const now = Date.now();
         const currentTop = typeof window !== 'undefined' ? window.scrollY || 0 : 0;
+        const viewportHeight = entry.rootBounds?.height ?? (typeof window !== 'undefined' ? window.innerHeight : 0);
+        const sentinelBottom = entry.boundingClientRect.bottom;
+        const nearBottom = viewportHeight === 0 || sentinelBottom >= viewportHeight - 120;
+
+        if (!entry.isIntersecting) {
+          canTriggerNextRef.current = true;
+          return;
+        }
+
         if (
           entry.isIntersecting &&
+          nearBottom &&
+          canTriggerNextRef.current &&
           !didTrigger &&
-          now - lastTriggerTimeRef.current > 500 &&
-          currentTop > lastTriggerScrollTopRef.current + 4
+          now - lastTriggerTimeRef.current > 500
         ) {
           didTrigger = true;
+          canTriggerNextRef.current = false;
           lastTriggerTimeRef.current = now;
           lastTriggerScrollTopRef.current = currentTop;
           if (typeof window !== 'undefined') {
@@ -660,22 +672,10 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           setPage((prev) => prev + 1);
         }
 
-        if (themeMode === 'playful' && typeof window !== 'undefined') {
-          const rect = entry.boundingClientRect;
-          console.debug('[Playful Observer]', {
-            isIntersecting: entry.isIntersecting,
-            top: rect.top,
-            bottom: rect.bottom,
-            height: rect.height,
-            rootTop: entry.rootBounds?.top,
-            rootHeight: entry.rootBounds?.height,
-            scrollY: window.scrollY,
-          });
-        }
       },
       {
         root: null,
-        rootMargin: '120px 0px 0px 0px',
+        rootMargin: '0px 0px 200px 0px',
         threshold: 0,
       }
     );
@@ -683,11 +683,10 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     observer.observe(loadMoreRef.current);
 
     if (typeof window !== 'undefined' && themeMode === 'playful') {
-      const rect = loadMoreRef.current?.getBoundingClientRect();
       console.debug('[Playful Sentinel]', {
-        top: rect?.top,
-        bottom: rect?.bottom,
-        height: rect?.height,
+        top: loadMoreRef.current?.getBoundingClientRect().top,
+        bottom: loadMoreRef.current?.getBoundingClientRect().bottom,
+        height: loadMoreRef.current?.getBoundingClientRect().height,
         viewportHeight: window.innerHeight,
         scrollY: window.scrollY,
         page,
