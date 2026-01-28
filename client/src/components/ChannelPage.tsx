@@ -206,6 +206,9 @@ function ChannelPage({ token }: ChannelPageProps) {
               color="primary"
               sx={{
                 ...channelChipSx,
+                '&:hover': {
+                  backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.08),
+                }
               }}
             />
           </Tooltip>
@@ -221,6 +224,9 @@ function ChannelPage({ token }: ChannelPageProps) {
               color="primary"
               sx={{
                 ...channelChipSx,
+                '&:hover': {
+                  backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.08),
+                }
               }}
             />
           </Tooltip>
@@ -239,7 +245,7 @@ function ChannelPage({ token }: ChannelPageProps) {
                 ...channelChipSx,
                 cursor: 'pointer',
                 '&:hover': {
-                  backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                  backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.08),
                 }
               }}
             />

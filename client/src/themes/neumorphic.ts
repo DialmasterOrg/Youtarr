@@ -258,6 +258,36 @@ export const neumorphicTheme: ThemeDefinition = {
             boxShadow: '9px 9px 16px rgba(163, 177, 198, 0.6), -9px -9px 16px rgba(255, 255, 255, 0.5)',
           },
         },
+        outlinedPrimary: {
+          color: '#3B82F6',
+          '&:hover': {
+            backgroundColor: '#3B82F6',
+            color: '#FFFFFF',
+          },
+          '&.Mui-disabled': {
+            color: 'rgba(0, 0, 0, 0.26)',
+          },
+        },
+        outlinedWarning: {
+          color: '#F59E0B',
+          '&:hover': {
+            backgroundColor: '#F59E0B',
+            color: '#FFFFFF',
+          },
+          '&.Mui-disabled': {
+            color: 'rgba(0, 0, 0, 0.26)',
+          },
+        },
+        outlinedError: {
+          color: '#EF4444',
+          '&:hover': {
+            backgroundColor: '#EF4444',
+            color: '#FFFFFF',
+          },
+          '&.Mui-disabled': {
+            color: 'rgba(0, 0, 0, 0.26)',
+          },
+        },
       },
     },
     MuiToggleButton: {

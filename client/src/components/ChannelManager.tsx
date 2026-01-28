@@ -750,12 +750,14 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
               onClick={handleSaveChanges}
               disabled={isSaving}
               aria-label="Save changes"
-              sx={{
-                color: '#ffffff',
+              sx={(theme) => ({
+                color: 'primary.contrastText',
+                bgcolor: 'primary.main',
                 '&:hover': {
-                  color: '#ffffff',
+                  bgcolor: 'primary.dark',
+                  color: 'primary.contrastText',
                 }
-              }}
+              })}
             >
               {isSaving ? <CircularProgress size={20} color="inherit" sx={{ mr: 1 }} /> : <SaveIcon sx={{ mr: 1 }} />}
               {isSaving ? 'Saving…' : 'Save'}

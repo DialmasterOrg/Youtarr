@@ -242,12 +242,14 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
                 onClick={handleOpenSettings}
                 disabled={validatedVideos.length === 0 || isDownloading}
                 startIcon={isDownloading ? <CircularProgress size={20} /> : <DownloadIcon />}
-                sx={{ 
-                  color: '#ffffff',
+                sx={(theme) => ({ 
+                  color: 'primary.contrastText',
+                  bgcolor: 'primary.main',
                   '&:hover': {
-                    color: '#ffffff',
+                    bgcolor: 'primary.dark',
+                    color: 'primary.contrastText',
                   }
-                }}
+                })}
               >
                 {isDownloading ? 'Starting...' : 'Download Videos'}
               </Button>

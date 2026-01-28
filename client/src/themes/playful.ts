@@ -69,6 +69,7 @@ export const playfulTheme: ThemeDefinition = {
       'nav-border': '2px solid var(--foreground)',
       'nav-shadow': 'var(--shadow-hard)',
       'nav-item-bg-selected': '#fbbf24', // tertiary in playful
+      'nav-item-text-selected': '#1e293b',
       'appbar-border': '2px solid var(--foreground)',
       'appbar-shadow': 'var(--shadow-hard)',
     },
@@ -116,6 +117,7 @@ export const playfulTheme: ThemeDefinition = {
       'nav-border': '2px solid var(--foreground)',
       'nav-shadow': 'var(--shadow-hard)',
       'nav-item-bg-selected': '#fbbf24',
+      'nav-item-text-selected': '#1e293b',
       'appbar-border': '2px solid var(--foreground)',
       'appbar-shadow': 'var(--shadow-hard)',
     },
@@ -157,6 +159,48 @@ export const playfulTheme: ThemeDefinition = {
           '&:active': {
             transform: 'translate(0, 0)',
             boxShadow: 'var(--shadow-hard-active)',
+          },
+        },
+        outlinedPrimary: {
+          color: 'var(--primary)',
+          borderColor: 'var(--primary)',
+          '&:hover': {
+            backgroundColor: 'var(--primary)',
+            color: 'var(--primary-foreground)',
+            borderColor: 'var(--foreground)',
+          },
+          '&.Mui-disabled': {
+            borderColor: 'var(--muted)',
+            color: 'var(--muted-foreground)',
+            opacity: 0.5,
+          },
+        },
+        outlinedWarning: {
+          color: '#fbbf24', // Amber coloring for playful warning
+          borderColor: '#fbbf24',
+          '&:hover': {
+            backgroundColor: '#fbbf24',
+            color: 'var(--foreground)',
+            borderColor: 'var(--foreground)',
+          },
+          '&.Mui-disabled': {
+            borderColor: 'var(--muted)',
+            color: 'var(--muted-foreground)',
+            opacity: 0.5,
+          },
+        },
+        outlinedError: {
+          color: 'var(--destructive)',
+          borderColor: 'var(--destructive)',
+          '&:hover': {
+            backgroundColor: 'var(--destructive)',
+            color: 'var(--destructive-foreground)',
+            borderColor: 'var(--foreground)',
+          },
+          '&.Mui-disabled': {
+            borderColor: 'var(--muted)',
+            color: 'var(--muted-foreground)',
+            opacity: 0.5,
           },
         },
       },

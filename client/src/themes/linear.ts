@@ -321,6 +321,61 @@ export const linearTheme: ThemeDefinition = {
             borderColor: 'rgba(255, 255, 255, 0.3)',
           },
         },
+        outlinedPrimary: {
+          color: '#5E6AD2',
+          borderColor: 'rgba(94, 106, 210, 0.5)',
+          '&:hover': {
+            backgroundColor: 'rgba(94, 106, 210, 0.15)',
+            borderColor: '#5E6AD2',
+            color: '#F3F4FF',
+          },
+          '&.Mui-disabled': {
+            borderColor: 'rgba(255, 255, 255, 0.1)',
+            color: 'rgba(255, 255, 255, 0.3)',
+          },
+        },
+        outlinedWarning: {
+          color: '#F59E0B',
+          borderColor: 'rgba(245, 158, 11, 0.5)',
+          '&:hover': {
+            backgroundColor: 'rgba(245, 158, 11, 0.15)',
+            borderColor: '#F59E0B',
+            color: '#FFFFFF',
+          },
+          '&.Mui-disabled': {
+            borderColor: 'rgba(255, 255, 255, 0.1)',
+            color: 'rgba(255, 255, 255, 0.3)',
+          },
+        },
+        outlinedError: {
+          color: '#EF4444',
+          borderColor: 'rgba(239, 68, 68, 0.5)',
+          '&:hover': {
+            backgroundColor: 'rgba(239, 68, 68, 0.15)',
+            borderColor: '#EF4444',
+            color: '#FFFFFF',
+          },
+          '&.Mui-disabled': {
+            borderColor: 'rgba(255, 255, 255, 0.1)',
+            color: 'rgba(255, 255, 255, 0.3)',
+          },
+        },
+      },
+    },
+    MuiFab: {
+      styleOverrides: {
+        root: {
+          backgroundColor: 'hsl(var(--primary))',
+          color: 'hsl(var(--primary-foreground))',
+          boxShadow: 'var(--shadow-hard)',
+          transition: 'all 240ms cubic-bezier(0.16, 1, 0.3, 1)',
+          '&:hover': {
+            backgroundColor: 'hsl(var(--primary))',
+            filter: 'brightness(1.1)',
+            transform: 'translateY(-4px) scale(1.05)',
+            boxShadow: '0 12px 32px rgba(94, 106, 210, 0.4)',
+          },
+        },
       },
     },
     MuiLinearProgress: {
@@ -332,7 +387,7 @@ export const linearTheme: ThemeDefinition = {
           height: 8,
         },
         bar: {
-          backgroundColor: '#5E6AD2',
+          backgroundColor: 'hsl(var(--primary))',
           borderRadius: 'var(--radius-ui)',
         },
       },

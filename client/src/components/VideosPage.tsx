@@ -1101,7 +1101,6 @@ function VideosPage({ token }: VideosPageProps) {
               bottom: 80,
               right: 16,
               zIndex: 1000,
-              color: '#ffffff',
             }}
             onClick={handleChangeRatingClick}
           >
@@ -1120,7 +1119,6 @@ function VideosPage({ token }: VideosPageProps) {
               bottom: 16,
               right: 16,
               zIndex: 1000,
-              color: '#ffffff',
             }}
             onClick={handleDeleteClick}
           >

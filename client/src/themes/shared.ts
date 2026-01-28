@@ -79,13 +79,62 @@ export const commonThemeOptions: ThemeOptions = {
         containedPrimary: {
           backgroundColor: 'var(--primary)',
           color: 'var(--primary-foreground)',
+          '&.Mui-disabled': {
+            backgroundColor: 'var(--muted)',
+            color: 'var(--muted-foreground)',
+            opacity: 0.5,
+          },
         },
         containedSecondary: {
           backgroundColor: 'var(--secondary)',
           color: 'var(--foreground)',
+          '&.Mui-disabled': {
+            backgroundColor: 'var(--muted)',
+            color: 'var(--muted-foreground)',
+            opacity: 0.5,
+          },
         },
         outlined: {
           border: 'var(--border-weight) solid var(--border-strong)',
+        },
+        outlinedPrimary: {
+          color: 'var(--primary)',
+          borderColor: 'var(--primary)',
+          '&:hover': {
+            backgroundColor: 'var(--primary)',
+            color: 'var(--primary-foreground)',
+          },
+          '&.Mui-disabled': {
+            borderColor: 'var(--muted)',
+            color: 'var(--muted-foreground)',
+            opacity: 0.5,
+          },
+        },
+        outlinedWarning: {
+          color: 'var(--accent)',
+          borderColor: 'var(--accent)',
+          '&:hover': {
+            backgroundColor: 'var(--accent)',
+            color: 'var(--accent-foreground)',
+          },
+          '&.Mui-disabled': {
+            borderColor: 'var(--muted)',
+            color: 'var(--muted-foreground)',
+            opacity: 0.5,
+          },
+        },
+        outlinedError: {
+          color: 'var(--destructive)',
+          borderColor: 'var(--destructive)',
+          '&:hover': {
+            backgroundColor: 'var(--destructive)',
+            color: 'var(--destructive-foreground)',
+          },
+          '&.Mui-disabled': {
+            borderColor: 'var(--muted)',
+            color: 'var(--muted-foreground)',
+            opacity: 0.5,
+          },
         },
       },
     },

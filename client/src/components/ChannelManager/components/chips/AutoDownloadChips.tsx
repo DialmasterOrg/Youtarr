@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Chip } from '@mui/material';
+import { Box, Chip, alpha } from '@mui/material';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 
 interface AutoDownloadChipsProps {
@@ -51,15 +51,26 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
           data-autodownload={isAutoDownloadEnabled ? 'true' : 'false'}
           label={isMobile ? tabInfo.short : tabInfo.full}
           size="small"
-          variant={isAutoDownloadEnabled ? 'filled' : 'outlined'}
-          color={isAutoDownloadEnabled ? 'primary' : 'default'}
+          variant="outlined"
+          color={isAutoDownloadEnabled ? 'success' : 'default'}
           icon={isAutoDownloadEnabled ? <FileDownloadIcon sx={{ fontSize: '0.85rem' }} /> : undefined}
-          sx={{
+          sx={(theme) => ({
             fontSize: '0.7rem',
+            transition: 'all 200ms ease',
+            borderWidth: isAutoDownloadEnabled ? '2px' : '1px',
+            borderColor: isAutoDownloadEnabled ? 'success.main' : 'divider',
+            bgcolor: isAutoDownloadEnabled ? alpha(theme.palette.success.main, 0.12) : 'transparent',
+            color: isAutoDownloadEnabled ? 'success.main' : 'text.secondary',
+            fontWeight: isAutoDownloadEnabled ? 800 : 500,
+            '&:hover': {
+              bgcolor: isAutoDownloadEnabled ? alpha(theme.palette.success.main, 0.2) : 'action.hover',
+              borderColor: isAutoDownloadEnabled ? 'success.dark' : 'text.primary',
+            },
             '& .MuiChip-icon': {
               ml: 0.3,
+              color: 'inherit',
             },
-          }}
+          })}
         />
       );
     })

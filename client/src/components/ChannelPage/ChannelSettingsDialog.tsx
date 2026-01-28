@@ -866,7 +866,15 @@ function ChannelSettingsDialog({
           onClick={handleSave}
           variant="contained"
           disabled={saving || loading || !hasChanges()}
-          sx={{ minWidth: 100 }}
+          sx={(theme) => ({ 
+            minWidth: 100,
+            color: 'primary.contrastText',
+            bgcolor: 'primary.main',
+            '&:hover': {
+              bgcolor: 'primary.dark',
+              color: 'primary.contrastText',
+            }
+          })}
         >
           {saving ? <CircularProgress size={24} /> : 'Save Settings'}
         </Button>

@@ -14,6 +14,7 @@ import {
   Tab,
   Pagination,
   Portal,
+  alpha,
 } from '@mui/material';
 
 import DownloadIcon from '@mui/icons-material/Download';
@@ -627,17 +628,30 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-        {label}
-        <Box
+        <Typography
+          variant="caption"
           sx={{
+            fontWeight: 700,
+            color: 'inherit',
+          }}
+        >
+          {label}
+        </Typography>
+        <Box
+          sx={(theme) => ({
             width: 12,
             height: 12,
             borderRadius: '50%',
-            backgroundColor: isEnabled ? '#22C55E' : 'rgba(255, 255, 255, 0.3)',
-            border: isEnabled ? '2px solid #16A34A' : '1px solid rgba(255, 255, 255, 0.5)',
+            backgroundColor: isEnabled 
+              ? (theme.palette.mode === 'dark' ? 'success.light' : 'success.main')
+              : alpha(theme.palette.text.primary, 0.1),
+            border: isEnabled 
+              ? `2px solid ${theme.palette.success.dark}` 
+              : `1px solid ${alpha(theme.palette.text.primary, 0.3)}`,
             transition: 'all 200ms ease',
             display: 'inline-block',
-          }}
+            boxShadow: isEnabled ? `0 0 8px ${alpha(theme.palette.success.main, 0.4)}` : 'none',
+          })}
           title={isEnabled ? 'Auto-download enabled' : 'Auto-download disabled'}
         />
       </Box>
@@ -741,16 +755,19 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
               sx={(theme) => {
                 const paletteKey = isDownloadAction ? 'primary' : 'error';
                 const palette = theme.palette[paletteKey];
+                const contrastText = palette.contrastText || '#ffffff';
                 return {
                   bgcolor: palette.main,
-                  color: '#ffffff',
+                  color: contrastText,
                   border: '2px solid',
                   borderColor: palette.main,
                   boxShadow: 'var(--shadow-hard)',
                   '&:hover': {
                     bgcolor: palette.dark,
                     borderColor: palette.dark,
-                    color: '#ffffff',
+                    color: contrastText,
+                    // If the background is too light on hover, darken it
+                    filter: theme.palette.mode === 'light' ? 'brightness(0.9)' : 'brightness(1.1)',
                   },
                   '&:focus-visible': {
                     outline: `3px solid ${theme.palette.primary.main}`,
