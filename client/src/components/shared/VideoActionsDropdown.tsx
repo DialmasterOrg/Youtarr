@@ -40,6 +40,12 @@ const VideoActionsDropdown: React.FC<VideoActionsDropdownProps> = ({
         startIcon={<MoreVertIcon />}
         onClick={handleOpen}
         disabled={disabled || selectedVideosCount === 0}
+        sx={{
+          color: '#ffffff',
+          '&:hover': {
+            color: '#ffffff',
+          }
+        }}
       >
         Actions
       </Button>

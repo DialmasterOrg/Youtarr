@@ -69,7 +69,17 @@ const DownloadChannelPage: React.FC<DownloadChannelPageProps> = ({
             gap={2}
             mt={3}
           >
-            <Button variant="contained" onClick={handleOpenChannelSettings} size="large">
+            <Button 
+              variant="contained" 
+              onClick={handleOpenChannelSettings} 
+              size="large"
+              sx={{
+                color: '#ffffff',
+                '&:hover': {
+                  color: '#ffffff',
+                }
+              }}
+            >
               Download new from all channels
             </Button>
           </Box>

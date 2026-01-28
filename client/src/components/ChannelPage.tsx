@@ -426,106 +426,175 @@ function ChannelPage({ token }: ChannelPageProps) {
           <CardContent
             sx={{
               px: isMobile ? 2 : 3,
-              py: isMobile ? 1 : 1.25,
+              py: isMobile ? 1.25 : 1.25,
               display: 'flex',
               flexDirection: 'column',
-              gap: isMobile ? 0.75 : 1,
+              gap: isMobile ? 1 : 1,
               justifyContent: 'center',
             }}
           >
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: isMobile ? 'column' : 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: isMobile ? 1.25 : 2,
-                m: 0,
-              }}
-            >
-              <Box
-                sx={{
-                  minWidth: 0,
-                  display: 'flex',
-                  flexDirection: isMobile ? 'column' : 'row',
-                  alignItems: 'center',
-                  gap: isMobile ? 0.75 : 1.5,
-                  flexWrap: 'wrap',
-                }}
-              >
-                <Typography variant="h6" sx={{ fontWeight: 700, mr: isMobile ? 0 : 1 }}>
+            {isMobile ? (
+              // Mobile: Compact layout with title and settings in a grid
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {/* Title */}
+                <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1rem' }}>
                   Channel Settings
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                  <Typography
-                    variant="body2"
-                    component="span"
-                    color="text.secondary"
-                    sx={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', lineHeight: 1.2 }}
-                  >
-                    Auto Download:
-                  </Typography>
-                  {renderAutoDownloadChips()}
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                  <Typography
-                    variant="body2"
-                    component="span"
-                    color="text.secondary"
-                    sx={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', lineHeight: 1.2 }}
-                  >
-                    Rating:
-                  </Typography>
-                  <RatingBadge
-                    rating={channel.default_rating}
-                    ratingSource="Channel Default"
-                    size="small"
-                    sx={{ ...channelChipSx }}
-                  />
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                  <Typography
-                    variant="body2"
-                    component="span"
-                    color="text.secondary"
-                    sx={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', lineHeight: 1.2 }}
-                  >
-                    Folder:
-                  </Typography>
-                  {renderSubFolder()}
+
+                {/* Compact grid layout */}
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.75, fontSize: '0.875rem' }}>
+                  {/* Auto Download */}
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', fontSize: '0.65rem' }}>
+                      Auto Download
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 0.3, flexWrap: 'wrap' }}>
+                      {renderAutoDownloadChips()}
+                    </Box>
+                  </Box>
+
+                  {/* Rating */}
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', fontSize: '0.65rem' }}>
+                      Rating
+                    </Typography>
+                    <RatingBadge
+                      rating={channel.default_rating}
+                      ratingSource="Channel Default"
+                      size="small"
+                      sx={{ ...channelChipSx, height: 24 }}
+                    />
+                  </Box>
+
+                  {/* Folder */}
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', fontSize: '0.65rem' }}>
+                      Folder
+                    </Typography>
+                    {renderSubFolder()}
+                  </Box>
+
+                  {/* Edit Button */}
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', fontSize: '0.65rem', visibility: 'hidden', height: '0.7rem' }}>
+                      Edit
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => setSettingsOpen(true)}
+                      aria-label="Edit settings"
+                      sx={{
+                        textTransform: 'none',
+                        minWidth: 0,
+                        px: 1.5,
+                        py: 0.5,
+                        fontSize: '0.8rem',
+                        height: 28,
+                        color: 'text.primary',
+                        borderColor: 'divider',
+                        '&:hover': {
+                          bgcolor: 'action.hover',
+                          borderColor: 'text.primary',
+                          color: 'text.primary',
+                        }
+                      }}
+                    >
+                      Edit
+                    </Button>
+                  </Box>
                 </Box>
               </Box>
-              <Button
-                variant="outlined"
-                startIcon={<SettingsIcon />}
-                onClick={() => setSettingsOpen(true)}
-                size="small"
-                aria-label="Edit settings"
+            ) : (
+              // Desktop: Original layout
+              <Box
                 sx={{
-                  alignSelf: 'center',
-                  textTransform: 'none',
-                  minWidth: 0,
-                  px: 2,
-                  py: 0.75,
-                  ml: isMobile ? 0 : 'auto',
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 2,
                   m: 0,
-                  width: isMobile ? '100%' : 'auto',
                 }}
               >
                 <Box
-                  component="span"
                   sx={{
-                    display: {
-                      xs: 'none',
-                      sm: 'inline-flex',
-                    },
-                    whiteSpace: 'nowrap',
+                    minWidth: 0,
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <Typography variant="h6" sx={{ fontWeight: 700, mr: 1 }}>
+                    Channel Settings
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                    <Typography
+                      variant="body2"
+                      component="span"
+                      color="text.secondary"
+                      sx={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', lineHeight: 1.2 }}
+                    >
+                      Auto Download:
+                    </Typography>
+                    {renderAutoDownloadChips()}
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                    <Typography
+                      variant="body2"
+                      component="span"
+                      color="text.secondary"
+                      sx={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', lineHeight: 1.2 }}
+                    >
+                      Rating:
+                    </Typography>
+                    <RatingBadge
+                      rating={channel.default_rating}
+                      ratingSource="Channel Default"
+                      size="small"
+                      sx={{ ...channelChipSx }}
+                    />
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                    <Typography
+                      variant="body2"
+                      component="span"
+                      color="text.secondary"
+                      sx={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', lineHeight: 1.2 }}
+                    >
+                      Folder:
+                    </Typography>
+                    {renderSubFolder()}
+                  </Box>
+                </Box>
+                <Button
+                  variant="outlined"
+                  startIcon={<SettingsIcon />}
+                  onClick={() => setSettingsOpen(true)}
+                  size="small"
+                  aria-label="Edit settings"
+                  sx={{
+                    alignSelf: 'center',
+                    textTransform: 'none',
+                    minWidth: 0,
+                    px: 2,
+                    py: 0.75,
+                    ml: 'auto',
+                    color: 'text.primary',
+                    borderColor: 'divider',
+                    '&:hover': {
+                      bgcolor: 'action.hover',
+                      borderColor: 'text.primary',
+                      color: 'text.primary',
+                    }
                   }}
                 >
                   Edit
-                </Box>
-              </Button>
-            </Box>
+                </Button>
+              </Box>
+            )}
           </CardContent>
         </Card>
       )}

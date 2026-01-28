@@ -189,6 +189,15 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
               size="small"
               onClick={handleClearAll}
               startIcon={<ClearIcon />}
+              sx={{
+                color: 'text.primary',
+                borderColor: 'divider',
+                '&:hover': {
+                  bgcolor: 'action.hover',
+                  borderColor: 'text.primary',
+                  color: 'text.primary',
+                }
+              }}
             >
               Clear All
             </Button>
@@ -233,6 +242,12 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
                 onClick={handleOpenSettings}
                 disabled={validatedVideos.length === 0 || isDownloading}
                 startIcon={isDownloading ? <CircularProgress size={20} /> : <DownloadIcon />}
+                sx={{ 
+                  color: '#ffffff',
+                  '&:hover': {
+                    color: '#ffffff',
+                  }
+                }}
               >
                 {isDownloading ? 'Starting...' : 'Download Videos'}
               </Button>

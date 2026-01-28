@@ -743,14 +743,14 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                 const palette = theme.palette[paletteKey];
                 return {
                   bgcolor: palette.main,
-                  color: palette.contrastText,
+                  color: '#ffffff',
                   border: '2px solid',
                   borderColor: palette.main,
                   boxShadow: 'var(--shadow-hard)',
                   '&:hover': {
                     bgcolor: palette.dark,
                     borderColor: palette.dark,
-                    color: palette.contrastText,
+                    color: '#ffffff',
                   },
                   '&:focus-visible': {
                     outline: `3px solid ${theme.palette.primary.main}`,

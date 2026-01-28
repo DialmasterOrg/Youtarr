@@ -37,6 +37,8 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import StorageIcon from '@mui/icons-material/Storage';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DownloadIcon from '@mui/icons-material/Download';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import AlarmOnIcon from '@mui/icons-material/AlarmOn';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { formatDuration, formatYTDate } from '../utils';
@@ -49,7 +51,6 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { debounce } from 'lodash';
 import { Link as RouterLink } from 'react-router-dom';
 import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
-import ScheduleIcon from '@mui/icons-material/Schedule';
 import DeleteVideosDialog from './shared/DeleteVideosDialog';
 import { useVideoDeletion } from './shared/useVideoDeletion';
 import RatingBadge from './shared/RatingBadge';
@@ -444,6 +445,15 @@ function VideosPage({ token }: VideosPageProps) {
               <Button
                 variant="outlined"
                 onClick={() => setSelectedVideos([])}
+                sx={{
+                  color: 'text.primary',
+                  borderColor: 'divider',
+                  '&:hover': {
+                    bgcolor: 'action.hover',
+                    borderColor: 'text.primary',
+                    color: 'text.primary',
+                  }
+                }}
               >
                 Clear Selection
               </Button>
@@ -457,6 +467,15 @@ function VideosPage({ token }: VideosPageProps) {
               variant='outlined'
               startIcon={<FilterListIcon />}
               onClick={handleFilterClick}
+              sx={{
+                color: 'text.primary',
+                borderColor: 'divider',
+                '&:hover': {
+                  bgcolor: 'action.hover',
+                  borderColor: 'text.primary',
+                  color: 'text.primary',
+                }
+              }}
             >
               Filter by Channel
             </Button>
@@ -557,13 +576,57 @@ function VideosPage({ token }: VideosPageProps) {
                           <Box
                             display='flex'
                             flexDirection='column'
-                            alignItems='center'
-                            justifyContent='center'
+                            alignItems='stretch'
+                            justifyContent='flex-start'
+                            sx={{ gap: 1 }}
                           >
+                            {/* Title at the top */}
+                            <Box sx={{ flexGrow: 1 }}>
+                              <Typography 
+                                variant='subtitle2' 
+                                sx={{ 
+                                  fontWeight: 600,
+                                  lineHeight: 1.3,
+                                  mb: 0.5,
+                                }}
+                              >
+                                {video.youTubeVideoName}
+                              </Typography>
+                              {(() => {
+                                const channelId = getEnabledChannelId(video.youTubeChannelName, video.channel_id);
+                                return channelId ? (
+                                  <Typography
+                                    component={RouterLink}
+                                    to={`/channel/${channelId}`}
+                                    variant='caption'
+                                    sx={{
+                                      color: 'primary.main',
+                                      textDecoration: 'none',
+                                      '&:hover': {
+                                        textDecoration: 'underline',
+                                      },
+                                      display: 'block',
+                                    }}
+                                  >
+                                    {video.youTubeChannelName}
+                                  </Typography>
+                                ) : (
+                                  <Typography
+                                    variant='caption'
+                                    color='text.secondary'
+                                    sx={{ display: 'block' }}
+                                  >
+                                    {video.youTubeChannelName}
+                                  </Typography>
+                                );
+                              })()}
+                            </Box>
+
+                            {/* Smaller thumbnail - 16:9 aspect ratio at reduced size */}
                             <Box
                               width='100%'
                               height='0'
-                              paddingTop='56.25%' // maintain 16:9 aspect ratio
+                              paddingTop='56.25%'
                               border={1}
                               borderColor='grey.500'
                               overflow='hidden'
@@ -618,7 +681,7 @@ function VideosPage({ token }: VideosPageProps) {
                                     backgroundColor: 'rgba(211, 47, 47, 0.95)',
                                     color: 'white',
                                     padding: '4px 8px',
-                                    fontSize: '0.75rem',
+                                    fontSize: '0.65rem',
                                     fontWeight: 'bold',
                                     textAlign: 'center',
                                     zIndex: 2,
@@ -645,49 +708,12 @@ function VideosPage({ token }: VideosPageProps) {
                                   <ErrorOutlineIcon
                                     sx={{
                                       color: 'error.main',
-                                      fontSize: '3rem',
+                                      fontSize: '2.5rem',
                                       filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))'
                                     }}
                                   />
                                 </Box>
                               ) : null}
-                              <Box
-                                sx={{
-                                  position: 'absolute',
-                                  left: 0,
-                                  right: 0,
-                                  bottom: 0,
-                                  bgcolor: 'rgba(0, 0, 0, 0.6)',
-                                  color: 'common.white',
-                                  px: 1,
-                                  py: 0.5,
-                                  fontSize: '0.75rem',
-                                  fontWeight: 600,
-                                  textOverflow: 'ellipsis',
-                                  overflow: 'hidden',
-                                  whiteSpace: 'nowrap',
-                                  zIndex: 2,
-                                }}
-                              >
-                                {(() => {
-                                  const channelId = getEnabledChannelId(video.youTubeChannelName, video.channel_id);
-                                  return channelId ? (
-                                    <Typography
-                                      component={RouterLink}
-                                      to={`/channel/${channelId}`}
-                                      sx={{
-                                        color: 'inherit',
-                                        textDecoration: 'none',
-                                        '&:hover': { textDecoration: 'underline' },
-                                      }}
-                                    >
-                                      {video.youTubeChannelName}
-                                    </Typography>
-                                  ) : (
-                                    <Box component="span">{video.youTubeChannelName}</Box>
-                                  );
-                                })()}
-                              </Box>
                               {/* Delete icon for downloaded videos on mobile */}
                               {!video.removed && video.fileSize && (
                                 <IconButton
@@ -697,8 +723,8 @@ function VideosPage({ token }: VideosPageProps) {
                                   }}
                                   sx={{
                                     position: 'absolute',
-                                    top: 8,
-                                    right: 8,
+                                    top: 4,
+                                    right: 4,
                                     bgcolor: selectedForDeletion.includes(video.id) ? 'error.main' : 'rgba(0,0,0,0.6)',
                                     color: 'white',
                                     '&:hover': {
@@ -709,130 +735,96 @@ function VideosPage({ token }: VideosPageProps) {
                                   }}
                                   size="small"
                                 >
-                                  <DeleteIcon fontSize="small" />
+                                  <DeleteIcon sx={{ fontSize: '1.125rem' }} />
                                 </IconButton>
                               )}
                             </Box>
-                            <Typography variant='subtitle1' textAlign='center'>
-                              {video.youTubeVideoName}
-                              {video.duration && (
-                                <Typography
-                                  variant='caption'
-                                  color='text.secondary'
-                                >
-                                  {' '}
-                                  ({formatDuration(video.duration)})
-                                </Typography>
-                              )}
-                            </Typography>
-                            {(() => {
-                              const channelId = getEnabledChannelId(video.youTubeChannelName, video.channel_id);
-                              return channelId ? (
-                                <Typography
-                                  component={RouterLink}
-                                  to={`/channel/${channelId}`}
-                                  variant='subtitle2'
-                                  sx={{
-                                    color: 'primary.main',
-                                    textDecoration: 'none',
-                                    '&:hover': {
-                                      textDecoration: 'underline',
-                                    },
-                                  }}
-                                >
-                                  {video.youTubeChannelName}
-                                </Typography>
-                              ) : (
-                                <Typography
-                                  variant='subtitle2'
-                                  color='text.secondary'
-                                >
-                                  {video.youTubeChannelName}
-                                </Typography>
-                              );
-                            })()}
 
-                            <Stack direction="row" spacing={1} justifyContent="center" sx={{ mt: 0.5 }}>
-                              <Typography
-                                variant='caption'
-                                color='text.secondary'
-                              >
-                                Added: {new Date(video.timeCreated).toLocaleDateString()}
-                              </Typography>
-                              <Typography
-                                variant='caption'
-                                color='text.secondary'
-                              >
-                                • Published: {formatYTDate(video.originalDate)}
-                              </Typography>
-                            </Stack>
+                            {/* Compact metadata below thumbnail */}
+                            <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+                              {/* Duration, Size, Published, Downloaded in a compact grid */}
+                              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5, fontSize: '0.75rem' }}>
+                                {video.duration && (
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <AlarmOnIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} />
+                                    <Typography variant='caption' sx={{ color: 'text.secondary' }}>
+                                      {formatDuration(video.duration)}
+                                    </Typography>
+                                  </Box>
+                                )}
+                                {video.fileSize && (
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <StorageIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} />
+                                    <Typography variant='caption' sx={{ color: 'text.secondary' }}>
+                                      {formatFileSize(video.fileSize)}
+                                    </Typography>
+                                  </Box>
+                                )}
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  <ScheduleIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} />
+                                  <Typography variant='caption' sx={{ color: 'text.secondary' }}>
+                                    Pub: {formatYTDate(video.originalDate)}
+                                  </Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  <DownloadIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} />
+                                  <Typography variant='caption' sx={{ color: 'text.secondary' }}>
+                                    {new Date(video.timeCreated).toLocaleDateString()}
+                                  </Typography>
+                                </Box>
+                              </Box>
 
-                            <Stack
-                              direction={{ xs: "row", sm: "column" }}
-                              spacing={1}
-                              justifyContent="center"
-                              alignItems="center"
-                              sx={{ mt: 0.5 }}
-                            >
-                              {(() => {
-                                const mediaTypeInfo = getMediaTypeInfo(video.media_type);
-                                return mediaTypeInfo ? (
-                                  <Chip
-                                    size="small"
-                                    icon={mediaTypeInfo.icon}
-                                    label={mediaTypeInfo.label}
-                                    color={mediaTypeInfo.color}
-                                    variant="outlined"
-                                    sx={{ height: 20, fontSize: '0.7rem' }}
-                                  />
-                                ) : null;
-                              })()}
-                              <RatingBadge
-                                rating={video.normalized_rating}
-                                ratingSource={video.rating_source}
-                                showNA={true}
-                                size="small"
-                                sx={{ height: 20, fontSize: '0.7rem', boxShadow: 'none' }}
-                              />
-                              {video.fileSize && (
-                                <Tooltip title="File size on disk" enterTouchDelay={0}>
-                                  <Chip
-                                    size="small"
-                                    icon={<StorageIcon />}
-                                    label={formatFileSize(video.fileSize)}
-                                    variant="outlined"
-                                    sx={{ height: 20, fontSize: '0.7rem' }}
-                                  />
-                                </Tooltip>
-                              )}
-                              {video.removed ? (
-                                <Tooltip title="Video file not found on disk" enterTouchDelay={0}>
-                                  <Chip
-                                    size="small"
-                                    icon={<ErrorOutlineIcon />}
-                                    label="Missing"
-                                    color="error"
-                                    variant="outlined"
-                                    sx={{ height: 20, fontSize: '0.7rem' }}
-                                  />
-                                </Tooltip>
-                              ) : video.fileSize ? (
-                                <Tooltip title="Video file exists on disk" enterTouchDelay={0}>
-                                  <Chip
-                                    size="small"
-                                    icon={<CheckCircleIcon />}
-                                    label="Available"
-                                    color="success"
-                                    variant="filled"
-                                    sx={{
-                                      height: 20,
-                                      fontSize: '0.7rem',
-                                      '& .MuiChip-icon': { fontSize: 14, ml: 0.5 },
-                                      '& .MuiChip-label': { px: 0.75 },
-                                    }}
-                                  />
-                                </Tooltip>
-                              ) : null}
+                              {/* Status chips in a flexible row */}
+                              <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                                {(() => {
+                                  const mediaTypeInfo = getMediaTypeInfo(video.media_type);
+                                  return mediaTypeInfo ? (
+                                    <Chip
+                                      size="small"
+                                      icon={mediaTypeInfo.icon}
+                                      label={mediaTypeInfo.label}
+                                      color={mediaTypeInfo.color}
+                                      variant="outlined"
+                                      sx={{ height: 20, fontSize: '0.65rem' }}
+                                    />
+                                  ) : null;
+                                })()}
+                                <RatingBadge
+                                  rating={video.normalized_rating}
+                                  ratingSource={video.rating_source}
+                                  showNA={true}
+                                  size="small"
+                                  sx={{ height: 20, fontSize: '0.65rem', boxShadow: 'none' }}
+                                />
+                                {video.removed ? (
+                                  <Tooltip title="Video file not found on disk" enterTouchDelay={0}>
+                                    <Chip
+                                      size="small"
+                                      icon={<ErrorOutlineIcon />}
+                                      label="Missing"
+                                      color="error"
+                                      variant="outlined"
+                                      sx={{ height: 20, fontSize: '0.65rem' }}
+                                    />
+                                  </Tooltip>
+                                ) : video.fileSize ? (
+                                  <Tooltip title="Video file exists on disk" enterTouchDelay={0}>
+                                    <Chip
+                                      size="small"
+                                      icon={<CheckCircleIcon />}
+                                      label="Available"
+                                      color="success"
+                                      variant="filled"
+                                      sx={{
+                                        height: 20,
+                                        fontSize: '0.65rem',
+                                        '& .MuiChip-icon': { fontSize: 12, ml: 0.25 },
+                                        '& .MuiChip-label': { px: 0.5 },
+                                      }}
+                                    />
+                                  </Tooltip>
+                                ) : null}
+                              </Stack>
                             </Stack>
                           </Box>
                         </TableCell>
@@ -1109,6 +1101,7 @@ function VideosPage({ token }: VideosPageProps) {
               bottom: 80,
               right: 16,
               zIndex: 1000,
+              color: '#ffffff',
             }}
             onClick={handleChangeRatingClick}
           >
@@ -1127,6 +1120,7 @@ function VideosPage({ token }: VideosPageProps) {
               bottom: 16,
               right: 16,
               zIndex: 1000,
+              color: '#ffffff',
             }}
             onClick={handleDeleteClick}
           >

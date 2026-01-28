@@ -729,6 +729,16 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
               onClick={undoChanges}
               disabled={isSaving}
               aria-label="Undo changes"
+              sx={{
+                color: 'text.primary',
+                bgcolor: 'background.paper',
+                border: '1px solid',
+                borderColor: 'divider',
+                '&:hover': {
+                  bgcolor: 'action.hover',
+                  color: 'text.primary',
+                }
+              }}
             >
               <UndoIcon sx={{ mr: 1 }} />
               Undo
@@ -740,6 +750,12 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
               onClick={handleSaveChanges}
               disabled={isSaving}
               aria-label="Save changes"
+              sx={{
+                color: '#ffffff',
+                '&:hover': {
+                  color: '#ffffff',
+                }
+              }}
             >
               {isSaving ? <CircularProgress size={20} color="inherit" sx={{ mr: 1 }} /> : <SaveIcon sx={{ mr: 1 }} />}
               {isSaving ? 'Saving…' : 'Save'}

@@ -164,6 +164,20 @@ function ChannelVideosHeader({
             size="small"
             disabled={fetchingAllVideos}
             startIcon={<RefreshIcon />}
+            sx={(theme) => ({
+              color: 'text.primary',
+              borderColor: 'divider',
+              '&:disabled': {
+                color: 'text.secondary',
+                borderColor: 'divider',
+                opacity: 0.5,
+              },
+              '&:hover:not(:disabled)': {
+                bgcolor: 'action.hover',
+                borderColor: 'text.primary',
+                color: 'text.primary',
+              },
+            })}
           >
             {fetchingAllVideos ? 'Refreshing...' : 'Refresh All'}
           </Button>
@@ -252,14 +266,20 @@ function ChannelVideosHeader({
               startIcon={<DownloadIcon />}
               onClick={onDownloadClick}
               disabled={checkedBoxes.length === 0}
-              sx={{
-                color: 'text.primary',
-                borderColor: 'divider',
-                '&:hover:not(:disabled)': {
-                  borderColor: 'primary.main',
-                  bgcolor: 'rgba(138, 92, 246, 0.08)',
+              sx={(theme) => ({
+                color: 'primary.main',
+                borderColor: 'primary.main',
+                '&:disabled': {
+                  color: 'text.secondary',
+                  borderColor: 'divider',
+                  opacity: 0.5,
                 },
-              }}
+                '&:hover:not(:disabled)': {
+                  borderColor: 'primary.dark',
+                  bgcolor: 'rgba(138, 92, 246, 0.08)',
+                  color: 'primary.dark',
+                },
+              })}
             >
               Download {checkedBoxes.length > 0 ? `${checkedBoxes.length} ${checkedBoxes.length === 1 ? 'Video' : 'Videos'}` : 'Selected'}
             </Button>
@@ -272,14 +292,20 @@ function ChannelVideosHeader({
                   ? selectableDeleteCount === 0
                   : checkedBoxes.length === 0 && selectableDownloadCount === 0
               }
-              sx={{
+              sx={(theme) => ({
                 color: 'text.primary',
                 borderColor: 'divider',
+                '&:disabled': {
+                  color: 'text.secondary',
+                  borderColor: 'divider',
+                  opacity: 0.5,
+                },
                 '&:hover:not(:disabled)': {
                   borderColor: 'text.primary',
                   bgcolor: 'action.hover',
+                  color: 'text.primary',
                 },
-              }}
+              })}
             >
               Select All This Page
             </Button>
@@ -288,14 +314,20 @@ function ChannelVideosHeader({
               size="small"
               onClick={onClearSelection}
               disabled={checkedBoxes.length === 0}
-              sx={{
+              sx={(theme) => ({
                 color: 'text.primary',
                 borderColor: 'divider',
+                '&:disabled': {
+                  color: 'text.secondary',
+                  borderColor: 'divider',
+                  opacity: 0.5,
+                },
                 '&:hover:not(:disabled)': {
                   borderColor: 'text.primary',
                   bgcolor: 'action.hover',
+                  color: 'text.primary',
                 },
-              }}
+              })}
             >
               Clear
             </Button>
@@ -305,14 +337,20 @@ function ChannelVideosHeader({
               startIcon={<BlockIcon />}
               onClick={onBulkIgnoreClick}
               disabled={checkedBoxes.length === 0}
-              sx={{
-                color: 'text.primary',
-                borderColor: 'divider',
-                '&:hover:not(:disabled)': {
+              sx={(theme) => ({
+                color: 'warning.main',
+                borderColor: 'warning.main',
+                '&:disabled': {
+                  color: 'warning.main',
                   borderColor: 'warning.main',
-                  bgcolor: 'rgba(251, 146, 60, 0.08)',
+                  opacity: 0.5,
                 },
-              }}
+                '&:hover:not(:disabled)': {
+                  borderColor: 'warning.dark',
+                  bgcolor: 'rgba(251, 146, 60, 0.08)',
+                  color: 'warning.dark',
+                },
+              })}
             >
               Ignore Selected
             </Button>
@@ -322,14 +360,20 @@ function ChannelVideosHeader({
               startIcon={<DeleteIcon />}
               onClick={onDeleteClick}
               disabled={selectedForDeletion.length === 0 || deleteLoading}
-              sx={{
+              sx={(theme) => ({
                 color: 'error.main',
                 borderColor: 'error.main',
+                '&:disabled': {
+                  color: 'error.main',
+                  borderColor: 'error.main',
+                  opacity: 0.5,
+                },
                 '&:hover:not(:disabled)': {
                   borderColor: 'error.dark',
                   bgcolor: 'rgba(239, 68, 68, 0.08)',
+                  color: 'error.dark',
                 },
-              }}
+              })}
             >
               Delete {selectedForDeletion.length > 0 ? `${selectedForDeletion.length}` : 'Selected'}
             </Button>
