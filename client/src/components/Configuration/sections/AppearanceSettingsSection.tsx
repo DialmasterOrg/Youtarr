@@ -64,6 +64,8 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
             <Card
               sx={{
                 height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
                 borderRadius: theme.tokens.light['radius-ui'] || 'var(--radius-ui)',
                 border: themeMode === theme.id ? '2px solid var(--primary)' : '2px solid var(--border-strong)',
                 boxShadow: themeMode === theme.id ? 'var(--shadow-hard)' : 'var(--shadow-soft)',
@@ -73,19 +75,19 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
               <CardActionArea
                 onClick={() => setThemeMode(theme.id)}
                 aria-label={`Select ${theme.name} theme`}
-                sx={{ height: '100%' }}
+                sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
               >
-                <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, flex: 1, width: '100%' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                       {theme.name}
                     </Typography>
                     <Radio checked={themeMode === theme.id} />
                   </Box>
-                  <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 120, px: 0, py: 1 }}>
                     {theme.preview}
                   </Box>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 'auto' }}>
                     {theme.description}
                   </Typography>
                 </CardContent>

@@ -10,7 +10,7 @@ export const flatTheme: ThemeDefinition = {
   preview: React.createElement(Box, {
     key: 'preview-root',
     sx: {
-      p: 2,
+      p: 2.5,
       borderRadius: '8px',
       bgcolor: '#FFFFFF',
       display: 'flex',
@@ -19,20 +19,23 @@ export const flatTheme: ThemeDefinition = {
       overflow: 'hidden',
       position: 'relative',
       border: '2px solid #E5E7EB',
+      width: '100%',
+      minHeight: 80,
     }
   }, [
     React.createElement(Box, {
       key: 'b1',
       sx: {
-        width: 32,
-        height: 32,
+        width: 44,
+        height: 44,
         borderRadius: '50%',
         bgcolor: '#3B82F6',
+        border: '2px solid #111827',
       }
     }),
     React.createElement(Box, {
       key: 'b2',
-      sx: { width: 48, height: 12, borderRadius: '6px', bgcolor: '#F3F4F6' }
+      sx: { width: 90, height: 16, borderRadius: '6px', bgcolor: '#F3F4F6', border: '2px solid #111827' }
     })
   ]),
   tokens: {
@@ -146,6 +149,37 @@ export const flatTheme: ThemeDefinition = {
           color: '#111827',
           fontWeight: 600,
         },
+        filledSuccess: {
+          backgroundColor: '#10B981',
+          color: '#FFFFFF',
+        },
+        filledInfo: {
+          backgroundColor: '#3B82F6',
+          color: '#FFFFFF',
+        },
+        filledWarning: {
+          backgroundColor: '#F59E0B',
+          color: '#FFFFFF',
+        },
+        filledError: {
+          backgroundColor: '#EF4444',
+          color: '#FFFFFF',
+        },
+        outlinedSuccess: {
+          color: '#10B981',
+          border: '2px solid #10B981',
+          backgroundColor: 'rgba(16, 185, 129, 0.08)',
+        },
+        outlinedInfo: {
+          color: '#3B82F6',
+          border: '2px solid #3B82F6',
+          backgroundColor: 'rgba(59, 130, 246, 0.08)',
+        },
+        outlinedWarning: {
+          color: '#F59E0B',
+          border: '2px solid #F59E0B',
+          backgroundColor: 'rgba(245, 158, 11, 0.08)',
+        },
       },
     },
     MuiOutlinedInput: {
@@ -229,6 +263,40 @@ export const flatTheme: ThemeDefinition = {
             backgroundColor: '#3B82F6',
             color: '#FFFFFF',
             borderColor: '#3B82F6',
+          },
+        },
+        outlined: {
+          color: '#111827',
+          borderColor: '#E5E7EB',
+          borderWidth: '2px',
+          '&:hover': {
+            backgroundColor: '#F3F4F6',
+            borderColor: '#3B82F6',
+          },
+        },
+      },
+    },
+    MuiToggleButton: {
+      styleOverrides: {
+        root: {
+          color: '#111827',
+          borderColor: '#E5E7EB',
+          backgroundColor: 'transparent',
+          borderWidth: '2px',
+          transition: 'all 200ms ease',
+          '&:hover': {
+            backgroundColor: '#F3F4F6',
+            borderColor: '#3B82F6',
+            color: '#3B82F6',
+          },
+          '&.Mui-selected': {
+            backgroundColor: '#3B82F6',
+            color: '#FFFFFF',
+            borderColor: '#3B82F6',
+            '&:hover': {
+              backgroundColor: '#2563EB',
+              borderColor: '#2563EB',
+            },
           },
         },
       },

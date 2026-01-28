@@ -10,20 +10,22 @@ export const neumorphicTheme: ThemeDefinition = {
   preview: React.createElement(Box, {
     key: 'preview-root',
     sx: {
-      p: 2,
+      p: 2.5,
       borderRadius: 3,
       bgcolor: '#e0e5ec',
       boxShadow: '9px 9px 16px rgba(163, 177, 198, 0.6), -9px -9px 16px rgba(255, 255, 255, 0.5)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
+      width: '100%',
+      minHeight: 80,
     }
   }, [
     React.createElement(Box, {
       key: 'b1',
       sx: {
-        width: 28,
-        height: 28,
+        width: 44,
+        height: 44,
         borderRadius: '999px',
         boxShadow: 'inset 6px 6px 10px rgba(163, 177, 198, 0.6), inset -6px -6px 10px rgba(255, 255, 255, 0.5)',
       }
@@ -31,8 +33,8 @@ export const neumorphicTheme: ThemeDefinition = {
     React.createElement(Box, {
       key: 'b2',
       sx: {
-        width: 36,
-        height: 36,
+        width: 90,
+        height: 16,
         borderRadius: '999px',
         boxShadow: '9px 9px 16px rgba(163, 177, 198, 0.6), -9px -9px 16px rgba(255, 255, 255, 0.5)',
       }
@@ -158,6 +160,36 @@ export const neumorphicTheme: ThemeDefinition = {
           color: '#3D4852',
           fontWeight: 600,
         },
+        filledSuccess: {
+          backgroundColor: '#10B981',
+          color: '#FFFFFF',
+          boxShadow: '6px 6px 12px rgba(163, 177, 198, 0.4), -6px -6px 12px rgba(255, 255, 255, 0.3)',
+        },
+        filledInfo: {
+          backgroundColor: '#3B82F6',
+          color: '#FFFFFF',
+          boxShadow: '6px 6px 12px rgba(163, 177, 198, 0.4), -6px -6px 12px rgba(255, 255, 255, 0.3)',
+        },
+        filledWarning: {
+          backgroundColor: '#F59E0B',
+          color: '#FFFFFF',
+          boxShadow: '6px 6px 12px rgba(163, 177, 198, 0.4), -6px -6px 12px rgba(255, 255, 255, 0.3)',
+        },
+        outlinedSuccess: {
+          color: '#10B981',
+          backgroundColor: 'rgba(16, 185, 129, 0.12)',
+          boxShadow: '6px 6px 12px rgba(163, 177, 198, 0.3), -6px -6px 12px rgba(255, 255, 255, 0.3)',
+        },
+        outlinedInfo: {
+          color: '#3B82F6',
+          backgroundColor: 'rgba(59, 130, 246, 0.12)',
+          boxShadow: '6px 6px 12px rgba(163, 177, 198, 0.3), -6px -6px 12px rgba(255, 255, 255, 0.3)',
+        },
+        outlinedWarning: {
+          color: '#F59E0B',
+          backgroundColor: 'rgba(245, 158, 11, 0.12)',
+          boxShadow: '6px 6px 12px rgba(163, 177, 198, 0.3), -6px -6px 12px rgba(255, 255, 255, 0.3)',
+        },
       },
     },
     MuiOutlinedInput: {
@@ -216,6 +248,46 @@ export const neumorphicTheme: ThemeDefinition = {
             transform: 'translateY(0.5px)',
             boxShadow: 'inset 3px 3px 6px rgba(163, 177, 198, 0.6), inset -3px -3px 6px rgba(255, 255, 255, 0.5)',
           },
+        },
+        outlined: {
+          color: '#3D4852',
+          backgroundColor: '#E0E5EC',
+          boxShadow: '6px 6px 12px rgba(163, 177, 198, 0.4), -6px -6px 12px rgba(255, 255, 255, 0.3)',
+          '&:hover': {
+            backgroundColor: '#E0E5EC',
+            boxShadow: '9px 9px 16px rgba(163, 177, 198, 0.6), -9px -9px 16px rgba(255, 255, 255, 0.5)',
+          },
+        },
+      },
+    },
+    MuiToggleButton: {
+      styleOverrides: {
+        root: {
+          color: '#3D4852',
+          backgroundColor: '#E0E5EC',
+          boxShadow: '6px 6px 12px rgba(163, 177, 198, 0.4), -6px -6px 12px rgba(255, 255, 255, 0.3)',
+          border: 'none',
+          transition: 'all 300ms ease-out',
+          '&:hover': {
+            backgroundColor: '#E0E5EC',
+            boxShadow: '8px 8px 16px rgba(163, 177, 198, 0.5), -8px -8px 16px rgba(255, 255, 255, 0.4)',
+          },
+          '&.Mui-selected': {
+            backgroundColor: '#10B981',
+            color: '#FFFFFF',
+            boxShadow: '8px 8px 16px rgba(163, 177, 198, 0.5), -8px -8px 16px rgba(255, 255, 255, 0.4)',
+            '&:hover': {
+              backgroundColor: '#059669',
+              boxShadow: '10px 10px 20px rgba(163, 177, 198, 0.6), -10px -10px 20px rgba(255, 255, 255, 0.5)',
+            },
+          },
+        },
+      },
+    },
+    MuiSvgIcon: {
+      styleOverrides: {
+        root: {
+          color: '#3D4852',
         },
       },
     },

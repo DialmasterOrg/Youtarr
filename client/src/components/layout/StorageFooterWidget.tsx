@@ -47,7 +47,13 @@ export function StorageFooterWidget({ token, collapsed }: StorageFooterWidgetPro
       <LinearProgress
         variant={loading ? 'indeterminate' : 'determinate'}
         value={loading ? undefined : progressValue}
-        sx={{ height: collapsed ? 6 : 8, borderRadius: 1 }}
+        sx={{
+          height: collapsed ? 6 : 8,
+          borderRadius: 'var(--radius-ui)',
+          '& .MuiLinearProgress-bar': {
+            borderRadius: 'var(--radius-ui)',
+          }
+        }}
       />
 
       {!collapsed && (

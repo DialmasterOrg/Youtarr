@@ -9,7 +9,7 @@ export const playfulTheme: ThemeDefinition = {
   layoutMode: 'sidebar',
   preview: React.createElement(Box, {
     sx: {
-      p: 2,
+      p: 2.5,
       borderRadius: 3,
       bgcolor: '#fffdf5',
       border: '2px solid #1e293b',
@@ -17,10 +17,12 @@ export const playfulTheme: ThemeDefinition = {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
+      width: '100%',
+      minHeight: 80,
     }
   }, [
-    React.createElement(Box, { key: 'b1', sx: { width: 24, height: 24, borderRadius: 1, bgcolor: '#f472b6' } }),
-    React.createElement(Box, { key: 'b2', sx: { width: 32, height: 8, borderRadius: 999, bgcolor: '#fbbf24' } })
+    React.createElement(Box, { key: 'b1', sx: { width: 44, height: 44, borderRadius: 1.5, bgcolor: '#f472b6', border: '2px solid #1e293b' } }),
+    React.createElement(Box, { key: 'b2', sx: { width: 90, height: 16, borderRadius: 999, bgcolor: '#fbbf24', border: '2px solid #1e293b' } })
   ]),
   tokens: {
     light: {

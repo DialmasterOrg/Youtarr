@@ -4,13 +4,13 @@ import { ThemeDefinition } from './types';
 
 export const linearTheme: ThemeDefinition = {
   id: 'linear',
-  name: 'Linear (Modern)',
+  name: 'Dark Modern',
   description: 'Deep atmosphere, precision depth, and ambient lighting pools.',
   layoutMode: 'top-nav',
   preview: React.createElement(Box, {
     key: 'preview-root',
     sx: {
-      p: 2,
+      p: 2.5,
       borderRadius: 3,
       bgcolor: '#050506',
       border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -20,6 +20,8 @@ export const linearTheme: ThemeDefinition = {
       justifyContent: 'space-between',
       overflow: 'hidden',
       position: 'relative',
+      width: '100%',
+      minHeight: 80,
     }
   }, [
     React.createElement(Box, {
@@ -28,8 +30,8 @@ export const linearTheme: ThemeDefinition = {
         position: 'absolute',
         top: -10,
         right: -10,
-        width: 40,
-        height: 40,
+        width: 60,
+        height: 60,
         borderRadius: '50%',
         background: 'radial-gradient(circle, rgba(94, 106, 210, 0.3) 0%, transparent 70%)',
         filter: 'blur(5px)',
@@ -37,11 +39,11 @@ export const linearTheme: ThemeDefinition = {
     }),
     React.createElement(Box, {
       key: 'b2',
-      sx: { width: 24, height: 24, borderRadius: 1.5, bgcolor: '#5E6AD2', boxShadow: '0 0 15px rgba(94, 106, 210, 0.4)' }
+      sx: { width: 44, height: 44, borderRadius: 1.5, bgcolor: '#5E6AD2', boxShadow: '0 0 15px rgba(94, 106, 210, 0.4)' }
     }),
     React.createElement(Box, {
       key: 'b3',
-      sx: { width: 36, height: 8, borderRadius: 999, bgcolor: 'rgba(255, 255, 255, 0.15)' }
+      sx: { width: 90, height: 16, borderRadius: 999, bgcolor: 'rgba(255, 255, 255, 0.15)' }
     })
   ]),
   tokens: {
@@ -152,10 +154,62 @@ export const linearTheme: ThemeDefinition = {
       styleOverrides: {
         root: {
           borderRadius: 'var(--radius-ui)',
-          border: 'var(--border-weight) solid rgba(94,106,210,0.3)',
-          backgroundColor: 'rgba(255,255,255,0.05)',
-          color: '#EDEDEF',
           fontWeight: 600,
+        },
+        filledSuccess: {
+          backgroundColor: 'rgba(34, 197, 94, 0.2)',
+          color: '#22C55E',
+          border: '1px solid #22C55E',
+        },
+        filledWarning: {
+          backgroundColor: 'rgba(245, 158, 11, 0.2)',
+          color: '#F59E0B',
+          border: '1px solid #F59E0B',
+        },
+        outlinedSuccess: {
+          color: '#22C55E',
+          border: '1px solid #22C55E',
+          backgroundColor: 'rgba(34, 197, 94, 0.1)',
+        },
+        outlinedInfo: {
+          color: '#3B82F6',
+          border: '1px solid #3B82F6',
+          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        },
+        outlinedWarning: {
+          color: '#F59E0B',
+          border: '1px solid #F59E0B',
+          backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        },
+      },
+    },
+    MuiToggleButton: {
+      styleOverrides: {
+        root: {
+          color: '#9CA3AF',
+          borderColor: 'rgba(255, 255, 255, 0.2)',
+          backgroundColor: 'transparent',
+          transition: 'all 200ms ease',
+          '&:hover': {
+            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            borderColor: 'rgba(255, 255, 255, 0.3)',
+            color: '#E5E7EB',
+          },
+          '&.Mui-selected': {
+            backgroundColor: 'rgba(94, 106, 210, 0.3)',
+            color: '#5E6AD2',
+            borderColor: '#5E6AD2',
+            '&:hover': {
+              backgroundColor: 'rgba(94, 106, 210, 0.4)',
+            },
+          },
+        },
+      },
+    },
+    MuiSvgIcon: {
+      styleOverrides: {
+        root: {
+          color: '#E5E7EB',
         },
       },
     },
@@ -231,6 +285,14 @@ export const linearTheme: ThemeDefinition = {
           '&:hover': {
             background: 'linear-gradient(180deg, #6872D9 0%, #5E6AD2 100%)',
             boxShadow: '0 0 28px rgba(94, 106, 210, 0.45)',
+          },
+        },
+        outlined: {
+          color: '#E5E7EB',
+          borderColor: 'rgba(255, 255, 255, 0.2)',
+          '&:hover': {
+            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            borderColor: 'rgba(255, 255, 255, 0.3)',
           },
         },
       },

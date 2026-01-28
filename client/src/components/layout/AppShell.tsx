@@ -154,6 +154,7 @@ export function AppShell({
         onLogout={onLogout}
         toggleDrawer={toggleDrawer}
         APP_BAR_TOGGLE_SIZE={APP_BAR_TOGGLE_SIZE}
+        isCollapsed={isMobile || isTopNav ? !drawerOpenMobile : collapsed}
       />
 
       <NavSidebar

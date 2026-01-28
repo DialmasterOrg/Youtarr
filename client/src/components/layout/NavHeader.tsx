@@ -19,7 +19,10 @@ import { Link as RouterLink, useLocation } from 'react-router-dom';
 import LogoutIcon from '@mui/icons-material/Logout';
 import DownloadIcon from '@mui/icons-material/Download';
 import MenuIcon from '@mui/icons-material/Menu';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { ThemeMode } from '../../contexts/ThemeEngineContext';
+import { StorageHeaderWidget } from './StorageHeaderWidget';
 
 interface NavHeaderProps {
   appName: string;
@@ -34,6 +37,7 @@ interface NavHeaderProps {
   onLogout?: () => void;
   toggleDrawer: () => void;
   APP_BAR_TOGGLE_SIZE: number;
+  isCollapsed: boolean;
 }
 
 export const NavHeader: React.FC<NavHeaderProps> = ({
@@ -49,9 +53,12 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   onLogout,
   toggleDrawer,
   APP_BAR_TOGGLE_SIZE,
+  isCollapsed,
 }) => {
   const location = useLocation();
   const theme = useTheme();
+
+  const isPlayful = themeMode === 'playful';
 
   // --- State ---
   // We strictly track the active key for the single-unit hover architecture
@@ -204,7 +211,13 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
         overflow: 'visible',
       }}
     >
-      <Toolbar sx={{ gap: 2, px: { xs: 1.5, sm: 2 }, minHeight: 64, alignItems: 'center', position: 'relative' }}>
+      <Toolbar sx={{ 
+        gap: 2, 
+        px: (isPlayful && !isMobile) ? 0.5 : { xs: 1.5, sm: 2 }, 
+        minHeight: 64, 
+        alignItems: 'center', 
+        position: 'relative' 
+      }}>
         
         {/* Toggle (Mobile/Side) */}
         {(!isTopNav || isMobile) && (
@@ -219,9 +232,18 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
               borderRadius: isTopNav ? 'var(--radius-ui)' : '50%',
               color: isLinear ? '#FFFFFF' : isFlat ? '#111827' : 'inherit',
               mr: isTopNav ? 1 : 0,
+              transition: isPlayful ? 'all 300ms var(--transition-bouncy)' : 'all 0.2s ease',
+              '&:hover': isPlayful ? {
+                transform: 'scale(1.1) rotate(5deg)',
+                bgcolor: 'var(--nav-item-bg-hover)',
+              } : {},
             }}
           >
-            <MenuIcon />
+            {isPlayful ? (
+              isCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />
+            ) : (
+              <MenuIcon />
+            )}
           </IconButton>
         )}
 
@@ -403,6 +425,8 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
               </IconButton>
             </Tooltip>
           )}
+
+          {token && <StorageHeaderWidget token={token} />}
 
           {token && !isPlatformManaged && onLogout && (
             <IconButton aria-label="logout" onClick={onLogout} sx={{ color: navTextPrimary }}>

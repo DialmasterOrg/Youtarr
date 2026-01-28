@@ -625,12 +625,21 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     const label = getTabLabel(tabType);
     const isEnabled = isTabAutoDownloadEnabled(tabType);
 
-    if (!isEnabled) return label;
-
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
         {label}
-        <AlarmOnIcon sx={{ fontSize: '1rem', color: 'error.main' }} />
+        <Box
+          sx={{
+            width: 12,
+            height: 12,
+            borderRadius: '50%',
+            backgroundColor: isEnabled ? '#22C55E' : 'rgba(255, 255, 255, 0.3)',
+            border: isEnabled ? '2px solid #16A34A' : '1px solid rgba(255, 255, 255, 0.5)',
+            transition: 'all 200ms ease',
+            display: 'inline-block',
+          }}
+          title={isEnabled ? 'Auto-download enabled' : 'Auto-download disabled'}
+        />
       </Box>
     );
   };
@@ -682,34 +691,10 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
     observer.observe(loadMoreRef.current);
 
-    if (typeof window !== 'undefined' && themeMode === 'playful') {
-      console.debug('[Playful Sentinel]', {
-        top: loadMoreRef.current?.getBoundingClientRect().top,
-        bottom: loadMoreRef.current?.getBoundingClientRect().bottom,
-        height: loadMoreRef.current?.getBoundingClientRect().height,
-        viewportHeight: window.innerHeight,
-        scrollY: window.scrollY,
-        page,
-      });
-    }
-
     return () => {
       observer.disconnect();
     };
   }, [videosLoading, hasNextPage, useInfiniteScroll, page, themeMode]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || themeMode !== 'playful') return;
-    const rect = loadMoreRef.current?.getBoundingClientRect();
-    console.debug('[Playful Sentinel Ping]', {
-      top: rect?.top,
-      bottom: rect?.bottom,
-      height: rect?.height,
-      viewportHeight: window.innerHeight,
-      scrollY: window.scrollY,
-      videosLoading,
-    });
-  }, [videosLoading, page, themeMode]);
 
   const renderSelectionAction = () => {
     if (!selectionMode) return null;
