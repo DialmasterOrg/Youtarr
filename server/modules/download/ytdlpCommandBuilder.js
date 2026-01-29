@@ -167,6 +167,10 @@ class YtdlpCommandBuilder {
     // Add user-agent to avoid 403 Forbidden errors from YouTube
     args.push('--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
 
+    // Force iOS client to avoid SABR streaming issues
+    // See: https://github.com/yt-dlp/yt-dlp/issues/12482
+    args.push('--extractor-args', 'youtube:player_client=ios,web');
+
     // Add proxy if configured
     if (config.proxy && config.proxy.trim()) {
       args.push('--proxy', config.proxy.trim());
