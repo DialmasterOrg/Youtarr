@@ -342,6 +342,23 @@ function PlaylistSettingsDialog({
               </Typography>
             </FormControl>
 
+            {/* Download Type */}
+            <FormControl fullWidth sx={{ mt: 2 }}>
+              <InputLabel>Download Type</InputLabel>
+              <Select
+                value={settings.audio_format || ''}
+                onChange={(e) => setSettings({ ...settings, audio_format: e.target.value || null })}
+                label="Download Type"
+              >
+                <MenuItem value="">Video Only (default)</MenuItem>
+                <MenuItem value="video_mp3">Video + MP3</MenuItem>
+                <MenuItem value="mp3_only">MP3 Only</MenuItem>
+              </Select>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, ml: 1.5 }}>
+                Choose whether to download video only, video with MP3, or audio-only MP3
+              </Typography>
+            </FormControl>
+
             <Divider sx={{ my: 3 }} />
             <Typography variant="subtitle2" gutterBottom>
               Download Filters

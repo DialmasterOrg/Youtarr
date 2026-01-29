@@ -711,6 +711,9 @@ class PlaylistModule {
             if (playlist.sub_folder) {
               overrideSettings.subfolder = playlist.sub_folder;
             }
+            if (playlist.audio_format) {
+              overrideSettings.audioFormat = playlist.audio_format;
+            }
 
             await downloadModule.doSpecificDownloads({
               body: {
@@ -838,6 +841,9 @@ class PlaylistModule {
     if (playlist.sub_folder) {
       overrideSettings.subfolder = playlist.sub_folder;
     }
+    if (playlist.audio_format) {
+      overrideSettings.audioFormat = playlist.audio_format;
+    }
 
     // Queue all videos as a single download job
     await downloadModule.doSpecificDownloads({
@@ -922,6 +928,9 @@ class PlaylistModule {
             }
             if (playlist.sub_folder) {
               playlistOverrideSettings.subfolder = playlist.sub_folder;
+            }
+            if (playlist.audio_format) {
+              playlistOverrideSettings.audioFormat = playlist.audio_format;
             }
 
             await downloadModule.doSpecificDownloads({
