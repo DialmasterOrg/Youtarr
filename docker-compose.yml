@@ -85,9 +85,6 @@ services:
       - ./server/images:/app/server/images
       - ./config:/app/config
       - ./jobs:/app/jobs
-      - ./server:/app/server
-      - ./client/build:/app/client/build
-      - ./migrations:/app/migrations
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--output", "/dev/null", "http://localhost:3011/api/health"]
       interval: 30s
