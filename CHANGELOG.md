@@ -1,5 +1,30 @@
 # Changelog
 
+## [v1.57.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.57.0) - 2026-01-19
+
+## [1.57.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.56.0...v1.57.0) (2026-01-19)
+
+
+### Features
+
+* Channel videos enhancements ([b37f4e1](https://github.com/DialmasterOrg/Youtarr/commit/b37f4e1ea833ff697ecb773155ff734aae6c73f8))
+* Channel videos filtering ([dcd3046](https://github.com/DialmasterOrg/Youtarr/commit/dcd30462301d2d01bdace19887ac7f56279489a2))
+* **#309:** add support for mp3-only download ([dd57bbc](https://github.com/DialmasterOrg/Youtarr/commit/dd57bbc5c8371d9b82cad1eafaaf4617dac7f67d)), closes [#309](https://github.com/DialmasterOrg/Youtarr/issues/309)
+
+
+### Bug Fixes
+
+* resolve coverage badges workflow failure ([a87640d](https://github.com/DialmasterOrg/Youtarr/commit/a87640d46764cf83f98c04513984a57102f2014a))
+
+
+### Documentation
+
+* update CHANGELOG for v1.56.0 [skip ci] ([cee0c56](https://github.com/DialmasterOrg/Youtarr/commit/cee0c56e4b42aa58bdea7bd370747af69d16346e))
+
+
+
+
+
 ## [v1.56.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.56.0) - 2026-01-04
 
 ## [1.56.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.55.0...v1.56.0) (2026-01-04)
