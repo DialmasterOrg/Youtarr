@@ -150,7 +150,7 @@ class YtdlpCommandBuilder {
 
   /**
    * Build arguments that ALWAYS apply to any yt-dlp invocation
-   * Includes: IPv4 enforcement, proxy, sleep-requests, and cookies
+   * Includes: IPv4 enforcement, proxy, sleep-requests, cookies, and user-agent
    * @param {Object} config - Configuration object
    * @param {Object} options - Options for building args
    * @param {boolean} options.skipSleepRequests - Skip adding --sleep-requests (for single metadata fetches)
@@ -163,6 +163,9 @@ class YtdlpCommandBuilder {
     // Always use IPv4
     // Note, I have found that this greatly improves reliability downloading from YouTube
     args.push('-4');
+
+    // Add user-agent to avoid 403 Forbidden errors from YouTube
+    args.push('--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
 
     // Add proxy if configured
     if (config.proxy && config.proxy.trim()) {
