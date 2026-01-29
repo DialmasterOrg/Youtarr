@@ -500,6 +500,41 @@ class YtdlpCommandBuilder {
 
     return args;
   }
+
+  /**
+   * Build args for fetching playlist information
+   * @param {string} playlistUrl - Playlist URL
+   * @param {string} outputFile - Output JSON file path
+   * @returns {Array<string>} - yt-dlp arguments
+   */
+  static buildPlaylistInfoArgs(playlistUrl, outputFile) {
+    const config = configModule.getConfig();
+    const args = this.buildCommonArgs(config);
+    args.push(
+      '--flat-playlist',
+      '--dump-single-json',  // Get playlist metadata with entries array
+      '--playlist-end', '1',  // Just get first video to verify playlist exists
+      playlistUrl
+    );
+    return args;
+  }
+
+  /**
+   * Build args for fetching playlist video list
+   * @param {string} playlistUrl - Playlist URL
+   * @param {string} outputFile - Output JSON file path
+   * @returns {Array<string>} - yt-dlp arguments
+   */
+  static buildPlaylistVideoListArgs(playlistUrl, outputFile) {
+    const config = configModule.getConfig();
+    const args = this.buildCommonArgs(config);
+    args.push(
+      '--flat-playlist',
+      '--dump-json',
+      playlistUrl
+    );
+    return args;
+  }
 }
 
 module.exports = YtdlpCommandBuilder;

@@ -36,6 +36,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SubscriptionsIcon from '@mui/icons-material/Subscriptions';
+import PlaylistPlayIcon from '@mui/icons-material/PlaylistPlay';
 import DownloadIcon from '@mui/icons-material/Download';
 import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
 import LoginIcon from '@mui/icons-material/Login';
@@ -44,11 +45,13 @@ import ShieldIcon from '@mui/icons-material/Shield';
 import NewReleasesIcon from '@mui/icons-material/NewReleases';
 import Configuration from './components/Configuration';
 import ChannelManager from './components/ChannelManager';
+import PlaylistManager from './components/PlaylistManager';
 import DownloadManager from './components/DownloadManager';
 import VideosPage from './components/VideosPage';
 import LocalLogin from './components/LocalLogin';
 import InitialSetup from './components/InitialSetup';
 import ChannelPage from './components/ChannelPage';
+import PlaylistPage from './components/PlaylistPage';
 import ChangelogPage from './components/ChangelogPage';
 import StorageStatus from './components/StorageStatus';
 import { useConfig } from './hooks/useConfig';
@@ -558,6 +561,31 @@ function AppContent() {
               <ListItem
                 button
                 component={Link}
+                to='/playlists'
+                onClick={handleDrawerToggle}
+                sx={{
+                  bgcolor: location.pathname === '/playlists' ? 'action.selected' : 'transparent',
+                  borderLeft: location.pathname === '/playlists' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
+                  '&:hover': {
+                    bgcolor: 'action.hover',
+                  },
+                  paddingX: isMobile ? '8px' : '16px'
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
+                  <PlaylistPlayIcon sx={{ color: location.pathname === '/playlists' ? 'primary.main' : 'inherit' }} />
+                </ListItemIcon>
+                <ListItemText
+                  primaryTypographyProps={{
+                    fontSize: isMobile ? 'small' : 'medium',
+                    fontWeight: location.pathname === '/playlists' ? 'bold' : 'normal'
+                  }}
+                  primary='Your Playlists'
+                />
+              </ListItem>
+              <ListItem
+                button
+                component={Link}
                 to='/downloads'
                 onClick={handleDrawerToggle}
                 sx={{
@@ -706,7 +734,7 @@ function AppContent() {
             style={{
               paddingTop: isMobile ? '100px' : '32px',
               width: '100%',
-              ...(location.pathname === '/channels'
+              ...((location.pathname === '/channels' || location.pathname === '/playlists')
                 ? (isMobile
                     ? {
                         height: '100vh',
@@ -756,6 +784,14 @@ function AppContent() {
                     <Route
                       path='/channels'
                       element={<ChannelManager token={token} />}
+                    />
+                    <Route
+                      path='/playlists'
+                      element={<PlaylistManager token={token} />}
+                    />
+                    <Route
+                      path='/playlist/:playlist_id'
+                      element={<PlaylistPage token={token} />}
                     />
                     <Route
                       path='/downloads'

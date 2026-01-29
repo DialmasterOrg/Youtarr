@@ -3,6 +3,7 @@ const createAuthRoutes = require('./auth');
 const createSetupRoutes = require('./setup');
 const createConfigRoutes = require('./config');
 const createChannelRoutes = require('./channels');
+const createPlaylistRoutes = require('./playlists');
 const createVideoRoutes = require('./videos');
 const createJobRoutes = require('./jobs');
 const createPlexRoutes = require('./plex');
@@ -19,6 +20,7 @@ function registerRoutes(app, deps) {
     loginLimiter,
     configModule,
     channelModule,
+    playlistModule,
     plexModule,
     downloadModule,
     jobModule,
@@ -44,6 +46,9 @@ function registerRoutes(app, deps) {
 
   // Channel routes
   app.use(createChannelRoutes({ verifyToken, channelModule, archiveModule }));
+
+  // Playlist routes
+  app.use(createPlaylistRoutes({ verifyToken, playlistModule }));
 
   // Video routes
   app.use(createVideoRoutes({ verifyToken, videosModule, downloadModule }));
