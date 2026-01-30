@@ -1,0 +1,118 @@
+:root {
+  --action-bar-gap: 8px;
+  --action-bar-gap-compact: 6px;
+  --action-bar-padding-y: 8px;
+  --action-bar-padding-x: 0px;
+}
+
+.action-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--action-bar-gap);
+  padding: var(--action-bar-padding-y) var(--action-bar-padding-x);
+}
+
+.action-bar--compact {
+  gap: var(--action-bar-gap-compact);
+}
+
+.action-bar--playful {
+  --action-bar-gap: 10px;
+}
+
+.action-bar--neumorphic {
+  --action-bar-gap: 8px;
+}
+
+.action-bar--linear,
+.action-bar--flat {
+  --action-bar-gap: 6px;
+}
+
+/* Action bar uses theme-provided tokens for foreground and borders */
+.action-bar {
+  color: var(--action-bar-foreground);
+}
+
+.action-bar .MuiButton-root,
+.action-bar .MuiIconButton-root,
+.action-bar .MuiButton-outlinedInherit {
+  color: var(--action-bar-foreground);
+  border: var(--border-weight) solid var(--action-bar-border);
+}
+
+.action-bar .MuiButton-root:hover,
+.action-bar .MuiIconButton-root:hover {
+  border: var(--border-weight) solid var(--action-bar-hover-border);
+}
+
+/* Disabled state for action bar buttons - theme-controlled */
+.action-bar .MuiButton-root.Mui-disabled,
+.action-bar .MuiIconButton-root.Mui-disabled,
+.action-bar .MuiButton-root.Mui-disabled.MuiButton-outlined {
+  color: var(--action-bar-disabled-foreground) !important;
+  border-color: var(--action-bar-border) !important;
+  background-color: transparent !important;
+  opacity: 1 !important;
+}
+
+.action-bar .MuiButton-root.Mui-disabled .MuiSvgIcon-root,
+.action-bar .MuiIconButton-root.Mui-disabled .MuiSvgIcon-root {
+  color: var(--action-bar-disabled-foreground) !important;
+} 
+
+.MuiButton-root.intent-base,
+.MuiIconButton-root.intent-base {
+  color: var(--foreground);
+  background-color: transparent;
+  border-color: var(--border);
+}
+
+.MuiButton-root.intent-base:hover,
+.MuiIconButton-root.intent-base:hover {
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+
+.MuiButton-root.intent-success,
+.MuiIconButton-root.intent-success {
+  color: var(--secondary);
+  background-color: transparent;
+  border: var(--border-weight) solid var(--secondary);
+}
+
+.MuiButton-root.intent-success:hover,
+.MuiIconButton-root.intent-success:hover {
+  background-color: var(--secondary);
+  color: var(--secondary-foreground);
+  border: var(--border-weight) solid var(--secondary);
+}
+
+.MuiButton-root.intent-warning,
+.MuiIconButton-root.intent-warning {
+  color: var(--accent);
+  background-color: transparent;
+  border: var(--border-weight) solid var(--accent);
+}
+
+.MuiButton-root.intent-warning:hover,
+.MuiIconButton-root.intent-warning:hover {
+  background-color: var(--accent);
+  color: var(--accent-foreground);
+  border: var(--border-weight) solid var(--accent);
+}
+
+.MuiButton-root.intent-danger,
+.MuiIconButton-root.intent-danger {
+  color: var(--destructive);
+  background-color: transparent;
+  border: var(--border-weight) solid var(--destructive);
+}
+
+.MuiButton-root.intent-danger:hover,
+.MuiIconButton-root.intent-danger:hover {
+  background-color: var(--destructive);
+  color: var(--destructive-foreground);
+  border: var(--border-weight) solid var(--destructive);
+}

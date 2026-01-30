@@ -68,6 +68,11 @@ body::before {
   opacity: 0.5;
 }
 
+.playful-shape {
+  will-change: transform, box-shadow;
+  transform: translateZ(0);
+}
+
 /* Outlined input notch should only appear when label is floated */
 .MuiFormControl-root .MuiInputLabel-root:not(.MuiInputLabel-shrink) + .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline legend {
   max-width: 0.01px;

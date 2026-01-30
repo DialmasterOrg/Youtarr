@@ -17,7 +17,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  alpha,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ViewModuleIcon from '@mui/icons-material/ViewModule';
@@ -33,6 +32,9 @@ import ClearIcon from '@mui/icons-material/Clear';
 import { getVideoStatus } from '../../utils/videoStatus';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { RATING_OPTIONS } from '../../utils/ratings';
+import { useThemeEngine } from '../../contexts/ThemeEngineContext';
+import { ActionBar } from '../shared/ActionBar';
+import { intentStyles } from '../../utils/intentStyles';
 
 type ViewMode = 'table' | 'grid' | 'list';
 
@@ -93,6 +95,7 @@ function ChannelVideosHeader({
   onInfoIconClick,
   onMaxRatingChange,
 }: ChannelVideosHeaderProps) {
+  const { themeMode } = useThemeEngine();
   const renderInfoIcon = (message: string) => {
     const handleClick = (e: React.MouseEvent) => {
       e.preventDefault();
@@ -165,8 +168,10 @@ function ChannelVideosHeader({
             onClick={onRefreshClick}
             variant="outlined"
             size="small"
+            color="inherit"
             disabled={fetchingAllVideos}
             startIcon={<RefreshIcon />}
+            className={intentStyles.base}
           >
             {fetchingAllVideos ? 'Refreshing...' : 'Refresh All'}
           </Button>
@@ -248,20 +253,22 @@ function ChannelVideosHeader({
 
         {/* Action buttons for desktop */}
         {!isMobile && (
-          <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}>
+          <ActionBar variant={themeMode} sx={{ mt: 2 }}>
             <Button
               variant="outlined"
               size="small"
-              color="primary"
+              color="inherit"
               startIcon={<DownloadIcon />}
               onClick={onDownloadClick}
               disabled={checkedBoxes.length === 0}
+              className={intentStyles.success}
             >
               Download {checkedBoxes.length > 0 ? `${checkedBoxes.length} ${checkedBoxes.length === 1 ? 'Video' : 'Videos'}` : 'Selected'}
             </Button>
             <Button
               variant="outlined"
               size="small"
+              color="inherit"
               onClick={onSelectAll}
               disabled={
                 selectionMode === 'delete'
@@ -269,6 +276,7 @@ function ChannelVideosHeader({
                   : checkedBoxes.length === 0 && selectableDownloadCount === 0
               }
               startIcon={<ChecklistIcon />}
+              className={intentStyles.base}
             >
               Select All This Page
             </Button>
@@ -284,24 +292,54 @@ function ChannelVideosHeader({
             <Button
               variant="outlined"
               size="small"
-              color="warning"
+              color="inherit"
               startIcon={<BlockIcon />}
               onClick={onBulkIgnoreClick}
               disabled={checkedBoxes.length === 0}
+              className={intentStyles.warning}
             >
               Ignore Selected
             </Button>
             <Button
               variant="outlined"
               size="small"
-              color="error"
+              color="inherit"
               startIcon={<DeleteIcon />}
               onClick={onDeleteClick}
               disabled={selectedForDeletion.length === 0 || deleteLoading}
+              className={intentStyles.danger}
             >
               Delete {selectedForDeletion.length > 0 ? `${selectedForDeletion.length}` : 'Selected'}
             </Button>
-          </Box>
+          </ActionBar>
+        )}
+
+        {/* Action buttons for mobile */}
+        {isMobile && (
+          <ActionBar variant={themeMode} compact sx={{ mt: 2 }}>
+            <IconButton
+              size="small"
+              onClick={onSelectAll}
+              disabled={
+                selectionMode === 'delete'
+                  ? selectableDeleteCount === 0
+                  : checkedBoxes.length === 0 && selectableDownloadCount === 0
+              }
+              className={intentStyles.base}
+              aria-label="Select all this page"
+            >
+              <ChecklistIcon fontSize="small" />
+            </IconButton>
+            <IconButton
+              size="small"
+              onClick={onClearSelection}
+              disabled={checkedBoxes.length === 0}
+              className={intentStyles.base}
+              aria-label="Clear selection"
+            >
+              <ClearIcon fontSize="small" />
+            </IconButton>
+          </ActionBar>
         )}
       </Box>
 

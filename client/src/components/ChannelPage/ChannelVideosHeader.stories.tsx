@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from '@storybook/test';
 import ChannelVideosHeader from './ChannelVideosHeader';
 import { ChannelVideo } from '../../types/ChannelVideo';
+import { ThemeEngineProvider } from '../../contexts/ThemeEngineContext';
 
 const paginatedVideos: ChannelVideo[] = [
   {
@@ -19,6 +20,13 @@ const paginatedVideos: ChannelVideo[] = [
 const meta: Meta<typeof ChannelVideosHeader> = {
   title: 'Components/ChannelPage/ChannelVideosHeader',
   component: ChannelVideosHeader,
+  decorators: [
+    (Story) => (
+      <ThemeEngineProvider>
+        <Story />
+      </ThemeEngineProvider>
+    ),
+  ],
   args: {
     isMobile: false,
     viewMode: 'grid',
@@ -75,6 +83,6 @@ export const ActionBarInteractions: Story = {
 
     const deleteButton = canvas.getByRole('button', { name: /delete 1/i });
     await userEvent.hover(deleteButton);
-    expect(deleteButton.className).toContain('MuiButton-outlinedError');
+    expect(deleteButton.className).toContain('intent-danger');
   },
 };

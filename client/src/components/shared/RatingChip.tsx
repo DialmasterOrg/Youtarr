@@ -31,7 +31,7 @@ const RatingChip: React.FC<RatingChipProps> = ({ rating, size = 'small' }) => {
           border: isNeumorphic
             ? 'var(--border-weight) solid transparent'
             : 'var(--border-weight) solid var(--border-strong)',
-          boxShadow: isNeumorphic ? 'var(--shadow-input-rest)' : 'var(--shadow-hard)',
+          boxShadow: isNeumorphic ? 'var(--shadow-input-rest)' : 'none',
           color: 'var(--foreground)',
           '& .MuiChip-label': {
             px: 0.75,

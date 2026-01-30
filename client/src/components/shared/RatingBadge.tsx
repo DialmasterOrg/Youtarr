@@ -59,7 +59,18 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
         },
       };
     }
-    // playful and default
+    // playful theme - no shadow; other defaults keep shadow
+    if (themeMode === 'playful') {
+      return {
+        border: 'var(--border-weight) solid var(--foreground)',
+        boxShadow: 'none',
+        '&:hover': {
+          boxShadow: 'none',
+          transform: 'translate(0, 0)',
+        },
+      };
+    }
+
     return {
       border: 'var(--border-weight) solid var(--foreground)',
       boxShadow: 'var(--shadow-hard)',

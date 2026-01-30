@@ -14,6 +14,7 @@ import {
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ReactMarkdown from 'react-markdown';
 import { useChangelog } from '../hooks/useChangelog';
+import { intentStyles } from '../utils/intentStyles';
 
 const CHANGELOG_GITHUB_URL =
   'https://github.com/DialmasterOrg/Youtarr/blob/main/CHANGELOG.md';
@@ -45,6 +46,8 @@ function ChangelogPage() {
             onClick={refetch}
             disabled={loading}
             size="small"
+            color="inherit"
+            className={intentStyles.base}
           >
             Refresh
           </Button>

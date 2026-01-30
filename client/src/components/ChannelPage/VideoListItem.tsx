@@ -15,6 +15,7 @@ import StorageIcon from '@mui/icons-material/Storage';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { useTheme } from '@mui/material/styles';
+import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { formatFileSize, decodeHtml } from '../../utils/formatters';
@@ -44,6 +45,7 @@ function VideoListItem({
   onMobileTooltip,
 }: VideoListItemProps) {
   const theme = useTheme();
+  const { themeMode } = useThemeEngine();
   const status = getVideoStatus(video);
   // Check if video is still live (not "was_live" and not null/undefined)
   const isStillLive = video.live_status && video.live_status !== 'was_live';
@@ -280,12 +282,15 @@ function VideoListItem({
                 label={mediaTypeInfo.label}
                 color={mediaTypeInfo.color}
                 variant="outlined"
-                sx={{
+                sx={(theme) => ({
                   height: 18,
                   fontSize: '0.7rem',
                   '& .MuiChip-icon': { fontSize: 14, ml: 0.5 },
                   '& .MuiChip-label': { px: 0.6 },
-                }}
+                  '&:hover': {
+                    boxShadow: themeMode === 'playful' ? 'none' : undefined,
+                  }
+                })}
               />
             )}
             <Chip
@@ -294,12 +299,23 @@ function VideoListItem({
               size="small"
               color={getStatusColor(status)}
               variant={status === 'downloaded' ? 'filled' : 'outlined'}
-              sx={{
+              sx={(theme) => ({
                 height: 20,
                 fontSize: '0.7rem',
                 '& .MuiChip-icon': { fontSize: 14, ml: 0.5 },
-                '& .MuiChip-label': { px: 0.75 },
-              }}
+                '& .MuiChip-label': {
+                  px: 0.75,
+                  display: 'inline-block',
+                  maxWidth: 120,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                },
+                flex: '0 0 auto',
+                '&:hover': {
+                  boxShadow: theme.palette.mode === 'light' && themeMode === 'playful' ? 'none' : undefined,
+                }
+              })}
             />
           </Box>
         </CardContent>

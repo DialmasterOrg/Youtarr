@@ -20,6 +20,7 @@ import { formatFileSize, decodeHtml } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
+import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 
 interface VideoCardProps {
   video: ChannelVideo;
@@ -63,6 +64,8 @@ function VideoCard({
   const isIgnored = status === 'ignored';
   const baseTransform = isInteractive ? 'var(--sticker-rest-transform)' : 'translate(0, 0)';
   const isClickable = (isDownloadSelectable && isDownloadAllowed) || (isDeleteSelectable && isDeleteAllowed);
+
+  const { themeMode } = useThemeEngine();
 
   return (
     <Fade in timeout={300} key={video.youtube_id}>
@@ -313,16 +316,16 @@ function VideoCard({
                     label={mediaTypeInfo.label}
                     color={mediaTypeInfo.color}
                     variant="outlined"
-                    sx={{ 
+                  sx={(theme) => ({ 
                       height: 24, 
                       fontSize: '0.7rem', 
                       minWidth: 'fit-content',
                       boxShadow: 'none',
                       transition: 'box-shadow 200ms var(--transition-bouncy)',
                       '&:hover': {
-                        boxShadow: 'var(--shadow-hard)',
+                        boxShadow: themeMode === 'playful' ? 'none' : 'var(--shadow-hard)'
                       }
-                    }}
+                    })}
                   />
                 )}
                 <RatingBadge
@@ -338,17 +341,24 @@ function VideoCard({
                   size="small"
                   color={getStatusColor(status)}
                   variant={status === 'downloaded' ? 'filled' : 'outlined'}
-                  sx={{ 
+                  sx={(theme) => ({ 
                     height: 24, 
                     fontSize: '0.7rem', 
-                    flex: '1 1 auto', 
+                    flex: '0 0 auto',
                     minWidth: 'fit-content',
                     boxShadow: 'none',
                     transition: 'box-shadow 200ms var(--transition-bouncy)',
+                    '& .MuiChip-label': {
+                      display: 'inline-block',
+                      maxWidth: 140,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    },
                     '&:hover': {
-                      boxShadow: 'var(--shadow-hard)',
+                      boxShadow: themeMode === 'playful' ? 'none' : 'var(--shadow-hard)'
                     }
-                  }}
+                  })}
                 />
               </Box>
             </Box>
