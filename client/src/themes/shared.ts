@@ -96,6 +96,11 @@ export const commonThemeOptions: ThemeOptions = {
         },
         outlined: {
           border: 'var(--border-weight) solid var(--border-strong)',
+          color: 'var(--foreground)',
+          '&:hover': {
+            backgroundColor: 'var(--foreground)',
+            color: 'var(--background)',
+          },
         },
         outlinedPrimary: {
           color: 'var(--primary)',
@@ -172,8 +177,35 @@ export const commonThemeOptions: ThemeOptions = {
           borderRadius: 'var(--radius-ui)',
           border: 'var(--border-weight) solid var(--border-strong)',
           boxShadow: 'none',
-          transition: 'box-shadow 250ms var(--transition-bouncy)',
+          transition: 'all 250ms var(--transition-bouncy)',
           fontWeight: 600,
+        },
+        filledPrimary: {
+          backgroundColor: 'var(--primary)',
+          color: 'var(--primary-foreground)',
+          borderColor: 'var(--primary)',
+        },
+        outlinedPrimary: {
+          color: 'var(--primary)',
+          borderColor: 'var(--primary)',
+        },
+        filledSuccess: {
+          backgroundColor: 'var(--secondary)',
+          color: 'var(--foreground)',
+          borderColor: 'var(--secondary)',
+        },
+        outlinedSuccess: {
+          color: 'var(--secondary)',
+          borderColor: 'var(--secondary)',
+        },
+        filledWarning: {
+          backgroundColor: 'var(--accent)',
+          color: 'var(--accent-foreground)',
+          borderColor: 'var(--accent)',
+        },
+        outlinedWarning: {
+          color: 'var(--accent)',
+          borderColor: 'var(--accent)',
         },
       },
     },

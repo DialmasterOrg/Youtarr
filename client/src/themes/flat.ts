@@ -114,10 +114,10 @@ export const flatTheme: ThemeDefinition = {
       'input-border-hover': '217 92% 60%',
       ring: '217 92% 60%',
       radius: '0.25rem',
-      'radius-ui': '8px',
-      'radius-input': '8px',
-      'radius-thumb': '8px',
-      'border-weight': '2px',
+      'radius-ui': '2px',
+      'radius-input': '4px',
+      'radius-thumb': '4px',
+      'border-weight': '1px',
       'nav-hover-style': 'flat-solid',
       'shadow-soft': 'none',
       'shadow-hard': 'none',
@@ -171,33 +171,51 @@ export const flatTheme: ThemeDefinition = {
       styleOverrides: {
         root: {
           borderRadius: 'var(--radius-ui)',
-          border: 'none',
+          border: 'var(--border-weight) solid var(--border)',
           boxShadow: 'none',
-          backgroundColor: 'var(--muted)',
+          backgroundColor: 'transparent',
           color: 'var(--foreground)',
-          fontWeight: 600,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          fontSize: '0.65rem',
+          letterSpacing: '0.05em',
+          transition: 'all 0.2s ease',
+          '&:hover': {
+            borderColor: 'var(--primary)',
+            backgroundColor: 'rgba(59, 130, 246, 0.05)',
+          },
+        },
+        filledPrimary: {
+          backgroundColor: 'var(--primary)',
+          color: 'var(--primary-foreground)',
+          borderColor: 'var(--primary)',
+          '&:hover': {
+            filter: 'brightness(1.1)',
+            backgroundColor: 'var(--primary)',
+          },
         },
         filledSuccess: {
           backgroundColor: 'var(--secondary)',
-          color: 'var(--secondary-foreground)',
-        },
-        filledInfo: {
-          backgroundColor: 'var(--primary)',
-          color: 'var(--primary-foreground)',
-        },
-        filledWarning: {
-          backgroundColor: 'var(--accent)',
-          color: 'var(--accent-foreground)',
-        },
-        filledError: {
-          backgroundColor: 'var(--destructive)',
-          color: 'var(--destructive-foreground)',
+          color: '#FFFFFF',
+          borderColor: 'var(--secondary)',
         },
         outlinedSuccess: {
           color: 'var(--secondary)',
-          border: '2px solid var(--secondary)',
-          backgroundColor: 'rgba(16, 185, 129, 0.08)',
+          border: 'var(--border-weight) solid var(--secondary)',
+          backgroundColor: 'transparent',
         },
+        filledWarning: {
+          backgroundColor: 'var(--accent)',
+          color: '#000000',
+          borderColor: 'var(--accent)',
+        },
+        filledError: {
+          backgroundColor: 'var(--destructive)',
+          color: '#FFFFFF',
+          borderColor: 'var(--destructive)',
+        },
+      },
+    },
         outlinedInfo: {
           color: 'var(--primary)',
           border: '2px solid var(--primary)',
@@ -262,18 +280,22 @@ export const flatTheme: ThemeDefinition = {
     MuiButton: {
       styleOverrides: {
         root: {
-          textTransform: 'none',
-          fontWeight: 600,
+          textTransform: 'uppercase',
+          fontWeight: 700,
+          fontFamily: 'monospace',
+          fontSize: '0.75rem',
+          letterSpacing: '0.05em',
           borderRadius: 'var(--radius-ui)',
-          border: 'none',
+          border: 'var(--border-weight) solid transparent',
           boxShadow: 'none',
-          transition: 'transform 200ms ease, background-color 200ms ease, border-color 200ms ease',
+          transition: 'all 200ms ease',
           '&:hover': {
             boxShadow: 'none',
-            transform: 'scale(1.05)',
+            transform: 'translateY(-1px)',
+            borderColor: 'var(--primary)',
           },
           '&:active': {
-            transform: 'scale(0.98)',
+            transform: 'translateY(0)',
           },
         },
         containedPrimary: {
@@ -281,11 +303,11 @@ export const flatTheme: ThemeDefinition = {
           color: 'var(--primary-foreground)',
           '&:hover': {
             backgroundColor: 'var(--primary)',
-            filter: 'brightness(0.9)',
+            filter: 'brightness(1.1)',
           },
         },
         outlinedPrimary: {
-          borderWidth: '2px',
+          borderWidth: 'var(--border-weight)',
           borderColor: 'var(--primary)',
           color: 'var(--primary)',
           '&:hover': {
@@ -300,7 +322,7 @@ export const flatTheme: ThemeDefinition = {
           },
         },
         outlinedWarning: {
-          borderWidth: '2px',
+          borderWidth: 'var(--border-weight)',
           borderColor: 'var(--accent)',
           color: 'var(--accent)',
           '&:hover': {
@@ -315,7 +337,7 @@ export const flatTheme: ThemeDefinition = {
           },
         },
         outlinedError: {
-          borderWidth: '2px',
+          borderWidth: 'var(--border-weight)',
           borderColor: 'var(--destructive)',
           color: 'var(--destructive)',
           '&:hover': {
@@ -332,11 +354,10 @@ export const flatTheme: ThemeDefinition = {
         outlined: {
           color: 'var(--foreground)',
           borderColor: 'var(--border)',
-          borderWidth: '2px',
+          borderWidth: 'var(--border-weight)',
           '&:hover': {
-            backgroundColor: 'var(--muted)',
-            borderColor: 'var(--primary)',
-            color: 'var(--primary)',
+            backgroundColor: 'var(--foreground)',
+            color: 'var(--background)',
           },
         },
       },

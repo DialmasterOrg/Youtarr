@@ -219,6 +219,25 @@ export const playfulTheme: ThemeDefinition = {
           borderRadius: 'var(--radius-ui)',
           border: '2px solid var(--foreground)',
           fontWeight: 700,
+          boxShadow: 'var(--shadow-hard)',
+          transition: 'all 300ms var(--transition-bouncy)',
+          '&:hover': {
+            transform: 'translate(-2px, -2px)',
+            boxShadow: 'var(--shadow-hard-hover)',
+          },
+        },
+        filledPrimary: {
+          backgroundColor: 'var(--primary)',
+          color: 'var(--primary-foreground)',
+        },
+        filledSuccess: {
+          backgroundColor: '#fbbf24', // Using yellow for active status in playful
+          color: 'var(--foreground)',
+        },
+        outlined: {
+          backgroundColor: 'var(--background)',
+          color: 'var(--foreground)',
+          opacity: 0.8,
         },
       },
     },

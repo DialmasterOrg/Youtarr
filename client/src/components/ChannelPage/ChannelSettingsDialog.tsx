@@ -42,6 +42,7 @@ import RatingIcon from '@mui/icons-material/Star';
 import { useConfig } from '../../hooks/useConfig';
 import { SubfolderAutocomplete } from '../shared/SubfolderAutocomplete';
 import { RATING_OPTIONS } from '../../utils/ratings';
+import RatingBadge from '../shared/RatingBadge';
 
 interface ChannelSettings {
   sub_folder: string | null;
@@ -741,11 +742,9 @@ function ChannelSettingsDialog({
               <Typography variant="caption" color="text.secondary">
                 Effective default rating:
               </Typography>
-              <Chip
-                size="small"
-                label={effectiveRatingLabel}
-                color={settings.default_rating ? 'warning' : 'default'}
-                sx={{ fontWeight: 700 }}
+              <RatingBadge 
+                rating={effectiveRatingLabel} 
+                size="small" 
               />
             </Box>
           </Box>

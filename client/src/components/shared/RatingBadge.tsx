@@ -83,13 +83,12 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
           borderRadius: 'var(--radius-ui)',
           bgcolor: 'var(--card)',
           color: 'var(--foreground)',
-          border: themeMode === 'neumorphic'
-            ? 'var(--border-weight) solid transparent'
-            : 'var(--border-weight) solid var(--foreground)',
+          border: 'var(--border-weight) solid var(--foreground)',
           boxShadow: 'none',
-          transition: 'transform 200ms var(--transition-bouncy), box-shadow 200ms var(--transition-bouncy)',
+          transition: 'all 200ms var(--transition-bouncy)',
           '&:hover': {
             boxShadow: themeMode === 'neumorphic' ? 'var(--shadow-input-rest)' : 'var(--shadow-hard)',
+            transform: 'translate(-1px, -1px)',
           },
           ...sx,
         }}
@@ -99,8 +98,10 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
           variant="caption"
           sx={{
             fontWeight: 800,
-            fontSize: size === 'small' ? '0.7rem' : '0.8rem',
+            fontSize: size === 'small' ? '0.65rem' : '0.75rem',
             lineHeight: 1,
+            textTransform: 'uppercase',
+            letterSpacing: '0.02em',
           }}
         >
           {displayRating}

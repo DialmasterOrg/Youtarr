@@ -28,6 +28,8 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BlockIcon from '@mui/icons-material/Block';
 import InfoIcon from '@mui/icons-material/Info';
+import ChecklistIcon from '@mui/icons-material/Checklist';
+import ClearIcon from '@mui/icons-material/Clear';
 import { getVideoStatus } from '../../utils/videoStatus';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { RATING_OPTIONS } from '../../utils/ratings';
@@ -165,19 +167,6 @@ function ChannelVideosHeader({
             size="small"
             disabled={fetchingAllVideos}
             startIcon={<RefreshIcon />}
-            sx={{
-              color: 'text.primary',
-              borderColor: 'divider',
-              '&:hover:not(:disabled)': {
-                bgcolor: 'action.hover',
-                borderColor: 'text.primary',
-              },
-              '&.Mui-disabled': {
-                color: 'text.secondary',
-                borderColor: 'divider',
-                opacity: 0.5,
-              },
-            }}
           >
             {fetchingAllVideos ? 'Refreshing...' : 'Refresh All'}
           </Button>
@@ -279,6 +268,7 @@ function ChannelVideosHeader({
                   ? selectableDeleteCount === 0
                   : checkedBoxes.length === 0 && selectableDownloadCount === 0
               }
+              startIcon={<ChecklistIcon />}
             >
               Select All This Page
             </Button>
@@ -287,6 +277,7 @@ function ChannelVideosHeader({
               size="small"
               onClick={onClearSelection}
               disabled={checkedBoxes.length === 0}
+              startIcon={<ClearIcon />}
             >
               Clear
             </Button>

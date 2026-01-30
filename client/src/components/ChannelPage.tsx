@@ -135,20 +135,18 @@ function ChannelPage({ token }: ChannelPageProps) {
           label="Videos"
           size="small"
           variant={enabledTabs.includes('video') ? 'filled' : 'outlined'}
-          color={enabledTabs.includes('video') ? 'primary' : 'default'}
+          color={enabledTabs.includes('video') ? 'success' : 'default'}
           sx={{
             ...channelChipSx,
-            opacity: enabledTabs.includes('video') ? 1 : 0.5,
           }}
         />
         <Chip
           label="Shorts"
           size="small"
           variant={enabledTabs.includes('short') ? 'filled' : 'outlined'}
-          color={enabledTabs.includes('short') ? 'primary' : 'default'}
+          color={enabledTabs.includes('short') ? 'success' : 'default'}
           sx={{
             ...channelChipSx,
-            opacity: enabledTabs.includes('short') ? 1 : 0.5,
           }}
         />
       </Box>
