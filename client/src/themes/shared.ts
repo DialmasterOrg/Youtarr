@@ -1,5 +1,15 @@
 import { ThemeOptions } from '@mui/material/styles';
 
+export const fabBase = {
+  root: {
+    transition: 'all 200ms ease',
+    border: '1px solid transparent',
+    '& .MuiSvgIcon-root': {
+      color: 'inherit',
+    },
+  },
+};
+
 export const commonThemeOptions: ThemeOptions = {
   typography: {
     fontFamily: [
@@ -171,44 +181,6 @@ export const commonThemeOptions: ThemeOptions = {
         },
       },
     },
-    MuiChip: {
-      styleOverrides: {
-        root: {
-          borderRadius: 'var(--radius-ui)',
-          border: 'var(--border-weight) solid var(--border-strong)',
-          boxShadow: 'none',
-          transition: 'all 250ms var(--transition-bouncy)',
-          fontWeight: 600,
-          '&.MuiChip-filled.MuiChip-colorPrimary': {
-            backgroundColor: 'var(--primary)',
-            color: 'var(--primary-foreground)',
-            borderColor: 'var(--primary)',
-          },
-          '&.MuiChip-outlined.MuiChip-colorPrimary': {
-            color: 'var(--primary)',
-            borderColor: 'var(--primary)',
-          },
-          '&.MuiChip-filled.MuiChip-colorSuccess': {
-            backgroundColor: 'var(--secondary)',
-            color: 'var(--foreground)',
-            borderColor: 'var(--secondary)',
-          },
-          '&.MuiChip-outlined.MuiChip-colorSuccess': {
-            color: 'var(--secondary)',
-            borderColor: 'var(--secondary)',
-          },
-          '&.MuiChip-filled.MuiChip-colorWarning': {
-            backgroundColor: 'var(--accent)',
-            color: 'var(--accent-foreground)',
-            borderColor: 'var(--accent)',
-          },
-          '&.MuiChip-outlined.MuiChip-colorWarning': {
-            color: 'var(--accent)',
-            borderColor: 'var(--accent)',
-          },
-        },
-      },
-    },
     MuiFab: {
       styleOverrides: {
         root: {
@@ -216,24 +188,6 @@ export const commonThemeOptions: ThemeOptions = {
           border: '1px solid transparent',
           '& .MuiSvgIcon-root': {
             color: 'inherit',
-          },
-          '&.Mui-primary': {
-            backgroundColor: 'var(--primary)',
-            color: 'var(--primary-foreground)',
-            '&:hover': {
-              backgroundColor: 'var(--primary-foreground)',
-              color: 'var(--primary)',
-              borderColor: 'var(--primary)',
-            },
-          },
-          '&.Mui-error': {
-            backgroundColor: 'var(--destructive)',
-            color: 'var(--destructive-foreground)',
-            '&:hover': {
-              backgroundColor: 'var(--destructive-foreground)',
-              color: 'var(--destructive)',
-              borderColor: 'var(--destructive)',
-            },
           },
         },
       },

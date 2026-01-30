@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box } from '@mui/material';
 import { ThemeDefinition } from './types';
+import { fabBase } from './shared';
 
 export const playfulTheme: ThemeDefinition = {
   id: 'playful',
