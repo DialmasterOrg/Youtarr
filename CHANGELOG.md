@@ -1,5 +1,24 @@
 # Changelog
 
+## [v1.57.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.57.1) - 2026-01-30
+
+### [1.57.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.57.0...v1.57.1) (2026-01-30)
+
+
+### Bug Fixes
+
+* exclude broken android_sdkless player client to prevent 403 errors ([ff60d21](https://github.com/DialmasterOrg/Youtarr/commit/ff60d21d0816f4aed9c48a2c0bb4ff5e38094a48)), closes [#15712](https://github.com/DialmasterOrg/Youtarr/issues/15712)
+* Revert previous fix attempt for 403 ([60f7cf5](https://github.com/DialmasterOrg/Youtarr/commit/60f7cf5148d12412ab13d3cbc7e6d04ef6be7820))
+
+
+### Documentation
+
+* update CHANGELOG for v1.57.0 [skip ci] ([2898ad5](https://github.com/DialmasterOrg/Youtarr/commit/2898ad509546479deb72a7695d5de6e6db366fec))
+
+
+
+
+
 ## [v1.57.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.57.0) - 2026-01-19
 
 ## [1.57.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.56.0...v1.57.0) (2026-01-19)
