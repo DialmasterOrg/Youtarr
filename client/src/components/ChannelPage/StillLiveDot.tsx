@@ -10,6 +10,7 @@ interface StillLiveDotProps {
 function StillLiveDot({ isMobile = false, onMobileClick }: StillLiveDotProps) {
   const [tooltipOpen, setTooltipOpen] = useState(false);
   const message = "Cannot download while still airing";
+  const tooltipTimeoutRef = React.useRef<number | null>(null);
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -19,10 +20,18 @@ function StillLiveDot({ isMobile = false, onMobileClick }: StillLiveDotProps) {
       onMobileClick(message);
     } else {
       setTooltipOpen(!tooltipOpen);
-      // Auto-close tooltip after 2 seconds
-      setTimeout(() => setTooltipOpen(false), 2000);
+      // Auto-close tooltip after 2 seconds and store timeout id so we can clear it
+      tooltipTimeoutRef.current = window.setTimeout(() => setTooltipOpen(false), 2000);
     }
   };
+
+  React.useEffect(() => {
+    return () => {
+      if (tooltipTimeoutRef.current) {
+        clearTimeout(tooltipTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const liveDot = (
     <Chip

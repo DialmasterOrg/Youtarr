@@ -390,46 +390,48 @@ export const flatTheme: ThemeDefinition = {
     },
     MuiFab: {
       styleOverrides: {
-        primary: {
-          backgroundColor: 'var(--primary)',
-          color: 'var(--primary-foreground)',
-          boxShadow: 'none',
-          border: '2px solid var(--primary)',
-          transition: 'transform 200ms ease, background-color 200ms ease, border-color 200ms ease',
-          '&:hover': {
-            backgroundColor: 'var(--primary-foreground)',
-            color: 'var(--primary)',
-            borderColor: 'var(--primary)',
-            transform: 'scale(1.08)',
+        root: {
+          '&.Mui-primary': {
+            backgroundColor: 'var(--primary)',
+            color: 'var(--primary-foreground)',
             boxShadow: 'none',
-            '& .MuiSvgIcon-root': {
-              color: 'inherit',
+            border: '2px solid var(--primary)',
+            transition: 'transform 200ms ease, background-color 200ms ease, border-color 200ms ease',
+            '&:hover': {
+              backgroundColor: 'var(--primary-foreground)',
+              color: 'var(--primary)',
+              borderColor: 'var(--primary)',
+              transform: 'scale(1.08)',
+              boxShadow: 'none',
+              '& .MuiSvgIcon-root': {
+                color: 'inherit',
+              },
             },
           },
-        },
-        secondary: {
-          backgroundColor: 'var(--secondary)',
-          color: 'var(--secondary-foreground)',
-          border: '2px solid var(--secondary)',
-          '&:hover': {
-            backgroundColor: 'var(--secondary-foreground)',
-            color: 'var(--secondary)',
-            borderColor: 'var(--secondary)',
-            '& .MuiSvgIcon-root': {
-              color: 'inherit',
+          '&.Mui-secondary': {
+            backgroundColor: 'var(--secondary)',
+            color: 'var(--secondary-foreground)',
+            border: '2px solid var(--secondary)',
+            '&:hover': {
+              backgroundColor: 'var(--secondary-foreground)',
+              color: 'var(--secondary)',
+              borderColor: 'var(--secondary)',
+              '& .MuiSvgIcon-root': {
+                color: 'inherit',
+              },
             },
           },
-        },
-        error: {
-          backgroundColor: 'var(--destructive)',
-          color: 'var(--destructive-foreground)',
-          border: '2px solid var(--destructive)',
-          '&:hover': {
-            backgroundColor: 'var(--destructive-foreground)',
-            color: 'var(--destructive)',
-            borderColor: 'var(--destructive)',
-            '& .MuiSvgIcon-root': {
-              color: 'inherit',
+          '&.Mui-error': {
+            backgroundColor: 'var(--destructive)',
+            color: 'var(--destructive-foreground)',
+            border: '2px solid var(--destructive)',
+            '&:hover': {
+              backgroundColor: 'var(--destructive-foreground)',
+              color: 'var(--destructive)',
+              borderColor: 'var(--destructive)',
+              '& .MuiSvgIcon-root': {
+                color: 'inherit',
+              },
             },
           },
         },

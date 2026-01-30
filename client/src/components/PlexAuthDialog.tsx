@@ -28,6 +28,16 @@ const PlexAuthDialog: React.FC<PlexAuthDialogProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const intervalRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, []);
 
   const handlePlexAuth = async () => {
     setLoading(true);
@@ -52,13 +62,16 @@ const PlexAuthDialog: React.FC<PlexAuthDialogProps> = ({
       const maxAttempts = 30; // 2.5 minutes total
 
       // Poll the server every 5 seconds to check if the PIN is claimed
-      const intervalId = setInterval(async () => {
+      intervalRef.current = window.setInterval(async () => {
         try {
           const checkRes = await fetch(`/plex/check-pin/${pinId}`);
           const { authToken } = await checkRes.json();
           
           if (authToken) {
-            clearInterval(intervalId);
+            if (intervalRef.current) {
+              clearInterval(intervalRef.current);
+              intervalRef.current = null;
+            }
             authWindow?.close();
             
             if (authToken === 'invalid') {
@@ -78,14 +91,20 @@ const PlexAuthDialog: React.FC<PlexAuthDialogProps> = ({
           } else {
             attempts++;
             if (attempts >= maxAttempts) {
-              clearInterval(intervalId);
+              if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+              }
               setError('Authentication timeout. Please try again.');
               authWindow?.close();
               setLoading(false);
             }
           }
         } catch (err) {
-          clearInterval(intervalId);
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+          }
           setError('Failed to check authentication status. Please try again.');
           authWindow?.close();
           setLoading(false);

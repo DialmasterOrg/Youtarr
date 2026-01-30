@@ -16,6 +16,7 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
 
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const subscriptionsRef = useRef<Subscription[]>([]);
+  const reconnectTimeoutRef = useRef<number | null>(null);
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -47,7 +48,7 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     ws.onclose = () => {
       // If the connection was closed, try to reconnect after a delay.
       const delay = calculateBackoff(retries);
-      setTimeout(connect, delay);
+      reconnectTimeoutRef.current = window.setTimeout(connect, delay);
     };
 
     ws.onerror = (error: Event) => {
@@ -116,6 +117,12 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     }
 
     return () => {
+      // Clear any pending reconnect timer
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+
       if (socket) {
         socket.close();
       }

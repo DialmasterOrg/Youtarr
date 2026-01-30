@@ -217,7 +217,7 @@ export const commonThemeOptions: ThemeOptions = {
           '& .MuiSvgIcon-root': {
             color: 'inherit',
           },
-          '&.MuiFab-primary': {
+          '&.Mui-primary': {
             backgroundColor: 'var(--primary)',
             color: 'var(--primary-foreground)',
             '&:hover': {
@@ -226,7 +226,7 @@ export const commonThemeOptions: ThemeOptions = {
               borderColor: 'var(--primary)',
             },
           },
-          '&.MuiFab-error': {
+          '&.Mui-error': {
             backgroundColor: 'var(--destructive)',
             color: 'var(--destructive-foreground)',
             '&:hover': {

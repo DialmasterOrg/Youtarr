@@ -193,7 +193,7 @@ afterEach(() => {
 });
 
 // Clean up after the tests are finished.
-afterAll(() => {
+afterAll(async () => {
   try {
     if (typeof jest !== 'undefined' && typeof (jest as any).useFakeTimers === 'function') {
       jest.clearAllTimers();
@@ -202,5 +202,16 @@ afterAll(() => {
   } catch (e) {
     // Ignore if timers are not mockable in this context
   }
+
+  // Allow any pending microtasks / MessagePorts used by scheduler to drain before closing the server
+  // This reduces spurious "open handles" warnings from scheduler/MessageChannel.
+  await new Promise<void>((resolve) => {
+    if (typeof setImmediate !== 'undefined') {
+      setImmediate(() => resolve());
+    } else {
+      setTimeout(() => resolve(), 0);
+    }
+  });
+
   server.close();
 });

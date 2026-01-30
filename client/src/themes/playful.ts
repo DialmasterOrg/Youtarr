@@ -371,64 +371,66 @@ export const playfulTheme: ThemeDefinition = {
     },
     MuiFab: {
       styleOverrides: {
-        primary: {
-          backgroundColor: 'var(--primary)',
-          color: 'var(--primary-foreground)',
-          border: '2px solid var(--foreground)',
-          boxShadow: 'var(--shadow-hard)',
-          transition: 'all 300ms var(--transition-bouncy)',
-          '&:hover': {
-            backgroundColor: 'var(--primary-foreground)',
-            color: 'var(--primary)',
-            transform: 'translate(-2px, -2px) scale(1.05)',
-            boxShadow: 'var(--shadow-hard-hover)',
-            '& .MuiSvgIcon-root': {
-              color: 'inherit',
+        root: {
+          '&.Mui-primary': {
+            backgroundColor: 'var(--primary)',
+            color: 'var(--primary-foreground)',
+            border: '2px solid var(--foreground)',
+            boxShadow: 'var(--shadow-hard)',
+            transition: 'all 300ms var(--transition-bouncy)',
+            '&:hover': {
+              backgroundColor: 'var(--primary-foreground)',
+              color: 'var(--primary)',
+              transform: 'translate(-2px, -2px) scale(1.05)',
+              boxShadow: 'var(--shadow-hard-hover)',
+              '& .MuiSvgIcon-root': {
+                color: 'inherit',
+              },
+            },
+            '&:active': {
+              transform: 'translate(0, 0)',
+              boxShadow: 'var(--shadow-hard-active)',
             },
           },
-          '&:active': {
-            transform: 'translate(0, 0)',
-            boxShadow: 'var(--shadow-hard-active)',
-          },
-        },
-        secondary: {
-          backgroundColor: 'var(--secondary)',
-          color: 'var(--primary-foreground)',
-          border: '2px solid var(--foreground)',
-          boxShadow: 'var(--shadow-hard)',
-          transition: 'all 300ms var(--transition-bouncy)',
-          '&:hover': {
-            backgroundColor: 'var(--primary-foreground)',
-            color: 'var(--secondary)',
-            transform: 'translate(-2px, -2px) scale(1.05)',
-            boxShadow: 'var(--shadow-hard-hover)',
-            '& .MuiSvgIcon-root': {
-              color: 'inherit',
+          '&.Mui-secondary': {
+            backgroundColor: 'var(--secondary)',
+            color: 'var(--primary-foreground)',
+            border: '2px solid var(--foreground)',
+            boxShadow: 'var(--shadow-hard)',
+            transition: 'all 300ms var(--transition-bouncy)',
+            '&:hover': {
+              backgroundColor: 'var(--primary-foreground)',
+              color: 'var(--secondary)',
+              transform: 'translate(-2px, -2px) scale(1.05)',
+              boxShadow: 'var(--shadow-hard-hover)',
+              '& .MuiSvgIcon-root': {
+                color: 'inherit',
+              },
+            },
+            '&:active': {
+              transform: 'translate(0, 0)',
+              boxShadow: 'var(--shadow-hard-active)',
             },
           },
-          '&:active': {
-            transform: 'translate(0, 0)',
-            boxShadow: 'var(--shadow-hard-active)',
-          },
-        },
-        error: {
-          backgroundColor: 'var(--destructive)',
-          color: 'var(--destructive-foreground)',
-          border: '2px solid var(--foreground)',
-          boxShadow: 'var(--shadow-hard)',
-          transition: 'all 300ms var(--transition-bouncy)',
-          '&:hover': {
-            backgroundColor: 'var(--destructive-foreground)',
-            color: 'var(--destructive)',
-            transform: 'translate(-2px, -2px) scale(1.05)',
-            boxShadow: 'var(--shadow-hard-hover)',
-            '& .MuiSvgIcon-root': {
-              color: 'inherit',
+          '&.Mui-error': {
+            backgroundColor: 'var(--destructive)',
+            color: 'var(--destructive-foreground)',
+            border: '2px solid var(--foreground)',
+            boxShadow: 'var(--shadow-hard)',
+            transition: 'all 300ms var(--transition-bouncy)',
+            '&:hover': {
+              backgroundColor: 'var(--destructive-foreground)',
+              color: 'var(--destructive)',
+              transform: 'translate(-2px, -2px) scale(1.05)',
+              boxShadow: 'var(--shadow-hard-hover)',
+              '& .MuiSvgIcon-root': {
+                color: 'inherit',
+              },
             },
-          },
-          '&:active': {
-            transform: 'translate(0, 0)',
-            boxShadow: 'var(--shadow-hard-active)',
+            '&:active': {
+              transform: 'translate(0, 0)',
+              boxShadow: 'var(--shadow-hard-active)',
+            },
           },
         },
       },
