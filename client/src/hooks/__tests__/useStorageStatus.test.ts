@@ -411,7 +411,7 @@ describe('useStorageStatus', () => {
         data: mockStorageData,
       });
 
-      renderHook(() => useStorageStatus(mockToken, { poll: true }));
+      renderHook(() => useStorageStatus(mockToken, { poll: false }));
 
       // Initial fetch
       await waitFor(() => {
