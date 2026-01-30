@@ -40,7 +40,7 @@ describe('ChannelManager loading flow', () => {
 
     expect(screen.getByText(/syncing channels\.{3}/i)).toBeInTheDocument();
 
-    listState = {
+    listState = ({
       channels: [{
         url: 'https://youtube.com/@test',
         uploader: 'Test Channel',
@@ -53,7 +53,7 @@ describe('ChannelManager loading flow', () => {
       error: null,
       refetch: jest.fn(),
       subFolders: [],
-    };
+    } as any);
 
     rerender(<ChannelManager token="test-token" />);
 

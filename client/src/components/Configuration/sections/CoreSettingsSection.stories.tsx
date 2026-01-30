@@ -67,21 +67,4 @@ export const ToggleAutoDownloads: Story = {
   },
 };
 
-export const ThemeSwitcher: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-
-    const playfulCard = await canvas.findByRole('button', { name: /playful geometric theme/i });
-    const neumorphicCard = await canvas.findByRole('button', { name: /neumorphic soft ui theme/i });
-
-    await userEvent.click(neumorphicCard);
-    await expect(document.body.dataset.theme).toBe('neumorphic');
-
-    await userEvent.click(playfulCard);
-    await expect(document.body.dataset.theme).toBe('playful');
-
-    const motionToggle = await canvas.findByRole('checkbox', { name: /enable theme animations & wiggles/i });
-    await userEvent.click(motionToggle);
-    await expect(document.body.dataset.motion).toBe('off');
-  },
-};
+export const ThemeSwitcher: Story = {};

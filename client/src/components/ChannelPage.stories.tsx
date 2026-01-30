@@ -127,7 +127,7 @@ export const Default: Story = {
     await expect(await body.findByText(/2-10 min/i)).toBeInTheDocument();
 
     // Test settings button interaction
-    const settingsButton = await body.findByRole('button', { name: /channel settings/i });
+    const settingsButton = await body.findByRole('button', { name: /edit settings/i });
     await userEvent.click(settingsButton);
     await expect(await body.findByText(/effective channel quality/i)).toBeInTheDocument();
 

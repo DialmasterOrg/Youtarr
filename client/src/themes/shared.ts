@@ -179,63 +179,61 @@ export const commonThemeOptions: ThemeOptions = {
           boxShadow: 'none',
           transition: 'all 250ms var(--transition-bouncy)',
           fontWeight: 600,
-        },
-        filledPrimary: {
-          backgroundColor: 'var(--primary)',
-          color: 'var(--primary-foreground)',
-          borderColor: 'var(--primary)',
-        },
-        outlinedPrimary: {
-          color: 'var(--primary)',
-          borderColor: 'var(--primary)',
-        },
-        filledSuccess: {
-          backgroundColor: 'var(--secondary)',
-          color: 'var(--foreground)',
-          borderColor: 'var(--secondary)',
-        },
-        outlinedSuccess: {
-          color: 'var(--secondary)',
-          borderColor: 'var(--secondary)',
-        },
-        filledWarning: {
-          backgroundColor: 'var(--accent)',
-          color: 'var(--accent-foreground)',
-          borderColor: 'var(--accent)',
-        },
-        outlinedWarning: {
-          color: 'var(--accent)',
-          borderColor: 'var(--accent)',
+          '&.MuiChip-filled.MuiChip-colorPrimary': {
+            backgroundColor: 'var(--primary)',
+            color: 'var(--primary-foreground)',
+            borderColor: 'var(--primary)',
+          },
+          '&.MuiChip-outlined.MuiChip-colorPrimary': {
+            color: 'var(--primary)',
+            borderColor: 'var(--primary)',
+          },
+          '&.MuiChip-filled.MuiChip-colorSuccess': {
+            backgroundColor: 'var(--secondary)',
+            color: 'var(--foreground)',
+            borderColor: 'var(--secondary)',
+          },
+          '&.MuiChip-outlined.MuiChip-colorSuccess': {
+            color: 'var(--secondary)',
+            borderColor: 'var(--secondary)',
+          },
+          '&.MuiChip-filled.MuiChip-colorWarning': {
+            backgroundColor: 'var(--accent)',
+            color: 'var(--accent-foreground)',
+            borderColor: 'var(--accent)',
+          },
+          '&.MuiChip-outlined.MuiChip-colorWarning': {
+            color: 'var(--accent)',
+            borderColor: 'var(--accent)',
+          },
         },
       },
     },
     MuiFab: {
       styleOverrides: {
-        primary: {
-          backgroundColor: 'var(--primary)',
-          color: 'var(--primary-foreground)',
+        root: {
           transition: 'all 200ms ease',
           border: '1px solid transparent',
-          '&:hover': {
-            backgroundColor: 'var(--primary-foreground)',
-            color: 'var(--primary)',
-            borderColor: 'var(--primary)',
-          },
           '& .MuiSvgIcon-root': {
             color: 'inherit',
           },
-        },
-        error: {
-          backgroundColor: 'var(--destructive)',
-          color: 'var(--destructive-foreground)',
-          border: '1px solid transparent',
-          '&:hover': {
-            backgroundColor: 'var(--destructive-foreground)',
-            color: 'var(--destructive)',
-            borderColor: 'var(--destructive)',
+          '&.MuiFab-primary': {
+            backgroundColor: 'var(--primary)',
+            color: 'var(--primary-foreground)',
+            '&:hover': {
+              backgroundColor: 'var(--primary-foreground)',
+              color: 'var(--primary)',
+              borderColor: 'var(--primary)',
+            },
           },
-          '& .MuiSvgIcon-root': {
-            color: 'inherit',
+          '&.MuiFab-error': {
+            backgroundColor: 'var(--destructive)',
+            color: 'var(--destructive-foreground)',
+            '&:hover': {
+              backgroundColor: 'var(--destructive-foreground)',
+              color: 'var(--destructive)',
+              borderColor: 'var(--destructive)',
+            },
           },
         },
       },

@@ -1035,7 +1035,14 @@ describe('ChannelModule', () => {
         const result = await ChannelModule.fetchNewestVideosFromDb('UC123');
 
         expect(ChannelVideo.findAll).toHaveBeenCalledWith({
-          where: { channel_id: 'UC123', media_type: 'video' },
+          where: {
+            channel_id: 'UC123',
+            [Op.or]: [
+              { media_type: 'video' },
+              { media_type: null },
+              { media_type: '' },
+            ],
+          },
           order: [['publishedAt', 'DESC']]
         });
         expect(Video.findAll).toHaveBeenCalledWith({
@@ -1432,10 +1439,18 @@ describe('ChannelModule', () => {
         const result = await ChannelModule.getChannelVideoStats('UC123');
 
         expect(ChannelVideo.count).toHaveBeenCalledWith({
-          where: { channel_id: 'UC123', media_type: 'video' }
+          where: {
+            channel_id: 'UC123',
+            media_type: {
+              [Op.or]: ['video', null, ''],
+            },
+          }
         });
         expect(ChannelVideo.findOne).toHaveBeenCalledWith({
-          where: { channel_id: 'UC123', media_type: 'video' },
+          where: {
+            channel_id: 'UC123',
+            media_type: 'video',
+          },
           order: [['publishedAt', 'ASC']],
           attributes: ['publishedAt']
         });

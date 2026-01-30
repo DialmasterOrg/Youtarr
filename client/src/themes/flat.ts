@@ -41,7 +41,7 @@ export const flatTheme: ThemeDefinition = {
   tokens: {
     light: {
       'font-body': "'Plus Jakarta Sans'",
-      'font-display': "'Outfit'",
+      'font-display': "'Plus Jakarta Sans'",
       background: '0 0% 100%', // Pure White
       foreground: '217 32% 10%', // Dark Gray 900 (#111827)
       card: '0 0% 100%',
@@ -90,7 +90,7 @@ export const flatTheme: ThemeDefinition = {
     },
     dark: {
       'font-body': "'Plus Jakarta Sans'",
-      'font-display': "'Outfit'",
+      'font-display': "'Plus Jakarta Sans'",
       background: '222 47% 11%',
       foreground: '0 0% 100%',
       card: '222 47% 12%',
@@ -216,18 +216,6 @@ export const flatTheme: ThemeDefinition = {
         },
       },
     },
-        outlinedInfo: {
-          color: 'var(--primary)',
-          border: '2px solid var(--primary)',
-          backgroundColor: 'rgba(59, 130, 246, 0.08)',
-        },
-        outlinedWarning: {
-          color: 'var(--accent)',
-          border: '2px solid var(--accent)',
-          backgroundColor: 'rgba(245, 158, 11, 0.08)',
-        },
-      },
-    },
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
@@ -282,7 +270,7 @@ export const flatTheme: ThemeDefinition = {
         root: {
           textTransform: 'uppercase',
           fontWeight: 700,
-          fontFamily: 'monospace',
+          fontFamily: 'var(--font-body)',
           fontSize: '0.75rem',
           letterSpacing: '0.05em',
           borderRadius: 'var(--radius-ui)',
@@ -444,40 +432,6 @@ export const flatTheme: ThemeDefinition = {
               color: 'inherit',
             },
           },
-        },
-      },
-    },
-    MuiSwitch: {
-      styleOverrides: {
-        root: {
-          width: 42,
-          height: 26,
-          padding: 0,
-          '& .MuiSwitch-switchBase': {
-            padding: 0,
-            margin: 2,
-            transitionDuration: '300ms',
-            '&.Mui-checked': {
-              transform: 'translateX(16px)',
-              color: '#fff',
-              '& + .MuiSwitch-track': {
-                backgroundColor: 'var(--primary)',
-                opacity: 1,
-                border: 0,
-              },
-            },
-          },
-        },
-        thumb: {
-          boxSizing: 'border-box',
-          width: 22,
-          height: 22,
-        },
-        track: {
-          borderRadius: 26 / 2,
-          backgroundColor: 'var(--muted-foreground)',
-          opacity: 0.8,
-          transition: 'background-color 500ms',
         },
       },
     },

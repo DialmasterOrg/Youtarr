@@ -35,7 +35,7 @@ type Story = StoryObj<typeof DownloadHistory>;
 export const ToggleShowNoVideos: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const checkbox = canvas.getByRole('checkbox', { name: 'Show jobs with no videos' });
+    const checkbox = canvas.getByRole('checkbox', { name: 'Show jobs without videos' });
     await userEvent.click(checkbox);
     await expect(checkbox).toBeChecked();
   },

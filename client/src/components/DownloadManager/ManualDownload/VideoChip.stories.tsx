@@ -12,6 +12,7 @@ const video: VideoInfo = {
   media_type: 'short',
   isAlreadyDownloaded: true,
   isMembersOnly: false,
+  publishedAt: Date.now(),
 };
 
 const meta: Meta<typeof VideoChip> = {

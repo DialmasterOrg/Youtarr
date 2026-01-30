@@ -29,10 +29,12 @@ const meta: Meta<typeof ChannelVideosHeader> = {
     fetchingAllVideos: false,
     checkedBoxes: ['vid1'],
     selectedForDeletion: [],
+    selectionMode: 'download',
     deleteLoading: false,
     paginatedVideos,
     autoDownloadsEnabled: true,
     selectedTab: 'videos',
+    maxRating: '',
     onViewModeChange: fn(),
     onSearchChange: fn(),
     onHideDownloadedChange: fn(),
@@ -44,6 +46,7 @@ const meta: Meta<typeof ChannelVideosHeader> = {
     onDeleteClick: fn(),
     onBulkIgnoreClick: fn(),
     onInfoIconClick: fn(),
+    onMaxRatingChange: fn(),
   },
 };
 
@@ -55,5 +58,23 @@ export const DownloadSelection: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: /download 1 video/i }));
     await expect(args.onDownloadClick).toHaveBeenCalledTimes(1);
+  },
+};
+
+export const ActionBarInteractions: Story = {
+  args: {
+    checkedBoxes: [],
+    selectedForDeletion: ['vid1'],
+    selectionMode: 'download',
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const selectAllButton = canvas.getByRole('button', { name: /select all this page/i });
+    await userEvent.click(selectAllButton);
+    await expect(args.onSelectAll).toHaveBeenCalledTimes(1);
+
+    const deleteButton = canvas.getByRole('button', { name: /delete 1/i });
+    await userEvent.hover(deleteButton);
+    expect(deleteButton.className).toContain('MuiButton-outlinedError');
   },
 };

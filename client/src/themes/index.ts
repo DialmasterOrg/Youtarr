@@ -13,6 +13,8 @@ export const ALL_THEMES: Record<ThemeMode, ThemeDefinition> = {
   flat: flatTheme,
 };
 
+export type { ThemeMode } from './types';
+
 export const getThemeById = (id: ThemeMode): ThemeDefinition => {
   return ALL_THEMES[id] || playfulTheme;
 };

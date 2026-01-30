@@ -347,7 +347,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
               alignItems: 'center',
               justifyContent: 'space-between',
               bgcolor: 'action.hover',
-              fontFamily: 'monospace',
+              fontFamily: 'var(--font-body)',
               wordBreak: 'break-all',
             }}
           >
@@ -424,16 +424,16 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
             Use this URL in Apple Shortcuts, Tasker, or other tools:
           </Typography>
           <Paper sx={{ p: 2, bgcolor: 'action.hover' }}>
-            <Typography variant="body2" sx={{ fontFamily: 'monospace', mb: 1 }}>
+            <Typography variant="body2" sx={{ fontFamily: 'var(--font-body)', mb: 1 }}>
               <strong>URL:</strong> {window.location.origin}/api/videos/download
             </Typography>
-            <Typography variant="body2" sx={{ fontFamily: 'monospace', mb: 1 }}>
+            <Typography variant="body2" sx={{ fontFamily: 'var(--font-body)', mb: 1 }}>
               <strong>Method:</strong> POST
             </Typography>
-            <Typography variant="body2" sx={{ fontFamily: 'monospace', mb: 1 }}>
+            <Typography variant="body2" sx={{ fontFamily: 'var(--font-body)', mb: 1 }}>
               <strong>Header:</strong> x-api-key: {createdKey?.key?.substring(0, 8)}...
             </Typography>
-            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+            <Typography variant="body2" sx={{ fontFamily: 'var(--font-body)' }}>
               <strong>Body:</strong> {`{ "url": "<youtube-url>" }`}
             </Typography>
           </Paper>

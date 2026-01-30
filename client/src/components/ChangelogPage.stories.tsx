@@ -60,9 +60,11 @@ export const Loading: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get(CHANGELOG_RAW_URL, () =>
-          HttpResponse.text('# Version 1.0.0', { delay: 1200 })
-        ),
+        // Use an async resolver and a native timeout to simulate a slow response
+        http.get(CHANGELOG_RAW_URL, async () => {
+          await new Promise((r) => setTimeout(r, 1200));
+          return HttpResponse.text('# Version 1.0.0');
+        }),
       ],
     },
   },

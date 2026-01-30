@@ -38,7 +38,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import SettingsIcon from '@mui/icons-material/Settings';
 import DownloadIcon from '@mui/icons-material/Download';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
-import RatingIcon from '@mui/icons-material/Star';
+import RatingIcon from '@mui/icons-material/EighteenUpRating';
 import { useConfig } from '../../hooks/useConfig';
 import { SubfolderAutocomplete } from '../shared/SubfolderAutocomplete';
 import { RATING_OPTIONS } from '../../utils/ratings';
@@ -311,7 +311,6 @@ function ChannelSettingsDialog({
 
       // If folder was moved, show additional info
       if (result.folderMoved && result.moveResult) {
-        console.log('Channel folder moved:', result.moveResult);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to save settings';
@@ -634,7 +633,7 @@ function ChannelSettingsDialog({
                       }}>
                         <Typography
                           variant="caption"
-                          sx={{ fontFamily: 'monospace', flex: 1, wordBreak: 'break-all' }}
+                          sx={{ fontFamily: 'var(--font-body)', flex: 1, wordBreak: 'break-all' }}
                         >
                           {example.pattern}
                         </Typography>
@@ -672,7 +671,7 @@ function ChannelSettingsDialog({
             </Box>
 
             {previewError && (
-              <Alert severity="error" onClose={() => setPreviewError(null)} size="small">
+              <Alert severity="error" onClose={() => setPreviewError(null)}>
                 {previewError}
               </Alert>
             )}

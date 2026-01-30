@@ -46,6 +46,14 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
   const theme = useTheme();
   const hasConnectionError = errors.some(e => categorizeError(e) === 'connection');
   const hasSchemaError = errors.some(e => categorizeError(e) === 'schema');
+  const customColors = {
+    errorListBackground: theme.palette.mode === 'dark' ? theme.palette.grey[900] : theme.palette.grey[50],
+    errorListBorder: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200],
+    errorText: theme.palette.mode === 'dark' ? theme.palette.error.light : theme.palette.error.main,
+    codeBlockBackground: theme.palette.mode === 'dark' ? theme.palette.grey[900] : theme.palette.grey[100],
+    codeBlockInner: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200],
+    warningBackground: theme.palette.mode === 'dark' ? theme.palette.warning.dark : theme.palette.warning.light,
+  };
 
   return (
     <Box
@@ -207,7 +215,7 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
                       primary={error}
                       sx={{
                         '& .MuiListItemText-primary': {
-                          fontFamily: 'monospace',
+                          fontFamily: 'var(--font-body)',
                           fontSize: '0.9rem',
                           color: customColors.errorText,
                           wordBreak: 'break-word',

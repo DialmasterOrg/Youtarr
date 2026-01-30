@@ -44,10 +44,8 @@ export const useChannelList = ({
 
   useEffect(() => {
     isMountedRef.current = true;
-    console.log(`[useChannelList] Hook instance ${hookInstanceId.current} mounted`);
     return () => {
       isMountedRef.current = false;
-      console.log(`[useChannelList] Hook instance ${hookInstanceId.current} unmounted`);
     };
   }, []);
 
@@ -87,15 +85,6 @@ export const useChannelList = ({
     const requestId = Math.random().toString(36).substring(7);
 
     try {
-      console.log(`[useChannelList] [${hookInstanceId.current}] [Req:${requestId}] Fetching channels...`, { 
-        page, 
-        pageSize, 
-        searchTerm, 
-        sortOrder, 
-        subFolder, 
-        append,
-        tokenPrefix: token ? token.substring(0, 8) : 'null'
-      });
       const response = await axios.get<ChannelListResponse>('/getchannels', {
         headers: { 'x-access-token': token },
         timeout: 15000,
@@ -109,20 +98,8 @@ export const useChannelList = ({
         },
       });
 
-      const requestDurationMs = Math.round(performance.now() - requestStartedAt);
-      console.log(`[useChannelList] [${hookInstanceId.current}] [Req:${requestId}] API Response received`, { 
-        status: response.status, 
-        durationMs: requestDurationMs,
-        hasData: !!response.data,
-        dataType: typeof response.data,
-        channelCount: Array.isArray(response.data?.channels) ? response.data.channels.length : 
-                     (response.data?.channels as any)?.rows?.length ?? 'N/A',
-        fullPayload: response.data // Added to explore object shape
-      });
-
       const payload = response.data;
       if (!isMountedRef.current) {
-        console.log(`[useChannelList] [${hookInstanceId.current}] [Req:${requestId}] Hook unmounted before response processed`);
         return;
       }
 
@@ -151,14 +128,6 @@ export const useChannelList = ({
       }
 
       const rawSubFolders = (payload?.subFolders || payload?.subfolders || []) as Array<string | null>;
-
-      console.log(`[useChannelList] [${hookInstanceId.current}] [Req:${requestId}] State update starting`, { 
-        rawChannelsCount: rawChannels.length, 
-        rawTotal, 
-        rawTotalPages,
-        rawSubFoldersCount: rawSubFolders.length,
-        firstChannelSample: rawChannels[0]
-      });
 
       setChannels((prev) => {
         if (!append || page === 1) {

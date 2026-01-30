@@ -439,7 +439,7 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                               variant="caption"
                               color="text.secondary"
                               sx={{
-                                fontFamily: 'monospace',
+                                fontFamily: 'var(--font-body)',
                                 display: 'block',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
@@ -612,7 +612,7 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
                     <Typography 
                       variant="caption" 
                       sx={{ 
-                        fontFamily: 'monospace', 
+                        fontFamily: 'var(--font-body)', 
                         color: 'info.main',
                         fontSize: '0.7rem',
                         display: 'block',

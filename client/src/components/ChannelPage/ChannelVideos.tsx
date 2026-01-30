@@ -22,7 +22,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AlarmOnIcon from '@mui/icons-material/AlarmOn';
 
 import useMediaQuery from '@mui/material/useMediaQuery';
-import { useTheme } from '@mui/material/styles';
+import { Theme, useTheme } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
 import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
 import { useVideoDeletion } from '../shared/useVideoDeletion';
@@ -726,7 +726,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
             color={isDownloadAction ? 'primary' : 'error'}
             overlap="circular"
             anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-            sx={(theme) => ({
+            sx={(theme: Theme) => ({
               position: 'fixed',
               bottom: isMobile ? 84 : 56,
               right: isMobile ? 20 : 56,
@@ -742,18 +742,11 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                 boxShadow: 'var(--shadow-hard)',
               },
             })}
-            slotProps={{
-              badge: {
-                sx: (theme) => ({
-                  zIndex: theme.zIndex.snackbar + 1,
-                }),
-              },
-            }}
           >
             <Fab
               color={isDownloadAction ? 'primary' : 'error'}
               onClick={handleActionClick}
-              sx={(theme) => ({
+              sx={(theme: Theme) => ({
                 boxShadow: 'var(--shadow-hard)',
                 border: theme.palette.mode === 'light' ? 'none' : '1px solid rgba(255,255,255,0.1)',
                 '&:focus-visible': {
@@ -943,7 +936,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
               )}
               {!hasNextPage && videos.length > 0 && (
                 <Typography variant="caption" color="text.secondary" align="center" sx={{ display: 'block', py: 2 }}>
-                  You're all caught up.
+                  {"You're all caught up."}
                 </Typography>
               )}
             </>

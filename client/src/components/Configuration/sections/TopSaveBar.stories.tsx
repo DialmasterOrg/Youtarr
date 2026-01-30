@@ -19,7 +19,7 @@ type Story = StoryObj<typeof TopSaveBar>;
 export const UnsavedChanges: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: /save now/i }));
+    await userEvent.click(canvas.getByRole('button', { name: /save changes/i }));
     await expect(args.onSave).toHaveBeenCalled();
   },
 };

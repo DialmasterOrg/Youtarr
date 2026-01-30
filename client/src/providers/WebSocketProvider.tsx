@@ -51,7 +51,6 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     };
 
     ws.onerror = (error: Event) => {
-      console.log('Socket encountered error: ', error);
       setRetries((retries) => retries + 1);
     };
 
@@ -67,7 +66,6 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
 
   const showDownloadCompleteNotification = async (payload: any) => {
     if (!('Notification' in window)) {
-      console.log('This browser does not support desktop notification');
       return;
     }
 
@@ -109,8 +107,6 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
           showDownloadCompleteNotification(message.payload);
         }
 
-        // Uncomment to debug web socket messages...
-        //console.log('Received message from socket: ', message);
         subscriptionsRef.current.forEach((sub) => {
           if (sub.filter(message)) {
             sub.callback(message.payload);

@@ -3,7 +3,7 @@ import { useChangelog } from '../useChangelog';
 import { jest } from '@jest/globals';
 
 // Mock global fetch
-const mockFetch = jest.fn();
+const mockFetch: any = jest.fn();
 
 // Track a counter to ensure each test gets a unique "now" time
 // This ensures the cache from previous tests is always expired
@@ -15,7 +15,7 @@ describe('useChangelog', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
-    globalThis.fetch = mockFetch;
+    (globalThis.fetch as any) = mockFetch;
     jest.spyOn(console, 'error').mockImplementation(() => {});
     // Each test starts 1 hour after the previous one to ensure cache expiration
     testCounter++;
@@ -31,8 +31,8 @@ describe('useChangelog', () => {
   test('fetches and returns changelog content', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      text: jest.fn().mockResolvedValueOnce(mockChangelogContent),
-    });
+      text: async () => mockChangelogContent,
+    } as any);
 
     const { result } = renderHook(() => useChangelog());
 
@@ -65,8 +65,8 @@ describe('useChangelog', () => {
   test('uses cached content within cache duration', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      text: jest.fn().mockResolvedValueOnce(mockChangelogContent),
-    });
+      text: async () => mockChangelogContent,
+    } as any);
 
     const { result: result1, unmount } = renderHook(() => useChangelog());
 
@@ -97,12 +97,12 @@ describe('useChangelog', () => {
     mockFetch
       .mockResolvedValueOnce({
         ok: true,
-        text: jest.fn().mockResolvedValueOnce(mockChangelogContent),
-      })
+        text: async () => mockChangelogContent,
+      } as any)
       .mockResolvedValueOnce({
         ok: true,
-        text: jest.fn().mockResolvedValueOnce(updatedContent),
-      });
+        text: async () => updatedContent,
+      } as any);
 
     const { result } = renderHook(() => useChangelog());
 

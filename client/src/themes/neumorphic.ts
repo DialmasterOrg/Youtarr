@@ -43,7 +43,7 @@ export const neumorphicTheme: ThemeDefinition = {
   tokens: {
     light: {
       'font-body': "'DM Sans'",
-      'font-display': "'Plus Jakarta Sans'",
+      'font-display': "'DM Sans'",
       background: '210 20% 90%',
       foreground: '210 10% 20%',
       card: '210 20% 90%',
@@ -85,7 +85,7 @@ export const neumorphicTheme: ThemeDefinition = {
     },
     dark: {
       'font-body': "'DM Sans'",
-      'font-display': "'Plus Jakarta Sans'",
+      'font-display': "'DM Sans'",
       background: '210 20% 10%',
       foreground: '210 10% 90%',
       card: '210 20% 10%',
@@ -179,20 +179,6 @@ export const neumorphicTheme: ThemeDefinition = {
           backgroundColor: 'hsl(var(--background))',
           color: 'var(--accent)',
           boxShadow: 'var(--shadow-input-rest)',
-        },
-      },
-    },
-          boxShadow: '6px 6px 12px rgba(163, 177, 198, 0.3), -6px -6px 12px rgba(255, 255, 255, 0.3)',
-        },
-        outlinedInfo: {
-          color: '#3B82F6',
-          backgroundColor: 'rgba(59, 130, 246, 0.12)',
-          boxShadow: '6px 6px 12px rgba(163, 177, 198, 0.3), -6px -6px 12px rgba(255, 255, 255, 0.3)',
-        },
-        outlinedWarning: {
-          color: '#F59E0B',
-          backgroundColor: 'rgba(245, 158, 11, 0.12)',
-          boxShadow: '6px 6px 12px rgba(163, 177, 198, 0.3), -6px -6px 12px rgba(255, 255, 255, 0.3)',
         },
       },
     },

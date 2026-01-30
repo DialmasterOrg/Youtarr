@@ -31,7 +31,7 @@ export const reverseFrequencyMapping = (cronExpression: string): string => {
  * Generates channel files download options (1-10, plus current value if > 10)
  */
 export const getChannelFilesOptions = (currentValue: number): number[] => {
-  const options = [];
+  const options: number[] = [];
   // Always include 1-10
   for (let i = 1; i <= 10; i++) {
     options.push(i);

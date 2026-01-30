@@ -110,7 +110,7 @@ describe('useChannelList', () => {
     expect(result.current.error).toBe('Channel sync timed out. Please try again.');
   });
 
-  test('logs unexpected payload shape', async () => {
+  test('handles unexpected payload shape', async () => {
     mockedAxios.get.mockResolvedValueOnce({
       data: {
         channels: 'not-an-array',
@@ -123,7 +123,6 @@ describe('useChannelList', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    expect(console.warn).toHaveBeenCalled();
     expect(result.current.channels).toEqual([]);
   });
 });

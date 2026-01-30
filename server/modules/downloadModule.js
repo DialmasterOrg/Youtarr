@@ -106,7 +106,7 @@ class DownloadModule {
         groups.some((g) => g.filterConfig && g.filterConfig.hasFilters && g.filterConfig.hasFilters());
 
       if (needsGrouping) {
-        console.log(`Using grouped downloads: ${groups.length} group(s) with resolved settings`);
+        logger.info(`Using grouped downloads: ${groups.length} group(s) with resolved settings`);
         return await this.doGroupedChannelDownloads(jobData, groups, isNextJob);
       }
 
@@ -121,7 +121,7 @@ class DownloadModule {
 
       return await this.doSingleChannelDownloadJob(jobDataWithQuality, isNextJob);
     } catch (err) {
-      console.error('Error generating channel download groups, falling back to single job:', err);
+      logger.error({ err }, 'Error generating channel download groups, falling back to single job');
       return await this.doSingleChannelDownloadJob(jobData, isNextJob);
     }
   }
@@ -187,7 +187,7 @@ class DownloadModule {
   }
 
   async doGroupedChannelDownloads(jobData, groups, isNextJob = false) {
-    console.log(`Processing ${groups.length} channel download groups in a single job`);
+    logger.info(`Processing ${groups.length} channel download groups in a single job`);
 
     // Create ONE job for all groups
     const jobType = `Channel Downloads - ${groups.length} group(s)`;
@@ -227,7 +227,7 @@ class DownloadModule {
       const groupDesc = `Group ${i + 1}/${groups.length} (${group.quality}p${group.subFolder ? `, ${group.subFolder}` : ''})`;
       const groupJobType = `Channel Downloads - ${groupDesc}`;
 
-      console.log(`Processing ${groupJobType} with ${group.channels.length} channels`);
+      logger.info(`Processing ${groupJobType} with ${group.channels.length} channels`);
 
       // Update job type to show current group
       await jobModule.updateJob(jobId, {
@@ -237,7 +237,7 @@ class DownloadModule {
       try {
         // Execute this group's download (without starting next job)
         await this.executeGroupDownload(group, jobId, groupJobType, jobData, true);
-        console.log(`Completed ${groupJobType}`);
+        logger.info(`Completed ${groupJobType}`);
       } catch (err) {
         logger.error({ err, group: groupDesc }, 'Error processing download group');
         await jobModule.updateJob(jobId, {
@@ -376,7 +376,7 @@ class DownloadModule {
       // Check if we have any URLs to download
       if (urls.length === 0) {
         logger.warn({ jobType }, 'Skipping group - no enabled tabs for any channels in this group');
-        console.log(`Skipping ${jobType} - no enabled tabs for any channels`);
+        logger.info(`Skipping ${jobType} - no enabled tabs for any channels`);
         return; // Skip this group, continue with next group in sequence
       }
 
@@ -459,7 +459,7 @@ class DownloadModule {
             effectiveQuality = channelRecord.video_quality;
           }
         } catch (channelErr) {
-          console.error('[DownloadModule] Error determining channel quality override:', channelErr.message);
+          logger.error({ err: channelErr }, 'Error determining channel quality override');
         }
       }
 

@@ -26,7 +26,7 @@ export const playfulTheme: ThemeDefinition = {
   ]),
   tokens: {
     light: {
-      'font-body': "'Plus Jakarta Sans'",
+      'font-body': "'Outfit'",
       'font-display': "'Outfit'",
       background: '48 100% 98%', // #fffdf5
       foreground: '222 47% 11%', // #1e293b
@@ -70,11 +70,20 @@ export const playfulTheme: ThemeDefinition = {
       'nav-shadow': 'var(--shadow-hard)',
       'nav-item-bg-selected': '#fbbf24', // tertiary in playful
       'nav-item-text-selected': '#1e293b',
+      'nav-item-border': '2px solid var(--foreground)',
+      'nav-item-border-selected': '3px solid var(--foreground)',
+      'nav-item-bg': 'transparent',
+      'nav-item-bg-hover': 'rgba(0, 0, 0, 0.04)',
+      'nav-item-shadow': 'none',
+      'nav-item-shadow-selected': 'var(--shadow-hard)',
+      'nav-item-shadow-hover': 'var(--shadow-hard-hover)',
+      'nav-item-transform': 'translate(0, 0)',
+      'nav-item-transform-hover': 'translate(-2px, -2px)',
       'appbar-border': '2px solid var(--foreground)',
       'appbar-shadow': 'var(--shadow-hard)',
     },
     dark: {
-      'font-body': "'Plus Jakarta Sans'",
+      'font-body': "'Outfit'",
       'font-display': "'Outfit'",
       background: '222 47% 11%', // #0f172a
       foreground: '48 100% 98%', // #fffdf5
@@ -118,11 +127,39 @@ export const playfulTheme: ThemeDefinition = {
       'nav-shadow': 'var(--shadow-hard)',
       'nav-item-bg-selected': '#fbbf24',
       'nav-item-text-selected': '#1e293b',
+      'nav-item-border': '2px solid var(--foreground)',
+      'nav-item-border-selected': '3px solid var(--foreground)',
+      'nav-item-bg': 'transparent',
+      'nav-item-bg-hover': 'rgba(255, 255, 255, 0.08)',
+      'nav-item-shadow': 'none',
+      'nav-item-shadow-selected': 'var(--shadow-hard)',
+      'nav-item-shadow-hover': 'var(--shadow-hard-hover)',
+      'nav-item-transform': 'translate(0, 0)',
+      'nav-item-transform-hover': 'translate(-2px, -2px)',
       'appbar-border': '2px solid var(--foreground)',
       'appbar-shadow': 'var(--shadow-hard)',
     },
   },
   muiOverrides: {
+    MuiAppBar: {
+      styleOverrides: {
+        root: {
+          backgroundColor: 'var(--background)',
+          color: 'var(--foreground)',
+          borderBottom: '2px solid var(--foreground)',
+          boxShadow: 'var(--shadow-hard)',
+        },
+      },
+    },
+    MuiDrawer: {
+      styleOverrides: {
+        paper: {
+          backgroundColor: 'var(--background)',
+          borderRight: '2px solid var(--foreground)',
+          boxShadow: 'none',
+        },
+      },
+    },
     MuiCard: {
       styleOverrides: {
         root: {
@@ -238,6 +275,82 @@ export const playfulTheme: ThemeDefinition = {
           backgroundColor: 'var(--background)',
           color: 'var(--foreground)',
           opacity: 0.8,
+        },
+      },
+    },
+    MuiTabs: {
+      styleOverrides: {
+        root: {
+          minHeight: 48,
+        },
+        indicator: {
+          height: 4,
+          backgroundColor: 'var(--foreground)',
+          borderRadius: '4px 4px 0 0',
+        },
+      },
+    },
+    MuiTab: {
+      styleOverrides: {
+        root: {
+          textTransform: 'none',
+          fontWeight: 800,
+          fontSize: '0.95rem',
+          color: 'var(--foreground)',
+          '&.Mui-selected': {
+            color: 'var(--foreground)',
+          },
+        },
+      },
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          color: 'var(--foreground)',
+          transition: 'all 200ms var(--transition-bouncy)',
+          '&:hover': {
+            backgroundColor: 'rgba(0,0,0,0.08)',
+            transform: 'scale(1.1) rotate(5deg)',
+          },
+        },
+      },
+    },
+    MuiToggleButtonGroup: {
+      styleOverrides: {
+        root: {
+          border: '2px solid var(--foreground)',
+          borderRadius: 'var(--radius-ui)',
+          backgroundColor: 'var(--card)',
+          overflow: 'hidden',
+          boxShadow: 'var(--shadow-hard)',
+        },
+        grouped: {
+          border: 'none',
+          borderRadius: 0,
+          '&:not(:last-of-type)': {
+            borderRight: '2px solid var(--foreground)',
+          },
+        },
+      },
+    },
+    MuiToggleButton: {
+      styleOverrides: {
+        root: {
+          color: 'var(--foreground)',
+          fontWeight: 700,
+          padding: '8px 16px',
+          border: 'none',
+          '&:hover': {
+            backgroundColor: 'rgba(0,0,0,0.05)',
+          },
+          '&.Mui-selected': {
+            backgroundColor: '#fbbf24', // Amber
+            color: '#1e293b', // Always dark for amber
+            '&:hover': {
+              backgroundColor: '#fbbf24',
+              opacity: 0.9,
+            },
+          },
         },
       },
     },

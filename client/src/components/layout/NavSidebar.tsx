@@ -236,14 +236,14 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                               height: NAV_SUB_MIN_HEIGHT,
                               width: `calc(100% - ${theme.spacing(NAV_SUB_TEXT_INDENT)})`,
                               ml: theme.spacing(NAV_SUB_TEXT_INDENT),
-                              border: subSelected ? 'var(--nav-item-border-selected)' : '1px solid transparent',
-                              bgcolor: subSelected ? 'var(--nav-item-bg-selected)' : 'transparent',
-                              boxShadow: subSelected ? 'var(--nav-item-shadow-selected)' : 'none',
+                              border: subSelected ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)',
+                              bgcolor: subSelected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
+                              boxShadow: subSelected ? 'var(--nav-item-shadow-selected)' : 'var(--nav-item-shadow)',
                               color: subSelected ? 'var(--nav-item-text-selected)' : 'text.secondary',
                               '&:hover': {
-                                bgcolor: 'transparent',
-                                transform: 'none',
-                                boxShadow: 'none',
+                                bgcolor: subSelected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg-hover)',
+                                transform: subSelected ? 'var(--nav-item-transform-hover)' : 'var(--nav-item-transform)',
+                                boxShadow: subSelected ? 'var(--nav-item-shadow-hover)' : 'var(--nav-item-shadow)',
                               },
                             })}
                           >
@@ -444,14 +444,14 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                       borderRadius: 'var(--radius-ui)',
                       minHeight: 32,
                       px: 1,
-                      border: subSelected ? 'var(--nav-item-border-selected)' : '1px solid transparent',
-                      bgcolor: subSelected ? 'var(--nav-item-bg-selected)' : 'transparent',
-                      boxShadow: subSelected ? 'var(--nav-item-shadow-selected)' : 'none',
+                      border: subSelected ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)',
+                      bgcolor: subSelected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
+                      boxShadow: subSelected ? 'var(--nav-item-shadow-selected)' : 'var(--nav-item-shadow)',
                       color: subSelected ? 'var(--nav-item-text-selected)' : 'text.secondary',
                       '&:hover': {
-                        bgcolor: 'transparent',
-                        transform: 'none',
-                        boxShadow: 'none',
+                        bgcolor: subSelected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg-hover)',
+                        transform: subSelected ? 'var(--nav-item-transform-hover)' : 'var(--nav-item-transform)',
+                        boxShadow: subSelected ? 'var(--nav-item-shadow-hover)' : 'var(--nav-item-shadow)',
                       },
                     }}
                   >
@@ -509,8 +509,9 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                   justifyContent: 'center',
                   cursor: 'pointer',
                   transition: 'all 0.2s',
-                  bgcolor: selected ? 'var(--nav-item-bg-selected)' : 'transparent',
-                  boxShadow: selected ? 'var(--nav-item-shadow-selected)' : 'none',
+                  border: selected ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)',
+                  bgcolor: selected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
+                  boxShadow: selected ? 'var(--nav-item-shadow-selected)' : 'var(--nav-item-shadow)',
                   color: selected ? 'var(--nav-item-text-selected)' : 'text.secondary',
                   '&:active': {
                     transform: 'scale(0.9)',

@@ -1,7 +1,7 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { useCookieManagement } from './useCookieManagement';
-import { CookieStatus } from '../../types';
+import { CookieStatus } from '../types';
 
 // Mock fetch globally (MSW may patch fetch during setup, so we also reset it in beforeEach).
 global.fetch = jest.fn();

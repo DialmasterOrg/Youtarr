@@ -4,6 +4,7 @@ import axios from 'axios';
 export interface StorageData {
   availableGB: string;
   percentFree: number;
+  percentUsed?: number;
   totalGB: string;
 }
 

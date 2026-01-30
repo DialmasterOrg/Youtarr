@@ -108,7 +108,7 @@ function ChangelogPage() {
                 backgroundColor: 'action.hover',
                 padding: '2px 6px',
                 borderRadius: 1,
-                fontFamily: 'monospace',
+                fontFamily: 'var(--font-body)',
               },
               '& pre': {
                 backgroundColor: 'action.hover',

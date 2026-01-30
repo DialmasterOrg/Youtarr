@@ -131,14 +131,14 @@ global.ResizeObserver = jest.fn().mockImplementation(() => ({
   observe: jest.fn(),
   unobserve: jest.fn(),
   disconnect: jest.fn(),
-}));
+})) as any;
 
 // Mock IntersectionObserver
 global.IntersectionObserver = jest.fn().mockImplementation(() => ({
   observe: jest.fn(),
   unobserve: jest.fn(),
   disconnect: jest.fn(),
-}));
+})) as any;
 
 // Mock WebSocket
 global.WebSocket = jest.fn().mockImplementation(() => ({
@@ -152,7 +152,7 @@ global.WebSocket = jest.fn().mockImplementation(() => ({
   OPEN: 1,
   CLOSING: 2,
   CLOSED: 3,
-}));
+})) as any;
 
 // Mock Notification API
 Object.defineProperty(window, 'Notification', {
@@ -165,8 +165,10 @@ Object.defineProperty(window, 'Notification', {
 
 Object.defineProperty(window.Notification, 'requestPermission', {
   writable: true,
-  value: jest.fn().mockResolvedValue('granted'),
+  value: (async () => 'granted') as any,
 });
+
+// In afterEach/afterAll, check that 'useFakeTimers' is a function before accessing it
 
 // Establish API mocking before all tests
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
@@ -178,7 +180,7 @@ afterEach(() => {
   
   // Clear any pending timers that might be keeping the event loop alive.
   try {
-    if (typeof jest !== 'undefined' && jest.useFakeTimers) {
+    if (typeof jest !== 'undefined' && typeof (jest as any).useFakeTimers === 'function') {
       if (jest.isMockFunction(setTimeout)) {
         jest.runOnlyPendingTimers();
         jest.clearAllTimers();
@@ -193,7 +195,7 @@ afterEach(() => {
 // Clean up after the tests are finished.
 afterAll(() => {
   try {
-    if (typeof jest !== 'undefined' && jest.useFakeTimers) {
+    if (typeof jest !== 'undefined' && typeof (jest as any).useFakeTimers === 'function') {
       jest.clearAllTimers();
       jest.useRealTimers();
     }

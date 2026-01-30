@@ -21,7 +21,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import { ThemeMode } from '../../contexts/ThemeEngineContext';
+import { ThemeMode } from '../../themes';
 import { StorageHeaderWidget } from './StorageHeaderWidget';
 
 interface NavHeaderProps {
@@ -258,7 +258,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
             to="/channels"
             sx={{
               fontWeight: 700,
-              fontFamily: 'Outfit',
+              fontFamily: 'var(--font-display)',
               whiteSpace: 'nowrap',
               height: '100%',
               display: 'flex',

@@ -53,6 +53,42 @@ const jobs = [
       ],
     },
   },
+  {
+    id: 'job-2',
+    jobType: 'Channel Downloads',
+    status: 'Complete',
+    output: 'Finished',
+    timeCreated: Date.now() - 900_000,
+    timeInitiated: Date.now() - 840_000,
+    data: {
+      videos: [
+        {
+          id: 2,
+          youtubeId: 'def456',
+          youTubeChannelName: 'Test Channel',
+          youTubeVideoName: 'Sample Video 2',
+          timeCreated: '2024-01-15T11:30:00',
+          originalDate: '20240112',
+          duration: 420,
+          description: 'Another sample video',
+          removed: false,
+          fileSize: '524288000',
+        },
+        {
+          id: 3,
+          youtubeId: 'ghi789',
+          youTubeChannelName: 'Test Channel',
+          youTubeVideoName: 'Sample Video 3',
+          timeCreated: '2024-01-15T12:30:00',
+          originalDate: '20240113',
+          duration: 300,
+          description: 'Third sample video',
+          removed: false,
+          fileSize: '734003200',
+        },
+      ],
+    },
+  },
 ];
 
 export const Empty: Story = {
@@ -63,7 +99,8 @@ export const Empty: Story = {
   },
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
-    await expect(await body.findByText(/no jobs currently running/i)).toBeInTheDocument();
+    await expect(await body.findByText(/download history/i)).toBeInTheDocument();
+    await expect(await body.findByText(/no jobs currently/i)).toBeInTheDocument();
     
     // Allow state updates from potential polling or intervals to settle
     await waitFor(() => {}, { timeout: 1100 }).catch(() => {});
@@ -77,18 +114,10 @@ export const WithJobs: Story = {
     },
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-
-    // Video titles are shown in the info popover, not in the table cell.
-    const infoIcon = await canvas.findByTestId('InfoIcon');
-    const infoButton = infoIcon.closest('button');
-    await expect(infoButton).toBeTruthy();
-
-    await userEvent.click(infoButton as HTMLElement);
-
     const body = within(canvasElement.ownerDocument.body);
-    await expect(
-      await body.findByText((text) => text.toLowerCase().includes('sample video 1'))
-    ).toBeInTheDocument();
+    await expect(await body.findByText(/download history/i)).toBeInTheDocument();
+    await expect(await body.findByText(/sample video 1/i)).toBeInTheDocument();
+    await userEvent.click(await body.findByText(/multiple \(2\)/i));
+    await expect(await body.findByText(/sample video 2/i)).toBeInTheDocument();
   },
 };

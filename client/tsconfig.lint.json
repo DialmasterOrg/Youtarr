@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client", "jest", "node"],
+    "typeRoots": ["./src/types", "./node_modules/@types"],
+    "noImplicitAny": false,
+    "paths": {
+      "@storybook/react": ["./src/types/storybook.d.ts"]
+    }
+  },
+  "include": ["src"]
+}

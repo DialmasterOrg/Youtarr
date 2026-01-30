@@ -8,7 +8,7 @@ const meta: Meta<typeof NotificationsSection> = {
   title: 'Components/Configuration/Sections/NotificationsSection',
   component: NotificationsSection,
   render: (args) => {
-    const [config, setConfig] = useState({
+    const [config, setConfig] = useState<any>({
       ...DEFAULT_CONFIG,
       notificationsEnabled: true,
       appriseUrls: [],

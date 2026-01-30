@@ -118,7 +118,7 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
               variant="h3"
               component="h1"
               sx={{
-                fontFamily: 'Outfit',
+                fontFamily: 'var(--font-display)',
                 fontWeight: isPlayful ? 800 : 700,
                 fontSize: isPlayful ? '3rem' : '2.5rem',
                 mb: 1,
@@ -139,7 +139,7 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
                 color: 'text.secondary',
                 fontWeight: 500,
                 fontSize: isLinear ? '0.9rem' : '1rem',
-                fontFamily: isLinear ? 'monospace' : 'inherit',
+                fontFamily: 'var(--font-body)',
               }}
             >
               {isLinear
@@ -241,7 +241,7 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
               textAlign: 'center',
               mt: 3,
               color: 'text.secondary',
-              fontFamily: isLinear ? 'monospace' : 'inherit',
+              fontFamily: 'var(--font-body)',
             }}
           >
             {isLinear ? '© Youtarr v1.0' : 'Powered by Youtarr'}

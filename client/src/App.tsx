@@ -215,7 +215,6 @@ function AppContent() {
       return; // Don't poll if database is healthy
     }
 
-    console.log('Database in error state, starting polling...');
     countdownRef.current = 15;
     setCountdown(15);
 
@@ -226,7 +225,6 @@ function AppContent() {
         const data = await response.json();
 
         if (data.status === 'healthy') {
-          console.log('Database recovered!');
           setDbStatus('healthy');
           setDbRecovered(true); // Show recovery message
           setDbErrors([]);

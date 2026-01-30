@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { useAutoRemovalDryRun } from './useAutoRemovalDryRun';
-import { AutoRemovalDryRunResult } from '../../types';
+import { AutoRemovalDryRunResult } from '../types';
 
 // Mock fetch globally
 global.fetch = jest.fn();

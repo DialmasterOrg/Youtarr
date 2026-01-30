@@ -120,7 +120,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
 
   // Generate options for video count dropdown
   const getVideoCountOptions = () => {
-    const options = [];
+    const options: number[] = [];
     // Always include 1-10
     for (let i = 1; i <= 10; i++) {
       options.push(i);

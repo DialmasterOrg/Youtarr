@@ -54,8 +54,6 @@ describe('DownloadModule', () => {
   let downloadModule;
   let mockDownloadExecutor;
   let fsPromises;
-  let consoleLogSpy;
-  let consoleErrorSpy;
   let logger;
   let ChannelModelMock;
 
@@ -77,10 +75,6 @@ describe('DownloadModule', () => {
     fsPromises.writeFile.mockResolvedValue();
     // Re-assign fs.promises after clearing mocks to ensure it's available
     fs.promises = fsPromises;
-
-    // Setup console spies
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     // Clear module cache and require fresh instance
     jest.resetModules();
@@ -137,8 +131,7 @@ describe('DownloadModule', () => {
   });
 
   afterEach(() => {
-    consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
+    jest.resetModules();
   });
 
   describe('constructor', () => {
@@ -323,7 +316,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doChannelDownloads();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('Using grouped downloads: 2 group(s) with resolved settings');
+      expect(logger.info).toHaveBeenCalledWith('Using grouped downloads: 2 group(s) with resolved settings');
       expect(spy).toHaveBeenCalledWith({}, groups, false);
     });
 
@@ -433,7 +426,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doChannelDownloads();
 
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Error generating channel download groups, falling back to single job:', error);
+      expect(logger.error).toHaveBeenCalledWith({ err: error }, 'Error generating channel download groups, falling back to single job');
       expect(spy).toHaveBeenCalledWith({}, false);
     });
   });
@@ -587,7 +580,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doGroupedChannelDownloads({}, groups);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('Processing 2 channel download groups in a single job');
+      expect(logger.info).toHaveBeenCalledWith('Processing 2 channel download groups in a single job');
       expect(jobModuleMock.addOrUpdateJob).toHaveBeenCalledTimes(1);
       expect(jobModuleMock.addOrUpdateJob).toHaveBeenCalledWith(
         expect.objectContaining({

@@ -7,7 +7,7 @@ import VideocamIcon from '@mui/icons-material/Videocam';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import { useTheme } from '@mui/material/styles';
+import { alpha, useTheme } from '@mui/material/styles';
 import { Channel } from '../types/Channel';
 import RatingBadge from './shared/RatingBadge';
 import ChannelVideos from './ChannelPage/ChannelVideos';
@@ -281,7 +281,7 @@ function ChannelPage({ token }: ChannelPageProps) {
               <Typography
                 variant="body2"
                 sx={{
-                  fontFamily: 'monospace',
+                  fontFamily: 'var(--font-body)',
                   bgcolor: 'action.hover',
                   p: 1,
                   borderRadius: 1,
@@ -302,7 +302,7 @@ function ChannelPage({ token }: ChannelPageProps) {
               <Typography
                 variant="body2"
                 sx={{
-                  fontFamily: 'monospace',
+                  fontFamily: 'var(--font-body)',
                   bgcolor: 'action.hover',
                   p: 1,
                   borderRadius: 1,

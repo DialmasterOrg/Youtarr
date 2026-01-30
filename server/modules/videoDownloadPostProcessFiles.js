@@ -182,7 +182,7 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         channelSubFolder = null;
         const baseDir = configModule.directoryPath;
         targetChannelFolder = buildChannelPath(baseDir, null, actualChannelFolderName);
-        console.log('[Post-Process] Using subfolder override: root directory (no subfolder)');
+        logger.info('[Post-Process] Using subfolder override: root directory (no subfolder)');
       } else if (subfolderOverride === channelSettingsModule.getGlobalDefaultSentinel()) {
         // Use global default subfolder
         channelSubFolder = channelSettingsModule.resolveEffectiveSubfolder(subfolderOverride);
@@ -190,13 +190,13 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
           const baseDir = configModule.directoryPath;
           targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
         }
-        console.log('[Post-Process] Using subfolder override: global default');
+        logger.info('[Post-Process] Using subfolder override: global default');
       } else {
         // Specific subfolder override
         channelSubFolder = subfolderOverride;
         const baseDir = configModule.directoryPath;
         targetChannelFolder = buildChannelPath(baseDir, subfolderOverride, actualChannelFolderName);
-        console.log(`[Post-Process] Using subfolder override: ${subfolderOverride}`);
+        logger.info(`[Post-Process] Using subfolder override: ${subfolderOverride}`);
       }
     } else if (jsonData.channel_id) {
       // No override - check channel settings or use global default
@@ -217,7 +217,7 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
             } else if (channel.default_rating && channel.default_rating !== 'NR') {
               jsonData.normalized_rating = channel.default_rating;
               jsonData.rating_source = 'Channel Default';
-              console.log(`[Post-Process] Applying channel default rating: ${channel.default_rating}`);
+              logger.info(`[Post-Process] Applying channel default rating: ${channel.default_rating}`);
             }
           }
 
@@ -231,14 +231,14 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
                 { folder_name: actualChannelFolderName },
                 { where: { id: channel.id } }
               );
-              console.log(`[Post-Process] Updated channel folder_name to: ${actualChannelFolderName}`);
+              logger.info(`[Post-Process] Updated channel folder_name to: ${actualChannelFolderName}`);
             } catch (updateErr) {
               console.error(`[Post-Process] Error updating folder_name: ${updateErr.message}`);
             }
           }
         } else {
           // Untracked channel (not in database) - auto-create with enabled=false
-          console.log(`[Post-Process] Untracked channel ${jsonData.channel_id}, auto-creating as disabled`);
+          logger.info(`[Post-Process] Untracked channel ${jsonData.channel_id}, auto-creating as disabled`);
           try {
             channel = await Channel.create({
               channel_id: jsonData.channel_id,
@@ -247,7 +247,7 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
               enabled: false,
               sub_folder: null
             });
-            console.log(`[Post-Process] Auto-created disabled channel with folder_name: ${actualChannelFolderName}`);
+            logger.info(`[Post-Process] Auto-created disabled channel with folder_name: ${actualChannelFolderName}`);
           } catch (createErr) {
             console.error(`[Post-Process] Error auto-creating channel: ${createErr.message}`);
           }
@@ -261,7 +261,7 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
           // Use the actual channel folder name from the filesystem (yt-dlp already sanitized it)
           // instead of jsonData.uploader which may contain special characters
           targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
-          console.log(`[Post-Process] Channel will use subfolder: ${channelSubFolder}`);
+          logger.info(`[Post-Process] Channel will use subfolder: ${channelSubFolder}`);
         }
       } catch (err) {
         console.error(`[Post-Process] Error checking channel subfolder: ${err.message}`);
@@ -272,7 +272,7 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       if (channelSubFolder) {
         const baseDir = configModule.directoryPath;
         targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
-        console.log(`[Post-Process] No channel ID, using global default subfolder: ${channelSubFolder}`);
+        logger.info(`[Post-Process] No channel ID, using global default subfolder: ${channelSubFolder}`);
       }
     }
 
@@ -494,7 +494,7 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         // Channel has subfolder - move directly to subfolder location (atomic move)
         targetVideoDirectory = path.join(targetChannelFolder, videoDirectoryName);
         targetChannelFolderForMove = targetChannelFolder;
-        console.log(`[Post-Process] Moving to subfolder location: ${channelSubFolder}`);
+        logger.info(`[Post-Process] Moving to subfolder location: ${channelSubFolder}`);
       } else {
         // No subfolder - move to standard location
         const standardFinalPath = tempPathManager.convertTempToFinal(videoPath);

@@ -3,9 +3,9 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from '@storybook/test';
 import ErrorBoundary from './ErrorBoundary';
 
-function Thrower() {
+const Thrower: React.FC = () => {
   throw new Error('Storybook forced error');
-}
+};
 
 const meta: Meta<typeof ErrorBoundary> = {
   title: 'Composite/ErrorBoundary',

@@ -250,7 +250,6 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
       if (response.ok) {
         // Success - job will update via WebSocket
-        console.log('Job termination initiated successfully');
       } else {
         const error = await response.json();
         alert(error.error || 'Failed to terminate job');
@@ -558,7 +557,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
               </Typography>
               <Typography variant="body1" color={(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'warning.contrastText' : 'success.contrastText'}>
                 {(() => {
-                  const parts = [];
+                  const parts: string[] = [];
                   if (finalSummary.totalDownloaded > 0) {
                     parts.push(`✓ ${finalSummary.totalDownloaded} video${finalSummary.totalDownloaded !== 1 ? 's' : ''} downloaded`);
                   }

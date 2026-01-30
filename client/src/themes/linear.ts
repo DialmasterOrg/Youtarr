@@ -49,7 +49,7 @@ export const linearTheme: ThemeDefinition = {
   tokens: {
     light: {
       'font-body': "'Plus Jakarta Sans'",
-      'font-display': "'Outfit'",
+      'font-display': "'Plus Jakarta Sans'",
       background: '240 10% 3.9%', // Dark by default for linear
       foreground: '0 0% 98%',
       card: '240 10% 3.9%',
@@ -98,7 +98,7 @@ export const linearTheme: ThemeDefinition = {
     },
     dark: {
       'font-body': "'Plus Jakarta Sans'",
-      'font-display': "'Outfit'",
+      'font-display': "'Plus Jakarta Sans'",
       background: '240 10% 3.9%',
       foreground: '0 0% 98%',
       card: '240 10% 3.9%',

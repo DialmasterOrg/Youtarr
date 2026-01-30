@@ -184,13 +184,6 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const showSkeletons = loading && displayChannels.length === 0;
   const showInlineLoader = loading && displayChannels.length > 0;
 
-  console.log(`[ChannelManager] Render state`, { 
-    loading, 
-    displayChannelsCount: displayChannels.length, 
-    serverChannelsCount: serverChannels.length,
-    showSkeletons,
-    tokenPrefix: token ? token.substring(0, 8) : 'null'
-  });
   const folderControlActive = Boolean(selectedSubFolder);
   const availableFolderOptions = useMemo(() => {
     const folderSet = new Set<string>([DEFAULT_SUBFOLDER_KEY]);
@@ -803,7 +796,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
           <Typography
             variant="body2"
             sx={{
-              fontFamily: 'monospace',
+              fontFamily: 'var(--font-body)',
               bgcolor: 'action.hover',
               p: 1,
               borderRadius: 1,

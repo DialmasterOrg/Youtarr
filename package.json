@@ -8,7 +8,7 @@
     "lint": "eslint ./client/src/. --ext .ts,.tsx && eslint ./server/. --ext .js",
     "lint:frontend": "eslint ./client/src/. --ext .ts,.tsx",
     "lint:backend": "eslint ./server/. --ext .js",
-    "lint:ts": "cd client && npx tsc --noEmit",
+    "lint:ts": "cd client && npx tsc --noEmit -p tsconfig.lint.json",
     "lint:fix": "eslint ./client/src/. --ext .ts,.tsx --fix && eslint ./server/. --ext .js --fix",
     "lint-staged": "lint-staged",
     "prepare": "husky install",

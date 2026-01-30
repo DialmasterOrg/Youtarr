@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box } from '@mui/material';
-import { ThemeMode } from '../../contexts/ThemeEngineContext';
+import { ThemeMode } from '../../themes';
 
 interface BackgroundDecorationsProps {
   themeMode: ThemeMode;

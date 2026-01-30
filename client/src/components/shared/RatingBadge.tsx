@@ -39,6 +39,39 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
 }) => {
   const { themeMode } = useThemeEngine();
 
+  const getStyleSx = () => {
+    if (themeMode === 'neumorphic') {
+      return {
+        border: 'var(--border-weight) solid transparent',
+        boxShadow: 'var(--shadow-input-rest)',
+        '&:hover': {
+          boxShadow: 'var(--shadow-input-rest)',
+          transform: 'translate(0, 0)',
+        },
+      };
+    } else if (themeMode === 'flat' || themeMode === 'linear') {
+      return {
+        border: 'var(--border-weight) solid var(--border)',
+        boxShadow: 'none',
+        '&:hover': {
+          boxShadow: 'none',
+          transform: 'translate(0, 0)',
+        },
+      };
+    }
+    // playful and default
+    return {
+      border: 'var(--border-weight) solid var(--foreground)',
+      boxShadow: 'var(--shadow-hard)',
+      '&:hover': {
+        boxShadow: 'var(--shadow-hard-hover)',
+        transform: 'translate(-2px, -2px)',
+      },
+    };
+  };
+
+  const styleSx = getStyleSx();
+
   if (!rating && !showNA) {
     return null;
   }
@@ -83,13 +116,9 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
           borderRadius: 'var(--radius-ui)',
           bgcolor: 'var(--card)',
           color: 'var(--foreground)',
-          border: 'var(--border-weight) solid var(--foreground)',
-          boxShadow: 'none',
           transition: 'all 200ms var(--transition-bouncy)',
-          '&:hover': {
-            boxShadow: themeMode === 'neumorphic' ? 'var(--shadow-input-rest)' : 'var(--shadow-hard)',
-            transform: 'translate(-1px, -1px)',
-          },
+          transform: 'translate(0, 0)',
+          ...styleSx,
           ...sx,
         }}
       >
