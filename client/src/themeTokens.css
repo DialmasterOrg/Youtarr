@@ -3,7 +3,21 @@
   --action-bar-gap-compact: 6px;
   --action-bar-padding-y: 8px;
   --action-bar-padding-x: 0px;
-}
+
+  /* Chip & rating shadows (tokenizable per-theme) */
+  --chip-shadow: none;
+  --chip-shadow-hover: var(--chip-shadow-hover, var(--shadow-hard-hover));
+  --rating-chip-shadow: none;
+  --rating-chip-shadow-hover: var(--rating-chip-shadow-hover, var(--shadow-hard-hover));
+
+  /* Max widths for status/rating chips to prevent overflow; per-theme overrides encouraged */
+  --status-chip-max-width: 140px;
+  --rating-chip-max-width: 120px;
+
+  /* Settings splash-specific tokens (override per-theme) */
+  --settings-splash-shadow-hover: var(--nav-item-shadow-hover);
+  --settings-splash-border: var(--nav-item-bg-selected);
+} 
 
 .action-bar {
   display: flex;

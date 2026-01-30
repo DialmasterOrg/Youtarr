@@ -316,16 +316,16 @@ function VideoCard({
                     label={mediaTypeInfo.label}
                     color={mediaTypeInfo.color}
                     variant="outlined"
-                  sx={(theme) => ({ 
-                      height: 24, 
-                      fontSize: '0.7rem', 
-                      minWidth: 'fit-content',
-                      boxShadow: 'none',
-                      transition: 'box-shadow 200ms var(--transition-bouncy)',
-                      '&:hover': {
-                        boxShadow: themeMode === 'playful' ? 'none' : 'var(--shadow-hard)'
-                      }
-                    })}
+                  sx={{
+                    height: 24,
+                    fontSize: '0.7rem',
+                    minWidth: 'fit-content',
+                    boxShadow: 'var(--chip-shadow)',
+                    transition: 'box-shadow 200ms var(--transition-bouncy)',
+                    '&:hover': {
+                      boxShadow: 'var(--chip-shadow-hover)'
+                    }
+                  }}
                   />
                 )}
                 <RatingBadge
@@ -341,24 +341,24 @@ function VideoCard({
                   size="small"
                   color={getStatusColor(status)}
                   variant={status === 'downloaded' ? 'filled' : 'outlined'}
-                  sx={(theme) => ({ 
+                  sx={{ 
                     height: 24, 
                     fontSize: '0.7rem', 
                     flex: '0 0 auto',
                     minWidth: 'fit-content',
-                    boxShadow: 'none',
+                    boxShadow: 'var(--chip-shadow)',
                     transition: 'box-shadow 200ms var(--transition-bouncy)',
                     '& .MuiChip-label': {
                       display: 'inline-block',
-                      maxWidth: 140,
+                      maxWidth: 'var(--status-chip-max-width)',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
                     },
                     '&:hover': {
-                      boxShadow: themeMode === 'playful' ? 'none' : 'var(--shadow-hard)'
+                      boxShadow: 'var(--chip-shadow-hover)'
                     }
-                  })}
+                  }}
                 />
               </Box>
             </Box>

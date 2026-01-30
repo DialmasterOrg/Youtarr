@@ -282,15 +282,17 @@ function VideoListItem({
                 label={mediaTypeInfo.label}
                 color={mediaTypeInfo.color}
                 variant="outlined"
-                sx={(theme) => ({
+                sx={{
                   height: 18,
                   fontSize: '0.7rem',
                   '& .MuiChip-icon': { fontSize: 14, ml: 0.5 },
                   '& .MuiChip-label': { px: 0.6 },
+                  boxShadow: 'var(--chip-shadow)',
+                  transition: 'box-shadow 200ms var(--transition-bouncy)',
                   '&:hover': {
-                    boxShadow: themeMode === 'playful' ? 'none' : undefined,
+                    boxShadow: 'var(--chip-shadow-hover)',
                   }
-                })}
+                }}
               />
             )}
             <Chip
@@ -312,8 +314,10 @@ function VideoListItem({
                   whiteSpace: 'nowrap',
                 },
                 flex: '0 0 auto',
+                boxShadow: 'var(--chip-shadow)',
+                transition: 'box-shadow 200ms var(--transition-bouncy)',
                 '&:hover': {
-                  boxShadow: theme.palette.mode === 'light' && themeMode === 'playful' ? 'none' : undefined,
+                  boxShadow: 'var(--chip-shadow-hover)',
                 }
               })}
             />

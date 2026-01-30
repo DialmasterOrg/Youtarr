@@ -164,9 +164,11 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
               transition: 'all 0.2s ease',
               '&:hover': {
                 transform: 'scale(1.02)',
-                boxShadow: themeMode === 'playful' ? 'none' : 2
-              }
+                boxShadow: 'var(--chip-shadow-hover)'
+              },
+              boxShadow: 'var(--chip-shadow)'
             })}
+
           />
         </Tooltip>
       </Grow>

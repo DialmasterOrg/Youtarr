@@ -26,6 +26,7 @@ export function SettingsIndex() {
         {SETTINGS_PAGES.map((page) => (
           <Grid item xs={12} md={6} lg={4} key={page.key} sx={{ display: 'flex' }}>
             <Card 
+              className="settings-splash-card"
               variant="outlined" 
               sx={{ 
                 borderRadius: 'var(--radius-ui)', 

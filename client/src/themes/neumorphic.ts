@@ -131,6 +131,13 @@ export const neumorphicTheme: ThemeDefinition = {
       'action-bar-border': '210 10% 15%',
       'action-bar-hover-border': '210 10% 20%',
       'action-bar-disabled-foreground': '210 10% 60%',
+      /* Chip & rating shadows */
+      'chip-shadow': 'var(--shadow-input-rest)',
+      'chip-shadow-hover': 'var(--shadow-input-rest)',
+      'rating-chip-shadow': 'var(--shadow-input-rest)',
+      'rating-chip-shadow-hover': 'var(--shadow-input-rest)',
+      'status-chip-max-width': '140px',
+      'rating-chip-max-width': '120px',
       'nav-hover-style': 'inset-glow',
       shadow: '0 0% 0%',
       'shadow-soft': '8px 8px 16px #0a0a0a, -8px -8px 16px #1e1e1e',

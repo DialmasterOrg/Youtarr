@@ -64,6 +64,15 @@ export const commonThemeOptions: ThemeOptions = {
             transform: 'var(--card-hover-transform)',
             boxShadow: 'var(--card-hover-shadow)',
           },
+          '&.settings-splash-card:hover': {
+            transform: 'var(--card-hover-transform)',
+            boxShadow: 'var(--settings-splash-shadow-hover, var(--card-hover-shadow))',
+            borderColor: 'var(--settings-splash-border, var(--nav-item-bg-selected))',
+            '& .MuiCardActionArea-root': {
+              backgroundColor: 'var(--nav-item-bg-hover)',
+              boxShadow: 'var(--settings-splash-shadow-hover, var(--nav-item-shadow-hover))',
+            },
+          }, 
         },
       },
     },
@@ -202,6 +211,19 @@ export const commonThemeOptions: ThemeOptions = {
         bar: {
           borderRadius: 'var(--radius-ui)',
           backgroundColor: 'var(--primary)',
+        },
+      },
+    },
+    MuiCardActionArea: {
+      styleOverrides: {
+        root: {
+          transition: 'background-color 200ms var(--transition-bouncy)',
+          '&:hover': {
+            backgroundColor: 'var(--nav-item-bg-hover)',
+          },
+          '&.Mui-focusVisible': {
+            backgroundColor: 'var(--nav-item-bg-hover)',
+          },
         },
       },
     },

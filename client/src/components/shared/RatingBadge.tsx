@@ -40,45 +40,32 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
   const { themeMode } = useThemeEngine();
 
   const getStyleSx = () => {
-    if (themeMode === 'neumorphic') {
-      return {
-        border: 'var(--border-weight) solid transparent',
-        boxShadow: 'var(--shadow-input-rest)',
-        '&:hover': {
-          boxShadow: 'var(--shadow-input-rest)',
-          transform: 'translate(0, 0)',
-        },
-      };
-    } else if (themeMode === 'flat' || themeMode === 'linear') {
-      return {
-        border: 'var(--border-weight) solid var(--border)',
-        boxShadow: 'none',
-        '&:hover': {
-          boxShadow: 'none',
-          transform: 'translate(0, 0)',
-        },
-      };
-    }
-    // playful theme - no shadow; other defaults keep shadow
-    if (themeMode === 'playful') {
-      return {
-        border: 'var(--border-weight) solid var(--foreground)',
-        boxShadow: 'none',
-        '&:hover': {
-          boxShadow: 'none',
-          transform: 'translate(0, 0)',
-        },
-      };
-    }
-
-    return {
+    // Use theme tokens for rating chip shadows and hover states so themes can control them
+    const base = {
       border: 'var(--border-weight) solid var(--foreground)',
-      boxShadow: 'var(--shadow-hard)',
+      boxShadow: 'var(--rating-chip-shadow)',
       '&:hover': {
-        boxShadow: 'var(--shadow-hard-hover)',
+        boxShadow: 'var(--rating-chip-shadow-hover)',
         transform: 'translate(-2px, -2px)',
       },
     };
+
+    if (themeMode === 'neumorphic') {
+      return {
+        ...base,
+        border: 'var(--border-weight) solid transparent',
+      };
+    }
+
+    if (themeMode === 'flat' || themeMode === 'linear') {
+      return {
+        ...base,
+        border: 'var(--border-weight) solid var(--border)',
+      };
+    }
+
+    // playful or default - let tokens decide final look
+    return base;
   };
 
   const styleSx = getStyleSx();

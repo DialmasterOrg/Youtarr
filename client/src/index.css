@@ -326,6 +326,14 @@ body[data-theme='playful'] .sticker:focus-within {
   box-shadow: var(--chip-shadow-hover);
 }
 
+/* Enforce no chip shadows in playful theme to avoid leftover shadows from other overrides */
+body[data-theme='playful'] .MuiChip-root,
+body[data-theme='playful'] .MuiChip-root:hover,
+body[data-theme='playful'] .sticker,
+body[data-theme='playful'] .sticker:hover {
+  box-shadow: none !important;
+}
+
 body[data-theme='neumorphic'] .playful-shape {
   display: none !important;
 }
@@ -394,6 +402,19 @@ body[data-motion='off'] .MuiButton-root:hover {
 /* Theme-Specific Animations - Only Active When Motion is On */
 body[data-motion='on'][data-theme='playful'] .animate-on-mount {
   animation: pop-in 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Settings splash card: ensure Playful shows bold gold border and shadow on hover */
+body[data-theme='playful'] .settings-splash-card:hover {
+  border-color: var(--settings-splash-border) !important;
+  box-shadow: var(--settings-splash-shadow-hover) !important;
+}
+
+/* Ensure CardActionArea inside the splash card also gets the gold hover and background */
+body[data-theme='playful'] .settings-splash-card .MuiCardActionArea-root:hover,
+body[data-theme='playful'] .settings-splash-card:hover .MuiCardActionArea-root {
+  box-shadow: var(--settings-splash-shadow-hover) !important;
+  background-color: var(--nav-item-bg-hover) !important;
 }
 
 body[data-motion='on'][data-theme='playful'] .animate-bounce {
