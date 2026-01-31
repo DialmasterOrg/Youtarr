@@ -109,6 +109,7 @@ Or remove/comment out the `YOUTARR_IMAGE` line in your `.env` file to use the de
 - [External Database](docs/platforms/external-db.md) - Using existing MariaDB/MySQL
 
 ### Advanced Topics
+- [Backup & Restore](docs/BACKUP_RESTORE.md) - Backup your configuration and database, restore to new systems
 - [Database Management](docs/DATABASE.md) - Database configuration and maintenance
 - [Docker Configuration](docs/DOCKER.md) - Advanced Docker settings
 - [Development Guide](docs/DEVELOPMENT.md) - Contributing and development setup
