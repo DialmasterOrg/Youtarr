@@ -51,3 +51,6 @@ docker-compose.override.*
 # Default video download directory and README, all other files excluded
 downloads/*
 !downloads/README.md
+
+# Backup archive location
+backups/
