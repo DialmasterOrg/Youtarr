@@ -1,6 +1,6 @@
 # Youtarr
 
-![Backend Coverage](https://img.shields.io/badge/Backend_Coverage-79%25-yellow)
+![Backend Coverage](https://img.shields.io/badge/Backend_Coverage-80%25-yellow)
 ![Frontend Coverage](https://img.shields.io/badge/Frontend_Coverage-84%25-brightgreen)
 ![CI Status](https://github.com/DialmasterOrg/Youtarr/workflows/CI%20-%20Lint%20and%20Test/badge.svg)
 
