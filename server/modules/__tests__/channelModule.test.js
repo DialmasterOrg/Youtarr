@@ -2500,6 +2500,41 @@ describe('ChannelModule', () => {
           autoDownloadEnabledTabs: 'video,short'
         });
       });
+
+      test('should fallback to videos tab when all RSS checks fail', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          available_tabs: null, // Not yet populated
+          auto_download_enabled_tabs: null
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+        Channel.update.mockResolvedValue([1]);
+
+        // Mock fetch to always reject (simulating network timeout/failure)
+        const originalFetch = global.fetch;
+        global.fetch = jest.fn().mockRejectedValue(new Error('Network timeout'));
+
+        try {
+          const result = await ChannelModule.detectAndSaveChannelTabs('UC123');
+
+          // Should fallback to videos tab
+          expect(result).toEqual({
+            availableTabs: ['videos'],
+            autoDownloadEnabledTabs: 'video'
+          });
+
+          // Should save the fallback to the database
+          expect(Channel.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+              available_tabs: 'videos',
+              auto_download_enabled_tabs: 'video'
+            }),
+            expect.anything()
+          );
+        } finally {
+          global.fetch = originalFetch;
+        }
+      });
     });
 
     describe('buildRssFeedUrl', () => {
@@ -2534,7 +2569,7 @@ describe('ChannelModule', () => {
           expect(exists).toBe(true);
           expect(global.fetch).toHaveBeenCalledWith(
             'https://www.youtube.com/feeds/videos.xml?playlist_id=UULF123',
-            { method: 'GET' }
+            expect.objectContaining({ method: 'GET', signal: expect.any(AbortSignal) })
           );
         } finally {
           global.fetch = originalFetch;
