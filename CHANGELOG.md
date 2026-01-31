@@ -1,5 +1,36 @@
 # Changelog
 
+## [v1.58.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.58.0) - 2026-01-31
+
+## [1.58.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.57.1...v1.58.0) (2026-01-31)
+
+
+### Features
+
+* add backup and restore scripts ([1efe59f](https://github.com/DialmasterOrg/Youtarr/commit/1efe59fbd4f108470aca28fd89b0f14daf60d0ff))
+* add in-app yt-dlp update functionality ([8900fb9](https://github.com/DialmasterOrg/Youtarr/commit/8900fb92122e32a364d5f9e775e4927e1a72f9d2))
+
+
+### Bug Fixes
+
+* patch form-data security vuln (CVE-2025-7783) ([1830341](https://github.com/DialmasterOrg/Youtarr/commit/1830341ae06edc073f21153d793bbc2a65381605))
+* use byte-based truncation for yt-dlp output templates ([#404](https://github.com/DialmasterOrg/Youtarr/issues/404)) ([09a58f9](https://github.com/DialmasterOrg/Youtarr/commit/09a58f97f80510d29d6245c27f0fc0183dd8f0b1))
+
+
+### Continuous Integration
+
+* add Claude Code review workflow for PRs ([a808618](https://github.com/DialmasterOrg/Youtarr/commit/a8086182e9ee7276e42304df2aa81ff18eda2ec0))
+* Claude Code review workflow fix ([cb9a074](https://github.com/DialmasterOrg/Youtarr/commit/cb9a074f64f5b866756856a80bdd552eb08b09a4))
+
+
+### Documentation
+
+* update CHANGELOG for v1.57.1 [skip ci] ([247f063](https://github.com/DialmasterOrg/Youtarr/commit/247f063682f36f0ba8d8793580a2d33444feeb52))
+
+
+
+
+
 ## [v1.57.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.57.1) - 2026-01-30
 
 ### [1.57.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.57.0...v1.57.1) (2026-01-30)
