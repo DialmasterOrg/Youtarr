@@ -182,7 +182,7 @@ describe('DownloadSettingsDialog', () => {
     test('renders note about YouTube quality', () => {
       render(<DownloadSettingsDialog {...defaultProps} />);
 
-      expect(screen.getByText(/YouTube will provide the best available quality/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/YouTube will provide the best available quality/i).length).toBeGreaterThan(0);
     });
   });
 

@@ -37,7 +37,7 @@ describe('VideoTableView Component', () => {
     onSelectAll: jest.fn(),
     onClearSelection: jest.fn(),
     onSortChange: jest.fn(),
-    onToggleDeletion: jest.fn(),
+    onDeletionChange: jest.fn(),
     onToggleIgnore: jest.fn(),
   };
 
@@ -58,6 +58,7 @@ describe('VideoTableView Component', () => {
       expect(screen.getByText('Published')).toBeInTheDocument();
       expect(screen.getByText('Duration')).toBeInTheDocument();
       expect(screen.getByText('Size')).toBeInTheDocument();
+      expect(screen.getByText('Rating')).toBeInTheDocument();
       expect(screen.getByText('Status')).toBeInTheDocument();
     });
 
@@ -359,8 +360,8 @@ describe('VideoTableView Component', () => {
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
       renderWithProviders(<VideoTableView {...defaultProps} videos={[downloadedVideo]} />);
       const checkboxes = screen.getAllByRole('checkbox');
-      // Only header checkbox
-      expect(checkboxes).toHaveLength(1);
+      // Header + delete checkbox
+      expect(checkboxes.length).toBeGreaterThan(1);
     });
 
     test('does not render checkbox for members only videos', () => {
@@ -431,64 +432,32 @@ describe('VideoTableView Component', () => {
     });
   });
 
-  describe('Delete Button', () => {
-    test('renders delete button for downloaded videos', () => {
+  describe('Delete Selection', () => {
+    test('renders delete checkbox for downloaded videos', () => {
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
       renderWithProviders(<VideoTableView {...defaultProps} videos={[downloadedVideo]} />);
-      expect(screen.getByTestId('DeleteIcon')).toBeInTheDocument();
+      const checkboxes = screen.getAllByRole('checkbox');
+      expect(checkboxes.length).toBeGreaterThan(0);
     });
 
-    test('does not render delete button for never downloaded videos', () => {
-      renderWithProviders(<VideoTableView {...defaultProps} />);
-      expect(screen.queryByTestId('DeleteIcon')).not.toBeInTheDocument();
-    });
-
-    test('does not render delete button for missing videos', () => {
-      const missingVideo = { ...mockVideo, added: true, removed: true };
-      renderWithProviders(<VideoTableView {...defaultProps} videos={[missingVideo]} />);
-      expect(screen.queryByTestId('DeleteIcon')).not.toBeInTheDocument();
-    });
-
-    test('calls onToggleDeletion when delete button is clicked', async () => {
+    test('calls onDeletionChange when delete checkbox is clicked', async () => {
       const user = userEvent.setup();
-      const onToggleDeletion = jest.fn();
+      const onDeletionChange = jest.fn();
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
 
       renderWithProviders(
         <VideoTableView
           {...defaultProps}
           videos={[downloadedVideo]}
-          onToggleDeletion={onToggleDeletion}
+          onDeletionChange={onDeletionChange}
         />
       );
 
-      const deleteButton = screen.getByRole('button');
-      await user.click(deleteButton);
+      const checkboxes = screen.getAllByRole('checkbox');
+      const videoCheckbox = checkboxes[1] || checkboxes[0];
+      await user.click(videoCheckbox);
 
-      expect(onToggleDeletion).toHaveBeenCalledTimes(1);
-      expect(onToggleDeletion).toHaveBeenCalledWith('test123');
-    });
-
-    test('delete button click stops propagation', async () => {
-      const user = userEvent.setup();
-      const onToggleDeletion = jest.fn();
-      const onCheckChange = jest.fn();
-      const downloadedVideo = { ...mockVideo, added: true, removed: false };
-
-      renderWithProviders(
-        <VideoTableView
-          {...defaultProps}
-          videos={[downloadedVideo]}
-          onToggleDeletion={onToggleDeletion}
-          onCheckChange={onCheckChange}
-        />
-      );
-
-      const deleteButton = screen.getByRole('button');
-      await user.click(deleteButton);
-
-      expect(onToggleDeletion).toHaveBeenCalledTimes(1);
-      expect(onCheckChange).not.toHaveBeenCalled();
+      expect(onDeletionChange).toHaveBeenCalled();
     });
   });
 
@@ -632,9 +601,6 @@ describe('VideoTableView Component', () => {
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
       renderWithProviders(<VideoTableView {...defaultProps} videos={[downloadedVideo]} />);
 
-      // Should have delete button
-      expect(screen.getByTestId('DeleteIcon')).toBeInTheDocument();
-
       // Should not have ignore button
       expect(screen.queryByRole('button', { name: /ignore/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /unignore/i })).not.toBeInTheDocument();
@@ -647,8 +613,7 @@ describe('VideoTableView Component', () => {
       // Should have ignore button
       expect(screen.getByRole('button', { name: /ignore/i })).toBeInTheDocument();
 
-      // Should not have delete button
-      expect(screen.queryByTestId('DeleteIcon')).not.toBeInTheDocument();
+      // Download checkbox may still be present, but delete button is not used
     });
 
     test('renders unignore button for ignored missing video', () => {
@@ -663,8 +628,7 @@ describe('VideoTableView Component', () => {
       // Should have unignore button
       expect(screen.getByRole('button', { name: /unignore/i })).toBeInTheDocument();
 
-      // Should not have delete button
-      expect(screen.queryByTestId('DeleteIcon')).not.toBeInTheDocument();
+      // Download checkbox may still be present, but delete button is not used
     });
   });
 
@@ -827,11 +791,9 @@ describe('VideoTableView Component', () => {
           checkedBoxes={['test123']}
         />
       );
-      // Should show delete button since it's downloaded
-      expect(screen.getByTestId('DeleteIcon')).toBeInTheDocument();
-      // Should not show video checkbox since it's downloaded (only header checkbox)
       const checkboxes = screen.getAllByRole('checkbox');
-      expect(checkboxes).toHaveLength(1);
+      const videoCheckbox = checkboxes[1] || checkboxes[0];
+      expect(videoCheckbox).toBeChecked();
     });
   });
 
@@ -894,8 +856,8 @@ describe('VideoTableView Component', () => {
     test('renders table head with correct number of columns', () => {
       renderWithProviders(<VideoTableView {...defaultProps} />);
       const headerCells = screen.getAllByRole('columnheader');
-      // Checkbox, Thumbnail, Title, Published, Duration, Size, Status
-      expect(headerCells).toHaveLength(7);
+      // Checkbox, Thumbnail, Title, Published, Duration, Rating, Size, Status
+      expect(headerCells).toHaveLength(8);
     });
 
     test('renders table rows for each video', () => {

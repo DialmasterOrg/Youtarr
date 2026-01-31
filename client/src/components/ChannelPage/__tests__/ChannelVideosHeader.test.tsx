@@ -62,7 +62,6 @@ describe('ChannelVideosHeader Component', () => {
     onViewModeChange: jest.fn(),
     onSearchChange: jest.fn(),
     onHideDownloadedChange: jest.fn(),
-    onAutoDownloadChange: jest.fn(),
     onRefreshClick: jest.fn(),
     onDownloadClick: jest.fn(),
     onSelectAll: jest.fn(),
@@ -170,53 +169,14 @@ describe('ChannelVideosHeader Component', () => {
     });
   });
 
-  describe('Auto-Download Toggle', () => {
-    test('renders auto-download switch', () => {
-      renderWithProviders(<ChannelVideosHeader {...defaultProps} />);
-      expect(screen.getByRole('checkbox', { name: /Enable Channel Downloads for this tab/i })).toBeInTheDocument();
-    });
-
-    test('auto-download switch reflects enabled state', () => {
-      renderWithProviders(
-        <ChannelVideosHeader {...defaultProps} autoDownloadsEnabled={true} />
-      );
-
-      const checkbox = screen.getByRole('checkbox', { name: /Enable Channel Downloads for this tab/i });
-      expect(checkbox).toBeChecked();
-    });
-
-    test('auto-download switch reflects disabled state', () => {
-      renderWithProviders(
-        <ChannelVideosHeader {...defaultProps} autoDownloadsEnabled={false} />
-      );
-
-      const checkbox = screen.getByRole('checkbox', { name: /Enable Channel Downloads for this tab/i });
-      expect(checkbox).not.toBeChecked();
-    });
-
-    test('calls onAutoDownloadChange when toggled', async () => {
-      const user = userEvent.setup();
-      const onAutoDownloadChange = jest.fn();
-
-      renderWithProviders(
-        <ChannelVideosHeader
-          {...defaultProps}
-          onAutoDownloadChange={onAutoDownloadChange}
-        />
-      );
-
-      await user.click(screen.getByRole('checkbox', { name: /Enable Channel Downloads for this tab/i }));
-      expect(onAutoDownloadChange).toHaveBeenCalledWith(true);
-    });
-
-    test('renders info icons for both date and auto-download on desktop', () => {
+  describe('Info Icons', () => {
+    test('renders date info icon on desktop', () => {
       renderWithProviders(<ChannelVideosHeader {...defaultProps} />);
       const infoIcons = screen.getAllByTestId('InfoIcon');
-      // Should have 2 info icons: one for date tooltip, one for auto-download
-      expect(infoIcons).toHaveLength(2);
+      expect(infoIcons).toHaveLength(1);
     });
 
-    test('info icons are clickable on mobile', async () => {
+    test('info icon is clickable on mobile', async () => {
       const user = userEvent.setup();
       const onInfoIconClick = jest.fn();
 
@@ -229,9 +189,8 @@ describe('ChannelVideosHeader Component', () => {
       );
 
       const infoIcons = screen.getAllByTestId('InfoIcon');
-      expect(infoIcons).toHaveLength(2);
+      expect(infoIcons).toHaveLength(1);
 
-      // Click the first info icon (date tooltip)
       await user.click(infoIcons[0]);
       expect(onInfoIconClick).toHaveBeenCalledTimes(1);
     });
@@ -423,14 +382,14 @@ describe('ChannelVideosHeader Component', () => {
       expect(screen.getByRole('button', { name: /Delete Selected/i })).toBeInTheDocument();
     });
 
-    test('does not render action buttons on mobile', () => {
+    test('renders compact action buttons on mobile', () => {
       renderWithProviders(
         <ChannelVideosHeader {...defaultProps} isMobile={true} />
       );
 
+      expect(screen.getByRole('button', { name: /Select all this page/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Clear selection/i })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Download.*Selected/i })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /Select All This Page/i })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: /Clear/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Ignore Selected/i })).not.toBeInTheDocument();
     });
   });
@@ -654,7 +613,7 @@ describe('ChannelVideosHeader Component', () => {
       );
 
       const button = screen.getByRole('button', { name: /Ignore Selected/i });
-      expect(button).toHaveClass('MuiButton-outlinedWarning');
+      expect(button).toHaveClass('intent-warning');
     });
   });
 

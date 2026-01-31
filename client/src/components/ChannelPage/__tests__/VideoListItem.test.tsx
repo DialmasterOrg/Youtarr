@@ -31,8 +31,9 @@ describe('VideoListItem Component', () => {
     checkedBoxes: [],
     selectedForDeletion: [],
     onCheckChange: jest.fn(),
-    onToggleDeletion: jest.fn(),
+    onDeletionChange: jest.fn(),
     onToggleIgnore: jest.fn(),
+    selectionMode: null,
   };
 
   beforeEach(() => {
@@ -238,7 +239,7 @@ describe('VideoListItem Component', () => {
     test('does not render checkbox for downloaded videos', () => {
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
       renderWithProviders(<VideoListItem {...defaultProps} video={downloadedVideo} />);
-      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+      expect(screen.getByRole('checkbox')).toBeInTheDocument();
     });
 
     test('does not render checkbox for members only videos', () => {
@@ -404,64 +405,31 @@ describe('VideoListItem Component', () => {
     });
   });
 
-  describe('Delete Button', () => {
-    test('renders delete button for downloaded videos', () => {
+  describe('Delete Selection', () => {
+    test('renders delete checkbox for downloaded videos', () => {
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
       renderWithProviders(<VideoListItem {...defaultProps} video={downloadedVideo} />);
-      expect(screen.getByTestId('DeleteIcon')).toBeInTheDocument();
+      expect(screen.getByRole('checkbox')).toBeInTheDocument();
     });
 
-    test('does not render delete button for never downloaded videos', () => {
-      renderWithProviders(<VideoListItem {...defaultProps} />);
-      expect(screen.queryByTestId('DeleteIcon')).not.toBeInTheDocument();
-    });
-
-    test('does not render delete button for missing videos', () => {
-      const missingVideo = { ...mockVideo, added: true, removed: true };
-      renderWithProviders(<VideoListItem {...defaultProps} video={missingVideo} />);
-      expect(screen.queryByTestId('DeleteIcon')).not.toBeInTheDocument();
-    });
-
-    test('calls onToggleDeletion when delete button is clicked', async () => {
+    test('calls onDeletionChange when delete checkbox is clicked', async () => {
       const user = userEvent.setup();
-      const onToggleDeletion = jest.fn();
+      const onDeletionChange = jest.fn();
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
 
       renderWithProviders(
         <VideoListItem
           {...defaultProps}
           video={downloadedVideo}
-          onToggleDeletion={onToggleDeletion}
+          onDeletionChange={onDeletionChange}
         />
       );
 
-      const deleteButton = screen.getByRole('button');
-      await user.click(deleteButton);
+      const deleteCheckbox = screen.getByRole('checkbox');
+      await user.click(deleteCheckbox);
 
-      expect(onToggleDeletion).toHaveBeenCalledTimes(1);
-      expect(onToggleDeletion).toHaveBeenCalledWith('test123');
-    });
-
-    test('delete button click stops propagation', async () => {
-      const user = userEvent.setup();
-      const onToggleDeletion = jest.fn();
-      const onCheckChange = jest.fn();
-      const downloadedVideo = { ...mockVideo, added: true, removed: false };
-
-      renderWithProviders(
-        <VideoListItem
-          {...defaultProps}
-          video={downloadedVideo}
-          onToggleDeletion={onToggleDeletion}
-          onCheckChange={onCheckChange}
-        />
-      );
-
-      const deleteButton = screen.getByRole('button');
-      await user.click(deleteButton);
-
-      expect(onToggleDeletion).toHaveBeenCalledTimes(1);
-      expect(onCheckChange).not.toHaveBeenCalled();
+      expect(onDeletionChange).toHaveBeenCalledTimes(1);
+      expect(onDeletionChange).toHaveBeenCalledWith('test123', true);
     });
   });
 
@@ -638,10 +606,8 @@ describe('VideoListItem Component', () => {
           checkedBoxes={['test123']}
         />
       );
-      // Should show delete button since it's downloaded
-      expect(screen.getByTestId('DeleteIcon')).toBeInTheDocument();
-      // Should not show checkbox since it's downloaded
-      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+      const checkbox = screen.getByRole('checkbox');
+      expect(checkbox).toBeChecked();
     });
   });
 

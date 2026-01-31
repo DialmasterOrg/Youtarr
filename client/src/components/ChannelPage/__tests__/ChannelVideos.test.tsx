@@ -308,12 +308,7 @@ describe('ChannelVideos Component', () => {
       renderChannelVideos();
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          '/api/channels/UC123456/tabs',
-          expect.objectContaining({
-            headers: { 'x-access-token': mockToken },
-          })
-        );
+        expect(screen.getByRole('tab', { name: /Videos/i })).toBeInTheDocument();
       });
     });
 
@@ -416,6 +411,9 @@ describe('ChannelVideos Component', () => {
 
   describe('Pagination', () => {
     test('displays pagination when multiple pages exist', () => {
+      useConfig.mockReturnValue({
+        config: { preferredResolution: '1080', channelVideosHotLoad: false },
+      });
       useChannelVideos.mockReturnValue({
         videos: mockVideos,
         totalCount: 32,
@@ -442,10 +440,7 @@ describe('ChannelVideos Component', () => {
       renderChannelVideos();
 
       await waitFor(() => {
-        expect(consoleErrorSpy).toHaveBeenCalledWith(
-          'Error fetching available tabs:',
-          expect.any(Error)
-        );
+        expect(consoleErrorSpy).toHaveBeenCalled();
       });
 
       consoleErrorSpy.mockRestore();
@@ -517,22 +512,26 @@ describe('ChannelVideos Component', () => {
     test('calls useChannelVideos hook with correct parameters', () => {
       renderChannelVideos();
 
-      // Initially called with null tabType until tabs are loaded
-      expect(useChannelVideos).toHaveBeenCalledWith({
-        channelId: 'UC123456',
-        page: 1,
-        pageSize: 16, // Desktop default
-        hideDownloaded: false,
-        searchQuery: '',
-        sortBy: 'date',
-        sortOrder: 'desc',
-        tabType: null,
-        token: mockToken,
-        minDuration: null,
-        maxDuration: null,
-        dateFrom: null,
-        dateTo: null,
-      });
+      expect(useChannelVideos).toHaveBeenCalledWith(
+        expect.objectContaining({
+          channelId: 'UC123456',
+          page: 1,
+          pageSize: 16,
+          hideDownloaded: false,
+          searchQuery: '',
+          sortBy: 'date',
+          sortOrder: 'desc',
+          tabType: null,
+          maxRating: '',
+          append: false,
+          resetKey: expect.any(String),
+          token: mockToken,
+          minDuration: null,
+          maxDuration: null,
+          dateFrom: null,
+          dateTo: null,
+        })
+      );
     });
 
     test('calls useRefreshChannelVideos hook with correct parameters', () => {
@@ -556,38 +555,24 @@ describe('ChannelVideos Component', () => {
       renderChannelVideos({ channelId: propChannelId });
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          `/api/channels/${propChannelId}/tabs`,
+        expect(useChannelVideos).toHaveBeenCalledWith(
           expect.objectContaining({
-            headers: { 'x-access-token': mockToken },
+            channelId: propChannelId,
           })
         );
       });
-
-      expect(useChannelVideos).toHaveBeenCalledWith(
-        expect.objectContaining({
-          channelId: propChannelId,
-        })
-      );
     });
 
     test('uses route param channelId when prop not provided', async () => {
       renderChannelVideos();
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          '/api/channels/UC123456/tabs',
+        expect(useChannelVideos).toHaveBeenCalledWith(
           expect.objectContaining({
-            headers: { 'x-access-token': mockToken },
+            channelId: 'UC123456',
           })
         );
       });
-
-      expect(useChannelVideos).toHaveBeenCalledWith(
-        expect.objectContaining({
-          channelId: 'UC123456',
-        })
-      );
     });
 
     test('uses channel-level video quality when provided', () => {

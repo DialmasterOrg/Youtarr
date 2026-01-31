@@ -9,7 +9,11 @@ import { DEFAULT_CONFIG } from '../../../../config/configSchema';
 
 // Mock fetch globally
 const mockFetch = jest.fn();
-global.fetch = mockFetch;
+Object.defineProperty(globalThis, 'fetch', {
+  writable: true,
+  configurable: true,
+  value: mockFetch,
+});
 
 const createConfig = (overrides: Partial<ConfigState> = {}): ConfigState => ({
   ...DEFAULT_CONFIG,
@@ -27,11 +31,8 @@ const createSectionProps = (
   ...overrides,
 });
 
-// Helper to expand accordion
-const expandAccordion = async (user: ReturnType<typeof userEvent.setup>) => {
-  const accordionButton = screen.getByRole('button', { name: /Notifications/i });
-  await user.click(accordionButton);
-};
+// ConfigurationAccordion no longer collapses sections; keep helper as no-op
+const expandAccordion = async () => {};
 
 // Use delay: null to prevent timer-related flakiness when running with other tests
 const setupUser = () => userEvent.setup({ delay: null });
@@ -40,6 +41,11 @@ describe('NotificationsSection Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockFetch.mockClear();
+    Object.defineProperty(globalThis, 'fetch', {
+      writable: true,
+      configurable: true,
+      value: mockFetch,
+    });
   });
 
   describe('Component Rendering', () => {
@@ -83,11 +89,10 @@ describe('NotificationsSection Component', () => {
       expect(screen.getByText('Enabled')).toBeInTheDocument();
     });
 
-    test('accordion is collapsed by default', () => {
+    test('renders notifications header', () => {
       const props = createSectionProps();
-      const { container } = renderWithProviders(<NotificationsSection {...props} />);
-      const accordionButton = within(container).getByRole('button', { name: /Notifications/i });
-      expect(accordionButton).toHaveAttribute('aria-expanded', 'false');
+      renderWithProviders(<NotificationsSection {...props} />);
+      expect(screen.getByText('Notifications')).toBeInTheDocument();
     });
   });
 
@@ -481,22 +486,24 @@ describe('NotificationsSection Component', () => {
 
       await expandAccordion(user);
 
-      const testButton = screen.getByRole('button', { name: /Test notification/i });
+      const [testButton] = screen.getAllByRole('button', { name: /Test notification/i });
       await user.click(testButton);
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith('/api/notifications/test-single', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-access-token': 'my-auth-token',
-          },
-          body: JSON.stringify({
-            url: 'discord://webhook_id/token',
-            name: 'My Discord',
-            richFormatting: true
-          })
-        });
+        expect(mockFetch).toHaveBeenCalled();
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith('/api/notifications/test-single', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-access-token': 'my-auth-token',
+        },
+        body: JSON.stringify({
+          url: 'discord://webhook_id/token',
+          name: 'My Discord',
+          richFormatting: true
+        })
       });
     });
 
@@ -518,12 +525,10 @@ describe('NotificationsSection Component', () => {
 
       await expandAccordion(user);
 
-      const testButton = screen.getByRole('button', { name: /Test notification/i });
+      const [testButton] = screen.getAllByRole('button', { name: /Test notification/i });
       await user.click(testButton);
 
-      await waitFor(() => {
-        expect(screen.getByText(/Sent successfully/i)).toBeInTheDocument();
-      });
+      expect(await screen.findByText(/Sent successfully!/i)).toBeInTheDocument();
     });
 
     test('shows error message when test fails', async () => {
@@ -544,12 +549,10 @@ describe('NotificationsSection Component', () => {
 
       await expandAccordion(user);
 
-      const testButton = screen.getByRole('button', { name: /Test notification/i });
+      const [testButton] = screen.getAllByRole('button', { name: /Test notification/i });
       await user.click(testButton);
 
-      await waitFor(() => {
-        expect(screen.getByText(/Connection refused/i)).toBeInTheDocument();
-      });
+      expect(await screen.findByText(/Connection refused/i)).toBeInTheDocument();
     });
   });
 
@@ -688,11 +691,10 @@ describe('NotificationsSection Component', () => {
       expect(screen.getByText(/Apprise/i)).toBeInTheDocument();
     });
 
-    test('accordion has proper aria attributes', () => {
+    test('renders section header text', () => {
       const props = createSectionProps();
-      const { container } = renderWithProviders(<NotificationsSection {...props} />);
-      const accordionButton = within(container).getByRole('button', { name: /Notifications/i });
-      expect(accordionButton).toHaveAttribute('aria-expanded');
+      renderWithProviders(<NotificationsSection {...props} />);
+      expect(screen.getByText('Notifications')).toBeInTheDocument();
     });
 
     test('delete buttons have accessible labels', async () => {

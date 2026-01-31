@@ -35,10 +35,19 @@ describe('ChannelSettingsDialog', () => {
     min_duration: null,
     max_duration: null,
     title_filter_regex: null,
+    default_rating: null,
+    auto_download_enabled_tabs: 'video',
     audio_format: null,
   };
 
   const mockSubfolders = ['__Sports', '__Music', '__Tech'];
+
+  const openTab = async (user: ReturnType<typeof userEvent.setup>, label: string) => {
+    const pattern = new RegExp(label, 'i');
+    const tab = screen.queryByRole('tab', { name: pattern });
+    const target = tab ?? screen.getByRole('button', { name: pattern });
+    await user.click(target);
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -82,6 +91,7 @@ describe('ChannelSettingsDialog', () => {
           json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
+      const user = userEvent.setup();
       render(<ChannelSettingsDialog {...defaultProps} />);
 
       expect(screen.getByText('Channel Settings: Test Channel')).toBeInTheDocument();
@@ -108,6 +118,7 @@ describe('ChannelSettingsDialog', () => {
     });
 
     test('renders all form controls after loading', async () => {
+      const user = userEvent.setup();
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
@@ -126,9 +137,11 @@ describe('ChannelSettingsDialog', () => {
 
       expect(screen.getByLabelText('Channel Video Quality Override')).toBeInTheDocument();
       expect(screen.getByLabelText('Subfolder')).toBeInTheDocument();
+
+      await openTab(user, 'Filters');
       expect(screen.getByLabelText('Min Duration (mins)')).toBeInTheDocument();
       expect(screen.getByLabelText('Max Duration (mins)')).toBeInTheDocument();
-      expect(screen.getByLabelText('Title Filter (Python Regex)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Title Regex Pattern')).toBeInTheDocument();
     });
   });
 
@@ -150,6 +163,7 @@ describe('ChannelSettingsDialog', () => {
           json: jest.fn().mockResolvedValueOnce(mockSubfolders),
         });
 
+      const user = userEvent.setup();
       render(<ChannelSettingsDialog {...defaultProps} />);
 
       await waitFor(() => {
@@ -165,13 +179,15 @@ describe('ChannelSettingsDialog', () => {
       const subfolderInput = screen.getByLabelText('Subfolder');
       expect(subfolderInput).toHaveValue('__Sports');
 
+      await openTab(user, 'Filters');
+
       const minDurationInput = screen.getByLabelText('Min Duration (mins)');
       expect(minDurationInput).toHaveValue(5);
 
       const maxDurationInput = screen.getByLabelText('Max Duration (mins)');
       expect(maxDurationInput).toHaveValue(60);
 
-      const regexInput = screen.getByLabelText('Title Filter (Python Regex)');
+      const regexInput = screen.getByLabelText('Title Regex Pattern');
       expect(regexInput).toHaveValue('(?i)highlight');
     });
 
@@ -491,7 +507,7 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByText('Add New Subfolder')).not.toBeInTheDocument();
       });
 
-      const saveButton = screen.getByRole('button', { name: 'Save' });
+      const saveButton = screen.getByRole('button', { name: /Save Settings/i });
       await user.click(saveButton);
 
       // Verify the component sends the clean subfolder name to API
@@ -533,6 +549,7 @@ describe('ChannelSettingsDialog', () => {
 
   describe('Duration Filters', () => {
     test('converts seconds to minutes when loading', async () => {
+      const user = userEvent.setup();
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
@@ -552,6 +569,8 @@ describe('ChannelSettingsDialog', () => {
       await waitFor(() => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
+
+      await openTab(user, 'Filters');
 
       const minDurationInput = screen.getByLabelText('Min Duration (mins)');
       expect(minDurationInput).toHaveValue(3);
@@ -585,6 +604,8 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
+      await openTab(user, 'Filters');
+
       const minDurationInput = screen.getByLabelText('Min Duration (mins)');
       await user.clear(minDurationInput);
       await user.type(minDurationInput, '10');
@@ -593,7 +614,7 @@ describe('ChannelSettingsDialog', () => {
       await user.clear(maxDurationInput);
       await user.type(maxDurationInput, '60');
 
-      const saveButton = screen.getByRole('button', { name: 'Save' });
+      const saveButton = screen.getByRole('button', { name: /Save Settings/i });
       await user.click(saveButton);
 
       await waitFor(() => {
@@ -636,6 +657,8 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
+      await openTab(user, 'Filters');
+
       const minDurationInput = screen.getByLabelText('Min Duration (mins)');
       await user.type(minDurationInput, 'abc');
 
@@ -664,6 +687,8 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
+      await openTab(user, 'Filters');
+
       const minDurationInput = screen.getByLabelText('Min Duration (mins)');
       expect(minDurationInput).toHaveValue(5);
 
@@ -675,6 +700,7 @@ describe('ChannelSettingsDialog', () => {
 
   describe('Title Filter Regex', () => {
     test('renders title filter input', async () => {
+      const user = userEvent.setup();
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
@@ -691,10 +717,9 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      expect(screen.getByLabelText('Title Filter (Python Regex)')).toBeInTheDocument();
-      expect(
-        screen.getByText(/Only download videos with titles matching regex pattern/i)
-      ).toBeInTheDocument();
+      await openTab(user, 'Filters');
+
+      expect(screen.getByLabelText('Title Regex Pattern')).toBeInTheDocument();
     });
 
     test('updates regex value on input', async () => {
@@ -716,13 +741,16 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const regexInput = screen.getByLabelText('Title Filter (Python Regex)');
+      await openTab(user, 'Filters');
+
+      const regexInput = screen.getByLabelText('Title Regex Pattern');
       await user.type(regexInput, '(?i)podcast');
 
       expect(regexInput).toHaveValue('(?i)podcast');
     });
 
     test('renders preview button', async () => {
+      const user = userEvent.setup();
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
@@ -739,10 +767,13 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      expect(screen.getByRole('button', { name: 'Preview Regex' })).toBeInTheDocument();
+      await openTab(user, 'Filters');
+
+      expect(screen.getByRole('button', { name: 'Preview Filter' })).toBeInTheDocument();
     });
 
     test('disables preview button when no regex entered', async () => {
+      const user = userEvent.setup();
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
@@ -759,7 +790,9 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const previewButton = screen.getByRole('button', { name: 'Preview Regex' });
+      await openTab(user, 'Filters');
+
+      const previewButton = screen.getByRole('button', { name: 'Preview Filter' });
       expect(previewButton).toBeDisabled();
     });
 
@@ -798,11 +831,13 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const previewButton = screen.getByRole('button', { name: 'Preview Regex' });
+      await openTab(user, 'Filters');
+
+      const previewButton = screen.getByRole('button', { name: 'Preview Filter' });
       await user.click(previewButton);
 
       await waitFor(() => {
-        expect(screen.getByText('1 of 2 recent videos match')).toBeInTheDocument();
+        expect(screen.getByText('1 of 2 matches')).toBeInTheDocument();
       });
 
       expect(screen.getByText('Test Video 1')).toBeInTheDocument();
@@ -835,7 +870,9 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const previewButton = screen.getByRole('button', { name: 'Preview Regex' });
+      await openTab(user, 'Filters');
+
+      const previewButton = screen.getByRole('button', { name: 'Preview Filter' });
       await user.click(previewButton);
 
       await waitFor(() => {
@@ -844,6 +881,7 @@ describe('ChannelSettingsDialog', () => {
     });
 
     test('renders documentation link', async () => {
+      const user = userEvent.setup();
       mockFetch
         .mockResolvedValueOnce({
           ok: true,
@@ -860,7 +898,9 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const docLink = screen.getByTitle('Python regex documentation');
+      await openTab(user, 'Filters');
+
+      const docLink = screen.getByRole('link');
       expect(docLink).toHaveAttribute(
         'href',
         'https://docs.python.org/3/library/re.html#regular-expression-syntax'
@@ -900,7 +940,7 @@ describe('ChannelSettingsDialog', () => {
       await user.click(qualitySelect);
       await user.click(screen.getByText('720p (HD)'));
 
-      const saveButton = screen.getByRole('button', { name: 'Save' });
+      const saveButton = screen.getByRole('button', { name: /Save Settings/i });
       await user.click(saveButton);
 
       await waitFor(() => {
@@ -946,7 +986,7 @@ describe('ChannelSettingsDialog', () => {
       await user.click(qualitySelect);
       await user.click(screen.getByText('720p (HD)'));
 
-      const saveButton = screen.getByRole('button', { name: 'Save' });
+      const saveButton = screen.getByRole('button', { name: /Save Settings/i });
       await user.click(saveButton);
 
       await waitFor(() => {
@@ -983,7 +1023,7 @@ describe('ChannelSettingsDialog', () => {
       await user.click(qualitySelect);
       await user.click(screen.getByText('720p (HD)'));
 
-      const saveButton = screen.getByRole('button', { name: 'Save' });
+      const saveButton = screen.getByRole('button', { name: /Save Settings/i });
       await user.click(saveButton);
 
       await waitFor(() => {
@@ -1023,7 +1063,7 @@ describe('ChannelSettingsDialog', () => {
       await user.click(qualitySelect);
       await user.click(screen.getByText('720p (HD)'));
 
-      const saveButton = screen.getByRole('button', { name: 'Save' });
+      const saveButton = screen.getByRole('button', { name: /Save Settings/i });
       await user.click(saveButton);
 
       await waitFor(() => {
@@ -1067,7 +1107,7 @@ describe('ChannelSettingsDialog', () => {
       await user.click(qualitySelect);
       await user.click(screen.getByText('720p (HD)'));
 
-      const saveButton = screen.getByRole('button', { name: 'Save' });
+      const saveButton = screen.getByRole('button', { name: /Save Settings/i });
       await user.click(saveButton);
 
       await waitFor(() => {
@@ -1103,7 +1143,7 @@ describe('ChannelSettingsDialog', () => {
       await user.click(qualitySelect);
       await user.click(screen.getByText('720p (HD)'));
 
-      const saveButton = screen.getByRole('button', { name: 'Save' });
+      const saveButton = screen.getByRole('button', { name: /Save Settings/i });
       await user.click(saveButton);
 
       await waitFor(() => {
@@ -1130,7 +1170,7 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const saveButton = screen.getByRole('button', { name: 'Save' });
+      const saveButton = screen.getByRole('button', { name: /Save Settings/i });
       expect(saveButton).toBeDisabled();
     });
 
@@ -1153,7 +1193,7 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      const saveButton = screen.getByRole('button', { name: 'Save' });
+      const saveButton = screen.getByRole('button', { name: /Save Settings/i });
       expect(saveButton).toBeDisabled();
 
       const qualitySelect = screen.getByLabelText('Channel Video Quality Override');
@@ -1301,28 +1341,17 @@ describe('ChannelSettingsDialog', () => {
       ).toBeInTheDocument();
     });
 
-    test('renders download filters info', async () => {
-      mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
-        });
-
+    test('renders duration filters info', async () => {
+      const user = userEvent.setup();
       render(<ChannelSettingsDialog {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText('Download Filters')).toBeInTheDocument();
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
-      expect(
-        screen.getByText(
-          /These filters only apply to channel downloads\. Manually selected videos will always download\./i
-        )
-      ).toBeInTheDocument();
+      await openTab(user, 'Filters');
+
+      expect(screen.getByText('Duration Filters')).toBeInTheDocument();
     });
   });
 
@@ -1356,7 +1385,7 @@ describe('ChannelSettingsDialog', () => {
       await user.click(qualitySelect);
       await user.click(screen.getByText('720p (HD)'));
 
-      const saveButton = screen.getByRole('button', { name: 'Save' });
+      const saveButton = screen.getByRole('button', { name: /Save Settings/i });
 
       expect(() => user.click(saveButton)).not.toThrow();
     });
@@ -1407,7 +1436,6 @@ describe('ChannelSettingsDialog', () => {
 
     test('handles folderMoved result in response', async () => {
       const user = userEvent.setup();
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
 
       mockFetch
         .mockResolvedValueOnce({
@@ -1438,17 +1466,12 @@ describe('ChannelSettingsDialog', () => {
       await user.click(qualitySelect);
       await user.click(screen.getByText('720p (HD)'));
 
-      const saveButton = screen.getByRole('button', { name: 'Save' });
+      const saveButton = screen.getByRole('button', { name: /Save Settings/i });
       await user.click(saveButton);
 
       await waitFor(() => {
-        expect(consoleSpy).toHaveBeenCalledWith(
-          'Channel folder moved:',
-          expect.objectContaining({ success: true })
-        );
+        expect(mockOnClose).toHaveBeenCalled();
       });
-
-      consoleSpy.mockRestore();
     });
   });
 });

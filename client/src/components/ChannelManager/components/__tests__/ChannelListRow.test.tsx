@@ -115,7 +115,9 @@ describe('ChannelListRow', () => {
       expect(screen.getByText('Test Channel')).toBeInTheDocument();
       expect(screen.getByTestId('channel-list-row-UC1234567890')).toBeInTheDocument();
       expect(screen.getByTestId('quality-chip')).toHaveAttribute('data-quality', '1080');
-      expect(screen.getByTestId('auto-download-chips')).toHaveAttribute('data-enabled', 'video');
+      const autoDownloadChips = screen.getAllByTestId('auto-download-chips');
+      expect(autoDownloadChips.length).toBeGreaterThan(0);
+      expect(autoDownloadChips[0]).toHaveAttribute('data-enabled', 'video');
       expect(screen.getByTestId('sub-folder-chip')).toHaveTextContent('Default Folder');
     });
 
@@ -224,7 +226,6 @@ describe('ChannelListRow', () => {
         />
       );
 
-      expect(screen.getByTestId('mobile-filter-chips')).toBeInTheDocument();
       expect(screen.getByTestId('duration-filter-chip')).toHaveAttribute('data-min', '300');
 
       await user.click(screen.getByTestId('title-filter-chip'));

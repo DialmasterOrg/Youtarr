@@ -63,6 +63,14 @@ jest.mock('../shared/useVideoDeletion', () => ({
   useVideoDeletion: jest.fn()
 }));
 
+jest.mock('../shared/RatingBadge', () => ({
+  __esModule: true,
+  default: function MockRatingBadge() {
+    const React = require('react');
+    return React.createElement('div', { 'data-testid': 'rating-badge' });
+  }
+}));
+
 const mockVideos: VideoData[] = [
   {
     id: 1,
@@ -119,6 +127,16 @@ const mockPaginatedResponse = (videos: VideoData[], page = 1, limit = 12) => {
 // Use delay: null to prevent timer-related flakiness when running with other tests
 const setupUser = () => userEvent.setup({ delay: null });
 
+const openActionsMenu = async (user: ReturnType<typeof setupUser>) => {
+  const actionsButton = await screen.findByRole('button', { name: /Actions/i });
+  await user.click(actionsButton);
+};
+
+const clickCheckbox = async (user: ReturnType<typeof setupUser>, index: number) => {
+  const checkbox = screen.getAllByRole('checkbox')[index] as HTMLElement;
+  fireEvent.click(checkbox);
+};
+
 describe('VideosPage Component', () => {
   const mockToken = 'test-token';
   const useMediaQuery = require('@mui/material/useMediaQuery');
@@ -146,7 +164,8 @@ describe('VideosPage Component', () => {
       render(<VideosPage token={mockToken} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Downloaded Videos/)).toBeInTheDocument();
+        const headings = screen.getAllByRole('heading', { name: /Downloaded Videos/ });
+        expect(headings.length).toBeGreaterThan(0);
       });
 
       await waitFor(() => {
@@ -189,13 +208,10 @@ describe('VideosPage Component', () => {
       render(<VideosPage token={mockToken} />);
 
       await waitFor(() => {
-        expect(screen.getByText('Thumbnail')).toBeInTheDocument();
+        expect(screen.getByText('Published')).toBeInTheDocument();
       });
-      expect(screen.getByText('Channel')).toBeInTheDocument();
-      expect(screen.getByText('Video Information')).toBeInTheDocument();
-      expect(screen.getByText('Published')).toBeInTheDocument();
-      expect(screen.getByText('Added')).toBeInTheDocument();
-      expect(screen.getByText('File Info')).toBeInTheDocument();
+      expect(screen.getByText('Downloaded')).toBeInTheDocument();
+      expect(screen.getByText('Downloaded Videos')).toBeInTheDocument();
     });
 
     test('filters videos by channel name', async () => {
@@ -294,7 +310,7 @@ describe('VideosPage Component', () => {
         expect(screen.getByText('How to Code')).toBeInTheDocument();
       });
 
-      const addedHeader = screen.getByText('Added');
+      const addedHeader = screen.getByText('Downloaded');
       await user.click(addedHeader);
 
       // Verify that a new API call was made
@@ -399,7 +415,6 @@ describe('VideosPage Component', () => {
       });
 
       expect(screen.queryByText('Thumbnail')).not.toBeInTheDocument();
-      expect(screen.queryByText('Video Information')).not.toBeInTheDocument();
     });
 
     test('displays filter button in mobile view', async () => {
@@ -450,8 +465,7 @@ describe('VideosPage Component', () => {
 
       const channelElements = screen.getAllByText('Tech Channel');
       expect(channelElements.length).toBeGreaterThan(0);
-      expect(screen.getByText(/Added:/)).toBeInTheDocument();
-      expect(screen.getByText(/Published/)).toBeInTheDocument();
+      expect(screen.getByText(/Pub:/)).toBeInTheDocument();
     });
 
     test('handles mobile filter menu interaction', async () => {
@@ -524,7 +538,7 @@ describe('VideosPage Component', () => {
       });
 
       // Check file size display in format indicator chip (1GB formatted)
-      expect(screen.getByText('1.0GB')).toBeInTheDocument();
+      expect(screen.getAllByText('1.0GB').length).toBeGreaterThan(0);
       expect(screen.getByTestId('MovieOutlinedIcon')).toBeInTheDocument();
     });
 
@@ -555,7 +569,7 @@ describe('VideosPage Component', () => {
       render(<VideosPage token={mockToken} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Downloaded Videos \(42 total\)/)).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: /Downloaded Videos \(42 total\)/ })).toBeInTheDocument();
       });
     });
 
@@ -622,7 +636,8 @@ describe('VideosPage Component', () => {
         expect(screen.getByText('Failed to load videos. Please try refreshing the page. If this error persists, the Youtarr backend may be down.')).toBeInTheDocument();
       });
 
-      expect(screen.getByText(/Downloaded Videos/)).toBeInTheDocument();
+      const headings = screen.getAllByRole('heading', { name: /Downloaded Videos/ });
+      expect(headings.length).toBeGreaterThan(0);
       expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to fetch videos:', expect.any(Error));
 
       consoleErrorSpy.mockRestore();
@@ -661,7 +676,7 @@ describe('VideosPage Component', () => {
       });
 
       const publishedHeader = screen.getByText('Published');
-      const addedHeader = screen.getByText('Added');
+      const addedHeader = screen.getByText('Downloaded');
 
       await user.click(publishedHeader);
       await user.click(publishedHeader);
@@ -736,9 +751,7 @@ describe('VideosPage Component', () => {
 
         render(<VideosPage token={mockToken} />);
 
-        await waitFor(() => {
-          expect(screen.getByText('How to Code')).toBeInTheDocument();
-        });
+        expect(await screen.findByText('How to Code')).toBeInTheDocument();
 
         // Should have a "select all" checkbox in the header
         const checkboxes = screen.getAllByRole('checkbox');
@@ -751,9 +764,7 @@ describe('VideosPage Component', () => {
 
         render(<VideosPage token={mockToken} />);
 
-        await waitFor(() => {
-          expect(screen.getByText('How to Code')).toBeInTheDocument();
-        });
+        expect(await screen.findByText('How to Code')).toBeInTheDocument();
 
         // Get all checkboxes (first is "select all", rest are individual videos)
         const checkboxes = screen.getAllByRole('checkbox');
@@ -799,9 +810,7 @@ describe('VideosPage Component', () => {
 
         render(<VideosPage token={mockToken} />);
 
-        await waitFor(() => {
-          expect(screen.getByText('How to Code')).toBeInTheDocument();
-        });
+        expect(await screen.findByText('How to Code')).toBeInTheDocument();
 
         const checkboxes = screen.getAllByRole('checkbox');
         const selectAllCheckbox = checkboxes[0];
@@ -820,20 +829,18 @@ describe('VideosPage Component', () => {
 
         render(<VideosPage token={mockToken} />);
 
-        await waitFor(() => {
-          expect(screen.getByText('How to Code')).toBeInTheDocument();
-        });
+        expect(await screen.findByText('How to Code')).toBeInTheDocument();
 
-        // Delete button should not be visible initially
-        expect(screen.queryByText('Delete Selected')).not.toBeInTheDocument();
+        // Actions button should not be visible initially
+        expect(screen.queryByRole('button', { name: /Actions/i })).not.toBeInTheDocument();
 
         // Select a video
         const checkboxes = screen.getAllByRole('checkbox');
         await user.click(checkboxes[1]);
 
-        // Delete button should now be visible
+        // Actions button should now be visible
         await waitFor(() => {
-          expect(screen.getByText('Delete Selected')).toBeInTheDocument();
+          expect(screen.getByRole('button', { name: /Actions/i })).toBeInTheDocument();
         });
       });
 
@@ -843,9 +850,7 @@ describe('VideosPage Component', () => {
 
         render(<VideosPage token={mockToken} />);
 
-        await waitFor(() => {
-          expect(screen.getByText('How to Code')).toBeInTheDocument();
-        });
+        expect(await screen.findByText('How to Code')).toBeInTheDocument();
 
         // Select a video
         const checkboxes = screen.getAllByRole('checkbox');
@@ -870,22 +875,19 @@ describe('VideosPage Component', () => {
 
         render(<VideosPage token={mockToken} />);
 
-        await waitFor(() => {
-          expect(screen.getByText('How to Code')).toBeInTheDocument();
-        });
+        expect(await screen.findByText('How to Code')).toBeInTheDocument();
 
         // Select videos
-        const checkboxes = screen.getAllByRole('checkbox');
-        await user.click(checkboxes[1]);
-        await user.click(checkboxes[2]);
+        await clickCheckbox(user, 1);
+        await clickCheckbox(user, 2);
 
         await waitFor(() => {
           expect(screen.getByText(/2 videos selected/)).toBeInTheDocument();
         });
 
-        // Click delete button
-        const deleteButton = screen.getByText('Delete Selected');
-        await user.click(deleteButton);
+        // Click delete action
+        await openActionsMenu(user);
+        await user.click(screen.getByText('Delete Selected'));
 
         // Dialog should open
         await waitFor(() => {
@@ -904,9 +906,7 @@ describe('VideosPage Component', () => {
 
         render(<VideosPage token={mockToken} />);
 
-        await waitFor(() => {
-          expect(screen.getByText('How to Code')).toBeInTheDocument();
-        });
+        expect(await screen.findByText('How to Code')).toBeInTheDocument();
 
         // Find and click the delete icon button for a single video
         const deleteButtons = screen.getAllByTestId('DeleteIcon');
@@ -932,9 +932,7 @@ describe('VideosPage Component', () => {
 
         render(<VideosPage token={mockToken} />);
 
-        await waitFor(() => {
-          expect(screen.getByText('How to Code')).toBeInTheDocument();
-        });
+        expect(await screen.findByText('How to Code')).toBeInTheDocument();
 
         const checkboxes = screen.getAllByRole('checkbox');
         const videoCheckbox = checkboxes[1]; // First video checkbox (after select all)
@@ -954,9 +952,7 @@ describe('VideosPage Component', () => {
 
         render(<VideosPage token={mockToken} />);
 
-        await waitFor(() => {
-          expect(screen.getByText('How to Code')).toBeInTheDocument();
-        });
+        expect(await screen.findByText('How to Code')).toBeInTheDocument();
 
         // Should have delete icons for videos with fileSize
         const deleteIcons = screen.getAllByTestId('DeleteIcon');
@@ -969,9 +965,7 @@ describe('VideosPage Component', () => {
 
         render(<VideosPage token={mockToken} />);
 
-        await waitFor(() => {
-          expect(screen.getByText('How to Code')).toBeInTheDocument();
-        });
+        expect(await screen.findByText('How to Code')).toBeInTheDocument();
 
         const deleteIcons = screen.getAllByTestId('DeleteIcon');
         const thumbnailDeleteIcon = deleteIcons[0];
@@ -992,9 +986,7 @@ describe('VideosPage Component', () => {
 
         render(<VideosPage token={mockToken} />);
 
-        await waitFor(() => {
-          expect(screen.getByText('How to Code')).toBeInTheDocument();
-        });
+        expect(await screen.findByText('How to Code')).toBeInTheDocument();
 
         // Select first video via delete icon
         const deleteIcons = screen.getAllByTestId('DeleteIcon');
@@ -1025,18 +1017,16 @@ describe('VideosPage Component', () => {
 
         render(<VideosPage token={mockToken} />);
 
-        await waitFor(() => {
-          expect(screen.getByText('How to Code')).toBeInTheDocument();
-        });
+        expect(await screen.findByText('How to Code')).toBeInTheDocument();
 
         // Select videos
         const checkboxes = screen.getAllByRole('checkbox');
         await user.click(checkboxes[1]);
         await user.click(checkboxes[2]);
 
-        // Click delete
-        const deleteButton = screen.getByText('Delete Selected');
-        await user.click(deleteButton);
+        // Click delete action
+        await openActionsMenu(user);
+        await user.click(screen.getByText('Delete Selected'));
 
         // Confirm deletion
         const confirmButton = screen.getByTestId('dialog-confirm');
@@ -1071,9 +1061,7 @@ describe('VideosPage Component', () => {
 
         render(<VideosPage token={mockToken} />);
 
-        await waitFor(() => {
-          expect(screen.getByText('How to Code')).toBeInTheDocument();
-        });
+        expect(await screen.findByText('How to Code')).toBeInTheDocument();
 
         // Select videos
         const checkboxes = screen.getAllByRole('checkbox');
@@ -1081,6 +1069,7 @@ describe('VideosPage Component', () => {
         await user.click(checkboxes[2]);
 
         // Delete
+        await openActionsMenu(user);
         await user.click(screen.getByText('Delete Selected'));
         await user.click(screen.getByTestId('dialog-confirm'));
 
@@ -1107,14 +1096,12 @@ describe('VideosPage Component', () => {
 
         render(<VideosPage token={mockToken} />);
 
-        await waitFor(() => {
-          expect(screen.getByText('How to Code')).toBeInTheDocument();
-        });
+        expect(await screen.findByText('How to Code')).toBeInTheDocument();
 
         // Select and delete
-        const checkboxes = screen.getAllByRole('checkbox');
-        await user.click(checkboxes[1]);
-        await user.click(checkboxes[2]);
+        await clickCheckbox(user, 1);
+        await clickCheckbox(user, 2);
+        await openActionsMenu(user);
         await user.click(screen.getByText('Delete Selected'));
         await user.click(screen.getByTestId('dialog-confirm'));
 
@@ -1131,13 +1118,11 @@ describe('VideosPage Component', () => {
 
         render(<VideosPage token={mockToken} />);
 
-        await waitFor(() => {
-          expect(screen.getByText('How to Code')).toBeInTheDocument();
-        });
+        expect(await screen.findByText('How to Code')).toBeInTheDocument();
 
         // Select and open dialog
-        const checkboxes = screen.getAllByRole('checkbox');
-        await user.click(checkboxes[1]);
+        await clickCheckbox(user, 1);
+        await openActionsMenu(user);
         await user.click(screen.getByText('Delete Selected'));
 
         // Cancel
@@ -1171,12 +1156,12 @@ describe('VideosPage Component', () => {
         });
 
         // Select and delete
-        const checkboxes = screen.getAllByRole('checkbox');
-        await user.click(checkboxes[1]);
-        await user.click(checkboxes[2]);
+        await clickCheckbox(user, 1);
+        await clickCheckbox(user, 2);
 
         expect(screen.getByText(/2 videos selected/)).toBeInTheDocument();
 
+        await openActionsMenu(user);
         await user.click(screen.getByText('Delete Selected'));
         await user.click(screen.getByTestId('dialog-confirm'));
 
@@ -1206,12 +1191,11 @@ describe('VideosPage Component', () => {
         });
 
         // Select video
-        const checkboxes = screen.getAllByRole('checkbox');
-        await user.click(checkboxes[1]);
+        await clickCheckbox(user, 1);
 
         // Delete button should be disabled
-        const deleteButton = screen.getByText('Delete Selected');
-        expect(deleteButton).toBeDisabled();
+        const actionsButton = screen.getByRole('button', { name: /Actions/i });
+        expect(actionsButton).toBeDisabled();
       });
     });
 
@@ -1235,8 +1219,8 @@ describe('VideosPage Component', () => {
         });
 
         // Delete video
-        const checkboxes = screen.getAllByRole('checkbox');
-        await user.click(checkboxes[1]);
+        await clickCheckbox(user, 1);
+        await openActionsMenu(user);
         await user.click(screen.getByText('Delete Selected'));
         await user.click(screen.getByTestId('dialog-confirm'));
 
@@ -1264,8 +1248,8 @@ describe('VideosPage Component', () => {
         });
 
         // Delete and fail
-        const checkboxes = screen.getAllByRole('checkbox');
-        await user.click(checkboxes[1]);
+        await clickCheckbox(user, 1);
+        await openActionsMenu(user);
         await user.click(screen.getByText('Delete Selected'));
         await user.click(screen.getByTestId('dialog-confirm'));
 

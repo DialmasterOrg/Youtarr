@@ -118,9 +118,9 @@ describe('ChannelCard Component', () => {
       expect(img).toHaveAttribute('src', '/images/channelthumb-default.jpg');
     });
 
-    test('renders default folder text when sub_folder is null', () => {
+    test('does not render folder indicator when sub_folder is null', () => {
       renderWithProviders(<ChannelCard {...defaultProps} />);
-      expect(screen.getByText('Default Folder')).toBeInTheDocument();
+      expect(screen.queryByText('Default Folder')).not.toBeInTheDocument();
     });
 
     test('renders custom sub_folder when provided', () => {
@@ -393,7 +393,7 @@ describe('ChannelCard Component', () => {
       );
 
       expect(screen.getByText('Minimal Channel')).toBeInTheDocument();
-      expect(screen.getByText('Default Folder')).toBeInTheDocument();
+      expect(screen.queryByText('Default Folder')).not.toBeInTheDocument();
     });
 
     test('handles channel with very long uploader name', () => {
@@ -524,9 +524,15 @@ describe('ChannelCard Component', () => {
       expect(card).toBeInTheDocument();
     });
 
-    test('folder icon is displayed for accessibility context', () => {
+    test('folder indicator is shown only for custom subfolders', () => {
       renderWithProviders(<ChannelCard {...defaultProps} />);
-      expect(screen.getByTestId('FolderIcon')).toBeInTheDocument();
+      expect(screen.queryByText(/\//)).not.toBeInTheDocument();
+
+      const channelWithFolder = { ...mockChannel, sub_folder: 'music' };
+      renderWithProviders(
+        <ChannelCard {...defaultProps} channel={channelWithFolder} />
+      );
+      expect(screen.getByText('/music')).toBeInTheDocument();
     });
   });
 

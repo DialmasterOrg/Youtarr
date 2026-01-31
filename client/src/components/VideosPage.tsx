@@ -42,6 +42,7 @@ import AlarmOnIcon from '@mui/icons-material/AlarmOn';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { formatDuration, formatYTDate } from '../utils';
+import { formatFileSize } from '../utils/formatters';
 import { VideoData, PaginatedVideosResponse, EnabledChannel } from '../types/VideoData';
 import { useSwipeable } from 'react-swipeable';
 import FilterMenu from './VideosPage/FilterMenu';
