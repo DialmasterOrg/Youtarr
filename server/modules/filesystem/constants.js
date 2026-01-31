@@ -42,22 +42,27 @@ const MEDIA_EXTENSIONS = [...VIDEO_EXTENSIONS, ...AUDIO_EXTENSIONS];
 /**
  * yt-dlp output template for channel folder name
  * Uses uploader with fallback to channel, then uploader_id
+ * Truncated to 80 bytes max to avoid filesystem path length issues with UTF-8 characters
  */
-const CHANNEL_TEMPLATE = '%(uploader,channel,uploader_id)s';
+const CHANNEL_TEMPLATE = '%(uploader,channel,uploader_id).80B';
 
 /**
  * yt-dlp output template for video folder name
  * Format: "ChannelName - VideoTitle - VideoID"
- * Title is truncated to 76 characters to avoid path length issues
+ * Title is truncated to 76 bytes (not characters) to avoid path length issues with UTF-8
+ * Using .NB syntax for byte-based truncation instead of .Ns for character-based
+ * Note: 76 bytes keeps same safety margin as before for Windows path limits (entire path must be <260)
  */
-const VIDEO_FOLDER_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title).76s - %(id)s`;
+const VIDEO_FOLDER_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title).76B - %(id)s`;
 
 /**
  * yt-dlp output template for video file name
  * Format: "ChannelName - VideoTitle [VideoID].ext"
- * Title is truncated to 76 characters to avoid path length issues
+ * Title is truncated to 76 bytes (not characters) to avoid path length issues with UTF-8
+ * Using .NB syntax for byte-based truncation instead of .Ns for character-based
+ * Note: 76 bytes keeps same safety margin as before for Windows path limits (entire path must be <260)
  */
-const VIDEO_FILE_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title).76s [%(id)s].%(ext)s`;
+const VIDEO_FILE_TEMPLATE = `${CHANNEL_TEMPLATE} - %(title).76B [%(id)s].%(ext)s`;
 
 /**
  * Pattern to extract YouTube video ID from filename

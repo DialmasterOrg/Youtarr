@@ -472,6 +472,7 @@ const initialize = async () => {
       videosModule,
       archiveModule,
       getCachedYtDlpVersion,
+      refreshYtDlpVersionCache,
       validateEnvAuthCredentials,
       isLocalhostIP,
       isWslEnvironment,

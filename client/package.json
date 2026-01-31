@@ -62,5 +62,10 @@
       "src/**/*.{ts,tsx,js,jsx}",
       "!src/types/**"
     ]
+  },
+  "overrides": {
+    "jsdom": {
+      "form-data": "^3.0.4"
+    }
   }
 }
