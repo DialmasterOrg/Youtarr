@@ -25,13 +25,14 @@ function registerRoutes(app, deps) {
     videosModule,
     archiveModule,
     getCachedYtDlpVersion,
+    refreshYtDlpVersionCache,
     validateEnvAuthCredentials,
     isLocalhostIP,
     isWslEnvironment,
   } = deps;
 
-  // Health routes (no auth required for health checks)
-  app.use(createHealthRoutes({ getCachedYtDlpVersion }));
+  // Health routes (no auth required for health checks, but yt-dlp endpoints are authenticated)
+  app.use(createHealthRoutes({ getCachedYtDlpVersion, refreshYtDlpVersionCache, verifyToken }));
 
   // Auth routes
   app.use(createAuthRoutes({ verifyToken, loginLimiter, configModule }));
