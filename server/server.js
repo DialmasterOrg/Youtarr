@@ -188,6 +188,7 @@ const initialize = async () => {
 
     const configModule = require('./modules/configModule');
     const channelModule = require('./modules/channelModule');
+    const playlistModule = require('./modules/playlistModule');
     const plexModule = require('./modules/plexModule');
     const downloadModule = require('./modules/downloadModule');
     const jobModule = require('./modules/jobModule');
@@ -466,6 +467,7 @@ const initialize = async () => {
       loginLimiter,
       configModule,
       channelModule,
+      playlistModule,
       plexModule,
       downloadModule,
       jobModule,

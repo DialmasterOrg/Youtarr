@@ -32,6 +32,7 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
 }) => {
   const [tabValue, setTabValue] = useState(0);
   const [showChannelSettingsDialog, setShowChannelSettingsDialog] = useState(false);
+  const [showPlaylistSettingsDialog, setShowPlaylistSettingsDialog] = useState(false);
 
   // Use config hook to get default resolution and video count
   const { config } = useConfig(token);
@@ -40,6 +41,11 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
 
   const handleOpenChannelSettings = () => {
     setShowChannelSettingsDialog(true);
+  };
+
+  const handleOpenPlaylistSettings = () => {
+    console.log('Opening playlist settings dialog');
+    setShowPlaylistSettingsDialog(true);
   };
 
   const handleTriggerChannelDownloads = async (settings: DownloadSettings | null) => {
@@ -64,6 +70,35 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
     // job and we should display an alert
     if (result.status === 400) {
       alert('Channel Download already running');
+    }
+    setTimeout(fetchRunningJobs, 500);
+  };
+
+  const handleTriggerPlaylistDownloads = async (settings: DownloadSettings | null) => {
+    console.log('Triggering playlist downloads with settings:', settings);
+    setShowPlaylistSettingsDialog(false);
+    downloadInitiatedRef.current = true;
+
+    const body: any = {};
+    // Add settings to the request body if provided
+    if (settings) {
+      body.overrideSettings = settings;
+    }
+
+    console.log('Fetching /api/playlists/download-all with body:', body);
+    const result = await fetch('/api/playlists/download-all', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-access-token': token || '',
+      },
+      body: JSON.stringify(body),
+    });
+    console.log('Playlist download result status:', result.status);
+    // If the result is a 400 then we already have a running Playlist Download
+    // job and we should display an alert
+    if (result.status === 400) {
+      alert('Playlist Download already running');
     }
     setTimeout(fetchRunningJobs, 500);
   };
@@ -109,6 +144,7 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
             <Tabs value={tabValue} onChange={handleTabChange} centered>
               <Tab label="Manual Download" />
               <Tab label="Channel Download" />
+              <Tab label="Playlist Download" />
             </Tabs>
           </Box>
 
@@ -123,7 +159,7 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
                 defaultResolution={defaultResolution}
               />
             </ErrorBoundary>
-          ) : (
+          ) : tabValue === 1 ? (
             <ErrorBoundary
               fallbackMessage="An error occurred with channel downloads. Please refresh the page and try again."
               onReset={() => setTabValue(1)}
@@ -145,6 +181,28 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
                 </Button>
               </Box>
             </ErrorBoundary>
+          ) : (
+            <ErrorBoundary
+              fallbackMessage="An error occurred with playlist downloads. Please refresh the page and try again."
+              onReset={() => setTabValue(2)}
+            >
+              <Box
+                display='flex'
+                flexDirection='column'
+                justifyContent='center'
+                alignItems='center'
+                gap={2}
+                mt={3}
+              >
+                <Button
+                  variant='contained'
+                  onClick={handleOpenPlaylistSettings}
+                  size='large'
+                >
+                  Download new from all playlists
+                </Button>
+              </Box>
+            </ErrorBoundary>
           )}
         </CardContent>
       </Card>
@@ -153,6 +211,16 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
         open={showChannelSettingsDialog}
         onClose={() => setShowChannelSettingsDialog(false)}
         onConfirm={handleTriggerChannelDownloads}
+        defaultResolution={defaultResolution}
+        defaultVideoCount={defaultVideoCount}
+        mode="channel"
+        defaultResolutionSource="global"
+      />
+
+      <DownloadSettingsDialog
+        open={showPlaylistSettingsDialog}
+        onClose={() => setShowPlaylistSettingsDialog(false)}
+        onConfirm={handleTriggerPlaylistDownloads}
         defaultResolution={defaultResolution}
         defaultVideoCount={defaultVideoCount}
         mode="channel"

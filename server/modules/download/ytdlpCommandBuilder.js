@@ -150,7 +150,7 @@ class YtdlpCommandBuilder {
 
   /**
    * Build arguments that ALWAYS apply to any yt-dlp invocation
-   * Includes: IPv4 enforcement, proxy, sleep-requests, and cookies
+   * Includes: IPv4 enforcement, proxy, sleep-requests, cookies, and user-agent
    * @param {Object} config - Configuration object
    * @param {Object} options - Options for building args
    * @param {boolean} options.skipSleepRequests - Skip adding --sleep-requests (for single metadata fetches)
@@ -163,6 +163,13 @@ class YtdlpCommandBuilder {
     // Always use IPv4
     // Note, I have found that this greatly improves reliability downloading from YouTube
     args.push('-4');
+
+    // Add user-agent to avoid 403 Forbidden errors from YouTube
+    args.push('--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
+
+    // Force iOS client to avoid SABR streaming issues
+    // See: https://github.com/yt-dlp/yt-dlp/issues/12482
+    args.push('--extractor-args', 'youtube:player_client=ios,web');
 
     // Add proxy if configured
     if (config.proxy && config.proxy.trim()) {
@@ -498,6 +505,41 @@ class YtdlpCommandBuilder {
     const sponsorblockArgs = this.buildSponsorblockArgs(config);
     args.push(...sponsorblockArgs);
 
+    return args;
+  }
+
+  /**
+   * Build args for fetching playlist information
+   * @param {string} playlistUrl - Playlist URL
+   * @param {string} outputFile - Output JSON file path
+   * @returns {Array<string>} - yt-dlp arguments
+   */
+  static buildPlaylistInfoArgs(playlistUrl, outputFile) {
+    const config = configModule.getConfig();
+    const args = this.buildCommonArgs(config);
+    args.push(
+      '--flat-playlist',
+      '--dump-single-json',  // Get playlist metadata with entries array
+      '--playlist-end', '1',  // Just get first video to verify playlist exists
+      playlistUrl
+    );
+    return args;
+  }
+
+  /**
+   * Build args for fetching playlist video list
+   * @param {string} playlistUrl - Playlist URL
+   * @param {string} outputFile - Output JSON file path
+   * @returns {Array<string>} - yt-dlp arguments
+   */
+  static buildPlaylistVideoListArgs(playlistUrl, outputFile) {
+    const config = configModule.getConfig();
+    const args = this.buildCommonArgs(config);
+    args.push(
+      '--flat-playlist',
+      '--dump-json',
+      playlistUrl
+    );
     return args;
   }
 }
