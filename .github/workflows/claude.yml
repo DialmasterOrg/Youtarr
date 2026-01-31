@@ -31,7 +31,7 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: "/review"
-          claude_args: "--max-turns 5"
+          claude_args: '--max-turns 5 --allowedTools "Bash(gh:*)"'
 
   # Manual @claude responses - restricted to authorized users
   manual-claude:
@@ -50,4 +50,4 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude_args: "--max-turns 10"
+          claude_args: '--max-turns 10 --allowedTools "Bash(gh:*)"'
