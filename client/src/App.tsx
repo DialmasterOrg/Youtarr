@@ -1,6 +1,6 @@
 import './App.css';
 import packageJson from '../package.json';
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import toplogo from './Youtarr_text.png';
 import axios from 'axios';
 import {
@@ -34,6 +34,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
 import MenuIcon from '@mui/icons-material/Menu';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import Tooltip from '@mui/material/Tooltip';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SubscriptionsIcon from '@mui/icons-material/Subscriptions';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -55,6 +56,7 @@ import { useConfig } from './hooks/useConfig';
 import ErrorBoundary from './components/ErrorBoundary';
 import DatabaseErrorOverlay from './components/DatabaseErrorOverlay';
 import { lightTheme, darkTheme } from './theme';
+import { YTDLP_UPDATED_EVENT } from './components/Configuration/hooks/useYtDlpUpdate';
 
 // Event name for database error detection
 const DB_ERROR_EVENT = 'db-error-detected';
@@ -76,6 +78,8 @@ function AppContent() {
   const [dbErrors, setDbErrors] = useState<string[]>([]);
   const [dbRecovered, setDbRecovered] = useState(false);
   const [countdown, setCountdown] = useState(15);
+  const [ytDlpUpdateAvailable, setYtDlpUpdateAvailable] = useState(false);
+  const [ytDlpLatestVersion, setYtDlpLatestVersion] = useState('');
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -359,6 +363,53 @@ function AppContent() {
       });
   }, []);
 
+  const fetchYtDlpVersionInfo = useCallback(() => {
+    if (!token) {
+      setYtDlpUpdateAvailable(false);
+      setYtDlpLatestVersion('');
+      return;
+    }
+
+    fetch('/api/ytdlp/latest-version', {
+      headers: { 'x-access-token': token },
+    })
+      .then((response) => {
+        if (response.ok) {
+          return response.json();
+        }
+        throw new Error('Failed to fetch yt-dlp version');
+      })
+      .then((data) => {
+        setYtDlpUpdateAvailable(data.updateAvailable || false);
+        setYtDlpLatestVersion(data.latestVersion || '');
+        if (data.currentVersion) {
+          setYtDlpVersion(data.currentVersion);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch yt-dlp version info:', err);
+        setYtDlpUpdateAvailable(false);
+        setYtDlpLatestVersion('');
+      });
+  }, [token]);
+
+  useEffect(() => {
+    fetchYtDlpVersionInfo();
+  }, [fetchYtDlpVersionInfo]);
+
+  // Listen for yt-dlp update events to refresh version display
+  useEffect(() => {
+    const handleYtDlpUpdated = () => {
+      fetchYtDlpVersionInfo();
+    };
+
+    window.addEventListener(YTDLP_UPDATED_EVENT, handleYtDlpUpdated);
+
+    return () => {
+      window.removeEventListener(YTDLP_UPDATED_EVENT, handleYtDlpUpdated);
+    };
+  }, [fetchYtDlpVersionInfo]);
+
   return (
     <ThemeProvider theme={selectedTheme}>
       <CssBaseline />
@@ -450,13 +501,28 @@ function AppContent() {
               {clientVersion}
             </Typography>
             {ytDlpVersion && (
-              <Typography
-                fontSize='x-small'
-                color={'textSecondary'}
-                style={{ opacity: 0.7 }}
-              >
-                yt-dlp: {ytDlpVersion}
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                {ytDlpUpdateAvailable && (
+                  <Tooltip title={`yt-dlp update available (${ytDlpLatestVersion}). Go to Configuration to update.`}>
+                    <IconButton
+                      component={Link}
+                      to="/configuration"
+                      size="small"
+                      aria-label={`yt-dlp update available (${ytDlpLatestVersion}). Click to go to Configuration.`}
+                      sx={{ p: 0.25 }}
+                    >
+                      <WarningAmberIcon sx={{ fontSize: 14, color: 'warning.main' }} />
+                    </IconButton>
+                  </Tooltip>
+                )}
+                <Typography
+                  fontSize='x-small'
+                  color={'textSecondary'}
+                  style={{ opacity: 0.7 }}
+                >
+                  yt-dlp: {ytDlpVersion}
+                </Typography>
+              </Box>
             )}
           </Box>
           {/* This is the matching invisible IconButton */}

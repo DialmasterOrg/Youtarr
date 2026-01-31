@@ -21,7 +21,13 @@ import {
   Collapse,
   CircularProgress,
   Link,
+  Typography,
+  Divider,
 } from '@mui/material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import SystemUpdateIcon from '@mui/icons-material/SystemUpdate';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import { YtDlpVersionInfo, YtDlpUpdateStatus } from '../hooks/useYtDlpUpdate';
 import { ConfigurationCard } from '../common/ConfigurationCard';
 import { InfoTooltip } from '../common/InfoTooltip';
 import SubtitleLanguageSelector from '../SubtitleLanguageSelector';
@@ -38,6 +44,9 @@ interface CoreSettingsSectionProps {
   onConfigChange: (updates: Partial<ConfigState>) => void;
   onMobileTooltipClick?: (text: string) => void;
   token: string | null;
+  ytDlpVersionInfo?: YtDlpVersionInfo;
+  ytDlpUpdateStatus?: YtDlpUpdateStatus;
+  onYtDlpUpdate?: () => void;
 }
 
 export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
@@ -47,6 +56,9 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
   onConfigChange,
   onMobileTooltipClick,
   token,
+  ytDlpVersionInfo,
+  ytDlpUpdateStatus,
+  onYtDlpUpdate,
 }) => {
   // Fetch available subfolders
   const { subfolders, loading: subfoldersLoading } = useSubfolders(token);
@@ -57,6 +69,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
   const [affectedChannels, setAffectedChannels] = useState<{ count: number; channelNames: string[] }>({ count: 0, channelNames: [] });
   const [loadingAffectedChannels, setLoadingAffectedChannels] = useState(false);
   const [showAffectedList, setShowAffectedList] = useState(false);
+  const [showYtDlpUpdateDialog, setShowYtDlpUpdateDialog] = useState(false);
 
   // Handle default subfolder change with confirmation
   const handleDefaultSubfolderChange = async (newValue: string | null) => {
@@ -386,6 +399,91 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
           </Box>
         </Grid>
       </Grid>
+
+      {/* yt-dlp Version Section */}
+      {ytDlpVersionInfo && ytDlpVersionInfo.currentVersion && (
+        <>
+          <Divider sx={{ mt: 3, mb: 2 }} />
+          <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', mb: 1 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
+                yt-dlp:
+              </Typography>
+              <Typography
+                variant="body1"
+                sx={{ fontFamily: 'monospace', fontWeight: 500 }}
+              >
+                {ytDlpVersionInfo.currentVersion}
+              </Typography>
+              {ytDlpVersionInfo.updateAvailable && ytDlpVersionInfo.latestVersion ? (
+                <>
+                  <ArrowForwardIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                  <Typography
+                    variant="body1"
+                    sx={{ fontFamily: 'monospace', fontWeight: 500, color: 'warning.main' }}
+                  >
+                    {ytDlpVersionInfo.latestVersion}
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    color="warning"
+                    startIcon={
+                      ytDlpUpdateStatus === 'updating' ? (
+                        <CircularProgress size={16} />
+                      ) : (
+                        <SystemUpdateIcon />
+                      )
+                    }
+                    onClick={() => setShowYtDlpUpdateDialog(true)}
+                    disabled={ytDlpUpdateStatus === 'updating'}
+                  >
+                    {ytDlpUpdateStatus === 'updating' ? 'Updating...' : 'Update'}
+                  </Button>
+                </>
+              ) : (
+                <CheckCircleIcon color="success" fontSize="small" />
+              )}
+            </Box>
+            <Typography variant="caption" color="text.secondary">
+              yt-dlp is the video download engine. If downloads are failing, try updating yt-dlp to the latest version.
+            </Typography>
+          </Box>
+        </>
+      )}
+
+      {/* yt-dlp Update Confirmation Dialog */}
+      <Dialog
+        open={showYtDlpUpdateDialog}
+        onClose={() => setShowYtDlpUpdateDialog(false)}
+        aria-labelledby="ytdlp-update-dialog-title"
+        aria-describedby="ytdlp-update-dialog-description"
+      >
+        <DialogTitle id="ytdlp-update-dialog-title">Update yt-dlp?</DialogTitle>
+        <DialogContent>
+          <DialogContentText id="ytdlp-update-dialog-description">
+            This will update yt-dlp from{' '}
+            <strong>{ytDlpVersionInfo?.currentVersion || 'current version'}</strong> to{' '}
+            <strong>{ytDlpVersionInfo?.latestVersion || 'latest version'}</strong>.
+          </DialogContentText>
+          <DialogContentText sx={{ mt: 2 }}>
+            Newer versions are not guaranteed to be fully compatible with Youtarr. Updating is only recommended if you are experiencing issues with downloading videos.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowYtDlpUpdateDialog(false)}>Cancel</Button>
+          <Button
+            onClick={() => {
+              setShowYtDlpUpdateDialog(false);
+              onYtDlpUpdate?.();
+            }}
+            variant="contained"
+            color="primary"
+          >
+            Update
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Confirmation Dialog for Default Subfolder */}
       <Dialog open={showConfirmDialog} onClose={handleCancelDefaultSubfolder}>
