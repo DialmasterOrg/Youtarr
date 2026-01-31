@@ -202,8 +202,8 @@ describe('YtdlpCommandBuilder', () => {
       tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
       const result = YtdlpCommandBuilder.buildOutputPath();
       expect(result).toContain('/mock/youtube/output/.youtarr_tmp');
-      expect(result).toContain('%(uploader,channel,uploader_id)s');
-      expect(result).toContain('%(title).76s');
+      expect(result).toContain('%(uploader,channel,uploader_id).80B');
+      expect(result).toContain('%(title).76B');
       expect(result).toContain('%(id)s');
       expect(result).toContain('%(ext)s');
     });
@@ -212,7 +212,7 @@ describe('YtdlpCommandBuilder', () => {
       tempPathManager.getTempBasePath.mockReturnValue('/tmp/youtarr-temp');
       const result = YtdlpCommandBuilder.buildOutputPath();
       expect(result).toContain('/tmp/youtarr-temp');
-      expect(result).toContain('%(uploader,channel,uploader_id)s');
+      expect(result).toContain('%(uploader,channel,uploader_id).80B');
     });
 
     it('should include subfolder when provided', () => {
@@ -220,14 +220,14 @@ describe('YtdlpCommandBuilder', () => {
       const result = YtdlpCommandBuilder.buildOutputPath('TechChannel');
       expect(result).toContain('/mock/youtube/output/.youtarr_tmp');
       expect(result).toContain('TechChannel');
-      expect(result).toContain('%(uploader,channel,uploader_id)s');
+      expect(result).toContain('%(uploader,channel,uploader_id).80B');
     });
 
     it('should not include subfolder when null', () => {
       tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
       const result = YtdlpCommandBuilder.buildOutputPath(null);
       expect(result).toContain('/mock/youtube/output/.youtarr_tmp');
-      expect(result).toContain('%(uploader,channel,uploader_id)s');
+      expect(result).toContain('%(uploader,channel,uploader_id).80B');
     });
 
     it('should use temp path with subfolder', () => {
@@ -243,8 +243,8 @@ describe('YtdlpCommandBuilder', () => {
       tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
       const result = YtdlpCommandBuilder.buildThumbnailPath();
       expect(result).toContain('/mock/youtube/output/.youtarr_tmp');
-      expect(result).toContain('%(uploader,channel,uploader_id)s');
-      expect(result).toContain('%(title).76s');
+      expect(result).toContain('%(uploader,channel,uploader_id).80B');
+      expect(result).toContain('%(title).76B');
       expect(result).toContain('[%(id)s]');
       // Should NOT contain extension since yt-dlp adds .jpg
       expect(result).not.toMatch(/\.%(ext)s$/);
@@ -254,7 +254,7 @@ describe('YtdlpCommandBuilder', () => {
       tempPathManager.getTempBasePath.mockReturnValue('/tmp/youtarr-temp');
       const result = YtdlpCommandBuilder.buildThumbnailPath();
       expect(result).toContain('/tmp/youtarr-temp');
-      expect(result).toContain('%(uploader,channel,uploader_id)s');
+      expect(result).toContain('%(uploader,channel,uploader_id).80B');
     });
 
     it('should include subfolder when provided', () => {
@@ -262,14 +262,14 @@ describe('YtdlpCommandBuilder', () => {
       const result = YtdlpCommandBuilder.buildThumbnailPath('NewsChannel');
       expect(result).toContain('/mock/youtube/output/.youtarr_tmp');
       expect(result).toContain('NewsChannel');
-      expect(result).toContain('%(uploader,channel,uploader_id)s');
+      expect(result).toContain('%(uploader,channel,uploader_id).80B');
     });
 
     it('should not include subfolder when null', () => {
       tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
       const result = YtdlpCommandBuilder.buildThumbnailPath(null);
       expect(result).toContain('/mock/youtube/output/.youtarr_tmp');
-      expect(result).toContain('%(uploader,channel,uploader_id)s');
+      expect(result).toContain('%(uploader,channel,uploader_id).80B');
     });
 
     it('should match video filename pattern without extension', () => {
@@ -278,8 +278,8 @@ describe('YtdlpCommandBuilder', () => {
       const thumbnailPath = YtdlpCommandBuilder.buildThumbnailPath();
 
       // Thumbnail should have the same pattern as video file but without the .%(ext)s
-      expect(outputPath).toContain('%(uploader,channel,uploader_id)s - %(title).76s [%(id)s].%(ext)s');
-      expect(thumbnailPath).toContain('%(uploader,channel,uploader_id)s - %(title).76s [%(id)s]');
+      expect(outputPath).toContain('%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s].%(ext)s');
+      expect(thumbnailPath).toContain('%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s]');
     });
   });
 
@@ -599,8 +599,8 @@ describe('YtdlpCommandBuilder', () => {
       // Check main output template
       const mainOutput = result[outputIndices[0] + 1];
       expect(mainOutput).toContain('/mock/youtube/output');
-      expect(mainOutput).toContain('%(uploader,channel,uploader_id)s');
-      expect(mainOutput).toContain('%(title).76s');
+      expect(mainOutput).toContain('%(uploader,channel,uploader_id).80B');
+      expect(mainOutput).toContain('%(title).76B');
       expect(mainOutput).toContain('%(id)s');
       expect(mainOutput).toContain('%(ext)s');
 
@@ -609,7 +609,7 @@ describe('YtdlpCommandBuilder', () => {
       expect(thumbOutput).toContain('thumbnail:');
       expect(thumbOutput).toContain('/mock/youtube/output');
       // Thumbnail should use same filename as video (without extension)
-      expect(thumbOutput).toContain('%(uploader,channel,uploader_id)s - %(title).76s [%(id)s]');
+      expect(thumbOutput).toContain('%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s]');
 
       // Check playlist thumbnail is disabled
       const plThumbOutput = result[outputIndices[2] + 1];
@@ -878,13 +878,13 @@ describe('YtdlpCommandBuilder', () => {
 
       // Check that output contains the expected template patterns
       expect(mainOutput).toContain('/mock/youtube/output');
-      expect(mainOutput).toContain('%(uploader,channel,uploader_id)s');
+      expect(mainOutput).toContain('%(uploader,channel,uploader_id).80B');
 
       // Folder should have channel - title - id format
-      expect(mainOutput).toContain('%(uploader,channel,uploader_id)s - %(title).76s - %(id)s');
+      expect(mainOutput).toContain('%(uploader,channel,uploader_id).80B - %(title).76B - %(id)s');
 
       // File should have channel - title [id].ext format
-      expect(mainOutput).toContain('%(uploader,channel,uploader_id)s - %(title).76s [%(id)s].%(ext)s');
+      expect(mainOutput).toContain('%(uploader,channel,uploader_id).80B - %(title).76B [%(id)s].%(ext)s');
     });
   });
 
