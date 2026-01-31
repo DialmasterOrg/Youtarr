@@ -40,13 +40,13 @@ describe('filesystem/constants', () => {
   });
 
   describe('yt-dlp templates', () => {
-    it('CHANNEL_TEMPLATE should use uploader with fallbacks', () => {
-      expect(CHANNEL_TEMPLATE).toBe('%(uploader,channel,uploader_id)s');
+    it('CHANNEL_TEMPLATE should use uploader with fallbacks and byte truncation', () => {
+      expect(CHANNEL_TEMPLATE).toBe('%(uploader,channel,uploader_id).80B');
     });
 
-    it('VIDEO_FOLDER_TEMPLATE should include channel and truncated title', () => {
+    it('VIDEO_FOLDER_TEMPLATE should include channel and byte-truncated title', () => {
       expect(VIDEO_FOLDER_TEMPLATE).toContain(CHANNEL_TEMPLATE);
-      expect(VIDEO_FOLDER_TEMPLATE).toContain('%(title).76s');
+      expect(VIDEO_FOLDER_TEMPLATE).toContain('%(title).76B');
       expect(VIDEO_FOLDER_TEMPLATE).toContain('%(id)s');
     });
 

@@ -151,14 +151,14 @@ describe('filesystem/pathBuilder', () => {
     it('should build template without subfolder', () => {
       const template = buildOutputTemplate(baseDir, null);
       expect(template).not.toContain('__');
-      expect(template).toContain('%(uploader,channel,uploader_id)s');
+      expect(template).toContain('%(uploader,channel,uploader_id).80B');
       expect(template).toContain('[%(id)s]');
     });
 
     it('should build template with subfolder', () => {
       const template = buildOutputTemplate(baseDir, 'MyFolder');
       expect(template).toContain('__MyFolder');
-      expect(template).toContain('%(uploader,channel,uploader_id)s');
+      expect(template).toContain('%(uploader,channel,uploader_id).80B');
     });
   });
 
