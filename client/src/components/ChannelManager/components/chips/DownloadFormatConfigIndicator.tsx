@@ -31,7 +31,7 @@ const DownloadFormatConfigIndicator: React.FC<DownloadFormatConfigIndicatorProps
             data-testid="video-format-icon"
             sx={{
               fontSize: '1rem',
-              color: 'primary.main',
+              color: 'var(--video-chip-icon, var(--primary))',
             }}
           />
         </Tooltip>
@@ -42,7 +42,7 @@ const DownloadFormatConfigIndicator: React.FC<DownloadFormatConfigIndicatorProps
             data-testid="audio-format-icon"
             sx={{
               fontSize: '1rem',
-              color: 'secondary.main',
+              color: 'var(--audio-chip-icon, var(--secondary))',
             }}
           />
         </Tooltip>

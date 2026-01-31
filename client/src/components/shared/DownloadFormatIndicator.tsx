@@ -47,6 +47,12 @@ const DownloadFormatIndicator: React.FC<DownloadFormatIndicatorProps> = ({
   const videoSizeLabel = videoSizeNum ? formatFileSize(videoSizeNum) : 'Unknown';
   const audioSizeLabel = audioSizeNum ? formatFileSize(audioSizeNum) : 'Unknown';
 
+  const chipBaseSx = {
+    height: 20,
+    fontSize: '0.7rem',
+    transition: 'box-shadow 200ms var(--transition-bouncy, ease)',
+  };
+
   return (
     <Box
       sx={{
@@ -59,10 +65,20 @@ const DownloadFormatIndicator: React.FC<DownloadFormatIndicatorProps> = ({
         <Tooltip title={displayVideoPath} arrow placement="top" enterTouchDelay={0}>
           <Chip
             size="small"
-            icon={<VideoIcon sx={{ color: 'primary.main' }} />}
+            icon={<VideoIcon sx={{ color: 'var(--video-chip-icon, var(--primary))' }} />}
             label={videoSizeLabel}
             variant="outlined"
-            sx={{ height: 20, fontSize: '0.7rem' }}
+            sx={{
+              ...chipBaseSx,
+              borderRadius: 'var(--video-chip-radius, var(--radius-ui))',
+              borderColor: 'var(--video-chip-border, var(--border))',
+              backgroundColor: 'var(--video-chip-bg, transparent)',
+              color: 'var(--video-chip-foreground, var(--foreground))',
+              boxShadow: 'var(--video-chip-shadow, var(--chip-shadow))',
+              '&:hover': {
+                boxShadow: 'var(--video-chip-shadow-hover, var(--chip-shadow-hover))',
+              },
+            }}
           />
         </Tooltip>
       )}
@@ -70,10 +86,20 @@ const DownloadFormatIndicator: React.FC<DownloadFormatIndicatorProps> = ({
         <Tooltip title={displayAudioPath} arrow placement="top" enterTouchDelay={0}>
           <Chip
             size="small"
-            icon={<AudioIcon sx={{ color: 'secondary.main' }} />}
+            icon={<AudioIcon sx={{ color: 'var(--audio-chip-icon, var(--secondary))' }} />}
             label={audioSizeLabel}
             variant="outlined"
-            sx={{ height: 20, fontSize: '0.7rem' }}
+            sx={{
+              ...chipBaseSx,
+              borderRadius: 'var(--audio-chip-radius, var(--radius-ui))',
+              borderColor: 'var(--audio-chip-border, var(--border))',
+              backgroundColor: 'var(--audio-chip-bg, transparent)',
+              color: 'var(--audio-chip-foreground, var(--foreground))',
+              boxShadow: 'var(--audio-chip-shadow, var(--chip-shadow))',
+              '&:hover': {
+                boxShadow: 'var(--audio-chip-shadow-hover, var(--chip-shadow-hover))',
+              },
+            }}
           />
         </Tooltip>
       )}

@@ -17,7 +17,52 @@
   /* Settings splash-specific tokens (override per-theme) */
   --settings-splash-shadow-hover: var(--nav-item-shadow-hover);
   --settings-splash-border: var(--nav-item-bg-selected);
+
+  /* Audio format indicator tokens */
+  --audio-chip-radius: var(--radius-ui);
+  --audio-chip-bg: transparent;
+  --audio-chip-border: var(--border);
+  --audio-chip-foreground: var(--foreground);
+  --audio-chip-icon: var(--secondary);
+  --audio-chip-shadow: var(--chip-shadow);
+  --audio-chip-shadow-hover: var(--chip-shadow-hover);
+
+  --video-chip-radius: var(--radius-ui);
+  --video-chip-bg: transparent;
+  --video-chip-border: var(--border);
+  --video-chip-foreground: var(--foreground);
+  --video-chip-icon: var(--primary);
+  --video-chip-shadow: var(--chip-shadow);
+  --video-chip-shadow-hover: var(--chip-shadow-hover);
+
+  /* Audio control tokens */
+  --audio-control-radius: var(--radius-input);
+  --audio-control-border: var(--input-border);
+  --audio-control-bg: var(--input);
+  --audio-control-foreground: var(--foreground);
+  --audio-control-shadow: var(--shadow-input-rest);
+  --audio-control-shadow-focus: var(--shadow-input-focus);
 } 
+
+.audio-control .MuiOutlinedInput-root {
+  border-radius: var(--audio-control-radius);
+  background-color: var(--audio-control-bg);
+  color: var(--audio-control-foreground);
+  box-shadow: var(--audio-control-shadow);
+}
+
+.audio-control .MuiOutlinedInput-root.Mui-focused {
+  box-shadow: var(--audio-control-shadow-focus);
+}
+
+.audio-control .MuiOutlinedInput-notchedOutline {
+  border-color: var(--audio-control-border);
+}
+
+.audio-control .MuiInputLabel-root,
+.audio-control .MuiFormHelperText-root {
+  color: var(--audio-control-foreground);
+}
 
 .action-bar {
   display: flex;

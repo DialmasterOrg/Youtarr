@@ -34,12 +34,18 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     setSubscriptions((prev) => prev.filter((sub) => sub.callback !== callback));
   }, []);
 
+  const buildWebSocketUrl = () => {
+    const backendEnv = import.meta.env.VITE_BACKEND_URL;
+    const backendUrl = backendEnv
+      ? new URL(backendEnv)
+      : new URL(window.location.href);
+    const protocol = backendUrl.protocol === 'https:' ? 'wss' : 'ws';
+    const portSegment = backendUrl.port ? `:${backendUrl.port}` : '';
+    return `${protocol}://${backendUrl.hostname}${portSegment}`;
+  };
+
   const connect = useCallback(() => {
-    const host = window.location.hostname;
-    const port =
-      import.meta.env.DEV ? '3011' : window.location.port;
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${protocol}://${host}:${port}`);
+    const ws = new WebSocket(buildWebSocketUrl());
 
     ws.onopen = () => {
       setRetries(0); // Reset retries counter when successfully connected

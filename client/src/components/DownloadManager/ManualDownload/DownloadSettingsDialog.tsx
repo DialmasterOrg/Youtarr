@@ -411,7 +411,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                     Download Type
                   </Typography>
 
-                  <FormControl fullWidth sx={{ mb: 2 }}>
+                  <FormControl fullWidth sx={{ mb: 2 }} className="audio-control audio-control--download-type">
                     <InputLabel id="audio-format-select-label" shrink>Download Type</InputLabel>
                     <Select
                       labelId="audio-format-select-label"

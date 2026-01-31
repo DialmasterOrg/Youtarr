@@ -9,6 +9,7 @@ import { DEFAULT_CONFIG } from '../config/configSchema';
 const meta: Meta<typeof ChannelManager> = {
   title: 'Pages/ChannelManager',
   component: ChannelManager,
+  tags: ['veracity'],
   args: {
     token: 'storybook-token',
   },
