@@ -1838,12 +1838,15 @@ class ChannelModule {
     const rssUrl = this.buildRssFeedUrl(channelId, tabType);
 
     try {
-      const response = await fetch(rssUrl, { method: 'GET' });
+      const response = await fetch(rssUrl, {
+        method: 'GET',
+        signal: AbortSignal.timeout(10000), // 10 second timeout
+      });
       // Any non-404 response means the tab exists
       // (YouTube returns 404 for non-existent playlist feeds)
       return response.status !== 404;
     } catch (error) {
-      // Network error - assume tab doesn't exist
+      // Network error or timeout - assume tab doesn't exist
       logger.debug({ channelId, tabType, error: error.message }, 'RSS feed check failed');
       return false;
     }
@@ -1897,9 +1900,16 @@ class ChannelModule {
         })
       );
 
-      const availableTabs = tabChecks
+      let availableTabs = tabChecks
         .filter(result => result.exists)
         .map(result => result.tabType);
+
+      // Fallback: if all RSS checks failed (e.g., network timeout), assume "videos" tab exists
+      // This prevents channels from being added with no tabs, which would make them unusable
+      if (availableTabs.length === 0) {
+        logger.warn({ channelId }, 'All RSS tab checks failed, defaulting to videos tab');
+        availableTabs = [TAB_TYPES.VIDEOS];
+      }
 
       // Determine smart default for auto_download_enabled_tabs
       let autoDownloadEnabledTabs = 'video';
