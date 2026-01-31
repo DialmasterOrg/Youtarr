@@ -814,7 +814,11 @@ describe('server routes - channels', () => {
         'date', // default sortBy
         'desc', // default sortOrder
         'videos', // default tabType
-        '' // default maxRating
+        '', // default maxRating
+        null, // default minDuration
+        null, // default maxDuration
+        null, // default dateFrom
+        null  // default dateTo
       );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -877,7 +881,11 @@ describe('server routes - channels', () => {
         'title',
         'asc',
         'videos', // default tabType
-        ''
+        '',
+        null, // default minDuration
+        null, // default maxDuration
+        null, // default dateFrom
+        null  // default dateTo
       );
       expect(res.statusCode).toBe(200);
     });
@@ -913,7 +921,11 @@ describe('server routes - channels', () => {
         'date',
         'desc',
         'shorts',
-        ''
+        '',
+        null, // default minDuration
+        null, // default maxDuration
+        null, // default dateFrom
+        null  // default dateTo
       );
       expect(res.statusCode).toBe(200);
     });

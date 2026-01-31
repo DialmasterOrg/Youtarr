@@ -137,6 +137,8 @@ describe('VideoMetadataProcessor', () => {
         channel_id: 'UC123456',
         filePath: '/output/directory/Test Channel/Test Channel - Test Video Title - abc123/Test Channel - Test Video Title [abc123].mp4',
         fileSize: '1024000',
+        audioFilePath: null,
+        audioFileSize: null,
         media_type: 'video',
         normalized_rating: null,
         rating_source: null,
@@ -220,7 +222,7 @@ describe('VideoMetadataProcessor', () => {
       expect(result[0].fileSize).toBeNull();
       expect(logger.warn).toHaveBeenCalledWith(
         { videoId: 'missingpath' },
-        'Video file path could not be determined from metadata or filesystem search'
+        'No file paths could be determined from metadata or filesystem search'
       );
     });
 
@@ -386,6 +388,8 @@ describe('VideoMetadataProcessor', () => {
         channel_id: undefined,
         filePath: '/output/directory/Unknown Channel/Unknown Channel - Incomplete Video - incomplete123/Unknown Channel - Incomplete Video [incomplete123].mp4',
         fileSize: null,
+        audioFilePath: null,
+        audioFileSize: null,
         media_type: 'video',
         normalized_rating: null,
         rating_source: null,

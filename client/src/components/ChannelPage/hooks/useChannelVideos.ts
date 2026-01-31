@@ -14,6 +14,10 @@ interface UseChannelVideosParams {
   token: string | null;
   append?: boolean;
   resetKey?: string;
+  minDuration?: number | null;
+  maxDuration?: number | null;
+  dateFrom?: Date | null;
+  dateTo?: Date | null;
 }
 
 interface UseChannelVideosResult {
@@ -41,6 +45,10 @@ export function useChannelVideos({
   token,
   append = false,
   resetKey,
+  minDuration,
+  maxDuration,
+  dateFrom,
+  dateTo,
 }: UseChannelVideosParams): UseChannelVideosResult {
   const [videos, setVideos] = useState<ChannelVideo[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
@@ -84,6 +92,20 @@ export function useChannelVideos({
         queryParams.set('maxRating', maxRating);
       }
 
+      // Add optional filter params (convert duration from minutes to seconds)
+      if (minDuration != null) {
+        queryParams.append('minDuration', (minDuration * 60).toString());
+      }
+      if (maxDuration != null) {
+        queryParams.append('maxDuration', (maxDuration * 60).toString());
+      }
+      if (dateFrom) {
+        queryParams.append('dateFrom', dateFrom.toISOString().split('T')[0]);
+      }
+      if (dateTo) {
+        queryParams.append('dateTo', dateTo.toISOString().split('T')[0]);
+      }
+
       const response = await fetch(`/getchannelvideos/${channelId}?${queryParams}`, {
         headers: {
           'x-access-token': token,
@@ -123,7 +145,7 @@ export function useChannelVideos({
     } finally {
       setLoading(false);
     }
-  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, maxRating, token, append]);
+  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, maxRating, token, append, minDuration, maxDuration, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchVideos();

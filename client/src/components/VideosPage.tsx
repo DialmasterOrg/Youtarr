@@ -58,6 +58,7 @@ import ChangeRatingDialog from './shared/ChangeRatingDialog';
 import EighteenUpRatingIcon from '@mui/icons-material/EighteenUpRating';
 import VideoActionsDropdown from './shared/VideoActionsDropdown';
 import { RATING_OPTIONS } from '../utils/ratings';
+import DownloadFormatIndicator from './shared/DownloadFormatIndicator';
 
 interface VideosPageProps {
   token: string | null;
@@ -186,23 +187,6 @@ function VideosPage({ token }: VideosPageProps) {
       setSortOrder('desc');
     }
     setPage(1);
-  };
-
-  const formatFileSize = (bytes: string | null | undefined): string => {
-    if (!bytes) return '';
-    const size = parseInt(bytes);
-    if (isNaN(size)) return '';
-
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    let unitIndex = 0;
-    let formattedSize = size;
-
-    while (formattedSize >= 1024 && unitIndex < units.length - 1) {
-      formattedSize /= 1024;
-      unitIndex++;
-    }
-
-    return `${formattedSize.toFixed(1)} ${units[unitIndex]}`;
   };
 
   const getMediaTypeInfo = (mediaType?: string) => {
@@ -776,6 +760,14 @@ function VideosPage({ token }: VideosPageProps) {
 
                               {/* Status chips in a flexible row */}
                               <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                                {!video.removed && (video.filePath || video.audioFilePath) && (
+                                  <DownloadFormatIndicator
+                                    filePath={video.filePath}
+                                    audioFilePath={video.audioFilePath}
+                                    fileSize={video.fileSize}
+                                    audioFileSize={video.audioFileSize}
+                                  />
+                                )}
                                 {(() => {
                                   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
                                   return mediaTypeInfo ? (
@@ -994,6 +986,14 @@ function VideosPage({ token }: VideosPageProps) {
                                   size="small"
                                   sx={{ height: 20, fontSize: '0.7rem', boxShadow: 'none' }}
                                 />
+                                {!video.removed && (video.filePath || video.audioFilePath) && (
+                                  <DownloadFormatIndicator
+                                    filePath={video.filePath}
+                                    audioFilePath={video.audioFilePath}
+                                    fileSize={video.fileSize}
+                                    audioFileSize={video.audioFileSize}
+                                  />
+                                )}
                                 {video.fileSize && (
                                   <Tooltip title="File size on disk" enterTouchDelay={0}>
                                     <Chip
@@ -1035,36 +1035,36 @@ function VideosPage({ token }: VideosPageProps) {
                                 ) : null}
                               </Stack>
                               <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                  <ScheduleIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                                  <Typography variant="caption" color="text.secondary">
-                                    Published: {formatYTDate(video.originalDate)}
-                                  </Typography>
-                                </Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                  <DownloadIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                                  <Typography variant="caption" color="text.secondary">
-                                    Downloaded: {new Date(video.timeCreated).toLocaleDateString()} {new Date(video.timeCreated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                  </Typography>
-                                </Box>
-                              </Stack>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <ScheduleIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                    <Typography variant="caption" color="text.secondary">
+                                      Published: {formatYTDate(video.originalDate)}
+                                    </Typography>
+                                  </Box>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <DownloadIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                    <Typography variant="caption" color="text.secondary">
+                                      Downloaded: {new Date(video.timeCreated).toLocaleDateString()} {new Date(video.timeCreated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </Typography>
+                                  </Box>
+                                </Stack>
+                              </Box>
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Tooltip title="Delete video from disk">
+                                  <span>
+                                    <IconButton
+                                      color="error"
+                                      size="small"
+                                      onClick={() => handleDeleteSingleVideo(video.id)}
+                                      disabled={Boolean(video.removed) || deleteLoading}
+                                    >
+                                      <DeleteIcon />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                              </Box>
                             </Box>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <Tooltip title="Delete video from disk">
-                                <span>
-                                  <IconButton
-                                    color="error"
-                                    size="small"
-                                    onClick={() => handleDeleteSingleVideo(video.id)}
-                                    disabled={Boolean(video.removed) || deleteLoading}
-                                  >
-                                    <DeleteIcon />
-                                  </IconButton>
-                                </span>
-                              </Tooltip>
-                            </Box>
-                          </Box>
-                        </TableCell>
+                          </TableCell>
                       )}
                     </TableRow>
                   ))

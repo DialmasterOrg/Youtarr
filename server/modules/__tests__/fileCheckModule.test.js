@@ -104,7 +104,7 @@ describe('FileCheckModule', () => {
         }
       ]);
       expect(result.updates).toEqual([
-        { id: 1, fileSize: 1000, removed: false }
+        { id: 1, removed: false }
       ]);
       expect(mockFs.stat).toHaveBeenCalledWith('/videos/channel/video.mp4');
     });
@@ -134,7 +134,7 @@ describe('FileCheckModule', () => {
         }
       ]);
       expect(result.updates).toEqual([
-        { id: 1, fileSize: 2000, removed: false }
+        { id: 1, fileSize: 2000 }
       ]);
       expect(mockFs.stat).toHaveBeenCalledWith('/videos/channel/video.mp4');
     });
@@ -226,8 +226,8 @@ describe('FileCheckModule', () => {
       ]);
       expect(result.updates).toEqual([
         { id: 1, removed: true },
-        { id: 2, fileSize: 2000, removed: false },
-        { id: 4, fileSize: 4000, removed: false }
+        { id: 2, removed: false },
+        { id: 4, fileSize: 4000 }
       ]);
       expect(mockFs.stat).toHaveBeenCalledTimes(3);
     });
@@ -296,7 +296,7 @@ describe('FileCheckModule', () => {
 
       expect(result.videos[0].fileSize).toBe('2000');
       expect(result.updates).toEqual([
-        { id: 1, fileSize: 2000, removed: false }
+        { id: 1, fileSize: 2000 }
       ]);
     });
 
@@ -316,7 +316,7 @@ describe('FileCheckModule', () => {
 
       expect(result.videos[0].fileSize).toBe('1000');
       expect(result.updates).toEqual([
-        { id: 1, fileSize: 1000, removed: false }
+        { id: 1, fileSize: 1000 }
       ]);
     });
 
@@ -338,7 +338,7 @@ describe('FileCheckModule', () => {
 
       expect(result.videos[0].fileSize).toBe(largeSize.toString());
       expect(result.updates).toEqual([
-        { id: 1, fileSize: largeSize, removed: false }
+        { id: 1, fileSize: largeSize }
       ]);
     });
   });

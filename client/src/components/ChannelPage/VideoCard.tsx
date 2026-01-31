@@ -11,16 +11,15 @@ import {
   Tooltip,
 } from '@mui/material';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import StorageIcon from '@mui/icons-material/Storage';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
-import { formatFileSize, decodeHtml } from '../../utils/formatters';
+import { decodeHtml } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
-import { useThemeEngine } from '../../contexts/ThemeEngineContext';
+import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 
 interface VideoCardProps {
   video: ChannelVideo;
@@ -64,8 +63,6 @@ function VideoCard({
   const isIgnored = status === 'ignored';
   const baseTransform = isInteractive ? 'var(--sticker-rest-transform)' : 'translate(0, 0)';
   const isClickable = (isDownloadSelectable && isDownloadAllowed) || (isDeleteSelectable && isDeleteAllowed);
-
-  const { themeMode } = useThemeEngine();
 
   return (
     <Fade in timeout={300} key={video.youtube_id}>
@@ -287,23 +284,25 @@ function VideoCard({
               {decodeHtml(video.title)}
             </Typography>
 
-            <Box sx={{ mt: 'auto', display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-              {/* Date and Size on same line */}
+            <Box sx={{ mt: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {/* Date and download format info */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                {video.media_type !== 'short' && video.publishedAt && (
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <CalendarTodayIcon sx={{ fontSize: 12 }} />
-                    {isMobile
-                      ? new Date(video.publishedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-                      : new Date(video.publishedAt).toLocaleDateString()
-                    }
-                  </Typography>
-                )}
-                {video.fileSize && (
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <StorageIcon sx={{ fontSize: 12 }} />
-                    {formatFileSize(video.fileSize)}
-                  </Typography>
+              {video.media_type !== 'short' && video.publishedAt && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <CalendarTodayIcon sx={{ fontSize: 12 }} />
+                  {isMobile
+                    ? new Date(video.publishedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                    : new Date(video.publishedAt).toLocaleDateString()
+                  }
+                </Typography>
+              )}
+                {video.added && !video.removed && (
+                  <DownloadFormatIndicator
+                    filePath={video.filePath}
+                    audioFilePath={video.audioFilePath}
+                    fileSize={video.fileSize}
+                    audioFileSize={video.audioFileSize}
+                  />
                 )}
               </Box>
 

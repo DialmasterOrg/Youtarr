@@ -746,7 +746,7 @@ describe('DownloadModule', () => {
       await downloadModule.executeGroupDownload(group, mockJobId, 'Channel Downloads - Group 1/1 (480p, lowres)', jobData, true);
 
       // Subfolder should NOT be passed to download - post-processing handles subfolder routing
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('480', false, null, undefined);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('480', false, null, undefined, null);
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--playlist-end', '5'
@@ -776,7 +776,7 @@ describe('DownloadModule', () => {
       await downloadModule.executeGroupDownload(group, mockJobId, 'Channel Downloads - Group 1/1 (1080p)', jobData, true);
 
       // Subfolder should NOT be passed - post-processing handles it
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('1080', true, null, undefined);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('1080', true, null, undefined, null);
     });
 
     it('should pass filterConfig to YtdlpCommandBuilder when group has filters', async () => {
@@ -800,8 +800,8 @@ describe('DownloadModule', () => {
 
       await downloadModule.executeGroupDownload(group, mockJobId, 'Channel Downloads - Group 1/1 (1080p)', {}, true);
 
-      // Verify filterConfig is passed as the 4th parameter
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('1080', false, null, mockFilterConfig);
+      // Verify filterConfig is passed as the 4th parameter, audioFormat is null when not in filterConfig
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgs).toHaveBeenCalledWith('1080', false, null, mockFilterConfig, null);
     });
 
     it('should pass skipJobTransition flag to doDownload', async () => {
@@ -878,7 +878,7 @@ describe('DownloadModule', () => {
         }),
         false
       );
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null);
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--format', 'best[height<=1080]',
@@ -967,7 +967,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('480', false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('480', false, null);
     });
 
     it('should respect channel-level quality override when present', async () => {
@@ -985,9 +985,63 @@ describe('DownloadModule', () => {
 
       expect(ChannelModelMock.findOne).toHaveBeenCalledWith({
         where: { channel_id: 'UC123456' },
-        attributes: ['video_quality']
+        attributes: ['video_quality', 'audio_format']
       });
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, null);
+    });
+
+    it('should respect channel-level audio_format when no override provided', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+      ChannelModelMock.findOne.mockResolvedValue({ video_quality: '720', audio_format: 'mp3_only' });
+
+      const request = {
+        body: {
+          urls: ['https://youtube.com/watch?v=test'],
+          channelId: 'UC123456'
+        }
+      };
+
+      await downloadModule.doSpecificDownloads(request);
+
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, 'mp3_only');
+    });
+
+    it('should prioritize override audioFormat over channel audio_format', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+      ChannelModelMock.findOne.mockResolvedValue({ video_quality: '720', audio_format: 'mp3_only' });
+
+      const request = {
+        body: {
+          urls: ['https://youtube.com/watch?v=test'],
+          channelId: 'UC123456',
+          overrideSettings: {
+            audioFormat: 'video_mp3'
+          }
+        }
+      };
+
+      await downloadModule.doSpecificDownloads(request);
+
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, 'video_mp3');
+    });
+
+    it('should allow null audioFormat override to bypass channel mp3_only setting', async () => {
+      jobModuleMock.getJob.mockReturnValue({ status: 'In Progress' });
+      ChannelModelMock.findOne.mockResolvedValue({ video_quality: '720', audio_format: 'mp3_only' });
+
+      const request = {
+        body: {
+          urls: ['https://youtube.com/watch?v=test'],
+          channelId: 'UC123456',
+          overrideSettings: {
+            audioFormat: null  // Explicitly override to "Video Only"
+          }
+        }
+      };
+
+      await downloadModule.doSpecificDownloads(request);
+
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', false, null);
     });
 
     it('should handle allowRedownload override setting', async () => {
@@ -1004,7 +1058,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', true);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('720', true, null);
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--format', 'best[height<=720]',
@@ -1039,7 +1093,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('480', false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('480', false, null);
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--format', 'best[height<=480]',
@@ -1070,7 +1124,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doSpecificDownloads(request);
 
-      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false);
+      expect(YtdlpCommandBuilderMock.getBaseCommandArgsForManualDownload).toHaveBeenCalledWith('1080', false, null);
       expect(mockDownloadExecutor.doDownload).toHaveBeenCalledWith(
         expect.arrayContaining([
           '--download-archive', './config/complete.list',

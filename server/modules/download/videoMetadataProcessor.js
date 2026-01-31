@@ -96,42 +96,51 @@ class VideoMetadataProcessor {
       return null;
     }
 
-    const targetSuffix = `[${videoId}].mp4`;
-    const visited = new Set();
+    // Search for both .mp4 and .mp3 files (video and audio-only downloads)
+    const suffixesToTry = [`[${videoId}].mp4`, `[${videoId}].mp3`];
 
-    if (preferredChannelName) {
-      const normalizedTarget = this.normalizeForDirectoryMatch(preferredChannelName);
+    for (const targetSuffix of suffixesToTry) {
+      const visited = new Set();
 
-      try {
-        const channelDirs = await fsPromises.readdir(baseDir, { withFileTypes: true });
+      if (preferredChannelName) {
+        const normalizedTarget = this.normalizeForDirectoryMatch(preferredChannelName);
 
-        for (const dirent of channelDirs) {
-          if (!dirent.isDirectory()) {
-            continue;
-          }
+        try {
+          const channelDirs = await fsPromises.readdir(baseDir, { withFileTypes: true });
 
-          const dirPath = path.join(baseDir, dirent.name);
-          const normalizedDir = this.normalizeForDirectoryMatch(dirent.name);
+          for (const dirent of channelDirs) {
+            if (!dirent.isDirectory()) {
+              continue;
+            }
 
-          if (
-            normalizedDir &&
-            normalizedTarget &&
-            (normalizedDir === normalizedTarget ||
-              normalizedDir.includes(normalizedTarget) ||
-              normalizedTarget.includes(normalizedDir))
-          ) {
-            const locatedPath = await this.searchForVideoFile(dirPath, targetSuffix, visited);
-            if (locatedPath) {
-              return locatedPath;
+            const dirPath = path.join(baseDir, dirent.name);
+            const normalizedDir = this.normalizeForDirectoryMatch(dirent.name);
+
+            if (
+              normalizedDir &&
+              normalizedTarget &&
+              (normalizedDir === normalizedTarget ||
+                normalizedDir.includes(normalizedTarget) ||
+                normalizedTarget.includes(normalizedDir))
+            ) {
+              const locatedPath = await this.searchForVideoFile(dirPath, targetSuffix, visited);
+              if (locatedPath) {
+                return locatedPath;
+              }
             }
           }
+        } catch (err) {
+          logger.warn({ err, baseDir }, 'Error scanning channel directories while locating video file');
         }
-      } catch (err) {
-        logger.warn({ err, baseDir }, 'Error scanning channel directories while locating video file');
+      }
+
+      const result = await this.searchForVideoFile(baseDir, targetSuffix, visited);
+      if (result) {
+        return result;
       }
     }
 
-    return this.searchForVideoFile(baseDir, targetSuffix, visited);
+    return null;
   }
 
   static async processVideoMetadata(newVideoUrls) {
@@ -167,41 +176,72 @@ class VideoMetadataProcessor {
           media_type: data.media_type || 'video',
           normalized_rating: data.normalized_rating || null,
           rating_source: data.rating_source || null,
+          filePath: null,
+          fileSize: null,
+          audioFilePath: null,
+          audioFileSize: null,
+          removed: false,
         };
 
-        let fullPath = data._actual_filepath;
+        // Get file paths from JSON (supports dual-format downloads)
+        let videoFilePath = data._actual_video_filepath || null;
+        let audioFilePath = data._actual_audio_filepath || null;
 
-        if (!fullPath) {
-          fullPath = await this.findVideoFilePath(data.id, preferredChannelName);
-
-          if (fullPath) {
-            logger.info({ filepath: fullPath, videoId: id }, 'Located video file path via filesystem search');
+        // Fallback: if only _actual_filepath exists (old format or single-file download)
+        if (!videoFilePath && !audioFilePath && data._actual_filepath) {
+          const ext = path.extname(data._actual_filepath).toLowerCase();
+          if (ext === '.mp3') {
+            audioFilePath = data._actual_filepath;
+          } else {
+            videoFilePath = data._actual_filepath;
           }
         }
 
-        if (!fullPath) {
-          logger.warn({ videoId: id }, 'Video file path could not be determined from metadata or filesystem search');
-          videoMetadata.filePath = null;
-          videoMetadata.fileSize = null;
-          videoMetadata.removed = false;
+        // If no paths found in JSON, try filesystem search
+        if (!videoFilePath && !audioFilePath) {
+          const foundPath = await this.findVideoFilePath(data.id, preferredChannelName);
+          if (foundPath) {
+            logger.info({ filepath: foundPath, videoId: id }, 'Located file path via filesystem search');
+            const ext = path.extname(foundPath).toLowerCase();
+            if (ext === '.mp3') {
+              audioFilePath = foundPath;
+            } else {
+              videoFilePath = foundPath;
+            }
+          }
+        }
+
+        // If still no paths, log warning and continue
+        if (!videoFilePath && !audioFilePath) {
+          logger.warn({ videoId: id }, 'No file paths could be determined from metadata or filesystem search');
           processedVideos.push(videoMetadata);
           continue;
         }
 
-        // Check if file exists and get file size - with retry logic for production environments
-        let stats = await this.waitForFile(fullPath);
+        // Get video file info
+        if (videoFilePath) {
+          const videoStats = await this.waitForFile(videoFilePath);
+          if (videoStats) {
+            videoMetadata.filePath = videoFilePath;
+            videoMetadata.fileSize = videoStats.size.toString();
+            logger.info({ filepath: videoFilePath, fileSize: videoStats.size, videoId: id }, 'Found video file');
+          } else {
+            videoMetadata.filePath = videoFilePath; // Store expected path anyway
+            logger.warn({ videoId: id, expectedPath: videoFilePath }, 'Video file not found after retries');
+          }
+        }
 
-        if (stats) {
-          videoMetadata.filePath = fullPath;
-          videoMetadata.fileSize = stats.size.toString(); // Convert to string as DB expects BIGINT as string
-          videoMetadata.removed = false;
-          logger.info({ filepath: fullPath, fileSize: stats.size, videoId: id }, 'Found video file');
-        } else {
-          // File doesn't exist after retries
-          logger.warn({ videoId: id, expectedPath: fullPath }, 'Video file not found after all retries');
-          videoMetadata.filePath = fullPath; // Store expected path anyway
-          videoMetadata.fileSize = null;
-          videoMetadata.removed = false; // Assume it's not removed, just not found yet
+        // Get audio file info
+        if (audioFilePath) {
+          const audioStats = await this.waitForFile(audioFilePath);
+          if (audioStats) {
+            videoMetadata.audioFilePath = audioFilePath;
+            videoMetadata.audioFileSize = audioStats.size.toString();
+            logger.info({ filepath: audioFilePath, fileSize: audioStats.size, videoId: id }, 'Found audio file');
+          } else {
+            videoMetadata.audioFilePath = audioFilePath; // Store expected path anyway
+            logger.warn({ videoId: id, expectedPath: audioFilePath }, 'Audio file not found after retries');
+          }
         }
 
         processedVideos.push(videoMetadata);

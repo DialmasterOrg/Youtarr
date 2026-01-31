@@ -16,6 +16,7 @@ export interface DownloadSettings {
   videoCount: number;
   allowRedownload?: boolean;
   subfolder?: string | null;
+  audioFormat?: string | null;
 }
 
 export interface ValidationResponse {

@@ -12,4 +12,5 @@ export interface Channel {
   max_duration?: number | null;
   title_filter_regex?: string | null;
   default_rating?: string | null;
+  audio_format?: string | null;
 }

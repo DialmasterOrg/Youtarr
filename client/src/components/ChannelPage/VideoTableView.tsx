@@ -18,10 +18,11 @@ import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
-import { formatFileSize, decodeHtml } from '../../utils/formatters';
+import { decodeHtml } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
+import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
@@ -259,7 +260,14 @@ function VideoTableView({
                   />
                 </TableCell>
                 <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                  {video.fileSize ? formatFileSize(video.fileSize) : '-'}
+                  {(video.filePath || video.audioFilePath) ? (
+                    <DownloadFormatIndicator
+                      filePath={video.filePath}
+                      audioFilePath={video.audioFilePath}
+                      fileSize={video.fileSize}
+                      audioFileSize={video.audioFileSize}
+                    />
+                  ) : '-'}
                 </TableCell>
                 <TableCell sx={{ whiteSpace: 'nowrap' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap', overflow: 'hidden' }}>

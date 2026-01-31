@@ -52,6 +52,7 @@ interface ChannelSettings {
   title_filter_regex: string | null;
   default_rating: string | null;
   auto_download_enabled_tabs: string | null;
+  audio_format: string | null;
 }
 
 interface FilterPreviewVideo {
@@ -113,6 +114,7 @@ function ChannelSettingsDialog({
     max_duration: null,
     title_filter_regex: null,
     default_rating: null,
+    audio_format: null,
     auto_download_enabled_tabs: null
   });
   const [originalSettings, setOriginalSettings] = useState<ChannelSettings>({
@@ -122,6 +124,7 @@ function ChannelSettingsDialog({
     max_duration: null,
     title_filter_regex: null,
     default_rating: null,
+    audio_format: null,
     auto_download_enabled_tabs: null
   });
   const [subfolders, setSubfolders] = useState<string[]>([]);
@@ -207,6 +210,7 @@ function ChannelSettingsDialog({
           max_duration: settingsData.max_duration ?? null,
           title_filter_regex: settingsData.title_filter_regex ?? null,
           default_rating: settingsData.default_rating ?? null,
+          audio_format: settingsData.audio_format ?? null,
           auto_download_enabled_tabs: settingsData.auto_download_enabled_tabs ?? 'video'
         };
         setSettings(loadedSettings);
@@ -264,6 +268,7 @@ function ChannelSettingsDialog({
           max_duration: settings.max_duration,
           title_filter_regex: settings.title_filter_regex || null,
           default_rating: settings.default_rating || null,
+          audio_format: settings.audio_format || null,
           auto_download_enabled_tabs: settings.auto_download_enabled_tabs
         })
       });
@@ -293,6 +298,7 @@ function ChannelSettingsDialog({
         max_duration: result?.settings?.max_duration ?? settings.max_duration ?? null,
         title_filter_regex: result?.settings?.title_filter_regex ?? settings.title_filter_regex ?? null,
         default_rating: result?.settings?.default_rating ?? settings.default_rating ?? null,
+        audio_format: result?.settings?.audio_format ?? settings.audio_format ?? null,
         auto_download_enabled_tabs: result?.settings?.auto_download_enabled_tabs ?? settings.auto_download_enabled_tabs ?? null
       };
 
@@ -332,6 +338,7 @@ function ChannelSettingsDialog({
            settings.max_duration !== originalSettings.max_duration ||
            settings.title_filter_regex !== originalSettings.title_filter_regex ||
            settings.default_rating !== originalSettings.default_rating ||
+           settings.audio_format !== originalSettings.audio_format ||
            settings.auto_download_enabled_tabs !== originalSettings.auto_download_enabled_tabs;
   };
 
@@ -460,6 +467,42 @@ function ChannelSettingsDialog({
                 Effective channel quality: {effectiveQualityDisplay}.
               </Typography>
             </Box>
+
+            <FormControl fullWidth sx={{ mt: 1 }}>
+              <InputLabel id="audio-format-label" shrink>Download Type</InputLabel>
+              <Select
+                labelId="audio-format-label"
+                value={settings.audio_format || ''}
+                label="Download Type"
+                onChange={(e) => setSettings({
+                  ...settings,
+                  audio_format: e.target.value || null
+                })}
+                displayEmpty
+                notched
+              >
+                <MenuItem value="">
+                  <em>Video Only (default)</em>
+                </MenuItem>
+                <MenuItem value="video_mp3">Video + MP3</MenuItem>
+                <MenuItem value="mp3_only">MP3 Only</MenuItem>
+              </Select>
+            </FormControl>
+
+            {settings.audio_format && (
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                MP3 files are saved at 192kbps in the same folder as videos.
+              </Typography>
+            )}
+
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                Subfolder Organization
+              </Typography>
+              <Typography variant="body2">
+                Use subfolders to keep channel downloads organized without changing your global storage path.
+              </Typography>
+            </Alert>
 
             <Divider />
 

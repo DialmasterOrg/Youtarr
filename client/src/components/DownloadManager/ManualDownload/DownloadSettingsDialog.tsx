@@ -6,6 +6,7 @@ import {
   DialogActions,
   Button,
   FormControl,
+  FormHelperText,
   InputLabel,
   Select,
   MenuItem,
@@ -22,7 +23,8 @@ import {
   Download as DownloadIcon,
   Settings as SettingsIcon,
   FolderOpen as FolderIcon,
-  HighQuality as QualityIcon
+  HighQuality as QualityIcon,
+  Videocam as VideocamIcon
 } from '@mui/icons-material';
 import { DownloadSettings } from './types';
 import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
@@ -38,6 +40,8 @@ interface DownloadSettingsDialogProps {
   defaultVideoCount?: number; // For channel downloads
   mode?: 'manual' | 'channel'; // To differentiate between modes
   defaultResolutionSource?: 'channel' | 'global';
+  defaultAudioFormat?: string | null; // For channel audio format default
+  defaultAudioFormatSource?: 'channel' | 'global';
   token?: string | null; // For fetching subfolders
 }
 
@@ -60,6 +64,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   defaultVideoCount = 3,
   mode = 'manual',
   defaultResolutionSource = 'global',
+  defaultAudioFormat = null,
+  defaultAudioFormatSource = 'global',
   token = null
 }) => {
   const [useCustomSettings, setUseCustomSettings] = useState(false);
@@ -68,6 +74,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   const [allowRedownload, setAllowRedownload] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [subfolderOverride, setSubfolderOverride] = useState<string | null>(null);
+  const [audioFormat, setAudioFormat] = useState<string | null>(defaultAudioFormat);
 
   // Fetch available subfolders
   const { subfolders, loading: subfoldersLoading } = useSubfolders(token);
@@ -77,11 +84,21 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
     ? selectedDefaultOption.label
     : `${defaultResolution}p`;
 
+  const getAudioFormatLabel = (format: string | null) => {
+    if (!format) return 'Per channel settings (or video only)';
+    if (format === 'video_mp3') return 'Video + MP3';
+    if (format === 'mp3_only') return 'Audio Only (MP3)';
+    return 'Video Only';
+  };
+
+  const defaultAudioFormatLabel = getAudioFormatLabel(defaultAudioFormat);
+
   // Auto-detect re-download need
   useEffect(() => {
     if (open && !hasUserInteracted) {
       setResolution(defaultResolution);
       setChannelVideoCount(defaultVideoCount);
+      setAudioFormat(defaultAudioFormat);
       // Auto-check re-download if there are missing videos or previously downloaded videos in manual mode
       if (missingVideoCount > 0) {
         setAllowRedownload(true);
@@ -89,7 +106,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
         setAllowRedownload(false);
       }
     }
-  }, [open, hasUserInteracted, mode, missingVideoCount, defaultResolution, defaultVideoCount]);
+  }, [open, hasUserInteracted, mode, missingVideoCount, defaultResolution, defaultVideoCount, defaultAudioFormat]);
 
   useEffect(() => {
     if (!open) {
@@ -97,8 +114,9 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       setUseCustomSettings(false);
       setAllowRedownload(false);
       setSubfolderOverride(null);
+      setAudioFormat(defaultAudioFormat);
     }
-  }, [open]);
+  }, [open, defaultAudioFormat]);
 
   const handleUseCustomToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
     setUseCustomSettings(event.target.checked);
@@ -154,14 +172,17 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
     }
 
     // Include subfolder override if set (only for manual mode)
-    const hasOverride = useCustomSettings || allowRedownload || (mode === 'manual' && subfolderOverride !== null);
+    const hasOverride = useCustomSettings || allowRedownload ||
+      (mode === 'manual' && subfolderOverride !== null) ||
+      (mode === 'manual' && audioFormat !== null);
 
     if (hasOverride) {
       onConfirm({
         resolution: useCustomSettings ? resolution : defaultResolution,
         videoCount: mode === 'channel' ? (useCustomSettings ? channelVideoCount : defaultVideoCount) : 0,
         allowRedownload,
-        subfolder: mode === 'manual' ? subfolderOverride : undefined
+        subfolder: mode === 'manual' ? subfolderOverride : undefined,
+        audioFormat: mode === 'manual' ? audioFormat : undefined
       });
     } else {
       onConfirm(null); // Use defaults
@@ -247,6 +268,18 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                 </Typography>
               </Box>
 
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+                <VideocamIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                <Typography variant="body2">
+                  <strong>Download Type:</strong> {defaultAudioFormatLabel}
+                  {defaultAudioFormatSource === 'channel' && (
+                    <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                      (channel)
+                    </Typography>
+                  )}
+                </Typography>
+              </Box>
+
               {mode === 'channel' && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
                   <DownloadIcon fontSize="small" sx={{ color: 'text.secondary' }} />
@@ -258,7 +291,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
 
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
                 Configured channels will use their subfolder settings.
-                Unconfigured channels will use the global default.
+                Enable custom settings to download MP3 audio.
               </Typography>
             </Paper>
           </Collapse>
@@ -315,6 +348,9 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                     </MenuItem>
                   ))}
                 </Select>
+                <FormHelperText>
+                  YouTube will provide the best available quality up to your selected resolution.
+                </FormHelperText>
               </FormControl>
 
               {resolution === '2160' && (
@@ -370,6 +406,35 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                     label="Override Destination"
                     helperText="Configured channels use their subfolder, unconfigured channels use global default."
                   />
+
+                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, mt: 2 }}>
+                    Download Type
+                  </Typography>
+
+                  <FormControl fullWidth sx={{ mb: 2 }}>
+                    <InputLabel id="audio-format-select-label" shrink>Download Type</InputLabel>
+                    <Select
+                      labelId="audio-format-select-label"
+                      id="audio-format-select"
+                      value={audioFormat || ''}
+                      label="Download Type"
+                      displayEmpty
+                      notched
+                      onChange={(e) => {
+                        setAudioFormat(e.target.value || null);
+                        setHasUserInteracted(true);
+                      }}
+                    >
+                      <MenuItem value=""><em>Video Only (default)</em></MenuItem>
+                      <MenuItem value="video_mp3">Video + MP3</MenuItem>
+                      <MenuItem value="mp3_only">MP3 Only</MenuItem>
+                    </Select>
+                    {audioFormat && (
+                      <FormHelperText>
+                        MP3 files are saved at 192kbps in the same folder as videos.
+                      </FormHelperText>
+                    )}
+                  </FormControl>
                 </>
               )}
             </Box>

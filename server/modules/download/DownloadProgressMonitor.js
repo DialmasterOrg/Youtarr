@@ -229,7 +229,7 @@ class DownloadProgressMonitor {
     const stripExtension = (name) => {
       if (!name) return '';
       let result = name;
-      result = result.replace(/\.f\d+\.[^.]+$/, '');
+      result = result.replace(/\.f[\d-]+\.[^.]+$/, '');
       result = result.replace(/\.[^.]+$/, '');
       return result;
     };
@@ -291,8 +291,8 @@ class DownloadProgressMonitor {
       const path = line.split('Destination:')[1].trim();
       // Detect subtitle file downloads
       if (path.match(/\.(vtt|srt)$/i)) return 'downloading_subtitles';
-      if (path.match(/\.f\d+\.mp4$/)) return 'downloading_video';
-      if (path.match(/\.f\d+\.m4a$/)) return 'downloading_audio';
+      if (path.match(/\.f[\d-]+\.mp4$/)) return 'downloading_video';
+      if (path.match(/\.f[\d-]+\.m4a$/)) return 'downloading_audio';
       if (path.includes('poster') || path.includes('thumbnail')) return 'downloading_thumbnail';
     }
 

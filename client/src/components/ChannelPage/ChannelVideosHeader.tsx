@@ -17,6 +17,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Badge,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ViewModuleIcon from '@mui/icons-material/ViewModule';
@@ -29,6 +30,7 @@ import BlockIcon from '@mui/icons-material/Block';
 import InfoIcon from '@mui/icons-material/Info';
 import ChecklistIcon from '@mui/icons-material/Checklist';
 import ClearIcon from '@mui/icons-material/Clear';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import { getVideoStatus } from '../../utils/videoStatus';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { RATING_OPTIONS } from '../../utils/ratings';
@@ -65,6 +67,10 @@ interface ChannelVideosHeaderProps {
   onBulkIgnoreClick: () => void;
   onInfoIconClick: (tooltip: string) => void;
   onMaxRatingChange: (value: string) => void;
+  // Filter-related props (desktop only)
+  activeFilterCount?: number;
+  filtersExpanded?: boolean;
+  onFiltersExpandedChange?: (expanded: boolean) => void;
 }
 
 function ChannelVideosHeader({
@@ -94,6 +100,9 @@ function ChannelVideosHeader({
   onBulkIgnoreClick,
   onInfoIconClick,
   onMaxRatingChange,
+  activeFilterCount = 0,
+  filtersExpanded = false,
+  onFiltersExpandedChange,
 }: ChannelVideosHeaderProps) {
   const { themeMode } = useThemeEngine();
   const renderInfoIcon = (message: string) => {
@@ -173,7 +182,7 @@ function ChannelVideosHeader({
             startIcon={<RefreshIcon />}
             className={intentStyles.base}
           >
-            {fetchingAllVideos ? 'Refreshing...' : 'Refresh All'}
+            {fetchingAllVideos ? 'Loading...' : 'Load More'}
           </Button>
         </Box>
 
@@ -254,6 +263,21 @@ function ChannelVideosHeader({
         {/* Action buttons for desktop */}
         {!isMobile && (
           <ActionBar variant={themeMode} sx={{ mt: 2 }}>
+            {onFiltersExpandedChange && (
+              <Button
+                variant={filtersExpanded ? 'contained' : 'outlined'}
+                size="small"
+                startIcon={
+                  <Badge badgeContent={activeFilterCount} color="primary" invisible={activeFilterCount === 0}>
+                    <FilterListIcon />
+                  </Badge>
+                }
+                onClick={() => onFiltersExpandedChange(!filtersExpanded)}
+                className={intentStyles.base}
+              >
+                Filters
+              </Button>
+            )}
             <Button
               variant="outlined"
               size="small"

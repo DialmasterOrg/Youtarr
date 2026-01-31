@@ -45,12 +45,23 @@ class YtdlpCommandBuilder {
       return path.join(baseOutputPath, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, thumbnailFilename);
     }
   }
-  // Build format string based on resolution and codec preference
-  static buildFormatString(resolution, videoCodec = 'default') {
+  /**
+   * Build format string based on resolution, codec preference, and audio format
+   * @param {string} resolution - Video resolution (e.g., '1080', '720')
+   * @param {string} videoCodec - Video codec preference ('h264', 'h265', 'default')
+   * @param {string|null} audioFormat - Audio format ('mp3_only' for audio-only, null for video)
+   * @returns {string} - Format string for yt-dlp -f argument
+   */
+  static buildFormatString(resolution, videoCodec = 'default', audioFormat = null) {
+    // For MP3-only mode, we just need best audio
+    if (audioFormat === 'mp3_only') {
+      return 'bestaudio[ext=m4a]/bestaudio/best';
+    }
+
     const res = resolution || '1080';
 
     // Base format components
-    const audioFormat = 'bestaudio[ext=m4a]';
+    const audioFmt = 'bestaudio[ext=m4a]';
     const fallbackMp4 = 'best[ext=mp4]';
     const ultimateFallback = 'best';
 
@@ -59,18 +70,18 @@ class YtdlpCommandBuilder {
     switch (videoCodec) {
     case 'h264':
       // Prefer H.264/AVC codec, fallback to any codec at preferred resolution, then fallback to best
-      videoFormat = `bestvideo[height<=${res}][ext=mp4][vcodec^=avc]+${audioFormat}/bestvideo[height<=${res}][ext=mp4]+${audioFormat}/${fallbackMp4}/${ultimateFallback}`;
+      videoFormat = `bestvideo[height<=${res}][ext=mp4][vcodec^=avc]+${audioFmt}/bestvideo[height<=${res}][ext=mp4]+${audioFmt}/${fallbackMp4}/${ultimateFallback}`;
       break;
 
     case 'h265':
       // Prefer H.265/HEVC codec, fallback to any codec at preferred resolution, then fallback to best
-      videoFormat = `bestvideo[height<=${res}][ext=mp4][vcodec^=hev]+${audioFormat}/bestvideo[height<=${res}][ext=mp4]+${audioFormat}/${fallbackMp4}/${ultimateFallback}`;
+      videoFormat = `bestvideo[height<=${res}][ext=mp4][vcodec^=hev]+${audioFmt}/bestvideo[height<=${res}][ext=mp4]+${audioFmt}/${fallbackMp4}/${ultimateFallback}`;
       break;
 
     case 'default':
     default:
       // Default behavior: no codec preference, just resolution and container
-      videoFormat = `bestvideo[height<=${res}][ext=mp4]+${audioFormat}/${fallbackMp4}/${ultimateFallback}`;
+      videoFormat = `bestvideo[height<=${res}][ext=mp4]+${audioFmt}/${fallbackMp4}/${ultimateFallback}`;
       break;
     }
 
@@ -113,6 +124,29 @@ class YtdlpCommandBuilder {
       return ['--cookies', cookiesPath];
     }
     return [];
+  }
+
+  /**
+   * Build audio extraction args for MP3 downloads
+   * @param {string|null} audioFormat - 'video_mp3' or 'mp3_only', null for video only
+   * @returns {string[]} - Array of yt-dlp arguments for audio extraction
+   */
+  static buildAudioArgs(audioFormat) {
+    if (!audioFormat) {
+      return [];
+    }
+
+    const args = [];
+
+    if (audioFormat === 'mp3_only') {
+      // Extract audio only, convert to MP3 at 192kbps
+      args.push('-x', '--audio-format', 'mp3', '--audio-quality', '192K');
+    } else if (audioFormat === 'video_mp3') {
+      // Keep video AND extract audio as MP3 at 192kbps
+      args.push('--extract-audio', '--keep-video', '--audio-format', 'mp3', '--audio-quality', '192K');
+    }
+
+    return args;
   }
 
   /**
@@ -318,12 +352,21 @@ class YtdlpCommandBuilder {
     return allFilters.join(' & ');
   }
 
-  // Build yt-dlp command args array for channel downloads
+  /**
+   * Build yt-dlp command args array for channel downloads
+   * @param {string} resolution - Video resolution
+   * @param {boolean} allowRedownload - Allow re-downloading previously fetched videos
+   * @param {string|null} subFolder - Subfolder for output
+   * @param {Object|null} filterConfig - Channel filter configuration
+   * @param {string|null} audioFormat - Audio format ('video_mp3', 'mp3_only', or null for video only)
+   * @returns {string[]} - Array of yt-dlp command arguments
+   */
   static getBaseCommandArgs(
     resolution,
     allowRedownload = false,
     subFolder = null,
-    filterConfig = null
+    filterConfig = null,
+    audioFormat = null
   ) {
     const config = configModule.getConfig();
     const res = resolution || config.preferredResolution || '1080';
@@ -350,10 +393,14 @@ class YtdlpCommandBuilder {
       '--output-na-placeholder', 'Unknown Channel',
       // Clean @ prefix from uploader_id when it's used as fallback
       '--replace-in-metadata', 'uploader_id', '^@', '',
-      '-f', this.buildFormatString(res, videoCodec),
+      '-f', this.buildFormatString(res, videoCodec, audioFormat),
       '--write-thumbnail',
       '--convert-thumbnails', 'jpg',
     ];
+
+    // Add audio extraction args if configured
+    const audioArgs = this.buildAudioArgs(audioFormat);
+    args.push(...audioArgs);
 
     // Add subtitle args if configured
     const subtitleArgs = this.buildSubtitleArgs(config);
@@ -388,9 +435,15 @@ class YtdlpCommandBuilder {
     return args;
   }
 
-  // Build yt-dlp command args array for manual downloads - no duration filter
-  // Note: Subfolder routing is handled post-download in videoDownloadPostProcessFiles.js
-  static getBaseCommandArgsForManualDownload(resolution, allowRedownload = false) {
+  /**
+   * Build yt-dlp command args array for manual downloads - no duration filter
+   * Note: Subfolder routing is handled post-download in videoDownloadPostProcessFiles.js
+   * @param {string} resolution - Video resolution
+   * @param {boolean} allowRedownload - Allow re-downloading previously fetched videos
+   * @param {string|null} audioFormat - Audio format ('video_mp3', 'mp3_only', or null for video only)
+   * @returns {string[]} - Array of yt-dlp command arguments
+   */
+  static getBaseCommandArgsForManualDownload(resolution, allowRedownload = false, audioFormat = null) {
     const config = configModule.getConfig();
     const res = resolution || config.preferredResolution || '1080';
     const videoCodec = config.videoCodec || 'default';
@@ -416,10 +469,14 @@ class YtdlpCommandBuilder {
       '--output-na-placeholder', 'Unknown Channel',
       // Clean @ prefix from uploader_id when it's used as fallback
       '--replace-in-metadata', 'uploader_id', '^@', '',
-      '-f', this.buildFormatString(res, videoCodec),
+      '-f', this.buildFormatString(res, videoCodec, audioFormat),
       '--write-thumbnail',
       '--convert-thumbnails', 'jpg',
     ];
+
+    // Add audio extraction args if configured
+    const audioArgs = this.buildAudioArgs(audioFormat);
+    args.push(...audioArgs);
 
     // Add subtitle args if configured
     const subtitleArgs = this.buildSubtitleArgs(config);

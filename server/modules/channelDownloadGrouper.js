@@ -7,10 +7,11 @@ const { buildOutputTemplate, buildThumbnailTemplate } = require('./filesystem');
  * Encapsulates channel filter settings for download filtering
  */
 class ChannelFilterConfig {
-  constructor(minDuration = null, maxDuration = null, titleFilterRegex = null) {
+  constructor(minDuration = null, maxDuration = null, titleFilterRegex = null, audioFormat = null) {
     this.minDuration = minDuration;
     this.maxDuration = maxDuration;
     this.titleFilterRegex = titleFilterRegex;
+    this.audioFormat = audioFormat;
   }
 
   /**
@@ -23,7 +24,8 @@ class ChannelFilterConfig {
     return JSON.stringify({
       min: this.minDuration,
       max: this.maxDuration,
-      regex: this.titleFilterRegex
+      regex: this.titleFilterRegex,
+      audio: this.audioFormat
     });
   }
 
@@ -32,7 +34,10 @@ class ChannelFilterConfig {
    * @returns {boolean} - True if at least one filter is configured
    */
   hasFilters() {
-    return this.minDuration !== null || this.maxDuration !== null || this.titleFilterRegex !== null;
+    return this.minDuration !== null ||
+           this.maxDuration !== null ||
+           this.titleFilterRegex !== null ||
+           this.audioFormat !== null;
   }
 
   /**
@@ -44,7 +49,8 @@ class ChannelFilterConfig {
     return new ChannelFilterConfig(
       channel.min_duration,
       channel.max_duration,
-      channel.title_filter_regex
+      channel.title_filter_regex,
+      channel.audio_format
     );
   }
 }
@@ -69,7 +75,8 @@ class ChannelDownloadGrouper {
         'auto_download_enabled_tabs',
         'min_duration',
         'max_duration',
-        'title_filter_regex'
+        'title_filter_regex',
+        'audio_format'
       ]
     });
 

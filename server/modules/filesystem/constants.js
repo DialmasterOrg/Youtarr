@@ -29,6 +29,17 @@ const ROOT_SENTINEL = '##ROOT##';
 const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mkv', '.m4v', '.avi'];
 
 /**
+ * Audio file extensions for MP3 downloads
+ */
+const AUDIO_EXTENSIONS = ['.mp3'];
+
+/**
+ * All media file extensions (video + audio)
+ * Used when searching for any downloaded media
+ */
+const MEDIA_EXTENSIONS = [...VIDEO_EXTENSIONS, ...AUDIO_EXTENSIONS];
+
+/**
  * yt-dlp output template for channel folder name
  * Uses uploader with fallback to channel, then uploader_id
  */
@@ -72,15 +83,29 @@ const YOUTUBE_ID_PATTERN = /^[a-zA-Z0-9_-]{10,12}$/;
 const MAIN_VIDEO_FILE_PATTERN = /\[[a-zA-Z0-9_-]{10,12}\]\.(mp4|mkv|webm)$/;
 
 /**
+ * Pattern to identify main audio files (MP3 downloads)
+ * Matches [VideoID].mp3
+ */
+const MAIN_AUDIO_FILE_PATTERN = /\[[a-zA-Z0-9_-]{10,12}\]\.mp3$/;
+
+/**
+ * Pattern to identify any main media file (video or audio)
+ * Matches [VideoID].mp4/mkv/webm/mp3
+ */
+const MAIN_MEDIA_FILE_PATTERN = /\[[a-zA-Z0-9_-]{10,12}\]\.(mp4|mkv|webm|mp3)$/;
+
+/**
  * Pattern to identify video fragment files (to exclude)
  */
-const FRAGMENT_FILE_PATTERN = /\.f\d+\.(mp4|m4a|webm)$/;
+const FRAGMENT_FILE_PATTERN = /\.f[\d-]+\.(mp4|m4a|webm|mkv)$/;
 
 module.exports = {
   SUBFOLDER_PREFIX,
   GLOBAL_DEFAULT_SENTINEL,
   ROOT_SENTINEL,
   VIDEO_EXTENSIONS,
+  AUDIO_EXTENSIONS,
+  MEDIA_EXTENSIONS,
   CHANNEL_TEMPLATE,
   VIDEO_FOLDER_TEMPLATE,
   VIDEO_FILE_TEMPLATE,
@@ -88,5 +113,7 @@ module.exports = {
   YOUTUBE_ID_DASH_PATTERN,
   YOUTUBE_ID_PATTERN,
   MAIN_VIDEO_FILE_PATTERN,
+  MAIN_AUDIO_FILE_PATTERN,
+  MAIN_MEDIA_FILE_PATTERN,
   FRAGMENT_FILE_PATTERN
 };

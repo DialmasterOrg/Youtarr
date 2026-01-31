@@ -105,6 +105,8 @@ class VideosModule {
           Videos.channel_id,
           Videos.filePath,
           Videos.fileSize,
+          Videos.audioFilePath,
+          Videos.audioFileSize,
           Videos.removed,
           Videos.youtube_removed,
           Videos.media_type,
@@ -351,36 +353,47 @@ class VideosModule {
         if (entry.isDirectory()) {
           // Recursively scan subdirectories
           await this.scanForVideoFiles(fullPath, fileMap, duplicates);
-        } else if (entry.isFile() && entry.name.endsWith('.mp4')) {
-          // Extract YouTube ID from filename - matches files ending with [youtube_id].mp4
-          // Accepts ANY characters before the final [id].mp4 pattern
-          const match = entry.name.match(/\[([^[\]]+)\]\.mp4$/);
+        } else if (entry.isFile() && (entry.name.endsWith('.mp4') || entry.name.endsWith('.mp3'))) {
+          // Extract YouTube ID from filename - matches files ending with [youtube_id].mp4 or [youtube_id].mp3
+          // Accepts ANY characters before the final [id].ext pattern
+          const match = entry.name.match(/\[([^[\]]+)\]\.(mp4|mp3)$/);
           if (match) {
             const youtubeId = match[1];
+            const ext = match[2]; // 'mp4' or 'mp3'
+            const isAudio = ext === 'mp3';
             const stats = await fs.stat(fullPath);
 
-            // Check for duplicates
-            if (fileMap.has(youtubeId)) {
+            // Get or create entry for this youtubeId
+            if (!fileMap.has(youtubeId)) {
+              fileMap.set(youtubeId, {
+                videoFilePath: null,
+                videoFileSize: null,
+                audioFilePath: null,
+                audioFileSize: null
+              });
+            }
+
+            const existing = fileMap.get(youtubeId);
+            const pathKey = isAudio ? 'audioFilePath' : 'videoFilePath';
+            const sizeKey = isAudio ? 'audioFileSize' : 'videoFileSize';
+
+            // Check for duplicates of the same type
+            if (existing[pathKey]) {
               // Track duplicate for logging
               if (!duplicates.has(youtubeId)) {
-                duplicates.set(youtubeId, [fileMap.get(youtubeId).filePath]);
+                duplicates.set(youtubeId, []);
               }
               duplicates.get(youtubeId).push(fullPath);
 
               // Keep the larger file (likely the more complete download)
-              const existingFile = fileMap.get(youtubeId);
-              if (stats.size > existingFile.fileSize) {
-                logger.warn({ youtubeId, filePath: fullPath, size: stats.size }, 'Duplicate found: keeping larger file');
-                fileMap.set(youtubeId, {
-                  filePath: fullPath,
-                  fileSize: stats.size
-                });
+              if (stats.size > existing[sizeKey]) {
+                logger.warn({ youtubeId, filePath: fullPath, size: stats.size, type: ext }, 'Duplicate found: keeping larger file');
+                existing[pathKey] = fullPath;
+                existing[sizeKey] = stats.size;
               }
             } else {
-              fileMap.set(youtubeId, {
-                filePath: fullPath,
-                fileSize: stats.size
-              });
+              existing[pathKey] = fullPath;
+              existing[sizeKey] = stats.size;
             }
           }
         }
@@ -446,7 +459,7 @@ class VideosModule {
 
         // Fetch a chunk of videos
         const videos = await Video.findAll({
-          attributes: ['id', 'youtubeId', 'filePath', 'fileSize', 'removed'],
+          attributes: ['id', 'youtubeId', 'filePath', 'fileSize', 'audioFilePath', 'audioFileSize', 'removed'],
           limit: VIDEO_CHUNK_SIZE,
           offset: offset,
           raw: true
@@ -468,24 +481,58 @@ class VideosModule {
 
           const fileInfo = fileMap.get(video.youtubeId);
 
-
           if (fileInfo) {
-            // File exists - check if update needed
-            if (video.filePath !== fileInfo.filePath ||
-                !video.fileSize ||
-                video.fileSize !== fileInfo.fileSize.toString() ||
-                video.removed === true) {
+            // Check if any file exists (video or audio)
+            const hasVideoFile = !!fileInfo.videoFilePath;
+            const hasAudioFile = !!fileInfo.audioFilePath;
+            const hasAnyFile = hasVideoFile || hasAudioFile;
 
-              bulkUpdates.push({
-                id: video.id,
-                filePath: fileInfo.filePath,
-                fileSize: fileInfo.fileSize,
-                removed: false
-              });
-              chunkUpdated++;
+            if (hasAnyFile) {
+              // Check if update needed for video file
+              const videoPathChanged = hasVideoFile && video.filePath !== fileInfo.videoFilePath;
+              const videoSizeChanged = hasVideoFile && (!video.fileSize || video.fileSize !== fileInfo.videoFileSize.toString());
+
+              // Check if update needed for audio file
+              const audioPathChanged = hasAudioFile && video.audioFilePath !== fileInfo.audioFilePath;
+              const audioSizeChanged = hasAudioFile && (!video.audioFileSize || video.audioFileSize !== fileInfo.audioFileSize.toString());
+
+              // Check if we need to clear audio fields (audio file was deleted)
+              const audioFileRemoved = !hasAudioFile && (video.audioFilePath || video.audioFileSize);
+
+              // Check if we need to clear video fields (video file was deleted but audio exists)
+              const videoFileRemoved = !hasVideoFile && hasAudioFile && (video.filePath || video.fileSize);
+
+              if (videoPathChanged || videoSizeChanged || audioPathChanged || audioSizeChanged ||
+                  audioFileRemoved || videoFileRemoved || video.removed === true) {
+                const update = {
+                  id: video.id,
+                  removed: false
+                };
+
+                // Update video file info
+                if (hasVideoFile) {
+                  update.filePath = fileInfo.videoFilePath;
+                  update.fileSize = fileInfo.videoFileSize;
+                } else if (videoFileRemoved) {
+                  update.filePath = null;
+                  update.fileSize = null;
+                }
+
+                // Update audio file info
+                if (hasAudioFile) {
+                  update.audioFilePath = fileInfo.audioFilePath;
+                  update.audioFileSize = fileInfo.audioFileSize;
+                } else if (audioFileRemoved) {
+                  update.audioFilePath = null;
+                  update.audioFileSize = null;
+                }
+
+                bulkUpdates.push(update);
+                chunkUpdated++;
+              }
             }
           } else {
-            // File doesn't exist in fileMap
+            // No files exist in fileMap for this video
             if (!video.removed) {
               // Only mark as removed, don't touch filePath or fileSize
               // They might still be valid even if we can't find the file right now
@@ -527,6 +574,14 @@ class VideosModule {
               if (update.fileSize !== undefined) {
                 setClauses.push('fileSize = ?');
                 replacements.push(update.fileSize);
+              }
+              if (update.audioFilePath !== undefined) {
+                setClauses.push('audioFilePath = ?');
+                replacements.push(update.audioFilePath);
+              }
+              if (update.audioFileSize !== undefined) {
+                setClauses.push('audioFileSize = ?');
+                replacements.push(update.audioFileSize);
               }
               if (update.removed !== undefined) {
                 setClauses.push('removed = ?');

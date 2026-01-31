@@ -14,7 +14,9 @@ import { Channel } from '../../../types/Channel';
 import {
   AutoDownloadChips,
   DurationFilterChip,
+  DownloadFormatConfigIndicator,
   QualityChip,
+  SubFolderChip,
   TitleFilterChip,
 } from './chips';
 
@@ -129,6 +131,13 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
           </Tooltip>
         </Box>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'center' }}>
+          <SubFolderChip subFolder={channel.sub_folder} />
+          <DownloadFormatConfigIndicator audioFormat={channel.audio_format} />
+          <AutoDownloadChips
+            availableTabs={channel.available_tabs}
+            autoDownloadTabs={channel.auto_download_enabled_tabs}
+            isMobile={isMobile}
+          />
           {hasFilters && (
             <Divider orientation='vertical' flexItem sx={{ alignSelf: 'stretch', mx: 0.5 }} aria-hidden />
           )}

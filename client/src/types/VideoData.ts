@@ -16,6 +16,8 @@ export interface VideoData {
   description: string | null;
   filePath?: string | null;
   fileSize?: string | null;
+  audioFilePath?: string | null;
+  audioFileSize?: string | null;
   removed?: boolean;
   youtube_removed?: boolean;
   channel_id?: string | null;
