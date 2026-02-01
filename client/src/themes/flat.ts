@@ -228,6 +228,11 @@ export const flatTheme: ThemeDefinition = {
           backgroundColor: 'var(--secondary)',
           color: '#FFFFFF',
           borderColor: 'var(--secondary)',
+          '&:hover': {
+            backgroundColor: 'var(--secondary)',
+            filter: 'brightness(1.1)',
+            borderColor: 'var(--secondary)',
+          },
         },
         outlinedSuccess: {
           color: 'var(--secondary)',
@@ -238,11 +243,21 @@ export const flatTheme: ThemeDefinition = {
           backgroundColor: 'var(--accent)',
           color: '#000000',
           borderColor: 'var(--accent)',
+          '&:hover': {
+            backgroundColor: 'var(--accent)',
+            filter: 'brightness(1.1)',
+            borderColor: 'var(--accent)',
+          },
         },
         filledError: {
           backgroundColor: 'var(--destructive)',
           color: '#FFFFFF',
           borderColor: 'var(--destructive)',
+          '&:hover': {
+            backgroundColor: 'var(--destructive)',
+            filter: 'brightness(1.1)',
+            borderColor: 'var(--destructive)',
+          },
         },
       },
     },

@@ -405,5 +405,33 @@ export const neumorphicTheme: ThemeDefinition = {
         },
       },
     },
+    MuiFab: {
+      styleOverrides: {
+        root: {
+          backgroundColor: 'var(--card)',
+          color: 'var(--foreground)',
+          boxShadow: 'var(--shadow-soft)',
+          border: 'none',
+          transition: 'all 200ms ease',
+          '&:hover': {
+            backgroundColor: 'var(--card)',
+            boxShadow: 'var(--shadow-hard)',
+            transform: 'scale(1.05)',
+          },
+          '&:active': {
+            boxShadow: 'var(--shadow-input-focus)',
+            transform: 'scale(0.98)',
+          },
+          '&.Mui-primary': {
+            backgroundColor: 'var(--primary)',
+            color: '#ffffff',
+            '&:hover': {
+              backgroundColor: 'var(--primary)',
+              filter: 'brightness(1.1)',
+            },
+          },
+        },
+      },
+    },
   },
 };

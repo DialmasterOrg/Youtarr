@@ -41,7 +41,7 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
       : new URL(window.location.href);
     const protocol = backendUrl.protocol === 'https:' ? 'wss' : 'ws';
     const portSegment = backendUrl.port ? `:${backendUrl.port}` : '';
-    return `${protocol}://${backendUrl.hostname}${portSegment}`;
+    return `${protocol}://${backendUrl.hostname}${portSegment}/ws`;
   };
 
   const connect = useCallback(() => {

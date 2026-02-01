@@ -4,6 +4,7 @@ const JobVideo = require('./jobvideo');
 const JobVideoDownload = require('./jobvideodownload');
 const Video = require('./video');
 const Channel = require('./channel');
+const ChannelVideo = require('./channelvideo');
 const Session = require('./session');
 const ApiKey = require('./apikey');
 
@@ -23,6 +24,7 @@ module.exports = {
   JobVideoDownload,
   Video,
   Channel,
+  ChannelVideo,
   Session,
   ApiKey,
 };

@@ -53,22 +53,24 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
     : '/images/channelthumb-default.jpg';
 
   const renderHeaderChips = () => (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: { xs: 1, sm: 2 }, alignItems: 'center' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <Typography variant='caption' color='text.secondary'>Quality:</Typography>
+        <Typography variant='caption' color='text.secondary'>QUALITY:</Typography>
         <QualityChip
           videoQuality={channel.video_quality}
           globalPreferredResolution={globalPreferredResolution}
         />
+        <DownloadFormatConfigIndicator audioFormat={channel.audio_format} />
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <Typography variant='caption' color='text.secondary'>Auto:</Typography>
+        <Typography variant='caption' color='text.secondary'>AUTO:</Typography>
         <AutoDownloadChips
           availableTabs={channel.available_tabs}
           autoDownloadTabs={channel.auto_download_enabled_tabs}
           isMobile={isMobile}
         />
       </Box>
+      <SubFolderChip subFolder={channel.sub_folder} />
     </Box>
   );
 
@@ -130,28 +132,20 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
             </IconButton>
           </Tooltip>
         </Box>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'center' }}>
-          <SubFolderChip subFolder={channel.sub_folder} />
-          <DownloadFormatConfigIndicator audioFormat={channel.audio_format} />
-          <AutoDownloadChips
-            availableTabs={channel.available_tabs}
-            autoDownloadTabs={channel.auto_download_enabled_tabs}
-            isMobile={isMobile}
-          />
-          {hasFilters && (
-            <Divider orientation='vertical' flexItem sx={{ alignSelf: 'stretch', mx: 0.5 }} aria-hidden />
-          )}
-          <DurationFilterChip
-            minDuration={channel.min_duration}
-            maxDuration={channel.max_duration}
-            isMobile={isMobile}
-          />
-          <TitleFilterChip
-            titleFilterRegex={channel.title_filter_regex}
-            onRegexClick={onRegexClick}
-            isMobile={isMobile}
-          />
-        </Box>
+        {hasFilters && (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'center' }}>
+            <DurationFilterChip
+              minDuration={channel.min_duration}
+              maxDuration={channel.max_duration}
+              isMobile={isMobile}
+            />
+            <TitleFilterChip
+              titleFilterRegex={channel.title_filter_regex}
+              onRegexClick={onRegexClick}
+              isMobile={isMobile}
+            />
+          </Box>
+        )}
       </Box>
     </ListItem>
   );

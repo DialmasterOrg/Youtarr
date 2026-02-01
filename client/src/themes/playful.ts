@@ -336,8 +336,20 @@ export const playfulTheme: ThemeDefinition = {
           color: 'var(--primary-foreground)',
         },
         filledSuccess: {
-          backgroundColor: '#fbbf24', // Using yellow for active status in playful
-          color: 'var(--foreground)',
+          backgroundColor: '#10b981', // Theme Green (Emerald)
+          color: '#ffffff',
+          '&:hover': {
+            backgroundColor: '#10b981',
+            filter: 'brightness(1.1)',
+          },
+        },
+        filledError: {
+          backgroundColor: '#f59e0b', // Theme Orange (Amber)
+          color: '#ffffff',
+          '&:hover': {
+            backgroundColor: '#f59e0b',
+            filter: 'brightness(1.1)',
+          },
         },
         outlined: {
           backgroundColor: 'var(--background)',
@@ -447,12 +459,12 @@ export const playfulTheme: ThemeDefinition = {
             boxShadow: 'var(--shadow-hard)',
             transition: 'all 300ms var(--transition-bouncy)',
             '&:hover': {
-              backgroundColor: 'var(--primary-foreground)',
+              backgroundColor: 'var(--background)',
               color: 'var(--primary)',
               transform: 'translate(-2px, -2px) scale(1.05)',
               boxShadow: 'var(--shadow-hard-hover)',
               '& .MuiSvgIcon-root': {
-                color: 'inherit',
+                color: 'var(--primary)',
               },
             },
             '&:active': {
@@ -462,17 +474,17 @@ export const playfulTheme: ThemeDefinition = {
           },
           '&.Mui-secondary': {
             backgroundColor: 'var(--secondary)',
-            color: 'var(--primary-foreground)',
+            color: '#ffffff',
             border: '2px solid var(--foreground)',
             boxShadow: 'var(--shadow-hard)',
             transition: 'all 300ms var(--transition-bouncy)',
             '&:hover': {
-              backgroundColor: 'var(--primary-foreground)',
+              backgroundColor: 'var(--background)',
               color: 'var(--secondary)',
               transform: 'translate(-2px, -2px) scale(1.05)',
               boxShadow: 'var(--shadow-hard-hover)',
               '& .MuiSvgIcon-root': {
-                color: 'inherit',
+                color: 'var(--secondary)',
               },
             },
             '&:active': {
@@ -487,12 +499,12 @@ export const playfulTheme: ThemeDefinition = {
             boxShadow: 'var(--shadow-hard)',
             transition: 'all 300ms var(--transition-bouncy)',
             '&:hover': {
-              backgroundColor: 'var(--destructive-foreground)',
+              backgroundColor: 'var(--background)',
               color: 'var(--destructive)',
               transform: 'translate(-2px, -2px) scale(1.05)',
               boxShadow: 'var(--shadow-hard-hover)',
               '& .MuiSvgIcon-root': {
-                color: 'inherit',
+                color: 'var(--destructive)',
               },
             },
             '&:active': {
