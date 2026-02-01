@@ -76,6 +76,13 @@ export const Default: Story = {
             customFileUpdated: new Date().toISOString(),
           })
         ),
+        http.get('/api/ytdlp/latest-version', () =>
+          HttpResponse.json({
+            currentVersion: '2024.10.07',
+            latestVersion: '2024.10.07',
+            updateAvailable: false,
+          })
+        ),
       ],
     },
   },

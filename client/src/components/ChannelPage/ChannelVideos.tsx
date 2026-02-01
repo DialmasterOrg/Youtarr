@@ -801,10 +801,19 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
               color={isDownloadAction ? 'primary' : 'error'}
               onClick={handleActionClick}
               sx={(theme: Theme) => ({
+                backgroundColor: isDownloadAction ? theme.palette.primary.main : theme.palette.error.main,
+                color: isDownloadAction ? theme.palette.primary.contrastText : theme.palette.error.contrastText,
                 boxShadow: 'var(--shadow-hard)',
                 border: theme.palette.mode === 'light' ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                '& .MuiSvgIcon-root': {
+                  color: 'inherit',
+                },
+                '&:hover': {
+                  backgroundColor: isDownloadAction ? theme.palette.primary.dark : theme.palette.error.dark,
+                  color: isDownloadAction ? theme.palette.primary.contrastText : theme.palette.error.contrastText,
+                },
                 '&:focus-visible': {
-                  outline: `3px solid ${theme.palette.primary.main}`,
+                  outline: `3px solid ${isDownloadAction ? theme.palette.primary.main : theme.palette.error.main}`,
                   outlineOffset: 3,
                 },
               })}

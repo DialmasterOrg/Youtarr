@@ -32,5 +32,8 @@ export const Default: Story = {
     const link = canvas.getByRole('link', { name: /core/i });
     await expect(link).toHaveAttribute('href', '/settings/core');
     await userEvent.click(link);
+
+    const downloadingLink = canvas.getByRole('link', { name: /downloading/i });
+    await expect(downloadingLink).toHaveAttribute('href', '/settings/downloading');
   },
 };
