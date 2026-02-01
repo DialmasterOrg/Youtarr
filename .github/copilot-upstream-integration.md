@@ -28,3 +28,23 @@ Use the following sections in your review comment:
 - Ready for Auto-Merge (Yes/No)
 - Porting Strategy (only if UI impacted)
 - Risk Notes / Follow-ups
+
+## 5) Sample Copilot Review Comment (bot-friendly)
+Use this template when composing the automated review comment for upstream-sync PRs:
+
+**Copilot Integration Summary**
+
+**Changes Classified:** _<Pure Logic/Backend | UI/Frontend>_
+
+**Files (sample):**
+<insert up to 15 files here, grouped by classification>
+
+**Ready for Auto-Merge:** _<Yes/No>_
+
+**Porting Strategy (if UI impacted):**
+- Upstream: `client/src/OldMenu.js` line 40 — changed selection logic.
+- Port to: `client/src/components/modern-nav/NewModernNav.tsx` line 120 — apply same selection change, adapt types and prop names.
+
+**Risk Notes / Follow-ups:**
+- Run `Upstream Compatibility Check` (workflow_dispatch) with `ref=<sync branch>` to validate tests.
+- If conflicts exist, resolve in branch then re-run checks.

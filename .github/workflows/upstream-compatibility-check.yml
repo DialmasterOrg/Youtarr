@@ -2,6 +2,15 @@ name: Upstream Compatibility Check
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to checkout (branch or sha)'
+        required: false
+        default: 'main'
+      run-tests:
+        description: 'Run tests (true/false)'
+        required: false
+        default: 'true'
 
 permissions:
   contents: read
@@ -15,6 +24,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.inputs.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -63,10 +74,13 @@ jobs:
   test-backend:
     name: Backend Tests
     runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.run-tests == 'true' }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.inputs.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -119,10 +133,13 @@ jobs:
   test-frontend:
     name: Frontend Tests
     runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.run-tests == 'true' }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.inputs.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v3

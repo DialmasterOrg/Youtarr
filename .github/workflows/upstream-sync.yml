@@ -4,6 +4,27 @@ on:
   schedule:
     - cron: "0 3 * * 1"
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (true/false)'
+        required: false
+        default: 'false'
+      last_sync_tag:
+        description: 'Override the LAST_SYNC_TAG (e.g., 1.58.0)'
+        required: false
+        default: ''
+      upstream_repo:
+        description: 'Override UPSTREAM_REPO (owner/repo)'
+        required: false
+        default: ''
+      upstream_branch:
+        description: 'Override UPSTREAM_BRANCH (default: main)'
+        required: false
+        default: ''
+      base_branch:
+        description: 'Override BASE_BRANCH (default: main)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -33,6 +54,25 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Read runtime inputs
+        run: |
+          # Allow workflow_dispatch inputs to override env vars
+          if [ -n "${{ github.event.inputs.dry_run }}" ]; then
+            echo "DRY_RUN=${{ github.event.inputs.dry_run }}" >> $GITHUB_ENV
+          fi
+          if [ -n "${{ github.event.inputs.last_sync_tag }}" ]; then
+            echo "LAST_SYNC_TAG=${{ github.event.inputs.last_sync_tag }}" >> $GITHUB_ENV
+          fi
+          if [ -n "${{ github.event.inputs.upstream_repo }}" ]; then
+            echo "UPSTREAM_REPO=${{ github.event.inputs.upstream_repo }}" >> $GITHUB_ENV
+          fi
+          if [ -n "${{ github.event.inputs.upstream_branch }}" ]; then
+            echo "UPSTREAM_BRANCH=${{ github.event.inputs.upstream_branch }}" >> $GITHUB_ENV
+          fi
+          if [ -n "${{ github.event.inputs.base_branch }}" ]; then
+            echo "BASE_BRANCH=${{ github.event.inputs.base_branch }}" >> $GITHUB_ENV
+          fi
+
       - name: Add upstream remote
         run: |
           if [ "${UPSTREAM_REPO}" = "${GITHUB_REPOSITORY}" ]; then
@@ -54,56 +94,88 @@ jobs:
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
           echo "file_count=$(wc -l < /tmp/upstream_files.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
 
-      - name: Prepare sync branch
+      - name: Prepare sync branch and attempt merge
+        id: prepare-merge
         if: steps.upstream-diff.outputs.has_changes == 'true'
         run: |
           git checkout -B "${SYNC_BRANCH}" "origin/${BASE_BRANCH}"
-          git merge --no-ff --no-commit "upstream/${UPSTREAM_BRANCH}"
 
-      - name: Generate PR body
+          # Try merging upstream into the sync branch (no commit)
+          git merge --no-ff --no-commit "upstream/${UPSTREAM_BRANCH}" || true
+
+          # Detect any merge conflicts
+          if git ls-files -u | grep -q .; then
+            git ls-files -u | awk '{print $4}' | sort -u > /tmp/conflicted_files.txt
+            echo "has_conflicts=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_conflicts=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Detect UI changes
+        id: detect-ui
         if: steps.upstream-diff.outputs.has_changes == 'true'
         run: |
           IFS=',' read -ra UI_PATHS_ARR <<< "${UI_PATHS}"
 
-          is_ui_file() {
-            local file="$1"
+          ui_count=0
+          while IFS= read -r file; do
             for path in "${UI_PATHS_ARR[@]}"; do
               if [[ "$file" == "$path"* ]]; then
-                return 0
+                ui_count=$((ui_count+1))
+                break
               fi
             done
-            return 1
-          }
+          done < /tmp/upstream_files.txt
 
-          {
-            echo "# Upstream Relay: ${LAST_SYNC_TAG} → upstream/${UPSTREAM_BRANCH}"
-            echo ""
-            echo "## Summary"
-            echo "- Upstream: ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}"
-            echo "- Diff scope: ${LAST_SYNC_TAG}..upstream/${UPSTREAM_BRANCH}"
-            echo "- Files changed: ${{ steps.upstream-diff.outputs.file_count }}"
-            echo ""
-            echo "## Modified Files (Upstream Diff)"
-            echo "| File | UI Impact |"
-            echo "| --- | --- |"
-            while IFS= read -r file; do
-              if is_ui_file "$file"; then
-                echo "| ${file} | ✅ UI |"
-              else
-                echo "| ${file} | — |"
-              fi
-            done < /tmp/upstream_files.txt
-            echo ""
-            echo "## Copilot Integration Consultant Protocol"
-            echo "Follow the instructions in .github/copilot-upstream-integration.md when reviewing this PR."
-            echo ""
-            echo "## Minimalist Justification"
-            echo "This relay keeps us aligned with upstream changes while preserving our modern UI architecture."
-            echo "We can safely adopt backend and logic improvements without forcing UI regressions, maintaining upstream parity and UI innovation simultaneously."
-          } > /tmp/pr-body.md
+          if [ "$ui_count" -gt 0 ]; then
+            echo "has_ui_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_ui_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "ui_count=${ui_count}" >> "$GITHUB_OUTPUT"
+
+      - name: Finalize merge (no conflicts)
+        if: steps.prepare-merge.outputs.has_conflicts == 'false' && steps.upstream-diff.outputs.has_changes == 'true'
+        run: |
+          git commit -m "chore: merge upstream/${UPSTREAM_BRANCH} into ${SYNC_BRANCH} [auto]"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ] || [ "${{ env.DRY_RUN }}" = "true" ]; then
+            echo "DRY RUN: merge committed locally but not pushed. Skipping push and PR creation."
+            exit 0
+          fi
+          git push -u origin "${SYNC_BRANCH}"
+
+      - name: Finalize merge (conflicts present)
+        if: steps.prepare-merge.outputs.has_conflicts == 'true' && steps.upstream-diff.outputs.has_changes == 'true'
+        run: |
+          echo "Conflicts were detected while merging upstream/${UPSTREAM_BRANCH} into ${SYNC_BRANCH}."
+          echo "Conflicted files:" > /tmp/UPSTREAM_MERGE_CONFLICTS.md
+          echo "" >> /tmp/UPSTREAM_MERGE_CONFLICTS.md
+          echo "The following files had conflicts during the automatic merge:" >> /tmp/UPSTREAM_MERGE_CONFLICTS.md
+          sed 's/^/ - /' /tmp/conflicted_files.txt >> /tmp/UPSTREAM_MERGE_CONFLICTS.md
+          echo "" >> /tmp/UPSTREAM_MERGE_CONFLICTS.md
+          echo "Please review and resolve conflicts. The upstream changes are listed in the PR for convenience." >> /tmp/UPSTREAM_MERGE_CONFLICTS.md
+
+          # Abort merge to keep working tree clean and create a branch containing a conflict summary instead
+          git merge --abort || true
+          git add /tmp/UPSTREAM_MERGE_CONFLICTS.md
+          git commit -m "chore: upstream merge conflicts detected; add conflict summary"
+
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ] || [ "${{ env.DRY_RUN }}" = "true" ]; then
+            echo "DRY RUN: conflict branch prepared but not pushed. Skipping push and PR creation."
+            exit 0
+          fi
+
+          git push -u origin "${SYNC_BRANCH}" --force
+
+      - name: Upload PR body artifact (dry run)
+        if: steps.upstream-diff.outputs.has_changes == 'true' && (github.event.inputs.dry_run == 'true' || env.DRY_RUN == 'true')
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-relay-pr-body
+          path: /tmp/pr-body.md
 
       - name: Create pull request
-        if: steps.upstream-diff.outputs.has_changes == 'true'
+        if: steps.upstream-diff.outputs.has_changes == 'true' && (github.event.inputs.dry_run != 'true' && env.DRY_RUN != 'true')
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -113,3 +185,57 @@ jobs:
           body-path: /tmp/pr-body.md
           commit-message: "chore: sync upstream ${UPSTREAM_BRANCH}"
           labels: upstream-sync
+
+      - name: Find PR and apply labels & Copilot note
+        if: steps.upstream-diff.outputs.has_changes == 'true' && (github.event.inputs.dry_run != 'true' && env.DRY_RUN != 'true')
+        uses: actions/github-script@v6
+        env:
+          HAS_CONFLICTS: ${{ steps.prepare-merge.outputs.has_conflicts }}
+          HAS_UI_CHANGES: ${{ steps.detect-ui.outputs.has_ui_changes }}
+          UPSTREAM_FILES: ${{ steps.upstream-diff.outputs.file_count }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner
+            const repo = context.repo.repo
+            const branch = process.env.SYNC_BRANCH
+            const base = process.env.BASE_BRANCH
+            // Find the PR created by the previous step
+            const pulls = await github.rest.pulls.list({ owner, repo, head: `${owner}:${branch}`, state: 'open', base })
+            if (!pulls.data || pulls.data.length === 0) {
+              core.info('No open PR found for the sync branch; exiting.')
+              return
+            }
+            const pr = pulls.data[0]
+            const prNumber = pr.number
+
+            // Ensure standard labels exist (create if missing)
+            async function ensureLabel(name, color = 'ededed', description = '') {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name })
+              } catch (err) {
+                await github.rest.issues.createLabel({ owner, repo, name, color, description })
+              }
+            }
+
+            await ensureLabel('ui-impact', '1d76db', 'Upstream changes that affect UI/frontend')
+            await ensureLabel('backend-only', '0e8a16', 'Upstream changes that are backend/logic only')
+            await ensureLabel('ready-for-auto-merge', 'b60205', 'Ready to be auto-merged if checks pass')
+            await ensureLabel('upstream-sync/conflicts', 'fbca04', 'Merge conflicts requiring human resolution')
+
+            const labelsToAdd = ['upstream-sync']
+            const hasConflicts = (process.env.HAS_CONFLICTS === 'true')
+            const hasUi = (process.env.HAS_UI_CHANGES === 'true')
+
+            if (hasConflicts) labelsToAdd.push('upstream-sync/conflicts')
+            if (hasUi) labelsToAdd.push('ui-impact')
+            else labelsToAdd.push('backend-only', 'ready-for-auto-merge')
+
+            await github.rest.issues.addLabels({ owner, repo, issue_number: prNumber, labels: labelsToAdd })
+
+            // Add a short assistant note to the PR pointing to Copilot protocol
+            const body = `Automated upstream relay PR\n\n**Files changed:** ${process.env.UPSTREAM_FILES || 'see PR files'}\n\nThis PR was created by the automated upstream relay. See .github/copilot-upstream-integration.md for the Copilot review protocol.`
+            await github.rest.issues.createComment({ owner, repo, issue_number: prNumber, body })
+
+            core.info(`PR #${prNumber} processed with labels: ${labelsToAdd.join(', ')}`)
+

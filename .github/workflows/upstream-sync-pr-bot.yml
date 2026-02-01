@@ -1,0 +1,91 @@
+name: Upstream Sync PR Bot
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches: [ main ]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  classify-and-comment:
+    name: Classify files and post Copilot guidance
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ensure this is an upstream sync PR
+        id: check-pr
+        run: |
+          if [[ "${{ github.event.pull_request.head.ref }}" != sync/upstream* ]]; then
+            echo "Not a sync branch, skipping"
+            exit 78
+          fi
+
+      - name: Classify changed files & post review comment
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner
+            const repo = context.repo.repo
+            const pr = context.payload.pull_request
+            if (!pr) return
+
+            const uiPaths = ["client/src","client/public","client/packages","client/index.html","client/vite.config.ts","client/tailwind.config.js"]
+
+            // Get files changed in the PR
+            const files = await github.rest.pulls.listFiles({ owner, repo, pull_number: pr.number, per_page: 500 })
+            let uiFiles = []
+            let backendFiles = []
+            for (const f of files.data) {
+              const p = f.filename
+              if (uiPaths.some(path => p.startsWith(path))) uiFiles.push(p)
+              else backendFiles.push(p)
+            }
+
+            // Ensure labels exist
+            async function ensureLabel(name, color = 'ededed', description = '') {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name })
+              } catch (err) {
+                await github.rest.issues.createLabel({ owner, repo, name, color, description })
+              }
+            }
+
+            await ensureLabel('ui-impact', '1d76db', 'Upstream changes that affect UI/frontend')
+            await ensureLabel('backend-only', '0e8a16', 'Upstream changes that are backend/logic only')
+            await ensureLabel('ready-for-auto-merge', 'b60205', 'Ready to be auto-merged if checks pass')
+
+            const labels = []
+            if (uiFiles.length > 0) labels.push('ui-impact')
+            else labels.push('backend-only','ready-for-auto-merge')
+
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number: pr.number, labels })
+            }
+
+            // Compose the comment
+            const bodyLines = []
+            bodyLines.push('**Copilot Integration Summary**')
+            bodyLines.push('')
+            bodyLines.push(`**Changes Classified:** ${uiFiles.length > 0 ? 'UI/Frontend affected' : 'Pure Logic/Backend'}`)
+            bodyLines.push('')
+            if (uiFiles.length > 0) {
+              bodyLines.push('**UI files affected (sample):**')
+              bodyLines.push(uiFiles.slice(0,50).map(s => '- ' + s).join('\n'))
+              bodyLines.push('')
+              bodyLines.push('**Recommendation:** Provide a porting strategy using `.github/copilot-upstream-integration.md` as a template. Highlight exact upstream locations and target files in our modern UI to port changes.')
+            } else {
+              bodyLines.push('**Files:**')
+              bodyLines.push(backendFiles.slice(0,50).map(s => '- ' + s).join('\n'))
+              bodyLines.push('')
+              bodyLines.push('**Recommendation:** This PR appears to be backend-only and can be marked Ready for Auto-Merge after compatibility checks pass.')
+            }
+
+            bodyLines.push('')
+            bodyLines.push('_Automated message: see .github/copilot-upstream-integration.md for the review template._')
+
+            await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body: bodyLines.join('\n') })
