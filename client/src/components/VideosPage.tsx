@@ -995,17 +995,6 @@ function VideosPage({ token }: VideosPageProps) {
                                     audioFileSize={video.audioFileSize}
                                   />
                                 )}
-                                {video.fileSize && (
-                                  <Tooltip title="File size on disk" enterTouchDelay={0}>
-                                    <Chip
-                                      size="small"
-                                      icon={<StorageIcon />}
-                                      label={formatFileSize(video.fileSize)}
-                                      variant="outlined"
-                                      sx={{ height: 20, fontSize: '0.7rem' }}
-                                    />
-                                  </Tooltip>
-                                )}
                                 {video.removed ? (
                                   <Tooltip title="Video file not found on disk. It may have been deleted or moved." enterTouchDelay={0}>
                                     <Chip
