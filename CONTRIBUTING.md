@@ -53,7 +53,21 @@ Found a bug? Check the [GitHub Issues](https://github.com/DialmasterOrg/Youtarr/
 - Relevant logs or screenshots
 
 ### New Features
-Have an idea for a new feature? Open an issue to discuss it before starting development. This helps ensure the feature aligns with the project's direction and prevents duplicate work.
+
+Have an idea for a new feature? **Open an issue to discuss it before starting development.** This is especially important for:
+
+- Features requiring more than ~1,000 lines of code
+- Changes to the build system, testing framework, or core architecture
+- UI/UX redesigns or navigation changes
+- New dependencies or third-party integrations
+
+Why discuss first?
+- Ensures the feature aligns with the project direction
+- Prevents duplicate work
+- Allows the maintainer to suggest the best approach
+- Avoids investing time in changes that may not be accepted
+
+For small, obvious improvements (typo fixes, minor bug fixes), feel free to submit a PR directly.
 
 ### Documentation Improvements
 Documentation is crucial for user adoption. Contributions that improve clarity, fix errors, or add missing information are highly valued. This includes:
@@ -222,6 +236,54 @@ fix/zzz ──────┘
    - Modified setup/installation steps
    - Changed environment variables
 
+### PR Scope and Size Guidelines
+
+**Keep PRs focused and reviewable.** Large PRs are difficult to review and risky to merge. Follow these guidelines:
+
+#### Size Limits
+- **Target: Under 1,000 lines changed** (excluding generated files, lock files)
+- **Hard limit: 25 files** - PRs touching more than 25 files need prior discussion
+- **One feature per PR** - Don't bundle unrelated changes
+
+#### PR Requirements (Non-Negotiable)
+
+These are hard requirements for all PRs:
+
+- **No merge conflicts** - Rebase your branch on the latest `dev` before submitting
+- **CI must pass** - All automated checks must be green (linting, tests, type checking)
+- **No bypassing checks** - Never use `--no-verify`, `test.skip()`, or comment out tests
+- **Coverage maintained** - Don't delete tests without adding equivalent coverage
+
+#### What Requires Prior Discussion
+
+Open a GitHub issue or Discord discussion **before** starting work on:
+
+| Change Type | Why Discuss First? |
+|-------------|-------------------|
+| Build system changes | Affects entire codebase |
+| Testing framework changes | Affects all tests |
+| Major dependencies | Long-term maintenance |
+| Architecture changes | Affects future PRs |
+| Large refactors | Risk of regressions |
+
+#### Breaking Up Large Changes
+
+If your feature requires many changes, split it into sequential PRs:
+
+1. **Infrastructure PR** - Build/config changes only
+2. **Core feature PR** - Minimal implementation
+3. **Enhancement PRs** - Additional features, polish
+4. **Test migration PR** - Only after feature is stable
+
+Each PR should be independently reviewable and mergeable.
+
+#### What NOT to Do
+
+- **Don't delete existing tests** without adding equivalent coverage first
+- **Don't modify CI/workflow files** in feature PRs (submit those separately)
+- **Don't combine unrelated features** in a single PR
+- **Don't make "while I'm here" changes** - stay focused on the stated goal
+
 ### Submitting Your PR
 
 When you're ready, push your branch and create a pull request **targeting the `dev` branch** on GitHub. Your PR will be reviewed by the maintainer.
@@ -229,11 +291,18 @@ When you're ready, push your branch and create a pull request **targeting the `d
 **PR Checklist:**
 
 - [ ] PR targets `dev` branch (not `main`)
+- [ ] PR has no merge conflicts (rebased on latest `dev`)
+- [ ] CI passes (linting, tests, type checking all green)
 - [ ] Tests pass locally (`npm test`)
 - [ ] Coverage meets 70% threshold
+- [ ] No bypassed checks (no `--no-verify`, `test.skip`, or commented tests)
 - [ ] Conventional commit format used
 - [ ] ESLint passes (`npm run lint`)
 - [ ] TypeScript compiles without errors (`npm run lint:ts`)
+- [ ] PR is focused on a single feature/fix (not bundled changes)
+- [ ] PR touches fewer than 25 files (or discussed with maintainer first)
+- [ ] No workflow/CI file changes (submit those separately)
+- [ ] Existing tests are preserved (or equivalent coverage added)
 - [ ] Documentation updated if needed
 - [ ] Tested in Docker environment
 - [ ] No commented-out code or debug statements
@@ -402,6 +471,30 @@ npm run db:create-migration -- --name your-migration-name
 For more information on database management, see [DATABASE.md](docs/DATABASE.md).
 
 ## Getting Help
+
+### Communication Expectations
+
+**We value collaboration over surprise PRs.** Before investing significant time:
+
+1. **Check existing issues** - Is someone already working on this?
+2. **Open a discussion issue** - Describe what you want to build
+3. **Wait for feedback** - The maintainer may have context you don't
+4. **Start small** - A working prototype PR is better than a complete rewrite
+
+#### When to Reach Out
+
+- **Small bug fixes** (< 100 lines): Just submit the PR
+- **Medium features** (100-1000 lines): Open an issue first
+- **Large changes** (1000+ lines): Discuss on Discord or issue before coding
+- **Architectural changes**: Always discuss first, regardless of size
+
+#### Response Times
+
+- **Issues**: Typically responded to within 2-4 days
+- **PRs**: Review within 1 week (complex PRs may take longer)
+- **Discord**: Usually 1-2 day response time during active hours
+
+Don't interpret silence as approval to proceed with major changes.
 
 ### Questions and Discussion
 
