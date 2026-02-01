@@ -42,15 +42,15 @@ export const AdvancedSettingsSection: React.FC<AdvancedSettingsSectionProps> = (
 
   return (
     <ConfigurationAccordion
-      title="Advanced Settings"
-      chipLabel="Advanced"
+      title="Network & Rate Limits"
+      chipLabel="Network"
       chipColor="default"
       defaultExpanded={false}
     >
       <Alert severity="info" sx={{ mb: 2 }}>
-        <AlertTitle>Advanced Configuration</AlertTitle>
+        <AlertTitle>Network & Rate Limits</AlertTitle>
         <Typography variant="body2">
-          Fine-tune yt-dlp behavior with rate limiting and proxy settings. These settings are applied to all yt-dlp operations.
+          Fine-tune yt-dlp networking with request pacing and proxy settings. These apply to all yt-dlp operations.
         </Typography>
       </Alert>
 

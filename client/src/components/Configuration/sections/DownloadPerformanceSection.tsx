@@ -31,15 +31,15 @@ export const DownloadPerformanceSection: React.FC<DownloadPerformanceSectionProp
 }) => {
   return (
     <ConfigurationAccordion
-      title="Download Performance Settings"
+      title="Performance & Reliability"
       chipLabel={config.enableStallDetection ? "Stall Detection On" : "Stall Detection Off"}
       chipColor={config.enableStallDetection ? "success" : "default"}
       defaultExpanded={false}
     >
       <Alert severity="info" sx={{ mb: 2 }}>
-        <AlertTitle>Performance Optimization</AlertTitle>
+        <AlertTitle>Performance & Reliability</AlertTitle>
         <Typography variant="body2">
-          Configure download timeouts, retry attempts, and stall detection to handle slow or interrupted downloads automatically.
+          Tune yt-dlp timeouts, retries, and stall detection to keep downloads resilient on slow or flaky connections.
         </Typography>
       </Alert>
 

@@ -21,13 +21,12 @@ import { SponsorBlockSection } from '../Configuration/sections/SponsorBlockSecti
 import { KodiCompatibilitySection } from '../Configuration/sections/KodiCompatibilitySection';
 import { CookieConfigSection } from '../Configuration/sections/CookieConfigSection';
 import { NotificationsSection } from '../Configuration/sections/NotificationsSection';
-import { DownloadPerformanceSection } from '../Configuration/sections/DownloadPerformanceSection';
-import { AdvancedSettingsSection } from '../Configuration/sections/AdvancedSettingsSection';
+import { DownloadingSection } from '../Configuration/sections/DownloadingSection';
 import { AutoRemovalSection } from '../Configuration/sections/AutoRemovalSection';
 import { AccountSecuritySection } from '../Configuration/sections/AccountSecuritySection';
 import ApiKeysSection from '../Configuration/sections/ApiKeysSection';
 import { TopSaveBar } from '../Configuration/sections/TopSaveBar';
-import { usePlexConnection, useConfigSave } from '../Configuration/hooks';
+import { usePlexConnection, useConfigSave, useYtDlpUpdate } from '../Configuration/hooks';
 import { useStorageStatus } from '../../hooks/useStorageStatus';
 import { useConfig } from '../../hooks/useConfig';
 import { TRACKABLE_CONFIG_KEYS } from '../../config/configSchema';
@@ -113,6 +112,33 @@ export function Settings({ token }: SettingsProps) {
     hasPlexServerConfigured,
     checkPlexConnection: () => {},
   });
+
+  const {
+    versionInfo: ytDlpVersionInfo,
+    updateStatus: ytDlpUpdateStatus,
+    errorMessage: ytDlpErrorMessage,
+    successMessage: ytDlpSuccessMessage,
+    performUpdate: performYtDlpUpdate,
+    clearMessages: clearYtDlpMessages,
+  } = useYtDlpUpdate(token);
+
+  useEffect(() => {
+    if (ytDlpErrorMessage) {
+      setSnackbar({
+        open: true,
+        message: ytDlpErrorMessage,
+        severity: 'error',
+      });
+      clearYtDlpMessages();
+    } else if (ytDlpSuccessMessage) {
+      setSnackbar({
+        open: true,
+        message: ytDlpSuccessMessage,
+        severity: 'success',
+      });
+      clearYtDlpMessages();
+    }
+  }, [ytDlpErrorMessage, ytDlpSuccessMessage, clearYtDlpMessages]);
 
   const handleConfirmSave = () => {
     setOpenConfirmDialog(false);
@@ -265,25 +291,20 @@ export function Settings({ token }: SettingsProps) {
           }
         />
         <Route
-          path="performance"
+          path="downloading"
           element={
-            <DownloadPerformanceSection
+            <DownloadingSection
               config={config}
               onConfigChange={handleConfigChange}
               onMobileTooltipClick={setMobileTooltip}
+              ytDlpVersionInfo={ytDlpVersionInfo}
+              ytDlpUpdateStatus={ytDlpUpdateStatus}
+              onYtDlpUpdate={performYtDlpUpdate}
             />
           }
         />
-        <Route
-          path="advanced"
-          element={
-            <AdvancedSettingsSection
-              config={config}
-              onConfigChange={handleConfigChange}
-              onMobileTooltipClick={setMobileTooltip}
-            />
-          }
-        />
+        <Route path="performance" element={<Navigate to="/settings/downloading" replace />} />
+        <Route path="advanced" element={<Navigate to="/settings/downloading" replace />} />
         <Route
           path="autoremove"
           element={

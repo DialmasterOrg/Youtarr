@@ -17,8 +17,7 @@ import { SponsorBlockSection } from './Configuration/sections/SponsorBlockSectio
 import { KodiCompatibilitySection } from './Configuration/sections/KodiCompatibilitySection';
 import { CookieConfigSection } from './Configuration/sections/CookieConfigSection';
 import { NotificationsSection } from './Configuration/sections/NotificationsSection';
-import { DownloadPerformanceSection } from './Configuration/sections/DownloadPerformanceSection';
-import { AdvancedSettingsSection } from './Configuration/sections/AdvancedSettingsSection';
+import { DownloadingSection } from './Configuration/sections/DownloadingSection';
 import { AutoRemovalSection } from './Configuration/sections/AutoRemovalSection';
 import { AccountSecuritySection } from './Configuration/sections/AccountSecuritySection';
 import ApiKeysSection from './Configuration/sections/ApiKeysSection';
@@ -228,9 +227,6 @@ function Configuration({ token }: ConfigurationProps) {
         onConfigChange={handleConfigChange}
         onMobileTooltipClick={setMobileTooltip}
         token={token}
-        ytDlpVersionInfo={ytDlpVersionInfo}
-        ytDlpUpdateStatus={ytDlpUpdateStatus}
-        onYtDlpUpdate={performYtDlpUpdate}
       />
 
       <PlexIntegrationSection
@@ -274,16 +270,13 @@ function Configuration({ token }: ConfigurationProps) {
         setSnackbar={setSnackbar}
       />
 
-      <DownloadPerformanceSection
+      <DownloadingSection
         config={config}
         onConfigChange={handleConfigChange}
         onMobileTooltipClick={setMobileTooltip}
-      />
-
-      <AdvancedSettingsSection
-        config={config}
-        onConfigChange={handleConfigChange}
-        onMobileTooltipClick={setMobileTooltip}
+        ytDlpVersionInfo={ytDlpVersionInfo}
+        ytDlpUpdateStatus={ytDlpUpdateStatus}
+        onYtDlpUpdate={performYtDlpUpdate}
       />
 
       <AutoRemovalSection
