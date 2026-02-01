@@ -748,7 +748,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
                 bgcolor: 'primary.main',
                 '&:hover': {
                   bgcolor: 'primary.dark',
-                  color: 'primary.contrastText',
+                  color: 'primary.main',
                 }
               })}
             >

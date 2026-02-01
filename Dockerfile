@@ -12,9 +12,13 @@ RUN npm ci --only=production --ignore-scripts
 FROM base AS build
 COPY package*.json ./
 RUN npm ci
+# Install client dependencies separately for build
+COPY client/package*.json ./client/
+RUN npm install --prefix client --include=dev --no-audit --no-fund
 # Copy server code and built React app
 COPY server/ ./server/
-COPY client/build/ ./client/build/
+COPY client/ ./client/
+RUN npm run --prefix client build
 COPY migrations/ ./migrations/
 
 # ---- Apprise ----

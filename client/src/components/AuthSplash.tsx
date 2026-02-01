@@ -244,7 +244,7 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
               fontFamily: 'var(--font-body)',
             }}
           >
-            {isLinear ? '© Youtarr v1.0' : 'Powered by Youtarr'}
+            {isLinear ? 'Youtarr' : 'Powered by Youtarr'}
           </Typography>
         </Paper>
       </Container>

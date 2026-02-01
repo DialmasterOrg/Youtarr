@@ -74,14 +74,32 @@ body::before {
 }
 
 /* Outlined input notch should only appear when label is floated */
-.MuiFormControl-root .MuiInputLabel-root:not(.MuiInputLabel-shrink) + .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline legend {
-  max-width: 0.01px;
+.MuiOutlinedInput-notchedOutline legend {
   padding: 0;
+  display: block;
+  width: auto;
+  height: 11px;
+  visibility: hidden;
+  max-width: 0.01px;
+  transition: max-width 50ms cubic-bezier(0, 0, 0.2, 1) 0ms;
+  white-space: nowrap;
 }
 
-.MuiFormControl-root .MuiInputLabel-root.MuiInputLabel-shrink + .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline legend {
-  max-width: 100%;
-  padding: 0 20px;
+.MuiInputLabel-shrink + .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline legend {
+  max-width: 1000px;
+  padding: 0 10px;
+}
+
+.MuiInputLabel-shrink + .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline legend > span {
+  padding: 0 10px;
+  display: inline-block;
+  visibility: hidden;
+}
+
+.MuiInputLabel-root.MuiInputLabel-shrink.MuiInputLabel-outlined {
+  background-color: var(--input);
+  padding: 0 6px;
+  border-radius: 6px;
 }
 
 h1,
