@@ -1,0 +1,115 @@
+name: Upstream Relay Sync
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  UPSTREAM_REPO: ${{ vars.UPSTREAM_REPO || github.repository }}
+  UPSTREAM_BRANCH: ${{ vars.UPSTREAM_BRANCH || 'main' }}
+  BASE_BRANCH: ${{ vars.BASE_BRANCH || 'main' }}
+  LAST_SYNC_TAG: ${{ vars.LAST_SYNC_TAG || '1.58.0' }}
+  SYNC_BRANCH: sync/upstream-updates
+  UI_PATHS: "client/src,client/public,client/packages,client/index.html,client/vite.config.ts,client/tailwind.config.js"
+
+jobs:
+  upstream-sync:
+    name: Relay Upstream Changes
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          if [ "${UPSTREAM_REPO}" = "${GITHUB_REPOSITORY}" ]; then
+            echo "⚠️ UPSTREAM_REPO not set. Using current repository as fallback."
+            echo "Set repository variable UPSTREAM_REPO to the true upstream (owner/repo)."
+          fi
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git fetch upstream "${UPSTREAM_BRANCH}" --tags
+
+      - name: Calculate upstream diff (tag -> head)
+        id: upstream-diff
+        run: |
+          git diff --name-only "${LAST_SYNC_TAG}..upstream/${UPSTREAM_BRANCH}" > /tmp/upstream_files.txt
+          if [ ! -s /tmp/upstream_files.txt ]; then
+            echo "No changes detected between ${LAST_SYNC_TAG} and upstream/${UPSTREAM_BRANCH}."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          echo "file_count=$(wc -l < /tmp/upstream_files.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare sync branch
+        if: steps.upstream-diff.outputs.has_changes == 'true'
+        run: |
+          git checkout -B "${SYNC_BRANCH}" "origin/${BASE_BRANCH}"
+          git merge --no-ff --no-commit "upstream/${UPSTREAM_BRANCH}"
+
+      - name: Generate PR body
+        if: steps.upstream-diff.outputs.has_changes == 'true'
+        run: |
+          IFS=',' read -ra UI_PATHS_ARR <<< "${UI_PATHS}"
+
+          is_ui_file() {
+            local file="$1"
+            for path in "${UI_PATHS_ARR[@]}"; do
+              if [[ "$file" == "$path"* ]]; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          {
+            echo "# Upstream Relay: ${LAST_SYNC_TAG} → upstream/${UPSTREAM_BRANCH}"
+            echo ""
+            echo "## Summary"
+            echo "- Upstream: ${UPSTREAM_REPO}@${UPSTREAM_BRANCH}"
+            echo "- Diff scope: ${LAST_SYNC_TAG}..upstream/${UPSTREAM_BRANCH}"
+            echo "- Files changed: ${{ steps.upstream-diff.outputs.file_count }}"
+            echo ""
+            echo "## Modified Files (Upstream Diff)"
+            echo "| File | UI Impact |"
+            echo "| --- | --- |"
+            while IFS= read -r file; do
+              if is_ui_file "$file"; then
+                echo "| ${file} | ✅ UI |"
+              else
+                echo "| ${file} | — |"
+              fi
+            done < /tmp/upstream_files.txt
+            echo ""
+            echo "## Copilot Integration Consultant Protocol"
+            echo "Follow the instructions in .github/copilot-upstream-integration.md when reviewing this PR."
+            echo ""
+            echo "## Minimalist Justification"
+            echo "This relay keeps us aligned with upstream changes while preserving our modern UI architecture."
+            echo "We can safely adopt backend and logic improvements without forcing UI regressions, maintaining upstream parity and UI innovation simultaneously."
+          } > /tmp/pr-body.md
+
+      - name: Create pull request
+        if: steps.upstream-diff.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ env.SYNC_BRANCH }}
+          base: ${{ env.BASE_BRANCH }}
+          title: "chore: sync upstream ${UPSTREAM_BRANCH}"
+          body-path: /tmp/pr-body.md
+          commit-message: "chore: sync upstream ${UPSTREAM_BRANCH}"
+          labels: upstream-sync

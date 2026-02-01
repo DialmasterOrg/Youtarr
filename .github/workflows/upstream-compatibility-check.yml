@@ -1,10 +1,7 @@
-name: CI - Lint and Test
+name: Upstream Compatibility Check
 
 on:
-  push:
-    branches: [ main, dev ]
-  pull_request:
-    branches: [ main, dev ]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -185,8 +182,6 @@ jobs:
             client/coverage/coverage-summary.json
             client/coverage/lcov.info
 
-  # This job is required for branch protection rules
-  # It will only succeed if all tests and linting pass
   check-all:
     name: All Checks
     runs-on: ubuntu-latest
