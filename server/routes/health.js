@@ -3,14 +3,21 @@ const router = express.Router();
 const https = require('https');
 const logger = require('../logger');
 const databaseHealth = require('../modules/databaseHealthModule');
+const ytdlpModule = require('../modules/ytdlpModule');
 
 /**
  * Creates health routes
  * @param {Object} deps - Dependencies
  * @param {Function} deps.getCachedYtDlpVersion - Function to get cached yt-dlp version
+ * @param {Function} deps.refreshYtDlpVersionCache - Function to refresh yt-dlp version cache
+ * @param {Function} deps.verifyToken - Authentication middleware
  * @returns {express.Router}
  */
-module.exports = function createHealthRoutes({ getCachedYtDlpVersion }) {
+module.exports = function createHealthRoutes({
+  getCachedYtDlpVersion,
+  refreshYtDlpVersionCache,
+  verifyToken,
+}) {
   /**
    * @swagger
    * /api/health:
@@ -137,6 +144,103 @@ module.exports = function createHealthRoutes({ getCachedYtDlpVersion }) {
     } catch (error) {
       logger.error({ err: error }, 'Failed to fetch version from Docker Hub');
       res.status(500).json({ error: 'Failed to fetch version from Docker Hub' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/ytdlp/latest-version:
+   *   get:
+   *     summary: Get yt-dlp version information
+   *     description: Returns the current installed yt-dlp version and the latest available version from GitHub.
+   *     tags: [Health]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Version information
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 currentVersion:
+   *                   type: string
+   *                   description: Currently installed yt-dlp version
+   *                 latestVersion:
+   *                   type: string
+   *                   description: Latest yt-dlp version from GitHub
+   *                 updateAvailable:
+   *                   type: boolean
+   *                   description: Whether an update is available
+   *       401:
+   *         description: Unauthorized
+   *       500:
+   *         description: Failed to fetch version information
+   */
+  router.get('/api/ytdlp/latest-version', verifyToken, async (req, res) => {
+    try {
+      const currentVersion = getCachedYtDlpVersion();
+      const latestVersion = await ytdlpModule.getLatestVersion();
+      const updateAvailable = ytdlpModule.isUpdateAvailable(currentVersion, latestVersion);
+
+      res.json({
+        currentVersion,
+        latestVersion,
+        updateAvailable,
+      });
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to get yt-dlp version information');
+      res.status(500).json({ error: 'Failed to get version information' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/ytdlp/update:
+   *   post:
+   *     summary: Update yt-dlp
+   *     description: Performs a yt-dlp self-update to the latest version.
+   *     tags: [Health]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Update result
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   description: Whether the update succeeded
+   *                 message:
+   *                   type: string
+   *                   description: Status message
+   *                 newVersion:
+   *                   type: string
+   *                   description: New version after update (if applicable)
+   *       401:
+   *         description: Unauthorized
+   *       500:
+   *         description: Update failed
+   */
+  router.post('/api/ytdlp/update', verifyToken, async (req, res) => {
+    try {
+      const result = await ytdlpModule.performUpdate();
+
+      if (result.success) {
+        refreshYtDlpVersionCache();
+      }
+
+      res.json(result);
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to update yt-dlp');
+      res.status(500).json({
+        success: false,
+        message: 'Update failed due to an unexpected error',
+      });
     }
   });
 

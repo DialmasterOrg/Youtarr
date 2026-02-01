@@ -26,6 +26,7 @@ import { SaveBar } from './Configuration/sections/SaveBar';
 import {
   usePlexConnection,
   useConfigSave,
+  useYtDlpUpdate,
 } from './Configuration/hooks';
 import { useStorageStatus } from '../hooks/useStorageStatus';
 import { useConfig } from '../hooks/useConfig';
@@ -129,6 +130,33 @@ function Configuration({ token }: ConfigurationProps) {
     checkPlexConnection,
   });
 
+  const {
+    versionInfo: ytDlpVersionInfo,
+    updateStatus: ytDlpUpdateStatus,
+    errorMessage: ytDlpErrorMessage,
+    successMessage: ytDlpSuccessMessage,
+    performUpdate: performYtDlpUpdate,
+    clearMessages: clearYtDlpMessages,
+  } = useYtDlpUpdate(token);
+
+  useEffect(() => {
+    if (ytDlpErrorMessage) {
+      setSnackbar({
+        open: true,
+        message: ytDlpErrorMessage,
+        severity: 'error',
+      });
+      clearYtDlpMessages();
+    } else if (ytDlpSuccessMessage) {
+      setSnackbar({
+        open: true,
+        message: ytDlpSuccessMessage,
+        severity: 'success',
+      });
+      clearYtDlpMessages();
+    }
+  }, [ytDlpErrorMessage, ytDlpSuccessMessage, clearYtDlpMessages]);
+
   const handleOpenConfirmDialog = () => {
     setOpenConfirmDialog(true);
   };
@@ -200,6 +228,9 @@ function Configuration({ token }: ConfigurationProps) {
         onConfigChange={handleConfigChange}
         onMobileTooltipClick={setMobileTooltip}
         token={token}
+        ytDlpVersionInfo={ytDlpVersionInfo}
+        ytDlpUpdateStatus={ytDlpUpdateStatus}
+        onYtDlpUpdate={performYtDlpUpdate}
       />
 
       <PlexIntegrationSection

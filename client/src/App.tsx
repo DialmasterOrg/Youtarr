@@ -1,6 +1,6 @@
 import './App.css';
 import packageJson from '../package.json';
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import {
   BrowserRouter as Router,
@@ -35,6 +35,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import DatabaseErrorOverlay from './components/DatabaseErrorOverlay';
 import { useThemeEngine } from './contexts/ThemeEngineContext';
 import { createAppTheme } from './themes';
+import { YTDLP_UPDATED_EVENT } from './components/Configuration/hooks/useYtDlpUpdate';
 
 // Event name for database error detection
 const DB_ERROR_EVENT = 'db-error-detected';
@@ -47,6 +48,8 @@ function AppContent() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [serverVersion, setServerVersion] = useState('');
   const [ytDlpVersion, setYtDlpVersion] = useState('');
+  const [ytDlpUpdateAvailable, setYtDlpUpdateAvailable] = useState(false);
+  const [ytDlpLatestVersion, setYtDlpLatestVersion] = useState('');
   const [requiresSetup, setRequiresSetup] = useState<boolean | null>(null);
   const [checkingSetup, setCheckingSetup] = useState(true);
   const [isPlatformManaged, setIsPlatformManaged] = useState(false);
@@ -73,6 +76,10 @@ function AppContent() {
   const updateTooltip = updateAvailable
     ? `New version (${serverVersion}) available! Please shut down and pull the latest image and files to update.`
     : undefined;
+
+  const ytDlpLabel = ytDlpVersion
+    ? `yt-dlp: ${ytDlpVersion}${ytDlpUpdateAvailable && ytDlpLatestVersion ? ` (update ${ytDlpLatestVersion})` : ''}`
+    : '';
 
   const selectedTheme = useMemo(() => {
     return createAppTheme('light', themeMode); // Mode hardcoded for now, can be dynamic later
@@ -357,6 +364,52 @@ function AppContent() {
       });
   }, []);
 
+  const fetchYtDlpVersionInfo = useCallback(() => {
+    if (!token) {
+      setYtDlpUpdateAvailable(false);
+      setYtDlpLatestVersion('');
+      return;
+    }
+
+    fetch('/api/ytdlp/latest-version', {
+      headers: { 'x-access-token': token },
+    })
+      .then((response) => {
+        if (response.ok) {
+          return response.json();
+        }
+        throw new Error('Failed to fetch yt-dlp version');
+      })
+      .then((data) => {
+        setYtDlpUpdateAvailable(data.updateAvailable || false);
+        setYtDlpLatestVersion(data.latestVersion || '');
+        if (data.currentVersion) {
+          setYtDlpVersion(data.currentVersion);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch yt-dlp version info:', err);
+        setYtDlpUpdateAvailable(false);
+        setYtDlpLatestVersion('');
+      });
+  }, [token]);
+
+  useEffect(() => {
+    fetchYtDlpVersionInfo();
+  }, [fetchYtDlpVersionInfo]);
+
+  useEffect(() => {
+    const handleYtDlpUpdated = () => {
+      fetchYtDlpVersionInfo();
+    };
+
+    window.addEventListener(YTDLP_UPDATED_EVENT, handleYtDlpUpdated);
+
+    return () => {
+      window.removeEventListener(YTDLP_UPDATED_EVENT, handleYtDlpUpdated);
+    };
+  }, [fetchYtDlpVersionInfo]);
+
   return (
     <ThemeProvider theme={selectedTheme}>
       <CssBaseline />
@@ -418,7 +471,7 @@ function AppContent() {
                     token={token}
                     isPlatformManaged={isPlatformManaged}
                     appName="Youtarr"
-                    versionLabel={ytDlpVersion ? `${clientVersion} • yt-dlp: ${ytDlpVersion}` : clientVersion}
+                    versionLabel={ytDlpLabel ? `${clientVersion} • ${ytDlpLabel}` : clientVersion}
                     updateAvailable={updateAvailable}
                     updateTooltip={updateTooltip}
                     onLogout={handleLogout}

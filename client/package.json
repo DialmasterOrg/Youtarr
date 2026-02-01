@@ -93,5 +93,10 @@
     "workerDirectory": [
       "public"
     ]
+  },
+  "overrides": {
+    "jsdom": {
+      "form-data": "^3.0.4"
+    }
   }
 }

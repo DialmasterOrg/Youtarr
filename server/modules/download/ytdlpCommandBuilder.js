@@ -37,7 +37,7 @@ class YtdlpCommandBuilder {
     const baseOutputPath = tempPathManager.getTempBasePath();
 
     // Use same filename as video file (without extension - yt-dlp adds .jpg)
-    const thumbnailFilename = `${CHANNEL_TEMPLATE} - %(title).76s [%(id)s]`;
+    const thumbnailFilename = `${CHANNEL_TEMPLATE} - %(title).76B [%(id)s]`;
 
     if (subFolder) {
       return path.join(baseOutputPath, subFolder, CHANNEL_TEMPLATE, VIDEO_FOLDER_TEMPLATE, thumbnailFilename);
