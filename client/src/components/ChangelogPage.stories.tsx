@@ -91,13 +91,15 @@ export const ErrorState: Story = {
     const originalConsoleError = console.error;
     console.error = () => {};
     try {
+      const alert = await body.findByRole('alert');
+      const alertContent = within(alert);
 
-    await expect(await body.findByText(/unable to load changelog/i)).toBeInTheDocument();
-    await expect(await body.findByRole('link', { name: /https:\/\/github.com\/dialmasterorg\/youtarr/i })).toBeInTheDocument();
+      await expect(alertContent.getByText(/unable to load changelog/i)).toBeInTheDocument();
+      await expect(alertContent.getByRole('link', { name: /https:\/\/github.com\/dialmasterorg\/youtarr/i })).toBeInTheDocument();
 
-    const retryButton = await body.findByRole('button', { name: /retry/i });
-    await userEvent.click(retryButton);
-    await expect(await body.findByRole('progressbar')).toBeInTheDocument();
+      const retryButton = await alertContent.findByRole('button', { name: /retry/i });
+      await userEvent.click(retryButton);
+      await expect(await body.findByRole('progressbar')).toBeInTheDocument();
     } finally {
       console.error = originalConsoleError;
     }

@@ -90,12 +90,7 @@ export const Default: Story = {
     const body = within(canvasElement.ownerDocument.body);
 
     // Core settings card is rendered once config has loaded.
-    await expect(await body.findByText('Core Settings')).toBeInTheDocument();
-
-    // Expand accordions to ensure content is in DOM and wait for async fetches to complete.
-    // This prevents 'act' warnings from state updates that happen after the test normally finishes.
-    const cookieAccordion = await body.findByText('Cookie Configuration');
-    await userEvent.click(cookieAccordion);
+    await expect(await body.findByRole('heading', { name: /core settings/i }, { timeout: 10000 })).toBeInTheDocument();
 
     // Enable cookies to surface the status text.
     const enableCookiesToggle = await body.findByRole('checkbox', { name: /Enable Cookies/i });
@@ -106,8 +101,6 @@ export const Default: Story = {
     );
     await expect(cookieStatusLabels.length).toBeGreaterThan(0);
 
-    const apiAccordion = await body.findByText('API Keys & External Access');
-    await userEvent.click(apiAccordion);
     await expect(await body.findByText('Test Key')).toBeInTheDocument();
 
     const outputDirLabels = await body.findAllByText('YouTube Output Directory');

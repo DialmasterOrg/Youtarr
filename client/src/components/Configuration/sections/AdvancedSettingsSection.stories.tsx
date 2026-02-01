@@ -28,7 +28,6 @@ type Story = StoryObj<typeof AdvancedSettingsSection>;
 export const ShowsProxyValidation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByText('Advanced Settings'));
     const input = await canvas.findByLabelText('Proxy URL');
     await userEvent.type(input, 'ftp://invalid');
     await userEvent.tab();

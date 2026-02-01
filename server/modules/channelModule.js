@@ -170,8 +170,8 @@ class ChannelModule {
     await new Promise((resolve, reject) => {
       ytDlp.on('exit', (code) => {
         // Check for bot detection
-        if (stderrBuffer.includes("Sign in to confirm you're not a bot") ||
-            stderrBuffer.includes("Sign in to confirm that you're not a bot")) {
+        if (stderrBuffer.includes('Sign in to confirm you\'re not a bot') ||
+          stderrBuffer.includes('Sign in to confirm that you\'re not a bot')) {
           const error = new Error('Bot detection encountered. Please set cookies in your Configuration or try different cookies to resolve this issue.');
           error.code = 'COOKIES_REQUIRED';
           reject(error);
@@ -2120,7 +2120,7 @@ class ChannelModule {
 
       // Now fetch the requested page of videos with file checking enabled
       const offset = (page - 1) * pageSize;
-  const paginatedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, maxRating, minDuration, maxDuration, dateFrom, dateTo);
+      const paginatedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, maxRating, minDuration, maxDuration, dateFrom, dateTo);
 
       // Check if videos still exist on YouTube and mark as removed if they don't
       const videoValidationModule = require('./videoValidationModule');
@@ -2190,15 +2190,15 @@ class ChannelModule {
       }
 
       // Get stats for the response
-  const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, maxRating, minDuration, maxDuration, dateFrom, dateTo);
+      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, maxRating, minDuration, maxDuration, dateFrom, dateTo);
 
       return this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
 
     } catch (error) {
       logger.error({ err: error, channelId }, 'Error fetching channel videos');
       const offset = (page - 1) * pageSize;
-  const cachedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, maxRating, minDuration, maxDuration, dateFrom, dateTo);
-  const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, maxRating, minDuration, maxDuration, dateFrom, dateTo);
+      const cachedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, maxRating, minDuration, maxDuration, dateFrom, dateTo);
+      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, maxRating, minDuration, maxDuration, dateFrom, dateTo);
       return this.buildChannelVideosResponse(cachedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
     }
   }

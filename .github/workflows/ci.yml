@@ -31,11 +31,6 @@ jobs:
           cd client
           npm ci
 
-      - name: Install Playwright browsers
-        run: |
-          cd client
-          npx playwright install --with-deps
-
       - name: Run ESLint on Backend
         id: lint-backend
         run: npx eslint ./server/. --ext .js
@@ -143,6 +138,11 @@ jobs:
         run: |
           cd client
           npm ci
+
+      - name: Install Playwright browsers
+        run: |
+          cd client
+          npx playwright install --with-deps
 
       - name: Run frontend tests with coverage
         run: cd client && npm test -- --coverage --coverageReporters=json-summary --coverageReporters=lcov --coverageReporters=text --watchAll=false

@@ -28,13 +28,14 @@ export const PasswordMismatch: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    const completeSetup = await canvas.findByRole('button', { name: /complete setup/i });
-    await waitFor(() => expect(completeSetup).toBeEnabled());
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: /complete setup/i })).toBeEnabled()
+    );
 
     await userEvent.type(canvas.getByLabelText(/^password/i), 'password123');
     await userEvent.type(canvas.getByLabelText(/confirm password/i), 'password456');
 
-    await userEvent.click(completeSetup);
+    await userEvent.click(canvas.getByRole('button', { name: /complete setup/i }));
 
     await expect(await canvas.findByText(/passwords do not match/i)).toBeInTheDocument();
   },
@@ -44,8 +45,9 @@ export const SuccessfulSetup: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
 
-    const completeSetup = await canvas.findByRole('button', { name: /complete setup/i });
-    await waitFor(() => expect(completeSetup).toBeEnabled());
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: /complete setup/i })).toBeEnabled()
+    );
 
     const password = canvas.getByLabelText(/^password/i);
     const confirmPassword = canvas.getByLabelText(/confirm password/i);
@@ -55,7 +57,7 @@ export const SuccessfulSetup: Story = {
     await userEvent.clear(confirmPassword);
     await userEvent.type(confirmPassword, 'password123');
 
-    await userEvent.click(completeSetup);
+    await userEvent.click(canvas.getByRole('button', { name: /complete setup/i }));
 
     await waitFor(() => expect(args.onSetupComplete).toHaveBeenCalledWith('setup-token'));
   },

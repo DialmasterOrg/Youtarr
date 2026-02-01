@@ -44,7 +44,7 @@ export const Default: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText(/yt-dlp/i)).toBeInTheDocument();
+    await expect(canvas.getAllByText(/yt-dlp/i)).not.toHaveLength(0);
     await expect(canvas.queryByRole('button', { name: /update/i })).not.toBeInTheDocument();
   },
 };

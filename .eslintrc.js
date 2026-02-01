@@ -22,6 +22,6 @@ module.exports = {
   parserOptions: {
     ecmaVersion: "latest",
   },
-  plugins: ["react", "@typescript-eslint"],
+  plugins: ["react", "react-hooks", "@typescript-eslint"],
   rules: {},
 };

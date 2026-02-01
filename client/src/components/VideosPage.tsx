@@ -741,7 +741,7 @@ function VideosPage({ token }: VideosPageProps) {
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                     <StorageIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} />
                                     <Typography variant='caption' sx={{ color: 'text.secondary' }}>
-                                      {formatFileSize(video.fileSize)}
+                                      {formatFileSize(typeof video.fileSize === 'string' ? parseInt(video.fileSize, 10) : video.fileSize)}
                                     </Typography>
                                   </Box>
                                 )}
