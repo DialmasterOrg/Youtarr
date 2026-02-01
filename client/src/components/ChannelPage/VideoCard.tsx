@@ -61,6 +61,7 @@ function VideoCard({
   const isDeleteChecked = selectedForDeletion.includes(video.youtube_id);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
   const isIgnored = status === 'ignored';
+  const statusVariant = status === 'downloaded' || status === 'missing' ? 'filled' : 'outlined';
   const baseTransform = isInteractive ? 'var(--sticker-rest-transform)' : 'translate(0, 0)';
   const isClickable = (isDownloadSelectable && isDownloadAllowed) || (isDeleteSelectable && isDeleteAllowed);
 
@@ -339,7 +340,7 @@ function VideoCard({
                   label={getStatusLabel(status)}
                   size="small"
                   color={getStatusColor(status)}
-                  variant={status === 'downloaded' ? 'filled' : 'outlined'}
+                  variant={statusVariant}
                   sx={{ 
                     height: 24, 
                     fontSize: '0.7rem', 

@@ -17,6 +17,7 @@ import {
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
+import DownloadIcon from '@mui/icons-material/Download';
 import { StorageFooterWidget } from './StorageFooterWidget';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 
@@ -55,6 +56,8 @@ interface NavSidebarProps {
   collapsed: boolean;
   navItems: any[];
   versionLabel?: string;
+  ytDlpUpdateAvailable?: boolean;
+  ytDlpUpdateTooltip?: string;
   token: string | null;
   onCloseMobile: () => void;
 }
@@ -66,6 +69,8 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
   collapsed,
   navItems,
   versionLabel,
+  ytDlpUpdateAvailable = false,
+  ytDlpUpdateTooltip,
   token,
   onCloseMobile,
 }) => {
@@ -292,22 +297,29 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
 
       {!isCompactStorage && (
         <Box sx={{ px: collapsed ? 1 : 2, pb: 0.5, textAlign: 'left' }}>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{
-              display: 'block',
-              whiteSpace: 'nowrap',
-              overflow: isNavCollapsed ? 'visible' : 'hidden',
-              textOverflow: isNavCollapsed ? 'clip' : 'ellipsis',
-              textAlign: isNavCollapsed ? 'center' : 'left',
-              fontSize: isNavCollapsed ? 'clamp(0.55rem, 1.6vw, 0.75rem)' : NAV_SECONDARY_FONT_SIZE,
-              letterSpacing: isNavCollapsed ? '-0.01em' : 'normal',
-            }}
-            title={versionLabel}
-          >
-            {displayVersionLabel}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: isNavCollapsed ? 'center' : 'flex-start', gap: 0.5 }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{
+                display: 'block',
+                whiteSpace: 'nowrap',
+                overflow: isNavCollapsed ? 'visible' : 'hidden',
+                textOverflow: isNavCollapsed ? 'clip' : 'ellipsis',
+                textAlign: isNavCollapsed ? 'center' : 'left',
+                fontSize: isNavCollapsed ? 'clamp(0.55rem, 1.6vw, 0.75rem)' : NAV_SECONDARY_FONT_SIZE,
+                letterSpacing: isNavCollapsed ? '-0.01em' : 'normal',
+              }}
+              title={versionLabel}
+            >
+              {displayVersionLabel}
+            </Typography>
+            {ytDlpUpdateAvailable && ytDlpUpdateTooltip && (
+              <Tooltip title={ytDlpUpdateTooltip} placement="right" arrow>
+                <DownloadIcon sx={{ fontSize: '0.65rem', color: 'warning.main' }} />
+              </Tooltip>
+            )}
+          </Box>
         </Box>
       )}
 
@@ -322,9 +334,16 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
             gap: 1,
           }}
         >
-          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-            {versionLabel || 'yt-dlp'}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+              {versionLabel || 'yt-dlp'}
+            </Typography>
+            {ytDlpUpdateAvailable && ytDlpUpdateTooltip && (
+              <Tooltip title={ytDlpUpdateTooltip} placement="top" arrow>
+                <DownloadIcon sx={{ fontSize: '0.65rem', color: 'warning.main' }} />
+              </Tooltip>
+            )}
+          </Box>
           <StorageFooterWidget
             token={token}
             collapsed={collapsed}

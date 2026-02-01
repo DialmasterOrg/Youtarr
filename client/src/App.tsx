@@ -77,9 +77,10 @@ function AppContent() {
     ? `New version (${serverVersion}) available! Please shut down and pull the latest image and files to update.`
     : undefined;
 
-  const ytDlpLabel = ytDlpVersion
-    ? `yt-dlp: ${ytDlpVersion}${ytDlpUpdateAvailable && ytDlpLatestVersion ? ` (update ${ytDlpLatestVersion})` : ''}`
-    : '';
+  const ytDlpLabel = ytDlpVersion ? `yt-dlp: ${ytDlpVersion}` : '';
+  const ytDlpUpdateTooltip = ytDlpUpdateAvailable && ytDlpLatestVersion
+    ? `yt-dlp update available (${ytDlpLatestVersion}). Go to Settings to update.`
+    : undefined;
 
   const selectedTheme = useMemo(() => {
     return createAppTheme('light', themeMode); // Mode hardcoded for now, can be dynamic later
@@ -474,6 +475,8 @@ function AppContent() {
                     versionLabel={ytDlpLabel ? `${clientVersion} • ${ytDlpLabel}` : clientVersion}
                     updateAvailable={updateAvailable}
                     updateTooltip={updateTooltip}
+                    ytDlpUpdateAvailable={ytDlpUpdateAvailable}
+                    ytDlpUpdateTooltip={ytDlpUpdateTooltip}
                     onLogout={handleLogout}
                   >
                     <Container

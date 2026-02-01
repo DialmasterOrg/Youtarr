@@ -5,6 +5,23 @@
 ### Chores
 * start UI modernization (initial planning and templates) — private work tracked in `feat/ui-modernization`
 
+## [v1.58.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.58.0) - 2026-01-31
+
+### [1.58.0](https://github.com/DialmasterOrg/Youtarr/compare/v1.57.1...v1.58.0) (2026-01-31)
+
+### Features
+* add yt-dlp update engine with cached version checks and authenticated update endpoints
+* add backup/restore scripts with Docker-friendly workflows
+* surface yt-dlp update indicators in Settings and navigation
+* colorize channel video status chips for downloaded and missing states
+
+### Bug Fixes
+* enforce byte-safe filename truncation in yt-dlp templates
+* apply form-data security override for jsdom
+
+### Documentation
+* add backup/restore guide and README link
+
 ## [v1.57.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.57.1) - 2026-01-30
 
 ### [1.57.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.57.0...v1.57.1) (2026-01-30)

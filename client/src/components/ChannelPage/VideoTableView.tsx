@@ -127,6 +127,7 @@ function VideoTableView({
         <TableBody>
           {videos.map((video) => {
             const status = getVideoStatus(video);
+            const statusVariant = status === 'downloaded' || status === 'missing' ? 'filled' : 'outlined';
             // Check if video is still live (not "was_live" and not null/undefined)
             const isStillLive = video.live_status && video.live_status !== 'was_live';
             const isDownloadSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !video.youtube_removed && !isStillLive;
@@ -285,7 +286,7 @@ function VideoTableView({
                       label={getStatusLabel(status)}
                       size="small"
                       color={getStatusColor(status)}
-                      variant={status === 'downloaded' ? 'filled' : 'outlined'}
+                      variant={statusVariant}
                     />
                   </Box>
                 </TableCell>

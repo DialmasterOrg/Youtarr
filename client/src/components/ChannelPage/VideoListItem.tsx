@@ -55,6 +55,7 @@ function VideoListItem({
   const isDeleteChecked = selectedForDeletion.includes(video.youtube_id);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
   const isIgnored = status === 'ignored';
+  const statusVariant = status === 'downloaded' || status === 'missing' ? 'filled' : 'outlined';
   const isClickable = (isDownloadSelectable && isDownloadAllowed) || (isDeleteSelectable && isDeleteAllowed);
 
   return (
@@ -300,7 +301,7 @@ function VideoListItem({
               label={getStatusLabel(status)}
               size="small"
               color={getStatusColor(status)}
-              variant={status === 'downloaded' ? 'filled' : 'outlined'}
+              variant={statusVariant}
               sx={(theme) => ({
                 height: 20,
                 fontSize: '0.7rem',

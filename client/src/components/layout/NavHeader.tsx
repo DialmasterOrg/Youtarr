@@ -34,6 +34,8 @@ interface NavHeaderProps {
   versionLabel?: string;
   updateAvailable: boolean;
   updateTooltip?: string;
+  ytDlpUpdateAvailable?: boolean;
+  ytDlpUpdateTooltip?: string;
   onLogout?: () => void;
   toggleDrawer: () => void;
   APP_BAR_TOGGLE_SIZE: number;
@@ -50,6 +52,8 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   versionLabel,
   updateAvailable,
   updateTooltip,
+  ytDlpUpdateAvailable = false,
+  ytDlpUpdateTooltip,
   onLogout,
   toggleDrawer,
   APP_BAR_TOGGLE_SIZE,
@@ -405,9 +409,18 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                 {versionParts[0]}
               </Typography>
               {versionParts[1] && (
-                <Typography variant="caption" sx={{ color: navTextSecondary, fontSize: '0.6rem' }}>
-                  {versionParts[1]}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4 }}>
+                  <Typography variant="caption" sx={{ color: navTextSecondary, fontSize: '0.6rem' }}>
+                    {versionParts[1]}
+                  </Typography>
+                  {ytDlpUpdateAvailable && ytDlpUpdateTooltip && (
+                    <Tooltip title={ytDlpUpdateTooltip} placement="bottom" arrow>
+                      <Box component="span" sx={{ display: 'inline-flex', color: 'warning.main' }}>
+                        <DownloadIcon sx={{ fontSize: '0.6rem' }} />
+                      </Box>
+                    </Tooltip>
+                  )}
+                </Box>
               )}
             </Box>
           )}

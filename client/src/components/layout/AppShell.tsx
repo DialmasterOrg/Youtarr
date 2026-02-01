@@ -27,6 +27,8 @@ interface AppShellProps {
   onLogout?: () => void;
   updateAvailable?: boolean;
   updateTooltip?: string;
+  ytDlpUpdateAvailable?: boolean;
+  ytDlpUpdateTooltip?: string;
   children: React.ReactNode;
 }
 
@@ -42,6 +44,8 @@ export function AppShell({
   onLogout,
   updateAvailable = false,
   updateTooltip,
+  ytDlpUpdateAvailable = false,
+  ytDlpUpdateTooltip,
   children,
 }: AppShellProps) {
   const theme = useTheme();
@@ -151,6 +155,8 @@ export function AppShell({
         versionLabel={versionLabel}
         updateAvailable={updateAvailable}
         updateTooltip={updateTooltip}
+        ytDlpUpdateAvailable={ytDlpUpdateAvailable}
+        ytDlpUpdateTooltip={ytDlpUpdateTooltip}
         onLogout={onLogout}
         toggleDrawer={toggleDrawer}
         APP_BAR_TOGGLE_SIZE={APP_BAR_TOGGLE_SIZE}
@@ -165,6 +171,8 @@ export function AppShell({
         collapsed={collapsed}
         navItems={navItems}
         versionLabel={versionLabel}
+        ytDlpUpdateAvailable={ytDlpUpdateAvailable}
+        ytDlpUpdateTooltip={ytDlpUpdateTooltip}
         onCloseMobile={() => setDrawerOpenMobile(false)}
       />
 
