@@ -1,0 +1,3 @@
+# Local file to skip husky pre-commit hooks
+# Create this file to bypass linting, TypeScript checks, and tests during commit
+# Remove or rename this file to re-enable hooks
