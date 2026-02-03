@@ -4,14 +4,20 @@ module.exports = {
     es2021: true,
     node: true
   },
-  extends: 'eslint:recommended',
+  extends: [
+    'eslint:recommended',
+    'plugin:testing-library/react'
+  ],
   parserOptions: {
     ecmaVersion: 12
   },
+  plugins: ['testing-library'],
   rules: {
     indent: ['error', 2],
-    'linebreak-style': ['error', 'unix'],
+    'linebreak-style': 'off',
     quotes: ['error', 'single'],
-    semi: ['error', 'always']
+    semi: ['error', 'always'],
+    'react/no-unescaped-entities': 'off',
+    'react/prop-types': 'off'
   }
 };
