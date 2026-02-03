@@ -100,7 +100,7 @@ describe('ChannelPage Component', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          '/getChannelInfo/UC123456',
+          '/getchannelinfo/UC123456',
           {
             headers: {
               'x-access-token': mockToken

@@ -140,7 +140,7 @@ describe('DownloadPerformanceSection Component', () => {
 
       await expandAccordion(user);
 
-      const selectButton = screen.getByRole('button', { name: '30 seconds' });
+      const selectButton = screen.getByRole('combobox', { name: /Socket Timeout/i });
       await user.click(selectButton);
 
       const option = await screen.findByRole('option', { name: '10 seconds' });
@@ -156,7 +156,7 @@ describe('DownloadPerformanceSection Component', () => {
 
       await expandAccordion(user);
 
-      const selectButton = screen.getByRole('button', { name: '30 seconds' });
+      const selectButton = screen.getByRole('combobox', { name: /Socket Timeout/i });
       await user.click(selectButton);
 
       expect(await screen.findByRole('option', { name: '5 seconds' })).toBeInTheDocument();
@@ -234,7 +234,7 @@ describe('DownloadPerformanceSection Component', () => {
 
       await expandAccordion(user);
 
-      const selectButton = screen.getByRole('button', { name: '50 KB/s' });
+      const selectButton = screen.getByRole('combobox', { name: /Throttled Rate Detection/i });
       await user.click(selectButton);
 
       const option = await screen.findByRole('option', { name: '250 KB/s' });
@@ -252,7 +252,7 @@ describe('DownloadPerformanceSection Component', () => {
 
       await expandAccordion(user);
 
-      const selectButton = screen.getByRole('button', { name: '50 KB/s' });
+      const selectButton = screen.getByRole('combobox', { name: /Throttled Rate Detection/i });
       await user.click(selectButton);
 
       expect(await screen.findByRole('option', { name: '20 KB/s' })).toBeInTheDocument();
@@ -357,7 +357,7 @@ describe('DownloadPerformanceSection Component', () => {
 
       await expandAccordion(user);
 
-      const selectButton = screen.getByRole('button', { name: '2 retries' });
+      const selectButton = screen.getByRole('combobox', { name: /Download Retries/i });
       await user.click(selectButton);
 
       const option = await screen.findByRole('option', { name: '1 retry' });
@@ -373,7 +373,7 @@ describe('DownloadPerformanceSection Component', () => {
 
       await expandAccordion(user);
 
-      const selectButton = screen.getByRole('button', { name: '2 retries' });
+      const selectButton = screen.getByRole('combobox', { name: /Download Retries/i });
       await user.click(selectButton);
 
       expect(await screen.findByRole('option', { name: 'No retries' })).toBeInTheDocument();
@@ -686,7 +686,7 @@ describe('DownloadPerformanceSection Component', () => {
       await expandAccordion(user);
 
       // With different values, we can uniquely identify the stall threshold select by its value
-      const stallThresholdButton = screen.getByRole('button', { name: '20 KB/s' });
+      const stallThresholdButton = screen.getByRole('combobox', { name: /Stall Threshold Rate/i });
       await user.click(stallThresholdButton);
 
       const option = await screen.findByRole('option', { name: '1 MB/s' });
@@ -709,7 +709,7 @@ describe('DownloadPerformanceSection Component', () => {
       await expandAccordion(user);
 
       // With different values, we can uniquely identify the stall threshold select
-      const stallThresholdButton = screen.getByRole('button', { name: '20 KB/s' });
+      const stallThresholdButton = screen.getByRole('combobox', { name: /Stall Threshold Rate/i });
       await user.click(stallThresholdButton);
 
       expect(await screen.findByRole('option', { name: '20 KB/s' })).toBeInTheDocument();
@@ -795,14 +795,14 @@ describe('DownloadPerformanceSection Component', () => {
       await expandAccordion(user);
 
       // Change socket timeout
-      const timeoutButton = screen.getByRole('button', { name: '30 seconds' });
+      const timeoutButton = screen.getByRole('combobox', { name: /Socket Timeout/i });
       await user.click(timeoutButton);
       const timeoutOption = await screen.findByRole('option', { name: '20 seconds' });
       await user.click(timeoutOption);
       expect(onConfigChange).toHaveBeenCalledWith({ downloadSocketTimeoutSeconds: 20 });
 
       // Change retry count
-      const retryButton = screen.getByRole('button', { name: '2 retries' });
+      const retryButton = screen.getByRole('combobox', { name: /Download Retries/i });
       await user.click(retryButton);
       const retryOption = await screen.findByRole('option', { name: '3 retries' });
       await user.click(retryOption);

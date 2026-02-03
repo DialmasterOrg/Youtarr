@@ -9,7 +9,7 @@ For development, you'll need:
 3. **Git** for version control
 4. A code editor (VS Code recommended)
 
-**Note:** Runtime dependencies (MariaDB, yt-dlp, ffmpeg, Node) run inside the dev containers, but the `build-dev` script uses your host Node.js to install packages and build the frontend before the Docker image is created.
+**Note:** Runtime dependencies (MariaDB, yt-dlp, ffmpeg, Node) run inside the dev containers, but the `build-dev` script uses your host Node.js to install packages and build the frontend (Vite) before the Docker image is created.
 
 ## Project Structure
 
@@ -59,7 +59,7 @@ Optional flags:
 - `--no-cache` - Force rebuild to get latest yt-dlp version
 - `SKIP_DEV_IMAGE_PRUNE=1` - Skip automatic cleanup of old untagged `youtarr-dev` images (pruning is enabled by default to keep Docker storage from filling)
 
-The script runs `npm run build` for the client and then invokes `docker build`, so make sure Node.js 18+ and npm are available locally.
+The script runs `npm run build` for the client (Vite) and then invokes `docker build`, so make sure Node.js 18+ and npm are available locally.
 
 ### 3. Configure .env (optional)
 
@@ -182,7 +182,36 @@ docker compose logs -f
 ./stop.sh
 ```
 
-**Note:** Youtarr only supports the Docker-based workflow described here. Always build and test inside the dev containers rather than trying to run the backend or frontend directly on the host.
+**Note:** Youtarr only supports the Docker-based workflow described here for production parity. For UI iteration, you can optionally use the local Vite dev server (see below).
+
+## Local Frontend Development (Vite)
+
+If you want faster UI iteration, you can run the client locally with Vite while the backend runs in Docker:
+
+1. Start the backend stack:
+  - Use `./scripts/start-dev.sh` (serves the API at http://localhost:3087 by default)
+2. In another terminal, start the Vite dev server from client/:
+  - `npm run dev`
+
+Vite proxies API calls to the backend. You can override the backend URL using `VITE_BACKEND_URL`.
+
+## Run the Upstream CI Suite Locally
+
+The upstream CI workflow runs lint, TypeScript checks, backend tests, and frontend tests. You can run the same checks locally:
+
+1. Install dependencies (root + client):
+  - `npm ci`
+  - `cd client && npm ci`
+2. Lint + type-check:
+  - `npx eslint ./server/. --ext .js`
+  - `npx eslint ./client/src/. --ext .ts,.tsx`
+  - `npm run lint:ts`
+3. Backend tests with coverage:
+  - `npm run test:backend -- --coverage --coverageReporters=json-summary --coverageReporters=lcov --coverageReporters=text`
+4. Frontend tests with coverage:
+  - `cd client && npm test -- --coverage --coverageReporters=json-summary --coverageReporters=lcov --coverageReporters=text --watchAll=false`
+
+These commands mirror .github/workflows/ci.yml and are the exact checks used for PR validation.
 
 ### Working with Containers
 
@@ -234,6 +263,24 @@ npm run lint:backend
 # TypeScript type checking
 npm run lint:ts
 ```
+
+### ESLint Rule Exceptions
+
+During the Vite/Jest migration we temporarily disable a few rules in [.eslintrc.js](../.eslintrc.js) because they trigger hundreds of violations across the existing TSX/tests (e.g., `React` imports in JSX, legacy `require` calls, `setState` inside effects). The project still depends on those patterns, so the rules are set to `off` until we can refactor incrementally. The disabled rules are:
+
+- `react/no-unescaped-entities`
+- `react/react-in-jsx-scope`
+- `react/prop-types`
+- `@typescript-eslint/no-empty-function`
+- `@typescript-eslint/no-var-requires`
+- `no-case-declarations`
+- `prefer-const`
+- `react-hooks/globals`
+- `react-hooks/immutability`
+- `react-hooks/set-state-in-effect`
+- `react-hooks/immutable-state`
+
+We plan to document each rule’s cleanup in the migration checklist and re-enable them one at a time once the offending files are modernized.
 
 ### Pre-commit Hooks
 

@@ -32,6 +32,12 @@ jest.mock('@mui/material/styles', () => ({
   useTheme: () => ({
     breakpoints: {
       down: (breakpoint: string) => false
+    },
+    transitions: {
+      duration: {
+        enteringScreen: 225,
+        leavingScreen: 195
+      }
     }
   })
 }));

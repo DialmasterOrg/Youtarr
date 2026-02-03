@@ -14,6 +14,17 @@ jest.mock('@mui/material/styles', () => ({
   useTheme: () => ({
     breakpoints: { down: () => false },
     zIndex: { snackbar: 1000, fab: 1050 },
+    transitions: {
+      duration: {
+        shortest: 0,
+        shorter: 0,
+        short: 0,
+        standard: 0,
+        complex: 0,
+        enteringScreen: 0,
+        leavingScreen: 0,
+      },
+    },
   }),
 }));
 

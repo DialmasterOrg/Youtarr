@@ -1,4 +1,4 @@
-module.exports = {
+﻿module.exports = {
   settings: {
     react: {
       version: "18.2",
@@ -31,10 +31,8 @@ module.exports = {
   parserOptions: {
     ecmaVersion: "latest",
   },
-  plugins: ["react", "react-hooks", "@typescript-eslint", "testing-library"],
+  plugins: ["react", "react-hooks", "@typescript-eslint"],
   rules: {
     "react/react-in-jsx-scope": "off",
-    "react/no-unescaped-entities": "off",
-    "react/prop-types": "off",
   },
 };

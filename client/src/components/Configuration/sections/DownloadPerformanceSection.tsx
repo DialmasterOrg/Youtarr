@@ -46,8 +46,9 @@ export const DownloadPerformanceSection: React.FC<DownloadPerformanceSectionProp
       <Grid container spacing={2}>
         <Grid item xs={12} md={6}>
           <FormControl fullWidth>
-            <InputLabel>Socket Timeout</InputLabel>
+            <InputLabel id="socket-timeout-label">Socket Timeout</InputLabel>
             <Select
+              labelId="socket-timeout-label"
               value={config.downloadSocketTimeoutSeconds ?? 30}
               onChange={(e) => onConfigChange({ downloadSocketTimeoutSeconds: Number(e.target.value) })}
               label="Socket Timeout"
@@ -65,8 +66,9 @@ export const DownloadPerformanceSection: React.FC<DownloadPerformanceSectionProp
 
         <Grid item xs={12} md={6}>
           <FormControl fullWidth>
-            <InputLabel>Throttled Rate Detection</InputLabel>
+            <InputLabel id="throttled-rate-label">Throttled Rate Detection</InputLabel>
             <Select
+              labelId="throttled-rate-label"
               value={config.downloadThrottledRate ?? '100K'}
               onChange={(e) => onConfigChange({ downloadThrottledRate: e.target.value })}
               label="Throttled Rate Detection"
@@ -87,8 +89,9 @@ export const DownloadPerformanceSection: React.FC<DownloadPerformanceSectionProp
 
         <Grid item xs={12} md={6}>
           <FormControl fullWidth>
-            <InputLabel>Download Retries</InputLabel>
+            <InputLabel id="download-retries-label">Download Retries</InputLabel>
             <Select
+              labelId="download-retries-label"
               value={config.downloadRetryCount ?? 2}
               onChange={(e) => onConfigChange({ downloadRetryCount: Number(e.target.value) })}
               label="Download Retries"
@@ -140,8 +143,9 @@ export const DownloadPerformanceSection: React.FC<DownloadPerformanceSectionProp
 
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
-                <InputLabel>Stall Threshold Rate</InputLabel>
+                <InputLabel id="stall-threshold-rate-label">Stall Threshold Rate</InputLabel>
                 <Select
+                  labelId="stall-threshold-rate-label"
                   value={config.stallDetectionRateThreshold ?? config.downloadThrottledRate ?? '100K'}
                   onChange={(e) => onConfigChange({ stallDetectionRateThreshold: e.target.value })}
                   label="Stall Threshold Rate"

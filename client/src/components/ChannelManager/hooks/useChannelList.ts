@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { Channel } from '../../../types/Channel';
 import { normalizeSubFolderKey } from '../../../utils/channelHelpers';
@@ -33,42 +33,36 @@ export const useChannelList = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [subFolders, setSubFolders] = useState<string[]>([]);
-  const isMountedRef = useRef(true);
-
-  useEffect(() => {
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
 
   const fetchChannels = useCallback(async () => {
     if (!token) {
-      if (!isMountedRef.current) return;
       setChannels([]);
       setTotal(0);
       setTotalPages(0);
       return;
     }
-
-    if (!isMountedRef.current) return;
     setLoading(true);
     setError(null);
 
     try {
+      const headers = { 'x-access-token': token };
+      const params = {
+        page,
+        pageSize,
+        search: searchTerm || undefined,
+        sortOrder,
+        subFolder: subFolder || '',
+      };
+
       const response = await axios.get<ChannelListResponse>('/getchannels', {
-        headers: { 'x-access-token': token },
-        params: {
-          page,
-          pageSize,
-          search: searchTerm || undefined,
-          sortOrder,
-          subFolder: subFolder || undefined,
-        },
+        headers,
+        params,
       });
 
       const payload = response.data;
-      if (!isMountedRef.current) return;
-      setChannels(payload.channels || []);
+      const channelsData = payload.channels || [];
+      
+      setChannels(channelsData);
       setTotal(payload.total || 0);
       setTotalPages(payload.totalPages || 0);
       setSubFolders(
@@ -76,13 +70,9 @@ export const useChannelList = ({
       );
     } catch (err: any) {
       const message = err?.response?.data?.error || 'Failed to load channels';
-      if (isMountedRef.current) {
-        setError(message);
-      }
+      setError(message);
     } finally {
-      if (isMountedRef.current) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   }, [token, page, pageSize, searchTerm, sortOrder, subFolder]);
 

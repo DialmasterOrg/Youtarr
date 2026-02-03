@@ -790,7 +790,15 @@ describe('usePlexConnection', () => {
     test('handles network error during connection test', async () => {
       const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+      // Mock for initial check (succeeds)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue([]),
+      } as any);
+      // Mock for testPlexConnection (fails)
+      mockFetch.mockImplementationOnce(() => {
+        throw new Error('Network error');
+      });
 
       const { result } = renderHook(() =>
         usePlexConnection({

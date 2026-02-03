@@ -233,9 +233,8 @@ describe('CoreSettingsSection Component', () => {
         config: createConfig({ channelAutoDownload: false })
       });
       renderWithProviders(<CoreSettingsSection {...props} />);
-      // When disabled, MUI Select has role="button" with aria-disabled
-      const selectButton = screen.getByRole('button', { name: /Every 6 hours/i });
-      expect(selectButton).toHaveAttribute('aria-disabled', 'true');
+      const select = screen.getByRole('combobox', { name: /Download Frequency/i });
+      expect(select).toHaveAttribute('aria-disabled', 'true');
     });
 
     test('select is enabled when channelAutoDownload is true', () => {
@@ -243,9 +242,8 @@ describe('CoreSettingsSection Component', () => {
         config: createConfig({ channelAutoDownload: true })
       });
       renderWithProviders(<CoreSettingsSection {...props} />);
-      // When enabled, MUI Select has role="button" without aria-disabled
-      const selectButton = screen.getByRole('button', { name: /Every 6 hours/i });
-      expect(selectButton).not.toHaveAttribute('aria-disabled', 'true');
+      const select = screen.getByRole('combobox', { name: /Download Frequency/i });
+      expect(select).not.toHaveAttribute('aria-disabled', 'true');
     });
 
     test('calls onConfigChange when frequency is changed', async () => {
@@ -257,8 +255,8 @@ describe('CoreSettingsSection Component', () => {
       });
       renderWithProviders(<CoreSettingsSection {...props} />);
 
-      const selectButton = screen.getByRole('button', { name: /Every 6 hours/i });
-      await user.click(selectButton);
+      const select = screen.getByRole('combobox', { name: /Download Frequency/i });
+      await user.click(select);
 
       const hourlyOption = await screen.findByRole('option', { name: 'Hourly' });
       await user.click(hourlyOption);
@@ -273,8 +271,8 @@ describe('CoreSettingsSection Component', () => {
       });
       renderWithProviders(<CoreSettingsSection {...props} />);
 
-      const selectButton = screen.getByRole('button', { name: /Every 6 hours/i });
-      await user.click(selectButton);
+      const select = screen.getByRole('combobox', { name: /Download Frequency/i });
+      await user.click(select);
 
       expect(await screen.findByRole('option', { name: 'Every 15 minutes' })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: 'Every 30 minutes' })).toBeInTheDocument();
@@ -291,7 +289,7 @@ describe('CoreSettingsSection Component', () => {
     test('renders Files to Download per Channel select', () => {
       const props = createSectionProps();
       renderWithProviders(<CoreSettingsSection {...props} />);
-      expect(screen.getByText(/Files to Download per Channel/i)).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: /Files to Download per Channel/i })).toBeInTheDocument();
     });
 
     test('displays current value', () => {
@@ -311,8 +309,8 @@ describe('CoreSettingsSection Component', () => {
       });
       renderWithProviders(<CoreSettingsSection {...props} />);
 
-      const selectButton = screen.getByRole('button', { name: '3 videos' });
-      await user.click(selectButton);
+      const select = screen.getByRole('combobox', { name: /Files to Download per Channel/i });
+      await user.click(select);
 
       const option = await screen.findByRole('option', { name: '7 videos' });
       await user.click(option);
@@ -327,8 +325,8 @@ describe('CoreSettingsSection Component', () => {
       });
       renderWithProviders(<CoreSettingsSection {...props} />);
 
-      const selectButton = screen.getByRole('button', { name: '3 videos' });
-      await user.click(selectButton);
+      const select = screen.getByRole('combobox', { name: /Files to Download per Channel/i });
+      await user.click(select);
 
       expect(await screen.findByRole('option', { name: '1 video' })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: '5 videos' })).toBeInTheDocument();
@@ -342,8 +340,8 @@ describe('CoreSettingsSection Component', () => {
       });
       renderWithProviders(<CoreSettingsSection {...props} />);
 
-      const selectButton = screen.getByRole('button', { name: '15 videos' });
-      await user.click(selectButton);
+      const select = screen.getByRole('combobox', { name: /Files to Download per Channel/i });
+      await user.click(select);
 
       expect(await screen.findByRole('option', { name: '15 videos' })).toBeInTheDocument();
     });
@@ -390,8 +388,8 @@ describe('CoreSettingsSection Component', () => {
       });
       renderWithProviders(<CoreSettingsSection {...props} />);
 
-      const selectButton = screen.getByRole('button', { name: '1080p' });
-      await user.click(selectButton);
+      const select = screen.getByRole('combobox', { name: /Preferred Resolution/i });
+      await user.click(select);
 
       const option = await screen.findByRole('option', { name: '4K (2160p)' });
       await user.click(option);
@@ -404,8 +402,8 @@ describe('CoreSettingsSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<CoreSettingsSection {...props} />);
 
-      const selectButton = screen.getByRole('button', { name: '1080p' });
-      await user.click(selectButton);
+      const select = screen.getByRole('combobox', { name: /Preferred Resolution/i });
+      await user.click(select);
 
       expect(await screen.findByRole('option', { name: '4K (2160p)' })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: '1440p' })).toBeInTheDocument();
@@ -441,8 +439,8 @@ describe('CoreSettingsSection Component', () => {
       });
       renderWithProviders(<CoreSettingsSection {...props} />);
 
-      const selectButton = screen.getByRole('button', { name: 'Default (No Preference)' });
-      await user.click(selectButton);
+      const select = screen.getByRole('combobox', { name: /Preferred Video Codec/i });
+      await user.click(select);
 
       const option = await screen.findByRole('option', { name: 'H.265/HEVC (Balanced)' });
       await user.click(option);
@@ -455,8 +453,8 @@ describe('CoreSettingsSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<CoreSettingsSection {...props} />);
 
-      const selectButton = screen.getByRole('button', { name: 'Default (No Preference)' });
-      await user.click(selectButton);
+      const select = screen.getByRole('combobox', { name: /Preferred Video Codec/i });
+      await user.click(select);
 
       expect(await screen.findByRole('option', { name: 'Default (No Preference)' })).toBeInTheDocument();
       expect(screen.getByRole('option', { name: 'H.264/AVC (Best Compatibility)' })).toBeInTheDocument();
@@ -669,8 +667,8 @@ describe('CoreSettingsSection Component', () => {
       });
       const { rerender } = renderWithProviders(<CoreSettingsSection {...props} />);
 
-      let selectButton = screen.getByRole('button', { name: /Every 6 hours/i });
-      expect(selectButton).not.toHaveAttribute('aria-disabled', 'true');
+      let select = screen.getByRole('combobox', { name: /Download Frequency/i });
+      expect(select).not.toHaveAttribute('aria-disabled', 'true');
 
       // Simulate disabling auto downloads
       rerender(
@@ -680,8 +678,8 @@ describe('CoreSettingsSection Component', () => {
         />
       );
 
-      selectButton = screen.getByRole('button', { name: /Every 6 hours/i });
-      expect(selectButton).toHaveAttribute('aria-disabled', 'true');
+      select = screen.getByRole('combobox', { name: /Download Frequency/i });
+      expect(select).toHaveAttribute('aria-disabled', 'true');
     });
 
     test('handles multiple configuration changes', async () => {

@@ -89,8 +89,9 @@ export const SponsorBlockSection: React.FC<SponsorBlockSectionProps> = ({
           <>
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
-                <InputLabel>Action for Segments</InputLabel>
+                <InputLabel id="action-for-segments-label">Action for Segments</InputLabel>
                 <Select
+                  labelId="action-for-segments-label"
                   value={config.sponsorblockAction}
                   onChange={(e) => onConfigChange({ sponsorblockAction: e.target.value as 'remove' | 'mark' })}
                   label="Action for Segments"

@@ -1,6 +1,7 @@
 import React, { useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Alert,
+  Badge,
   Box,
   Button,
   Card,
@@ -29,6 +30,8 @@ import {
   ListItemText,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import WifiIcon from '@mui/icons-material/Wifi';
+import WifiOffIcon from '@mui/icons-material/WifiOff';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import SortByAlphaIcon from '@mui/icons-material/SortByAlpha';
@@ -99,6 +102,16 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
     return viewMode === 'grid' ? 27 : 20;
   }, [isMobile, viewMode]);
 
+  // Senior State Architect: Memoize params to kill identity-based re-fetch loops
+  const channelListParams = useMemo(() => ({
+    token,
+    page,
+    pageSize,
+    searchTerm: filterValue,
+    sortOrder,
+    subFolder: selectedSubFolder || undefined,
+  }), [token, page, pageSize, filterValue, sortOrder, selectedSubFolder]);
+
   const {
     channels: serverChannels,
     total,
@@ -107,14 +120,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
     error,
     refetch,
     subFolders: apiSubFolders,
-  } = useChannelList({
-    token,
-    page,
-    pageSize,
-    searchTerm: filterValue,
-    sortOrder,
-    subFolder: selectedSubFolder || undefined,
-  });
+  } = useChannelList(channelListParams);
 
   const {
     pendingAdditions,

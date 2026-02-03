@@ -275,7 +275,7 @@ describe('SponsorBlockSection Component', () => {
 
       await expandAccordion(user);
 
-      const selectButton = screen.getByRole('button', { name: /Remove segments from video/i });
+      const selectButton = screen.getByRole('combobox', { name: /Action for Segments/i });
       await user.click(selectButton);
 
       const markOption = await screen.findByRole('option', { name: 'Mark segments as chapters' });
@@ -298,7 +298,7 @@ describe('SponsorBlockSection Component', () => {
 
       await expandAccordion(user);
 
-      const selectButton = screen.getByRole('button', { name: /Mark segments as chapters/i });
+      const selectButton = screen.getByRole('combobox', { name: /Action for Segments/i });
       await user.click(selectButton);
 
       const removeOption = await screen.findByRole('option', { name: 'Remove segments from video' });
@@ -316,7 +316,7 @@ describe('SponsorBlockSection Component', () => {
 
       await expandAccordion(user);
 
-      const selectButton = screen.getByRole('button', { name: /Remove segments from video/i });
+      const selectButton = screen.getByRole('combobox', { name: /Action for Segments/i });
       await user.click(selectButton);
 
       expect(await screen.findByRole('option', { name: 'Remove segments from video' })).toBeInTheDocument();
@@ -1056,7 +1056,7 @@ describe('SponsorBlockSection Component', () => {
       await expandAccordion(user);
 
       // Change action to "mark"
-      const selectButton = screen.getByRole('button', { name: /Remove segments from video/i });
+      const selectButton = screen.getByRole('combobox', { name: /Action for Segments/i });
       await user.click(selectButton);
       const markOption = await screen.findByRole('option', { name: 'Mark segments as chapters' });
       await user.click(markOption);
