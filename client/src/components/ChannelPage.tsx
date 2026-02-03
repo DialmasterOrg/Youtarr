@@ -51,7 +51,7 @@ function ChannelPage({ token }: ChannelPageProps) {
   };
 
   useEffect(() => {
-    fetch(`/getChannelInfo/${channel_id}`, {
+    fetch(`/getchannelinfo/${channel_id}`, {
       headers: {
         'x-access-token': token || '',
       },

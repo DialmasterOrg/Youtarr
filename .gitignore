@@ -19,6 +19,7 @@ server/images
 # Local dev exclusion
 ffmpeg.exe
 yt-dlp.exe
+.skip-husky
 
 # testing
 /coverage

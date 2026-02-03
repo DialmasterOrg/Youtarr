@@ -33,21 +33,25 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     setSubscriptions((prev) => prev.filter((sub) => sub.callback !== callback));
   }, []);
 
-  const connect = useCallback(() => {
-    const host = window.location.hostname;
-    const port =
-      process.env.NODE_ENV === 'development' ? '3011' : window.location.port;
+  const buildWebSocketUrl = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${protocol}://${host}:${port}`);
+    const host = window.location.host; // This includes hostname and port
+
+    // In development and production, we use the proxy/ingress /ws path.
+    // The Vite proxy in dev will forward this to the backend root.
+    return `${protocol}://${host}/ws`;
+  };
+
+  const connect = useCallback(() => {
+    const ws = new WebSocket(buildWebSocketUrl());
 
     ws.onopen = () => {
       setRetries(0); // Reset retries counter when successfully connected
     };
 
     ws.onclose = () => {
-      // If the connection was closed, try to reconnect after a delay.
-      const delay = calculateBackoff(retries);
-      setTimeout(connect, delay);
+      // Connection closed - clear socket reference.
+      setSocket(null);
     };
 
     ws.onerror = (error: Event) => {
@@ -56,14 +60,10 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     };
 
     setSocket(ws);
-  }, [retries]);
+  }, []);
 
-  // Function to calculate backoff time
-  const calculateBackoff = (retries: number) => {
-    // This is a simple exponential backoff strategy with a max delay of 30 seconds.
-    const delay = Math.min(30 * 1000, Math.pow(2, retries) * 1000);
-    return delay;
-  };
+  // Note: reconnect/backoff logic removed — we no longer auto-reconnect from the
+  // provider. Keep `retries` state for diagnostics only.
 
   const showDownloadCompleteNotification = async (payload: any) => {
     if (!('Notification' in window)) {

@@ -122,13 +122,19 @@ function VideosPage({ token }: VideosPageProps) {
         },
       });
 
-      setVideos(response.data.videos);
-      setTotalVideos(response.data.total);
-      setTotalPages(response.data.totalPages);
+      const data = response.data || {};
+      const normalizedVideos = (data.videos || []).map((video) => ({
+        ...video,
+        removed: !!video.removed,
+        youtube_removed: !!video.youtube_removed,
+      }));
+      setVideos(normalizedVideos);
+      setTotalVideos(data.total || 0);
+      setTotalPages(data.totalPages || 1);
 
       // Use channels list from API response (includes all channels, not just current page)
-      setUniqueChannels(response.data.channels || []);
-      setEnabledChannels(response.data.enabledChannels || []);
+      setUniqueChannels(data.channels || []);
+      setEnabledChannels(data.enabledChannels || []);
     } catch (error) {
       console.error('Failed to fetch videos:', error);
       setLoadError('Failed to load videos. Please try refreshing the page. If this error persists, the Youtarr backend may be down.');

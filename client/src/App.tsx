@@ -70,7 +70,6 @@ function AppContent() {
   const [ytDlpVersion, setYtDlpVersion] = useState('');
   const [requiresSetup, setRequiresSetup] = useState<boolean | null>(null);
   const [checkingSetup, setCheckingSetup] = useState(true);
-  const [isPlatformManaged, setIsPlatformManaged] = useState(false);
   const [showTmpWarning, setShowTmpWarning] = useState(false);
   const [shouldShowWarning, setShouldShowWarning] = useState(false);
   const [platformName, setPlatformName] = useState<string | null>(null);
@@ -86,7 +85,8 @@ function AppContent() {
   const drawerWidth = isMobile ? '50%' : 240; // specify your drawer width
 
   // Use config hook for global configuration access
-  const { config: appConfig, deploymentEnvironment } = useConfig(token);
+  const { config: appConfig, deploymentEnvironment, isPlatformManaged: platformManagedState } = useConfig(token);
+  const isPlatformManaged = !platformManagedState.authEnabled;
   const { version } = packageJson;
   const clientVersion = `v${version}`; // Create a version with 'v' prefix for comparison
   const tmpDirectory = '/tmp';
@@ -294,13 +294,17 @@ function AppContent() {
 
     // First check if setup is required
     fetch('/setup/status')
-      .then(response => response.json())
+      .then(response => {
+        if (response.ok) {
+          return response.json();
+        }
+        throw new Error('Setup status check failed');
+      })
       .then(data => {
         setRequiresSetup(data.requiresSetup);
         setCheckingSetup(false);
 
         if (data.platformManaged) {
-          setIsPlatformManaged(true);
           setToken('platform-managed-auth');
           localStorage.setItem('authToken', 'platform-managed-auth');
           return;
@@ -327,7 +331,7 @@ function AppContent() {
               },
             })
               .then((response) => {
-                if (response.ok) {
+                if (response.ok || response.status === 304) {
                   setToken(authToken);
                 } else {
                   localStorage.removeItem('authToken');

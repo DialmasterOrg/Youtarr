@@ -1,0 +1,33 @@
+services:
+  youtarr-db:
+    image: mariadb:10.3
+    container_name: youtarr-db-dev
+    volumes:
+      - youtarr-db-data-dev:/var/lib/mysql
+
+  youtarr:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${YOUTARR_IMAGE:-youtarr-dev:latest}
+    # Map 3011:3011 in dev to simplify proxy and WebSocket logic.
+    ports:
+      - "3011:3011"
+    volumes:
+      - ${YOUTUBE_OUTPUT_DIR:-./downloads}:/usr/src/app/data
+      - ./server/images:/app/server/images
+      - ./config:/app/config
+      - ./jobs:/app/jobs
+      - ./server:/app/server
+      - ./migrations:/app/migrations
+      - ./package.json:/app/package.json
+      - ./package-lock.json:/app/package-lock.json
+    environment:
+      - NODE_ENV=development
+      - DEV_MODE=true
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+    # Use Node 18+'s built-in watch mode instead of needing a separate dev Dockerfile with nodemon
+    command: ["node", "--watch", "server/server.js"]
+
+volumes:
+  youtarr-db-data-dev:

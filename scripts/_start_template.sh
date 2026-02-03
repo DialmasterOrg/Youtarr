@@ -59,13 +59,20 @@ if [ "$USE_EXTERNAL_DB" == "true" ]; then
 else
   if [ "$IS_ARM" == "true" ]; then
     # Use ARM override to switch to named volume (works around virtiofs bugs)
-    COMPOSE_ARGS="-f docker-compose.yml -f docker-compose.arm.yml up -d"
+    COMPOSE_ARGS="-f docker-compose.yml -f docker-compose.arm.yml"
   else
-    COMPOSE_ARGS="-f docker-compose.yml up -d"
+    COMPOSE_ARGS="-f docker-compose.yml"
   fi
 fi
 
-$COMPOSE_CMD $COMPOSE_ARGS
+if [ "$DEV_MODE" == "true" ]; then
+  # Add dev overrides
+  COMPOSE_ARGS="$COMPOSE_ARGS -f docker-compose.dev.yml"
+  yt_info "Dev mode enabled: using docker-compose.dev.yml"
+  yt_detail "Backend exposed on port: 3011"
+fi
+
+$COMPOSE_CMD $COMPOSE_ARGS up -d
 
 yt_section "Environment"
 yt_info "Youtarr services are starting."
