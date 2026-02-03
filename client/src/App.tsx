@@ -30,7 +30,7 @@ import {
   Box,
   CssBaseline,
 } from '@mui/material';
-import { ThemeProvider } from '@mui/material/styles';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
 import MenuIcon from '@mui/icons-material/Menu';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -95,6 +95,11 @@ function AppContent() {
   const selectedTheme = useMemo(() => {
     return appConfig.darkModeEnabled ? darkTheme : lightTheme;
   }, [appConfig.darkModeEnabled]);
+
+  // Wrap selectedTheme with createTheme to ensure all default theme values
+  // (like transitions.duration) are present and tests don't blow up when
+  // Material-UI components read these fields.
+  const providedTheme = useMemo(() => createTheme(selectedTheme as any), [selectedTheme]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -415,7 +420,7 @@ function AppContent() {
   }, [fetchYtDlpVersionInfo]);
 
   return (
-    <ThemeProvider theme={selectedTheme}>
+    <ThemeProvider theme={providedTheme}>
       <CssBaseline />
       <>
         {/* Database Error Overlay - shows when database is unavailable or recovered */}

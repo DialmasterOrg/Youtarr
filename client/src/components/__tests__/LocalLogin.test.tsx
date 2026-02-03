@@ -84,7 +84,7 @@ describe('LocalLogin Component', () => {
     
     expect(localStorageMock.setItem).toHaveBeenCalledWith('authToken', mockToken);
     expect(mockSetToken).toHaveBeenCalledWith(mockToken);
-    expect(window.location.href).toBe('/configuration');
+    expect(window.location.pathname).toBe('/configuration');
   });
 
   test('displays error for invalid credentials (401)', async () => {
@@ -161,7 +161,7 @@ describe('LocalLogin Component', () => {
     await user.click(submitButton);
     
     await waitFor(() => {
-      expect(window.location.href).toBe('/setup');
+      expect(window.location.pathname).toBe('/setup');
     });
   });
 
