@@ -196,17 +196,19 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <FormControl fullWidth>
-              <InputLabel>Download Frequency</InputLabel>
-              <Select
-                value={currentFrequency}
-                onChange={(e: SelectChangeEvent<string>) =>
-                  handleSelectChange(e as any, 'channelDownloadFrequency')
-                }
-                label="Download Frequency"
-                disabled={!config.channelAutoDownload}
-              >
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <FormControl fullWidth>
+                <InputLabel id="download-frequency-label">Download Frequency</InputLabel>
+                <Select
+                  id="download-frequency-select"
+                  labelId="download-frequency-label"
+                  value={currentFrequency}
+                  onChange={(e: SelectChangeEvent<string>) =>
+                    handleSelectChange(e as any, 'channelDownloadFrequency')
+                  }
+                  label="Download Frequency"
+                  disabled={!config.channelAutoDownload}
+                >
                 {Object.keys(FREQUENCY_MAPPING).map((key) => (
                   <MenuItem key={key} value={key}>
                     {key}
@@ -224,11 +226,13 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
         <Grid item xs={12} md={6}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <FormControl fullWidth>
-              <InputLabel>Files to Download per Channel</InputLabel>
+              <InputLabel id="files-per-channel-label">Files to Download per Channel</InputLabel>
               <Select
+                labelId="files-per-channel-label"
+                id="files-per-channel-select"
                 value={config.channelFilesToDownload}
                 onChange={handleChannelFilesChange}
-                label="Videos to Download per Channel Tab"
+                label="Files to Download per Channel"
               >
                 {getChannelFilesOptions(config.channelFilesToDownload).map(count => (
                   <MenuItem key={count} value={count}>
@@ -247,8 +251,10 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
         <Grid item xs={12} md={6}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <FormControl fullWidth>
-              <InputLabel>Preferred Resolution</InputLabel>
+              <InputLabel id="preferred-resolution-label">Preferred Resolution</InputLabel>
               <Select
+                labelId="preferred-resolution-label"
+                id="preferred-resolution-select"
                 value={config.preferredResolution}
                 onChange={(e: SelectChangeEvent<string>) =>
                   onConfigChange({ preferredResolution: e.target.value })
@@ -274,8 +280,10 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <FormControl fullWidth>
-                <InputLabel>Preferred Video Codec</InputLabel>
+                <InputLabel id="preferred-video-codec-label">Preferred Video Codec</InputLabel>
                 <Select
+                  labelId="preferred-video-codec-label"
+                  id="preferred-video-codec-select"
                   value={config.videoCodec}
                   onChange={(e: SelectChangeEvent<string>) =>
                     onConfigChange({ videoCodec: e.target.value })

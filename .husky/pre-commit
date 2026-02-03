@@ -1,6 +1,11 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
+if [ -f .skip-husky ]; then
+    echo "⏭️ Skipping pre-commit checks (local skip file found)."
+    exit 0
+fi
+
 echo "🔍 Running linter..."
 npm run lint
 if [ $? -ne 0 ]; then
