@@ -594,6 +594,24 @@ describe('ApiKeysSection Component', () => {
       // Should not show HTTP warning on localhost (default in jsdom)
       expect(screen.queryByText(/insecure/i)).not.toBeInTheDocument();
     });
+
+    test('shows warning on insecure external network', async () => {
+      setMockLocation('http://192.168.1.10:3000/');
+      const user = userEvent.setup();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ keys: [] }),
+      });
+      
+      const props = createSectionProps();
+      renderWithProviders(<ApiKeysSection {...props} />);
+
+      await expandAccordion(user);
+
+      await waitFor(() => {
+        expect(screen.getByText(/insecure/i)).toBeInTheDocument();
+      });
+    });
   });
 
   describe('Error Handling', () => {

@@ -30,6 +30,8 @@ import WarningIcon from '@mui/icons-material/Warning';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 
+import { locationUtils } from 'src/utils/location';
+
 interface ApiKey {
   id: number;
   name: string;
@@ -70,7 +72,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
     keyName: '',
   });
   const [isHttpWarning] = useState(
-    window.location.protocol !== 'https:' && window.location.hostname !== 'localhost'
+    locationUtils.getProtocol() !== 'https:' && locationUtils.getHostname() !== 'localhost'
   );
 
   const fetchApiKeys = useCallback(async () => {
@@ -172,7 +174,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
   };
 
   const generateBookmarklet = (apiKey: string) => {
-    const serverUrl = window.location.origin;
+    const serverUrl = locationUtils.getOrigin();
     const code = `javascript:(function(){var k='${apiKey}';var s='${serverUrl}';var u=location.href;if(!/youtube\\.com|youtu\\.be/.test(u)){alert('Not YouTube');return;}fetch(s+'/api/videos/download',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':k},body:JSON.stringify({url:u})}).then(function(r){return r.json()}).then(function(d){alert(d.success?'✓ Added: '+(d.video&&d.video.title?d.video.title:'Queued'):'✗ '+d.error)}).catch(function(){alert('✗ Connection failed')})})();`;
     return code;
   };
@@ -425,7 +427,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
           </Typography>
           <Paper sx={{ p: 2, bgcolor: 'action.hover' }}>
             <Typography variant="body2" sx={{ fontFamily: 'monospace', mb: 1 }}>
-              <strong>URL:</strong> {window.location.origin}/api/videos/download
+              <strong>URL:</strong> {locationUtils.getOrigin()}/api/videos/download
             </Typography>
             <Typography variant="body2" sx={{ fontFamily: 'monospace', mb: 1 }}>
               <strong>Method:</strong> POST

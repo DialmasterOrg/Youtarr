@@ -26,24 +26,77 @@ if (typeof globalThis.TextDecoder === 'undefined') {
   globalThis.TextDecoder = TextDecoder as any;
 }
 
-// Mock window.location properly for JSDOM
-// We use a property descriptor to make it configurable
-const mockLocation = {
-  ...window.location,
-  reload: jest.fn(),
-  assign: jest.fn(),
-  replace: jest.fn(),
+type LocationMocks = {
+  assign: jest.Mock<void, [string]>;
+  reload: jest.Mock<void, []>;
+  replace: jest.Mock<void, [string]>;
 };
 
-try {
-  Object.defineProperty(window, 'location', {
-    value: mockLocation,
-    configurable: true,
-    writable: true,
-  });
-} catch (e) {
-  console.warn('Could not mock window.location:', e);
+type LocationOverrides = {
+  href: string;
+  origin: string;
+  protocol: string;
+  host: string;
+  hostname: string;
+  port: string;
+  pathname: string;
+  search: string;
+};
+
+const setMockLocation = (url: string): LocationMocks => {
+  const parsed = new URL(url, 'http://localhost/');
+  
+  const overrides: LocationOverrides = {
+    href: parsed.href,
+    origin: parsed.origin,
+    protocol: parsed.protocol,
+    host: parsed.host,
+    hostname: parsed.hostname,
+    port: parsed.port,
+    pathname: parsed.pathname,
+    search: parsed.search,
+  };
+
+  globalThis.__locationOverrides = overrides;
+
+  // Use existing mocks if they already exist to prevent losing references in tests
+  if (globalThis.__locationMocks) {
+    return globalThis.__locationMocks;
+  }
+
+  const mocks: LocationMocks = {
+    assign: jest.fn((nextUrl: string) => {
+      setMockLocation(new URL(nextUrl, globalThis.__locationOverrides?.href || 'http://localhost/').href);
+    }),
+    replace: jest.fn((nextUrl: string) => {
+      setMockLocation(new URL(nextUrl, globalThis.__locationOverrides?.href || 'http://localhost/').href);
+    }),
+    reload: jest.fn(),
+  };
+
+  globalThis.__locationMocks = mocks;
+
+  return mocks;
+};
+
+declare global {
+  interface GlobalThis {
+    setMockLocation: (url: string) => LocationMocks;
+    __locationMocks: LocationMocks | undefined;
+    __locationOverrides: LocationOverrides | undefined;
+  }
 }
+
+globalThis.setMockLocation = setMockLocation;
+
+// Note: Direct window.location redefinition is blocked in JSDOM (Jest 30).
+// We use the locationUtils abstraction instead (src/utils/location.ts).
+
+beforeEach(() => {
+  globalThis.__locationMocks = undefined;
+  globalThis.__locationOverrides = undefined;
+  setMockLocation('http://localhost/');
+});
 
 // Mock import.meta.env for source code that hasn't been transformed by SWC
 // We define it on globalThis as well to ensure it's picked up

@@ -11,8 +11,6 @@ jest.mock('axios', () => ({
 
 const axios = require('axios');
 
-const testNavigate = jest.fn();
-
 // Mock localStorage
 const localStorageMock = {
   getItem: jest.fn(),
@@ -30,11 +28,7 @@ describe('LocalLogin Component', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (globalThis as any).__TEST_NAVIGATE__ = testNavigate;
-  });
-
-  afterEach(() => {
-    delete (globalThis as any).__TEST_NAVIGATE__;
+    globalThis.setMockLocation('http://localhost/login');
   });
 
   test('renders login form with username and password fields', () => {
@@ -86,7 +80,7 @@ describe('LocalLogin Component', () => {
     
     expect(localStorageMock.setItem).toHaveBeenCalledWith('authToken', mockToken);
     expect(mockSetToken).toHaveBeenCalledWith(mockToken);
-    expect(testNavigate).toHaveBeenCalledWith('/configuration');
+    expect(globalThis.__locationMocks?.assign).toHaveBeenCalledWith('/configuration');
   });
 
   test('displays error for invalid credentials (401)', async () => {
@@ -163,7 +157,7 @@ describe('LocalLogin Component', () => {
     await user.click(submitButton);
     
     await waitFor(() => {
-      expect(testNavigate).toHaveBeenCalledWith('/setup');
+      expect(globalThis.__locationMocks?.assign).toHaveBeenCalledWith('/setup');
     });
   });
 

@@ -1,22 +1,14 @@
 import React, { useState } from 'react';
 import { Button, TextField, Alert, Box } from '@mui/material';
 import axios from 'axios';
+import { locationUtils } from 'src/utils/location';
 
 interface LocalLoginProps {
   setToken: (token: string) => void;
 }
 
 const redirectTo = (path: string) => {
-  const testNavigate = (globalThis as any).__TEST_NAVIGATE__ as
-    | undefined
-    | ((p: string) => void);
-
-  if (typeof testNavigate === 'function') {
-    testNavigate(path);
-    return;
-  }
-
-  window.location.href = path;
+  locationUtils.setHref(path);
 };
 
 const LocalLogin: React.FC<LocalLoginProps> = ({ setToken }) => {

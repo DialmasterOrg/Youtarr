@@ -58,13 +58,10 @@ import DatabaseErrorOverlay from './components/DatabaseErrorOverlay';
 import { lightTheme, darkTheme } from './theme';
 import { YTDLP_UPDATED_EVENT } from './components/Configuration/hooks/useYtDlpUpdate';
 
+import { locationUtils } from './utils/location';
+
 // Event name for database error detection
 const DB_ERROR_EVENT = 'db-error-detected';
-
-// Exported for testing purposes to allow mocking window.location.reload
-export const windowUtils = {
-  reload: () => window.location.reload(),
-};
 
 function AppContent() {
   const [token, setToken] = useState<string | null>(
@@ -107,7 +104,7 @@ function AppContent() {
 
   const handleDatabaseRetry = () => {
     // Reload the page to re-check database status
-    windowUtils.reload();
+    locationUtils.reload();
   };
 
   // Override global fetch to automatically detect database errors
@@ -831,7 +828,7 @@ function AppContent() {
                 <Route path='/setup' element={<InitialSetup onSetupComplete={(newToken) => {
                   setToken(newToken);
                   setRequiresSetup(false);
-                  window.location.href = '/configuration';
+                  locationUtils.setHref('/configuration');
                 }} />} />
                 <Route
                   path='/login'

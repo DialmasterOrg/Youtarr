@@ -118,36 +118,13 @@ Object.defineProperty(window, 'localStorage', {
 // Mock window.location
 const originalLocation = window.location;
 
-// Delete and replace window.location with a plain mock object
-// This bypasses JSDOM's non-configurable location
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
-delete (window as any).location;
-
-const mockLocation: any = {
-  href: 'http://localhost/',
-  origin: 'http://localhost',
-  pathname: '/',
-  search: '',
-  hash: '',
-  protocol: 'http:',
-  host: 'localhost',
-  hostname: 'localhost',
-  port: '',
-  replace: jest.fn(),
-  reload: jest.fn(),
-  assign: jest.fn(),
-  toString: () => 'http://localhost/',
-};
-
-(window as any).location = mockLocation;
-
 describe('WebSocketProvider', () => {
   let originalWebSocket: typeof WebSocket;
   let originalConsoleLog: typeof console.log;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    setMockLocation('http://localhost/');
     jest.useFakeTimers();
     MockWebSocket.clearInstances();
     originalWebSocket = global.WebSocket;
@@ -204,16 +181,24 @@ describe('WebSocketProvider', () => {
     expect(ws.url).toBe('ws://localhost/ws');
   });
 
-  test.skip('uses correct WebSocket URL in production mode', () => {
-    // This test requires modifying window.location.port which triggers JSDOM navigation errors
-    // In a real environment, the WebSocket URL construction is tested through integration tests
+  test('uses correct WebSocket URL in production mode with custom port', () => {
+    setMockLocation('http://localhost:3087/');
+    render(
+      <WebSocketProvider>
+        <div />
+      </WebSocketProvider>
+    );
     const ws = MockWebSocket.instances[0];
     expect(ws.url).toBe('ws://localhost:3087/ws');
   });
 
-  test.skip('uses WSS protocol for HTTPS connections', () => {
-    // This test requires modifying window.location.protocol which triggers JSDOM navigation errors
-    // In a real environment, the WebSocket URL construction is tested through integration tests
+  test('uses WSS protocol for HTTPS connections', () => {
+    setMockLocation('https://localhost/');
+    render(
+      <WebSocketProvider>
+        <div />
+      </WebSocketProvider>
+    );
     const ws = MockWebSocket.instances[0];
     expect(ws.url).toBe('wss://localhost/ws');
   });

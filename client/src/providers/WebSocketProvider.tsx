@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import WebSocketContext from '../contexts/WebSocketContext';
+import { locationUtils } from 'src/utils/location';
 
 interface WebSocketProviderProps {
   children: ReactNode;
@@ -11,10 +12,10 @@ interface Subscription {
 }
 
 const buildWebSocketUrl = () => {
-  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  const host = window.location.port
-    ? `${window.location.hostname}:${window.location.port}`
-    : window.location.hostname;
+  const protocol = locationUtils.getProtocol() === 'https:' ? 'wss' : 'ws';
+  const host = locationUtils.getPort()
+    ? `${locationUtils.getHostname()}:${locationUtils.getPort()}`
+    : locationUtils.getHostname();
 
   // Use a stable /ws path. In dev, Vite proxies /ws -> backend.
   return `${protocol}://${host}/ws`;
