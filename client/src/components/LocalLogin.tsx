@@ -6,6 +6,19 @@ interface LocalLoginProps {
   setToken: (token: string) => void;
 }
 
+const redirectTo = (path: string) => {
+  const testNavigate = (globalThis as any).__TEST_NAVIGATE__ as
+    | undefined
+    | ((p: string) => void);
+
+  if (typeof testNavigate === 'function') {
+    testNavigate(path);
+    return;
+  }
+
+  window.location.href = path;
+};
+
 const LocalLogin: React.FC<LocalLoginProps> = ({ setToken }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -26,10 +39,10 @@ const LocalLogin: React.FC<LocalLoginProps> = ({ setToken }) => {
       const { token } = response.data;
       localStorage.setItem('authToken', token);
       setToken(token);
-      window.location.href = '/configuration';
+      redirectTo('/configuration');
     } catch (err: any) {
       if (err.response?.data?.requiresSetup) {
-        window.location.href = '/setup';
+        redirectTo('/setup');
       } else if (err.response?.status === 429) {
         // Rate limited - show the specific message from server
         setError(err.response?.data?.error || err.response?.data?.message || 'Too many login attempts. Please try again later.');

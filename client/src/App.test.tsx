@@ -123,23 +123,6 @@ jest.mock('./components/DatabaseErrorOverlay', () => {
   };
 });
 
-// Mock window.location with proper URL
-delete (window as any).location;
-window.location = {
-  href: 'http://localhost/',
-  origin: 'http://localhost',
-  pathname: '/',
-  search: '',
-  hash: '',
-  protocol: 'http:',
-  host: 'localhost',
-  hostname: 'localhost',
-  port: '',
-  replace: jest.fn(),
-  reload: jest.fn(),
-  assign: jest.fn()
-} as any;
-
 // Mock localStorage
 const localStorageMock = {
   getItem: jest.fn(),
@@ -151,6 +134,30 @@ Object.defineProperty(window, 'localStorage', {
   value: localStorageMock,
   writable: true,
 });
+
+// Store the original location for restoration in afterEach
+const originalLocation = window.location;
+
+// Delete and replace window.location with a plain mock object
+// This bypasses JSDOM's non-configurable location
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+delete (window as any).location;
+(window as any).location = {
+  href: 'http://localhost/',
+  origin: 'http://localhost',
+  pathname: '/',
+  search: '',
+  hash: '',
+  protocol: 'http:',
+  host: 'localhost',
+  hostname: 'localhost',
+  port: '',
+  replace: jest.fn(),
+  reload: jest.fn(),
+  assign: jest.fn(),
+  toString: () => 'http://localhost/',
+} as any;
 
 // Mock matchMedia for responsive testing
 Object.defineProperty(window, 'matchMedia', {
@@ -165,6 +172,14 @@ Object.defineProperty(window, 'matchMedia', {
     removeEventListener: jest.fn(),
     dispatchEvent: jest.fn(),
   })),
+});
+
+beforeEach(() => {
+  jest.clearAllMocks();
+});
+
+afterEach(() => {
+  // Location is mocked at module scope, no restoration needed
 });
 
 // Mock MUI's useTheme and useMediaQuery hooks
@@ -231,8 +246,7 @@ describe('App Component', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    window.location.href = 'http://localhost/';
-    window.location.pathname = '/';
+    window.history.replaceState({}, '', '/');
     localStorageMock.getItem.mockReturnValue(null);
     (global.fetch as jest.Mock).mockImplementation(createFetchMock());
     axios.get.mockResolvedValue({ data: { version: 'v1.0.0' } });
@@ -631,6 +645,8 @@ describe('App Component', () => {
 
     test('retry button calls window.location.reload', async () => {
       const user = userEvent.setup();
+      const testReload = jest.fn();
+      (globalThis as any).__TEST_RELOAD__ = testReload;
       (global.fetch as jest.Mock).mockImplementation(createFetchMock({
         '/api/db-status': {
           ok: true,
@@ -652,7 +668,9 @@ describe('App Component', () => {
       const retryButton = screen.getByText('Retry');
       await user.click(retryButton);
 
-      expect(window.location.reload).toHaveBeenCalled();
+      expect(testReload).toHaveBeenCalled();
+
+      delete (globalThis as any).__TEST_RELOAD__;
     });
 
     test('gracefully handles fetch failure by assuming healthy database', async () => {

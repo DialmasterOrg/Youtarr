@@ -102,6 +102,12 @@ function AppContent() {
 
   const handleDatabaseRetry = () => {
     // Reload the page to re-check database status
+    const testReload = (globalThis as any).__TEST_RELOAD__ as undefined | (() => void);
+    if (typeof testReload === 'function') {
+      testReload();
+      return;
+    }
+
     window.location.reload();
   };
 

@@ -10,6 +10,16 @@ interface Subscription {
   callback: (data: any) => void;
 }
 
+const buildWebSocketUrl = () => {
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const host = window.location.port
+    ? `${window.location.hostname}:${window.location.port}`
+    : window.location.hostname;
+
+  // Use a stable /ws path. In dev, Vite proxies /ws -> backend.
+  return `${protocol}://${host}/ws`;
+};
+
 const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [retries, setRetries] = useState(0);
@@ -34,11 +44,7 @@ const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
   }, []);
 
   const connect = useCallback(() => {
-    const host = window.location.hostname;
-    const port =
-      process.env.NODE_ENV === 'development' ? '3011' : window.location.port;
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${protocol}://${host}:${port}`);
+    const ws = new WebSocket(buildWebSocketUrl());
 
     ws.onopen = () => {
       setRetries(0); // Reset retries counter when successfully connected
