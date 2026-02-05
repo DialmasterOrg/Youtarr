@@ -18,56 +18,36 @@ export default defineConfig(({ command }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/ws/, ''),
         },
-        // All API-related paths
+        // All API-related paths (cache control is handled server-side, not here)
         '/api': { 
           target: backendTarget, 
           changeOrigin: true,
           ws: false,
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          }
         },
         '/auth': { 
           target: backendTarget, 
           changeOrigin: true,
           ws: false,
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          }
         },
         '/setup': { 
           target: backendTarget, 
           changeOrigin: true,
           ws: false,
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          }
         },
         '/getconfig': { 
           target: backendTarget, 
           changeOrigin: true, 
           ws: false,
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          }
         },
         '/updateconfig': { target: backendTarget, changeOrigin: true, ws: false },
         '/validateToken': { target: backendTarget, changeOrigin: true, ws: false },
         '/getCurrentReleaseVersion': { target: backendTarget, changeOrigin: true, ws: false },
         '/getlogs': { target: backendTarget, changeOrigin: true, ws: false },
-        '/getVideos': { target: backendTarget, changeOrigin: true, ws: false, headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } },
-        '/getvideos': { target: backendTarget, changeOrigin: true, ws: false, headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } },
-        '/getchannels': { target: backendTarget, changeOrigin: true, ws: false, headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } },
-        '/getChannels': { target: backendTarget, changeOrigin: true, ws: false, headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } },
-        '/getchannelvideos': { target: backendTarget, changeOrigin: true, ws: false, headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } },
+        '/getVideos': { target: backendTarget, changeOrigin: true, ws: false },
+        '/getvideos': { target: backendTarget, changeOrigin: true, ws: false },
+        '/getchannels': { target: backendTarget, changeOrigin: true, ws: false },
+        '/getChannels': { target: backendTarget, changeOrigin: true, ws: false },
+        '/getchannelvideos': { target: backendTarget, changeOrigin: true, ws: false },
         '/runningjobs': { target: backendTarget, changeOrigin: true, ws: false },
         '/jobstatus': { target: backendTarget, changeOrigin: true, ws: false },
         '/storage-status': { target: backendTarget, changeOrigin: true, ws: false },
@@ -80,7 +60,7 @@ export default defineConfig(({ command }) => {
         '/plex': { target: backendTarget, changeOrigin: true, ws: false },
         '/images': { target: backendTarget, changeOrigin: true, ws: false },
         '/fetchallchannelvideos': { target: backendTarget, changeOrigin: true, ws: false },
-        '/getChannelInfo': { target: backendTarget, changeOrigin: true, ws: false, headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } },
+        '/getChannelInfo': { target: backendTarget, changeOrigin: true, ws: false },
         '/refreshlibrary': { target: backendTarget, changeOrigin: true, ws: false },
       },
     },

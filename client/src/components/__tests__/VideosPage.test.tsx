@@ -165,7 +165,6 @@ describe('VideosPage Component', () => {
           expect.objectContaining({
             headers: {
               'x-access-token': mockToken,
-              'Cache-Control': 'no-cache, no-store, must-revalidate'
             }
           })
         );

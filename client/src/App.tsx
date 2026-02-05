@@ -157,7 +157,7 @@ function AppContent() {
 
   // Check database status on initial load
   useEffect(() => {
-    fetch('/api/db-status', { cache: 'no-store' })
+    fetch('/api/db-status', { cache: 'no-cache' })
       .then((response) => {
         if (response.ok || response.status === 304) {
           return response.json();
@@ -247,7 +247,7 @@ function AppContent() {
     // Check database status every 15 seconds
     const checkInterval = setInterval(async () => {
       try {
-        const response = await fetch('/api/db-status', { cache: 'no-store' });
+        const response = await fetch('/api/db-status', { cache: 'no-cache' });
         if (!response.ok && response.status !== 304) {
           throw new Error('Failed to fetch DB status');
         }
@@ -317,7 +317,7 @@ function AppContent() {
     }
 
     // First check if setup is required
-    fetch('/setup/status', { cache: 'no-store' })
+    fetch('/setup/status', { cache: 'no-cache' })
       .then((response) => {
         if (response.ok || response.status === 304) {
           return response.json();
@@ -354,7 +354,7 @@ function AppContent() {
               headers: {
                 'x-access-token': authToken,
               },
-              cache: 'no-store',
+              cache: 'no-cache',
             })
               .then((response) => {
                 if (response.ok || response.status === 304) {

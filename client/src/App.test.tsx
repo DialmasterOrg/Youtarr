@@ -343,7 +343,7 @@ describe('App Component', () => {
         headers: {
           'x-access-token': 'test-token',
         },
-        cache: 'no-store',
+        cache: 'no-cache',
       });
     });
   });
@@ -596,7 +596,7 @@ describe('App Component', () => {
 
       await waitFor(() => {
         expect(fetch).toHaveBeenCalledWith('/api/db-status', {
-          cache: 'no-store'
+          cache: 'no-cache'
         });
       });
     });

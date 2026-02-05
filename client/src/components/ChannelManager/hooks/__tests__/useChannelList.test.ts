@@ -128,7 +128,6 @@ describe('useChannelList', () => {
       expect(axios.get).toHaveBeenCalledWith('/getchannels', {
         headers: {
           'x-access-token': mockToken,
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
         },
         params: {
           page: 2,
@@ -262,7 +261,6 @@ describe('useChannelList', () => {
       expect(axios.get).toHaveBeenCalledWith('/getchannels', {
         headers: {
           'x-access-token': mockToken,
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
         },
         params: {
           page: 1,
@@ -471,7 +469,6 @@ describe('useChannelList', () => {
       expect(axios.get).toHaveBeenLastCalledWith('/getchannels', {
         headers: {
           'x-access-token': 'new-token-456',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
         },
         params: expect.any(Object),
       });
@@ -787,7 +784,6 @@ describe('useChannelList', () => {
       expect(axios.get).toHaveBeenLastCalledWith('/getchannels', {
         headers: {
           'x-access-token': mockToken,
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
         },
         params: {
           page: 3,

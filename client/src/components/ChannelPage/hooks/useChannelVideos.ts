@@ -91,7 +91,7 @@ export function useChannelVideos({
         headers: {
           'x-access-token': token,
         },
-        cache: 'no-store',
+        cache: 'no-cache',
       });
 
       if (!response.ok) {

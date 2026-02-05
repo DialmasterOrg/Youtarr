@@ -122,7 +122,6 @@ function VideosPage({ token }: VideosPageProps) {
       const response = await axios.get<PaginatedVideosResponse>(`/getVideos?${params.toString()}`, {
         headers: {
           'x-access-token': token,
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
         },
       });
 

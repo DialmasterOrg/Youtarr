@@ -48,9 +48,8 @@ export const useChannelList = ({
 
     try {
       const response = await axios.get<ChannelListResponse>('/getchannels', {
-        headers: { 
+        headers: {
           'x-access-token': token,
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
         },
         params: {
           page,
