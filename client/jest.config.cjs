@@ -28,6 +28,14 @@ module.exports = {
             react: {
               runtime: 'automatic',
             },
+            optimizer: {
+              globals: {
+                vars: {
+                  'import.meta.env.DEV': 'true',
+                  'import.meta.env.MODE': '"test"',
+                },
+              },
+            },
           },
         },
         module: {

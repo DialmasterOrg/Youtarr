@@ -61,6 +61,11 @@ import { YTDLP_UPDATED_EVENT } from './components/Configuration/hooks/useYtDlpUp
 // Event name for database error detection
 const DB_ERROR_EVENT = 'db-error-detected';
 
+// Exported for testing purposes to allow mocking window.location.reload
+export const windowUtils = {
+  reload: () => window.location.reload(),
+};
+
 function AppContent() {
   const [token, setToken] = useState<string | null>(
     localStorage.getItem('authToken') // Only use the new authToken, no fallback to plexAuthToken
@@ -102,13 +107,7 @@ function AppContent() {
 
   const handleDatabaseRetry = () => {
     // Reload the page to re-check database status
-    const testReload = (globalThis as any).__TEST_RELOAD__ as undefined | (() => void);
-    if (typeof testReload === 'function') {
-      testReload();
-      return;
-    }
-
-    window.location.reload();
+    windowUtils.reload();
   };
 
   // Override global fetch to automatically detect database errors
@@ -182,13 +181,16 @@ function AppContent() {
   // Setup axios interceptor to handle 304 responses and database errors
   useEffect(() => {
     // Interceptor to prevent 304s by stripping conditional headers in dev mode
-    const requestInterceptor = axios.interceptors.request.use((config) => {
-      if (config.headers) {
-        delete config.headers['If-None-Match'];
-        delete config.headers['If-Modified-Since'];
-      }
-      return config;
-    });
+    let requestInterceptor: number | null = null;
+    if (import.meta.env.DEV) {
+      requestInterceptor = axios.interceptors.request.use((config) => {
+        if (config.headers) {
+          delete config.headers['If-None-Match'];
+          delete config.headers['If-Modified-Since'];
+        }
+        return config;
+      });
+    }
 
     const responseInterceptor = axios.interceptors.response.use(
       (response) => response,
@@ -209,7 +211,9 @@ function AppContent() {
 
     // Cleanup interceptors on unmount
     return () => {
-      axios.interceptors.request.eject(requestInterceptor);
+      if (requestInterceptor !== null) {
+        axios.interceptors.request.eject(requestInterceptor);
+      }
       axios.interceptors.response.eject(responseInterceptor);
     };
   }, []);

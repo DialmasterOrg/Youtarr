@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import App from './App';
+import App, { windowUtils } from './App';
 import { useMediaQuery } from '@mui/material';
 
 // Mock axios before any imports that use it
@@ -675,8 +675,9 @@ describe('App Component', () => {
 
     test('retry button calls window.location.reload', async () => {
       const user = userEvent.setup();
-      const testReload = jest.fn();
-      (globalThis as any).__TEST_RELOAD__ = testReload;
+      
+      const reloadSpy = jest.spyOn(windowUtils, 'reload').mockImplementation(() => {});
+
       (global.fetch as jest.Mock).mockImplementation(createFetchMock({
         '/api/db-status': {
           ok: true,
@@ -698,9 +699,8 @@ describe('App Component', () => {
       const retryButton = screen.getByText('Retry');
       await user.click(retryButton);
 
-      expect(testReload).toHaveBeenCalled();
-
-      delete (globalThis as any).__TEST_RELOAD__;
+      expect(reloadSpy).toHaveBeenCalled();
+      reloadSpy.mockRestore();
     });
 
     test('gracefully handles fetch failure by assuming healthy database', async () => {

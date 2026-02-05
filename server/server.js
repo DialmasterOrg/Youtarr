@@ -467,7 +467,6 @@ const initialize = async () => {
       // Entry HTML and app shell - should always fetch fresh to check for app updates
       else if (filePath === '/' || filePath === '/index.html') {
         res.set('Cache-Control', 'no-cache, must-revalidate');
-        res.set('ETag', `"${Date.now()}"`);
       }
       // Other static assets (fonts, images, manifest, etc.) - moderate caching
       else if (filePath.match(/\.(png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|json|webmanifest)$/i)) {
