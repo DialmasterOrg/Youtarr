@@ -123,7 +123,16 @@ if ! "$SHARED_SCRIPT_DIR/check_youtube_output_dir.sh"; then
     exit 1
 fi
 
+# Determine compose files to use
+# For now, only handle dev compose; TODO: expand to external-db and ARM flows
+if [ "$USE_DOCKER_COMPOSE_DEV" == "true" ]; then
+  COMPOSE_FILES="-f docker-compose.dev.yml"
+else
+  # For other flows, leave COMPOSE_FILES unset so they use default docker-compose behavior
+  unset COMPOSE_FILES
+fi
+
 yt_section "Docker"
-yt_info "Stopping any existing Youtarr containers."
-$COMPOSE_CMD down
+
+$COMPOSE_CMD $COMPOSE_FILES down
 yt_success "Existing containers stopped."

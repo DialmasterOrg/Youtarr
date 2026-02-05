@@ -74,25 +74,48 @@ The script runs `npm run build` for the client and then invokes `docker build`, 
 
 ### 4. Start Development Environment
 
+**Option A: Full Docker Development (Static Build)**
+
 ```bash
 # Start both app and database containers
 ./scripts/start-dev.sh
 ```
 
+This starts:
+- **Backend** on http://localhost:3011 (Node.js Express server with `--watch` for auto-restart)
+- **WebSocket** on the same HTTP server/port (3011)
+- **MariaDB** database on port 3321
+
 Optional flags:
 - `--no-auth` - Disable authentication (only use behind auth gateway or if not exposed outside your network)
 - `--debug`   - Set logging level to "debug" (defaults to `info`)
 
-This starts:
-- **Backend/Frontend** on http://localhost:3087 (serves pre-built static React files)
-- **WebSocket** on the same HTTP server/port (3087)
-- **MariaDB** database on port 3321 (by default, port can be overridden)
+**Option B: Vite Dev Server (Hot Module Reload)**
 
-**Note:** The development setup serves a production build of the frontend. Code changes require rebuilding (see below).
+For faster frontend development with HMR:
+
+```bash
+# Terminal 1: Start backend in Docker
+./scripts/start-dev.sh
+
+# Terminal 2: Start Vite dev server
+cd client
+npm run dev
+```
+
+Then access:
+- **Frontend (with HMR)** at http://localhost:3000
+- **Backend API** at http://localhost:3011 (proxied through Vite)
+
+The Vite dev server automatically proxies API/WebSocket requests to the backend at `:3011`.
 
 ### 5. Access the Application
 
-Navigate to http://localhost:3087 and create your admin account.
+Navigate to:
+- **Docker static build**: http://localhost:3011
+- **Vite dev server** (if running): http://localhost:3000
+
+Create your admin account on first access.
 
 ### 6. Stop Development Environment
 
@@ -165,6 +188,28 @@ You **must** rebuild (`./scripts/build-dev.sh`) for:
 
 ### Daily Development
 
+**Vite Dev Server Workflow (Recommended for Frontend)**
+
+```bash
+# Terminal 1: Start backend
+./scripts/start-dev.sh
+
+# Terminal 2: Start Vite with HMR
+cd client
+npm run dev
+
+# Make code changes - frontend updates instantly!
+# Backend changes auto-restart via --watch
+
+# View logs
+docker compose -f docker-compose.dev.yml logs -f youtarr
+
+# Stop when done
+./stop.sh
+```
+
+**Full Docker Workflow (For Testing Production Build)**
+
 ```bash
 # Start development environment
 ./scripts/start-dev.sh
@@ -176,7 +221,7 @@ You **must** rebuild (`./scripts/build-dev.sh`) for:
 ./scripts/start-dev.sh  # Automatically stops and restarts containers
 
 # View logs
-docker compose logs -f
+docker compose -f docker-compose.dev.yml logs -f
 
 # Stop when done
 ./stop.sh

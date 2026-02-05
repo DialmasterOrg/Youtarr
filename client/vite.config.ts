@@ -11,44 +11,77 @@ export default defineConfig(({ command }) => {
     server: {
       port: 3000,
       proxy: {
+        // Handle WebSocket path explicitly first
         '/ws': {
           target: backendTarget.replace(/^http/, 'ws'),
           ws: true,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/ws/, ''),
         },
-        '/api': { target: backendTarget, changeOrigin: true },
-        '/auth': { target: backendTarget, changeOrigin: true },
-        '/setup': { target: backendTarget, changeOrigin: true },
-        '/getconfig': { target: backendTarget, changeOrigin: true },
-        '/updateconfig': { target: backendTarget, changeOrigin: true },
-        '/validateToken': { target: backendTarget, changeOrigin: true },
-        '/getCurrentReleaseVersion': { target: backendTarget, changeOrigin: true },
-        '/getlogs': { target: backendTarget, changeOrigin: true },
-        '/getVideos': { target: backendTarget, changeOrigin: true },
-        '/getvideos': { target: backendTarget, changeOrigin: true },
-        '/getchannels': { target: backendTarget, changeOrigin: true },
-        '/getChannels': { target: backendTarget, changeOrigin: true },
-        '/runningjobs': { target: backendTarget, changeOrigin: true },
-        '/jobstatus': { target: backendTarget, changeOrigin: true },
-        '/storage-status': { target: backendTarget, changeOrigin: true },
-        '/getplexlibraries': { target: backendTarget, changeOrigin: true },
-        '/triggerchanneldownloads': { target: backendTarget, changeOrigin: true },
-        '/triggerspecificdownloads': { target: backendTarget, changeOrigin: true },
-        '/addchannel': { target: backendTarget, changeOrigin: true },
-        '/addchannelinfo': { target: backendTarget, changeOrigin: true },
-        '/updatechannels': { target: backendTarget, changeOrigin: true },
-        '/plex': { target: backendTarget, changeOrigin: true },
-        '/images': { target: backendTarget, changeOrigin: true },
-        '/fetchallchannelvideos': { target: backendTarget, changeOrigin: true },
-        '/getChannelInfo': { target: backendTarget, changeOrigin: true },
-        '/getchannelinfo': {
-          target: backendTarget,
+        // All API-related paths
+        '/api': { 
+          target: backendTarget, 
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/getchannelinfo/, '/getChannelInfo'),
+          ws: false,
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
         },
-        '/getchannelvideos': { target: backendTarget, changeOrigin: true },
-        '/refreshlibrary': { target: backendTarget, changeOrigin: true },
+        '/auth': { 
+          target: backendTarget, 
+          changeOrigin: true,
+          ws: false,
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        },
+        '/setup': { 
+          target: backendTarget, 
+          changeOrigin: true,
+          ws: false,
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        },
+        '/getconfig': { 
+          target: backendTarget, 
+          changeOrigin: true, 
+          ws: false,
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        },
+        '/updateconfig': { target: backendTarget, changeOrigin: true, ws: false },
+        '/validateToken': { target: backendTarget, changeOrigin: true, ws: false },
+        '/getCurrentReleaseVersion': { target: backendTarget, changeOrigin: true, ws: false },
+        '/getlogs': { target: backendTarget, changeOrigin: true, ws: false },
+        '/getVideos': { target: backendTarget, changeOrigin: true, ws: false, headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } },
+        '/getvideos': { target: backendTarget, changeOrigin: true, ws: false, headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } },
+        '/getchannels': { target: backendTarget, changeOrigin: true, ws: false, headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } },
+        '/getChannels': { target: backendTarget, changeOrigin: true, ws: false, headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } },
+        '/getchannelvideos': { target: backendTarget, changeOrigin: true, ws: false, headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } },
+        '/runningjobs': { target: backendTarget, changeOrigin: true, ws: false },
+        '/jobstatus': { target: backendTarget, changeOrigin: true, ws: false },
+        '/storage-status': { target: backendTarget, changeOrigin: true, ws: false },
+        '/getplexlibraries': { target: backendTarget, changeOrigin: true, ws: false },
+        '/triggerchanneldownloads': { target: backendTarget, changeOrigin: true, ws: false },
+        '/triggerspecificdownloads': { target: backendTarget, changeOrigin: true, ws: false },
+        '/addchannel': { target: backendTarget, changeOrigin: true, ws: false },
+        '/addchannelinfo': { target: backendTarget, changeOrigin: true, ws: false },
+        '/updatechannels': { target: backendTarget, changeOrigin: true, ws: false },
+        '/plex': { target: backendTarget, changeOrigin: true, ws: false },
+        '/images': { target: backendTarget, changeOrigin: true, ws: false },
+        '/fetchallchannelvideos': { target: backendTarget, changeOrigin: true, ws: false },
+        '/getChannelInfo': { target: backendTarget, changeOrigin: true, ws: false, headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' } },
+        '/refreshlibrary': { target: backendTarget, changeOrigin: true, ws: false },
       },
     },
     build: {
@@ -57,3 +90,4 @@ export default defineConfig(({ command }) => {
     },
   };
 });
+

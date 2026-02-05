@@ -48,13 +48,16 @@ export function useChannelVideos({
   const [totalCount, setTotalCount] = useState<number>(0);
   const [oldestVideoDate, setOldestVideoDate] = useState<string | null>(null);
   const [videoFailed, setVideoFailed] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(!!token && !!channelId && !!tabType);
   const [error, setError] = useState<Error | null>(null);
   const [autoDownloadsEnabled, setAutoDownloadsEnabled] = useState<boolean>(false);
   const [availableTabs, setAvailableTabs] = useState<string[]>([]);
 
   const fetchVideos = useCallback(async () => {
-    if (!channelId || !token || !tabType) return;
+    if (!channelId || !token || !tabType) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -88,6 +91,7 @@ export function useChannelVideos({
         headers: {
           'x-access-token': token,
         },
+        cache: 'no-store',
       });
 
       if (!response.ok) {

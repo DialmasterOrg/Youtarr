@@ -68,7 +68,7 @@ function VideosPage({ token }: VideosPageProps) {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [orderBy, setOrderBy] = useState<'published' | 'added'>('added');
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!!token);
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState<Date | null>(null);
   const [dateTo, setDateTo] = useState<Date | null>(null);
@@ -99,7 +99,10 @@ function VideosPage({ token }: VideosPageProps) {
 
   // Fetch videos with pagination and filters
   const fetchVideos = React.useCallback(async () => {
-    if (!token) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     setLoadError(null);
@@ -119,16 +122,23 @@ function VideosPage({ token }: VideosPageProps) {
       const response = await axios.get<PaginatedVideosResponse>(`/getVideos?${params.toString()}`, {
         headers: {
           'x-access-token': token,
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
         },
       });
 
-      setVideos(response.data.videos);
-      setTotalVideos(response.data.total);
-      setTotalPages(response.data.totalPages);
+      const data = response.data || {};
+      const normalizedVideos = (data.videos || []).map((video: VideoData) => ({
+        ...video,
+        removed: !!video.removed,
+        youtube_removed: !!video.youtube_removed,
+      }));
+      setVideos(normalizedVideos);
+      setTotalVideos(data.total || 0);
+      setTotalPages(data.totalPages || 1);
 
       // Use channels list from API response (includes all channels, not just current page)
-      setUniqueChannels(response.data.channels || []);
-      setEnabledChannels(response.data.enabledChannels || []);
+      setUniqueChannels(data.channels || []);
+      setEnabledChannels(data.enabledChannels || []);
     } catch (error) {
       console.error('Failed to fetch videos:', error);
       setLoadError('Failed to load videos. Please try refreshing the page. If this error persists, the Youtarr backend may be down.');

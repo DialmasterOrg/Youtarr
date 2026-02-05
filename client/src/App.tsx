@@ -157,8 +157,13 @@ function AppContent() {
 
   // Check database status on initial load
   useEffect(() => {
-    fetch('/api/db-status')
-      .then((response) => response.json())
+    fetch('/api/db-status', { cache: 'no-store' })
+      .then((response) => {
+        if (response.ok || response.status === 304) {
+          return response.json();
+        }
+        throw new Error('Failed to check database status');
+      })
       .then((data) => {
         if (data.status === 'healthy') {
           setDbStatus('healthy');
@@ -174,9 +179,18 @@ function AppContent() {
       });
   }, []);
 
-  // Setup axios interceptor to catch database errors from any API call
+  // Setup axios interceptor to handle 304 responses and database errors
   useEffect(() => {
-    const interceptor = axios.interceptors.response.use(
+    // Interceptor to prevent 304s by stripping conditional headers in dev mode
+    const requestInterceptor = axios.interceptors.request.use((config) => {
+      if (config.headers) {
+        delete config.headers['If-None-Match'];
+        delete config.headers['If-Modified-Since'];
+      }
+      return config;
+    });
+
+    const responseInterceptor = axios.interceptors.response.use(
       (response) => response,
       (error) => {
         // Check if this is a database error (503 with requiresDbFix flag)
@@ -193,9 +207,10 @@ function AppContent() {
       }
     );
 
-    // Cleanup interceptor on unmount
+    // Cleanup interceptors on unmount
     return () => {
-      axios.interceptors.response.eject(interceptor);
+      axios.interceptors.request.eject(requestInterceptor);
+      axios.interceptors.response.eject(responseInterceptor);
     };
   }, []);
 
@@ -232,7 +247,10 @@ function AppContent() {
     // Check database status every 15 seconds
     const checkInterval = setInterval(async () => {
       try {
-        const response = await fetch('/api/db-status');
+        const response = await fetch('/api/db-status', { cache: 'no-store' });
+        if (!response.ok && response.status !== 304) {
+          throw new Error('Failed to fetch DB status');
+        }
         const data = await response.json();
 
         if (data.status === 'healthy') {
@@ -299,8 +317,13 @@ function AppContent() {
     }
 
     // First check if setup is required
-    fetch('/setup/status')
-      .then(response => response.json())
+    fetch('/setup/status', { cache: 'no-store' })
+      .then((response) => {
+        if (response.ok || response.status === 304) {
+          return response.json();
+        }
+        throw new Error('Setup status check failed');
+      })
       .then(data => {
         setRequiresSetup(data.requiresSetup);
         setCheckingSetup(false);
@@ -331,9 +354,10 @@ function AppContent() {
               headers: {
                 'x-access-token': authToken,
               },
+              cache: 'no-store',
             })
               .then((response) => {
-                if (response.ok) {
+                if (response.ok || response.status === 304) {
                   setToken(authToken);
                 } else {
                   localStorage.removeItem('authToken');
