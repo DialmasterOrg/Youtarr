@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import App, { windowUtils } from './App';
+import App from './App';
 import { useMediaQuery } from '@mui/material';
 
 // Mock axios before any imports that use it

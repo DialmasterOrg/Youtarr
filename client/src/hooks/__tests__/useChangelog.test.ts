@@ -1,6 +1,6 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useChangelog } from '../useChangelog';
-import { locationUtils } from 'src/utils/location';
+import { locationUtils } from '../../utils/location';
 
 // Mock global fetch
 const mockFetch = jest.fn();

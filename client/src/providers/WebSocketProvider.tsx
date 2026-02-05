@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import WebSocketContext from '../contexts/WebSocketContext';
-import { locationUtils } from 'src/utils/location';
+import { locationUtils } from '../utils/location';
 
 interface WebSocketProviderProps {
   children: ReactNode;

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button, TextField, Alert, Box } from '@mui/material';
 import axios from 'axios';
-import { locationUtils } from 'src/utils/location';
+import { locationUtils } from '../utils/location';
 
 interface LocalLoginProps {
   setToken: (token: string) => void;

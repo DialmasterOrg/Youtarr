@@ -30,7 +30,7 @@ import WarningIcon from '@mui/icons-material/Warning';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 
-import { locationUtils } from 'src/utils/location';
+import { locationUtils } from '../../../utils/location';
 
 interface ApiKey {
   id: number;
