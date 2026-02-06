@@ -17,7 +17,6 @@ export default defineConfig(({ command }) => {
           target: backendTarget.replace(/^http/, 'ws'),
           ws: true,
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/ws/, ''),
         },
         // All API-related paths (cache control is handled server-side, not here)
         '/api': { 
