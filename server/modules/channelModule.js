@@ -285,7 +285,7 @@ class ChannelModule {
    * @returns {Object} - Formatted channel response
    */
   mapChannelToResponse(channel) {
-    return {
+    const out = {
       id: channel.channel_id,
       uploader: channel.uploader,
       uploader_id: channel.uploader_id || channel.channel_id,
@@ -300,8 +300,13 @@ class ChannelModule {
       min_duration: channel.min_duration || null,
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
-      default_rating: channel.default_rating || null,
     };
+
+    if (channel.default_rating != null) {
+      out.default_rating = channel.default_rating;
+    }
+
+    return out;
   }
 
   /**
@@ -310,7 +315,7 @@ class ChannelModule {
    * @returns {Object} - Simplified channel representation
    */
   mapChannelListEntry(channel) {
-    return {
+    const out = {
       url: channel.url,
       uploader: channel.uploader || '',
       channel_id: channel.channel_id || '',
@@ -322,8 +327,13 @@ class ChannelModule {
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
       audio_format: channel.audio_format || null,
-      default_rating: channel.default_rating || null,
     };
+
+    if (channel.default_rating != null) {
+      out.default_rating = channel.default_rating;
+    }
+
+    return out;
   }
 
   /**
@@ -1224,10 +1234,11 @@ class ChannelModule {
           media_type: mediaType,
           live_status: video.live_status || null,
           publishedAt: video.publishedAt || syntheticPublishedAt,
-          content_rating: video.content_rating || null,
-          age_limit: video.age_limit || null,
-          normalized_rating: video.normalized_rating || null,
         };
+
+        if (video.content_rating != null) updates.content_rating = video.content_rating;
+        if (video.age_limit != null) updates.age_limit = video.age_limit;
+        if (video.normalized_rating != null) updates.normalized_rating = video.normalized_rating;
 
         await videoRecord.update(updates);
       }
@@ -1252,7 +1263,7 @@ class ChannelModule {
       where: {
         youtubeId: youtubeIds
       },
-      attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating']
+      attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize']
     });
 
     // Create Maps for O(1) lookup of download status
@@ -1608,7 +1619,7 @@ class ChannelModule {
     const ageLimit = entry.age_limit || null;
     const ratingInfo = ratingMapper.mapFromEntry(contentRating, ageLimit);
 
-    return {
+    const out = {
       title: entry.title || 'Untitled',
       youtube_id: entry.id,
       publishedAt: this.extractPublishedDate(entry),
@@ -1617,11 +1628,14 @@ class ChannelModule {
       availability: entry.availability || null,
       media_type: entry.media_type || 'video',
       live_status: entry.live_status || null,
-      content_rating: contentRating,
-      age_limit: ageLimit,
-      normalized_rating: ratingInfo.normalized_rating,
-      rating_source: ratingInfo.source,
     };
+
+    if (contentRating != null) out.content_rating = contentRating;
+    if (ageLimit != null) out.age_limit = ageLimit;
+    if (ratingInfo && ratingInfo.normalized_rating != null) out.normalized_rating = ratingInfo.normalized_rating;
+    if (ratingInfo && ratingInfo.source != null) out.rating_source = ratingInfo.source;
+
+    return out;
   }
 
   /**

@@ -723,36 +723,39 @@ class JobModule {
     const age_limit = info.age_limit || null;
     const normalized_rating = info.normalized_rating || null;
 
+    const defaults = {
+      title,
+      thumbnail,
+      duration,
+      publishedAt,
+      availability,
+      media_type,
+      ignored: false,
+      ignored_at: null
+    };
+    if (content_rating != null) defaults.content_rating = content_rating;
+    if (age_limit != null) defaults.age_limit = age_limit;
+    if (normalized_rating != null) defaults.normalized_rating = normalized_rating;
+
     const [record, created] = await ChannelVideo.findOrCreate({
       where: { youtube_id, channel_id },
-      defaults: {
-        title,
-        thumbnail,
-        duration,
-        publishedAt,
-        availability,
-        media_type,
-        content_rating,
-        age_limit,
-        normalized_rating,
-        ignored: false,
-        ignored_at: null
-      },
+      defaults,
     });
     if (!created && !skipUpdateIfExists) {
       // Clear ignored flag when video is downloaded - user action shows they want this video
-      await record.update({
+      const updates = {
         title,
         thumbnail,
         duration,
         availability,
         media_type,
-        content_rating,
-        age_limit,
-        normalized_rating,
         ignored: false,
         ignored_at: null
-      });
+      };
+      if (content_rating != null) updates.content_rating = content_rating;
+      if (age_limit != null) updates.age_limit = age_limit;
+      if (normalized_rating != null) updates.normalized_rating = normalized_rating;
+      await record.update(updates);
     }
   }
 

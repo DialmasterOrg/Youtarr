@@ -175,15 +175,17 @@ function ChannelSettingsDialog({
         }
 
         const settingsData = await settingsResponse.json();
-        const loadedSettings = {
+        const loadedSettings: any = {
           sub_folder: settingsData.sub_folder || null,
           video_quality: settingsData.video_quality || null,
           min_duration: settingsData.min_duration || null,
           max_duration: settingsData.max_duration || null,
           title_filter_regex: settingsData.title_filter_regex || null,
           audio_format: settingsData.audio_format || null,
-          default_rating: settingsData.default_rating || null
         };
+        if (Object.prototype.hasOwnProperty.call(settingsData, 'default_rating')) {
+          loadedSettings.default_rating = settingsData.default_rating;
+        }
         setSettings(loadedSettings);
         setOriginalSettings(loadedSettings);
 
@@ -261,15 +263,20 @@ function ChannelSettingsDialog({
       }
 
       const result = await response.json();
-      const updatedSettings = {
+      const updatedSettings: any = {
         sub_folder: result?.settings?.sub_folder ?? settings.sub_folder ?? null,
         video_quality: result?.settings?.video_quality ?? settings.video_quality ?? null,
         min_duration: result?.settings?.min_duration ?? settings.min_duration ?? null,
         max_duration: result?.settings?.max_duration ?? settings.max_duration ?? null,
         title_filter_regex: result?.settings?.title_filter_regex ?? settings.title_filter_regex ?? null,
         audio_format: result?.settings?.audio_format ?? settings.audio_format ?? null,
-        default_rating: result?.settings?.default_rating ?? settings.default_rating ?? null
       };
+
+      if (result?.settings && Object.prototype.hasOwnProperty.call(result.settings, 'default_rating')) {
+        updatedSettings.default_rating = result.settings.default_rating;
+      } else if (Object.prototype.hasOwnProperty.call(settings, 'default_rating')) {
+        updatedSettings.default_rating = settings.default_rating;
+      }
 
       setSettings(updatedSettings);
       setOriginalSettings(updatedSettings);

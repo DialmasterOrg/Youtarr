@@ -118,7 +118,7 @@ class VideoValidationModule {
     const contentRating = metadata.contentRating || metadata.content_rating || null;
     const ageLimit = metadata.age_limit || null;
 
-    return {
+    const resp = {
       isValidUrl: true,
       isAlreadyDownloaded: isDuplicate,
       isMembersOnly: isMembersOnly,
@@ -137,10 +137,13 @@ class VideoValidationModule {
           null,
         availability: metadata.availability || 'public',
         media_type: metadata.media_type || 'video',
-        content_rating: contentRating,
-        age_limit: ageLimit,
       }
     };
+
+    if (contentRating != null) resp.metadata.content_rating = contentRating;
+    if (ageLimit != null) resp.metadata.age_limit = ageLimit;
+
+    return resp;
   }
 
   /**
