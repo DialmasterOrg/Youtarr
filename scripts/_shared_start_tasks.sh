@@ -18,6 +18,8 @@ Usage: $START_SCRIPT_NAME [--no-auth] [--debug] [--headless-auth] [--pull-latest
   --pull-latest      Pull latest git commits and Docker images before starting
   --dev              Use the bleeding-edge dev image (dialmaster/youtarr:dev-latest)
                      Warning: Dev builds contain unreleased features and may be unstable
+  --arm              Force ARM compose file selection (useful for Apple Silicon / Raspberry Pi)
+  --external-db      Use external database compose file (docker-compose.external-db.yml)
 EOF
 }
 
@@ -62,6 +64,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dev)
       USE_DEV_IMAGE=true
+      shift
+      ;;
+    --arm)
+      USE_ARM=true
+      shift
+      ;;
+    --external-db)
+      USE_EXTERNAL_DB=true
       shift
       ;;
     --help)
@@ -124,11 +134,35 @@ if ! "$SHARED_SCRIPT_DIR/check_youtube_output_dir.sh"; then
 fi
 
 # Determine compose files to use
-# For now, only handle dev compose; TODO: expand to external-db and ARM flows
-if [ "$USE_DOCKER_COMPOSE_DEV" == "true" ]; then
-  COMPOSE_FILES="-f docker-compose.dev.yml"
+# Support dev, external database, and ARM compose flows.
+# Priority (highest -> lowest):
+# 1) Dev compose (explicit CI/dev flows)
+# 2) External DB compose (when using an external DB)
+# 3) ARM compose (auto-detected or forced with --arm)
+# 4) Default docker-compose.yml
+
+# If the start script or wrapper exported USE_EXTERNAL_DB, it will be honored.
+# Allow explicit CLI override with --external-db and --arm flags parsed above.
+
+# Auto-detect ARM if not explicitly provided
+ARCH=$(uname -m)
+if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
+  DETECTED_ARM=true
 else
-  # For other flows, leave COMPOSE_FILES unset so they use default docker-compose behavior
+  DETECTED_ARM=false
+fi
+
+if [ "$USE_DOCKER_COMPOSE_DEV" == "true" ]; then
+  # Dev flow uses the dev compose (standalone file for developer workflows)
+  COMPOSE_FILES="-f docker-compose.dev.yml"
+elif [ "$USE_EXTERNAL_DB" == "true" ]; then
+  # External DB uses the base compose with the external-db override
+  COMPOSE_FILES="-f docker-compose.yml -f docker-compose.external-db.yml"
+elif [ "$USE_ARM" == "true" ] || [ "$DETECTED_ARM" == "true" ]; then
+  # ARM uses the base compose with the ARM override
+  COMPOSE_FILES="-f docker-compose.yml -f docker-compose.arm.yml"
+else
+  # Default - use standard docker-compose.yml
   unset COMPOSE_FILES
 fi
 
