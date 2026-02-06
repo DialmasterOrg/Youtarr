@@ -17,6 +17,7 @@ if (typeof globalThis.Request === 'undefined') {
 
 // Some libs (and JSDOM) expect these to exist
 import { TextDecoder, TextEncoder } from 'util';
+import { _testLocationHelpers } from './src/utils/location';
 
 if (typeof globalThis.TextEncoder === 'undefined') {
   globalThis.TextEncoder = TextEncoder as any;
@@ -57,44 +58,42 @@ const setMockLocation = (url: string): LocationMocks => {
     search: parsed.search,
   };
 
-  globalThis.__locationOverrides = overrides;
+  _testLocationHelpers.setOverrides(overrides);
 
   // Use existing mocks if they already exist to prevent losing references in tests
-  if (globalThis.__locationMocks) {
-    return globalThis.__locationMocks;
+  const existingMocks = _testLocationHelpers.getMocks();
+  if (existingMocks) {
+    return existingMocks as unknown as LocationMocks;
   }
 
   const mocks: LocationMocks = {
     assign: jest.fn((nextUrl: string) => {
-      setMockLocation(new URL(nextUrl, globalThis.__locationOverrides?.href || 'http://localhost/').href);
+      setMockLocation(new URL(nextUrl, _testLocationHelpers.getOverrides()?.href || 'http://localhost/').href);
     }),
     replace: jest.fn((nextUrl: string) => {
-      setMockLocation(new URL(nextUrl, globalThis.__locationOverrides?.href || 'http://localhost/').href);
+      setMockLocation(new URL(nextUrl, _testLocationHelpers.getOverrides()?.href || 'http://localhost/').href);
     }),
     reload: jest.fn(),
   };
 
-  globalThis.__locationMocks = mocks;
+  _testLocationHelpers.setMocks(mocks as any);
 
   return mocks;
 };
 
 declare global {
-  interface GlobalThis {
-    setMockLocation: (url: string) => LocationMocks;
-    __locationMocks: LocationMocks | undefined;
-    __locationOverrides: LocationOverrides | undefined;
-  }
+  var setMockLocation: (url: string) => LocationMocks;
 }
 
+// @ts-ignore
 globalThis.setMockLocation = setMockLocation;
 
 // Note: Direct window.location redefinition is blocked in JSDOM (Jest 30).
 // We use the locationUtils abstraction instead (src/utils/location.ts).
 
 beforeEach(() => {
-  globalThis.__locationMocks = undefined;
-  globalThis.__locationOverrides = undefined;
+  _testLocationHelpers.setMocks(undefined);
+  _testLocationHelpers.setOverrides(undefined);
   setMockLocation('http://localhost/');
 });
 

@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import LocalLogin from '../LocalLogin';
+import { _testLocationHelpers } from '../../utils/location';
 
 // Mock axios
 jest.mock('axios', () => ({
@@ -80,7 +81,7 @@ describe('LocalLogin Component', () => {
     
     expect(localStorageMock.setItem).toHaveBeenCalledWith('authToken', mockToken);
     expect(mockSetToken).toHaveBeenCalledWith(mockToken);
-    expect(globalThis.__locationMocks?.assign).toHaveBeenCalledWith('/configuration');
+    expect(_testLocationHelpers.getMocks()?.assign).toHaveBeenCalledWith('/configuration');
   });
 
   test('displays error for invalid credentials (401)', async () => {
@@ -157,7 +158,7 @@ describe('LocalLogin Component', () => {
     await user.click(submitButton);
     
     await waitFor(() => {
-      expect(globalThis.__locationMocks?.assign).toHaveBeenCalledWith('/setup');
+      expect(_testLocationHelpers.getMocks()?.assign).toHaveBeenCalledWith('/setup');
     });
   });
 

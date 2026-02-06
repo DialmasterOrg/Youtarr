@@ -120,9 +120,11 @@ describe('useChangelog', () => {
     expect(result.current.content).toBe(updatedContent);
   });
 
-  test('mocks window.location with a custom URL', () => {
+  test('mocks location using locationUtils and setMockLocation', () => {
+    // setMockLocation is a global helper defined in jest.setup.ts
     const mockLocation = setMockLocation('http://localhost/test?query=1');
 
+    // Use locationUtils instead of window.location directly
     expect(locationUtils.getHref()).toBe('http://localhost/test?query=1');
     expect(locationUtils.getSearch()).toBe('?query=1');
 
