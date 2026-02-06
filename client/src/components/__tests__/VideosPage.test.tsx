@@ -824,16 +824,16 @@ describe('VideosPage Component', () => {
           expect(screen.getByText('How to Code')).toBeInTheDocument();
         });
 
-        // Delete button should not be visible initially
-        expect(screen.queryByText('Delete Selected')).not.toBeInTheDocument();
+        // Actions button should not be visible initially
+        expect(screen.queryByText(/^Actions \(\d+\)$/)).not.toBeInTheDocument();
 
         // Select a video
         const checkboxes = screen.getAllByRole('checkbox');
         await user.click(checkboxes[1]);
 
-        // Delete button should now be visible
+        // Actions button should now be visible
         await waitFor(() => {
-          expect(screen.getByText('Delete Selected')).toBeInTheDocument();
+          expect(screen.getByText('Actions (1)')).toBeInTheDocument();
         });
       });
 
@@ -883,9 +883,13 @@ describe('VideosPage Component', () => {
           expect(screen.getByText(/2 videos selected/)).toBeInTheDocument();
         });
 
-        // Click delete button
-        const deleteButton = screen.getByText('Delete Selected');
-        await user.click(deleteButton);
+        // Click actions button
+        const actionsButton = screen.getByText('Actions (2)');
+        await user.click(actionsButton);
+
+        // Click delete menu item
+        const deleteMenuItem = screen.getByText('Delete Selected');
+        await user.click(deleteMenuItem);
 
         // Dialog should open
         await waitFor(() => {
@@ -1034,9 +1038,11 @@ describe('VideosPage Component', () => {
         await user.click(checkboxes[1]);
         await user.click(checkboxes[2]);
 
-        // Click delete
-        const deleteButton = screen.getByText('Delete Selected');
-        await user.click(deleteButton);
+        // Click actions button and delete
+        const actionsButton = screen.getByText('Actions (2)');
+        await user.click(actionsButton);
+        const deleteMenuItem = screen.getByText('Delete Selected');
+        await user.click(deleteMenuItem);
 
         // Confirm deletion
         const confirmButton = screen.getByTestId('dialog-confirm');
@@ -1081,7 +1087,10 @@ describe('VideosPage Component', () => {
         await user.click(checkboxes[2]);
 
         // Delete
-        await user.click(screen.getByText('Delete Selected'));
+        const actionsButton = screen.getByText('Actions (2)');
+        await user.click(actionsButton);
+        const deleteMenuItem = screen.getByText('Delete Selected');
+        await user.click(deleteMenuItem);
         await user.click(screen.getByTestId('dialog-confirm'));
 
         // Should show partial success message
@@ -1115,7 +1124,10 @@ describe('VideosPage Component', () => {
         const checkboxes = screen.getAllByRole('checkbox');
         await user.click(checkboxes[1]);
         await user.click(checkboxes[2]);
-        await user.click(screen.getByText('Delete Selected'));
+        const actionsButton = screen.getByText('Actions (2)');
+        await user.click(actionsButton);
+        const deleteMenuItem = screen.getByText('Delete Selected');
+        await user.click(deleteMenuItem);
         await user.click(screen.getByTestId('dialog-confirm'));
 
         // Should show error message
@@ -1138,7 +1150,10 @@ describe('VideosPage Component', () => {
         // Select and open dialog
         const checkboxes = screen.getAllByRole('checkbox');
         await user.click(checkboxes[1]);
-        await user.click(screen.getByText('Delete Selected'));
+        const actionsButton = screen.getByText('Actions (1)');
+        await user.click(actionsButton);
+        const deleteMenuItem = screen.getByText('Delete Selected');
+        await user.click(deleteMenuItem);
 
         // Cancel
         const cancelButton = screen.getByTestId('dialog-cancel');
@@ -1177,7 +1192,10 @@ describe('VideosPage Component', () => {
 
         expect(screen.getByText(/2 videos selected/)).toBeInTheDocument();
 
-        await user.click(screen.getByText('Delete Selected'));
+        const actionsButton = screen.getByText('Actions (2)');
+        await user.click(actionsButton);
+        const deleteMenuItem = screen.getByText('Delete Selected');
+        await user.click(deleteMenuItem);
         await user.click(screen.getByTestId('dialog-confirm'));
 
         // Selection should be cleared
@@ -1209,9 +1227,9 @@ describe('VideosPage Component', () => {
         const checkboxes = screen.getAllByRole('checkbox');
         await user.click(checkboxes[1]);
 
-        // Delete button should be disabled
-        const deleteButton = screen.getByText('Delete Selected');
-        expect(deleteButton).toBeDisabled();
+        // Actions button should be disabled
+        const actionsButton = screen.getByText('Actions (1)');
+        expect(actionsButton).toBeDisabled();
       });
     });
 
@@ -1237,7 +1255,10 @@ describe('VideosPage Component', () => {
         // Delete video
         const checkboxes = screen.getAllByRole('checkbox');
         await user.click(checkboxes[1]);
-        await user.click(screen.getByText('Delete Selected'));
+        const actionsButton = screen.getByText('Actions (1)');
+        await user.click(actionsButton);
+        const deleteMenuItem = screen.getByText('Delete Selected');
+        await user.click(deleteMenuItem);
         await user.click(screen.getByTestId('dialog-confirm'));
 
         // Success message appears
@@ -1266,7 +1287,10 @@ describe('VideosPage Component', () => {
         // Delete and fail
         const checkboxes = screen.getAllByRole('checkbox');
         await user.click(checkboxes[1]);
-        await user.click(screen.getByText('Delete Selected'));
+        const actionsButton = screen.getByText('Actions (1)');
+        await user.click(actionsButton);
+        const deleteMenuItem = screen.getByText('Delete Selected');
+        await user.click(deleteMenuItem);
         await user.click(screen.getByTestId('dialog-confirm'));
 
         // Error message appears

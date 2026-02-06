@@ -48,6 +48,9 @@ import ScheduleIcon from '@mui/icons-material/Schedule';
 import DeleteVideosDialog from './shared/DeleteVideosDialog';
 import { useVideoDeletion } from './shared/useVideoDeletion';
 import DownloadFormatIndicator from './shared/DownloadFormatIndicator';
+import RatingBadge from './shared/RatingBadge';
+import ChangeRatingDialog from './shared/ChangeRatingDialog';
+import VideoActionsDropdown from './shared/VideoActionsDropdown';
 
 interface VideosPageProps {
   token: string | null;
@@ -68,7 +71,7 @@ function VideosPage({ token }: VideosPageProps) {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [orderBy, setOrderBy] = useState<'published' | 'added'>('added');
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(!!token);
+  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState<Date | null>(null);
   const [dateTo, setDateTo] = useState<Date | null>(null);
@@ -77,6 +80,7 @@ function VideosPage({ token }: VideosPageProps) {
   const [selectedVideos, setSelectedVideos] = useState<number[]>([]);
   const [selectedForDeletion, setSelectedForDeletion] = useState<number[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -99,10 +103,7 @@ function VideosPage({ token }: VideosPageProps) {
 
   // Fetch videos with pagination and filters
   const fetchVideos = React.useCallback(async () => {
-    if (!token) {
-      setLoading(false);
-      return;
-    }
+    if (!token) return;
 
     setLoading(true);
     setLoadError(null);
@@ -126,7 +127,7 @@ function VideosPage({ token }: VideosPageProps) {
       });
 
       const data = response.data || {};
-      const normalizedVideos = (data.videos || []).map((video: VideoData) => ({
+      const normalizedVideos = (data.videos || []).map((video) => ({
         ...video,
         removed: !!video.removed,
         youtube_removed: !!video.youtube_removed,
@@ -240,6 +241,35 @@ function VideosPage({ token }: VideosPageProps) {
 
   const handleDeleteClick = () => {
     setDeleteDialogOpen(true);
+  };
+
+  const handleChangeRatingClick = () => {
+    setRatingDialogOpen(true);
+  };
+
+  const handleApplyRating = async (rating: string) => {
+    if (!token) return;
+
+    const videoIdsToUpdate = isMobile ? selectedForDeletion : selectedVideos;
+
+    try {
+      await axios.post('/api/videos/rating', {
+        videoIds: videoIdsToUpdate,
+        rating,
+      }, {
+        headers: {
+          'x-access-token': token,
+        },
+      });
+
+      setSuccessMessage(`Successfully updated content rating for ${videoIdsToUpdate.length} video(s)`);
+      setSelectedVideos([]);
+      setSelectedForDeletion([]);
+      fetchVideos();
+    } catch (error: any) {
+      console.error('Failed to update ratings:', error);
+      setErrorMessage(error.response?.data?.error || 'Failed to update content ratings');
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -368,15 +398,12 @@ function VideosPage({ token }: VideosPageProps) {
               <Typography variant="body2" color="text.secondary">
                 {selectedVideos.length} video{selectedVideos.length !== 1 ? 's' : ''} selected
               </Typography>
-              <Button
-                variant="contained"
-                color="error"
-                startIcon={<DeleteIcon />}
-                onClick={handleDeleteClick}
+              <VideoActionsDropdown
+                selectedVideosCount={selectedVideos.length}
+                onContentRating={handleChangeRatingClick}
+                onDelete={handleDeleteClick}
                 disabled={deleteLoading}
-              >
-                Delete Selected
-              </Button>
+              />
               <Button
                 variant="outlined"
                 onClick={() => setSelectedVideos([])}
@@ -722,6 +749,13 @@ function VideosPage({ token }: VideosPageProps) {
                                   />
                                 ) : null;
                               })()}
+                              <RatingBadge
+                                rating={video.normalized_rating}
+                                ratingSource={video.rating_source}
+                                showNA={true}
+                                size="small"
+                                sx={{ height: 20, fontSize: '0.7rem' }}
+                              />
                               {!!video.removed && (
                                 <Tooltip title="Video file not found on disk" enterTouchDelay={0}>
                                   <Chip
@@ -900,6 +934,12 @@ function VideosPage({ token }: VideosPageProps) {
                                   />
                                 ) : null;
                               })()}
+                              <RatingBadge
+                                rating={video.normalized_rating}
+                                ratingSource={video.rating_source}
+                                showNA={true}
+                                size="small"
+                              />
                               {!!video.removed && (
                                 <Tooltip title="Video file not found on disk. It may have been deleted or moved." enterTouchDelay={0}>
                                   <Chip
@@ -939,6 +979,13 @@ function VideosPage({ token }: VideosPageProps) {
       </CardContent>
 
       {/* Delete Confirmation Dialog */}
+      <ChangeRatingDialog
+        open={ratingDialogOpen}
+        onClose={() => setRatingDialogOpen(false)}
+        onApply={handleApplyRating}
+        selectedCount={isMobile ? selectedForDeletion.length : selectedVideos.length}
+      />
+
       <DeleteVideosDialog
         open={deleteDialogOpen}
         onClose={handleDeleteCancel}

@@ -21,6 +21,7 @@ import { decodeHtml } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
+import RatingBadge from '../shared/RatingBadge';
 
 interface VideoCardProps {
   video: ChannelVideo;
@@ -293,6 +294,7 @@ function VideoCard({
                     sx={{ height: 20, fontSize: '0.7rem' }}
                   />
                 )}
+                <RatingBadge rating={video.normalized_rating} size="small" variant="text" />
                 {isMobile && (
                   <Chip
                     icon={getStatusIcon(status)}

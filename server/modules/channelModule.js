@@ -12,6 +12,7 @@ const { Op, fn, col, where } = require('sequelize');
 const fileCheckModule = require('./fileCheckModule');
 const logger = require('../logger');
 const { sanitizeNameLikeYtDlp } = require('./filesystem');
+const ratingMapper = require('./ratingMapper');
 
 const { v4: uuidv4 } = require('uuid');
 const { spawn, execSync } = require('child_process');
@@ -299,6 +300,7 @@ class ChannelModule {
       min_duration: channel.min_duration || null,
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
+      default_rating: channel.default_rating || null,
     };
   }
 
@@ -320,6 +322,7 @@ class ChannelModule {
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
       audio_format: channel.audio_format || null,
+      default_rating: channel.default_rating || null,
     };
   }
 
@@ -1221,6 +1224,9 @@ class ChannelModule {
           media_type: mediaType,
           live_status: video.live_status || null,
           publishedAt: video.publishedAt || syntheticPublishedAt,
+          content_rating: video.content_rating || null,
+          age_limit: video.age_limit || null,
+          normalized_rating: video.normalized_rating || null,
         };
 
         await videoRecord.update(updates);
@@ -1246,7 +1252,7 @@ class ChannelModule {
       where: {
         youtubeId: youtubeIds
       },
-      attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize']
+      attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating']
     });
 
     // Create Maps for O(1) lookup of download status
@@ -1261,7 +1267,8 @@ class ChannelModule {
         fileSize: v.fileSize,
         filePath: v.filePath,
         audioFilePath: v.audioFilePath,
-        audioFileSize: v.audioFileSize
+        audioFileSize: v.audioFileSize,
+        normalized_rating: v.normalized_rating
       });
 
       // Collect videos that need file checking (only if checkFiles is true and have any file path)
@@ -1303,6 +1310,9 @@ class ChannelModule {
         plainVideoObject.filePath = status.filePath;
         plainVideoObject.audioFilePath = status.audioFilePath;
         plainVideoObject.audioFileSize = status.audioFileSize;
+        if (status.normalized_rating) {
+          plainVideoObject.normalized_rating = status.normalized_rating;
+        }
       } else {
         // Video never downloaded
         plainVideoObject.added = false;
@@ -1447,7 +1457,10 @@ class ChannelModule {
         availability: v.availability,
         youtube_removed: v.youtube_removed,
         ignored: v.ignored,
-        ignored_at: v.ignored_at
+        ignored_at: v.ignored_at,
+        normalized_rating: v.normalized_rating,
+        media_type: v.media_type,
+        live_status: v.live_status
       }));
 
       // This will check files for only the current page
@@ -1591,6 +1604,10 @@ class ChannelModule {
    * @returns {Object} - Parsed video object
    */
   parseVideoMetadata(entry) {
+    const contentRating = entry.contentRating || entry.content_rating || null;
+    const ageLimit = entry.age_limit || null;
+    const ratingInfo = ratingMapper.mapFromEntry(contentRating, ageLimit);
+
     return {
       title: entry.title || 'Untitled',
       youtube_id: entry.id,
@@ -1600,6 +1617,10 @@ class ChannelModule {
       availability: entry.availability || null,
       media_type: entry.media_type || 'video',
       live_status: entry.live_status || null,
+      content_rating: contentRating,
+      age_limit: ageLimit,
+      normalized_rating: ratingInfo.normalized_rating,
+      rating_source: ratingInfo.source,
     };
   }
 

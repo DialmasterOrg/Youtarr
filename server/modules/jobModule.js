@@ -125,6 +125,10 @@ class JobModule {
             originalDate: info.upload_date,
             channel_id: info.channel_id,
             media_type: info.media_type || 'video',
+            content_rating: info.content_rating || null,
+            age_limit: info.age_limit || null,
+            normalized_rating: info.normalized_rating || null,
+            rating_source: info.rating_source || null,
           };
 
           // Determine candidate file paths, preferring yt-dlp's recorded actual location
@@ -715,6 +719,9 @@ class JobModule {
     const availability = info.availability || null;
     const media_type = info.media_type || 'video';
     const thumbnail = `https://i.ytimg.com/vi/${youtube_id}/mqdefault.jpg`;
+    const content_rating = info.content_rating || null;
+    const age_limit = info.age_limit || null;
+    const normalized_rating = info.normalized_rating || null;
 
     const [record, created] = await ChannelVideo.findOrCreate({
       where: { youtube_id, channel_id },
@@ -725,6 +732,9 @@ class JobModule {
         publishedAt,
         availability,
         media_type,
+        content_rating,
+        age_limit,
+        normalized_rating,
         ignored: false,
         ignored_at: null
       },
@@ -737,6 +747,9 @@ class JobModule {
         duration,
         availability,
         media_type,
+        content_rating,
+        age_limit,
+        normalized_rating,
         ignored: false,
         ignored_at: null
       });
@@ -837,6 +850,10 @@ class JobModule {
             originalDate: info.upload_date,
             channel_id: info.channel_id,
             media_type: info.media_type || 'video',
+            content_rating: info.content_rating || null,
+            age_limit: info.age_limit || null,
+            normalized_rating: info.normalized_rating || null,
+            rating_source: info.rating_source || null,
           };
 
           // Check if file exists and get file size
@@ -890,6 +907,13 @@ class JobModule {
             // Update media_type only if currently set to default 'video' (meaning it hasn't been set yet)
             if (videoInstance.media_type === 'video' && payload.media_type && payload.media_type !== 'video') {
               updates.media_type = payload.media_type;
+            }
+
+            if (!videoInstance.normalized_rating && payload.normalized_rating) {
+              updates.normalized_rating = payload.normalized_rating;
+              updates.content_rating = payload.content_rating;
+              updates.age_limit = payload.age_limit;
+              updates.rating_source = payload.rating_source;
             }
 
             if (Object.keys(updates).length > 0) {

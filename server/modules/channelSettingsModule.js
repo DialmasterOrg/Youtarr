@@ -463,6 +463,7 @@ class ChannelSettingsModule {
       max_duration: channel.max_duration,
       title_filter_regex: channel.title_filter_regex,
       audio_format: channel.audio_format,
+      default_rating: channel.default_rating,
     };
   }
 
@@ -571,6 +572,11 @@ class ChannelSettingsModule {
         ? settings.title_filter_regex.trim()
         : null;
     }
+    if (settings.default_rating !== undefined) {
+      updateData.default_rating = settings.default_rating
+        ? settings.default_rating.trim()
+        : null;
+    }
     if (settings.audio_format !== undefined) {
       updateData.audio_format = settings.audio_format;
     }
@@ -619,6 +625,7 @@ class ChannelSettingsModule {
         max_duration: updatedChannel.max_duration,
         title_filter_regex: updatedChannel.title_filter_regex,
         audio_format: updatedChannel.audio_format,
+        default_rating: updatedChannel.default_rating,
       },
       folderMoved: subFolderChanged,
       moveResult
