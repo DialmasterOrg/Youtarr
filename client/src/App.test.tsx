@@ -135,9 +135,6 @@ Object.defineProperty(window, 'localStorage', {
   writable: true,
 });
 
-// Store the original location for restoration in afterEach
-const originalLocation = window.location;
-
 // Mock matchMedia for responsive testing
 Object.defineProperty(window, 'matchMedia', {
   writable: true,

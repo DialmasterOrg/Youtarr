@@ -115,9 +115,6 @@ Object.defineProperty(window, 'localStorage', {
   writable: true,
 });
 
-// Mock window.location
-const originalLocation = window.location;
-
 describe('WebSocketProvider', () => {
   let originalWebSocket: typeof WebSocket;
   let originalConsoleLog: typeof console.log;
