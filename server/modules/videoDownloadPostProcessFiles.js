@@ -124,15 +124,6 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     // Read the JSON file to get the upload_date
     const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
 
-    // Map rating from metadata if not already present
-    if (!jsonData.normalized_rating) {
-      const mapped = ratingMapper.mapFromEntry(jsonData.content_rating, jsonData.age_limit);
-      if (mapped.normalized_rating) {
-        jsonData.normalized_rating = mapped.normalized_rating;
-        jsonData.rating_source = mapped.source;
-      }
-    }
-
     // Parse the upload_date (format: YYYYMMDD) into a Date object
     let uploadDate = null;
     if (jsonData.upload_date) {
@@ -372,8 +363,13 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         ffmpegArgs.push('-metadata', `rating=${jsonData.normalized_rating}`);
       }
       if (jsonData.content_rating) {
-        const ratingSource = jsonData.rating_source || 'youtube';
-        ffmpegArgs.push('-metadata', `content_rating=${ratingSource}`);
+        const contentRatingValue = typeof jsonData.content_rating === 'string'
+          ? jsonData.content_rating
+          : JSON.stringify(jsonData.content_rating);
+        ffmpegArgs.push('-metadata', `content_rating=${contentRatingValue}`);
+      }
+      if (jsonData.rating_source) {
+        ffmpegArgs.push('-metadata', `rating_source=${jsonData.rating_source}`);
       }
       if (jsonData.age_limit) {
         ffmpegArgs.push('-metadata', `age_limit=${jsonData.age_limit}`);

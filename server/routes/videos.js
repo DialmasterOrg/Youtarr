@@ -177,6 +177,21 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
         });
       }
 
+      // Validate rating value against known normalized ratings.
+      const allowedRatings = new Set([
+        'G','PG','PG-13','R','NC-17',
+        'TV-Y','TV-Y7','TV-G','TV-PG','TV-14','TV-MA',
+        'NR'
+      ]);
+
+      if (rating !== null && typeof rating !== 'string') {
+        return res.status(400).json({ success: false, error: 'rating must be a string or null' });
+      }
+
+      if (rating !== null && rating !== 'NR' && !allowedRatings.has(rating)) {
+        return res.status(400).json({ success: false, error: 'invalid rating value' });
+      }
+
       const result = await videosModule.bulkUpdateVideoRatings(videoIds, rating);
       res.json(result);
     } catch (error) {
