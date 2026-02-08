@@ -4,7 +4,7 @@
 
 For development, you'll need:
 
-1. **Node.js 18+ and npm** (needed for the build script that compiles the client and installs dependencies before Docker runs)
+1. **Node.js 20.19+ and npm** (needed for the build script that compiles the client and installs dependencies before Docker runs)
 2. **Docker** and Docker Compose (v2 or v1)
 3. **Git** for version control
 4. A code editor (VS Code recommended)
@@ -59,7 +59,7 @@ Optional flags:
 - `--no-cache` - Force rebuild to get latest yt-dlp version
 - `SKIP_DEV_IMAGE_PRUNE=1` - Skip automatic cleanup of old untagged `youtarr-dev` images (pruning is enabled by default to keep Docker storage from filling)
 
-The script runs `npm run build` for the client and then invokes `docker build`, so make sure Node.js 18+ and npm are available locally.
+The script runs `npm run build` for the client and then invokes `docker build`, so make sure Node.js 20.19+ and npm are available locally.
 
 ### 3. Configure .env (optional)
 
@@ -104,7 +104,7 @@ npm run dev
 ```
 
 Then access:
-- **Frontend (with HMR)** at http://localhost:3000
+- **Frontend (with HMR)** at http://localhost:3087
 - **Backend API** at http://localhost:3011 (proxied through Vite)
 
 The Vite dev server automatically proxies API/WebSocket requests to the backend at `:3011`.
