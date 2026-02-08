@@ -12,6 +12,7 @@ const { Op, fn, col, where } = require('sequelize');
 const fileCheckModule = require('./fileCheckModule');
 const logger = require('../logger');
 const { sanitizeNameLikeYtDlp } = require('./filesystem');
+const tempPathManager = require('./download/tempPathManager');
 
 const { v4: uuidv4 } = require('uuid');
 const { spawn, execSync } = require('child_process');
@@ -151,7 +152,7 @@ class ChannelModule {
     const ytDlp = spawn('yt-dlp', args, {
       env: {
         ...process.env,
-        TMPDIR: '/tmp'
+        TMPDIR: tempPathManager.getTempBasePath()
       }
     });
 

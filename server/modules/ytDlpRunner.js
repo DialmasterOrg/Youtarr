@@ -1,6 +1,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const tempPathManager = require('./download/tempPathManager');
 
 class YtDlpRunner {
   constructor() {
@@ -31,7 +32,7 @@ class YtDlpRunner {
         timeout: timeoutMs,
         env: {
           ...process.env,
-          TMPDIR: '/tmp'
+          TMPDIR: tempPathManager.getTempBasePath()
         }
       });
 

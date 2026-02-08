@@ -412,7 +412,7 @@ class DownloadExecutor {
         env: {
           ...process.env,
           YOUTARR_JOB_ID: jobId,
-          TMPDIR: '/tmp',
+          TMPDIR: tempPathManager.getTempBasePath(),
           // Pass subfolder override to post-processor (empty string means no override)
           ...(subfolderOverride !== null && subfolderOverride !== undefined
             ? { YOUTARR_SUBFOLDER_OVERRIDE: subfolderOverride }
