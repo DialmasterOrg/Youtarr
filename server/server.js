@@ -451,6 +451,32 @@ const initialize = async () => {
     // Apply database health check middleware to all routes
     app.use(checkDatabaseHealth);
 
+    // Cache control middleware for static assets
+    // This provides proper caching strategies:
+    // - Hashed assets (in /assets/) can be cached long-term since they include content hash
+    // - index.html and other non-hashed files should not be cached to avoid serving stale app versions
+    app.use((req, res, next) => {
+      const filePath = req.path;
+
+      // Hashed assets (contain hash in filename, typically in /assets/ dir)
+      // Examples: /assets/index-ABC123.js, /assets/style-XYZ789.css
+      if (filePath.match(/\/assets\/.*\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)$/i)) {
+        // These files are immutable due to content hashing - cache for 1 year
+        res.set('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+      // Entry HTML and app shell - should always fetch fresh to check for app updates
+      else if (filePath === '/' || filePath === '/index.html') {
+        res.set('Cache-Control', 'no-cache, must-revalidate');
+      }
+      // Other static assets (fonts, images, manifest, etc.) - moderate caching
+      else if (filePath.match(/\.(png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|json|webmanifest)$/i)) {
+        // Cache for 1 hour
+        res.set('Cache-Control', 'public, max-age=3600');
+      }
+
+      next();
+    });
+
     // Serve images
     app.use('/images', express.static(configModule.getImagePath()));
 

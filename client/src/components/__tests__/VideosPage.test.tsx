@@ -164,7 +164,7 @@ describe('VideosPage Component', () => {
           expect.stringContaining('/getVideos?'),
           expect.objectContaining({
             headers: {
-              'x-access-token': mockToken
+              'x-access-token': mockToken,
             }
           })
         );

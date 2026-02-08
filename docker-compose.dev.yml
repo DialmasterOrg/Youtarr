@@ -1,0 +1,58 @@
+services:
+  youtarr-db:
+    image: mariadb:10.3
+    container_name: youtarr-db-dev
+    volumes:
+      - youtarr-db-data-dev:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-123qweasd}
+      MYSQL_DATABASE: ${DB_NAME:-youtarr}
+      MYSQL_USER: ${DB_USER:-youtarr}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-youtarrpassword}
+    command: ['--character-set-server=utf8mb4', '--collation-server=utf8mb4_unicode_ci']
+
+  youtarr:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${YOUTARR_IMAGE:-youtarr-dev:latest}
+    container_name: youtarr-dev
+    # Map 3011:3011 in dev so Vite proxy can reach backend at localhost:3011
+    ports:
+      - "3087:3011"
+    volumes:
+      - ${YOUTUBE_OUTPUT_DIR:-./downloads}:/usr/src/app/data
+      - ./server/images:/app/server/images
+      - ./config:/app/config
+      - ./jobs:/app/jobs
+      # Mount server code for hot reload with --watch
+      - ./server:/app/server
+      - ./migrations:/app/migrations
+      - ./package.json:/app/package.json
+      - ./package-lock.json:/app/package-lock.json
+    environment:
+      - NODE_ENV=development
+      - DEV_MODE=true
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - DB_HOST=youtarr-db
+      - DB_PORT=3306
+      - DB_NAME=${DB_NAME:-youtarr}
+      - DB_USER=${DB_USER:-youtarr}
+      - DB_PASSWORD=${DB_PASSWORD:-youtarrpassword}
+      - YOUTUBE_OUTPUT_DIR=/usr/src/app/data
+      - AUTH_ENABLED=${AUTH_ENABLED:-true}
+      - AUTH_PRESET_USERNAME=${AUTH_PRESET_USERNAME:-}
+      - AUTH_PRESET_PASSWORD=${AUTH_PRESET_PASSWORD:-}
+    depends_on:
+      - youtarr-db
+    # Use Node 18+'s built-in watch mode for auto-restart on server changes
+    command: ["node", "--watch", "server/server.js"]
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "--output", "/dev/null", "http://localhost:3011/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  youtarr-db-data-dev:

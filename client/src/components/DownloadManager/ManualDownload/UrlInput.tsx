@@ -35,18 +35,20 @@ const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled 
       }
 
       debounceTimerRef.current = setTimeout(async () => {
-        await onValidate(pastedText);
-        // Always clear input after validation attempt
-        setInputValue('');
+        const ok = await onValidate(pastedText);
+        if (ok) {
+          setInputValue('');
+        }
       }, 500);
     }
   }, [onValidate]);
 
   const handleAddClick = useCallback(async () => {
     if (inputValue.trim() && !isValidating) {
-      await onValidate(inputValue.trim());
-      // Always clear input after validation attempt
-      setInputValue('');
+      const ok = await onValidate(inputValue.trim());
+      if (ok) {
+        setInputValue('');
+      }
     }
   }, [inputValue, isValidating, onValidate]);
 
@@ -74,9 +76,10 @@ const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled 
         }
 
         debounceTimerRef.current = setTimeout(async () => {
-          await onValidate(text);
-          // Always clear input after validation attempt
-          setInputValue('');
+          const ok = await onValidate(text);
+          if (ok) {
+            setInputValue('');
+          }
         }, 500);
       }
     } catch (error) {
