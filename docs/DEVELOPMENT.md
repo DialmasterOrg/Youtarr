@@ -106,7 +106,7 @@ npm run dev
 ```
 
 Then access:
-- **Frontend (HMR)** at http://localhost:3087
+- **Frontend (HMR)** at http://localhost:3000
 
 The Vite dev server will proxy API and WebSocket requests to the backend at port `3011` so API calls work the same as the full-stack run.
 
@@ -116,7 +116,7 @@ Navigate to:
 
 Navigate to:
 - **Docker static build**: http://localhost:3087
-- **Vite dev server (if running)**: http://localhost:3087
+- **Vite dev server (if running)**: http://localhost:3000
 
 Create your admin account on first access.
 
