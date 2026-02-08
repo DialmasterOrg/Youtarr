@@ -74,46 +74,49 @@ The script runs `npm run build` for the client and then invokes `docker build`, 
 
 ### 4. Start Development Environment
 
-**Option A: Full Docker Development (Static Build)**
+**Step 1: Full Docker Development**
+
+Build and run the full stack using the pre-built static frontend served by the app container.
 
 ```bash
-# Start both app and database containers
+# Start both app and database containers (serves static frontend)
 ./scripts/start-dev.sh
 ```
 
 This starts:
 - **Backend** on http://localhost:3011 (Node.js Express server with `--watch` for auto-restart)
-- **WebSocket** on the same HTTP server/port (3011)
+- **Frontend (static, served by the app container)** on http://localhost:3087
 - **MariaDB** database on port 3321
 
 Optional flags:
 - `--no-auth` - Disable authentication (only use behind auth gateway or if not exposed outside your network)
 - `--debug`   - Set logging level to "debug" (defaults to `info`)
 
-**Option B: Vite Dev Server (Hot Module Reload)**
+**Step 2: Vite Dev Server (Hot Module Reload — optional)**
 
-For faster frontend development with HMR:
+For faster, iterative frontend development you can run the Vite dev server with HMR. This is optional; run it when you want instant frontend reloads while developing UI.
 
 ```bash
 # Terminal 1: Start backend in Docker
 ./scripts/start-dev.sh
 
-# Terminal 2: Start Vite dev server
+# Terminal 2: Start Vite dev server (HMR)
 cd client
 npm run dev
 ```
 
 Then access:
-- **Frontend (with HMR)** at http://localhost:3087
-- **Backend API** at http://localhost:3011 (proxied through Vite)
+- **Frontend (HMR)** at http://localhost:3087
 
-The Vite dev server automatically proxies API/WebSocket requests to the backend at `:3011`.
+The Vite dev server will proxy API and WebSocket requests to the backend at port `3011` so API calls work the same as the full-stack run.
 
 ### 5. Access the Application
 
 Navigate to:
-- **Docker static build**: http://localhost:3011
-- **Vite dev server** (if running): http://localhost:3000
+
+Navigate to:
+- **Docker static build**: http://localhost:3087
+- **Vite dev server (if running)**: http://localhost:3087
 
 Create your admin account on first access.
 

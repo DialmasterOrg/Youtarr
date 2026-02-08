@@ -19,7 +19,7 @@ services:
     container_name: youtarr-dev
     # Map 3011:3011 in dev so Vite proxy can reach backend at localhost:3011
     ports:
-      - "3011:3011"
+      - "3087:3011"
     volumes:
       - ${YOUTUBE_OUTPUT_DIR:-./downloads}:/usr/src/app/data
       - ./server/images:/app/server/images

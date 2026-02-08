@@ -3,14 +3,14 @@ import react from '@vitejs/plugin-react';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig(({ command }) => {
-  const backendPort = process.env.VITE_BACKEND_PORT || '3011';
+  const backendPort = process.env.VITE_BACKEND_PORT || '3087';
   const backendTarget = `http://127.0.0.1:${backendPort}`;
 
   return {
     plugins: [react(), tsconfigPaths()],
     envPrefix: ['VITE_', 'REACT_APP_'],
     server: {
-      port: 3087,
+      port: 3000,
       proxy: {
         // Handle WebSocket path explicitly first
         '/ws': {
