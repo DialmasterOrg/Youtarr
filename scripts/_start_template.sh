@@ -53,19 +53,8 @@ if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
   yt_info "Detected ARM architecture ($ARCH) - using named volume for MariaDB"
 fi
 
-if [ "$USE_EXTERNAL_DB" == "true" ]; then
-  # Only start the youtarr service.
-  COMPOSE_ARGS="-f docker-compose.external-db.yml up -d"
-else
-  if [ "$IS_ARM" == "true" ]; then
-    # Use ARM override to switch to named volume (works around virtiofs bugs)
-    COMPOSE_ARGS="-f docker-compose.yml -f docker-compose.arm.yml up -d"
-  else
-    COMPOSE_ARGS="-f docker-compose.yml up -d"
-  fi
-fi
-
-$COMPOSE_CMD $COMPOSE_ARGS
+# Bring up the stack using the selected compose files (COMPOSE_FILES is set in _shared_start_tasks.sh)
+$COMPOSE_CMD $COMPOSE_FILES up -d
 
 yt_section "Environment"
 yt_info "Youtarr services are starting."

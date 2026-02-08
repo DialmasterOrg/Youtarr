@@ -123,23 +123,6 @@ jest.mock('./components/DatabaseErrorOverlay', () => {
   };
 });
 
-// Mock window.location with proper URL
-delete (window as any).location;
-window.location = {
-  href: 'http://localhost/',
-  origin: 'http://localhost',
-  pathname: '/',
-  search: '',
-  hash: '',
-  protocol: 'http:',
-  host: 'localhost',
-  hostname: 'localhost',
-  port: '',
-  replace: jest.fn(),
-  reload: jest.fn(),
-  assign: jest.fn()
-} as any;
-
 // Mock localStorage
 const localStorageMock = {
   getItem: jest.fn(),
@@ -165,6 +148,15 @@ Object.defineProperty(window, 'matchMedia', {
     removeEventListener: jest.fn(),
     dispatchEvent: jest.fn(),
   })),
+});
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  setMockLocation('http://localhost/');
+});
+
+afterEach(() => {
+  // Global resets in jest.setup.ts handle this
 });
 
 // Mock MUI's useTheme and useMediaQuery hooks
@@ -231,8 +223,7 @@ describe('App Component', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    window.location.href = 'http://localhost/';
-    window.location.pathname = '/';
+    window.history.replaceState({}, '', '/');
     localStorageMock.getItem.mockReturnValue(null);
     (global.fetch as jest.Mock).mockImplementation(createFetchMock());
     axios.get.mockResolvedValue({ data: { version: 'v1.0.0' } });
@@ -295,6 +286,33 @@ describe('App Component', () => {
   test('validates auth token on mount', async () => {
     localStorageMock.getItem.mockReturnValue('test-token');
 
+    // Mock fetch responses in the order they are called:
+    // 1. /getconfig
+    // 2. /api/db-status
+    // 3. /setup/status
+    // 4. /auth/validate
+    (global.fetch as jest.Mock)
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          preferredResolution: '1080',
+          darkModeEnabled: false,
+          youtubeOutputDirectory: '/tmp',
+        }),
+      }))
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ status: 'healthy' }),
+      }))
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ requiresSetup: false }),
+      }))
+      .mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }));
+
     render(<App />);
 
     await waitFor(() => {
@@ -302,6 +320,7 @@ describe('App Component', () => {
         headers: {
           'x-access-token': 'test-token',
         },
+        cache: 'no-cache',
       });
     });
   });
@@ -315,7 +334,7 @@ describe('App Component', () => {
     }));
 
     render(<App />);
-
+      
     await waitFor(() => {
       expect(localStorageMock.removeItem).toHaveBeenCalledWith('authToken');
     });
@@ -553,7 +572,9 @@ describe('App Component', () => {
       render(<App />);
 
       await waitFor(() => {
-        expect(fetch).toHaveBeenCalledWith('/api/db-status');
+        expect(fetch).toHaveBeenCalledWith('/api/db-status', {
+          cache: 'no-cache'
+        });
       });
     });
 
@@ -631,6 +652,8 @@ describe('App Component', () => {
 
     test('retry button calls window.location.reload', async () => {
       const user = userEvent.setup();
+      const mockLocation = setMockLocation('http://localhost/');
+
       (global.fetch as jest.Mock).mockImplementation(createFetchMock({
         '/api/db-status': {
           ok: true,
@@ -652,7 +675,7 @@ describe('App Component', () => {
       const retryButton = screen.getByText('Retry');
       await user.click(retryButton);
 
-      expect(window.location.reload).toHaveBeenCalled();
+      expect(mockLocation.reload).toHaveBeenCalled();
     });
 
     test('gracefully handles fetch failure by assuming healthy database', async () => {

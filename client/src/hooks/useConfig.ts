@@ -38,7 +38,10 @@ export function useConfig(token: string | null): UseConfigResult {
   const [error, setError] = useState<Error | null>(null);
 
   const fetchConfig = useCallback(async () => {
-    if (!token) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     setError(null);

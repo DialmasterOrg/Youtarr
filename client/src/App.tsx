@@ -58,10 +58,21 @@ import DatabaseErrorOverlay from './components/DatabaseErrorOverlay';
 import { lightTheme, darkTheme } from './theme';
 import { YTDLP_UPDATED_EVENT } from './components/Configuration/hooks/useYtDlpUpdate';
 
+import { locationUtils } from './utils/location';
+
 // Event name for database error detection
 const DB_ERROR_EVENT = 'db-error-detected';
 
 function AppContent() {
+  // Safely parse JSON responses. 304/empty bodies return null.
+  const safeParseJson = async (response: Response) => {
+    if (response.status === 304) return null;
+    try {
+      return await response.json();
+    } catch (err) {
+      return null;
+    }
+  };
   const [token, setToken] = useState<string | null>(
     localStorage.getItem('authToken') // Only use the new authToken, no fallback to plexAuthToken
   );
@@ -102,7 +113,7 @@ function AppContent() {
 
   const handleDatabaseRetry = () => {
     // Reload the page to re-check database status
-    window.location.reload();
+    locationUtils.reload();
   };
 
   // Override global fetch to automatically detect database errors
@@ -151,9 +162,20 @@ function AppContent() {
 
   // Check database status on initial load
   useEffect(() => {
-    fetch('/api/db-status')
-      .then((response) => response.json())
+    fetch('/api/db-status', { cache: 'no-cache' })
+      .then(async (response) => {
+        if (!response.ok && response.status !== 304) {
+          throw new Error('Failed to check database status');
+        }
+        return await safeParseJson(response);
+      })
       .then((data) => {
+        if (!data) {
+          // 304 or empty body - assume healthy for initial check
+          setDbStatus('healthy');
+          return;
+        }
+
         if (data.status === 'healthy') {
           setDbStatus('healthy');
         } else {
@@ -168,9 +190,21 @@ function AppContent() {
       });
   }, []);
 
-  // Setup axios interceptor to catch database errors from any API call
+  // Setup axios interceptor to handle 304 responses and database errors
   useEffect(() => {
-    const interceptor = axios.interceptors.response.use(
+    // Interceptor to prevent 304s by stripping conditional headers in dev mode
+    let requestInterceptor: number | null = null;
+    if (import.meta.env.DEV) {
+      requestInterceptor = axios.interceptors.request.use((config) => {
+        if (config.headers) {
+          delete config.headers['If-None-Match'];
+          delete config.headers['If-Modified-Since'];
+        }
+        return config;
+      });
+    }
+
+    const responseInterceptor = axios.interceptors.response.use(
       (response) => response,
       (error) => {
         // Check if this is a database error (503 with requiresDbFix flag)
@@ -187,9 +221,12 @@ function AppContent() {
       }
     );
 
-    // Cleanup interceptor on unmount
+    // Cleanup interceptors on unmount
     return () => {
-      axios.interceptors.response.eject(interceptor);
+      if (requestInterceptor !== null) {
+        axios.interceptors.request.eject(requestInterceptor);
+      }
+      axios.interceptors.response.eject(responseInterceptor);
     };
   }, []);
 
@@ -226,10 +263,15 @@ function AppContent() {
     // Check database status every 15 seconds
     const checkInterval = setInterval(async () => {
       try {
-        const response = await fetch('/api/db-status');
-        const data = await response.json();
+        const response = await fetch('/api/db-status', { cache: 'no-cache' });
+        if (!response.ok && response.status !== 304) {
+          throw new Error('Failed to fetch DB status');
+        }
+        const data = await safeParseJson(response);
 
-        if (data.status === 'healthy') {
+        if (!data) {
+          // 304 or empty body - skip parsing and keep current state
+        } else if (data.status === 'healthy') {
           console.log('Database recovered!');
           setDbStatus('healthy');
           setDbRecovered(true); // Show recovery message
@@ -293,9 +335,21 @@ function AppContent() {
     }
 
     // First check if setup is required
-    fetch('/setup/status')
-      .then(response => response.json())
-      .then(data => {
+    fetch('/setup/status', { cache: 'no-cache' })
+      .then(async (response) => {
+        if (!response.ok && response.status !== 304) {
+          throw new Error('Setup status check failed');
+        }
+        return await safeParseJson(response);
+      })
+      .then((data) => {
+        if (!data) {
+          // 304 or empty body - we couldn't parse a body. Assume setup required to be safe.
+          setCheckingSetup(false);
+          setRequiresSetup(true);
+          return;
+        }
+
         setRequiresSetup(data.requiresSetup);
         setCheckingSetup(false);
 
@@ -325,9 +379,10 @@ function AppContent() {
               headers: {
                 'x-access-token': authToken,
               },
+              cache: 'no-cache',
             })
               .then((response) => {
-                if (response.ok) {
+                if (response.ok || response.status === 304) {
                   setToken(authToken);
                 } else {
                   localStorage.removeItem('authToken');
@@ -373,13 +428,17 @@ function AppContent() {
     fetch('/api/ytdlp/latest-version', {
       headers: { 'x-access-token': token },
     })
-      .then((response) => {
-        if (response.ok) {
-          return response.json();
+      .then(async (response) => {
+        if (!response.ok && response.status !== 304) {
+          throw new Error('Failed to fetch yt-dlp version');
         }
-        throw new Error('Failed to fetch yt-dlp version');
+        return await safeParseJson(response);
       })
       .then((data) => {
+        if (!data) {
+          // 304 or empty body - nothing to update
+          return;
+        }
         setYtDlpUpdateAvailable(data.updateAvailable || false);
         setYtDlpLatestVersion(data.latestVersion || '');
         if (data.currentVersion) {
@@ -797,7 +856,7 @@ function AppContent() {
                 <Route path='/setup' element={<InitialSetup onSetupComplete={(newToken) => {
                   setToken(newToken);
                   setRequiresSetup(false);
-                  window.location.href = '/configuration';
+                  locationUtils.setHref('/configuration');
                 }} />} />
                 <Route
                   path='/login'
