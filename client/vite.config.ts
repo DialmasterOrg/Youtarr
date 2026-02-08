@@ -10,7 +10,7 @@ export default defineConfig(({ command }) => {
     plugins: [react(), tsconfigPaths()],
     envPrefix: ['VITE_', 'REACT_APP_'],
     server: {
-      port: 3000,
+      port: 3087,
       proxy: {
         // Handle WebSocket path explicitly first
         '/ws': {
