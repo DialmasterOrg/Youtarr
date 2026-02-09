@@ -103,42 +103,34 @@ const TestConsumer: React.FC = () => {
   );
 };
 
+// Mock localStorage
+const localStorageMock = {
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+  clear: jest.fn(),
+};
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock,
+  writable: true,
+});
+
 describe('WebSocketProvider', () => {
   let originalWebSocket: typeof WebSocket;
   let originalConsoleLog: typeof console.log;
-  let originalLocation: Location;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    setMockLocation('http://localhost/');
     jest.useFakeTimers();
     MockWebSocket.clearInstances();
     originalWebSocket = global.WebSocket;
     originalConsoleLog = console.log;
-    originalLocation = window.location;
     console.log = jest.fn();
     (global as any).WebSocket = MockWebSocket;
     mockNotification.permission = 'default';
     mockNotification.requestPermission.mockResolvedValue('granted');
     NotificationConstructor.mockClear();
-
-    // Mock window.location with default values
-    delete (window as any).location;
-    (window as any).location = {
-      hostname: 'localhost',
-      port: '',
-      protocol: 'http:',
-      href: '',
-      origin: '',
-      pathname: '',
-      search: '',
-      hash: '',
-      host: 'localhost',
-      reload: jest.fn(),
-      replace: jest.fn(),
-      assign: jest.fn(),
-      ancestorOrigins: {} as DOMStringList,
-      toString: jest.fn(() => 'http://localhost')
-    };
   });
 
   afterEach(() => {
@@ -148,7 +140,6 @@ describe('WebSocketProvider', () => {
     jest.useRealTimers();
     (global as any).WebSocket = originalWebSocket;
     console.log = originalConsoleLog;
-    (window as any).location = originalLocation;
   });
 
   test('renders children correctly', () => {
@@ -162,9 +153,6 @@ describe('WebSocketProvider', () => {
   });
 
   test('creates WebSocket connection on mount', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    (process.env as any).NODE_ENV = 'development';
-
     render(
       <WebSocketProvider>
         <TestConsumer />
@@ -176,15 +164,10 @@ describe('WebSocketProvider', () => {
     });
 
     const ws = MockWebSocket.instances[0];
-    expect(ws.url).toBe('ws://localhost:3011');
-
-    (process.env as any).NODE_ENV = originalEnv;
+    expect(ws.url).toBe('ws://localhost/ws');
   });
 
   test('uses correct WebSocket URL in development mode', () => {
-    const originalEnv = process.env.NODE_ENV;
-    (process.env as any).NODE_ENV = 'development';
-
     render(
       <WebSocketProvider>
         <TestConsumer />
@@ -192,43 +175,29 @@ describe('WebSocketProvider', () => {
     );
 
     const ws = MockWebSocket.instances[0];
-    expect(ws.url).toBe('ws://localhost:3011');
-
-    (process.env as any).NODE_ENV = originalEnv;
+    expect(ws.url).toBe('ws://localhost/ws');
   });
 
-  test('uses correct WebSocket URL in production mode', () => {
-    const originalEnv = process.env.NODE_ENV;
-    (process.env as any).NODE_ENV = 'production';
-    (window as any).location.port = '3087';
-
+  test('uses correct WebSocket URL in production mode with custom port', () => {
+    setMockLocation('http://localhost:3087/');
     render(
       <WebSocketProvider>
-        <TestConsumer />
+        <div />
       </WebSocketProvider>
     );
-
     const ws = MockWebSocket.instances[0];
-    expect(ws.url).toBe('ws://localhost:3087');
-
-    (process.env as any).NODE_ENV = originalEnv;
+    expect(ws.url).toBe('ws://localhost:3087/ws');
   });
 
   test('uses WSS protocol for HTTPS connections', () => {
-    const originalEnv = process.env.NODE_ENV;
-    (process.env as any).NODE_ENV = 'development';
-    (window as any).location.protocol = 'https:';
-
+    setMockLocation('https://localhost/');
     render(
       <WebSocketProvider>
-        <TestConsumer />
+        <div />
       </WebSocketProvider>
     );
-
     const ws = MockWebSocket.instances[0];
-    expect(ws.url).toBe('wss://localhost:3011');
-
-    (process.env as any).NODE_ENV = originalEnv;
+    expect(ws.url).toBe('wss://localhost/ws');
   });
 
   test('resets retry counter on connection open', async () => {

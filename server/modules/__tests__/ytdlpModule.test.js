@@ -15,6 +15,10 @@ jest.mock('../jobModule', () => ({
   getInProgressJobId: jest.fn(),
 }));
 
+jest.mock('../download/tempPathManager', () => ({
+  getTempBasePath: jest.fn(() => '/tmp/youtarr-downloads'),
+}));
+
 // Mock logger
 jest.mock('../../logger', () => ({
   info: jest.fn(),
@@ -393,7 +397,11 @@ describe('ytdlpModule', () => {
 
       const result = await updatePromise;
       expect(result.success).toBe(true);
-      expect(spawn).toHaveBeenCalledWith('yt-dlp', ['-U']);
+      expect(spawn).toHaveBeenCalledWith('yt-dlp', ['-U'], expect.objectContaining({
+        env: expect.objectContaining({
+          TMPDIR: '/tmp/youtarr-downloads'
+        })
+      }));
     });
 
     it('resets update state after completion', async () => {

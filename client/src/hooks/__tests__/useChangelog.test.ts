@@ -1,5 +1,6 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useChangelog } from '../useChangelog';
+import { locationUtils } from '../../utils/location';
 
 // Mock global fetch
 const mockFetch = jest.fn();
@@ -117,5 +118,20 @@ describe('useChangelog', () => {
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(result.current.content).toBe(updatedContent);
+  });
+
+  test('mocks location using locationUtils and setMockLocation', () => {
+    // setMockLocation is a global helper defined in jest.setup.ts
+    const mockLocation = setMockLocation('http://localhost/test?query=1');
+
+    // Use locationUtils instead of window.location directly
+    expect(locationUtils.getHref()).toBe('http://localhost/test?query=1');
+    expect(locationUtils.getSearch()).toBe('?query=1');
+
+    locationUtils.assign('http://localhost/next');
+    expect(mockLocation.assign).toHaveBeenCalledWith('http://localhost/next');
+
+    locationUtils.reload();
+    expect(mockLocation.reload).toHaveBeenCalled();
   });
 });

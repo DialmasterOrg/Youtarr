@@ -7,6 +7,15 @@ const https = require('https');
 const { spawn } = require('child_process');
 const logger = require('../logger');
 
+// Lazy-loaded to avoid circular dependency issues during test mocking
+let _tempPathManager = null;
+function getTempPathManager() {
+  if (!_tempPathManager) {
+    _tempPathManager = require('./download/tempPathManager');
+  }
+  return _tempPathManager;
+}
+
 // Cache for latest version to avoid hitting GitHub API rate limits
 let cachedLatestVersion = null;
 let cacheTimestamp = 0;
@@ -166,7 +175,12 @@ function performUpdate() {
 
     logger.info('Starting yt-dlp update');
 
-    const updateProcess = spawn('yt-dlp', ['-U']);
+    const updateProcess = spawn('yt-dlp', ['-U'], {
+      env: {
+        ...process.env,
+        TMPDIR: getTempPathManager().getTempBasePath()
+      }
+    });
 
     updateProcess.stdout.on('data', (data) => {
       stdout += data.toString();
