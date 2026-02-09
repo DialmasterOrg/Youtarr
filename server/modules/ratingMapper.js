@@ -114,7 +114,7 @@ function mapFromEntry(contentRating, ageLimit, priority = 'mpaa,tvpg,ytrating,ag
     raw: contentRating,
   };
 
-  if (!contentRating && !ageLimit) {
+  if (!contentRating && ageLimit == null) {
     return result;
   }
 
@@ -154,7 +154,7 @@ function mapFromEntry(contentRating, ageLimit, priority = 'mpaa,tvpg,ytrating,ag
       }
     }
 
-    if (priorityLevel === 'age' && ageLimit) {
+    if (priorityLevel === 'age' && ageLimit != null) {
       const normalized = mapAgeLimit(ageLimit);
       if (normalized) {
         result.normalized_rating = normalized;

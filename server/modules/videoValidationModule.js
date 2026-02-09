@@ -116,7 +116,7 @@ class VideoValidationModule {
     const isMembersOnly = metadata.availability === 'subscriber_only';
 
     const contentRating = metadata.contentRating || metadata.content_rating || null;
-    const ageLimit = metadata.age_limit || null;
+    const ageLimit = metadata.age_limit ?? null;
 
     const resp = {
       isValidUrl: true,

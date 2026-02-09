@@ -1616,7 +1616,7 @@ class ChannelModule {
    */
   parseVideoMetadata(entry) {
     const contentRating = entry.contentRating || entry.content_rating || null;
-    const ageLimit = entry.age_limit || null;
+    const ageLimit = entry.age_limit ?? null;
     const ratingInfo = ratingMapper.mapFromEntry(contentRating, ageLimit);
 
     const out = {

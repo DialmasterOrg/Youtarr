@@ -151,6 +151,8 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
    *                   type: integer
    *               rating:
    *                 type: string
+   *                 nullable: true
+   *                 description: Content rating or null to clear
    *     responses:
    *       200:
    *         description: Ratings updated

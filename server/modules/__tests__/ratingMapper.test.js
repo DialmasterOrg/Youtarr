@@ -62,6 +62,12 @@ describe('ratingMapper', () => {
       expect(result.source).toBe('yt-dlp:age_limit=18');
     });
 
+    it('maps age_limit of 0 to TV-G', () => {
+      const result = mapFromEntry(null, 0);
+      expect(result.normalized_rating).toBe('TV-G');
+      expect(result.source).toBe('yt-dlp:age_limit=0');
+    });
+
     it('returns null when no rating data is present', () => {
       const result = mapFromEntry(null, null);
       expect(result.normalized_rating).toBe(null);

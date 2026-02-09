@@ -4,6 +4,7 @@ const Channel = require('../models/channel');
 const configModule = require('./configModule');
 const { Op } = require('sequelize');
 const logger = require('../logger');
+const ratingMapper = require('./ratingMapper');
 const {
   GLOBAL_DEFAULT_SENTINEL,
   ROOT_SENTINEL,
@@ -234,6 +235,50 @@ class ChannelSettingsModule {
       return {
         valid: false,
         error: 'Invalid audio format. Valid values: video_mp3, mp3_only, or null for video only',
+      };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Get all valid normalized ratings from ratingMapper
+   * @returns {string[]} - Array of valid rating strings
+   */
+  getValidNormalizedRatings() {
+    const ratings = new Set();
+    
+    // Add MPAA ratings (excluding null)
+    Object.values(ratingMapper.MPAA_RATINGS).forEach(rating => {
+      if (rating !== null) ratings.add(rating);
+    });
+    
+    // Add TVPG ratings (excluding null)
+    Object.values(ratingMapper.TVPG_RATINGS).forEach(rating => {
+      if (rating !== null) ratings.add(rating);
+    });
+    
+    return Array.from(ratings).sort();
+  }
+
+  /**
+   * Validate default rating setting
+   * @param {string|null} defaultRating - Default rating to validate
+   * @returns {Object} - { valid: boolean, error?: string }
+   */
+  validateDefaultRating(defaultRating) {
+    // NULL is valid (no default rating)
+    if (defaultRating === null || defaultRating === undefined) {
+      return { valid: true };
+    }
+
+    const validRatings = this.getValidNormalizedRatings();
+    const trimmed = defaultRating.trim();
+    
+    if (!validRatings.includes(trimmed)) {
+      return {
+        valid: false,
+        error: `Invalid rating. Valid values: ${validRatings.join(', ')}, or null for no default`,
       };
     }
 
@@ -539,6 +584,14 @@ class ChannelSettingsModule {
     // Validate audio format if provided
     if (settings.audio_format !== undefined) {
       const validation = this.validateAudioFormat(settings.audio_format);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+    }
+
+    // Validate default rating if provided
+    if (settings.default_rating !== undefined) {
+      const validation = this.validateDefaultRating(settings.default_rating);
       if (!validation.valid) {
         throw new Error(validation.error);
       }

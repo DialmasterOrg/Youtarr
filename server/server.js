@@ -473,6 +473,11 @@ const initialize = async () => {
         // Cache for 1 hour
         res.set('Cache-Control', 'public, max-age=3600');
       }
+      // Check if this is a request that returns index.html (SPA routes)
+      // These should not be cached to ensure fresh UI after updates
+      else if (req.accepts('text/html') && !filePath.startsWith('/api/') && !filePath.startsWith('/getconfig')) {
+        res.set('Cache-Control', 'no-cache, must-revalidate');
+      }
 
       next();
     });

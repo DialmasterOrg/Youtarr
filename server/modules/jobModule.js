@@ -126,7 +126,7 @@ class JobModule {
             channel_id: info.channel_id,
             media_type: info.media_type || 'video',
             content_rating: info.content_rating || null,
-            age_limit: info.age_limit || null,
+            age_limit: info.age_limit ?? null,
             normalized_rating: info.normalized_rating || null,
             rating_source: info.rating_source || null,
           };
@@ -720,7 +720,7 @@ class JobModule {
     const media_type = info.media_type || 'video';
     const thumbnail = `https://i.ytimg.com/vi/${youtube_id}/mqdefault.jpg`;
     const content_rating = info.content_rating || null;
-    const age_limit = info.age_limit || null;
+    const age_limit = info.age_limit ?? null;
     const normalized_rating = info.normalized_rating || null;
 
     const defaults = {
