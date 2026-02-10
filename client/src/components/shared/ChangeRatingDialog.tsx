@@ -17,7 +17,7 @@ import {
 interface ChangeRatingDialogProps {
   open: boolean;
   onClose: () => void;
-  onApply: (rating: string) => Promise<void>;
+  onApply: (rating: string | null) => Promise<void>;
   selectedCount: number;
 }
 
@@ -39,7 +39,8 @@ const ChangeRatingDialog: React.FC<ChangeRatingDialogProps> = ({
   const handleApply = async () => {
     setLoading(true);
     try {
-      await onApply(rating);
+      const payloadRating = rating === 'NR' ? null : rating;
+      await onApply(payloadRating);
       onClose();
     } catch (err) {
       console.error('Failed to apply rating:', err);

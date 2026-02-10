@@ -247,7 +247,7 @@ function VideosPage({ token }: VideosPageProps) {
     setRatingDialogOpen(true);
   };
 
-  const handleApplyRating = async (rating: string) => {
+  const handleApplyRating = async (rating: string | null) => {
     if (!token) return;
 
     const videoIdsToUpdate = isMobile ? selectedForDeletion : selectedVideos;

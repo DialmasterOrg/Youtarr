@@ -9,6 +9,7 @@ describe('VideosModule', () => {
   let mockConfigModule;
   let mockVideoValidationModule;
   let mockLogger;
+  let mockNfoGenerator;
 
   beforeEach(() => {
     jest.resetModules();
@@ -17,7 +18,8 @@ describe('VideosModule', () => {
     mockVideo = {
       count: jest.fn(),
       findAll: jest.fn(),
-      update: jest.fn().mockResolvedValue([0])
+      update: jest.fn().mockResolvedValue([0]),
+      findByPk: jest.fn().mockResolvedValue(null)
     };
 
     // Mock the Channel model
@@ -33,7 +35,10 @@ describe('VideosModule', () => {
     // Mock fs promises
     mockFs = {
       stat: jest.fn(),
-      readdir: jest.fn()
+      readdir: jest.fn(),
+      access: jest.fn(),
+      readFile: jest.fn(),
+      writeFile: jest.fn()
     };
 
     // Mock configModule
@@ -53,6 +58,10 @@ describe('VideosModule', () => {
       debug: jest.fn(),
       trace: jest.fn(),
       fatal: jest.fn()
+    };
+
+    mockNfoGenerator = {
+      writeVideoNfoFile: jest.fn()
     };
 
     // Mock the database module
@@ -78,6 +87,8 @@ describe('VideosModule', () => {
     jest.doMock('../configModule', () => mockConfigModule);
 
     jest.doMock('../videoValidationModule', () => mockVideoValidationModule);
+
+    jest.doMock('../nfoGenerator', () => mockNfoGenerator);
 
     // Mock logger
     jest.doMock('../../logger', () => mockLogger);
@@ -816,6 +827,50 @@ describe('VideosModule', () => {
       }
 
       expect(mockLogger.error).toHaveBeenCalledWith({ err: customError }, 'Error in getVideosPaginated');
+    });
+  });
+
+  describe('bulkUpdateVideoRatings', () => {
+    test('clears metadata when null rating is applied and tracks missing videos', async () => {
+      const existingId = 101;
+      const missingId = 202;
+
+      const videoInstance = {
+        id: existingId,
+        filePath: '/downloads/Channel/video [abc123].mp4',
+        update: jest.fn().mockResolvedValue()
+      };
+
+      mockVideo.findByPk.mockImplementation(async (id) => (id === existingId ? videoInstance : null));
+      mockFs.access.mockResolvedValue();
+      mockFs.readFile.mockResolvedValue(JSON.stringify({
+        normalized_rating: 'PG',
+        rating_source: 'Initial Source',
+        fulltitle: 'Test Video'
+      }));
+      mockFs.writeFile.mockResolvedValue();
+
+      const result = await VideosModule.bulkUpdateVideoRatings([existingId, missingId], null);
+
+      expect(mockVideo.findByPk).toHaveBeenCalledWith(existingId);
+      expect(mockVideo.findByPk).toHaveBeenCalledWith(missingId);
+      expect(videoInstance.update).toHaveBeenCalledWith({
+        normalized_rating: null,
+        rating_source: 'Manual Override'
+      });
+      expect(result.success).toEqual([existingId]);
+      expect(result.failed).toEqual([{ id: missingId, error: 'Video not found' }]);
+      expect(mockFs.readFile).toHaveBeenCalledWith(expect.stringContaining('.info.json'), 'utf8');
+      expect(mockFs.writeFile).toHaveBeenCalledTimes(1);
+
+      const [, writtenData] = mockFs.writeFile.mock.calls[0];
+      const parsed = JSON.parse(writtenData);
+      expect(parsed.normalized_rating).toBeNull();
+      expect(parsed.rating_source).toBe('Manual Override');
+      expect(mockNfoGenerator.writeVideoNfoFile).toHaveBeenCalledWith(
+        videoInstance.filePath,
+        expect.objectContaining({ normalized_rating: null })
+      );
     });
   });
 });

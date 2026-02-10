@@ -1264,7 +1264,17 @@ class ChannelModule {
       where: {
         youtubeId: youtubeIds
       },
-      attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize']
+      attributes: [
+        'id',
+        'youtubeId',
+        'removed',
+        'fileSize',
+        'filePath',
+        'audioFilePath',
+        'audioFileSize',
+        'normalized_rating',
+        'rating_source'
+      ]
     });
 
     // Create Maps for O(1) lookup of download status

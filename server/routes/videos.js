@@ -186,15 +186,25 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
         'NR'
       ]);
 
-      if (rating !== null && typeof rating !== 'string') {
-        return res.status(400).json({ success: false, error: 'rating must be a string or null' });
+      let normalizedRating = rating;
+
+      if (normalizedRating !== null) {
+        if (typeof normalizedRating !== 'string') {
+          return res.status(400).json({ success: false, error: 'rating must be a string or null' });
+        }
+
+        normalizedRating = normalizedRating.trim().toUpperCase();
+
+        if (normalizedRating === 'NR') {
+          normalizedRating = null;
+        }
       }
 
-      if (rating !== null && rating !== 'NR' && !allowedRatings.has(rating)) {
+      if (normalizedRating !== null && !allowedRatings.has(normalizedRating)) {
         return res.status(400).json({ success: false, error: 'invalid rating value' });
       }
 
-      const result = await videosModule.bulkUpdateVideoRatings(videoIds, rating);
+      const result = await videosModule.bulkUpdateVideoRatings(videoIds, normalizedRating);
       res.json(result);
     } catch (error) {
       req.log.error({ err: error }, 'Failed to update video ratings');
