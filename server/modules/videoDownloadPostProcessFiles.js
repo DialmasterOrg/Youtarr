@@ -62,7 +62,7 @@ async function downloadChannelThumbnailIfMissing(channelId) {
       const result = spawnSync('yt-dlp', ytdlpArgs, {
         env: {
           ...process.env,
-          TMPDIR: '/tmp'
+          TMPDIR: tempPathManager.getTempBasePath()
         },
         encoding: 'utf8'
       });
