@@ -439,6 +439,7 @@ describe('DownloadSettingsDialog', () => {
         useCustom: true,
         resolution: '720',
         allowRedownload: false,
+        rating: null,
       });
     });
 
@@ -461,6 +462,7 @@ describe('DownloadSettingsDialog', () => {
         resolution: '1080',
         videoCount: 10,
         allowRedownload: false,
+        rating: null,
       });
     });
   });
