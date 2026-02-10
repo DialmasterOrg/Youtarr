@@ -2,7 +2,8 @@ const {
   normalizeRating,
   mapAgeLimit,
   mapFromEntry,
-  applyChannelDefault,
+  determineEffectiveRating,
+  mapToNumericRating,
 } = require('../ratingMapper');
 
 describe('ratingMapper', () => {
@@ -23,11 +24,14 @@ describe('ratingMapper', () => {
 
   describe('mapAgeLimit', () => {
     it('maps age limits to normalized ratings', () => {
-      expect(mapAgeLimit(0)).toBe('TV-G');
       expect(mapAgeLimit(7)).toBe('TV-PG');
       expect(mapAgeLimit(13)).toBe('TV-14');
       expect(mapAgeLimit(16)).toBe('PG-13');
       expect(mapAgeLimit(18)).toBe('R');
+    });
+
+    it('returns null for age limit 0 (unrated)', () => {
+      expect(mapAgeLimit(0)).toBe(null);
     });
 
     it('returns null for invalid values', () => {
@@ -62,10 +66,10 @@ describe('ratingMapper', () => {
       expect(result.source).toBe('yt-dlp:age_limit=18');
     });
 
-    it('maps age_limit of 0 to TV-G', () => {
+    it('maps age_limit of 0 to null (unrated)', () => {
       const result = mapFromEntry(null, 0);
-      expect(result.normalized_rating).toBe('TV-G');
-      expect(result.source).toBe('yt-dlp:age_limit=0');
+      expect(result.normalized_rating).toBe(null);
+      expect(result.source).toBe(null);
     });
 
     it('returns null when no rating data is present', () => {
@@ -75,17 +79,90 @@ describe('ratingMapper', () => {
     });
   });
 
-  describe('applyChannelDefault', () => {
-    it('keeps existing video rating', () => {
-      expect(applyChannelDefault('R', 'PG')).toBe('R');
+  describe('determineEffectiveRating', () => {
+    it('prioritizes manual override over everything', () => {
+      const jsonData = { content_rating: { mpaaRating: 'mpaaPg13' }, age_limit: 18 };
+      expect(determineEffectiveRating(jsonData, 'TV-14', 'R')).toEqual({
+        normalized_rating: 'R',
+        numeric_rating: 4,
+        rating_source: 'Manual Override'
+      });
     });
 
-    it('applies channel default when video rating missing', () => {
-      expect(applyChannelDefault(null, 'TV-14')).toBe('TV-14');
+    it('treats manual override "NR" as null', () => {
+      const jsonData = { content_rating: { mpaaRating: 'mpaaPg13' }, age_limit: 18 };
+      expect(determineEffectiveRating(jsonData, 'TV-14', 'NR')).toEqual({
+        normalized_rating: null,
+        numeric_rating: null,
+        rating_source: 'Manual Override'
+      });
     });
 
-    it('returns null when neither rating exists', () => {
-      expect(applyChannelDefault(null, null)).toBe(null);
+    it('applies channel default when no manual override', () => {
+      const jsonData = { content_rating: null, age_limit: null };
+      expect(determineEffectiveRating(jsonData, 'TV-14', undefined)).toEqual({
+        normalized_rating: 'TV-14',
+        numeric_rating: 3,
+        rating_source: 'Channel Default'
+      });
+    });
+
+    it('ignores channel default "NR"', () => {
+      const jsonData = { content_rating: null, age_limit: null };
+      expect(determineEffectiveRating(jsonData, 'NR', undefined)).toEqual({
+        normalized_rating: null,
+        numeric_rating: null,
+        rating_source: null
+      });
+    });
+
+    it('falls back to metadata rating when no override or channel default', () => {
+      const jsonData = { content_rating: { mpaaRating: 'mpaaPg13' }, age_limit: null };
+      expect(determineEffectiveRating(jsonData, null, undefined)).toEqual({
+        normalized_rating: 'PG-13',
+        numeric_rating: 3,
+        rating_source: 'youtube:mpaaPg13'
+      });
+    });
+
+    it('returns null when no rating information available', () => {
+      const jsonData = { content_rating: null, age_limit: null };
+      expect(determineEffectiveRating(jsonData, null, undefined)).toEqual({
+        normalized_rating: null,
+        numeric_rating: null,
+        rating_source: null
+      });
+    });
+  });
+
+  describe('mapToNumericRating', () => {
+    it('maps G and G equivalents to 1', () => {
+      expect(mapToNumericRating('G')).toBe(1);
+      expect(mapToNumericRating('TV-Y')).toBe(1);
+      expect(mapToNumericRating('TV-G')).toBe(1);
+    });
+
+    it('maps PG and PG equivalents to 2', () => {
+      expect(mapToNumericRating('PG')).toBe(2);
+      expect(mapToNumericRating('TV-PG')).toBe(2);
+    });
+
+    it('maps PG-13 and PG-13 equivalents to 3', () => {
+      expect(mapToNumericRating('PG-13')).toBe(3);
+      expect(mapToNumericRating('TV-14')).toBe(3);
+    });
+
+    it('maps R and R equivalents to 4', () => {
+      expect(mapToNumericRating('R')).toBe(4);
+      expect(mapToNumericRating('TV-MA')).toBe(4);
+      expect(mapToNumericRating('NC-17')).toBe(4);
+    });
+
+    it('returns null for NR and unknown ratings', () => {
+      expect(mapToNumericRating(null)).toBe(null);
+      expect(mapToNumericRating('')).toBe(null);
+      expect(mapToNumericRating('unknown')).toBe(null);
+      expect(mapToNumericRating('NR')).toBe(null);
     });
   });
 });

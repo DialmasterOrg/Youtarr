@@ -27,6 +27,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import InfoIcon from '@mui/icons-material/Info';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import RatingBadge from '../shared/RatingBadge';
 import { useConfig } from '../../hooks/useConfig';
 import { SubfolderAutocomplete } from '../shared/SubfolderAutocomplete';
 
@@ -513,17 +514,17 @@ function ChannelSettingsDialog({
                 <MenuItem value="">
                   <em>No Default Rating</em>
                 </MenuItem>
-                <MenuItem value="G">G</MenuItem>
-                <MenuItem value="PG">PG</MenuItem>
-                <MenuItem value="PG-13">PG-13</MenuItem>
-                <MenuItem value="R">R</MenuItem>
-                <MenuItem value="NC-17">NC-17</MenuItem>
-                <MenuItem value="TV-Y">TV-Y</MenuItem>
-                <MenuItem value="TV-Y7">TV-Y7</MenuItem>
-                <MenuItem value="TV-G">TV-G</MenuItem>
-                <MenuItem value="TV-PG">TV-PG</MenuItem>
-                <MenuItem value="TV-14">TV-14</MenuItem>
-                <MenuItem value="TV-MA">TV-MA</MenuItem>
+                <MenuItem value="G"><RatingBadge rating="G" size="small" sx={{ mr: 1 }} /> G</MenuItem>
+                <MenuItem value="PG"><RatingBadge rating="PG" size="small" sx={{ mr: 1 }} /> PG</MenuItem>
+                <MenuItem value="PG-13"><RatingBadge rating="PG-13" size="small" sx={{ mr: 1 }} /> PG-13</MenuItem>
+                <MenuItem value="R"><RatingBadge rating="R" size="small" sx={{ mr: 1 }} /> R</MenuItem>
+                <MenuItem value="NC-17"><RatingBadge rating="NC-17" size="small" sx={{ mr: 1 }} /> NC-17</MenuItem>
+                <MenuItem value="TV-Y"><RatingBadge rating="TV-Y" size="small" sx={{ mr: 1 }} /> TV-Y</MenuItem>
+                <MenuItem value="TV-Y7"><RatingBadge rating="TV-Y7" size="small" sx={{ mr: 1 }} /> TV-Y7</MenuItem>
+                <MenuItem value="TV-G"><RatingBadge rating="TV-G" size="small" sx={{ mr: 1 }} /> TV-G</MenuItem>
+                <MenuItem value="TV-PG"><RatingBadge rating="TV-PG" size="small" sx={{ mr: 1 }} /> TV-PG</MenuItem>
+                <MenuItem value="TV-14"><RatingBadge rating="TV-14" size="small" sx={{ mr: 1 }} /> TV-14</MenuItem>
+                <MenuItem value="TV-MA"><RatingBadge rating="TV-MA" size="small" sx={{ mr: 1 }} /> TV-MA</MenuItem>
               </Select>
               <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
                 Rating to apply to videos in this channel if they don&apos;t have one.

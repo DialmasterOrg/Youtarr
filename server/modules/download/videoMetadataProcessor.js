@@ -174,6 +174,11 @@ class VideoMetadataProcessor {
           originalDate: data.upload_date,
           channel_id: data.channel_id,
           media_type: data.media_type || 'video',
+          content_rating: data.content_rating || null,
+          age_limit: data.age_limit ?? null,
+          // Capture rating information from metadata (mapped by post-processor)
+          normalized_rating: data.normalized_rating || null,
+          rating_source: data.rating_source || null,
           filePath: null,
           fileSize: null,
           audioFilePath: null,

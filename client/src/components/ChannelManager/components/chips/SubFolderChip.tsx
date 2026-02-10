@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
+import { Chip } from '@mui/material';
 import FolderIcon from '@mui/icons-material/Folder';
 import { isUsingDefaultSubfolder, isExplicitlyNoSubfolder } from '../../../../utils/channelHelpers';
 
@@ -11,35 +11,50 @@ const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
   // NULL or empty = "root" (backwards compatible, download to root)
   if (isExplicitlyNoSubfolder(subFolder)) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }} data-testid="subfolder-chip" data-default="false" data-root="true">
-        <FolderIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} data-testid="FolderIcon" />
-        <Typography variant="caption" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
-          root
-        </Typography>
-      </Box>
+      <Chip
+        data-testid="subfolder-chip"
+        data-default="false"
+        data-root="true"
+        size="small"
+        icon={<FolderIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} data-testid="FolderIcon" />}
+        label="root"
+        sx={{
+          fontSize: '0.7rem',
+          '& .MuiChip-label': { fontStyle: 'italic', color: 'text.secondary' },
+        }}
+      />
     );
   }
 
   // ##USE_GLOBAL_DEFAULT## = "global default" (uses global default)
   if (isUsingDefaultSubfolder(subFolder)) {
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }} data-testid="subfolder-chip" data-default="true">
-        <FolderIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} data-testid="FolderIcon" />
-        <Typography variant="caption" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
-          global default
-        </Typography>
-      </Box>
+      <Chip
+        data-testid="subfolder-chip"
+        data-default="true"
+        size="small"
+        icon={<FolderIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} data-testid="FolderIcon" />}
+        label="global default"
+        sx={{
+          fontSize: '0.7rem',
+          '& .MuiChip-label': { fontStyle: 'italic', color: 'text.secondary' },
+        }}
+      />
     );
   }
 
   // Specific subfolder
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }} data-testid="subfolder-chip" data-default="false">
-      <FolderIcon sx={{ fontSize: '0.9rem', color: 'primary.main' }} data-testid="FolderIcon" />
-      <Typography variant="caption">
-        __{subFolder}/
-      </Typography>
-    </Box>
+    <Chip
+      data-testid="subfolder-chip"
+      data-default="false"
+      size="small"
+      icon={<FolderIcon sx={{ fontSize: '0.9rem', color: 'primary.main' }} data-testid="FolderIcon" />}
+      label={`__${subFolder}/`}
+      sx={{
+        fontSize: '0.7rem',
+      }}
+    />
   );
 };
 

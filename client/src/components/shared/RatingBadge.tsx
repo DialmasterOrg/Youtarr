@@ -28,21 +28,25 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
   }
 
   const displayRating = rating || 'NR';
-  const label = variant === 'pill' ? `Rating: ${displayRating}` : displayRating;
+  const label = displayRating;
 
   const getRatingColor = (rate: string): 'default' | 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success' => {
     const lower = rate.toLowerCase();
 
-    if (lower.includes('tv-y')) return 'info';
-    if (lower.includes('tv-pg')) return 'primary';
-    if (lower.includes('tv-14')) return 'warning';
-    if (lower.includes('tv-ma')) return 'error';
+    // Kids / G - Green (Success)
+    if (lower.includes('tv-y') || lower.includes('tv-g') || lower === 'g') {
+      return 'success';
+    }
 
-    if (lower === 'g') return 'info';
-    if (lower === 'pg') return 'primary';
-    if (lower === 'pg-13') return 'warning';
-    if (lower === 'r') return 'error';
-    if (lower === 'nc-17') return 'error';
+    // Teens / PG - Orange (Warning)
+    if (lower.includes('tv-pg') || lower.includes('tv-14') || lower === 'pg' || lower === 'pg-13') {
+      return 'warning';
+    }
+
+    // Mature / R - Red (Error)
+    if (lower.includes('tv-ma') || lower === 'r' || lower === 'nc-17') {
+      return 'error';
+    }
 
     return 'default';
   };
@@ -74,16 +78,18 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
     );
   }
 
+  const chipColor = getRatingColor(displayRating);
+
   return (
     <Tooltip title={tooltipText} placement="top">
       <Chip
-        label={label}
+        label={displayRating}
         size={size}
-        color={getRatingColor(displayRating)}
-        variant="outlined"
+        color={chipColor}
+        icon={<EighteenUpRatingIcon sx={{ fontSize: size === 'small' ? '0.85rem' : '1rem' }} />}
         sx={{
-          fontWeight: 'bold',
-          fontSize: size === 'small' ? '0.75rem' : '0.875rem',
+          fontSize: size === 'small' ? '0.7rem' : '0.875rem',
+          '& .MuiChip-icon': { ml: 0.3 },
           ...sx,
         }}
       />

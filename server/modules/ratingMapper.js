@@ -50,7 +50,6 @@ const AGE_LIMIT_HEURISTICS = {
   16: 'PG-13',
   13: 'TV-14',
   7: 'TV-PG',
-  0: 'TV-G',
 };
 
 /**
@@ -168,14 +167,89 @@ function mapFromEntry(contentRating, ageLimit, priority = 'mpaa,tvpg,ytrating,ag
 }
 
 /**
- * Apply channel-level default rating if video has no rating
- * @param {string} videoRating - Video's normalized rating (can be null)
- * @param {string} channelDefaultRating - Channel's default rating (can be null)
- * @returns {string|null} - Final rating to use, or null if none available
+ * Determine the effective rating based on priority:
+ * 1. Manual Override (if provided and valid)
+ * 2. Channel Default (if configured)
+ * 3. Mapped Metadata (from yt-dlp)
+ * 4. NR (null)
+ * 
+ * @param {Object} jsonData - The full .info.json object from yt-dlp
+ * @param {string} channelDefaultRating - Default rating from channel settings (e.g. 'TV-Y')
+ * @param {string} manualOverrideRating - Manual override from download settings (e.g. 'G', 'NR', or null)
+ * @returns {Object} - { normalized_rating: string|null, rating_source: string|null }
  */
-function applyChannelDefault(videoRating, channelDefaultRating) {
-  if (videoRating) return videoRating;
-  if (channelDefaultRating) return channelDefaultRating;
+function determineEffectiveRating(jsonData, channelDefaultRating, manualOverrideRating) {
+  // 1. Manual Override
+  if (manualOverrideRating !== undefined && manualOverrideRating !== '') {
+    // If user explicitly chose "NR" (represented as "NR" string or specific null sentinel), treat as null.
+    // However, since it is an *override*, it should be treated as the effective rating even if null.
+    const val = manualOverrideRating === 'NR' ? null : manualOverrideRating;
+    return {
+      normalized_rating: val,
+      numeric_rating: mapToNumericRating(val),
+      rating_source: 'Manual Override'
+    };
+  }
+
+  // 2. Channel Default Setting
+  if (channelDefaultRating && channelDefaultRating !== 'NR') {
+    return {
+      normalized_rating: channelDefaultRating,
+      numeric_rating: mapToNumericRating(channelDefaultRating),
+      rating_source: 'Channel Default'
+    };
+  }
+
+  // 3. Rating parsed from ytdlp/metadata
+  const mapped = mapFromEntry(jsonData.content_rating, jsonData.age_limit);
+  if (mapped.normalized_rating && mapped.normalized_rating !== 'NR') {
+    return {
+      normalized_rating: mapped.normalized_rating,
+      numeric_rating: mapToNumericRating(mapped.normalized_rating),
+      rating_source: mapped.source
+    };
+  }
+
+  // 4. Fallback: NR
+  return {
+    normalized_rating: null,
+    numeric_rating: null,
+    rating_source: null
+  };
+}
+
+/**
+ * Map normalized rating to numeric scale where 1 = G and G equivalents
+ * @param {string|null} normalizedRating - Normalized rating (e.g., 'G', 'TV-PG', 'R')
+ * @returns {number|null} - Numeric rating (1-4) or null for NR/unrated
+ */
+function mapToNumericRating(normalizedRating) {
+  if (!normalizedRating) return null;
+
+  // Level 1: G and G equivalents (kids/family content)
+  const level1 = ['G', 'TV-Y', 'TV-G'];
+  if (level1.includes(normalizedRating)) {
+    return 1;
+  }
+
+  // Level 2: PG and PG equivalents (family with some caution)
+  const level2 = ['PG', 'TV-PG'];
+  if (level2.includes(normalizedRating)) {
+    return 2;
+  }
+
+  // Level 3: PG-13 and PG-13 equivalents (teens)
+  const level3 = ['PG-13', 'TV-14'];
+  if (level3.includes(normalizedRating)) {
+    return 3;
+  }
+
+  // Level 4: R and R equivalents (mature content)
+  const level4 = ['R', 'TV-MA', 'NC-17'];
+  if (level4.includes(normalizedRating)) {
+    return 4;
+  }
+
   return null;
 }
 
@@ -183,7 +257,8 @@ module.exports = {
   normalizeRating,
   mapAgeLimit,
   mapFromEntry,
-  applyChannelDefault,
+  determineEffectiveRating,
+  mapToNumericRating,
   MPAA_RATINGS,
   TVPG_RATINGS,
   AGE_LIMIT_HEURISTICS,

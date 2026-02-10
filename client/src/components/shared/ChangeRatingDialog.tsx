@@ -13,6 +13,7 @@ import {
   Box,
   CircularProgress,
 } from '@mui/material';
+import RatingBadge from './RatingBadge';
 
 interface ChangeRatingDialogProps {
   open: boolean;
@@ -68,6 +69,7 @@ const ChangeRatingDialog: React.FC<ChangeRatingDialogProps> = ({
             >
               {RATING_OPTIONS.map((opt) => (
                 <MenuItem key={opt} value={opt}>
+                  <RatingBadge rating={opt === 'NR' ? null : opt} size="small" showNA sx={{ mr: 1 }} />
                   {opt}
                 </MenuItem>
               ))}

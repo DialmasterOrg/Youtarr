@@ -164,6 +164,72 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     // Check for subfolder override from manual download (passed via environment variable)
     const subfolderOverride = process.env.YOUTARR_SUBFOLDER_OVERRIDE || null;
 
+    // Check for explicit rating override from manual download
+    const ratingOverrideEnv = process.env.YOUTARR_OVERRIDE_RATING;
+
+    // Always look up channel to apply default rating (independent of subfolder)
+    let channelRecord = null;
+    if (jsonData.channel_id) {
+      try {
+        // Use the centralized models export to ensure proper associations/initialization
+        const { Channel } = require('../models');
+        
+        const channelId = jsonData.channel_id.trim();
+        channelRecord = await Channel.findOne({
+          where: { channel_id: channelId },
+          attributes: ['id', 'sub_folder', 'uploader', 'folder_name', 'default_rating'] // Ensure default_rating is fetched
+        });
+        
+        console.log(`[Post-Process] Channel lookup for ${channelId}: ${channelRecord ? 'Found' : 'Not Found'}`);
+        if (channelRecord) {
+          console.log(`[Post-Process] Channel default_rating: '${channelRecord.default_rating}'`);
+
+          // Update folder_name if channel exists but name changed
+          if (actualChannelFolderName && channelRecord.folder_name !== actualChannelFolderName) {
+            try {
+              await Channel.update(
+                { folder_name: actualChannelFolderName },
+                { where: { id: channelRecord.id } }
+              );
+              channelRecord.folder_name = actualChannelFolderName;
+              console.log(`[Post-Process] Updated channel folder_name to: ${actualChannelFolderName}`);
+            } catch (updateErr) {
+              console.error(`[Post-Process] Error updating folder_name: ${updateErr.message}`);
+            }
+          }
+        } else {
+          console.log(`[Post-Process] Channel ${channelId} not found; skipping creation and assuming no channel default rating.`);
+        }
+      } catch (err) {
+        console.error(`[Post-Process] Error looking up/creating channel: ${err.message}`);
+      }
+    }
+
+    // Determine effective rating using strict priority order:
+    // 1. Manual Override
+    // 2. Channel Default
+    // 3. Mapped Metadata
+    // 4. NR
+    const manualOverride = (ratingOverrideEnv !== undefined && ratingOverrideEnv !== null && ratingOverrideEnv !== '') 
+      ? ratingOverrideEnv 
+      : undefined;
+      
+    const effectiveRating = ratingMapper.determineEffectiveRating(
+      jsonData, 
+      channelRecord ? channelRecord.default_rating : null,
+      manualOverride
+    );
+    
+    jsonData.normalized_rating = effectiveRating.normalized_rating;
+    jsonData.rating_source = effectiveRating.rating_source;
+    
+    // Log the decision
+    if (jsonData.normalized_rating) {
+      console.log(`[Post-Process] Applied rating: ${jsonData.normalized_rating} (Source: ${jsonData.rating_source})`);
+    } else {
+      console.log(`[Post-Process] No rating applied (Source: ${jsonData.rating_source || 'None'})`);
+    }
+
     if (subfolderOverride) {
       // Manual download with subfolder override
       const { ROOT_SENTINEL } = require('./filesystem/constants');
@@ -188,73 +254,14 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         targetChannelFolder = buildChannelPath(baseDir, subfolderOverride, actualChannelFolderName);
         console.log(`[Post-Process] Using subfolder override: ${subfolderOverride}`);
       }
-    } else if (jsonData.channel_id) {
-      // No override - check channel settings or use global default
-      try {
-        const Channel = require('../models/channel');
-        let channel = await Channel.findOne({
-          where: { channel_id: jsonData.channel_id },
-          attributes: ['id', 'sub_folder', 'uploader', 'folder_name', 'default_rating']
-        });
-
-        if (channel) {
-          // Apply channel-level default rating if none exists in metadata
-          if (!jsonData.normalized_rating) {
-            const mapped = ratingMapper.mapFromEntry(jsonData.content_rating, jsonData.age_limit);
-            if (mapped.normalized_rating) {
-              jsonData.normalized_rating = mapped.normalized_rating;
-              jsonData.rating_source = mapped.source;
-            } else if (channel.default_rating && channel.default_rating !== 'NR') {
-              jsonData.normalized_rating = channel.default_rating;
-              jsonData.rating_source = 'Channel Default';
-              console.log(`[Post-Process] Applying channel default rating: ${channel.default_rating}`);
-            }
-          }
-
-          // Tracked channel - resolve effective subfolder using centralized logic
-          channelSubFolder = channelSettingsModule.resolveEffectiveSubfolder(channel.sub_folder);
-
-          // Update folder_name if not set or different (channel may have been renamed on YouTube)
-          if (actualChannelFolderName && channel.folder_name !== actualChannelFolderName) {
-            try {
-              await Channel.update(
-                { folder_name: actualChannelFolderName },
-                { where: { id: channel.id } }
-              );
-              console.log(`[Post-Process] Updated channel folder_name to: ${actualChannelFolderName}`);
-            } catch (updateErr) {
-              console.error(`[Post-Process] Error updating folder_name: ${updateErr.message}`);
-            }
-          }
-        } else {
-          // Untracked channel (not in database) - auto-create with enabled=false
-          console.log(`[Post-Process] Untracked channel ${jsonData.channel_id}, auto-creating as disabled`);
-          try {
-            channel = await Channel.create({
-              channel_id: jsonData.channel_id,
-              uploader: jsonData.uploader || jsonData.channel || jsonData.uploader_id || null,
-              folder_name: actualChannelFolderName,
-              enabled: false,
-              sub_folder: null
-            });
-            console.log(`[Post-Process] Auto-created disabled channel with folder_name: ${actualChannelFolderName}`);
-          } catch (createErr) {
-            console.error(`[Post-Process] Error auto-creating channel: ${createErr.message}`);
-          }
-
-          // Use global default subfolder for the newly created channel
-          channelSubFolder = configModule.getDefaultSubfolder();
-        }
-
-        if (channelSubFolder) {
-          const baseDir = configModule.directoryPath;
-          // Use the actual channel folder name from the filesystem (yt-dlp already sanitized it)
-          // instead of jsonData.uploader which may contain special characters
-          targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
-          console.log(`[Post-Process] Channel will use subfolder: ${channelSubFolder}`);
-        }
-      } catch (err) {
-        console.error(`[Post-Process] Error checking channel subfolder: ${err.message}`);
+    } else if (channelRecord) {
+      // No subfolder override - use channel's subfolder setting
+      channelSubFolder = channelSettingsModule.resolveEffectiveSubfolder(channelRecord.sub_folder);
+      
+      if (channelSubFolder) {
+        const baseDir = configModule.directoryPath;
+        targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
+        console.log(`[Post-Process] Channel will use subfolder: ${channelSubFolder}`);
       }
     } else {
       // No channel_id available (rare case) - use global default

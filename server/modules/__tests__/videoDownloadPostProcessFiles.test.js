@@ -35,6 +35,7 @@ jest.mock('../configModule', () => ({
   getImagePath: jest.fn(() => '/mock/images'),
   stopWatchingConfig: jest.fn(),
   getCookiesPath: jest.fn(() => null),
+  getDefaultSubfolder: jest.fn(() => null),
   ffmpegPath: '/usr/bin/ffmpeg',
   directoryPath: '/library',
   __setConfig: (cfg) => {

@@ -1623,12 +1623,15 @@ class ChannelModule {
   /**
    * Parse video metadata from yt-dlp entry
    * @param {Object} entry - Video entry from yt-dlp
+   * @param {string|null} defaultRating - Default rating from channel settings
    * @returns {Object} - Parsed video object
    */
-  parseVideoMetadata(entry) {
+  parseVideoMetadata(entry, defaultRating = null) {
     const contentRating = entry.contentRating || entry.content_rating || null;
     const ageLimit = entry.age_limit ?? null;
-    const ratingInfo = ratingMapper.mapFromEntry(contentRating, ageLimit);
+    
+    // Utilize centralized rating mapper to determine effective rating (Manual Override not applicable here)
+    const effectiveRating = ratingMapper.determineEffectiveRating(entry, defaultRating);
 
     const out = {
       title: entry.title || 'Untitled',
@@ -1643,8 +1646,14 @@ class ChannelModule {
 
     if (contentRating != null) out.content_rating = contentRating;
     if (ageLimit != null) out.age_limit = ageLimit;
-    if (ratingInfo && ratingInfo.normalized_rating != null) out.normalized_rating = ratingInfo.normalized_rating;
-    if (ratingInfo && ratingInfo.source != null) out.rating_source = ratingInfo.source;
+    
+    if (effectiveRating.normalized_rating != null) {
+      out.normalized_rating = effectiveRating.normalized_rating;
+    }
+    
+    if (effectiveRating.rating_source != null) {
+      out.rating_source = effectiveRating.rating_source;
+    }
 
     return out;
   }
@@ -1652,9 +1661,10 @@ class ChannelModule {
   /**
    * Extract video entries from yt-dlp JSON response.
    * @param {Object} jsonOutput - Parsed JSON from yt-dlp
+   * @param {string|null} defaultRating - Default rating from channel
    * @returns {Array} - Array of parsed video metadata objects
    */
-  extractVideosFromYtDlpResponse(jsonOutput) {
+  extractVideosFromYtDlpResponse(jsonOutput, defaultRating = null) {
     const videos = [];
 
     if (!jsonOutput.entries || !Array.isArray(jsonOutput.entries)) {
@@ -1675,7 +1685,7 @@ class ChannelModule {
       }
 
       // Parse and add the video metadata
-      videos.push(this.parseVideoMetadata(entry));
+      videos.push(this.parseVideoMetadata(entry, defaultRating));
     }
 
     return videos;
@@ -1727,7 +1737,7 @@ class ChannelModule {
       const jsonOutput = JSON.parse(content);
 
       // Extract videos using helper method that handles nested structures
-      const videos = this.extractVideosFromYtDlpResponse(jsonOutput);
+      const videos = this.extractVideosFromYtDlpResponse(jsonOutput, channel.default_rating);
 
       // Extract the current channel URL (with handle) from the response
       const currentChannelUrl = jsonOutput.uploader_url || jsonOutput.channel_url || jsonOutput.url;
@@ -2256,7 +2266,7 @@ class ChannelModule {
           const content = await this.executeYtDlpCommand(args, outputFilePath);
 
           const jsonOutput = JSON.parse(content);
-          const videos = this.extractVideosFromYtDlpResponse(jsonOutput);
+          const videos = this.extractVideosFromYtDlpResponse(jsonOutput, channel.default_rating);
           const currentChannelUrl = jsonOutput.uploader_url || jsonOutput.channel_url || jsonOutput.url;
           return { videos, currentChannelUrl };
         });
