@@ -71,15 +71,16 @@ const mockJobVideoDownload = {
   update: jest.fn(() => Promise.resolve([0]))
 };
 
-jest.mock('../../models', () => ({
-  JobVideoDownload: mockJobVideoDownload
-}));
-
 const mockChannel = {
   findOne: jest.fn(() => Promise.resolve(null))
 };
 
 jest.mock('../../models/channel', () => mockChannel);
+
+jest.mock('../../models', () => ({
+  JobVideoDownload: mockJobVideoDownload,
+  Channel: mockChannel
+}));
 
 jest.mock('../../logger');
 
