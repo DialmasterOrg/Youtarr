@@ -206,7 +206,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
         subfolder: mode === 'manual' ? subfolderOverride : undefined,
         audioFormat: mode === 'manual' ? audioFormat : undefined,
         // Include rating only if custom settings are enabled (user explicitly selected it)
-        rating: useCustomSettings ? (rating ?? undefined) : undefined
+        // Use an explicit sentinel 'NR' when the user selected "No Rating" (null)
+        rating: useCustomSettings ? (rating === null ? 'NR' : (rating ?? undefined)) : undefined
       });
     } else {
       onConfirm(null); // Use defaults - post-processor will apply channel default rating

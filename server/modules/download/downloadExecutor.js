@@ -420,8 +420,9 @@ class DownloadExecutor {
       }
 
       // Pass explicit rating override if provided
-      if (ratingOverride !== undefined && ratingOverride !== null) {
-        procEnv.YOUTARR_OVERRIDE_RATING = String(ratingOverride);
+      // Accept null as an explicit "clear rating" sentinel and map it to 'NR'
+      if (ratingOverride !== undefined) {
+        procEnv.YOUTARR_OVERRIDE_RATING = ratingOverride === null ? 'NR' : String(ratingOverride);
       }
 
       const proc = spawn('yt-dlp', args, { env: procEnv });

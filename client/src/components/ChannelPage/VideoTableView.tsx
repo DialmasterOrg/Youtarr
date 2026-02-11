@@ -239,14 +239,16 @@ function VideoTableView({
                     />
                   ) : '-'}
                 </TableCell>
-                <TableCell>                  <RatingBadge 
-                    rating={video.normalized_rating} 
+                <TableCell>
+                  <RatingBadge
+                    rating={video.normalized_rating}
                     ratingSource={video.rating_source}
-                    size="small" 
-                    variant="text" 
+                    size="small"
+                    variant="text"
                   />
                 </TableCell>
-                <TableCell>                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                     {mediaTypeInfo && (
                       <Chip
                         size="small"

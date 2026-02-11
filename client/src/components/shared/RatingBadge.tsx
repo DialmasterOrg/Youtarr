@@ -28,7 +28,7 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
   }
 
   const displayRating = rating || 'NR';
-  const label = displayRating;
+  
 
   const getRatingColor = (rate: string): 'default' | 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success' => {
     const lower = rate.toLowerCase();

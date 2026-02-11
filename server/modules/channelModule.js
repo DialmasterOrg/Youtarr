@@ -1631,7 +1631,12 @@ class ChannelModule {
     const ageLimit = entry.age_limit ?? null;
     
     // Utilize centralized rating mapper to determine effective rating (Manual Override not applicable here)
-    const effectiveRating = ratingMapper.determineEffectiveRating(entry, defaultRating);
+    // Ensure content_rating and age_limit keys are present in normalized form so ratingMapper can read them
+    const normalizedEntry = Object.assign({}, entry, {
+      content_rating: contentRating,
+      age_limit: ageLimit
+    });
+    const effectiveRating = ratingMapper.determineEffectiveRating(normalizedEntry, defaultRating);
 
     const out = {
       title: entry.title || 'Untitled',

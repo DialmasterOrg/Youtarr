@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const logger = require('../logger');
+const ratingMapper = require('./ratingMapper');
 
 /**
  * Generates an NFO file for a video
@@ -149,10 +150,20 @@ class NfoGenerator {
 
       // Add rating information if available
       if (jsonData.normalized_rating) {
+        const displayCode = this.escapeXml(jsonData.normalized_rating);
+        const numeric = ratingMapper.mapToNumericRating(jsonData.normalized_rating);
+
         xml += '\n  <!-- Ratings -->\n';
-        xml += `  <mpaa>${this.escapeXml(jsonData.normalized_rating)}</mpaa>\n`;
+        // Keep the MPAA code for clients that prefer the textual code
+        xml += `  <mpaa>${displayCode}</mpaa>\n`;
         xml += '  <ratings>\n';
-        xml += `    <rating name="mpaa" max="10">${this.escapeXml(jsonData.normalized_rating)}</rating>\n`;
+        // Include a numeric rating where possible (preferred by some media servers)
+        if (numeric !== null) {
+          xml += `    <rating name="mpaa" max="10">${numeric}</rating>\n`;
+        } else {
+          // Fall back to textual code if numeric mapping isn't available
+          xml += `    <rating name="mpaa" max="10">${displayCode}</rating>\n`;
+        }
         if (jsonData.rating_source) {
           xml += `    <rating name="source">${this.escapeXml(jsonData.rating_source)}</rating>\n`;
         }

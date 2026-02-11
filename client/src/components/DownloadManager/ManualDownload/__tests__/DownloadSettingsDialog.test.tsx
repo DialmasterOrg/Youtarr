@@ -487,6 +487,7 @@ describe('DownloadSettingsDialog', () => {
         allowRedownload: false,
         subfolder: null,
         audioFormat: null,
+        rating: 'NR',
       });
     });
 
@@ -516,6 +517,9 @@ describe('DownloadSettingsDialog', () => {
         resolution: '1080',
         videoCount: 7,
         allowRedownload: false,
+        subfolder: undefined,
+        audioFormat: undefined,
+        rating: 'NR',
       });
     });
   });
@@ -611,6 +615,7 @@ describe('DownloadSettingsDialog', () => {
         allowRedownload: true,
         subfolder: null,
         audioFormat: null,
+        rating: 'NR',
       });
     });
 
@@ -634,6 +639,7 @@ describe('DownloadSettingsDialog', () => {
         allowRedownload: true,
         subfolder: null,
         audioFormat: null,
+        rating: 'NR',
       });
     });
 
