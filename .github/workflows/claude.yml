@@ -41,11 +41,13 @@ jobs:
             - Security implications
             - Performance considerations
 
-            The PR branch is already checked out. Use `gh pr diff ${{ github.event.pull_request.number }}` to see the changes.
+            Use `gh pr diff ${{ github.event.pull_request.number }}` to see the changes.
+
+            IMPORTANT: Only use `gh` commands. Do NOT run tests, npm commands, or any other shell commands.
 
             Post your review as a comment on the PR using `gh pr comment ${{ github.event.pull_request.number }} --body "your review here"`.
             Only post GitHub comments - don't just output text.
-          claude_args: '--max-turns 10 --allowedTools "Bash(gh:*)"'
+          claude_args: '--max-turns 10 --allowedTools "Bash(gh:*)" "Bash(git fetch *)"'
 
   # Manual @claude responses - restricted to authorized users
   manual-claude:
@@ -64,4 +66,4 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude_args: '--max-turns 10 --allowedTools "Bash(gh:*)"'
+          claude_args: '--max-turns 10 --allowedTools "Bash(gh:*)" "Bash(git fetch *)"'
