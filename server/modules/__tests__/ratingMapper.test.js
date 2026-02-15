@@ -4,6 +4,7 @@ const {
   mapFromEntry,
   determineEffectiveRating,
   mapToNumericRating,
+  mapToITunEXTC,
 } = require('../ratingMapper');
 
 describe('ratingMapper', () => {
@@ -163,6 +164,33 @@ describe('ratingMapper', () => {
       expect(mapToNumericRating('')).toBe(null);
       expect(mapToNumericRating('unknown')).toBe(null);
       expect(mapToNumericRating('NR')).toBe(null);
+    });
+  });
+
+  describe('mapToITunEXTC', () => {
+    it('maps MPAA ratings to mpaa| format', () => {
+      expect(mapToITunEXTC('G')).toBe('mpaa|G|');
+      expect(mapToITunEXTC('PG')).toBe('mpaa|PG|');
+      expect(mapToITunEXTC('PG-13')).toBe('mpaa|PG-13|');
+      expect(mapToITunEXTC('R')).toBe('mpaa|R|');
+      expect(mapToITunEXTC('NC-17')).toBe('mpaa|NC-17|');
+    });
+
+    it('maps TV ratings to us-tv| format', () => {
+      expect(mapToITunEXTC('TV-Y')).toBe('us-tv|TV-Y|');
+      expect(mapToITunEXTC('TV-Y7')).toBe('us-tv|TV-Y7|');
+      expect(mapToITunEXTC('TV-G')).toBe('us-tv|TV-G|');
+      expect(mapToITunEXTC('TV-PG')).toBe('us-tv|TV-PG|');
+      expect(mapToITunEXTC('TV-14')).toBe('us-tv|TV-14|');
+      expect(mapToITunEXTC('TV-MA')).toBe('us-tv|TV-MA|');
+    });
+
+    it('returns null for null, empty, and unknown ratings', () => {
+      expect(mapToITunEXTC(null)).toBe(null);
+      expect(mapToITunEXTC(undefined)).toBe(null);
+      expect(mapToITunEXTC('')).toBe(null);
+      expect(mapToITunEXTC('NR')).toBe(null);
+      expect(mapToITunEXTC('unknown')).toBe(null);
     });
   });
 });

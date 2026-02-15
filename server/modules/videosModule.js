@@ -218,11 +218,12 @@ class VideosModule {
    * Bulk update video ratings
    * @param {number[]} videoIds - List of database IDs
    * @param {string|null} rating - The new rating value
-   * @returns {Promise<{success:number[], failed:Array<{id:number, error:string}>}>}
+   * @returns {Promise<{success:number[], warnings:Array<{id:number, warning:string}>, failed:Array<{id:number, error:string}>}>}
    */
   async bulkUpdateVideoRatings(videoIds, rating) {
     const results = {
       success: [],
+      warnings: [],
       failed: []
     };
 
@@ -257,7 +258,7 @@ class VideosModule {
               jsonData = JSON.parse(content);
             } catch (parseErr) {
               logger.warn({ parseErr, jsonPath }, 'Failed to parse .info.json for rating update');
-              results.success.push(id);
+              results.warnings.push({ id, warning: 'Database updated but NFO not regenerated (corrupt .info.json)' });
               continue;
             }
 

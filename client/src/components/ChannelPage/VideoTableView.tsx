@@ -245,6 +245,7 @@ function VideoTableView({
                     ratingSource={video.rating_source}
                     size="small"
                     variant="text"
+                    showNA
                   />
                 </TableCell>
                 <TableCell>

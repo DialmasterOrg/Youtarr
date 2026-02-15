@@ -3,6 +3,9 @@
  * Maps YouTube/yt-dlp content rating fields to normalized Plex/Kodi ratings
  */
 
+/** Sentinel value for "Not Rated" */
+const NOT_RATED = 'NR';
+
 /**
  * MPAA rating mappings
  */
@@ -181,9 +184,9 @@ function mapFromEntry(contentRating, ageLimit, priority = 'mpaa,tvpg,ytrating,ag
 function determineEffectiveRating(jsonData, channelDefaultRating, manualOverrideRating) {
   // 1. Manual Override
   if (manualOverrideRating !== undefined && manualOverrideRating !== '') {
-    // If user explicitly chose "NR" (represented as "NR" string or specific null sentinel), treat as null.
+    // If user explicitly chose "NR" (represented as NOT_RATED string or specific null sentinel), treat as null.
     // However, since it is an *override*, it should be treated as the effective rating even if null.
-    const val = manualOverrideRating === 'NR' ? null : manualOverrideRating;
+    const val = manualOverrideRating === NOT_RATED ? null : manualOverrideRating;
     return {
       normalized_rating: val,
       numeric_rating: mapToNumericRating(val),
@@ -192,7 +195,7 @@ function determineEffectiveRating(jsonData, channelDefaultRating, manualOverride
   }
 
   // 2. Channel Default Setting
-  if (channelDefaultRating && channelDefaultRating !== 'NR') {
+  if (channelDefaultRating && channelDefaultRating !== NOT_RATED) {
     return {
       normalized_rating: channelDefaultRating,
       numeric_rating: mapToNumericRating(channelDefaultRating),
@@ -202,7 +205,7 @@ function determineEffectiveRating(jsonData, channelDefaultRating, manualOverride
 
   // 3. Rating parsed from ytdlp/metadata
   const mapped = mapFromEntry(jsonData.content_rating, jsonData.age_limit);
-  if (mapped.normalized_rating && mapped.normalized_rating !== 'NR') {
+  if (mapped.normalized_rating && mapped.normalized_rating !== NOT_RATED) {
     return {
       normalized_rating: mapped.normalized_rating,
       numeric_rating: mapToNumericRating(mapped.normalized_rating),
@@ -253,12 +256,58 @@ function mapToNumericRating(normalizedRating) {
   return null;
 }
 
+/**
+ * iTunEXTC format mapping for Plex MP4 embedding.
+ * Maps normalized ratings to the pipe-separated format Plex reads from the iTunEXTC atom.
+ */
+const ITUNEXTC_MAP = {
+  'G': 'mpaa|G|',
+  'PG': 'mpaa|PG|',
+  'PG-13': 'mpaa|PG-13|',
+  'R': 'mpaa|R|',
+  'NC-17': 'mpaa|NC-17|',
+  'TV-Y': 'us-tv|TV-Y|',
+  'TV-Y7': 'us-tv|TV-Y7|',
+  'TV-G': 'us-tv|TV-G|',
+  'TV-PG': 'us-tv|TV-PG|',
+  'TV-14': 'us-tv|TV-14|',
+  'TV-MA': 'us-tv|TV-MA|',
+};
+
+/**
+ * Map a normalized rating to iTunEXTC format for Plex MP4 embedding.
+ * @param {string|null} normalizedRating - Normalized rating (e.g., 'PG-13', 'TV-MA')
+ * @returns {string|null} - iTunEXTC value (e.g., 'mpaa|PG-13|') or null if not mappable
+ */
+function mapToITunEXTC(normalizedRating) {
+  if (!normalizedRating) return null;
+  return ITUNEXTC_MAP[normalizedRating] || null;
+}
+
+/**
+ * Get all valid normalized rating strings (cached at module level).
+ * @returns {string[]} - Sorted array of valid rating strings (e.g., ['G', 'NC-17', 'PG', ...])
+ */
+const VALID_NORMALIZED_RATINGS = (() => {
+  const ratings = new Set();
+  Object.values(MPAA_RATINGS).forEach(r => { if (r !== null) ratings.add(r); });
+  Object.values(TVPG_RATINGS).forEach(r => { if (r !== null) ratings.add(r); });
+  return Array.from(ratings).sort();
+})();
+
+function getValidNormalizedRatings() {
+  return VALID_NORMALIZED_RATINGS;
+}
+
 module.exports = {
   normalizeRating,
   mapAgeLimit,
   mapFromEntry,
   determineEffectiveRating,
   mapToNumericRating,
+  mapToITunEXTC,
+  getValidNormalizedRatings,
+  NOT_RATED,
   MPAA_RATINGS,
   TVPG_RATINGS,
   AGE_LIMIT_HEURISTICS,

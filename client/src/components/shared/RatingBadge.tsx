@@ -14,6 +14,7 @@ interface RatingBadgeProps {
 /**
  * Displays a content/parental rating badge
  * Examples: R, PG-13, TV-14, TV-MA, etc.
+ * When rating is null and showNA is true, shows a subtle "Unrated" indicator.
  */
 const RatingBadge: React.FC<RatingBadgeProps> = ({
   rating,
@@ -27,8 +28,22 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
     return null;
   }
 
-  const displayRating = rating || 'NR';
-  
+  // No rating assigned - show subtle "Unrated" indicator
+  if (!rating) {
+    return (
+      <Typography
+        variant="caption"
+        sx={{
+          color: 'text.disabled',
+          fontStyle: 'italic',
+          fontSize: size === 'small' ? '0.7rem' : '0.8rem',
+          ...sx,
+        }}
+      >
+        Unrated
+      </Typography>
+    );
+  }
 
   const getRatingColor = (rate: string): 'default' | 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success' => {
     const lower = rate.toLowerCase();
@@ -52,11 +67,11 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
   };
 
   const tooltipText = ratingSource
-    ? `Content Rating: ${displayRating} (Source: ${ratingSource})`
-    : `Content Rating: ${displayRating}`;
+    ? `Content Rating: ${rating} (Source: ${ratingSource})`
+    : `Content Rating: ${rating}`;
 
   if (variant === 'text') {
-    const color = getRatingColor(displayRating);
+    const color = getRatingColor(rating);
     const resolvedColor = color === 'default' ? 'text.secondary' : `${color}.main`;
 
     return (
@@ -71,19 +86,19 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
               fontSize: size === 'small' ? '0.75rem' : '0.875rem',
             }}
           >
-            {displayRating}
+            {rating}
           </Typography>
         </Box>
       </Tooltip>
     );
   }
 
-  const chipColor = getRatingColor(displayRating);
+  const chipColor = getRatingColor(rating);
 
   return (
     <Tooltip title={tooltipText} placement="top">
       <Chip
-        label={displayRating}
+        label={rating}
         size={size}
         color={chipColor}
         icon={<EighteenUpRatingIcon sx={{ fontSize: size === 'small' ? '0.85rem' : '1rem' }} />}

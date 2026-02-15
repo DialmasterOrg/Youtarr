@@ -68,6 +68,9 @@ describe('POST /api/videos/rating', () => {
 
     expect(videosModuleMock.bulkUpdateVideoRatings).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ success: false, error: 'invalid rating value' });
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      success: false,
+      error: expect.stringContaining('Invalid rating value'),
+    }));
   });
 });

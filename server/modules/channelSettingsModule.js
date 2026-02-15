@@ -242,23 +242,11 @@ class ChannelSettingsModule {
   }
 
   /**
-   * Get all valid normalized ratings from ratingMapper
+   * Get all valid normalized ratings from ratingMapper (cached)
    * @returns {string[]} - Array of valid rating strings
    */
   getValidNormalizedRatings() {
-    const ratings = new Set();
-    
-    // Add MPAA ratings (excluding null)
-    Object.values(ratingMapper.MPAA_RATINGS).forEach(rating => {
-      if (rating !== null) ratings.add(rating);
-    });
-    
-    // Add TVPG ratings (excluding null)
-    Object.values(ratingMapper.TVPG_RATINGS).forEach(rating => {
-      if (rating !== null) ratings.add(rating);
-    });
-    
-    return Array.from(ratings).sort();
+    return ratingMapper.getValidNormalizedRatings();
   }
 
   /**
@@ -273,8 +261,8 @@ class ChannelSettingsModule {
     }
 
     const validRatings = this.getValidNormalizedRatings();
-    const trimmed = defaultRating.trim();
-    
+    const trimmed = defaultRating.trim().toUpperCase();
+
     if (!validRatings.includes(trimmed)) {
       return {
         valid: false,

@@ -179,12 +179,9 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
         });
       }
 
-      // Validate rating value against known normalized ratings.
-      const allowedRatings = new Set([
-        'G','PG','PG-13','R','NC-17',
-        'TV-Y','TV-Y7','TV-G','TV-PG','TV-14','TV-MA',
-        'NR'
-      ]);
+      // Validate rating value against the single source of truth in ratingMapper
+      const ratingMapper = require('../modules/ratingMapper');
+      const validRatings = ratingMapper.getValidNormalizedRatings();
 
       let normalizedRating = rating;
 
@@ -195,13 +192,13 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
 
         normalizedRating = normalizedRating.trim().toUpperCase();
 
-        if (normalizedRating === 'NR') {
+        if (normalizedRating === ratingMapper.NOT_RATED) {
           normalizedRating = null;
         }
       }
 
-      if (normalizedRating !== null && !allowedRatings.has(normalizedRating)) {
-        return res.status(400).json({ success: false, error: 'invalid rating value' });
+      if (normalizedRating !== null && !validRatings.includes(normalizedRating)) {
+        return res.status(400).json({ success: false, error: `Invalid rating value. Valid options: ${validRatings.join(', ')}` });
       }
 
       const result = await videosModule.bulkUpdateVideoRatings(videoIds, normalizedRating);

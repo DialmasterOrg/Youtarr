@@ -48,6 +48,9 @@ const VideoActionsDropdown: React.FC<VideoActionsDropdownProps> = ({
         endIcon={<MoreVertIcon />}
         onClick={handleClick}
         disabled={disabled || selectedVideosCount === 0}
+        aria-label={`Actions for ${selectedVideosCount} selected video${selectedVideosCount !== 1 ? 's' : ''}`}
+        aria-haspopup="true"
+        aria-expanded={open}
       >
         Actions ({selectedVideosCount})
       </Button>

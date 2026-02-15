@@ -176,17 +176,17 @@ function ChannelSettingsDialog({
         }
 
         const settingsData = await settingsResponse.json();
-        const loadedSettings: any = {
+        const loadedSettings: ChannelSettings = {
           sub_folder: settingsData.sub_folder || null,
           video_quality: settingsData.video_quality || null,
           min_duration: settingsData.min_duration || null,
           max_duration: settingsData.max_duration || null,
           title_filter_regex: settingsData.title_filter_regex || null,
           audio_format: settingsData.audio_format || null,
+          default_rating: Object.prototype.hasOwnProperty.call(settingsData, 'default_rating')
+            ? settingsData.default_rating
+            : null,
         };
-        if (Object.prototype.hasOwnProperty.call(settingsData, 'default_rating')) {
-          loadedSettings.default_rating = settingsData.default_rating;
-        }
         setSettings(loadedSettings);
         setOriginalSettings(loadedSettings);
 
@@ -264,20 +264,17 @@ function ChannelSettingsDialog({
       }
 
       const result = await response.json();
-      const updatedSettings: any = {
+      const updatedSettings: ChannelSettings = {
         sub_folder: result?.settings?.sub_folder ?? settings.sub_folder ?? null,
         video_quality: result?.settings?.video_quality ?? settings.video_quality ?? null,
         min_duration: result?.settings?.min_duration ?? settings.min_duration ?? null,
         max_duration: result?.settings?.max_duration ?? settings.max_duration ?? null,
         title_filter_regex: result?.settings?.title_filter_regex ?? settings.title_filter_regex ?? null,
         audio_format: result?.settings?.audio_format ?? settings.audio_format ?? null,
+        default_rating: result?.settings && Object.prototype.hasOwnProperty.call(result.settings, 'default_rating')
+          ? result.settings.default_rating
+          : settings.default_rating ?? null,
       };
-
-      if (result?.settings && Object.prototype.hasOwnProperty.call(result.settings, 'default_rating')) {
-        updatedSettings.default_rating = result.settings.default_rating;
-      } else if (Object.prototype.hasOwnProperty.call(settings, 'default_rating')) {
-        updatedSettings.default_rating = settings.default_rating;
-      }
 
       setSettings(updatedSettings);
       setOriginalSettings(updatedSettings);
@@ -492,12 +489,6 @@ function ChannelSettingsDialog({
             <Typography variant="caption" color="text.secondary">
               Note: Changing the subfolder will move the channel's existing folder and files!</Typography>
 
-            {/* Download Filters Section */}
-            <Divider sx={{ my: 0 }} />
-
-            <Typography variant="h6" sx={{ mb: 1 }}>
-              Download Filters
-            </Typography>
             <FormControl fullWidth>
               <InputLabel id="default-rating-label" shrink>Default Content Rating</InputLabel>
               <Select
@@ -530,6 +521,13 @@ function ChannelSettingsDialog({
                 Rating to apply to videos in this channel if they don&apos;t have one.
               </Typography>
             </FormControl>
+
+            {/* Download Filters Section */}
+            <Divider sx={{ my: 0 }} />
+
+            <Typography variant="h6" sx={{ mb: 1 }}>
+              Download Filters
+            </Typography>
             <Alert severity="info" sx={{ mb: 2 }}>
               <Typography variant="body2">
                 These filters only apply to channel downloads. Manually selected videos will always download.

@@ -81,6 +81,7 @@ function VideosPage({ token }: VideosPageProps) {
   const [selectedForDeletion, setSelectedForDeletion] = useState<number[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
+  const [ratingLoading, setRatingLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -252,6 +253,7 @@ function VideosPage({ token }: VideosPageProps) {
 
     const videoIdsToUpdate = isMobile ? selectedForDeletion : selectedVideos;
 
+    setRatingLoading(true);
     try {
       await axios.post('/api/videos/rating', {
         videoIds: videoIdsToUpdate,
@@ -266,9 +268,14 @@ function VideosPage({ token }: VideosPageProps) {
       setSelectedVideos([]);
       setSelectedForDeletion([]);
       fetchVideos();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to update ratings:', error);
-      setErrorMessage(error.response?.data?.error || 'Failed to update content ratings');
+      const message = axios.isAxiosError(error)
+        ? error.response?.data?.error || 'Failed to update content ratings'
+        : 'Failed to update content ratings';
+      setErrorMessage(message);
+    } finally {
+      setRatingLoading(false);
     }
   };
 
@@ -402,7 +409,7 @@ function VideosPage({ token }: VideosPageProps) {
                 selectedVideosCount={selectedVideos.length}
                 onContentRating={handleChangeRatingClick}
                 onDelete={handleDeleteClick}
-                disabled={deleteLoading}
+                disabled={deleteLoading || ratingLoading}
               />
               <Button
                 variant="outlined"
