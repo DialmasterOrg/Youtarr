@@ -296,7 +296,7 @@ describe('videoDownloadPostProcessFiles', () => {
     expect(childProcess.spawnSync).toHaveBeenCalledWith(
       '/usr/bin/AtomicParsley',
       expect.arrayContaining([
-        '--year', '2024-01-31T00:00:00Z'
+        '--year', '2024'
       ]),
       expect.any(Object)
     );
