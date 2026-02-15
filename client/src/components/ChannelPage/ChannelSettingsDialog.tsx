@@ -518,7 +518,7 @@ function ChannelSettingsDialog({
                 <MenuItem value="TV-MA"><RatingBadge rating="TV-MA" size="small" sx={{ mr: 1 }} /> TV-MA</MenuItem>
               </Select>
               <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                Rating to apply to videos in this channel if they don&apos;t have one.
+                Rating to apply to videos in this channel if they don&apos;t have one. Will pass through to media server metadata.
               </Typography>
             </FormControl>
 
