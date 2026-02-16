@@ -113,8 +113,6 @@ The Vite dev server will proxy API and WebSocket requests to the backend at port
 ### 5. Access the Application
 
 Navigate to:
-
-Navigate to:
 - **Docker static build**: http://localhost:3087
 - **Vite dev server (if running)**: http://localhost:3000
 

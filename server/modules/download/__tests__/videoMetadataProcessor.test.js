@@ -135,11 +135,15 @@ describe('VideoMetadataProcessor', () => {
         description: 'Test video description',
         originalDate: '20240101',
         channel_id: 'UC123456',
+        media_type: 'video',
+        content_rating: null,
+        age_limit: null,
+        normalized_rating: null,
+        rating_source: null,
         filePath: '/output/directory/Test Channel/Test Channel - Test Video Title - abc123/Test Channel - Test Video Title [abc123].mp4',
         fileSize: '1024000',
         audioFilePath: null,
         audioFileSize: null,
-        media_type: 'video',
         removed: false
       });
 
@@ -384,11 +388,15 @@ describe('VideoMetadataProcessor', () => {
         description: undefined,
         originalDate: undefined,
         channel_id: undefined,
+        media_type: 'video',
+        content_rating: null,
+        age_limit: null,
+        normalized_rating: null,
+        rating_source: null,
         filePath: '/output/directory/Unknown Channel/Unknown Channel - Incomplete Video - incomplete123/Unknown Channel - Incomplete Video [incomplete123].mp4',
         fileSize: null,
         audioFilePath: null,
         audioFileSize: null,
-        media_type: 'video',
         removed: false
       });
     });

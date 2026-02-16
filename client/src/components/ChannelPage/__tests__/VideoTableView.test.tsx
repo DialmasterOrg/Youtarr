@@ -894,8 +894,8 @@ describe('VideoTableView Component', () => {
     test('renders table head with correct number of columns', () => {
       renderWithProviders(<VideoTableView {...defaultProps} />);
       const headerCells = screen.getAllByRole('columnheader');
-      // Checkbox, Thumbnail, Title, Published, Duration, Size, Status
-      expect(headerCells).toHaveLength(7);
+      // Checkbox, Thumbnail, Title, Published, Duration, Size, Rating, Status
+      expect(headerCells).toHaveLength(8);
     });
 
     test('renders table rows for each video', () => {

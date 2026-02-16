@@ -13,6 +13,7 @@ This guide provides step-by-step instructions for common tasks in Youtarr. After
 - [Organize Channels with Multi-Library Support](#organize-channels-with-multi-library-support)
 - [Browse and Filter Channel Videos](#browse-and-filter-channel-videos)
 - [External Access with API Keys](#external-access-with-api-keys)
+- [Content Ratings](#content-ratings)
 
 ## Download Individual Videos
 
@@ -268,8 +269,50 @@ Mark specific videos to exclude them from automatic channel downloads.
    - They won't appear in download recommendations
    - You can still manually download them if you change your mind
 
-## External Access with API Keys
+## Common tasks
 
+- Set a per-download override: When downloading manually, use the download/settings dialog to pick a rating or clear it (NR) for that specific download.
+- Configure a channel default: Open a channel, click the settings (gear) and set `Default Rating` to apply to that channel's future downloads.
+- Upgrading from an older Youtarr version: If you upgraded and want ratings populated for existing videos, run the backfill script described below.
+
+### Backfilling ratings for existing videos
+
+The `backfill-ratings.js` script finds all videos with no `normalized_rating` and fetches ratings from YouTube via yt-dlp.
+
+> **Warning — this can take a very long time for large libraries.** Each video requires a yt-dlp metadata fetch (~5 seconds per video). For example: 1,000 videos ≈ 1.5 hours; 10,000 videos ≈ 14+ hours. Run `--dry-run` first to see how many videos need backfilling, then plan accordingly (e.g., run overnight, use `screen`/`tmux`).
+
+The script must be run inside the Docker container:
+
+```bash
+# Preview what would change (no database writes) — run this first!
+docker exec youtarr node scripts/backfill-ratings.js --dry-run
+
+# Run for real (consider using screen/tmux for large libraries)
+docker exec -it youtarr node scripts/backfill-ratings.js
+```
+
+**`--dry-run` flag** — Previews changes without modifying the database and shows how many videos need backfilling. Always run this first.
+
+**Log file** — A timestamped log is written to `scripts/backfill-ratings-<timestamp>.log` inside the container.
+
+**Behavior notes:**
+- Processes in batches of 10 with 500 ms rate limiting between requests
+- Videos that fail metadata fetch are marked `backfill-failed`
+- Videos with no rating data available are marked `backfill-no-rating`
+- Safe to re-run — already-rated videos are skipped, so if interrupted you can just run it again
+
+## Content Ratings
+
+Youtarr now supports content ratings for videos and channels. Ratings are normalized to common media-server values (for example `G`, `PG`, `PG-13`, `R`, `NC-17`, and `TV-*`) and surfaced in the UI as badges and in the video metadata. They can also be used to drive automated policies or filter downloads.
+
+How ratings are determined (priority):
+
+1. Manual Override — a rating explicitly set when performing a manual download (or via the download dialog override). This takes highest priority.
+2. Channel Default — a `default_rating` can be configured on a channel and applies to unrated videos for that channel.
+3. Mapped Metadata — ratings parsed and normalized from yt-dlp/YouTube metadata (MPAA, TV-PG, YT age-restrictions, or `age_limit` heuristics).
+4. NR / Not Rated — no rating could be determined; treated as unrated/null.
+
+## External Access with API Keys
 Send videos to Youtarr from anywhere using API keys. This enables one-click downloads from browser bookmarklets, mobile shortcuts, and automation tools.
 
 > **Note**: API keys currently support **single video downloads only**. Playlists and channels require the web UI.

@@ -389,6 +389,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           allowRedownload: settings.allowRedownload,
           subfolder: settings.subfolder,
           audioFormat: settings.audioFormat,
+          rating: settings.rating,
         }
       : undefined;
 
@@ -991,6 +992,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
       {/* Dialogs and Snackbars */}
       <ChannelVideosDialogs
+        channelId={channelId}
         token={token}
         downloadDialogOpen={downloadDialogOpen}
         refreshConfirmOpen={refreshConfirmOpen}
