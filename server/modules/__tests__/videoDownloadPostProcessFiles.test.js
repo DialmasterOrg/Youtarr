@@ -289,14 +289,14 @@ describe('videoDownloadPostProcessFiles', () => {
     expect(process.exit).not.toHaveBeenCalled();
   });
 
-  it('includes --year with UTC timestamp when upload_date is present', async () => {
+  it('includes --year when upload_date is present', async () => {
     await loadModule();
     await settleAsync();
 
     expect(childProcess.spawnSync).toHaveBeenCalledWith(
       '/usr/bin/AtomicParsley',
       expect.arrayContaining([
-        '--year', '2024'
+        '--year', '2024-01-31'
       ]),
       expect.any(Object)
     );
