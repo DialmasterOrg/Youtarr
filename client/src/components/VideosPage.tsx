@@ -48,6 +48,9 @@ import ScheduleIcon from '@mui/icons-material/Schedule';
 import DeleteVideosDialog from './shared/DeleteVideosDialog';
 import { useVideoDeletion } from './shared/useVideoDeletion';
 import DownloadFormatIndicator from './shared/DownloadFormatIndicator';
+import RatingBadge from './shared/RatingBadge';
+import ChangeRatingDialog from './shared/ChangeRatingDialog';
+import VideoActionsDropdown from './shared/VideoActionsDropdown';
 
 interface VideosPageProps {
   token: string | null;
@@ -77,6 +80,8 @@ function VideosPage({ token }: VideosPageProps) {
   const [selectedVideos, setSelectedVideos] = useState<number[]>([]);
   const [selectedForDeletion, setSelectedForDeletion] = useState<number[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
+  const [ratingLoading, setRatingLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -122,13 +127,19 @@ function VideosPage({ token }: VideosPageProps) {
         },
       });
 
-      setVideos(response.data.videos);
-      setTotalVideos(response.data.total);
-      setTotalPages(response.data.totalPages);
+      const data = response.data || {};
+      const normalizedVideos = (data.videos || []).map((video) => ({
+        ...video,
+        removed: !!video.removed,
+        youtube_removed: !!video.youtube_removed,
+      }));
+      setVideos(normalizedVideos);
+      setTotalVideos(data.total || 0);
+      setTotalPages(data.totalPages || 1);
 
       // Use channels list from API response (includes all channels, not just current page)
-      setUniqueChannels(response.data.channels || []);
-      setEnabledChannels(response.data.enabledChannels || []);
+      setUniqueChannels(data.channels || []);
+      setEnabledChannels(data.enabledChannels || []);
     } catch (error) {
       console.error('Failed to fetch videos:', error);
       setLoadError('Failed to load videos. Please try refreshing the page. If this error persists, the Youtarr backend may be down.');
@@ -231,6 +242,41 @@ function VideosPage({ token }: VideosPageProps) {
 
   const handleDeleteClick = () => {
     setDeleteDialogOpen(true);
+  };
+
+  const handleChangeRatingClick = () => {
+    setRatingDialogOpen(true);
+  };
+
+  const handleApplyRating = async (rating: string | null) => {
+    if (!token) return;
+
+    const videoIdsToUpdate = isMobile ? selectedForDeletion : selectedVideos;
+
+    setRatingLoading(true);
+    try {
+      await axios.post('/api/videos/rating', {
+        videoIds: videoIdsToUpdate,
+        rating,
+      }, {
+        headers: {
+          'x-access-token': token,
+        },
+      });
+
+      setSuccessMessage(`Successfully updated content rating for ${videoIdsToUpdate.length} video(s)`);
+      setSelectedVideos([]);
+      setSelectedForDeletion([]);
+      fetchVideos();
+    } catch (error: unknown) {
+      console.error('Failed to update ratings:', error);
+      const message = axios.isAxiosError(error)
+        ? error.response?.data?.error || 'Failed to update content ratings'
+        : 'Failed to update content ratings';
+      setErrorMessage(message);
+    } finally {
+      setRatingLoading(false);
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -359,15 +405,12 @@ function VideosPage({ token }: VideosPageProps) {
               <Typography variant="body2" color="text.secondary">
                 {selectedVideos.length} video{selectedVideos.length !== 1 ? 's' : ''} selected
               </Typography>
-              <Button
-                variant="contained"
-                color="error"
-                startIcon={<DeleteIcon />}
-                onClick={handleDeleteClick}
-                disabled={deleteLoading}
-              >
-                Delete Selected
-              </Button>
+              <VideoActionsDropdown
+                selectedVideosCount={selectedVideos.length}
+                onContentRating={handleChangeRatingClick}
+                onDelete={handleDeleteClick}
+                disabled={deleteLoading || ratingLoading}
+              />
               <Button
                 variant="outlined"
                 onClick={() => setSelectedVideos([])}
@@ -713,6 +756,13 @@ function VideosPage({ token }: VideosPageProps) {
                                   />
                                 ) : null;
                               })()}
+                              <RatingBadge
+                                rating={video.normalized_rating}
+                                ratingSource={video.rating_source}
+                                showNA={true}
+                                size="small"
+                                sx={{ height: 20, fontSize: '0.7rem' }}
+                              />
                               {!!video.removed && (
                                 <Tooltip title="Video file not found on disk" enterTouchDelay={0}>
                                   <Chip
@@ -891,6 +941,12 @@ function VideosPage({ token }: VideosPageProps) {
                                   />
                                 ) : null;
                               })()}
+                              <RatingBadge
+                                rating={video.normalized_rating}
+                                ratingSource={video.rating_source}
+                                showNA={true}
+                                size="small"
+                              />
                               {!!video.removed && (
                                 <Tooltip title="Video file not found on disk. It may have been deleted or moved." enterTouchDelay={0}>
                                   <Chip
@@ -930,6 +986,13 @@ function VideosPage({ token }: VideosPageProps) {
       </CardContent>
 
       {/* Delete Confirmation Dialog */}
+      <ChangeRatingDialog
+        open={ratingDialogOpen}
+        onClose={() => setRatingDialogOpen(false)}
+        onApply={handleApplyRating}
+        selectedCount={isMobile ? selectedForDeletion.length : selectedVideos.length}
+      />
+
       <DeleteVideosDialog
         open={deleteDialogOpen}
         onClose={handleDeleteCancel}

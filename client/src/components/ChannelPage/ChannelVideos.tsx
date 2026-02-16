@@ -232,16 +232,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   }, [channelAutoDownloadTabs, availableTabs]);
 
   // Use custom hooks for data fetching
-  const {
-    videos,
-    totalCount,
-    oldestVideoDate,
-    videoFailed,
-    autoDownloadsEnabled,
-    availableTabs: availableTabsFromVideos,
-    loading: videosLoading,
-    refetch: refetchVideos,
-  } = useChannelVideos({
+  const channelVideosParams = useMemo(() => ({
     channelId,
     page,
     pageSize,
@@ -255,7 +246,32 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     maxDuration: filters.maxDuration,
     dateFrom: filters.dateFrom,
     dateTo: filters.dateTo,
-  });
+  }), [
+    channelId,
+    page,
+    pageSize,
+    hideDownloaded,
+    searchQuery,
+    sortBy,
+    sortOrder,
+    selectedTab,
+    token,
+    filters.minDuration,
+    filters.maxDuration,
+    filters.dateFrom,
+    filters.dateTo,
+  ]);
+
+  const {
+    videos,
+    totalCount,
+    oldestVideoDate,
+    videoFailed,
+    autoDownloadsEnabled,
+    availableTabs: availableTabsFromVideos,
+    loading: videosLoading,
+    refetch: refetchVideos,
+  } = useChannelVideos(channelVideosParams);
 
   // Update available tabs from video fetch response if available
   useEffect(() => {
@@ -373,6 +389,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           allowRedownload: settings.allowRedownload,
           subfolder: settings.subfolder,
           audioFormat: settings.audioFormat,
+          rating: settings.rating,
         }
       : undefined;
 
@@ -975,6 +992,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
       {/* Dialogs and Snackbars */}
       <ChannelVideosDialogs
+        channelId={channelId}
         token={token}
         downloadDialogOpen={downloadDialogOpen}
         refreshConfirmOpen={refreshConfirmOpen}

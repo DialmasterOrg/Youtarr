@@ -99,6 +99,16 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
     return viewMode === 'grid' ? 27 : 20;
   }, [isMobile, viewMode]);
 
+  // Senior State Architect: Memoize params to kill identity-based re-fetch loops
+  const channelListParams = useMemo(() => ({
+    token,
+    page,
+    pageSize,
+    searchTerm: filterValue,
+    sortOrder,
+    subFolder: selectedSubFolder || undefined,
+  }), [token, page, pageSize, filterValue, sortOrder, selectedSubFolder]);
+
   const {
     channels: serverChannels,
     total,
@@ -107,14 +117,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
     error,
     refetch,
     subFolders: apiSubFolders,
-  } = useChannelList({
-    token,
-    page,
-    pageSize,
-    searchTerm: filterValue,
-    sortOrder,
-    subFolder: selectedSubFolder || undefined,
-  });
+  } = useChannelList(channelListParams);
 
   const {
     pendingAdditions,

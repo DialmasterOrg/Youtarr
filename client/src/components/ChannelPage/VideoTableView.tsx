@@ -17,6 +17,7 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import RatingBadge from '../shared/RatingBadge';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml } from '../../utils/formatters';
@@ -107,6 +108,7 @@ function VideoTableView({
                 )}
               </Box>
             </TableCell>
+            <TableCell>Rating</TableCell>
             <TableCell>Status</TableCell>
           </TableRow>
         </TableHead>
@@ -236,6 +238,15 @@ function VideoTableView({
                       audioFileSize={video.audioFileSize}
                     />
                   ) : '-'}
+                </TableCell>
+                <TableCell>
+                  <RatingBadge
+                    rating={video.normalized_rating}
+                    ratingSource={video.rating_source}
+                    size="small"
+                    variant="text"
+                    showNA
+                  />
                 </TableCell>
                 <TableCell>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>

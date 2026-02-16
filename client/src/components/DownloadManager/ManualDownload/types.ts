@@ -17,6 +17,7 @@ export interface DownloadSettings {
   allowRedownload?: boolean;
   subfolder?: string | null;
   audioFormat?: string | null;
+  rating?: string | null;
 }
 
 export interface ValidationResponse {

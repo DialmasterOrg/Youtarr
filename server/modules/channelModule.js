@@ -12,6 +12,8 @@ const { Op, fn, col, where } = require('sequelize');
 const fileCheckModule = require('./fileCheckModule');
 const logger = require('../logger');
 const { sanitizeNameLikeYtDlp } = require('./filesystem');
+const ratingMapper = require('./ratingMapper');
+const tempPathManager = require('./download/tempPathManager');
 
 const { v4: uuidv4 } = require('uuid');
 const { spawn, execSync } = require('child_process');
@@ -151,7 +153,7 @@ class ChannelModule {
     const ytDlp = spawn('yt-dlp', args, {
       env: {
         ...process.env,
-        TMPDIR: '/tmp'
+        TMPDIR: tempPathManager.getTempBasePath()
       }
     });
 
@@ -284,7 +286,7 @@ class ChannelModule {
    * @returns {Object} - Formatted channel response
    */
   mapChannelToResponse(channel) {
-    return {
+    const out = {
       id: channel.channel_id,
       uploader: channel.uploader,
       uploader_id: channel.uploader_id || channel.channel_id,
@@ -300,6 +302,12 @@ class ChannelModule {
       max_duration: channel.max_duration || null,
       title_filter_regex: channel.title_filter_regex || null,
     };
+
+    if (channel.default_rating != null) {
+      out.default_rating = channel.default_rating;
+    }
+
+    return out;
   }
 
   /**
@@ -308,7 +316,7 @@ class ChannelModule {
    * @returns {Object} - Simplified channel representation
    */
   mapChannelListEntry(channel) {
-    return {
+    const out = {
       url: channel.url,
       uploader: channel.uploader || '',
       channel_id: channel.channel_id || '',
@@ -321,6 +329,12 @@ class ChannelModule {
       title_filter_regex: channel.title_filter_regex || null,
       audio_format: channel.audio_format || null,
     };
+
+    if (channel.default_rating != null) {
+      out.default_rating = channel.default_rating;
+    }
+
+    return out;
   }
 
   /**
@@ -1223,6 +1237,10 @@ class ChannelModule {
           publishedAt: video.publishedAt || syntheticPublishedAt,
         };
 
+        if (video.content_rating != null) updates.content_rating = video.content_rating;
+        if (video.age_limit != null) updates.age_limit = video.age_limit;
+        if (video.normalized_rating != null) updates.normalized_rating = video.normalized_rating;
+
         await videoRecord.update(updates);
       }
     }
@@ -1246,7 +1264,17 @@ class ChannelModule {
       where: {
         youtubeId: youtubeIds
       },
-      attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize']
+      attributes: [
+        'id',
+        'youtubeId',
+        'removed',
+        'fileSize',
+        'filePath',
+        'audioFilePath',
+        'audioFileSize',
+        'normalized_rating',
+        'rating_source'
+      ]
     });
 
     // Create Maps for O(1) lookup of download status
@@ -1261,7 +1289,8 @@ class ChannelModule {
         fileSize: v.fileSize,
         filePath: v.filePath,
         audioFilePath: v.audioFilePath,
-        audioFileSize: v.audioFileSize
+        audioFileSize: v.audioFileSize,
+        normalized_rating: v.normalized_rating
       });
 
       // Collect videos that need file checking (only if checkFiles is true and have any file path)
@@ -1303,6 +1332,9 @@ class ChannelModule {
         plainVideoObject.filePath = status.filePath;
         plainVideoObject.audioFilePath = status.audioFilePath;
         plainVideoObject.audioFileSize = status.audioFileSize;
+        if (status.normalized_rating) {
+          plainVideoObject.normalized_rating = status.normalized_rating;
+        }
       } else {
         // Video never downloaded
         plainVideoObject.added = false;
@@ -1447,7 +1479,10 @@ class ChannelModule {
         availability: v.availability,
         youtube_removed: v.youtube_removed,
         ignored: v.ignored,
-        ignored_at: v.ignored_at
+        ignored_at: v.ignored_at,
+        normalized_rating: v.normalized_rating,
+        media_type: v.media_type,
+        live_status: v.live_status
       }));
 
       // This will check files for only the current page
@@ -1588,10 +1623,22 @@ class ChannelModule {
   /**
    * Parse video metadata from yt-dlp entry
    * @param {Object} entry - Video entry from yt-dlp
+   * @param {string|null} defaultRating - Default rating from channel settings
    * @returns {Object} - Parsed video object
    */
-  parseVideoMetadata(entry) {
-    return {
+  parseVideoMetadata(entry, defaultRating = null) {
+    const contentRating = entry.contentRating || entry.content_rating || null;
+    const ageLimit = entry.age_limit ?? null;
+    
+    // Utilize centralized rating mapper to determine effective rating (Manual Override not applicable here)
+    // Ensure content_rating and age_limit keys are present in normalized form so ratingMapper can read them
+    const normalizedEntry = Object.assign({}, entry, {
+      content_rating: contentRating,
+      age_limit: ageLimit
+    });
+    const effectiveRating = ratingMapper.determineEffectiveRating(normalizedEntry, defaultRating);
+
+    const out = {
       title: entry.title || 'Untitled',
       youtube_id: entry.id,
       publishedAt: this.extractPublishedDate(entry),
@@ -1601,14 +1648,28 @@ class ChannelModule {
       media_type: entry.media_type || 'video',
       live_status: entry.live_status || null,
     };
+
+    if (contentRating != null) out.content_rating = contentRating;
+    if (ageLimit != null) out.age_limit = ageLimit;
+    
+    if (effectiveRating.normalized_rating != null) {
+      out.normalized_rating = effectiveRating.normalized_rating;
+    }
+    
+    if (effectiveRating.rating_source != null) {
+      out.rating_source = effectiveRating.rating_source;
+    }
+
+    return out;
   }
 
   /**
    * Extract video entries from yt-dlp JSON response.
    * @param {Object} jsonOutput - Parsed JSON from yt-dlp
+   * @param {string|null} defaultRating - Default rating from channel
    * @returns {Array} - Array of parsed video metadata objects
    */
-  extractVideosFromYtDlpResponse(jsonOutput) {
+  extractVideosFromYtDlpResponse(jsonOutput, defaultRating = null) {
     const videos = [];
 
     if (!jsonOutput.entries || !Array.isArray(jsonOutput.entries)) {
@@ -1629,7 +1690,7 @@ class ChannelModule {
       }
 
       // Parse and add the video metadata
-      videos.push(this.parseVideoMetadata(entry));
+      videos.push(this.parseVideoMetadata(entry, defaultRating));
     }
 
     return videos;
@@ -1681,7 +1742,7 @@ class ChannelModule {
       const jsonOutput = JSON.parse(content);
 
       // Extract videos using helper method that handles nested structures
-      const videos = this.extractVideosFromYtDlpResponse(jsonOutput);
+      const videos = this.extractVideosFromYtDlpResponse(jsonOutput, channel.default_rating);
 
       // Extract the current channel URL (with handle) from the response
       const currentChannelUrl = jsonOutput.uploader_url || jsonOutput.channel_url || jsonOutput.url;
@@ -2210,7 +2271,7 @@ class ChannelModule {
           const content = await this.executeYtDlpCommand(args, outputFilePath);
 
           const jsonOutput = JSON.parse(content);
-          const videos = this.extractVideosFromYtDlpResponse(jsonOutput);
+          const videos = this.extractVideosFromYtDlpResponse(jsonOutput, channel.default_rating);
           const currentChannelUrl = jsonOutput.uploader_url || jsonOutput.channel_url || jsonOutput.url;
           return { videos, currentChannelUrl };
         });

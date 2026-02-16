@@ -15,6 +15,7 @@ database
 server/images
 
 .env
+.env.dev
 
 # Local dev exclusion
 ffmpeg.exe

@@ -385,7 +385,7 @@ class DownloadExecutor {
     this.pendingProgressMessage = null;
   }
 
-  async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false, subfolderOverride = null) {
+  async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false, subfolderOverride = null, ratingOverride = undefined) {
     const initialCount = this.getCountOfDownloadedVideos();
     const config = configModule.getConfig();
     const monitor = new DownloadProgressMonitor(jobId, jobType);
@@ -408,17 +408,24 @@ class DownloadExecutor {
 
     return new Promise((resolve, reject) => {
       logger.info({ jobType, args, subfolderOverride }, 'Running yt-dlp');
-      const proc = spawn('yt-dlp', args, {
-        env: {
-          ...process.env,
-          YOUTARR_JOB_ID: jobId,
-          TMPDIR: '/tmp',
-          // Pass subfolder override to post-processor (empty string means no override)
-          ...(subfolderOverride !== null && subfolderOverride !== undefined
-            ? { YOUTARR_SUBFOLDER_OVERRIDE: subfolderOverride }
-            : {})
-        }
-      });
+      const procEnv = {
+        ...process.env,
+        YOUTARR_JOB_ID: jobId,
+        TMPDIR: tempPathManager.getTempBasePath()
+      };
+
+      // Pass subfolder override to post-processor (empty string means no override)
+      if (subfolderOverride !== null && subfolderOverride !== undefined) {
+        procEnv.YOUTARR_SUBFOLDER_OVERRIDE = subfolderOverride;
+      }
+
+      // Pass explicit rating override if provided
+      // Accept null as an explicit "clear rating" sentinel and map it to 'NR'
+      if (ratingOverride !== undefined) {
+        procEnv.YOUTARR_OVERRIDE_RATING = ratingOverride === null ? 'NR' : String(ratingOverride);
+      }
+
+      const proc = spawn('yt-dlp', args, { env: procEnv });
 
       // Store process reference for manual termination
       this.currentProcess = proc;

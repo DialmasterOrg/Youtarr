@@ -35,7 +35,9 @@ jest.mock('../configModule', () => ({
   getImagePath: jest.fn(() => '/mock/images'),
   stopWatchingConfig: jest.fn(),
   getCookiesPath: jest.fn(() => null),
+  getDefaultSubfolder: jest.fn(() => null),
   ffmpegPath: '/usr/bin/ffmpeg',
+  atomicParsleyPath: '/usr/bin/AtomicParsley',
   directoryPath: '/library',
   __setConfig: (cfg) => {
     Object.keys(mockConfig).forEach((key) => delete mockConfig[key]);
@@ -70,15 +72,16 @@ const mockJobVideoDownload = {
   update: jest.fn(() => Promise.resolve([0]))
 };
 
-jest.mock('../../models', () => ({
-  JobVideoDownload: mockJobVideoDownload
-}));
-
 const mockChannel = {
   findOne: jest.fn(() => Promise.resolve(null))
 };
 
 jest.mock('../../models/channel', () => mockChannel);
+
+jest.mock('../../models', () => ({
+  JobVideoDownload: mockJobVideoDownload,
+  Channel: mockChannel
+}));
 
 jest.mock('../../logger');
 
@@ -110,7 +113,6 @@ const ORIGINAL_EXIT = process.exit;
 describe('videoDownloadPostProcessFiles', () => {
   const videoPath = '/library/Channel/Video Title [abc123].mp4';
   const jsonPath = '/library/Channel/Video Title [abc123].info.json';
-  const tempPath = `${videoPath}.metadata_temp.mp4`;
   let setTimeoutSpy;
 
   beforeEach(() => {
@@ -150,11 +152,8 @@ describe('videoDownloadPostProcessFiles', () => {
     fs.writeFileSync.mockImplementation(() => {});
     fs.ensureDirSync.mockImplementation(() => {});
     fs.moveSync.mockImplementation(() => {});
-    fs.pathExists.mockImplementation(async (path) => path === tempPath);
+    fs.pathExists.mockResolvedValue(false);
     fs.stat.mockImplementation(async (path) => {
-      if (path === tempPath) {
-        return { size: 1000 };
-      }
       if (path === videoPath) {
         return { size: 900 };
       }
@@ -188,12 +187,25 @@ describe('videoDownloadPostProcessFiles', () => {
     await flushPromises();
   }
 
-  it('moves metadata temp file into place when size threshold passes', async () => {
+  it('embeds metadata via AtomicParsley with correct arguments', async () => {
     await loadModule();
     await settleAsync();
 
     expect(fs.moveSync).toHaveBeenCalledWith(jsonPath, '/mock/jobs/info/abc123.info.json', { overwrite: true });
-    expect(childProcess.spawnSync).toHaveBeenCalled();
+    expect(childProcess.spawnSync).toHaveBeenCalledWith(
+      '/usr/bin/AtomicParsley',
+      expect.arrayContaining([
+        videoPath,
+        '--title', 'Channel - Video Title',
+        '--genre', 'Education',
+        '--TVNetwork', 'Channel',
+        '--artist', 'Channel',
+        '--album', 'Channel',
+        '--stik', 'Movie',
+        '--overWrite'
+      ]),
+      expect.any(Object)
+    );
     expect(JobVideoDownload.update).toHaveBeenCalledWith(
       { status: 'completed', file_path: videoPath },
       {
@@ -203,30 +215,9 @@ describe('videoDownloadPostProcessFiles', () => {
         }
       }
     );
-    expect(fs.move).toHaveBeenCalledWith(tempPath, videoPath, { overwrite: true });
-    expect(fs.remove).not.toHaveBeenCalledWith(tempPath);
     expect(nfoGenerator.writeVideoNfoFile).toHaveBeenCalledWith(videoPath, expect.any(Object));
     expect(configModule.stopWatchingConfig).toHaveBeenCalled();
     expect(process.exit).not.toHaveBeenCalled();
-  });
-
-  it('removes metadata temp file when size check fails', async () => {
-    fs.stat.mockImplementation(async (path) => {
-      if (path === tempPath) {
-        return { size: 100 };
-      }
-      if (path === videoPath) {
-        return { size: 1000 };
-      }
-      return { size: 0 };
-    });
-
-    await loadModule();
-    await settleAsync();
-
-    expect(fs.move).not.toHaveBeenCalledWith(tempPath, videoPath, expect.any(Object));
-    expect(fs.remove).toHaveBeenCalledWith(tempPath);
-    expect(configModule.stopWatchingConfig).toHaveBeenCalled();
   });
 
   it('gracefully skips processing when info json is missing', async () => {
@@ -241,49 +232,36 @@ describe('videoDownloadPostProcessFiles', () => {
     expect(configModule.stopWatchingConfig).toHaveBeenCalled();
   });
 
-  it('retries move when first attempt fails', async () => {
-    const moveError = new Error('busy');
-    fs.move
-      .mockRejectedValueOnce(moveError)
-      .mockResolvedValueOnce();
-
-    await loadModule();
-    await settleAsync(6);
-
-    expect(fs.move).toHaveBeenCalledTimes(2);
-    expect(fs.remove).not.toHaveBeenCalledWith(tempPath);
-  });
-
-  it('removes temp file when move fails after retries', async () => {
-    fs.move.mockRejectedValue(new Error('still busy'));
-
-    await loadModule();
-    await settleAsync(8);
-
-    expect(fs.move).toHaveBeenCalledTimes(6); // initial + 5 retries
-    expect(fs.remove).toHaveBeenCalledWith(tempPath);
-  });
-
-  it('logs and ignores removal errors that are not ENOENT', async () => {
-    const removeError = new Error('permission denied');
-    fs.remove.mockRejectedValueOnce(removeError).mockResolvedValueOnce();
-    fs.stat.mockImplementation(async (path) => {
-      if (path === tempPath) {
-        return { size: 100 };
-      }
-      if (path === videoPath) {
-        return { size: 1000 };
-      }
-      return { size: 0 };
+  it('includes iTunEXTC atom when normalized_rating is set', async () => {
+    Channel.findOne.mockResolvedValue({
+      id: 1,
+      sub_folder: null,
+      uploader: 'Channel',
+      folder_name: 'Channel',
+      default_rating: 'PG-13'
     });
 
     await loadModule();
     await settleAsync();
 
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: tempPath }),
-      'Error deleting file'
+    expect(childProcess.spawnSync).toHaveBeenCalledWith(
+      '/usr/bin/AtomicParsley',
+      expect.arrayContaining([
+        '--rDNSatom', 'mpaa|PG-13|', 'name=iTunEXTC', 'domain=com.apple.iTunes'
+      ]),
+      expect.any(Object)
     );
+  });
+
+  it('skips iTunEXTC atom when no rating is set', async () => {
+    await loadModule();
+    await settleAsync();
+
+    const spawnCalls = childProcess.spawnSync.mock.calls;
+    const apCall = spawnCalls.find(c => c[0] === '/usr/bin/AtomicParsley');
+    expect(apCall).toBeTruthy();
+    const args = apCall[1];
+    expect(args).not.toContain('--rDNSatom');
   });
 
   it('writes actual filepath to JSON before moving', async () => {
@@ -297,32 +275,34 @@ describe('videoDownloadPostProcessFiles', () => {
     expect(fs.moveSync).toHaveBeenCalledWith(jsonPath, '/mock/jobs/info/abc123.info.json', { overwrite: true });
   });
 
-  it('cleans up temp file in catch block when ffmpeg spawn fails', async () => {
+  it('logs warning when AtomicParsley fails', async () => {
     childProcess.spawnSync.mockReturnValueOnce({ status: 1, stderr: Buffer.from('error') });
-    fs.move.mockClear();
-    fs.remove.mockClear();
 
     await loadModule();
     await settleAsync();
 
-    expect(fs.move).not.toHaveBeenCalled();
-    expect(fs.remove).toHaveBeenCalledWith(tempPath);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ err: expect.any(Error) }),
+      'Could not embed metadata via AtomicParsley'
+    );
+    // Should not fail the entire post-processing
+    expect(process.exit).not.toHaveBeenCalled();
   });
 
-  it('adds release_date metadata when upload_date is present', async () => {
+  it('includes --year when upload_date is present', async () => {
     await loadModule();
     await settleAsync();
 
     expect(childProcess.spawnSync).toHaveBeenCalledWith(
-      '/usr/bin/ffmpeg',
+      '/usr/bin/AtomicParsley',
       expect.arrayContaining([
-        '-metadata', 'release_date=2024-01-31'
+        '--year', '2024-01-31'
       ]),
       expect.any(Object)
     );
   });
 
-  it('skips release_date metadata when upload_date is missing', async () => {
+  it('skips --year when upload_date is missing', async () => {
     fs.readFileSync.mockReturnValue(JSON.stringify({
       id: 'abc123',
       title: 'Video Title',
@@ -334,13 +314,10 @@ describe('videoDownloadPostProcessFiles', () => {
     await settleAsync();
 
     const spawnCalls = childProcess.spawnSync.mock.calls;
-    if (spawnCalls.length > 0) {
-      const ffmpegArgs = spawnCalls[0][1];
-      const hasReleaseDate = ffmpegArgs.some((arg, idx) =>
-        arg === '-metadata' && ffmpegArgs[idx + 1]?.startsWith('release_date=')
-      );
-      expect(hasReleaseDate).toBe(false);
-    }
+    const apCall = spawnCalls.find(c => c[0] === '/usr/bin/AtomicParsley');
+    expect(apCall).toBeTruthy();
+    const args = apCall[1];
+    expect(args).not.toContain('--year');
   });
 
   it('marks video as completed in JobVideoDownload when job ID is available', async () => {
@@ -426,7 +403,7 @@ describe('videoDownloadPostProcessFiles', () => {
 
       const tempJsonPath = '/tmp/youtarr-downloads/Channel/Video Title [abc123].info.json';
       fs.existsSync.mockImplementation((path) => path === tempJsonPath || path === finalVideoPath);
-      fs.pathExists.mockImplementation(async (path) => path === tempPath);
+      fs.pathExists.mockResolvedValue(false);
 
       await loadModule();
       await settleAsync();

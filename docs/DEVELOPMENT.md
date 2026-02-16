@@ -4,7 +4,7 @@
 
 For development, you'll need:
 
-1. **Node.js 18+ and npm** (needed for the build script that compiles the client and installs dependencies before Docker runs)
+1. **Node.js 20.19+ and npm** (needed for the build script that compiles the client and installs dependencies before Docker runs)
 2. **Docker** and Docker Compose (v2 or v1)
 3. **Git** for version control
 4. A code editor (VS Code recommended)
@@ -59,7 +59,7 @@ Optional flags:
 - `--no-cache` - Force rebuild to get latest yt-dlp version
 - `SKIP_DEV_IMAGE_PRUNE=1` - Skip automatic cleanup of old untagged `youtarr-dev` images (pruning is enabled by default to keep Docker storage from filling)
 
-The script runs `npm run build` for the client and then invokes `docker build`, so make sure Node.js 18+ and npm are available locally.
+The script runs `npm run build` for the client and then invokes `docker build`, so make sure Node.js 20.19+ and npm are available locally.
 
 ### 3. Configure .env (optional)
 
@@ -74,25 +74,49 @@ The script runs `npm run build` for the client and then invokes `docker build`, 
 
 ### 4. Start Development Environment
 
+**Step 1: Full Docker Development**
+
+Build and run the full stack using the pre-built static frontend served by the app container.
+
 ```bash
-# Start both app and database containers
+# Start both app and database containers (serves static frontend)
 ./scripts/start-dev.sh
 ```
+
+This starts:
+- **Backend** on http://localhost:3011 (Node.js Express server with `--watch` for auto-restart)
+- **Frontend (static, served by the app container)** on http://localhost:3087
+- **MariaDB** database on port 3321
 
 Optional flags:
 - `--no-auth` - Disable authentication (only use behind auth gateway or if not exposed outside your network)
 - `--debug`   - Set logging level to "debug" (defaults to `info`)
 
-This starts:
-- **Backend/Frontend** on http://localhost:3087 (serves pre-built static React files)
-- **WebSocket** on the same HTTP server/port (3087)
-- **MariaDB** database on port 3321 (by default, port can be overridden)
+**Step 2: Vite Dev Server (Hot Module Reload — optional)**
 
-**Note:** The development setup serves a production build of the frontend. Code changes require rebuilding (see below).
+For faster, iterative frontend development you can run the Vite dev server with HMR. This is optional; run it when you want instant frontend reloads while developing UI.
+
+```bash
+# Terminal 1: Start backend in Docker
+./scripts/start-dev.sh
+
+# Terminal 2: Start Vite dev server (HMR)
+cd client
+npm run dev
+```
+
+Then access:
+- **Frontend (HMR)** at http://localhost:3000
+
+The Vite dev server will proxy API and WebSocket requests to the backend at port `3011` so API calls work the same as the full-stack run.
 
 ### 5. Access the Application
 
-Navigate to http://localhost:3087 and create your admin account.
+Navigate to:
+- **Docker static build**: http://localhost:3087
+- **Vite dev server (if running)**: http://localhost:3000
+
+Create your admin account on first access.
 
 ### 6. Stop Development Environment
 
@@ -165,6 +189,28 @@ You **must** rebuild (`./scripts/build-dev.sh`) for:
 
 ### Daily Development
 
+**Vite Dev Server Workflow (Recommended for Frontend)**
+
+```bash
+# Terminal 1: Start backend
+./scripts/start-dev.sh
+
+# Terminal 2: Start Vite with HMR
+cd client
+npm run dev
+
+# Make code changes - frontend updates instantly!
+# Backend changes auto-restart via --watch
+
+# View logs
+docker compose -f docker-compose.dev.yml logs -f youtarr
+
+# Stop when done
+./stop.sh
+```
+
+**Full Docker Workflow (For Testing Production Build)**
+
 ```bash
 # Start development environment
 ./scripts/start-dev.sh
@@ -176,7 +222,7 @@ You **must** rebuild (`./scripts/build-dev.sh`) for:
 ./scripts/start-dev.sh  # Automatically stops and restarts containers
 
 # View logs
-docker compose logs -f
+docker compose -f docker-compose.dev.yml logs -f
 
 # Stop when done
 ./stop.sh
