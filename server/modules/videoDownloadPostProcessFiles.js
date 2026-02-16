@@ -356,10 +356,7 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         const month = jsonData.upload_date.substring(4, 6);
         const day = jsonData.upload_date.substring(6, 8);
         const releaseDate = `${year}-${month}-${day}`;
-        apArgs.push('--release_date', `${releaseDate}`);
-        apArgs.push('--year', `${year}`);
-        apArgs.push('--date', `${releaseDate}`);
-        apArgs.push('--originaldate', `${releaseDate}`);
+        apArgs.push('--year', `${releaseDate}`);
       }
 
       // Description for Plex Summary
