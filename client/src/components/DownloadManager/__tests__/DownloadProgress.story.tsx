@@ -22,7 +22,7 @@ const meta: Meta<typeof DownloadProgress> = {
   title: 'Components/DownloadManager/DownloadProgress',
   component: DownloadProgress,
   decorators: [
-    (Story: any) => (
+    (Story) => (
       <MemoryRouter>
         <WebSocketContext.Provider
           value={{
@@ -36,7 +36,7 @@ const meta: Meta<typeof DownloadProgress> = {
       </MemoryRouter>
     ),
   ],
-  render: (args: any) => {
+  render: (args) => {
     const downloadProgressRef = useRef({ index: null, message: '' });
     const downloadInitiatedRef = useRef(false);
     return (
@@ -57,7 +57,7 @@ export default meta;
 type Story = StoryObj<typeof DownloadProgress>;
 
 export const ShowsQueuedJobs: Story = {
-  play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+  play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText('Download Progress')).toBeInTheDocument();
     await expect(canvas.getByText('1 job queued')).toBeInTheDocument();

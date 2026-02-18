@@ -1,0 +1,101 @@
+import React from 'react';
+import type { Meta, StoryObj } from '@storybook/react';
+import { expect, within, userEvent } from 'storybook/test';
+import { http, HttpResponse } from 'msw';
+import { DEFAULT_CONFIG } from '../../config/configSchema';
+import Configuration from '../Configuration';
+
+const meta: Meta<typeof Configuration> = {
+  title: 'Pages/Configuration',
+  component: Configuration,
+  args: {
+    token: 'storybook-token',
+  },
+  parameters: {
+    layout: 'fullscreen',
+  },
+};
+
+export default meta;
+
+type Story = StoryObj<typeof Configuration>;
+
+export const Default: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/getconfig', () =>
+          HttpResponse.json({
+            ...DEFAULT_CONFIG,
+            youtubeOutputDirectory: '/downloads/youtube',
+            isPlatformManaged: {
+              plexUrl: false,
+              authEnabled: true,
+              useTmpForDownloads: false,
+            },
+            deploymentEnvironment: {
+              platform: null,
+              isWsl: false,
+            },
+          })
+        ),
+        http.get('/storage-status', () =>
+          HttpResponse.json({
+            availableGB: '100',
+            percentFree: 50,
+            totalGB: '200',
+          })
+        ),
+        http.get('/api/keys', () =>
+          HttpResponse.json({
+            keys: [
+              {
+                id: 1,
+                name: 'Test Key',
+                key_prefix: 'yt_',
+                created_at: new Date().toISOString(),
+                last_used_at: null,
+                is_active: true,
+                usage_count: 0,
+              },
+            ],
+          })
+        ),
+        http.get('/api/cookies/status', () =>
+          HttpResponse.json({
+            customFileExists: true,
+            customFileSize: 1024,
+            customFileUpdated: new Date().toISOString(),
+          })
+        ),
+        http.get('/api/ytdlp/latest-version', () =>
+          HttpResponse.json({
+            currentVersion: '2024.10.07',
+            latestVersion: '2024.10.07',
+            updateAvailable: false,
+          })
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+
+    // Core settings card is rendered once config has loaded.
+    await expect(await body.findByRole('heading', { name: /core settings/i }, { timeout: 10000 })).toBeInTheDocument();
+
+    // Enable cookies to surface the status text.
+    const enableCookiesToggle = await body.findByRole('checkbox', { name: /Enable Cookies/i });
+    await userEvent.click(enableCookiesToggle);
+
+    const cookieStatusLabels = await body.findAllByText((_content: string, node?: Element | null) =>
+      node?.textContent?.includes('Using custom cookies') ?? false
+    );
+    await expect(cookieStatusLabels.length).toBeGreaterThan(0);
+
+    await expect(await body.findByText('Test Key')).toBeInTheDocument();
+
+    const outputDirLabels = await body.findAllByText('YouTube Output Directory');
+    await expect(outputDirLabels.length).toBeGreaterThan(0);
+  },
+};

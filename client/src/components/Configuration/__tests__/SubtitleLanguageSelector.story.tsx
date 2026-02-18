@@ -15,7 +15,7 @@ export default meta;
 type Story = StoryObj<typeof SubtitleLanguageSelector>;
 
 export const MultiSelect: Story = {
-  play: async ({ canvasElement, args }: { canvasElement: HTMLElement; args: any }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     const select = canvas.getByLabelText('Subtitle Languages');
 

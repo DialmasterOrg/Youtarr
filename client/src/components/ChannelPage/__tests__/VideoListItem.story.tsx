@@ -33,7 +33,7 @@ export default meta;
 type Story = StoryObj<typeof VideoListItem>;
 
 export const Selectable: Story = {
-  play: async ({ canvasElement, args }: { canvasElement: HTMLElement; args: any }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByText('Sample Video'));
     await expect(args.onCheckChange).toHaveBeenCalledWith('abc123', true);
