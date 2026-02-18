@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Button, TextField, Alert, Box } from '@mui/material';
 import axios from 'axios';
 import { locationUtils } from '../utils/location';
 
@@ -54,40 +53,53 @@ const LocalLogin: React.FC<LocalLoginProps> = ({ setToken }) => {
   };
 
   return (
-    <Box component="form" onSubmit={handleLogin} sx={{ mt: 2 }}>
-      <TextField
-        fullWidth
-        label="Username"
+    <form onSubmit={handleLogin} className="mt-2 space-y-4">
+      <label className="block">
+        <span className="mb-1 block text-sm font-medium text-[var(--app-text-primary)]">Username</span>
+        <input
+          className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-[var(--app-primary-main)] focus:ring-2 focus:ring-[var(--app-primary-main)]/20"
+          name="username"
+          type="text"
+          autoComplete="username"
+          aria-label="Username"
         value={username}
         onChange={(e) => setUsername(e.target.value)}
-        margin="normal"
         required
         autoFocus
-      />
-      <TextField
-        fullWidth
-        label="Password"
-        type="password"
+        />
+      </label>
+
+      <label className="block">
+        <span className="mb-1 block text-sm font-medium text-[var(--app-text-primary)]">Password</span>
+        <input
+          className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-[var(--app-primary-main)] focus:ring-2 focus:ring-[var(--app-primary-main)]/20"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          aria-label="Password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        margin="normal"
         required
-      />
+        />
+      </label>
+
       {error && (
-        <Alert severity="error" sx={{ mt: 2 }}>
+        <div
+          role="alert"
+          className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700"
+        >
           {error}
-        </Alert>
+        </div>
       )}
-      <Button
+
+      <button
         type="submit"
-        fullWidth
-        variant="contained"
-        sx={{ mt: 3 }}
         disabled={loading}
+        className="mt-2 inline-flex w-full items-center justify-center rounded-md bg-[var(--app-primary-main)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {loading ? 'Logging in...' : 'Login'}
-      </Button>
-    </Box>
+      </button>
+    </form>
   );
 };
 

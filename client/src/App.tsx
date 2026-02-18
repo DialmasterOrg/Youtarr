@@ -56,6 +56,7 @@ import { useConfig } from './hooks/useConfig';
 import ErrorBoundary from './components/ErrorBoundary';
 import DatabaseErrorOverlay from './components/DatabaseErrorOverlay';
 import { lightTheme, darkTheme } from './theme';
+import { getCssVarsForMode } from './theme/tokens';
 import { YTDLP_UPDATED_EVENT } from './components/Configuration/hooks/useYtDlpUpdate';
 
 import { locationUtils } from './utils/location';
@@ -105,6 +106,17 @@ function AppContent() {
   // Select theme based on darkModeEnabled config
   const selectedTheme = useMemo(() => {
     return appConfig.darkModeEnabled ? darkTheme : lightTheme;
+  }, [appConfig.darkModeEnabled]);
+
+  useEffect(() => {
+    const mode = appConfig.darkModeEnabled ? 'dark' : 'light';
+    const cssVars = getCssVarsForMode(mode);
+
+    document.documentElement.setAttribute('data-theme', mode);
+
+    Object.entries(cssVars).forEach(([key, value]) => {
+      document.documentElement.style.setProperty(key, value);
+    });
   }, [appConfig.darkModeEnabled]);
 
   const handleDrawerToggle = () => {

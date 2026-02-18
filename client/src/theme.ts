@@ -6,6 +6,7 @@
  */
 
 import { createTheme, ThemeOptions } from '@mui/material/styles';
+import { tokens } from './theme/tokens';
 
 /**
  * Common theme options shared between light and dark modes
@@ -47,49 +48,49 @@ export const lightTheme = createTheme({
   palette: {
     mode: 'light',
     primary: {
-      main: '#1976d2', // Material-UI default blue
-      light: '#42a5f5',
-      dark: '#1565c0',
-      contrastText: '#fff',
+      main: tokens.colors.light.primary.main,
+      light: tokens.colors.light.primary.light,
+      dark: tokens.colors.light.primary.dark,
+      contrastText: tokens.colors.light.primary.contrastText,
     },
     secondary: {
-      main: '#dc004e',
-      light: '#e33371',
-      dark: '#9a0036',
-      contrastText: '#fff',
+      main: tokens.colors.light.secondary.main,
+      light: tokens.colors.light.secondary.light,
+      dark: tokens.colors.light.secondary.dark,
+      contrastText: tokens.colors.light.secondary.contrastText,
     },
     success: {
-      main: '#4caf50', // Used for authenticated state
+      main: tokens.colors.light.semantic.success,
       light: '#81c784',
       dark: '#388e3c',
       contrastText: '#fff',
     },
     error: {
-      main: '#d32f2f',
+      main: tokens.colors.light.semantic.error,
       light: '#ef5350',
       dark: '#c62828',
       contrastText: '#fff',
     },
     warning: {
-      main: '#ff9800',
+      main: tokens.colors.light.semantic.warning,
       light: '#ffb74d',
       dark: '#f57c00',
       contrastText: 'rgba(0, 0, 0, 0.87)',
     },
     info: {
-      main: '#0288d1',
+      main: tokens.colors.light.semantic.info,
       light: '#03a9f4',
       dark: '#01579b',
       contrastText: '#fff',
     },
     background: {
-      default: '#fafafa',
-      paper: '#fff',
+      default: tokens.colors.light.background.default,
+      paper: tokens.colors.light.background.surface,
     },
     text: {
-      primary: 'rgba(0, 0, 0, 0.87)',
-      secondary: 'rgba(0, 0, 0, 0.6)',
-      disabled: 'rgba(0, 0, 0, 0.38)',
+      primary: tokens.colors.light.text.primary,
+      secondary: tokens.colors.light.text.secondary,
+      disabled: tokens.colors.light.text.disabled,
     },
     divider: 'rgba(0, 0, 0, 0.12)',
     action: {
@@ -110,49 +111,49 @@ export const darkTheme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: '#90caf9', // Lighter blue for better contrast on dark backgrounds
-      light: '#e3f2fd',
-      dark: '#42a5f5',
-      contrastText: 'rgba(0, 0, 0, 0.87)',
+      main: tokens.colors.dark.primary.main,
+      light: tokens.colors.dark.primary.light,
+      dark: tokens.colors.dark.primary.dark,
+      contrastText: tokens.colors.dark.primary.contrastText,
     },
     secondary: {
-      main: '#f48fb1',
-      light: '#ffc1e3',
-      dark: '#bf5f82',
-      contrastText: 'rgba(0, 0, 0, 0.87)',
+      main: tokens.colors.dark.secondary.main,
+      light: tokens.colors.dark.secondary.light,
+      dark: tokens.colors.dark.secondary.dark,
+      contrastText: tokens.colors.dark.secondary.contrastText,
     },
     success: {
-      main: '#66bb6a',
+      main: tokens.colors.dark.semantic.success,
       light: '#81c784',
       dark: '#388e3c',
       contrastText: 'rgba(0, 0, 0, 0.87)',
     },
     error: {
-      main: '#f44336',
+      main: tokens.colors.dark.semantic.error,
       light: '#e57373',
       dark: '#d32f2f',
       contrastText: '#fff',
     },
     warning: {
-      main: '#ffa726',
+      main: tokens.colors.dark.semantic.warning,
       light: '#ffb74d',
       dark: '#f57c00',
       contrastText: 'rgba(0, 0, 0, 0.87)',
     },
     info: {
-      main: '#29b6f6',
+      main: tokens.colors.dark.semantic.info,
       light: '#4fc3f7',
       dark: '#0288d1',
       contrastText: 'rgba(0, 0, 0, 0.87)',
     },
     background: {
-      default: '#121212',
-      paper: '#1e1e1e',
+      default: tokens.colors.dark.background.default,
+      paper: tokens.colors.dark.background.surface,
     },
     text: {
-      primary: '#fff',
-      secondary: 'rgba(255, 255, 255, 0.7)',
-      disabled: 'rgba(255, 255, 255, 0.5)',
+      primary: tokens.colors.dark.text.primary,
+      secondary: tokens.colors.dark.text.secondary,
+      disabled: tokens.colors.dark.text.disabled,
     },
     divider: 'rgba(255, 255, 255, 0.12)',
     action: {
