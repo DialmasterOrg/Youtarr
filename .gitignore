@@ -55,3 +55,14 @@ downloads/*
 
 # Backup archive location
 backups/
+
+# Storybook outputs and caches
+storybook-static/
+client/storybook-static/
+build-storybook/
+client/build-storybook/
+.cache/storybook/
+
+# Storybook test artifacts
+.out_storybook_
+.storyshots
