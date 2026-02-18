@@ -178,6 +178,32 @@ jobs:
             client/coverage/coverage-summary.json
             client/coverage/lcov.info
 
+  test-storybook:
+    name: Storybook Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install client dependencies
+        run: |
+          cd client
+          npm ci
+
+      - name: Run Storybook tests with build & serve
+        run: npm run test:storybook:ci
+        env:
+          CI: true
+
   # This job is required for branch protection rules
   # It will only succeed if all tests and linting pass
   check-all:
