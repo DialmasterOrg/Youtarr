@@ -117,10 +117,24 @@ module.exports = function createHealthRoutes({ getCachedYtDlpVersion, refreshYtD
             });
 
             resp.on('end', () => {
-              const dockerData = JSON.parse(data);
+              // If Docker Hub returned a non-200 status, surface a clear error instead of attempting to parse
+              if (resp.statusCode !== 200) {
+                logger.warn({ statusCode: resp.statusCode, body: data }, 'Non-200 response from Docker Hub when fetching tags');
+                return res.status(502).json({ error: `Docker Hub returned status ${resp.statusCode}` });
+              }
+
+              let dockerData;
+              try {
+                dockerData = JSON.parse(data);
+              } catch (parseErr) {
+                // Docker Hub sometimes returns HTML (e.g., 504 page) which would break JSON.parse
+                logger.error({ err: parseErr, body: data }, 'Failed to parse Docker Hub response as JSON');
+                return res.status(502).json({ error: 'Failed to parse Docker Hub response', details: data.slice(0, 1024) });
+              }
+
               // Filter out 'latest' and dev tags (dev-latest, dev-rc.*)
               // Only consider stable version tags (e.g., v1.55.0)
-              const stableTags = dockerData.results.filter(
+              const stableTags = (dockerData.results || []).filter(
                 (tag) => tag.name !== 'latest' && !tag.name.startsWith('dev')
               );
               const latestVersion = stableTags.length > 0 ? stableTags[0].name : null;

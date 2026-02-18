@@ -24,4 +24,6 @@ export interface ChannelVideo {
   live_status?: string | null;
   ignored?: boolean;
   ignored_at?: string | null;
+  normalized_rating?: string | null;
+  rating_source?: string | null;
 }

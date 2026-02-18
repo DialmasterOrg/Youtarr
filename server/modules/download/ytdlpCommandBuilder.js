@@ -126,6 +126,17 @@ class YtdlpCommandBuilder {
   }
 
   /**
+   * Build temp path args for yt-dlp internal temp files
+   * This redirects yt-dlp's internal temp files (used during download/merge operations)
+   * to our already-writable staging directory, fixing permission errors on some Docker setups.
+   * @returns {string[]} - Array with --paths temp: argument
+   */
+  static buildTempPathArgs() {
+    const tempPath = tempPathManager.getTempBasePath();
+    return ['--paths', `temp:${tempPath}`];
+  }
+
+  /**
    * Build audio extraction args for MP3 downloads
    * @param {string|null} audioFormat - 'video_mp3' or 'mp3_only', null for video only
    * @returns {string[]} - Array of yt-dlp arguments for audio extraction
@@ -150,7 +161,7 @@ class YtdlpCommandBuilder {
 
   /**
    * Build arguments that ALWAYS apply to any yt-dlp invocation
-   * Includes: IPv4 enforcement, proxy, sleep-requests, and cookies
+   * Includes: IPv4 enforcement, proxy, sleep-requests, cookies, and temp path
    * @param {Object} config - Configuration object
    * @param {Object} options - Options for building args
    * @param {boolean} options.skipSleepRequests - Skip adding --sleep-requests (for single metadata fetches)
@@ -183,6 +194,10 @@ class YtdlpCommandBuilder {
     if (cookiesPath) {
       args.push('--cookies', cookiesPath);
     }
+
+    // Add temp path for yt-dlp's internal temp files
+    // This fixes permission errors on Docker setups where /tmp may not be writable
+    args.push(...this.buildTempPathArgs());
 
     return args;
   }

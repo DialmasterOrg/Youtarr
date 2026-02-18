@@ -133,6 +133,87 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
 
   /**
    * @swagger
+   * /api/videos/rating:
+   *   post:
+   *     summary: Update video ratings
+   *     description: Update the content rating for multiple videos.
+   *     tags: [Videos]
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               videoIds:
+   *                 type: array
+   *                 items:
+   *                   type: integer
+   *               rating:
+   *                 type: string
+   *                 nullable: true
+   *                 description: Content rating or null to clear
+   *     responses:
+   *       200:
+   *         description: Ratings updated
+   *       400:
+   *         description: Invalid request
+   *       500:
+   *         description: Failed to update ratings
+   */
+  router.post('/api/videos/rating', verifyToken, async (req, res) => {
+    try {
+      const { videoIds, rating } = req.body;
+
+      if (!videoIds || !Array.isArray(videoIds) || videoIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'videoIds array is required'
+        });
+      }
+
+      if (rating === undefined) {
+        return res.status(400).json({
+          success: false,
+          error: 'rating is required'
+        });
+      }
+
+      // Validate rating value against the single source of truth in ratingMapper
+      const ratingMapper = require('../modules/ratingMapper');
+      const validRatings = ratingMapper.getValidNormalizedRatings();
+
+      let normalizedRating = rating;
+
+      if (normalizedRating !== null) {
+        if (typeof normalizedRating !== 'string') {
+          return res.status(400).json({ success: false, error: 'rating must be a string or null' });
+        }
+
+        normalizedRating = normalizedRating.trim().toUpperCase();
+
+        if (normalizedRating === ratingMapper.NOT_RATED) {
+          normalizedRating = null;
+        }
+      }
+
+      if (normalizedRating !== null && !validRatings.includes(normalizedRating)) {
+        return res.status(400).json({ success: false, error: `Invalid rating value. Valid options: ${validRatings.join(', ')}` });
+      }
+
+      const result = await videosModule.bulkUpdateVideoRatings(videoIds, normalizedRating);
+      res.json(result);
+    } catch (error) {
+      req.log.error({ err: error }, 'Failed to update video ratings');
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  /**
+   * @swagger
    * /api/videos:
    *   delete:
    *     summary: Delete videos

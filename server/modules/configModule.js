@@ -29,6 +29,7 @@ class ConfigModule extends EventEmitter {
     // Falls back to default /usr/src/app/data for backward compatibility
     this.directoryPath = process.env.DATA_PATH || '/usr/src/app/data';
     this.ffmpegPath = '/usr/bin/ffmpeg';
+    this.atomicParsleyPath = '/usr/bin/AtomicParsley';
 
     // Merge with template to add any missing fields
     const mergeResult = this.mergeWithTemplate(this.config);

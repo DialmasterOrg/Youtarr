@@ -28,6 +28,7 @@ WORKDIR /app
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    atomicparsley \
     curl \
     unzip \
     python3 \

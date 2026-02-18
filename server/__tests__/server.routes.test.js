@@ -291,6 +291,7 @@ const createServerModule = ({
         const httpsMock = {
           get: jest.fn((url, callback) => {
             const mockResp = {
+              statusCode: 200,
               on: jest.fn((event, handler) => {
                 if (event === 'data') {
                   handler('{"results":[{"name":"v1.0.0"},{"name":"latest"}]}');
@@ -1796,6 +1797,7 @@ describe('server routes - version', () => {
     // Mock response with dev tags that should be filtered out
     httpsMock.get.mockImplementationOnce((url, callback) => {
       const mockResp = {
+        statusCode: 200,
         on: jest.fn((event, handler) => {
           if (event === 'data') {
             // dev-latest and dev-rc tags should be filtered, leaving only stable version tags

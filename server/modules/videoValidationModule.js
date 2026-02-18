@@ -115,7 +115,10 @@ class VideoValidationModule {
   toValidationResponse(videoId, metadata, isDuplicate) {
     const isMembersOnly = metadata.availability === 'subscriber_only';
 
-    return {
+    const contentRating = metadata.contentRating || metadata.content_rating || null;
+    const ageLimit = metadata.age_limit ?? null;
+
+    const resp = {
       isValidUrl: true,
       isAlreadyDownloaded: isDuplicate,
       isMembersOnly: isMembersOnly,
@@ -133,9 +136,14 @@ class VideoValidationModule {
           ).getTime() / 1000) :
           null,
         availability: metadata.availability || 'public',
-        media_type: metadata.media_type || 'video'
+        media_type: metadata.media_type || 'video',
       }
     };
+
+    if (contentRating != null) resp.metadata.content_rating = contentRating;
+    if (ageLimit != null) resp.metadata.age_limit = ageLimit;
+
+    return resp;
   }
 
   /**

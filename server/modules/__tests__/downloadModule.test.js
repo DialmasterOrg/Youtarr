@@ -900,7 +900,8 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=abc123', 'https://youtube.com/watch?v=def456'],
         false,
         false,
-        null
+        null,
+        undefined
       );
     });
 
@@ -931,7 +932,8 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=xyz789'],
         false,
         false,
-        null
+        null,
+        undefined
       );
     });
 
@@ -957,7 +959,8 @@ describe('DownloadModule', () => {
         ['-abc123', 'https://youtube.com/watch?v=def456'],
         false,
         false,
-        null
+        null,
+        undefined
       );
     });
 
@@ -1079,7 +1082,8 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test1', 'https://youtube.com/watch?v=test2'],
         true,
         false,
-        null
+        null,
+        undefined
       );
       // Verify that --download-archive is NOT in the arguments when allowRedownload is true
       const callArgs = mockDownloadExecutor.doDownload.mock.calls[0][0];
@@ -1114,7 +1118,8 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        null
+        null,
+        undefined
       );
     });
 
@@ -1143,7 +1148,8 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=default'],
         false,
         false,
-        null
+        null,
+        undefined
       );
     });
 
@@ -1171,7 +1177,8 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        'Movies'
+        'Movies',
+        undefined
       );
     });
 
@@ -1197,7 +1204,8 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        null
+        null,
+        undefined
       );
     });
 
@@ -1222,7 +1230,8 @@ describe('DownloadModule', () => {
         ['https://youtube.com/watch?v=test'],
         false,
         false,
-        ''
+        '',
+        undefined
       );
     });
 
@@ -1280,7 +1289,8 @@ describe('DownloadModule', () => {
         [],
         false,
         false,
-        null
+        null,
+        undefined
       );
     });
   });

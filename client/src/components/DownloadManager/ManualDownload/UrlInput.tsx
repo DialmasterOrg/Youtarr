@@ -15,7 +15,8 @@ import {
 } from '@mui/icons-material';
 
 interface UrlInputProps {
-  onValidate: (url: string) => Promise<boolean>;
+  // onValidate may return a boolean or nothing; support sync/async handlers.
+  onValidate: (url: string) => Promise<boolean | void> | boolean | void;
   isValidating: boolean;
   disabled?: boolean;
 }
@@ -34,20 +35,22 @@ const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled 
         clearTimeout(debounceTimerRef.current);
       }
 
-      debounceTimerRef.current = setTimeout(async () => {
-        const ok = await onValidate(pastedText);
-        if (ok) {
-          setInputValue('');
-        }
+      debounceTimerRef.current = setTimeout(() => {
+        // fire-and-forget validation; parent may return boolean or nothing
+        Promise.resolve(onValidate(pastedText)).then((ok) => {
+          if (ok) setInputValue('');
+        }).catch(() => {});
       }, 500);
     }
   }, [onValidate]);
 
   const handleAddClick = useCallback(async () => {
     if (inputValue.trim() && !isValidating) {
-      const ok = await onValidate(inputValue.trim());
-      if (ok) {
-        setInputValue('');
+      try {
+        const ok = await Promise.resolve(onValidate(inputValue.trim()));
+        if (ok) setInputValue('');
+      } catch (err) {
+        // swallow errors from validator - retain input for retry
       }
     }
   }, [inputValue, isValidating, onValidate]);
@@ -75,11 +78,10 @@ const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled 
           clearTimeout(debounceTimerRef.current);
         }
 
-        debounceTimerRef.current = setTimeout(async () => {
-          const ok = await onValidate(text);
-          if (ok) {
-            setInputValue('');
-          }
+        debounceTimerRef.current = setTimeout(() => {
+          Promise.resolve(onValidate(text)).then((ok) => {
+            if (ok) setInputValue('');
+          }).catch(() => {});
         }, 500);
       }
     } catch (error) {

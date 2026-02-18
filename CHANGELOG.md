@@ -1,5 +1,72 @@
 # Changelog
 
+## [v1.59.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.59.0) - 2026-02-16
+
+## [1.59.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.58.0...v1.59.0) (2026-02-16)
+
+
+### Features
+
+* add default_rating handling in settings and channel mapping ([cec6610](https://github.com/DialmasterOrg/Youtarr/commit/cec661079a74356e445f88fa1e1b95060005ba19))
+* add Vite environment variables and enhance location mocking utilities for tests ([a4e52de](https://github.com/DialmasterOrg/Youtarr/commit/a4e52de6d05eed3ae3940b2c85b225a3c2d4c28f))
+* enhance testing setup with window.location mock and aligned endpoint calls with upstream-dev ([a364a44](https://github.com/DialmasterOrg/Youtarr/commit/a364a44eca9b9104689961e6d1deb7e919b80a7a))
+* enhance URL validation to support sync/async handlers and improve error handling ([d5d9cdc](https://github.com/DialmasterOrg/Youtarr/commit/d5d9cdcef625cbdd98776e9bacd8818279c9eaa5))
+* implement age limit mapping and validation for content ratings ([1b0a8fa](https://github.com/DialmasterOrg/Youtarr/commit/1b0a8fa17516bea1ba9fda875c3f4c7f5d153798))
+* Implement content rating system across various components ([349322d](https://github.com/DialmasterOrg/Youtarr/commit/349322d65e761c5fb4749e413063b1d23d183d28))
+* implement locationUtils for robust window.location mocking in tests and refactor components to use it ([86c0a1b](https://github.com/DialmasterOrg/Youtarr/commit/86c0a1bd49729cc8639966277d68e6ccca3fda3b))
+* implement safe JSON parsing for fetch responses and remove unused location mock ([9500926](https://github.com/DialmasterOrg/Youtarr/commit/950092680396981806bf16f2c47634296d9a47aa))
+* migrate client to Vite, update dependencies, and refactor tests ([cf0f67c](https://github.com/DialmasterOrg/Youtarr/commit/cf0f67cc7dcdb9b4cc50715ca97a7a2a07fe0052))
+* Pull content rating feature from full-stack and updated existing testing. ([c679d17](https://github.com/DialmasterOrg/Youtarr/commit/c679d173964c1456365ca24c0f0093c14cde8046))
+* update cache control settings across API calls and static assets ([7c9842b](https://github.com/DialmasterOrg/Youtarr/commit/7c9842b4db9b23af214adf593b926ef5a89870b5))
+* update video rating handling to support null values and normalize ratings in API ([d40de38](https://github.com/DialmasterOrg/Youtarr/commit/d40de38dca5c54ac898fde604dd79fb01922a760))
+
+
+### Bug Fixes
+
+* **#426:** use configurable tmp path ([8edefdf](https://github.com/DialmasterOrg/Youtarr/commit/8edefdf8b87c4d4fabf0bc59714be26ddd3996ca)), closes [#426](https://github.com/DialmasterOrg/Youtarr/issues/426)
+* **ci:** Claude Code gh workflow [skip ci] ([e103335](https://github.com/DialmasterOrg/Youtarr/commit/e1033355554c8b7dc060313eedd637567b7b9292))
+* **ci:** Claude Code gh workflow [skip ci] ([3ab9525](https://github.com/DialmasterOrg/Youtarr/commit/3ab9525f228a5dd196b75f789446105b2fc4ea66))
+* **ci:** grant gh CLI permissions to Claude Code workflow [skip ci] ([2ff9f19](https://github.com/DialmasterOrg/Youtarr/commit/2ff9f19babc38f7b7499d5a94fb303ab6f061506))
+* **ci:** grant gh CLI permissions to Claude Code workflow [skip ci] ([60f903c](https://github.com/DialmasterOrg/Youtarr/commit/60f903c50a845d3a1becdd570abd4d79e64b0fdb))
+* Improve content rating reliability and Plex metadata embedding ([29ac65d](https://github.com/DialmasterOrg/Youtarr/commit/29ac65d4ca5dff622b393f0f8ef40131aeb5e412))
+* update import paths for locationUtils in multiple components and tests ([c97b740](https://github.com/DialmasterOrg/Youtarr/commit/c97b74092486cbe8898b0148664a47d7c4a51cfa))
+* **ci:** Claude Code gh workflow [skip ci] ([af6cf50](https://github.com/DialmasterOrg/Youtarr/commit/af6cf505214076a988165fbba5913a041f50d589))
+* **ci:** Claude Code gh workflow [skip ci] ([42d6816](https://github.com/DialmasterOrg/Youtarr/commit/42d68160f9f2f7c820ece5cdd14f8937474f7332))
+* **ci:** Claude Code gh workflow [skip ci] ([c23a3bc](https://github.com/DialmasterOrg/Youtarr/commit/c23a3bc6382d102d2d4a718d54b17ea8155c983e))
+* **ci:** Claude Code gh workflow again [skip ci] ([6b29f5c](https://github.com/DialmasterOrg/Youtarr/commit/6b29f5ce30adea6fe19993e1b268446fbd5b5a7c))
+* **ci:** Claude Code gh workflow again [skip ci] ([4d4d73c](https://github.com/DialmasterOrg/Youtarr/commit/4d4d73cf1513116f26ff1fb90123da99ab57b389))
+* **ci:** Claude Code gh workflow again [skip ci] ([609d38a](https://github.com/DialmasterOrg/Youtarr/commit/609d38ae43471d11f65dbe5d32a4f7d1cff50ced))
+* **ci:** stop Claude running disallowed commands ([d6571fa](https://github.com/DialmasterOrg/Youtarr/commit/d6571fa9962f00961921ebf085ddae2aa0349602))
+* **tests:** correct --year in AtomicParsley test ([f826275](https://github.com/DialmasterOrg/Youtarr/commit/f826275e7de04509b8564033c0a8dffe80704eaa))
+* **tests:** prevent Jest hanging by mocking tempPathManager ([185ff04](https://github.com/DialmasterOrg/Youtarr/commit/185ff04d3c81c1b524fb70a49088acb1b14b698e))
+* Addressed test error and implemented code review suggestions. ([ce2315f](https://github.com/DialmasterOrg/Youtarr/commit/ce2315fd51a6407f2e63a448de8fef1dea6dd4e7))
+* Better helper text for content rating setting ([9a26bbb](https://github.com/DialmasterOrg/Youtarr/commit/9a26bbb3ea6c3eb03bff86d85da8fa1792a28221))
+* option for original date (year) metadata ([1c8e7d6](https://github.com/DialmasterOrg/Youtarr/commit/1c8e7d665297f06530445cc7dd58a0f89c66073b))
+* Update tests to include rating field in VideoTableView and DownloadSettingsDialog ([3745388](https://github.com/DialmasterOrg/Youtarr/commit/3745388ba0f4f6ab636c5e37fa140adb0617bcd3))
+
+
+### Tests
+
+* include Channel in models mock and set https mock statusCode=200 to fix CI ([e106d14](https://github.com/DialmasterOrg/Youtarr/commit/e106d14bcf55c3f10b314f705eb0ca7bb9896324))
+
+
+### Code Refactoring
+
+* update TypeScript version and remove unused files ([2d301be](https://github.com/DialmasterOrg/Youtarr/commit/2d301be1c6964ea1aa1c9fb0e357315e9e619a0b))
+
+
+### Documentation
+
+* document backfill-ratings.js script in USAGE_GUIDE ([79e5c74](https://github.com/DialmasterOrg/Youtarr/commit/79e5c749eb398a341bdc0524810396f8642e8ca4))
+* fix Vite dev server port in documentation [skip ci] ([cd49ed9](https://github.com/DialmasterOrg/Youtarr/commit/cd49ed924ef2c36d1249ab4ff7c733f1a8be31a2))
+* PR guidelines / expectations CONTRIBUTING.md [skip ci] ([d404bf8](https://github.com/DialmasterOrg/Youtarr/commit/d404bf80ab6476a923cdf64ee24c24669ca6035a))
+* PR guidelines / expectations CONTRIBUTING.md [skip ci] ([cce2e81](https://github.com/DialmasterOrg/Youtarr/commit/cce2e8179793091eff7049dba00a2512cf196adf))
+* update CHANGELOG for v1.58.0 [skip ci] ([bc52fad](https://github.com/DialmasterOrg/Youtarr/commit/bc52fad6e4ceed59486ab63b21d89cfdbb6ccc65))
+
+
+
+
+
 ## [v1.58.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.58.0) - 2026-01-31
 
 ## [1.58.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.57.1...v1.58.0) (2026-01-31)

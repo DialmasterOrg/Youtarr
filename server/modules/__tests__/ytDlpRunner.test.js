@@ -84,6 +84,10 @@ describe('YtDlpRunner', () => {
     };
     jest.doMock('../download/ytdlpCommandBuilder', () => ytdlpCommandBuilderMock);
 
+    jest.doMock('../download/tempPathManager', () => ({
+      getTempBasePath: jest.fn(() => '/tmp/youtarr-downloads')
+    }));
+
     loadModule();
   });
 

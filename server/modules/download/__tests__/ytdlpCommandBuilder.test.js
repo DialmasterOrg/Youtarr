@@ -297,6 +297,20 @@ describe('YtdlpCommandBuilder', () => {
     });
   });
 
+  describe('buildTempPathArgs', () => {
+    it('should return --paths temp: args with temp base path', () => {
+      tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
+      const result = YtdlpCommandBuilder.buildTempPathArgs();
+      expect(result).toEqual(['--paths', 'temp:/mock/youtube/output/.youtarr_tmp']);
+    });
+
+    it('should use external temp path when configured', () => {
+      tempPathManager.getTempBasePath.mockReturnValue('/tmp/youtarr-downloads');
+      const result = YtdlpCommandBuilder.buildTempPathArgs();
+      expect(result).toEqual(['--paths', 'temp:/tmp/youtarr-downloads']);
+    });
+  });
+
   describe('buildSubtitleArgs', () => {
     it('should return empty array when subtitles disabled', () => {
       const config = { subtitlesEnabled: false };
@@ -522,6 +536,11 @@ describe('YtdlpCommandBuilder', () => {
       expect(result).toContain('2');
       expect(result).toContain('--fragment-retries');
       expect(result).toContain('2');
+
+      // Check temp path args (fixes permission errors on Docker setups)
+      expect(result).toContain('--paths');
+      const pathsIndex = result.indexOf('--paths');
+      expect(result[pathsIndex + 1]).toMatch(/^temp:/);
 
       // Check progress template
       expect(result).toContain('--newline');

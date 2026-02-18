@@ -1,5 +1,11 @@
 /* eslint-env jest */
 
+// Mock tempPathManager before any module that depends on it is loaded
+// This prevents configModule's file watcher from starting
+jest.mock('../download/tempPathManager', () => ({
+  getTempBasePath: jest.fn(() => '/tmp/youtarr-downloads'),
+}));
+
 const videoValidationModule = require('../videoValidationModule');
 const ytDlpRunner = require('../ytDlpRunner');
 const archiveModule = require('../archiveModule');

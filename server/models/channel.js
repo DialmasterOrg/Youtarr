@@ -86,6 +86,12 @@ Channel.init(
       allowNull: true,
       defaultValue: null,
     },
+    default_rating: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      defaultValue: null,
+      comment: 'Default rating to apply to unrated videos in this channel',
+    },
   },
   {
     sequelize,

@@ -528,7 +528,18 @@ class DownloadModule {
       });
 
       // Pass URL count, URLs, allowRedownload flag, and subfolder override as additional parameters for manual downloads
-      this.downloadExecutor.doDownload(args, jobId, jobType, urls.length, urls, allowRedownload, false, subfolderOverride);
+      this.downloadExecutor.doDownload(
+        args,
+        jobId,
+        jobType,
+        urls.length,
+        urls,
+        allowRedownload,
+        false,
+        subfolderOverride,
+        // Pass rating override from overrideSettings if present
+        overrideSettings.rating !== undefined ? overrideSettings.rating : undefined
+      );
     }
   }
 

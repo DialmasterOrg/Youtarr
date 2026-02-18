@@ -4,11 +4,12 @@ const { execSync, spawnSync } = require('child_process');
 const configModule = require('./configModule');
 const channelSettingsModule = require('./channelSettingsModule');
 const nfoGenerator = require('./nfoGenerator');
+const ratingMapper = require('./ratingMapper');
 const tempPathManager = require('./download/tempPathManager');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { JobVideoDownload } = require('../models');
 const logger = require('../logger');
-const { moveWithRetries, safeRemove, buildChannelPath, cleanupEmptyParents } = require('./filesystem');
+const { buildChannelPath, cleanupEmptyParents } = require('./filesystem');
 
 const activeJobId = process.env.YOUTARR_JOB_ID;
 
@@ -61,7 +62,7 @@ async function downloadChannelThumbnailIfMissing(channelId) {
       const result = spawnSync('yt-dlp', ytdlpArgs, {
         env: {
           ...process.env,
-          TMPDIR: '/tmp'
+          TMPDIR: tempPathManager.getTempBasePath()
         },
         encoding: 'utf8'
       });
@@ -163,6 +164,72 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     // Check for subfolder override from manual download (passed via environment variable)
     const subfolderOverride = process.env.YOUTARR_SUBFOLDER_OVERRIDE || null;
 
+    // Check for explicit rating override from manual download
+    const ratingOverrideEnv = process.env.YOUTARR_OVERRIDE_RATING;
+
+    // Always look up channel to apply default rating (independent of subfolder)
+    let channelRecord = null;
+    if (jsonData.channel_id) {
+      try {
+        // Use the centralized models export to ensure proper associations/initialization
+        const { Channel } = require('../models');
+
+        const channelId = jsonData.channel_id.trim();
+        channelRecord = await Channel.findOne({
+          where: { channel_id: channelId },
+          attributes: ['id', 'sub_folder', 'uploader', 'folder_name', 'default_rating'] // Ensure default_rating is fetched
+        });
+
+        logger.info({ channelId, found: !!channelRecord }, 'Post-process channel lookup');
+        if (channelRecord) {
+          logger.info({ channelId, defaultRating: channelRecord.default_rating }, 'Post-process channel default rating');
+
+          // Update folder_name if channel exists but name changed
+          if (actualChannelFolderName && channelRecord.folder_name !== actualChannelFolderName) {
+            try {
+              await Channel.update(
+                { folder_name: actualChannelFolderName },
+                { where: { id: channelRecord.id } }
+              );
+              channelRecord.folder_name = actualChannelFolderName;
+              logger.info({ folderName: actualChannelFolderName }, 'Post-process updated channel folder_name');
+            } catch (updateErr) {
+              logger.error({ err: updateErr }, 'Post-process error updating folder_name');
+            }
+          }
+        } else {
+          logger.info({ channelId }, 'Post-process channel not found; assuming no channel default rating');
+        }
+      } catch (err) {
+        logger.error({ err }, 'Post-process error looking up channel');
+      }
+    }
+
+    // Determine effective rating using strict priority order:
+    // 1. Manual Override
+    // 2. Channel Default
+    // 3. Mapped Metadata
+    // 4. NR
+    const manualOverride = (ratingOverrideEnv !== undefined && ratingOverrideEnv !== null && ratingOverrideEnv !== '')
+      ? ratingOverrideEnv
+      : undefined;
+
+    const effectiveRating = ratingMapper.determineEffectiveRating(
+      jsonData,
+      channelRecord ? channelRecord.default_rating : null,
+      manualOverride
+    );
+
+    jsonData.normalized_rating = effectiveRating.normalized_rating;
+    jsonData.rating_source = effectiveRating.rating_source;
+
+    // Log the decision
+    if (jsonData.normalized_rating) {
+      logger.info({ rating: jsonData.normalized_rating, source: jsonData.rating_source }, 'Post-process applied rating');
+    } else {
+      logger.info({ source: jsonData.rating_source || 'None' }, 'Post-process no rating applied');
+    }
+
     if (subfolderOverride) {
       // Manual download with subfolder override
       const { ROOT_SENTINEL } = require('./filesystem/constants');
@@ -171,7 +238,7 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         channelSubFolder = null;
         const baseDir = configModule.directoryPath;
         targetChannelFolder = buildChannelPath(baseDir, null, actualChannelFolderName);
-        console.log('[Post-Process] Using subfolder override: root directory (no subfolder)');
+        logger.info('Post-process using subfolder override: root directory (no subfolder)');
       } else if (subfolderOverride === channelSettingsModule.getGlobalDefaultSentinel()) {
         // Use global default subfolder
         channelSubFolder = channelSettingsModule.resolveEffectiveSubfolder(subfolderOverride);
@@ -179,68 +246,22 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
           const baseDir = configModule.directoryPath;
           targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
         }
-        console.log('[Post-Process] Using subfolder override: global default');
+        logger.info('Post-process using subfolder override: global default');
       } else {
         // Specific subfolder override
         channelSubFolder = subfolderOverride;
         const baseDir = configModule.directoryPath;
         targetChannelFolder = buildChannelPath(baseDir, subfolderOverride, actualChannelFolderName);
-        console.log(`[Post-Process] Using subfolder override: ${subfolderOverride}`);
+        logger.info({ subfolder: subfolderOverride }, 'Post-process using subfolder override');
       }
-    } else if (jsonData.channel_id) {
-      // No override - check channel settings or use global default
-      try {
-        const Channel = require('../models/channel');
-        let channel = await Channel.findOne({
-          where: { channel_id: jsonData.channel_id },
-          attributes: ['id', 'sub_folder', 'uploader', 'folder_name']
-        });
+    } else if (channelRecord) {
+      // No subfolder override - use channel's subfolder setting
+      channelSubFolder = channelSettingsModule.resolveEffectiveSubfolder(channelRecord.sub_folder);
 
-        if (channel) {
-          // Tracked channel - resolve effective subfolder using centralized logic
-          channelSubFolder = channelSettingsModule.resolveEffectiveSubfolder(channel.sub_folder);
-
-          // Update folder_name if not set or different (channel may have been renamed on YouTube)
-          if (actualChannelFolderName && channel.folder_name !== actualChannelFolderName) {
-            try {
-              await Channel.update(
-                { folder_name: actualChannelFolderName },
-                { where: { id: channel.id } }
-              );
-              console.log(`[Post-Process] Updated channel folder_name to: ${actualChannelFolderName}`);
-            } catch (updateErr) {
-              console.error(`[Post-Process] Error updating folder_name: ${updateErr.message}`);
-            }
-          }
-        } else {
-          // Untracked channel (not in database) - auto-create with enabled=false
-          console.log(`[Post-Process] Untracked channel ${jsonData.channel_id}, auto-creating as disabled`);
-          try {
-            channel = await Channel.create({
-              channel_id: jsonData.channel_id,
-              uploader: jsonData.uploader || jsonData.channel || jsonData.uploader_id || null,
-              folder_name: actualChannelFolderName,
-              enabled: false,
-              sub_folder: null
-            });
-            console.log(`[Post-Process] Auto-created disabled channel with folder_name: ${actualChannelFolderName}`);
-          } catch (createErr) {
-            console.error(`[Post-Process] Error auto-creating channel: ${createErr.message}`);
-          }
-
-          // Use global default subfolder for the newly created channel
-          channelSubFolder = configModule.getDefaultSubfolder();
-        }
-
-        if (channelSubFolder) {
-          const baseDir = configModule.directoryPath;
-          // Use the actual channel folder name from the filesystem (yt-dlp already sanitized it)
-          // instead of jsonData.uploader which may contain special characters
-          targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
-          console.log(`[Post-Process] Channel will use subfolder: ${channelSubFolder}`);
-        }
-      } catch (err) {
-        console.error(`[Post-Process] Error checking channel subfolder: ${err.message}`);
+      if (channelSubFolder) {
+        const baseDir = configModule.directoryPath;
+        targetChannelFolder = buildChannelPath(baseDir, channelSubFolder, actualChannelFolderName);
+        console.log(`[Post-Process] Channel will use subfolder: ${channelSubFolder}`);
       }
     } else {
       // No channel_id available (rare case) - use global default
@@ -294,41 +315,38 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       }
     }
 
-    // Add additional metadata to the MP4 file that yt-dlp might have missed
-    // yt-dlp already embeds basic metadata, but we can add more for better Plex compatibility
+    // Embed iTunes-compatible metadata into the MP4 using AtomicParsley.
+    // AtomicParsley writes directly to the iTunes atom container (moov.udta.meta.ilst)
+    // which Plex reads for "Other Videos" / Personal Media libraries.
+    // It modifies the file in-place (--overWrite), so no temp file dance is needed.
     // Skip for audio-only downloads (MP3 files)
     if (isAudioFile) {
       logger.info('[Post-Process] Audio file detected, skipping video metadata embedding');
     } else try {
-      const tempPath = videoPath + '.metadata_temp.mp4';
+      const apArgs = [videoPath];
 
-      // Build metadata arguments as an array to avoid shell escaping issues
-      const ffmpegArgs = [
-        '-i', videoPath,
-        '-c', 'copy',
-        '-map_metadata', '0'
-      ];
-
-      // Add genre from categories (yt-dlp doesn't embed this)
-      if (jsonData.categories && jsonData.categories.length > 0) {
-        const genre = jsonData.categories.join(';');
-        ffmpegArgs.push('-metadata', `genre=${genre}`);
-      }
-
-      // Add studio/network (channel name)
+      // Title (channel name + video title)
       const channelName = jsonData.uploader || jsonData.channel || jsonData.uploader_id || '';
-      if (channelName) {
-        ffmpegArgs.push('-metadata', `network=${channelName}`);
-        ffmpegArgs.push('-metadata', `studio=${channelName}`);
-        ffmpegArgs.push('-metadata', `artist=${channelName}`);
-        ffmpegArgs.push('-metadata', `album=${channelName}`); // For collection grouping
-        ffmpegArgs.push('-metadata', `title=${channelName} - ${jsonData.title}`); // Include channel name in title
+      if (channelName && jsonData.title) {
+        apArgs.push('--title', `${channelName} - ${jsonData.title}`);
       }
 
-      // Add tags as keywords
+      // Genre from YouTube categories
+      if (jsonData.categories && jsonData.categories.length > 0) {
+        apArgs.push('--genre', jsonData.categories.join(';'));
+      }
+
+      // Channel name metadata
+      if (channelName) {
+        apArgs.push('--TVNetwork', channelName);
+        apArgs.push('--copyright', channelName);  // Plex maps cprt atom → Studio
+        apArgs.push('--artist', channelName);
+        apArgs.push('--album', channelName);       // Plex maps album → Collection
+      }
+
+      // Tags as keywords
       if (jsonData.tags && jsonData.tags.length > 0) {
-        const keywords = jsonData.tags.slice(0, 10).join(';');
-        ffmpegArgs.push('-metadata', `keywords=${keywords}`);
+        apArgs.push('--keyword', jsonData.tags.slice(0, 10).join(';'));
       }
 
       // Add release date for Plex/mp4 embedded metadata
@@ -338,20 +356,28 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         const month = jsonData.upload_date.substring(4, 6);
         const day = jsonData.upload_date.substring(6, 8);
         const releaseDate = `${year}-${month}-${day}`;
-        ffmpegArgs.push('-metadata', `release_date=${releaseDate}`);
-        ffmpegArgs.push('-metadata', `date=${releaseDate}`);
-        ffmpegArgs.push('-metadata', `year=${year}`);
-        ffmpegArgs.push('-metadata', `originaldate=${releaseDate}`);
+        apArgs.push('--year', `${releaseDate}`);
       }
 
-      // Add media type hint for Plex (9 = Home Video)
-      ffmpegArgs.push('-metadata', 'media_type=9');
+      // Description for Plex Summary
+      if (jsonData.description) {
+        apArgs.push('--description', jsonData.description.substring(0, 255));
+        apArgs.push('--longdesc', jsonData.description);
+      }
 
-      // Output file
-      ffmpegArgs.push('-y', tempPath);
+      // Media type (stik=9 → Movie, used by Plex for personal media)
+      apArgs.push('--stik', 'Movie');
 
-      logger.info('Adding additional metadata for Plex');
-      const result = spawnSync(configModule.ffmpegPath, ffmpegArgs, {
+      // Content rating via iTunEXTC atom — this is what Plex actually reads
+      const iTunEXTC = ratingMapper.mapToITunEXTC(jsonData.normalized_rating);
+      if (iTunEXTC) {
+        apArgs.push('--rDNSatom', iTunEXTC, 'name=iTunEXTC', 'domain=com.apple.iTunes');
+      }
+
+      apArgs.push('--overWrite');
+
+      logger.info('Embedding metadata via AtomicParsley for Plex');
+      const result = spawnSync(configModule.atomicParsleyPath, apArgs, {
         stdio: 'pipe',
         maxBuffer: 10 * 1024 * 1024
       });
@@ -362,45 +388,12 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
 
       if (result.status !== 0) {
         const stderr = result.stderr ? result.stderr.toString() : 'Unknown error';
-        throw new Error(`ffmpeg exited with status ${result.status}: ${stderr}`);
+        throw new Error(`AtomicParsley exited with status ${result.status}: ${stderr}`);
       }
 
-      // Replace original with temp file if successful
-      if (await fs.pathExists(tempPath)) {
-        const tempStats = await fs.stat(tempPath);
-        let origStats = null;
-        try {
-          origStats = await fs.stat(videoPath);
-        } catch (statErr) {
-          if (!statErr || statErr.code !== 'ENOENT') {
-            throw statErr;
-          }
-        }
-
-        const originalSize = origStats ? origStats.size : 0;
-        const sizeThreshold = originalSize * 0.9;
-        const sizeCheckPassed = !origStats || tempStats.size >= sizeThreshold;
-
-        if (sizeCheckPassed) {
-          try {
-            await moveWithRetries(tempPath, videoPath);
-            logger.info('Successfully added additional metadata to video file');
-          } catch (moveErr) {
-            logger.warn({ err: moveErr }, 'Could not replace video with metadata-enhanced version');
-            await safeRemove(tempPath);
-          }
-        } else {
-          logger.warn('Skipped metadata update due to file size mismatch');
-          await safeRemove(tempPath);
-        }
-      }
+      logger.info('Successfully embedded metadata via AtomicParsley');
     } catch (err) {
-      logger.warn({ err }, 'Could not add additional metadata');
-      // Clean up temp file if exists
-      const tempPath = videoPath + '.metadata_temp.mp4';
-      if (await fs.pathExists(tempPath)) {
-        await safeRemove(tempPath);
-      }
+      logger.warn({ err }, 'Could not embed metadata via AtomicParsley');
     }
 
     if (fs.existsSync(imagePath)) {

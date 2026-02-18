@@ -21,6 +21,7 @@ import { decodeHtml } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
+import RatingBadge from '../shared/RatingBadge';
 
 interface VideoListItemProps {
   video: ChannelVideo;
@@ -272,6 +273,13 @@ function VideoListItem({
                 }}
               />
             )}
+            <RatingBadge
+              rating={video.normalized_rating}
+              ratingSource={video.rating_source}
+              size="small"
+              variant="text"
+              showNA
+            />
             <Chip
               icon={getStatusIcon(status)}
               label={getStatusLabel(status)}

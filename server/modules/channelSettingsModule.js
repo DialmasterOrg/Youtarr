@@ -4,6 +4,7 @@ const Channel = require('../models/channel');
 const configModule = require('./configModule');
 const { Op } = require('sequelize');
 const logger = require('../logger');
+const ratingMapper = require('./ratingMapper');
 const {
   GLOBAL_DEFAULT_SENTINEL,
   ROOT_SENTINEL,
@@ -241,6 +242,38 @@ class ChannelSettingsModule {
   }
 
   /**
+   * Get all valid normalized ratings from ratingMapper (cached)
+   * @returns {string[]} - Array of valid rating strings
+   */
+  getValidNormalizedRatings() {
+    return ratingMapper.getValidNormalizedRatings();
+  }
+
+  /**
+   * Validate default rating setting
+   * @param {string|null} defaultRating - Default rating to validate
+   * @returns {Object} - { valid: boolean, error?: string }
+   */
+  validateDefaultRating(defaultRating) {
+    // NULL is valid (no default rating)
+    if (defaultRating === null || defaultRating === undefined) {
+      return { valid: true };
+    }
+
+    const validRatings = this.getValidNormalizedRatings();
+    const trimmed = defaultRating.trim().toUpperCase();
+
+    if (!validRatings.includes(trimmed)) {
+      return {
+        valid: false,
+        error: `Invalid rating. Valid values: ${validRatings.join(', ')}, or null for no default`,
+      };
+    }
+
+    return { valid: true };
+  }
+
+  /**
    * Get the full directory path for a channel, including subfolder if set
    * @param {Object} channel - Channel database record
    * @returns {string} - Full directory path
@@ -463,6 +496,7 @@ class ChannelSettingsModule {
       max_duration: channel.max_duration,
       title_filter_regex: channel.title_filter_regex,
       audio_format: channel.audio_format,
+      default_rating: channel.default_rating,
     };
   }
 
@@ -543,6 +577,14 @@ class ChannelSettingsModule {
       }
     }
 
+    // Validate default rating if provided
+    if (settings.default_rating !== undefined) {
+      const validation = this.validateDefaultRating(settings.default_rating);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+    }
+
     // Store old subfolder for potential move
     const oldSubFolder = channel.sub_folder;
     const newSubFolder = settings.sub_folder !== undefined ?
@@ -569,6 +611,11 @@ class ChannelSettingsModule {
     if (settings.title_filter_regex !== undefined) {
       updateData.title_filter_regex = settings.title_filter_regex
         ? settings.title_filter_regex.trim()
+        : null;
+    }
+    if (settings.default_rating !== undefined) {
+      updateData.default_rating = settings.default_rating
+        ? settings.default_rating.trim()
         : null;
     }
     if (settings.audio_format !== undefined) {
@@ -619,6 +666,7 @@ class ChannelSettingsModule {
         max_duration: updatedChannel.max_duration,
         title_filter_regex: updatedChannel.title_filter_regex,
         audio_format: updatedChannel.audio_format,
+        default_rating: updatedChannel.default_rating,
       },
       folderMoved: subFolderChanged,
       moveResult
