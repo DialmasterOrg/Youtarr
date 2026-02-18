@@ -4,7 +4,7 @@ module.exports = {
     url: 'http://localhost/',
   },
   roots: ['<rootDir>/src'],
-  testMatch: ['**/__tests__/**/*.[jt]s?(x)', '**/?(*.)+(spec|test).[jt]s?(x)'],
+  testMatch: ['**/?(*.)+(spec|test).[jt]s?(x)'],
   resetMocks: true,
   moduleNameMapper: {
     '^src/(.*)$': '<rootDir>/src/$1',
@@ -46,5 +46,10 @@ module.exports = {
   },
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts', '<rootDir>/src/setupTests.ts'],
   transformIgnorePatterns: ['/node_modules/(?!(@mui|@emotion)\\/)/'],
-  testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/dist/', '<rootDir>/storybook-static/'],
+  testPathIgnorePatterns: [
+    '<rootDir>/node_modules/',
+    '<rootDir>/dist/',
+    '<rootDir>/storybook-static/',
+    '\\.stories?\\.[jt]sx?$',
+  ],
 };
