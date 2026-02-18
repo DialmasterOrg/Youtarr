@@ -32,7 +32,7 @@
     "start": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "storybook": "storybook dev -p ${STORYBOOK_PORT:-6006}",
+    "storybook": "storybook dev",
     "build-storybook": "storybook build",
     "lint": "eslint src/. --ext .ts,.tsx",
     "lint:ts": "npx tsc --noEmit",

@@ -50,6 +50,6 @@ module.exports = {
     '<rootDir>/node_modules/',
     '<rootDir>/dist/',
     '<rootDir>/storybook-static/',
-    '\\.stories?\\.[jt]sx?$',
+    '\\.stor(y|ies)\\.[jt]sx?$',
   ],
 };
