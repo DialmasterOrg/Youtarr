@@ -110,19 +110,16 @@ Then access:
 
 The Vite dev server will proxy API and WebSocket requests to the backend at port `3011` so API calls work the same as the full-stack run.
 
-### 5. Storybook (Component Development & Interaction Testing)
+### 5. Storybook (Component Development)
 
-Use Storybook to develop components in isolation or run interaction tests.
+Use Storybook to develop and document components in isolation.
 
 ```bash
 # Start Storybook Server
 npm run storybook
-
-# Run interaction tests (while Storybook is running in another terminal)
-npm run test:storybook
 ```
 
-Storybook runs on http://localhost:6006.
+Storybook runs on http://localhost:6006. Story validation is done via Jest tests (see `client/src/tests/storybook_coverage.test.js`).
 
 ### 6. Access the Application
 

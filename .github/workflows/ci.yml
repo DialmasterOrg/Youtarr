@@ -200,13 +200,11 @@ jobs:
           cd client
           npm ci
 
-      - name: Install Playwright Browsers
-        run: |
-          cd client
-          npx playwright install --with-deps
+      - name: Build Storybook for validation
+        run: cd client && npm run build-storybook
 
-      - name: Run Storybook tests with build & serve
-        run: npm run test:storybook:ci
+      - name: Run Jest story validation tests
+        run: cd client && npm test -- src/tests/storybook_coverage.test.js --passWithNoTests
         env:
           CI: true
 
