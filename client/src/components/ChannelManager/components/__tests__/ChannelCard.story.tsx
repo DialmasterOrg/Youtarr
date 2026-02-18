@@ -22,11 +22,6 @@ const meta: Meta<typeof ChannelCard> = {
 export default meta;
 type Story = StoryObj<typeof ChannelCard>;
 
-type MockFn = {
-  mockClear: () => void;
-  mock: { calls: unknown[][] };
-};
-
 const mockChannel: Channel = {
     channel_id: 'UC_x5XG1OV2P6uYZ5FSM9Ptw',
     title: 'Example Channel',
@@ -47,8 +42,6 @@ export const Default: Story = {
   },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
-    const onNavigateMock = args.onNavigate as unknown as MockFn;
-    onNavigateMock.mockClear();
 
     const removeButton = canvas.getByRole('button', { name: /remove channel/i });
     await userEvent.click(removeButton);
@@ -56,13 +49,11 @@ export const Default: Story = {
 
     const regexChip = canvas.getByTestId('regex-filter-chip');
     await userEvent.click(regexChip);
-    await expect(args.onRegexClick).toHaveBeenCalled();
     await expect(args.onRegexClick).toHaveBeenCalledWith(expect.anything(), mockChannel.title_filter_regex);
 
     const card = canvas.getByTestId(`channel-card-${mockChannel.channel_id}`);
-    const initialNavigateCalls = onNavigateMock.mock.calls.length;
     await userEvent.click(card);
-    await expect(onNavigateMock.mock.calls.length).toBeGreaterThan(initialNavigateCalls);
+    await expect(args.onNavigate).toHaveBeenCalled();
   },
 };
 

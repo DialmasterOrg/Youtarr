@@ -103,9 +103,6 @@ const mergeMswHandlersLoader = async (context) => {
 const preview = {
   loaders: [mergeMswHandlersLoader, mswLoader],
   parameters: {
-    a11y: {
-      disable: true,
-    },
     actions: { argTypesRegex: '^on[A-Z].*' },
     controls: {
       matchers: {

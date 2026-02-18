@@ -110,7 +110,21 @@ Then access:
 
 The Vite dev server will proxy API and WebSocket requests to the backend at port `3011` so API calls work the same as the full-stack run.
 
-### 5. Access the Application
+### 5. Storybook (Component Development & Interaction Testing)
+
+Use Storybook to develop components in isolation or run interaction tests.
+
+```bash
+# Start Storybook Server
+npm run storybook
+
+# Run interaction tests (while Storybook is running in another terminal)
+npm run test:storybook
+```
+
+Storybook runs on http://localhost:6006.
+
+### 6. Access the Application
 
 Navigate to:
 - **Docker static build**: http://localhost:3087
@@ -118,7 +132,7 @@ Navigate to:
 
 Create your admin account on first access.
 
-### 6. Stop Development Environment
+### 7. Stop Development Environment
 
 ```bash
 ./stop.sh
