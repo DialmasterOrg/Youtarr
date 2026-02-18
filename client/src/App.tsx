@@ -55,8 +55,8 @@ import StorageStatus from './components/StorageStatus';
 import { useConfig } from './hooks/useConfig';
 import ErrorBoundary from './components/ErrorBoundary';
 import DatabaseErrorOverlay from './components/DatabaseErrorOverlay';
-import { lightTheme, darkTheme } from './theme';
-import { getCssVarsForMode } from './theme/tokens';
+import { useThemeEngine } from './contexts/ThemeEngineContext';
+import { createAppTheme } from './themes';
 import { YTDLP_UPDATED_EVENT } from './components/Configuration/hooks/useYtDlpUpdate';
 
 import { locationUtils } from './utils/location';
@@ -65,6 +65,7 @@ import { locationUtils } from './utils/location';
 const DB_ERROR_EVENT = 'db-error-detected';
 
 function AppContent() {
+  const { themeMode, setColorMode } = useThemeEngine();
   // Safely parse JSON responses. 304/empty bodies return null.
   const safeParseJson = async (response: Response) => {
     if (response.status === 304) return null;
@@ -103,21 +104,14 @@ function AppContent() {
   const clientVersion = `v${version}`; // Create a version with 'v' prefix for comparison
   const tmpDirectory = '/tmp';
 
-  // Select theme based on darkModeEnabled config
+  // Select theme based on global dark mode + selected visual style
   const selectedTheme = useMemo(() => {
-    return appConfig.darkModeEnabled ? darkTheme : lightTheme;
-  }, [appConfig.darkModeEnabled]);
+    return createAppTheme(appConfig.darkModeEnabled ? 'dark' : 'light', themeMode);
+  }, [appConfig.darkModeEnabled, themeMode]);
 
   useEffect(() => {
-    const mode = appConfig.darkModeEnabled ? 'dark' : 'light';
-    const cssVars = getCssVarsForMode(mode);
-
-    document.documentElement.setAttribute('data-theme', mode);
-
-    Object.entries(cssVars).forEach(([key, value]) => {
-      document.documentElement.style.setProperty(key, value);
-    });
-  }, [appConfig.darkModeEnabled]);
+    setColorMode(appConfig.darkModeEnabled ? 'dark' : 'light');
+  }, [appConfig.darkModeEnabled, setColorMode]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);

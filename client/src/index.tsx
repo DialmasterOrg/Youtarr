@@ -2,7 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './tailwind.css';
 import './index.css';
+import './themeTokens.css';
 import App from './App';
+import { ThemeEngineProvider } from './contexts/ThemeEngineContext';
 import WebSocketProvider from './providers/WebSocketProvider';
 
 const root = ReactDOM.createRoot(
@@ -10,8 +12,10 @@ const root = ReactDOM.createRoot(
 );
 root.render(
   <React.StrictMode>
-    <WebSocketProvider>
-      <App />
-    </WebSocketProvider>
+    <ThemeEngineProvider>
+      <WebSocketProvider>
+        <App />
+      </WebSocketProvider>
+    </ThemeEngineProvider>
   </React.StrictMode>
 );

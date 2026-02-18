@@ -3,6 +3,7 @@ import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import WebSocketContext from './contexts/WebSocketContext';
+import { ThemeEngineProvider } from './contexts/ThemeEngineContext';
 
 type WebSocketValue = {
   socket: any;
@@ -39,11 +40,13 @@ export function renderWithProviders(
 
   return render(
     <MemoryRouter>
-      <ThemeProvider theme={theme}>
-        <WebSocketContext.Provider value={value}>
-          {ui}
-        </WebSocketContext.Provider>
-      </ThemeProvider>
+      <ThemeEngineProvider>
+        <ThemeProvider theme={theme}>
+          <WebSocketContext.Provider value={value}>
+            {ui}
+          </WebSocketContext.Provider>
+        </ThemeProvider>
+      </ThemeEngineProvider>
     </MemoryRouter>
   );
 }

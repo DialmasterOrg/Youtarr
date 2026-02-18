@@ -18,6 +18,7 @@ import { KodiCompatibilitySection } from './Configuration/sections/KodiCompatibi
 import { CookieConfigSection } from './Configuration/sections/CookieConfigSection';
 import { NotificationsSection } from './Configuration/sections/NotificationsSection';
 import { DownloadPerformanceSection } from './Configuration/sections/DownloadPerformanceSection';
+import AppearanceSettingsSection from './Configuration/sections/AppearanceSettingsSection';
 import { AdvancedSettingsSection } from './Configuration/sections/AdvancedSettingsSection';
 import { AutoRemovalSection } from './Configuration/sections/AutoRemovalSection';
 import { AccountSecuritySection } from './Configuration/sections/AccountSecuritySection';
@@ -232,6 +233,10 @@ function Configuration({ token }: ConfigurationProps) {
         ytDlpVersionInfo={ytDlpVersionInfo}
         ytDlpUpdateStatus={ytDlpUpdateStatus}
         onYtDlpUpdate={performYtDlpUpdate}
+      />
+
+      <AppearanceSettingsSection
+        onMobileTooltipClick={setMobileTooltip}
       />
 
       <PlexIntegrationSection
