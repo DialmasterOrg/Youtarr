@@ -17,7 +17,9 @@
     "test:backend": "jest --config jest.config.js",
     "test:frontend": "cd client && npm test -- --watchAll=false",
     "test:coverage": "npm run lint && jest --config jest.config.js --coverage && cd client && npm test -- --coverage --watchAll=false",
-    "test:watch": "jest --config jest.config.js --watch"
+    "test:watch": "jest --config jest.config.js --watch",
+    "test:storybook": "cd client && npm run test:storybook",
+    "test:storybook:ci": "cd client && npm run test:storybook:ci"
   },
   "lint-staged": {
     "./client/src/*.{ts,tsx},./server/*.js": [
