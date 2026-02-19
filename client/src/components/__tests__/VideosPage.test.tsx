@@ -146,7 +146,7 @@ describe('VideosPage Component', () => {
       render(<VideosPage token={mockToken} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Downloaded Videos/)).toBeInTheDocument();
+        expect(screen.getByText(/Library/)).toBeInTheDocument();
       });
 
       await waitFor(() => {
@@ -555,7 +555,7 @@ describe('VideosPage Component', () => {
       render(<VideosPage token={mockToken} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Downloaded Videos \(42 total\)/)).toBeInTheDocument();
+        expect(screen.getByText(/Library \(42 total\)/)).toBeInTheDocument();
       });
     });
 
@@ -622,7 +622,7 @@ describe('VideosPage Component', () => {
         expect(screen.getByText('Failed to load videos. Please try refreshing the page. If this error persists, the Youtarr backend may be down.')).toBeInTheDocument();
       });
 
-      expect(screen.getByText(/Downloaded Videos/)).toBeInTheDocument();
+      expect(screen.getByText(/Library/)).toBeInTheDocument();
       expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to fetch videos:', expect.any(Error));
 
       consoleErrorSpy.mockRestore();

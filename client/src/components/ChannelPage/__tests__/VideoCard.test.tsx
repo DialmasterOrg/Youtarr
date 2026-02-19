@@ -32,10 +32,11 @@ describe('VideoCard Component', () => {
     checkedBoxes: [],
     hoveredVideo: null,
     selectedForDeletion: [],
+    selectionMode: null as 'download' | 'delete' | null,
     onCheckChange: jest.fn(),
     onHoverChange: jest.fn(),
-    onToggleDeletion: jest.fn(),
     onToggleIgnore: jest.fn(),
+    onDeletionChange: jest.fn(),
   };
 
   beforeEach(() => {
@@ -360,64 +361,44 @@ describe('VideoCard Component', () => {
     });
   });
 
-  describe('Delete Button', () => {
-    test('renders delete button for downloaded videos', () => {
+  describe('Delete Mode', () => {
+    test('renders delete checkbox for downloaded videos in delete mode', () => {
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
-      renderWithProviders(<VideoCard {...defaultProps} video={downloadedVideo} />);
-      expect(screen.getByTestId('DeleteIcon')).toBeInTheDocument();
+      renderWithProviders(
+        <VideoCard {...defaultProps} video={downloadedVideo} selectionMode="delete" />
+      );
+      expect(screen.getByRole('checkbox')).toBeInTheDocument();
     });
 
-    test('does not render delete button for never downloaded videos', () => {
-      renderWithProviders(<VideoCard {...defaultProps} />);
-      expect(screen.queryByTestId('DeleteIcon')).not.toBeInTheDocument();
+    test('does not render delete checkbox for never downloaded videos', () => {
+      renderWithProviders(<VideoCard {...defaultProps} selectionMode="delete" />);
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     });
 
-    test('does not render delete button for missing videos', () => {
+    test('does not render delete checkbox for missing videos', () => {
       const missingVideo = { ...mockVideo, added: true, removed: true };
-      renderWithProviders(<VideoCard {...defaultProps} video={missingVideo} />);
-      expect(screen.queryByTestId('DeleteIcon')).not.toBeInTheDocument();
+      renderWithProviders(<VideoCard {...defaultProps} video={missingVideo} selectionMode="delete" />);
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     });
 
-    test('calls onToggleDeletion when delete button is clicked', async () => {
+    test('calls onDeletionChange when card is clicked in delete mode', async () => {
       const user = userEvent.setup();
-      const onToggleDeletion = jest.fn();
+      const onDeletionChange = jest.fn();
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
 
       renderWithProviders(
         <VideoCard
           {...defaultProps}
           video={downloadedVideo}
-          onToggleDeletion={onToggleDeletion}
+          selectionMode="delete"
+          onDeletionChange={onDeletionChange}
         />
       );
 
-      const deleteButton = screen.getByRole('button');
-      await user.click(deleteButton);
+      await user.click(screen.getByRole('checkbox'));
 
-      expect(onToggleDeletion).toHaveBeenCalledTimes(1);
-      expect(onToggleDeletion).toHaveBeenCalledWith('test123');
-    });
-
-    test('delete button click stops propagation', async () => {
-      const user = userEvent.setup();
-      const onToggleDeletion = jest.fn();
-      const onCheckChange = jest.fn();
-      const downloadedVideo = { ...mockVideo, added: true, removed: false };
-
-      renderWithProviders(
-        <VideoCard
-          {...defaultProps}
-          video={downloadedVideo}
-          onToggleDeletion={onToggleDeletion}
-          onCheckChange={onCheckChange}
-        />
-      );
-
-      const deleteButton = screen.getByRole('button');
-      await user.click(deleteButton);
-
-      expect(onToggleDeletion).toHaveBeenCalledTimes(1);
-      expect(onCheckChange).not.toHaveBeenCalled();
+      expect(onDeletionChange).toHaveBeenCalledTimes(1);
+      expect(onDeletionChange).toHaveBeenCalledWith('test123', true);
     });
   });
 

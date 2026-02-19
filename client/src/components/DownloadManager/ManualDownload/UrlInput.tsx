@@ -15,8 +15,7 @@ import {
 } from '@mui/icons-material';
 
 interface UrlInputProps {
-  // onValidate may return a boolean or nothing; support sync/async handlers.
-  onValidate: (url: string) => Promise<boolean | void> | boolean | void;
+  onValidate: (url: string) => Promise<boolean>;
   isValidating: boolean;
   disabled?: boolean;
 }
@@ -35,23 +34,19 @@ const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled 
         clearTimeout(debounceTimerRef.current);
       }
 
-      debounceTimerRef.current = setTimeout(() => {
-        // fire-and-forget validation; parent may return boolean or nothing
-        Promise.resolve(onValidate(pastedText)).then((ok) => {
-          if (ok) setInputValue('');
-        }).catch(() => {});
+      debounceTimerRef.current = setTimeout(async () => {
+        await onValidate(pastedText);
+        // Always clear input after validation attempt
+        setInputValue('');
       }, 500);
     }
   }, [onValidate]);
 
   const handleAddClick = useCallback(async () => {
     if (inputValue.trim() && !isValidating) {
-      try {
-        const ok = await Promise.resolve(onValidate(inputValue.trim()));
-        if (ok) setInputValue('');
-      } catch (err) {
-        // swallow errors from validator - retain input for retry
-      }
+      await onValidate(inputValue.trim());
+      // Always clear input after validation attempt
+      setInputValue('');
     }
   }, [inputValue, isValidating, onValidate]);
 
@@ -78,10 +73,10 @@ const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled 
           clearTimeout(debounceTimerRef.current);
         }
 
-        debounceTimerRef.current = setTimeout(() => {
-          Promise.resolve(onValidate(text)).then((ok) => {
-            if (ok) setInputValue('');
-          }).catch(() => {});
+        debounceTimerRef.current = setTimeout(async () => {
+          await onValidate(text);
+          // Always clear input after validation attempt
+          setInputValue('');
         }, 500);
       }
     } catch (error) {

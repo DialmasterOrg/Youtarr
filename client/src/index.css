@@ -1,13 +1,520 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Outfit:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --font-body: 'Plus Jakarta Sans';
+  --font-display: 'Outfit';
+  --transition-bouncy: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --transition-base: 300ms;
+  --transition-fast: 180ms;
+  --shell-gap: 8px;
+  --appbar-radius: 24px;
+  --nav-radius: 24px;
+  --radius-ui: 16px;
+  --radius-input: 12px;
+  --radius-thumb: 12px;
+  --border-weight: 2px;
+  --nav-hover-style: flat-highlight;
+  --background-pattern: radial-gradient(var(--dot-grid) 1px, transparent 1px);
+  --card-hover-transform: translate(-2px, -2px) rotate(-0.5deg);
+  --card-hover-shadow: var(--shadow-hard-hover);
+  --wiggle-animation: wiggle 320ms var(--transition-bouncy);
+  --sticker-rest-transform: rotate(var(--sticker-tilt, 0deg));
+  --sticker-hover-transform: rotate(0deg) scale(1.03);
+  --chip-shadow-hover: var(--shadow-hard-hover);
+  --nav-border: 2px solid var(--foreground);
+  --nav-shadow: var(--shadow-hard);
+  --nav-item-border: 2px solid var(--foreground);
+  --nav-item-border-selected: 2px solid var(--foreground);
+  --nav-item-bg: transparent;
+  --nav-item-bg-selected: var(--tertiary);
+  --nav-item-bg-hover: var(--muted);
+  --nav-item-shadow: none;
+  --nav-item-shadow-selected: var(--shadow-hard);
+  --nav-item-shadow-hover: var(--shadow-hard-hover);
+  --nav-item-transform: translate(0, 0);
+  --nav-item-transform-hover: translate(-2px, -2px);
+  --appbar-border: 2px solid var(--foreground);
+  --appbar-shadow: var(--shadow-hard);
+  --appbar-pattern: radial-gradient(var(--dot-grid) 1px, transparent 1px);
+  --appbar-gradient: linear-gradient(135deg, rgba(139, 92, 246, 0.45), rgba(251, 113, 133, 0.45));
+  --neumo-breathe: none;
+  --avatar-hover-scale: 1.05;
+  /* Navigation width variables */
+  --nav-width-expanded: 260px;
+  --nav-width-collapsed: 72px;
+  --nav-width: var(--nav-width-expanded);
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  padding: 0;
+  font-family: var(--font-body), system-ui, -apple-system, sans-serif;
+  color: var(--foreground);
+  background-color: var(--background);
+  overflow-x: hidden;
+  transition: background-color 300ms ease, color 300ms ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: var(--background-pattern);
+  background-size: 24px 24px;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.5;
+}
+
+.playful-shape {
+  will-change: transform, box-shadow;
+  transform: translateZ(0);
+}
+
+/* Outlined input notch should only appear when label is floated */
+.MuiOutlinedInput-notchedOutline legend {
+  padding: 0;
+  display: block;
+  width: auto;
+  height: 11px;
+  visibility: hidden;
+  max-width: 0.01px;
+  transition: max-width 50ms cubic-bezier(0, 0, 0.2, 1) 0ms;
+  white-space: nowrap;
+}
+
+.MuiInputLabel-shrink + .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline legend {
+  max-width: 1000px;
+  padding: 0 10px;
+}
+
+.MuiInputLabel-shrink + .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline legend > span {
+  padding: 0 10px;
+  display: inline-block;
+  visibility: hidden;
+}
+
+.MuiInputLabel-root.MuiInputLabel-shrink.MuiInputLabel-outlined {
+  background-color: var(--card);
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display), system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans',
+    'Droid Sans', 'Helvetica Neue', sans-serif;
+}
+
+@keyframes wiggle {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  35% {
+    transform: rotate(1deg) scale(1.02);
+  }
+  70% {
+    transform: rotate(-1deg) scale(1.02);
+  }
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+/* Playful Theme: Pop/Bounce Animation */
+@keyframes pop-in {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Neumorphic Theme: Breathe/Shadow Animation */
+@keyframes neumo-breathe {
+  0%, 100% {
+    box-shadow: 10px 10px 20px rgba(163, 177, 198, 0.6), -10px -10px 20px rgba(255, 255, 255, 0.6);
+  }
+  50% {
+    box-shadow: 5px 5px 10px rgba(163, 177, 198, 0.4), -5px -5px 10px rgba(255, 255, 255, 0.4);
+  }
+}
+
+@keyframes neumo-breathe-dark {
+  0%, 100% {
+    box-shadow: 10px 10px 20px rgba(0, 0, 0, 0.5), -10px -10px 20px rgba(255, 255, 255, 0.05);
+  }
+  50% {
+    box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.3), -5px -5px 10px rgba(255, 255, 255, 0.03);
+  }
+}
+
+@keyframes neumo-float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+@keyframes neumo-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(180deg);
+  }
+}
+
+/* Industrial/Linear Theme: Slide/Linear Animation */
+@keyframes slide-in-left {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-right {
+  0% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-up {
+  0% {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+
+/* Universal Spinner Animation */
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes playful-dot-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes linear-blob-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -50px) scale(1.1); }
+  66% { transform: translate(-20px, 20px) scale(0.9); }
+}
+
+@keyframes linear-shine {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+.linear-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.15;
+  pointer-events: none;
+  z-index: 0;
+}
+
+body[data-motion='on'] .linear-blob {
+  animation: linear-blob-float 20s ease-in-out infinite;
+}
+
+.linear-grid {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(circle at center, black, transparent 80%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.linear-top-rail {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(94, 106, 210, 0.5), transparent);
+  overflow: hidden;
+  z-index: 1;
+}
+
+.linear-top-rail::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, #fff, transparent);
+  opacity: 0.3;
+}
+
+body[data-motion='on'] .linear-top-rail::after {
+  animation: linear-shine 8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wiggle-card:hover,
+  .MuiChip-root:hover,
+  .sticker:hover {
+    animation: none;
+  }
+}
+
+body[data-theme='playful'] .MuiChip-root,
+body[data-theme='playful'] .sticker {
+  transform: var(--sticker-rest-transform);
+  transition: transform 200ms var(--transition-bouncy), box-shadow 250ms var(--transition-bouncy);
+}
+
+body[data-theme='playful'] {
+  overflow-anchor: none;
+}
+
+body[data-theme='playful'] .MuiChip-root:hover,
+body[data-theme='playful'] .MuiChip-root:focus-visible,
+body[data-theme='playful'] .sticker:hover,
+body[data-theme='playful'] .sticker:focus-visible,
+body[data-theme='playful'] .sticker:focus-within {
+  transform: var(--sticker-hover-transform);
+  box-shadow: var(--chip-shadow-hover);
+}
+
+/* Enforce no chip shadows in playful theme to avoid leftover shadows from other overrides */
+body[data-theme='playful'] .MuiChip-root,
+body[data-theme='playful'] .MuiChip-root:hover,
+body[data-theme='playful'] .sticker,
+body[data-theme='playful'] .sticker:hover {
+  box-shadow: none !important;
+}
+
+body[data-theme='neumorphic'] .playful-shape {
+  display: none !important;
+}
+
+/* Animation classes - only apply when motion is enabled */
+body[data-motion='on'] .neumo-breathe {
+  animation: var(--neumo-breathe);
+}
+
+body[data-motion='on'] .neumo-float {
+  animation: neumo-float 3s ease-in-out infinite;
+}
+
+body[data-motion='on'] .neumo-rotate {
+  animation: neumo-rotate 500ms ease-out;
+}
+
+.pop-toggle {
+  transition: all var(--transition-base) var(--transition-bouncy) !important;
+  border: 2px solid var(--border-strong) !important;
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+  box-shadow: var(--shadow-hard) !important;
+}
+
+body[data-motion='on'] .pop-toggle:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-hard-hover) !important;
+  animation: var(--wiggle-animation);
+}
+
+.pop-toggle:active {
+  transform: translate(2px, 2px);
+  box-shadow: var(--shadow-hard-active) !important;
+}
+
+body[data-motion='off'] {
+  --card-hover-transform: none;
+  --card-hover-shadow: var(--shadow-soft);
+  --wiggle-animation: none;
+  --sticker-rest-transform: none;
+  --sticker-hover-transform: none;
+  --avatar-hover-scale: 1;
+  --nav-item-transform-hover: none;
+  --neumo-breathe: none;
+  --transition-bouncy: ease;
+  --transition-base: 0ms;
+  --transition-fast: 0ms;
+}
+
+body[data-motion='off'] *,
+body[data-motion='off'] *::before,
+body[data-motion='off'] *::after {
+  animation-duration: 0ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0ms !important;
+  transition: none !important;
+}
+
+/* Force disable specific hover transforms (like Linear Theme MuiCard/MuiButton) */
+body[data-motion='off'] .MuiCard-root:hover,
+body[data-motion='off'] .MuiButton-root:hover {
+  transform: none !important;
+}
+
+/* Theme-Specific Animations - Only Active When Motion is On */
+body[data-motion='on'][data-theme='playful'] .animate-on-mount {
+  animation: pop-in 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Settings splash card: ensure Playful shows bold gold border and shadow on hover */
+body[data-theme='playful'] .settings-splash-card:hover {
+  border-color: var(--settings-splash-border) !important;
+  box-shadow: var(--settings-splash-shadow-hover) !important;
+}
+
+/* Ensure CardActionArea inside the splash card also gets the gold hover and background */
+body[data-theme='playful'] .settings-splash-card .MuiCardActionArea-root:hover,
+body[data-theme='playful'] .settings-splash-card:hover .MuiCardActionArea-root {
+  box-shadow: var(--settings-splash-shadow-hover) !important;
+  background-color: var(--nav-item-bg-hover) !important;
+}
+
+body[data-motion='on'][data-theme='playful'] .animate-bounce {
+  animation: bounce 600ms cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+}
+
+body[data-motion='on'][data-theme='neumorphic'] .animate-on-mount {
+  animation: neumo-float 3s ease-in-out infinite;
+}
+
+body[data-motion='on'][data-theme='neumorphic'] .animate-breathe {
+  animation: neumo-breathe 3s ease-in-out infinite;
+}
+
+body[data-motion='on'][data-theme='linear'] .animate-on-mount {
+  animation: slide-in-up 250ms linear;
+}
+
+body[data-motion='on'][data-theme='linear'] .animate-slide-left {
+  animation: slide-in-left 250ms linear;
+}
+
+body[data-motion='on'][data-theme='linear'] .animate-slide-right {
+  animation: slide-in-right 250ms linear;
+}
+
+/* Playful loading dots (always animated) */
+.playful-loading-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.playful-loading-dots span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--foreground);
+  background: var(--secondary);
+  box-shadow: var(--shadow-hard);
+  animation: playful-dot-bounce 0.8s ease-in-out infinite;
+}
+
+.playful-loading-dots span:nth-child(2) {
+  background: var(--tertiary);
+  animation-delay: 0.15s;
+}
+
+.playful-loading-dots span:nth-child(3) {
+  background: var(--primary);
+  animation-delay: 0.3s;
+}
+
+/* Loading Spinner - Always Animated (Even with Motion Off) */
+.loading-spinner,
+.MuiCircularProgress-root {
+  animation: spin 1s linear infinite !important;
+}
+
+.MuiCircularProgress-circle {
+  stroke-dasharray: 80px, 200px;
+  stroke-dashoffset: 0;
+  animation: spin 1.4s ease-in-out infinite !important;
+}
+
+/* Structural Layout Anchors */
+:root {
+  --nav-width: 260px;
+}
+
+@media (max-width: 767px) {
+  :root {
+    --nav-width: 0px !important;
+  }
 }
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
+}
+
+html {
+  scroll-behavior: smooth;
 }

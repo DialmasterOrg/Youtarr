@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
-  Card,
-  CardContent,
   Grid,
   Typography,
   Table,
@@ -27,14 +25,24 @@ import {
   Fab,
   Badge,
   Zoom,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import Pagination from '@mui/material/Pagination';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import StorageIcon from '@mui/icons-material/Storage';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DownloadIcon from '@mui/icons-material/Download';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import AlarmOnIcon from '@mui/icons-material/AlarmOn';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { formatDuration, formatYTDate } from '../utils';
+import { formatFileSize } from '../utils/formatters';
 import { VideoData, PaginatedVideosResponse, EnabledChannel } from '../types/VideoData';
 import { useSwipeable } from 'react-swipeable';
 import FilterMenu from './VideosPage/FilterMenu';
@@ -44,13 +52,14 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { debounce } from 'lodash';
 import { Link as RouterLink } from 'react-router-dom';
 import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
-import ScheduleIcon from '@mui/icons-material/Schedule';
 import DeleteVideosDialog from './shared/DeleteVideosDialog';
 import { useVideoDeletion } from './shared/useVideoDeletion';
-import DownloadFormatIndicator from './shared/DownloadFormatIndicator';
 import RatingBadge from './shared/RatingBadge';
 import ChangeRatingDialog from './shared/ChangeRatingDialog';
+import EighteenUpRatingIcon from '@mui/icons-material/EighteenUpRating';
 import VideoActionsDropdown from './shared/VideoActionsDropdown';
+import { RATING_OPTIONS } from '../utils/ratings';
+import DownloadFormatIndicator from './shared/DownloadFormatIndicator';
 
 interface VideosPageProps {
   token: string | null;
@@ -81,7 +90,7 @@ function VideosPage({ token }: VideosPageProps) {
   const [selectedForDeletion, setSelectedForDeletion] = useState<number[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
-  const [ratingLoading, setRatingLoading] = useState(false);
+  const [maxRatingFilter, setMaxRatingFilter] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -119,6 +128,7 @@ function VideosPage({ token }: VideosPageProps) {
     if (filter) params.append('channelFilter', filter);
     if (dateFrom) params.append('dateFrom', dateFrom.toISOString().split('T')[0]);
     if (dateTo) params.append('dateTo', dateTo.toISOString().split('T')[0]);
+    if (maxRatingFilter) params.append('maxRating', maxRatingFilter);
 
     try {
       const response = await axios.get<PaginatedVideosResponse>(`/getVideos?${params.toString()}`, {
@@ -127,26 +137,20 @@ function VideosPage({ token }: VideosPageProps) {
         },
       });
 
-      const data = response.data || {};
-      const normalizedVideos = (data.videos || []).map((video) => ({
-        ...video,
-        removed: !!video.removed,
-        youtube_removed: !!video.youtube_removed,
-      }));
-      setVideos(normalizedVideos);
-      setTotalVideos(data.total || 0);
-      setTotalPages(data.totalPages || 1);
+      setVideos(response.data.videos);
+      setTotalVideos(response.data.total);
+      setTotalPages(response.data.totalPages);
 
       // Use channels list from API response (includes all channels, not just current page)
-      setUniqueChannels(data.channels || []);
-      setEnabledChannels(data.enabledChannels || []);
+      setUniqueChannels(response.data.channels || []);
+      setEnabledChannels(response.data.enabledChannels || []);
     } catch (error) {
       console.error('Failed to fetch videos:', error);
       setLoadError('Failed to load videos. Please try refreshing the page. If this error persists, the Youtarr backend may be down.');
     } finally {
       setLoading(false);
     }
-  }, [token, page, videosPerPage, orderBy, sortOrder, search, filter, dateFrom, dateTo]);
+  }, [token, page, videosPerPage, orderBy, sortOrder, search, filter, dateFrom, dateTo, maxRatingFilter]);
 
   useEffect(() => {
     fetchVideos();
@@ -253,7 +257,6 @@ function VideosPage({ token }: VideosPageProps) {
 
     const videoIdsToUpdate = isMobile ? selectedForDeletion : selectedVideos;
 
-    setRatingLoading(true);
     try {
       await axios.post('/api/videos/rating', {
         videoIds: videoIdsToUpdate,
@@ -274,8 +277,6 @@ function VideosPage({ token }: VideosPageProps) {
         ? error.response?.data?.error || 'Failed to update content ratings'
         : 'Failed to update content ratings';
       setErrorMessage(message);
-    } finally {
-      setRatingLoading(false);
     }
   };
 
@@ -330,8 +331,8 @@ function VideosPage({ token }: VideosPageProps) {
   });
 
   return (
-    <Card elevation={8} style={{ marginBottom: '16px' }}>
-      <CardContent>
+    <Box sx={{ mb: 2 }}>
+      <Box>
         <Typography
           variant={isMobile ? 'h6' : 'h5'}
           component='h2'
@@ -400,6 +401,24 @@ function VideosPage({ token }: VideosPageProps) {
             </LocalizationProvider>
           )}
 
+          <FormControl fullWidth size="small">
+            <InputLabel>Max Rating</InputLabel>
+            <Select
+              value={maxRatingFilter}
+              label="Max Rating"
+              onChange={(event) => {
+                setMaxRatingFilter(event.target.value);
+                setPage(1);
+              }}
+            >
+              {RATING_OPTIONS.map(option => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
           {selectedVideos.length > 0 && (
             <Box display="flex" gap={2} alignItems="center">
               <Typography variant="body2" color="text.secondary">
@@ -409,11 +428,20 @@ function VideosPage({ token }: VideosPageProps) {
                 selectedVideosCount={selectedVideos.length}
                 onContentRating={handleChangeRatingClick}
                 onDelete={handleDeleteClick}
-                disabled={deleteLoading || ratingLoading}
+                disabled={deleteLoading}
               />
               <Button
                 variant="outlined"
                 onClick={() => setSelectedVideos([])}
+                sx={{
+                  color: 'text.primary',
+                  borderColor: 'divider',
+                  '&:hover': {
+                    bgcolor: 'action.hover',
+                    borderColor: 'text.primary',
+                    color: 'text.primary',
+                  }
+                }}
               >
                 Clear Selection
               </Button>
@@ -427,6 +455,15 @@ function VideosPage({ token }: VideosPageProps) {
               variant='outlined'
               startIcon={<FilterListIcon />}
               onClick={handleFilterClick}
+              sx={{
+                color: 'text.primary',
+                borderColor: 'divider',
+                '&:hover': {
+                  bgcolor: 'action.hover',
+                  borderColor: 'text.primary',
+                  color: 'text.primary',
+                }
+              }}
             >
               Filter by Channel
             </Button>
@@ -457,79 +494,51 @@ function VideosPage({ token }: VideosPageProps) {
         <TableContainer component={Paper}>
           <div {...handlers}>
             <Table>
-              {isMobile ? (
-                <></>
-              ) : (
+              {isMobile ? null : (
                 <TableHead>
                   <TableRow>
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        indeterminate={selectedVideos.length > 0 && selectedVideos.length < videos.filter(v => !v.removed).length}
-                        checked={videos.filter(v => !v.removed).length > 0 && selectedVideos.length === videos.filter(v => !v.removed).length}
-                        onChange={handleSelectAll}
-                      />
-                    </TableCell>
-                    <TableCell
-                      style={{ fontWeight: 'bold', fontSize: 'medium' }}
-                    >
-                      Thumbnail
-                    </TableCell>
-                    <TableCell
-                      style={{ fontWeight: 'bold', fontSize: 'medium' }}
-                    >
-                      Channel
-                      <IconButton onClick={handleFilterClick}>
-                        <FilterListIcon />
-                      </IconButton>
-                      <FilterMenu
-                        anchorEl={anchorEl}
-                        handleClose={handleClose}
-                        handleMenuItemClick={handleMenuItemClick}
-                        filter={filter}
-                        uniqueChannels={uniqueChannels}
-                      />
-                    </TableCell>
-                    <TableCell
-                      style={{ fontWeight: 'bold', fontSize: 'medium' }}
-                    >
-                      Video Information
-                    </TableCell>
-                    <TableCell
-                      style={{ fontWeight: 'bold', fontSize: 'medium' }}
-                      sortDirection={
-                        orderBy === 'published' ? sortOrder : false
-                      }
-                    >
-                      <TableSortLabel
-                        active={orderBy === 'published'}
-                        direction={orderBy === 'published' ? sortOrder : 'asc'}
-                        onClick={() => handleSortChange('published')}
-                      >
-                        Published
-                      </TableSortLabel>
-                    </TableCell>
-
-                    <TableCell
-                      style={{ fontWeight: 'bold', fontSize: 'medium' }}
-                      sortDirection={orderBy === 'added' ? sortOrder : false}
-                    >
-                      <TableSortLabel
-                        active={orderBy === 'added'}
-                        direction={orderBy === 'added' ? sortOrder : 'asc'}
-                        onClick={() => handleSortChange('added')}
-                      >
-                        Added
-                      </TableSortLabel>
-                    </TableCell>
-                    <TableCell
-                      style={{ fontWeight: 'bold', fontSize: 'medium' }}
-                    >
-                      File Info
-                    </TableCell>
-                    <TableCell
-                      style={{ fontWeight: 'bold', fontSize: 'medium' }}
-                    >
-                      Actions
+                    <TableCell colSpan={1} sx={{ py: 1.5 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Checkbox
+                            indeterminate={selectedVideos.length > 0 && selectedVideos.length < videos.filter(v => !v.removed).length}
+                            checked={videos.filter(v => !v.removed).length > 0 && selectedVideos.length === videos.filter(v => !v.removed).length}
+                            onChange={handleSelectAll}
+                          />
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                            Downloaded Videos
+                          </Typography>
+                          <IconButton onClick={handleFilterClick} size="small">
+                            <FilterListIcon fontSize="small" />
+                          </IconButton>
+                          <FilterMenu
+                            anchorEl={anchorEl}
+                            handleClose={handleClose}
+                            handleMenuItemClick={handleMenuItemClick}
+                            filter={filter}
+                            uniqueChannels={uniqueChannels}
+                          />
+                        </Box>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Typography variant="caption" color="text.secondary">
+                            Sort:
+                          </Typography>
+                          <TableSortLabel
+                            active={orderBy === 'published'}
+                            direction={orderBy === 'published' ? sortOrder : 'asc'}
+                            onClick={() => handleSortChange('published')}
+                          >
+                            Published
+                          </TableSortLabel>
+                          <TableSortLabel
+                            active={orderBy === 'added'}
+                            direction={orderBy === 'added' ? sortOrder : 'asc'}
+                            onClick={() => handleSortChange('added')}
+                          >
+                            Downloaded
+                          </TableSortLabel>
+                        </Stack>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 </TableHead>
@@ -537,13 +546,13 @@ function VideosPage({ token }: VideosPageProps) {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={isMobile ? 1 : 8} align="center">
+                    <TableCell colSpan={1} align="center">
                       <Typography>Loading videos...</Typography>
                     </TableCell>
                   </TableRow>
                 ) : videos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={isMobile ? 1 : 8} align="center">
+                    <TableCell colSpan={1} align="center">
                       <Typography>No videos found</Typography>
                     </TableCell>
                   </TableRow>
@@ -555,13 +564,57 @@ function VideosPage({ token }: VideosPageProps) {
                           <Box
                             display='flex'
                             flexDirection='column'
-                            alignItems='center'
-                            justifyContent='center'
+                            alignItems='stretch'
+                            justifyContent='flex-start'
+                            sx={{ gap: 1 }}
                           >
+                            {/* Title at the top */}
+                            <Box sx={{ flexGrow: 1 }}>
+                              <Typography 
+                                variant='subtitle2' 
+                                sx={{ 
+                                  fontWeight: 600,
+                                  lineHeight: 1.3,
+                                  mb: 0.5,
+                                }}
+                              >
+                                {video.youTubeVideoName}
+                              </Typography>
+                              {(() => {
+                                const channelId = getEnabledChannelId(video.youTubeChannelName, video.channel_id);
+                                return channelId ? (
+                                  <Typography
+                                    component={RouterLink}
+                                    to={`/channel/${channelId}`}
+                                    variant='caption'
+                                    sx={{
+                                      color: 'primary.main',
+                                      textDecoration: 'none',
+                                      '&:hover': {
+                                        textDecoration: 'underline',
+                                      },
+                                      display: 'block',
+                                    }}
+                                  >
+                                    {video.youTubeChannelName}
+                                  </Typography>
+                                ) : (
+                                  <Typography
+                                    variant='caption'
+                                    color='text.secondary'
+                                    sx={{ display: 'block' }}
+                                  >
+                                    {video.youTubeChannelName}
+                                  </Typography>
+                                );
+                              })()}
+                            </Box>
+
+                            {/* Smaller thumbnail - 16:9 aspect ratio at reduced size */}
                             <Box
                               width='100%'
                               height='0'
-                              paddingTop='56.25%' // maintain 16:9 aspect ratio
+                              paddingTop='56.25%'
                               border={1}
                               borderColor='grey.500'
                               overflow='hidden'
@@ -616,7 +669,7 @@ function VideosPage({ token }: VideosPageProps) {
                                     backgroundColor: 'rgba(211, 47, 47, 0.95)',
                                     color: 'white',
                                     padding: '4px 8px',
-                                    fontSize: '0.75rem',
+                                    fontSize: '0.65rem',
                                     fontWeight: 'bold',
                                     textAlign: 'center',
                                     zIndex: 2,
@@ -643,7 +696,7 @@ function VideosPage({ token }: VideosPageProps) {
                                   <ErrorOutlineIcon
                                     sx={{
                                       color: 'error.main',
-                                      fontSize: '3rem',
+                                      fontSize: '2.5rem',
                                       filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))'
                                     }}
                                   />
@@ -658,8 +711,8 @@ function VideosPage({ token }: VideosPageProps) {
                                   }}
                                   sx={{
                                     position: 'absolute',
-                                    top: 8,
-                                    right: 8,
+                                    top: 4,
+                                    right: 4,
                                     bgcolor: selectedForDeletion.includes(video.id) ? 'error.main' : 'rgba(0,0,0,0.6)',
                                     color: 'white',
                                     '&:hover': {
@@ -670,124 +723,124 @@ function VideosPage({ token }: VideosPageProps) {
                                   }}
                                   size="small"
                                 >
-                                  <DeleteIcon fontSize="small" />
+                                  <DeleteIcon sx={{ fontSize: '1.125rem' }} />
                                 </IconButton>
                               )}
                             </Box>
-                            <Typography variant='subtitle1' textAlign='center'>
-                              {video.youTubeVideoName}
-                              {video.duration && (
-                                <Typography
-                                  variant='caption'
-                                  color='text.secondary'
-                                >
-                                  {' '}
-                                  ({formatDuration(video.duration)})
-                                </Typography>
-                              )}
-                            </Typography>
-                            {(() => {
-                              const channelId = getEnabledChannelId(video.youTubeChannelName, video.channel_id);
-                              return channelId ? (
-                                <Typography
-                                  component={RouterLink}
-                                  to={`/channel/${channelId}`}
-                                  variant='subtitle2'
-                                  sx={{
-                                    color: 'primary.main',
-                                    textDecoration: 'none',
-                                    '&:hover': {
-                                      textDecoration: 'underline',
-                                    },
-                                  }}
-                                >
-                                  {video.youTubeChannelName}
-                                </Typography>
-                              ) : (
-                                <Typography
-                                  variant='subtitle2'
-                                  color='text.secondary'
-                                >
-                                  {video.youTubeChannelName}
-                                </Typography>
-                              );
-                            })()}
 
-                            <Stack direction="row" spacing={1} justifyContent="center" sx={{ mt: 0.5 }}>
-                              <Typography
-                                variant='caption'
-                                color='text.secondary'
-                              >
-                                Added: {new Date(video.timeCreated).toLocaleDateString()}
-                              </Typography>
-                              <Typography
-                                variant='caption'
-                                color='text.secondary'
-                              >
-                                • Published: {formatYTDate(video.originalDate)}
-                              </Typography>
-                            </Stack>
+                            {/* Compact metadata below thumbnail */}
+                            <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+                              {/* Duration, Size, Published, Downloaded in a compact grid */}
+                              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5, fontSize: '0.75rem' }}>
+                                {video.duration && (
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <AlarmOnIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} />
+                                    <Typography variant='caption' sx={{ color: 'text.secondary' }}>
+                                      {formatDuration(video.duration)}
+                                    </Typography>
+                                  </Box>
+                                )}
+                                {video.fileSize && (
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <StorageIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} />
+                                    <Typography variant='caption' sx={{ color: 'text.secondary' }}>
+                                      {formatFileSize(typeof video.fileSize === 'string' ? parseInt(video.fileSize, 10) : video.fileSize)}
+                                    </Typography>
+                                  </Box>
+                                )}
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  <ScheduleIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} />
+                                  <Typography variant='caption' sx={{ color: 'text.secondary' }}>
+                                    Pub: {formatYTDate(video.originalDate)}
+                                  </Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  <DownloadIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} />
+                                  <Typography variant='caption' sx={{ color: 'text.secondary' }}>
+                                    {new Date(video.timeCreated).toLocaleDateString()}
+                                  </Typography>
+                                </Box>
+                              </Box>
 
-                            <Stack
-                              direction={{ xs: "row", sm: "column" }}
-                              spacing={1}
-                              justifyContent="center"
-                              alignItems="center"
-                              sx={{ mt: 0.5 }}
-                            >
-                              {!video.removed && (video.filePath || video.audioFilePath) && (
-                                <DownloadFormatIndicator
-                                  filePath={video.filePath}
-                                  audioFilePath={video.audioFilePath}
-                                  fileSize={video.fileSize}
-                                  audioFileSize={video.audioFileSize}
+                              {/* Status chips in a flexible row */}
+                              <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                                {!video.removed && (video.filePath || video.audioFilePath) && (
+                                  <DownloadFormatIndicator
+                                    filePath={video.filePath}
+                                    audioFilePath={video.audioFilePath}
+                                    fileSize={video.fileSize}
+                                    audioFileSize={video.audioFileSize}
+                                  />
+                                )}
+                                {(() => {
+                                  const mediaTypeInfo = getMediaTypeInfo(video.media_type);
+                                  return mediaTypeInfo ? (
+                                    <Chip
+                                      size="small"
+                                      icon={mediaTypeInfo.icon}
+                                      label={mediaTypeInfo.label}
+                                      color={mediaTypeInfo.color}
+                                      variant="outlined"
+                                      sx={{ height: 20, fontSize: '0.65rem' }}
+                                    />
+                                  ) : null;
+                                })()}
+                                <RatingBadge
+                                  rating={video.normalized_rating}
+                                  ratingSource={video.rating_source}
+                                  showNA={true}
+                                  size="small"
+                                  sx={{ height: 20, fontSize: '0.65rem', boxShadow: 'none' }}
                                 />
-                              )}
-                              {(() => {
-                                const mediaTypeInfo = getMediaTypeInfo(video.media_type);
-                                return mediaTypeInfo ? (
-                                  <Chip
-                                    size="small"
-                                    icon={mediaTypeInfo.icon}
-                                    label={mediaTypeInfo.label}
-                                    color={mediaTypeInfo.color}
-                                    variant="outlined"
-                                    sx={{ height: 20, fontSize: '0.7rem' }}
-                                  />
-                                ) : null;
-                              })()}
-                              <RatingBadge
-                                rating={video.normalized_rating}
-                                ratingSource={video.rating_source}
-                                showNA={true}
-                                size="small"
-                                sx={{ height: 20, fontSize: '0.7rem' }}
-                              />
-                              {!!video.removed && (
-                                <Tooltip title="Video file not found on disk" enterTouchDelay={0}>
-                                  <Chip
-                                    size="small"
-                                    icon={<ErrorOutlineIcon />}
-                                    label="Missing"
-                                    color="error"
-                                    variant="outlined"
-                                    sx={{ height: 20, fontSize: '0.7rem' }}
-                                  />
-                                </Tooltip>
-                              )}
+                                {video.removed ? (
+                                  <Tooltip title="Video file not found on disk" enterTouchDelay={0}>
+                                    <Chip
+                                      size="small"
+                                      icon={<ErrorOutlineIcon />}
+                                      label="Missing"
+                                      color="error"
+                                      variant="outlined"
+                                      sx={{ height: 20, fontSize: '0.65rem' }}
+                                    />
+                                  </Tooltip>
+                                ) : video.fileSize ? (
+                                  <Tooltip title="Video file exists on disk" enterTouchDelay={0}>
+                                    <Chip
+                                      size="small"
+                                      icon={<CheckCircleIcon />}
+                                      label="Available"
+                                      color="success"
+                                      variant="filled"
+                                      sx={{
+                                        height: 20,
+                                        fontSize: '0.65rem',
+                                        '& .MuiChip-icon': { fontSize: 12, ml: 0.25 },
+                                        '& .MuiChip-label': { px: 0.5 },
+                                      }}
+                                    />
+                                  </Tooltip>
+                                ) : null}
+                              </Stack>
                             </Stack>
                           </Box>
                         </TableCell>
                       ) : (
-                        <>
-                          <TableCell padding="checkbox">
+                        <TableCell colSpan={1} sx={{ p: 0 }}>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'stretch',
+                              gap: 2,
+                              py: 1.5,
+                              px: 2,
+                            }}
+                          >
                             <Checkbox
                               checked={selectedVideos.includes(video.id)}
                               onChange={() => handleSelectVideo(video.id)}
-                              disabled={video.removed}
+                              disabled={Boolean(video.removed)}
+                              sx={{ alignSelf: 'flex-start', mt: 0.5 }}
                             />
-                          </TableCell>
-                          <TableCell>
                             <Box
                               width={256}
                               height={144}
@@ -867,114 +920,144 @@ function VideosPage({ token }: VideosPageProps) {
                                   />
                                 </Box>
                               ) : null}
+                              <Box
+                                sx={{
+                                  position: 'absolute',
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  bgcolor: 'rgba(0, 0, 0, 0.6)',
+                                  color: 'common.white',
+                                  px: 1,
+                                  py: 0.5,
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  textOverflow: 'ellipsis',
+                                  overflow: 'hidden',
+                                  whiteSpace: 'nowrap',
+                                  zIndex: 2,
+                                }}
+                              >
+                                {(() => {
+                                  const channelId = getEnabledChannelId(video.youTubeChannelName, video.channel_id);
+                                  return channelId ? (
+                                    <Typography
+                                      component={RouterLink}
+                                      to={`/channel/${channelId}`}
+                                      sx={{
+                                        color: 'inherit',
+                                        textDecoration: 'none',
+                                        '&:hover': { textDecoration: 'underline' },
+                                      }}
+                                    >
+                                      {video.youTubeChannelName}
+                                    </Typography>
+                                  ) : (
+                                    <Box component="span">{video.youTubeChannelName}</Box>
+                                  );
+                                })()}
+                              </Box>
+                            </Box>
+                            <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                              <Box sx={{ minWidth: 0 }}>
+                                <Typography variant='subtitle1' sx={{ fontWeight: 700, lineHeight: 1.3 }}>
+                                  {video.youTubeVideoName}
+                                </Typography>
+                                {video.duration && (
+                                  <Typography variant='caption' color='text.secondary'>
+                                    Duration: {formatDuration(video.duration)}
+                                  </Typography>
+                                )}
+                              </Box>
+                              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" sx={{ rowGap: 0.5 }}>
+                                {(() => {
+                                  const mediaTypeInfo = getMediaTypeInfo(video.media_type);
+                                  return mediaTypeInfo ? (
+                                    <Chip
+                                      size="small"
+                                      icon={mediaTypeInfo.icon}
+                                      label={mediaTypeInfo.label}
+                                      color={mediaTypeInfo.color}
+                                      variant="outlined"
+                                      sx={{ height: 20, fontSize: '0.7rem' }}
+                                    />
+                                  ) : null;
+                                })()}
+                                <RatingBadge
+                                  rating={video.normalized_rating}
+                                  ratingSource={video.rating_source}
+                                  showNA={true}
+                                  size="small"
+                                  sx={{ height: 20, fontSize: '0.7rem', boxShadow: 'none' }}
+                                />
+                                {!video.removed && (video.filePath || video.audioFilePath) && (
+                                  <DownloadFormatIndicator
+                                    filePath={video.filePath}
+                                    audioFilePath={video.audioFilePath}
+                                    fileSize={video.fileSize}
+                                    audioFileSize={video.audioFileSize}
+                                  />
+                                )}
+                                {video.removed ? (
+                                  <Tooltip title="Video file not found on disk. It may have been deleted or moved." enterTouchDelay={0}>
+                                    <Chip
+                                      size="small"
+                                      icon={<ErrorOutlineIcon />}
+                                      label="Missing"
+                                      color="error"
+                                      variant="outlined"
+                                      sx={{ height: 20, fontSize: '0.7rem' }}
+                                    />
+                                  </Tooltip>
+                                ) : video.fileSize ? (
+                                  <Tooltip title="Video file exists on disk" enterTouchDelay={0}>
+                                    <Chip
+                                      size="small"
+                                      icon={<CheckCircleIcon />}
+                                      label="Available"
+                                      color="success"
+                                      variant="filled"
+                                      sx={{
+                                        height: 20,
+                                        fontSize: '0.7rem',
+                                        '& .MuiChip-icon': { fontSize: 14, ml: 0.5 },
+                                        '& .MuiChip-label': { px: 0.75 },
+                                      }}
+                                    />
+                                  </Tooltip>
+                                ) : null}
+                              </Stack>
+                              <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <ScheduleIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                    <Typography variant="caption" color="text.secondary">
+                                      Published: {formatYTDate(video.originalDate)}
+                                    </Typography>
+                                  </Box>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <DownloadIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                    <Typography variant="caption" color="text.secondary">
+                                      Downloaded: {new Date(video.timeCreated).toLocaleDateString()} {new Date(video.timeCreated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </Typography>
+                                  </Box>
+                                </Stack>
+                              </Box>
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Tooltip title="Delete video from disk">
+                                  <span>
+                                    <IconButton
+                                      color="error"
+                                      size="small"
+                                      onClick={() => handleDeleteSingleVideo(video.id)}
+                                      disabled={Boolean(video.removed) || deleteLoading}
+                                    >
+                                      <DeleteIcon />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                              </Box>
                             </Box>
                           </TableCell>
-                          <TableCell style={{ fontSize: 'medium' }}>
-                            {(() => {
-                              const channelId = getEnabledChannelId(video.youTubeChannelName, video.channel_id);
-                              return channelId ? (
-                                <Typography
-                                  component={RouterLink}
-                                  to={`/channel/${channelId}`}
-                                  sx={{
-                                    color: 'primary.main',
-                                    textDecoration: 'none',
-                                    '&:hover': {
-                                      textDecoration: 'underline',
-                                    },
-                                  }}
-                                >
-                                  {video.youTubeChannelName}
-                                </Typography>
-                              ) : (
-                                <>{video.youTubeChannelName}</>
-                              );
-                            })()}
-                          </TableCell>
-                          <TableCell style={{ fontSize: 'medium' }}>
-                            <Typography variant='subtitle1'>
-                              {video.youTubeVideoName}
-                            </Typography>
-                            {video.duration && (
-                              <Typography
-                                variant='caption'
-                                color='text.secondary'
-                              >
-                                Duration: {formatDuration(video.duration)}
-                              </Typography>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {formatYTDate(video.originalDate)}
-                          </TableCell>
-
-                          <TableCell>
-                            {new Date(video.timeCreated).toLocaleDateString()}
-                            <br />
-                            {new Date(video.timeCreated).toLocaleTimeString(
-                              [],
-                              {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              }
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Stack direction={isMobile ? "row" : "column"} spacing={1}>
-                              {!video.removed && (video.filePath || video.audioFilePath) && (
-                                <DownloadFormatIndicator
-                                  filePath={video.filePath}
-                                  audioFilePath={video.audioFilePath}
-                                  fileSize={video.fileSize}
-                                  audioFileSize={video.audioFileSize}
-                                />
-                              )}
-                              {(() => {
-                                const mediaTypeInfo = getMediaTypeInfo(video.media_type);
-                                return mediaTypeInfo ? (
-                                  <Chip
-                                    size="small"
-                                    icon={mediaTypeInfo.icon}
-                                    label={mediaTypeInfo.label}
-                                    color={mediaTypeInfo.color}
-                                    variant="outlined"
-                                  />
-                                ) : null;
-                              })()}
-                              <RatingBadge
-                                rating={video.normalized_rating}
-                                ratingSource={video.rating_source}
-                                showNA={true}
-                                size="small"
-                              />
-                              {!!video.removed && (
-                                <Tooltip title="Video file not found on disk. It may have been deleted or moved." enterTouchDelay={0}>
-                                  <Chip
-                                    size="small"
-                                    icon={<ErrorOutlineIcon />}
-                                    label="Missing"
-                                    color="error"
-                                    variant="outlined"
-                                  />
-                                </Tooltip>
-                              )}
-                            </Stack>
-                          </TableCell>
-                          <TableCell>
-                            <Tooltip title="Delete video from disk">
-                              <span>
-                                <IconButton
-                                  color="error"
-                                  size="small"
-                                  onClick={() => handleDeleteSingleVideo(video.id)}
-                                  disabled={video.removed || deleteLoading}
-                                >
-                                  <DeleteIcon />
-                                </IconButton>
-                              </span>
-                            </Tooltip>
-                          </TableCell>
-                        </>
                       )}
                     </TableRow>
                   ))
@@ -983,9 +1066,17 @@ function VideosPage({ token }: VideosPageProps) {
             </Table>
           </div>
         </TableContainer>
-      </CardContent>
+      </Box>
 
       {/* Delete Confirmation Dialog */}
+      <DeleteVideosDialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        videoCount={isMobile ? selectedForDeletion.length : selectedVideos.length}
+      />
+
+      {/* Change Rating Dialog */}
       <ChangeRatingDialog
         open={ratingDialogOpen}
         onClose={() => setRatingDialogOpen(false)}
@@ -993,12 +1084,23 @@ function VideosPage({ token }: VideosPageProps) {
         selectedCount={isMobile ? selectedForDeletion.length : selectedVideos.length}
       />
 
-      <DeleteVideosDialog
-        open={deleteDialogOpen}
-        onClose={handleDeleteCancel}
-        onConfirm={handleDeleteConfirm}
-        videoCount={isMobile ? selectedForDeletion.length : selectedVideos.length}
-      />
+      {/* Mobile Rating FAB */}
+      {isMobile && selectedForDeletion.length > 0 && (
+        <Zoom in={selectedForDeletion.length > 0}>
+          <Fab
+            color="primary"
+            sx={{
+              position: 'fixed',
+              bottom: 80,
+              right: 16,
+              zIndex: 1000,
+            }}
+            onClick={handleChangeRatingClick}
+          >
+            <EighteenUpRatingIcon />
+          </Fab>
+        </Zoom>
+      )}
 
       {/* Mobile Delete FAB */}
       {isMobile && selectedForDeletion.length > 0 && (
@@ -1040,7 +1142,7 @@ function VideosPage({ token }: VideosPageProps) {
           {errorMessage}
         </Alert>
       </Snackbar>
-    </Card>
+    </Box>
   );
 }
 

@@ -314,7 +314,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
     <>
       <Card sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <CardHeader
-          title="Your Channels"
+          title="Channels"
           action={
             <Tooltip title="Learn how channel downloads work">
               <IconButton onClick={() => setHelpDialogOpen(true)}>

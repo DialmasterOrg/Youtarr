@@ -5,6 +5,7 @@
   "type": "module",
   "proxy": "http://localhost:3011",
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.15",
     "@emotion/react": "^11.11.0",
     "@emotion/styled": "^11.11.0",
     "@mui/icons-material": "^5.11.16",

@@ -22,11 +22,30 @@ interface AppearanceSettingsSectionProps {
 export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps> = ({
   onMobileTooltipClick,
 }) => {
-  const { themeMode, setThemeMode, motionEnabled, setMotionEnabled } = useThemeEngine();
+  const { themeMode, setThemeMode, motionEnabled, setMotionEnabled, colorMode, setColorMode } = useThemeEngine();
 
   return (
     <ConfigurationCard title="Appearance" subtitle="Theme, visual style, and motion settings">
       <Grid container spacing={2} sx={{ mt: 1 }}>
+        {/* Dark Mode Toggle */}
+        <Grid item xs={12}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={colorMode === 'dark'}
+                  onChange={(event) => setColorMode(event.target.checked ? 'dark' : 'light')}
+                />
+              }
+              label="Dark Mode"
+            />
+            <InfoTooltip
+              text="Toggle between light and dark color mode. Your preference is saved locally."
+              onMobileClick={onMobileTooltipClick}
+            />
+          </Box>
+        </Grid>
+
         {/* Theme Animation Toggle */}
         <Grid item xs={12}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>

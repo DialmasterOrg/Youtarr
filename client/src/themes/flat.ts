@@ -221,14 +221,14 @@ export const flatTheme: ThemeDefinition = {
       styleOverrides: {
         root: {
           borderRadius: 'var(--radius-ui)',
-          border: 'none',
+          border: '1px solid var(--border)',
           boxShadow: 'none',
           backgroundColor: 'var(--card)',
           color: 'var(--card-foreground)',
-          transition: 'transform 200ms ease, background-color 200ms ease',
+          transition: 'transform 200ms ease, border-color 200ms ease, border-width 200ms ease',
           '&:hover': {
             transform: 'scale(1.02)',
-            backgroundColor: 'var(--muted)',
+            border: 'var(--border-weight) solid var(--primary)',
             boxShadow: 'none',
           },
         },

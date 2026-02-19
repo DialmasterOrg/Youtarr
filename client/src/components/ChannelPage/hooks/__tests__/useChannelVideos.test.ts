@@ -19,6 +19,7 @@ describe('useChannelVideos', () => {
     sortBy: 'date',
     sortOrder: 'desc',
     tabType: 'videos',
+    maxRating: 'all',
     token: mockToken,
   };
 

@@ -11,17 +11,15 @@ import {
   Tooltip,
 } from '@mui/material';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import DeleteIcon from '@mui/icons-material/Delete';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import { useTheme } from '@mui/material/styles';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
-import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import RatingBadge from '../shared/RatingBadge';
+import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 
 interface VideoCardProps {
   video: ChannelVideo;
@@ -29,11 +27,13 @@ interface VideoCardProps {
   checkedBoxes: string[];
   hoveredVideo: string | null;
   selectedForDeletion: string[];
+  selectionMode: 'download' | 'delete' | null;
   onCheckChange: (videoId: string, isChecked: boolean) => void;
   onHoverChange: (videoId: string | null) => void;
-  onToggleDeletion: (youtubeId: string) => void;
+  onDeletionChange: (videoId: string, isChecked: boolean) => void;
   onToggleIgnore: (youtubeId: string) => void;
   onMobileTooltip?: (message: string) => void;
+  isInteractive?: boolean;
 }
 
 function VideoCard({
@@ -42,49 +42,69 @@ function VideoCard({
   checkedBoxes,
   hoveredVideo,
   selectedForDeletion,
+  selectionMode,
   onCheckChange,
   onHoverChange,
-  onToggleDeletion,
+  onDeletionChange,
   onToggleIgnore,
   onMobileTooltip,
+  isInteractive = false,
 }: VideoCardProps) {
-  const theme = useTheme();
   const status = getVideoStatus(video);
   // Check if video is still live (not "was_live" and not null/undefined)
   const isStillLive = video.live_status && video.live_status !== 'was_live';
-  const isSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !isStillLive;
+  const isDownloadSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !isStillLive;
+  const isDeleteSelectable = video.added && !video.removed && !isStillLive;
+  const isDownloadAllowed = selectionMode !== 'delete';
+  const isDeleteAllowed = selectionMode !== 'download';
   const isChecked = checkedBoxes.includes(video.youtube_id);
+  const isDeleteChecked = selectedForDeletion.includes(video.youtube_id);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
   const isIgnored = status === 'ignored';
+  const statusVariant = status === 'downloaded' || status === 'missing' ? 'filled' : 'outlined';
+  const baseTransform = isInteractive ? 'var(--sticker-rest-transform)' : 'translate(0, 0)';
+  const isClickable = (isDownloadSelectable && isDownloadAllowed) || (isDeleteSelectable && isDeleteAllowed);
 
   return (
     <Fade in timeout={300} key={video.youtube_id}>
       <Grid item xs={12} sm={6} md={4} lg={3}>
         <Card
+          /* toggle 'hover:animate-wiggle' here */
+          className={isInteractive ? 'wiggle-card' : undefined}
           sx={{
             height: '100%',
             display: 'flex',
             flexDirection: 'column',
             position: 'relative',
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            cursor: isSelectable ? 'pointer' : 'default',
+            cursor: isClickable ? 'pointer' : 'default',
             opacity: status === 'members_only' || isIgnored ? 0.7 : 1,
-            transform: hoveredVideo === video.youtube_id ? 'translateY(-4px)' : 'translateY(0)',
-            boxShadow: hoveredVideo === video.youtube_id ? theme.shadows[8] : theme.shadows[1],
+            transform: hoveredVideo === video.youtube_id ? 'var(--sticker-hover-transform)' : baseTransform,
+            boxShadow: hoveredVideo === video.youtube_id ? 'var(--card-hover-shadow)' : 'var(--shadow-soft)',
             '&:hover': {
-              boxShadow: theme.shadows[4],
+              boxShadow: 'var(--card-hover-shadow)',
             },
           }}
           onMouseEnter={() => onHoverChange(video.youtube_id)}
           onMouseLeave={() => onHoverChange(null)}
-          onClick={() => isSelectable && onCheckChange(video.youtube_id, !isChecked)}
+          onClick={() => {
+            if (isDownloadSelectable && isDownloadAllowed) {
+              onCheckChange(video.youtube_id, !isChecked);
+              return;
+            }
+            if (isDeleteSelectable && isDeleteAllowed) {
+              onDeletionChange(video.youtube_id, !isDeleteChecked);
+            }
+          }}
         >
           {/* Thumbnail with overlay */}
           <Box sx={{
             position: 'relative',
             // Keep container size consistent - shorts use contain to show with black bars
             paddingTop: isMobile ? '52%' : '56.25%',
-            bgcolor: 'grey.900'
+            bgcolor: 'grey.900',
+            borderRadius: 'var(--radius-ui)',
+            overflow: 'hidden',
           }}>
             <img
               src={video.thumbnail}
@@ -97,6 +117,7 @@ function VideoCard({
                 height: '100%',
                 // Shorts use contain to show full portrait thumbnail with black bars
                 objectFit: video.media_type === 'short' ? 'contain' : 'cover',
+                borderRadius: 'var(--radius-ui)',
               }}
               loading="lazy"
             />
@@ -151,7 +172,7 @@ function VideoCard({
               >
                 <StillLiveDot isMobile={isMobile} onMobileClick={onMobileTooltip} />
               </Box>
-            ) : isSelectable && (
+            ) : isDownloadSelectable && isDownloadAllowed && (
               <Box
                 sx={{
                   position: 'absolute',
@@ -188,29 +209,29 @@ function VideoCard({
               </Box>
             )}
 
-            {/* Delete icon for downloaded videos that exist on disk */}
-            {video.added && !video.removed && (
-              <IconButton
-                onClick={(e) => {
+            {/* Delete checkbox for downloaded videos */}
+            {isDeleteSelectable && isDeleteAllowed && (
+              <Checkbox
+                checked={isDeleteChecked}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => {
                   e.stopPropagation();
-                  onToggleDeletion(video.youtube_id);
+                  onDeletionChange(video.youtube_id, e.target.checked);
                 }}
                 sx={{
                   position: 'absolute',
                   top: 8,
-                  right: 8,
-                  bgcolor: selectedForDeletion.includes(video.youtube_id) ? 'error.main' : 'rgba(0,0,0,0.6)',
+                  left: 8,
                   color: 'white',
-                  '&:hover': {
-                    bgcolor: selectedForDeletion.includes(video.youtube_id) ? 'error.dark' : 'rgba(0,0,0,0.8)',
+                  bgcolor: 'rgba(0,0,0,0.5)',
+                  '&.Mui-checked': {
+                    color: 'error.main',
                   },
-                  transition: 'all 0.2s',
-                  zIndex: 3,
+                  '&:hover': {
+                    bgcolor: 'rgba(0,0,0,0.7)',
+                  },
                 }}
-                size="small"
-              >
-                <DeleteIcon fontSize="small" />
-              </IconButton>
+              />
             )}
 
             {/* Ignore/Unignore button - for videos not currently on disk (never downloaded or missing) */}
@@ -265,8 +286,8 @@ function VideoCard({
             </Typography>
 
             <Box sx={{ mt: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {/* Date, size, and status - same line on mobile, separate on desktop */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              {/* Date and download format info */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
               {video.media_type !== 'short' && video.publishedAt && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <CalendarTodayIcon sx={{ fontSize: 12 }} />
@@ -284,6 +305,10 @@ function VideoCard({
                     audioFileSize={video.audioFileSize}
                   />
                 )}
+              </Box>
+
+              {/* Media type, rating, and status chips on same line */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
                 {mediaTypeInfo && (
                   <Chip
                     size="small"
@@ -291,39 +316,51 @@ function VideoCard({
                     label={mediaTypeInfo.label}
                     color={mediaTypeInfo.color}
                     variant="outlined"
-                    sx={{ height: 20, fontSize: '0.7rem' }}
+                  sx={{
+                    height: 24,
+                    fontSize: '0.7rem',
+                    minWidth: 'fit-content',
+                    boxShadow: 'var(--chip-shadow)',
+                    transition: 'box-shadow 200ms var(--transition-bouncy)',
+                    '&:hover': {
+                      boxShadow: 'var(--chip-shadow-hover)'
+                    }
+                  }}
                   />
                 )}
                 <RatingBadge
                   rating={video.normalized_rating}
                   ratingSource={video.rating_source}
+                  showNA={true}
                   size="small"
-                  variant="text"
-                  showNA
+                  sx={{ height: 24, flexShrink: 0 }}
                 />
-                {isMobile && (
-                  <Chip
-                    icon={getStatusIcon(status)}
-                    label={getStatusLabel(status)}
-                    size="small"
-                    color={getStatusColor(status)}
-                    variant={status === 'downloaded' ? 'filled' : 'outlined'}
-                    sx={{ height: 20, fontSize: '0.7rem' }}
-                  />
-                )}
-              </Box>
-
-              {/* Status chip for desktop only */}
-              {!isMobile && (
                 <Chip
                   icon={getStatusIcon(status)}
                   label={getStatusLabel(status)}
                   size="small"
                   color={getStatusColor(status)}
-                  variant={status === 'downloaded' ? 'filled' : 'outlined'}
-                  sx={{ width: 'fit-content' }}
+                  variant={statusVariant}
+                  sx={{ 
+                    height: 24, 
+                    fontSize: '0.7rem', 
+                    flex: '0 0 auto',
+                    minWidth: 'fit-content',
+                    boxShadow: 'var(--chip-shadow)',
+                    transition: 'box-shadow 200ms var(--transition-bouncy)',
+                    '& .MuiChip-label': {
+                      display: 'inline-block',
+                      maxWidth: 'var(--status-chip-max-width)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    },
+                    '&:hover': {
+                      boxShadow: 'var(--chip-shadow-hover)'
+                    }
+                  }}
                 />
-              )}
+              </Box>
             </Box>
           </Box>
         </Card>

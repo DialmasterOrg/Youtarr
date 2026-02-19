@@ -30,9 +30,10 @@ describe('VideoListItem Component', () => {
     video: mockVideo,
     checkedBoxes: [],
     selectedForDeletion: [],
+    selectionMode: null as 'download' | 'delete' | null,
     onCheckChange: jest.fn(),
-    onToggleDeletion: jest.fn(),
     onToggleIgnore: jest.fn(),
+    onDeletionChange: jest.fn(),
   };
 
   beforeEach(() => {
@@ -404,64 +405,49 @@ describe('VideoListItem Component', () => {
     });
   });
 
-  describe('Delete Button', () => {
-    test('renders delete button for downloaded videos', () => {
+  describe('Delete Mode', () => {
+    test('renders delete checkbox for downloaded videos in delete mode', () => {
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
-      renderWithProviders(<VideoListItem {...defaultProps} video={downloadedVideo} />);
-      expect(screen.getByTestId('DeleteIcon')).toBeInTheDocument();
+      renderWithProviders(
+        <VideoListItem {...defaultProps} video={downloadedVideo} selectionMode="delete" />
+      );
+      const checkboxes = screen.getAllByRole('checkbox');
+      expect(checkboxes.length).toBeGreaterThan(0);
     });
 
-    test('does not render delete button for never downloaded videos', () => {
-      renderWithProviders(<VideoListItem {...defaultProps} />);
-      expect(screen.queryByTestId('DeleteIcon')).not.toBeInTheDocument();
+    test('does not render delete checkbox for never downloaded videos in delete mode', () => {
+      renderWithProviders(<VideoListItem {...defaultProps} selectionMode="delete" />);
+      // Non-downloaded videos should not show a deletion checkbox
+      const checkboxes = screen.queryAllByRole('checkbox');
+      const deletionCheckbox = checkboxes.find(cb => cb.getAttribute('aria-label')?.includes('delete') || cb.getAttribute('aria-label') === null);
+      expect(screen.queryByLabelText(/mark for deletion/i)).not.toBeInTheDocument();
     });
 
-    test('does not render delete button for missing videos', () => {
+    test('does not render delete checkbox for missing videos', () => {
       const missingVideo = { ...mockVideo, added: true, removed: true };
-      renderWithProviders(<VideoListItem {...defaultProps} video={missingVideo} />);
-      expect(screen.queryByTestId('DeleteIcon')).not.toBeInTheDocument();
+      renderWithProviders(<VideoListItem {...defaultProps} video={missingVideo} selectionMode="delete" />);
+      expect(screen.queryByLabelText(/mark for deletion/i)).not.toBeInTheDocument();
     });
 
-    test('calls onToggleDeletion when delete button is clicked', async () => {
+    test('calls onDeletionChange when delete checkbox is changed', async () => {
       const user = userEvent.setup();
-      const onToggleDeletion = jest.fn();
+      const onDeletionChange = jest.fn();
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
 
       renderWithProviders(
         <VideoListItem
           {...defaultProps}
           video={downloadedVideo}
-          onToggleDeletion={onToggleDeletion}
+          selectionMode="delete"
+          onDeletionChange={onDeletionChange}
         />
       );
 
-      const deleteButton = screen.getByRole('button');
-      await user.click(deleteButton);
+      const checkboxes = screen.getAllByRole('checkbox');
+      await user.click(checkboxes[checkboxes.length - 1]);
 
-      expect(onToggleDeletion).toHaveBeenCalledTimes(1);
-      expect(onToggleDeletion).toHaveBeenCalledWith('test123');
-    });
-
-    test('delete button click stops propagation', async () => {
-      const user = userEvent.setup();
-      const onToggleDeletion = jest.fn();
-      const onCheckChange = jest.fn();
-      const downloadedVideo = { ...mockVideo, added: true, removed: false };
-
-      renderWithProviders(
-        <VideoListItem
-          {...defaultProps}
-          video={downloadedVideo}
-          onToggleDeletion={onToggleDeletion}
-          onCheckChange={onCheckChange}
-        />
-      );
-
-      const deleteButton = screen.getByRole('button');
-      await user.click(deleteButton);
-
-      expect(onToggleDeletion).toHaveBeenCalledTimes(1);
-      expect(onCheckChange).not.toHaveBeenCalled();
+      expect(onDeletionChange).toHaveBeenCalledTimes(1);
+      expect(onDeletionChange).toHaveBeenCalledWith('test123', expect.any(Boolean));
     });
   });
 

@@ -28,20 +28,23 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
     return null;
   }
 
-  // No rating assigned - show subtle "Unrated" indicator
+  // No rating assigned - show "NR" chip (no color, grey)
   if (!rating) {
     return (
-      <Typography
-        variant="caption"
+      <Chip
+        label="NR"
+        size={size}
+        color="default"
+        variant="outlined"
         sx={{
+          fontSize: size === 'small' ? '0.65rem' : '0.8rem',
+          height: size === 'small' ? 20 : 24,
           color: 'text.disabled',
-          fontStyle: 'italic',
-          fontSize: size === 'small' ? '0.7rem' : '0.8rem',
+          borderColor: 'text.disabled',
+          '& .MuiChip-label': { px: 0.75 },
           ...sx,
         }}
-      >
-        Unrated
-      </Typography>
+      />
     );
   }
 

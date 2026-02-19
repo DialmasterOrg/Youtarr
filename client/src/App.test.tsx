@@ -237,10 +237,10 @@ describe('App Component', () => {
     });
 
     expect(screen.getByText('YouTube Video Manager')).toBeInTheDocument();
-    expect(screen.getByText('Configuration')).toBeInTheDocument();
-    expect(screen.getByText('Your Channels')).toBeInTheDocument();
-    expect(screen.getByText('Manage Downloads')).toBeInTheDocument();
-    expect(screen.getByText('Downloaded Videos')).toBeInTheDocument();
+    expect(screen.getByText('Settings')).toBeInTheDocument();
+    expect(screen.getByText('Channels')).toBeInTheDocument();
+    expect(screen.getByText('Downloads')).toBeInTheDocument();
+    expect(screen.getByText('Library')).toBeInTheDocument();
     expect(screen.getByText('Changelog')).toBeInTheDocument();
   });
 
@@ -433,12 +433,12 @@ describe('App Component', () => {
 
     await waitFor(() => {
       // Navigation menu should have all authenticated routes
-      expect(screen.getByText('Configuration')).toBeInTheDocument();
+      expect(screen.getByText('Settings')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Your Channels')).toBeInTheDocument();
-    expect(screen.getByText('Manage Downloads')).toBeInTheDocument();
-    expect(screen.getByText('Downloaded Videos')).toBeInTheDocument();
+    expect(screen.getByText('Channels')).toBeInTheDocument();
+    expect(screen.getByText('Downloads')).toBeInTheDocument();
+    expect(screen.getByText('Library')).toBeInTheDocument();
   });
 
   test('shows mobile menu button on mobile devices', async () => {

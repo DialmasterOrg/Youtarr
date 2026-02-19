@@ -176,7 +176,7 @@ describe('ChannelManager Component', () => {
   describe('Component Rendering', () => {
     test('renders without crashing', () => {
       renderChannelManager();
-      expect(screen.getByText('Your Channels')).toBeInTheDocument();
+      expect(screen.getByText('Channels')).toBeInTheDocument();
     });
 
     test('throws error when WebSocketContext is not provided', () => {
@@ -1185,7 +1185,7 @@ describe('ChannelManager Component', () => {
   describe('Edge Cases', () => {
     test('handles null token gracefully', () => {
       renderChannelManager({ token: null });
-      expect(screen.getByText('Your Channels')).toBeInTheDocument();
+      expect(screen.getByText('Channels')).toBeInTheDocument();
     });
 
     test('handles empty subfolder list', () => {
@@ -1200,7 +1200,7 @@ describe('ChannelManager Component', () => {
       });
 
       renderChannelManager();
-      expect(screen.getByText('Your Channels')).toBeInTheDocument();
+      expect(screen.getByText('Channels')).toBeInTheDocument();
     });
 
     test('closes dialog when close button clicked', async () => {

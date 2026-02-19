@@ -158,7 +158,7 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
       <Paper elevation={1} sx={{ p: 2, mb: 2 }}>
         <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <PlaylistAddIcon />
-          Add Videos to Download
+          Download Youtube Video Manually
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Paste YouTube video URLs to add to queue
@@ -189,6 +189,15 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
               size="small"
               onClick={handleClearAll}
               startIcon={<ClearIcon />}
+              sx={{
+                color: 'text.primary',
+                borderColor: 'divider',
+                '&:hover': {
+                  bgcolor: 'action.hover',
+                  borderColor: 'text.primary',
+                  color: 'text.primary',
+                }
+              }}
             >
               Clear All
             </Button>
@@ -233,6 +242,14 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
                 onClick={handleOpenSettings}
                 disabled={validatedVideos.length === 0 || isDownloading}
                 startIcon={isDownloading ? <CircularProgress size={20} /> : <DownloadIcon />}
+                sx={(theme) => ({ 
+                  color: 'primary.contrastText',
+                  bgcolor: 'primary.main',
+                  '&:hover': {
+                    bgcolor: 'primary.dark',
+                    color: 'primary.contrastText',
+                  }
+                })}
               >
                 {isDownloading ? 'Starting...' : 'Download Videos'}
               </Button>

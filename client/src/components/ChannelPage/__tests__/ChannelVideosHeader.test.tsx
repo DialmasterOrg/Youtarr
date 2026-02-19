@@ -59,10 +59,11 @@ describe('ChannelVideosHeader Component', () => {
     paginatedVideos: [],
     autoDownloadsEnabled: false,
     selectedTab: 'videos',
+    selectionMode: null as 'download' | 'delete' | null,
+    maxRating: 'all',
     onViewModeChange: jest.fn(),
     onSearchChange: jest.fn(),
     onHideDownloadedChange: jest.fn(),
-    onAutoDownloadChange: jest.fn(),
     onRefreshClick: jest.fn(),
     onDownloadClick: jest.fn(),
     onSelectAll: jest.fn(),
@@ -70,6 +71,7 @@ describe('ChannelVideosHeader Component', () => {
     onDeleteClick: jest.fn(),
     onBulkIgnoreClick: jest.fn(),
     onInfoIconClick: jest.fn(),
+    onMaxRatingChange: jest.fn(),
   };
 
   beforeEach(() => {
@@ -192,21 +194,6 @@ describe('ChannelVideosHeader Component', () => {
 
       const checkbox = screen.getByRole('checkbox', { name: /Enable Channel Downloads for this tab/i });
       expect(checkbox).not.toBeChecked();
-    });
-
-    test('calls onAutoDownloadChange when toggled', async () => {
-      const user = userEvent.setup();
-      const onAutoDownloadChange = jest.fn();
-
-      renderWithProviders(
-        <ChannelVideosHeader
-          {...defaultProps}
-          onAutoDownloadChange={onAutoDownloadChange}
-        />
-      );
-
-      await user.click(screen.getByRole('checkbox', { name: /Enable Channel Downloads for this tab/i }));
-      expect(onAutoDownloadChange).toHaveBeenCalledWith(true);
     });
 
     test('renders info icons for both date and auto-download on desktop', () => {

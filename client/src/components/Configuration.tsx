@@ -73,7 +73,7 @@ const isDeepEqual = (a: any, b: any): boolean => {
   return keysA.every((key) => Object.prototype.hasOwnProperty.call(b, key) && isDeepEqual(a[key], b[key]));
 };
 
-function Configuration({ token }: ConfigurationProps) {
+function Configuration({ token, sectionGroup }: ConfigurationProps) {
   // Use the useConfig hook to fetch and manage configuration
   const {
     config,
@@ -221,97 +221,121 @@ function Configuration({ token }: ConfigurationProps) {
     return <ConfigurationSkeleton />;
   }
 
+  const showGeneral = !sectionGroup || sectionGroup === 'general';
+  const showIntegrations = !sectionGroup || sectionGroup === 'integrations';
+  const showDownloads = !sectionGroup || sectionGroup === 'downloads';
+  const showAdvanced = !sectionGroup || sectionGroup === 'advanced';
+  const showSecurity = !sectionGroup || sectionGroup === 'security';
+
   return (
     <>
-      <CoreSettingsSection
-        config={config}
-        deploymentEnvironment={deploymentEnvironment}
-        isPlatformManaged={isPlatformManaged}
-        onConfigChange={handleConfigChange}
-        onMobileTooltipClick={setMobileTooltip}
-        token={token}
-        ytDlpVersionInfo={ytDlpVersionInfo}
-        ytDlpUpdateStatus={ytDlpUpdateStatus}
-        onYtDlpUpdate={performYtDlpUpdate}
-      />
+      {showGeneral && (
+        <>
+          <CoreSettingsSection
+            config={config}
+            deploymentEnvironment={deploymentEnvironment}
+            isPlatformManaged={isPlatformManaged}
+            onConfigChange={handleConfigChange}
+            onMobileTooltipClick={setMobileTooltip}
+            token={token}
+            ytDlpVersionInfo={ytDlpVersionInfo}
+            ytDlpUpdateStatus={ytDlpUpdateStatus}
+            onYtDlpUpdate={performYtDlpUpdate}
+          />
 
-      <AppearanceSettingsSection
-        onMobileTooltipClick={setMobileTooltip}
-      />
+          <AppearanceSettingsSection
+            onMobileTooltipClick={setMobileTooltip}
+          />
+        </>
+      )}
 
-      <PlexIntegrationSection
-        config={config}
-        isPlatformManaged={isPlatformManaged}
-        plexConnectionStatus={plexConnectionStatus}
-        hasPlexServerConfigured={hasPlexServerConfigured}
-        onConfigChange={handleConfigChange}
-        onTestConnection={testPlexConnection}
-        onOpenLibrarySelector={openLibrarySelector}
-        onOpenPlexAuthDialog={() => setOpenPlexAuthDialog(true)}
-        onMobileTooltipClick={setMobileTooltip}
-      />
+      {showIntegrations && (
+        <>
+          <PlexIntegrationSection
+            config={config}
+            isPlatformManaged={isPlatformManaged}
+            plexConnectionStatus={plexConnectionStatus}
+            hasPlexServerConfigured={hasPlexServerConfigured}
+            onConfigChange={handleConfigChange}
+            onTestConnection={testPlexConnection}
+            onOpenLibrarySelector={openLibrarySelector}
+            onOpenPlexAuthDialog={() => setOpenPlexAuthDialog(true)}
+            onMobileTooltipClick={setMobileTooltip}
+          />
 
-      <SponsorBlockSection
-        config={config}
-        onConfigChange={handleConfigChange}
-        onMobileTooltipClick={setMobileTooltip}
-      />
+          <SponsorBlockSection
+            config={config}
+            onConfigChange={handleConfigChange}
+            onMobileTooltipClick={setMobileTooltip}
+          />
 
-      <KodiCompatibilitySection
-        config={config}
-        onConfigChange={handleConfigChange}
-        onMobileTooltipClick={setMobileTooltip}
-      />
+          <KodiCompatibilitySection
+            config={config}
+            onConfigChange={handleConfigChange}
+            onMobileTooltipClick={setMobileTooltip}
+          />
 
-      <CookieConfigSection
-        token={token}
-        config={config}
-        setConfig={setConfig}
-        onConfigChange={handleConfigChange}
-        setSnackbar={setSnackbar}
-        onMobileTooltipClick={setMobileTooltip}
-      />
+          <CookieConfigSection
+            token={token}
+            config={config}
+            setConfig={setConfig}
+            onConfigChange={handleConfigChange}
+            setSnackbar={setSnackbar}
+            onMobileTooltipClick={setMobileTooltip}
+          />
 
-      <NotificationsSection
-        token={token}
-        config={config}
-        onConfigChange={handleConfigChange}
-        onMobileTooltipClick={setMobileTooltip}
-        setSnackbar={setSnackbar}
-      />
+          <NotificationsSection
+            token={token}
+            config={config}
+            onConfigChange={handleConfigChange}
+            onMobileTooltipClick={setMobileTooltip}
+            setSnackbar={setSnackbar}
+          />
+        </>
+      )}
 
-      <DownloadPerformanceSection
-        config={config}
-        onConfigChange={handleConfigChange}
-        onMobileTooltipClick={setMobileTooltip}
-      />
+      {showDownloads && (
+        <>
+          <DownloadPerformanceSection
+            config={config}
+            onConfigChange={handleConfigChange}
+            onMobileTooltipClick={setMobileTooltip}
+          />
 
-      <AdvancedSettingsSection
-        config={config}
-        onConfigChange={handleConfigChange}
-        onMobileTooltipClick={setMobileTooltip}
-      />
+          <AutoRemovalSection
+            token={token}
+            config={config}
+            storageAvailable={storageAvailable}
+            onConfigChange={handleConfigChange}
+            onMobileTooltipClick={setMobileTooltip}
+          />
+        </>
+      )}
 
-      <AutoRemovalSection
-        token={token}
-        config={config}
-        storageAvailable={storageAvailable}
-        onConfigChange={handleConfigChange}
-        onMobileTooltipClick={setMobileTooltip}
-      />
+      {showAdvanced && (
+        <AdvancedSettingsSection
+          config={config}
+          onConfigChange={handleConfigChange}
+          onMobileTooltipClick={setMobileTooltip}
+        />
+      )}
 
-      <AccountSecuritySection
-        token={token}
-        envAuthApplied={config.envAuthApplied}
-        authEnabled={isPlatformManaged.authEnabled}
-        setSnackbar={setSnackbar}
-      />
+      {showSecurity && (
+        <>
+          <AccountSecuritySection
+            token={token}
+            envAuthApplied={config.envAuthApplied}
+            authEnabled={isPlatformManaged.authEnabled}
+            setSnackbar={setSnackbar}
+          />
 
-      <ApiKeysSection
-        token={token}
-        apiKeyRateLimit={config.apiKeyRateLimit}
-        onRateLimitChange={(value) => handleConfigChange({ apiKeyRateLimit: value })}
-      />
+          <ApiKeysSection
+            token={token}
+            apiKeyRateLimit={config.apiKeyRateLimit}
+            onRateLimitChange={(value) => handleConfigChange({ apiKeyRateLimit: value })}
+          />
+        </>
+      )}
 
       <SaveBar
         hasUnsavedChanges={hasUnsavedChanges}

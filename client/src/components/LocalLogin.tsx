@@ -30,7 +30,7 @@ const LocalLogin: React.FC<LocalLoginProps> = ({ setToken }) => {
       const { token } = response.data;
       localStorage.setItem('authToken', token);
       setToken(token);
-      redirectTo('/configuration');
+      redirectTo('/settings');
     } catch (err: any) {
       if (err.response?.data?.requiresSetup) {
         redirectTo('/setup');

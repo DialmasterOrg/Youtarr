@@ -13,6 +13,10 @@ import {
   Chip,
   LinearProgress,
   IconButton,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
   Badge,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
@@ -24,9 +28,15 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BlockIcon from '@mui/icons-material/Block';
 import InfoIcon from '@mui/icons-material/Info';
+import ChecklistIcon from '@mui/icons-material/Checklist';
+import ClearIcon from '@mui/icons-material/Clear';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import { getVideoStatus } from '../../utils/videoStatus';
 import { ChannelVideo } from '../../types/ChannelVideo';
+import { RATING_OPTIONS } from '../../utils/ratings';
+import { useThemeEngine } from '../../contexts/ThemeEngineContext';
+import { ActionBar } from '../shared/ActionBar';
+import { intentStyles } from '../../utils/intentStyles';
 
 type ViewMode = 'table' | 'grid' | 'list';
 
@@ -40,14 +50,15 @@ interface ChannelVideosHeaderProps {
   fetchingAllVideos: boolean;
   checkedBoxes: string[];
   selectedForDeletion: string[];
+  selectionMode: 'download' | 'delete' | null;
   deleteLoading: boolean;
   paginatedVideos: ChannelVideo[];
   autoDownloadsEnabled: boolean;
   selectedTab: string;
+  maxRating: string;
   onViewModeChange: (event: React.MouseEvent<HTMLElement>, newMode: ViewMode | null) => void;
   onSearchChange: (query: string) => void;
   onHideDownloadedChange: (hide: boolean) => void;
-  onAutoDownloadChange: (enabled: boolean) => void;
   onRefreshClick: () => void;
   onDownloadClick: () => void;
   onSelectAll: () => void;
@@ -55,6 +66,7 @@ interface ChannelVideosHeaderProps {
   onDeleteClick: () => void;
   onBulkIgnoreClick: () => void;
   onInfoIconClick: (tooltip: string) => void;
+  onMaxRatingChange: (value: string) => void;
   // Filter-related props (desktop only)
   activeFilterCount?: number;
   filtersExpanded?: boolean;
@@ -71,14 +83,15 @@ function ChannelVideosHeader({
   fetchingAllVideos,
   checkedBoxes,
   selectedForDeletion,
+  selectionMode,
   deleteLoading,
   paginatedVideos,
   autoDownloadsEnabled,
   selectedTab,
+  maxRating,
   onViewModeChange,
   onSearchChange,
   onHideDownloadedChange,
-  onAutoDownloadChange,
   onRefreshClick,
   onDownloadClick,
   onSelectAll,
@@ -86,10 +99,12 @@ function ChannelVideosHeader({
   onDeleteClick,
   onBulkIgnoreClick,
   onInfoIconClick,
+  onMaxRatingChange,
   activeFilterCount = 0,
   filtersExpanded = false,
   onFiltersExpandedChange,
 }: ChannelVideosHeaderProps) {
+  const { themeMode } = useThemeEngine();
   const renderInfoIcon = (message: string) => {
     const handleClick = (e: React.MouseEvent) => {
       e.preventDefault();
@@ -103,7 +118,7 @@ function ChannelVideosHeader({
       return (
         <IconButton
           size="small"
-          sx={{ ml: 0.5, p: 0.5 }}
+          sx={{ ml: 0.5, p: 0.5, color: 'var(--foreground)' }}
           onClick={handleClick}
         >
           <InfoIcon fontSize="small" />
@@ -113,7 +128,7 @@ function ChannelVideosHeader({
 
     return (
       <Tooltip title={message} arrow placement="top">
-        <IconButton size="small" sx={{ ml: 0.5, p: 0.5 }} onClick={(e) => e.stopPropagation()}>
+        <IconButton size="small" sx={{ ml: 0.5, p: 0.5, color: 'var(--foreground)' }} onClick={(e) => e.stopPropagation()}>
           <InfoIcon fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -126,6 +141,12 @@ function ChannelVideosHeader({
   const dateTooltipText = selectedTab === 'shorts'
     ? "Shorts do not expose publish dates via yt-dlp, so dates are hidden. " + dateTooltipBase
     : dateTooltipBase;
+
+  const selectableDownloadCount = paginatedVideos.filter((video) => {
+    const status = getVideoStatus(video);
+    return status === 'never_downloaded' || status === 'missing' || status === 'ignored';
+  }).length;
+  const selectableDeleteCount = paginatedVideos.filter((video) => video.added && !video.removed).length;
 
   return (
     <Box
@@ -156,32 +177,13 @@ function ChannelVideosHeader({
             onClick={onRefreshClick}
             variant="outlined"
             size="small"
+            color="inherit"
             disabled={fetchingAllVideos}
             startIcon={<RefreshIcon />}
+            className={intentStyles.base}
           >
             {fetchingAllVideos ? 'Loading...' : 'Load More'}
           </Button>
-        </Box>
-
-        {/* Auto-download setting for this tab */}
-        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={autoDownloadsEnabled}
-                onChange={(e) => onAutoDownloadChange(e.target.checked)}
-                size="small"
-              />
-            }
-            label="Enable Channel Downloads for this tab"
-            sx={{
-              '& .MuiFormControlLabel-label': {
-                fontSize: isMobile ? '0.75rem' : '1rem',
-                marginRight: -1,
-              }
-            }}
-          />
-          {renderInfoIcon(autoDownloadTooltip)}
         </Box>
 
         {/* Search and filters */}
@@ -200,6 +202,21 @@ function ChannelVideosHeader({
             }}
             sx={{ flexGrow: 1, minWidth: 200, width: isMobile ? '50%' : 'auto' }}
           />
+
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <InputLabel>Max Rating</InputLabel>
+            <Select
+              value={maxRating}
+              label="Max Rating"
+              onChange={(event) => onMaxRatingChange(event.target.value)}
+            >
+              {RATING_OPTIONS.map(option => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
           {/* View mode toggle - mobile shows list/grid, desktop shows table/grid */}
           <ToggleButtonGroup
@@ -245,7 +262,7 @@ function ChannelVideosHeader({
 
         {/* Action buttons for desktop */}
         {!isMobile && (
-          <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}>
+          <ActionBar variant={themeMode} sx={{ mt: 2 }}>
             {onFiltersExpandedChange && (
               <Button
                 variant={filtersExpanded ? 'contained' : 'outlined'}
@@ -256,27 +273,34 @@ function ChannelVideosHeader({
                   </Badge>
                 }
                 onClick={() => onFiltersExpandedChange(!filtersExpanded)}
+                className={intentStyles.base}
               >
                 Filters
               </Button>
             )}
             <Button
-              variant="contained"
+              variant="outlined"
               size="small"
+              color="inherit"
               startIcon={<DownloadIcon />}
               onClick={onDownloadClick}
               disabled={checkedBoxes.length === 0}
+              className={intentStyles.success}
             >
               Download {checkedBoxes.length > 0 ? `${checkedBoxes.length} ${checkedBoxes.length === 1 ? 'Video' : 'Videos'}` : 'Selected'}
             </Button>
             <Button
               variant="outlined"
               size="small"
+              color="inherit"
               onClick={onSelectAll}
-              disabled={checkedBoxes.length === 0 && paginatedVideos.filter(v => {
-                const status = getVideoStatus(v);
-                return status === 'never_downloaded' || status === 'missing' || status === 'ignored';
-              }).length === 0}
+              disabled={
+                selectionMode === 'delete'
+                  ? selectableDeleteCount === 0
+                  : checkedBoxes.length === 0 && selectableDownloadCount === 0
+              }
+              startIcon={<ChecklistIcon />}
+              className={intentStyles.base}
             >
               Select All This Page
             </Button>
@@ -285,30 +309,61 @@ function ChannelVideosHeader({
               size="small"
               onClick={onClearSelection}
               disabled={checkedBoxes.length === 0}
+              startIcon={<ClearIcon />}
             >
               Clear
             </Button>
             <Button
               variant="outlined"
               size="small"
-              color="warning"
+              color="inherit"
               startIcon={<BlockIcon />}
               onClick={onBulkIgnoreClick}
               disabled={checkedBoxes.length === 0}
+              className={intentStyles.warning}
             >
               Ignore Selected
             </Button>
             <Button
-              variant="contained"
-              color="error"
+              variant="outlined"
               size="small"
+              color="inherit"
               startIcon={<DeleteIcon />}
               onClick={onDeleteClick}
               disabled={selectedForDeletion.length === 0 || deleteLoading}
+              className={intentStyles.danger}
             >
               Delete {selectedForDeletion.length > 0 ? `${selectedForDeletion.length}` : 'Selected'}
             </Button>
-          </Box>
+          </ActionBar>
+        )}
+
+        {/* Action buttons for mobile */}
+        {isMobile && (
+          <ActionBar variant={themeMode} compact sx={{ mt: 2 }}>
+            <IconButton
+              size="small"
+              onClick={onSelectAll}
+              disabled={
+                selectionMode === 'delete'
+                  ? selectableDeleteCount === 0
+                  : checkedBoxes.length === 0 && selectableDownloadCount === 0
+              }
+              className={intentStyles.base}
+              aria-label="Select all this page"
+            >
+              <ChecklistIcon fontSize="small" />
+            </IconButton>
+            <IconButton
+              size="small"
+              onClick={onClearSelection}
+              disabled={checkedBoxes.length === 0}
+              className={intentStyles.base}
+              aria-label="Clear selection"
+            >
+              <ClearIcon fontSize="small" />
+            </IconButton>
+          </ActionBar>
         )}
       </Box>
 

@@ -65,7 +65,7 @@ const TerminateJobDialog: React.FC<TerminateJobDialogProps> = ({
 
           <Alert severity="info" sx={{ mb: 1 }}>
             <Typography variant="body2">
-              The job will show as "Terminated" in your download history with a list of completed videos.
+              The job will show as &quot;Terminated&quot; in your download history with a list of completed videos.
             </Typography>
           </Alert>
         </Box>

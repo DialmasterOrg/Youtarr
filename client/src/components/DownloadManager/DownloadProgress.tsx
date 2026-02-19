@@ -7,7 +7,6 @@ import React, {
 } from 'react';
 import {
   Grid,
-  Card,
   Typography,
   LinearProgress,
   Box,
@@ -28,6 +27,7 @@ import { useNavigate } from 'react-router-dom';
 import WebSocketContext from '../../contexts/WebSocketContext';
 import { Job } from '../../types/Job';
 import TerminateJobDialog from './TerminateJobDialog';
+import { useTheme } from '@mui/material/styles';
 
 interface DownloadProgressProps {
   downloadProgressRef: React.MutableRefObject<{
@@ -128,21 +128,27 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
     throw new Error('WebSocketContext not found');
   }
   const { subscribe, unsubscribe } = wsContext;
+  const theme = useTheme();
 
   // Derive color from state
   const progressColor = useMemo(() => {
-    if (!currentProgress) return '#9e9e9e';
+    if (!currentProgress) return theme.palette.action.disabled;
 
-    if (currentProgress.stalled) return '#ffca28'; // Yellow
+    if (currentProgress.stalled) return theme.palette.warning.main;
 
-    switch(currentProgress.state) {
-      case 'initiating': return '#9e9e9e'; // Grey
-      case 'complete': return '#66bb6a'; // Green
-      case 'terminated': return '#ff9800'; // Orange (warning)
-      case 'error': return '#ef5350'; // Red
-      default: return '#42a5f5'; // Blue
+    switch (currentProgress.state) {
+      case 'initiating':
+        return theme.palette.action.disabled;
+      case 'complete':
+        return theme.palette.success.main;
+      case 'terminated':
+        return theme.palette.warning.dark;
+      case 'error':
+        return theme.palette.error.main;
+      default:
+        return theme.palette.primary.main;
     }
-  }, [currentProgress]);
+  }, [currentProgress, theme.palette]);
 
   const overlayContent = useMemo(() => {
     if (!currentProgress) {
@@ -170,6 +176,19 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
       eta: formattedEta
     };
   }, [currentProgress]);
+
+  const overlayTextColor = useMemo(() => {
+    const percent = currentProgress?.progress?.percent ?? 0;
+    return percent > 50 ? theme.palette.common.white : theme.palette.text.primary;
+  }, [currentProgress?.progress?.percent, theme.palette]);
+
+  const overlayTextShadow = useMemo(
+    () =>
+      overlayTextColor === theme.palette.common.white
+        ? '1px 1px 2px rgba(0, 0, 0, 0.55)'
+        : '1px 1px 2px rgba(255, 255, 255, 0.65)',
+    [overlayTextColor]
+  );
 
   // Derive status message from state
   const statusMessage = useMemo(() => {
@@ -231,7 +250,6 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
       if (response.ok) {
         // Success - job will update via WebSocket
-        console.log('Job termination initiated successfully');
       } else {
         const error = await response.json();
         alert(error.error || 'Failed to terminate job');
@@ -386,7 +404,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
   return (
     <Grid item xs={12} md={12} paddingBottom={'8px'}>
-      <Card elevation={8}>
+      <Box>
         <Box sx={{
           display: 'flex',
           alignItems: 'center',
@@ -440,7 +458,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
               sx={{
                 bgcolor: 'action.hover',
                 '&:before': { display: 'none' },
-                borderRadius: 1,
+                borderRadius: 'var(--radius-ui)',
               }}
             >
               <AccordionSummary
@@ -498,7 +516,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                   <Button
                     color="inherit"
                     size="small"
-                    onClick={() => navigate('/configuration')}
+                    onClick={() => navigate('/settings')}
                   >
                     Go to Settings
                   </Button>
@@ -531,7 +549,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             <Box sx={{
               p: 1,
               backgroundColor: (finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'warning.light' : 'success.light',
-              borderRadius: 1,
+              borderRadius: 'var(--radius-ui)',
               textAlign: 'center'
             }}>
               <Typography variant="h6" color={(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'warning.contrastText' : 'success.contrastText'}>
@@ -539,7 +557,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
               </Typography>
               <Typography variant="body1" color={(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'warning.contrastText' : 'success.contrastText'}>
                 {(() => {
-                  const parts = [];
+                  const parts: string[] = [];
                   if (finalSummary.totalDownloaded > 0) {
                     parts.push(`✓ ${finalSummary.totalDownloaded} video${finalSummary.totalDownloaded !== 1 ? 's' : ''} downloaded`);
                   }
@@ -637,12 +655,13 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                 value={currentProgress.progress?.percent ?? 0}
                 sx={{
                   height: 32,
-                  borderRadius: 1,
-                  bgcolor: 'action.hover',
+                  borderRadius: 'var(--radius-ui)',
+                  bgcolor: theme.palette.action.hover,
+                  boxShadow: theme.shadows[1],
                   '& .MuiLinearProgress-bar': {
                     backgroundColor: progressColor,
-                    transition: 'background-color 0.3s ease'
-                  }
+                    transition: 'background-color 0.3s ease, width 0.3s ease',
+                  },
                 }}
               />
 
@@ -672,11 +691,9 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                       sx={{
                         flex: 1,
                         minWidth: 0,
-                        color: (currentProgress.progress?.percent ?? 0) > 50 ? 'white' : 'black',
+                        color: overlayTextColor,
                         fontWeight: 'bold',
-                        textShadow: (currentProgress.progress?.percent ?? 0) > 50 ?
-                          '1px 1px 2px rgba(0,0,0,0.7)' :
-                          '1px 1px 2px rgba(255,255,255,0.7)'
+                        textShadow: overlayTextShadow,
                       }}
                     >
                       {overlayContent.title}
@@ -688,11 +705,9 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                       sx={{
                         flexShrink: 0,
                         whiteSpace: 'nowrap',
-                        color: (currentProgress.progress?.percent ?? 0) > 50 ? 'white' : 'black',
+                        color: overlayTextColor,
                         fontWeight: 'bold',
-                        textShadow: (currentProgress.progress?.percent ?? 0) > 50 ?
-                          '1px 1px 2px rgba(0,0,0,0.7)' :
-                          '1px 1px 2px rgba(255,255,255,0.7)'
+                        textShadow: overlayTextShadow,
                       }}
                     >
                       {overlayContent.title ? `· ETA ${overlayContent.eta}` : `ETA ${overlayContent.eta}`}
@@ -728,16 +743,21 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
             {/* Video count display with context */}
             {videoCount.total > 0 && (
-              <Box sx={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                mt: 1,
-                p: 1,
-                bgcolor: 'action.hover',
-                borderRadius: 1
-              }}>
-                <Typography variant="body2" color="text.secondary">
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  mt: 1,
+                  px: 1.25,
+                  py: 0.75,
+                  bgcolor: theme.palette.background.paper,
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderRadius: 'var(--radius-ui)',
+                  boxShadow: theme.shadows[1],
+                }}
+              >
+                <Typography variant="body2" color="text.primary" sx={{ fontWeight: 600 }}>
                   {(() => {
                     const isChannelDownload = currentProgress.downloadType?.includes('Channel Downloads');
 
@@ -781,7 +801,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
           onClose={() => setShowTerminateDialog(false)}
           onConfirm={handleTerminate}
         />
-      </Card>
+      </Box>
     </Grid>
   );
 };

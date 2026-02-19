@@ -27,7 +27,6 @@ import {
   Videocam as VideocamIcon
 } from '@mui/icons-material';
 import { DownloadSettings } from './types';
-import RatingBadge from '../../shared/RatingBadge';
 import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
 import { useSubfolders } from '../../../hooks/useSubfolders';
 
@@ -44,7 +43,6 @@ interface DownloadSettingsDialogProps {
   defaultAudioFormat?: string | null; // For channel audio format default
   defaultAudioFormatSource?: 'channel' | 'global';
   token?: string | null; // For fetching subfolders
-  defaultRating?: string | null;
 }
 
 const RESOLUTION_OPTIONS = [
@@ -69,10 +67,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   defaultAudioFormat = null,
   defaultAudioFormatSource = 'global',
   token = null
-  ,
-  defaultRating = null
 }) => {
-  const [rating, setRating] = useState<string | null>(null);
   const [useCustomSettings, setUseCustomSettings] = useState(false);
   const [resolution, setResolution] = useState(defaultResolution);
   const [channelVideoCount, setChannelVideoCount] = useState(defaultVideoCount);
@@ -104,8 +99,6 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       setResolution(defaultResolution);
       setChannelVideoCount(defaultVideoCount);
       setAudioFormat(defaultAudioFormat);
-      // Initialize rating from prop when dialog opens
-      setRating(defaultRating ?? null);
       // Auto-check re-download if there are missing videos or previously downloaded videos in manual mode
       if (missingVideoCount > 0) {
         setAllowRedownload(true);
@@ -122,22 +115,12 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       setAllowRedownload(false);
       setSubfolderOverride(null);
       setAudioFormat(defaultAudioFormat);
-      setRating(defaultRating ?? null);
     }
   }, [open, defaultAudioFormat]);
 
   const handleUseCustomToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const checked = event.target.checked;
-    setUseCustomSettings(checked);
+    setUseCustomSettings(event.target.checked);
     setHasUserInteracted(true);
-    // When enabling custom settings, if rating is not set, initialize to channel/defaultRating
-    if (checked && (rating === null || rating === undefined)) {
-      // defaultRating prop may be undefined in some usages
-      // prefer to leave null if no defaultRating available
-      if (typeof defaultRating !== 'undefined' && defaultRating !== null) {
-        setRating(defaultRating);
-      }
-    }
   };
 
   const handleResolutionChange = (event: SelectChangeEvent<string>) => {
@@ -155,7 +138,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
 
   // Generate options for video count dropdown
   const getVideoCountOptions = () => {
-    const options = [];
+    const options: number[] = [];
     // Always include 1-10
     for (let i = 1; i <= 10; i++) {
       options.push(i);
@@ -182,11 +165,6 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
         settingsToSave.videoCount = channelVideoCount;
       }
 
-      // Save rating preference locally only when custom selected in manual mode
-      if (rating !== undefined) {
-        settingsToSave.rating = rating;
-      }
-
       localStorage.setItem(storageKey, JSON.stringify(settingsToSave));
     } catch (e) {
       // localStorage might not be available
@@ -204,13 +182,10 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
         videoCount: mode === 'channel' ? (useCustomSettings ? channelVideoCount : defaultVideoCount) : 0,
         allowRedownload,
         subfolder: mode === 'manual' ? subfolderOverride : undefined,
-        audioFormat: mode === 'manual' ? audioFormat : undefined,
-        // Include rating only if custom settings are enabled (user explicitly selected it)
-        // Use an explicit sentinel 'NR' when the user selected "No Rating" (null)
-        rating: useCustomSettings ? (rating === null ? 'NR' : (rating ?? undefined)) : undefined
+        audioFormat: mode === 'manual' ? audioFormat : undefined
       });
     } else {
-      onConfirm(null); // Use defaults - post-processor will apply channel default rating
+      onConfirm(null); // Use defaults
     }
   };
 
@@ -301,18 +276,6 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                     <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
                       (channel)
                     </Typography>
-                  )}
-                </Typography>
-              </Box>
-
-              {/* Content Rating in summary */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <strong>Content Rating:</strong>
-                  {defaultRating ? (
-                    <RatingBadge rating={defaultRating} size="small" />
-                  ) : (
-                    <span>Not set</span>
                   )}
                 </Typography>
               </Box>
@@ -448,7 +411,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                     Download Type
                   </Typography>
 
-                  <FormControl fullWidth sx={{ mb: 2 }}>
+                  <FormControl fullWidth sx={{ mb: 2 }} className="audio-control audio-control--download-type">
                     <InputLabel id="audio-format-select-label" shrink>Download Type</InputLabel>
                     <Select
                       labelId="audio-format-select-label"
@@ -472,45 +435,17 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                       </FormHelperText>
                     )}
                   </FormControl>
-                  {/* Rating Override - manual/custom only */}
-                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, mt: 2 }}>
-                    Content Rating Override
-                  </Typography>
-
-                  <FormControl fullWidth sx={{ mb: 2 }}>
-                    <InputLabel id="rating-select-label" shrink>Content Rating</InputLabel>
-                    <Select
-                      labelId="rating-select-label"
-                      id="rating-select"
-                      value={rating || ''}
-                      label="Content Rating"
-                      displayEmpty
-                      onChange={(e) => {
-                        const val = e.target.value as string;
-                        setRating(val === '' ? null : val);
-                        setHasUserInteracted(true);
-                      }}
-                    >
-                      <MenuItem value="">
-                        <em>No Rating</em>
-                      </MenuItem>
-                      <MenuItem value="G"><RatingBadge rating="G" size="small" sx={{ mr: 1 }} /> G</MenuItem>
-                      <MenuItem value="PG"><RatingBadge rating="PG" size="small" sx={{ mr: 1 }} /> PG</MenuItem>
-                      <MenuItem value="PG-13"><RatingBadge rating="PG-13" size="small" sx={{ mr: 1 }} /> PG-13</MenuItem>
-                      <MenuItem value="R"><RatingBadge rating="R" size="small" sx={{ mr: 1 }} /> R</MenuItem>
-                      <MenuItem value="NC-17"><RatingBadge rating="NC-17" size="small" sx={{ mr: 1 }} /> NC-17</MenuItem>
-                      <MenuItem value="TV-Y"><RatingBadge rating="TV-Y" size="small" sx={{ mr: 1 }} /> TV-Y</MenuItem>
-                      <MenuItem value="TV-Y7"><RatingBadge rating="TV-Y7" size="small" sx={{ mr: 1 }} /> TV-Y7</MenuItem>
-                      <MenuItem value="TV-G"><RatingBadge rating="TV-G" size="small" sx={{ mr: 1 }} /> TV-G</MenuItem>
-                      <MenuItem value="TV-PG"><RatingBadge rating="TV-PG" size="small" sx={{ mr: 1 }} /> TV-PG</MenuItem>
-                      <MenuItem value="TV-14"><RatingBadge rating="TV-14" size="small" sx={{ mr: 1 }} /> TV-14</MenuItem>
-                      <MenuItem value="TV-MA"><RatingBadge rating="TV-MA" size="small" sx={{ mr: 1 }} /> TV-MA</MenuItem>
-                    </Select>
-                  </FormControl>
                 </>
               )}
             </Box>
           </Collapse>
+
+          {/* Note about YouTube quality */}
+          <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 'var(--radius-ui)' }}>
+            <Typography variant="caption" color="text.secondary">
+              <strong>Note:</strong> YouTube will provide the best available quality up to your selected resolution.
+            </Typography>
+          </Box>
         </Box>
       </DialogContent>
 

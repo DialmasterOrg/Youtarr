@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Chip, Tooltip, Box, Grow, Popover, Typography, IconButton } from '@mui/material';
 import { Close as CloseIcon, History as HistoryIcon, Lock } from '@mui/icons-material';
 import { VideoInfo } from './types';
+import { useThemeEngine } from '../../../contexts/ThemeEngineContext';
 
 interface VideoChipProps {
   video: VideoInfo;
@@ -45,6 +46,7 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
 
   const open = Boolean(anchorEl);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
+  const { themeMode } = useThemeEngine();
 
   const formatDuration = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
@@ -122,7 +124,7 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
           bgcolor: 'action.selected',
           px: 0.5,
           py: 0.25,
-          borderRadius: 1
+          borderRadius: 'var(--radius-ui)'
         }}>
           {formatDuration(video.duration)}
         </Box>
@@ -151,7 +153,7 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
             deleteIcon={<CloseIcon />}
             color={getChipColor()}
             variant="filled"
-            sx={{
+            sx={(theme) => ({
               height: 'auto',
               py: 1,
               '& .MuiChip-label': {
@@ -162,9 +164,11 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
               transition: 'all 0.2s ease',
               '&:hover': {
                 transform: 'scale(1.02)',
-                boxShadow: 2
-              }
-            }}
+                boxShadow: 'var(--chip-shadow-hover)'
+              },
+              boxShadow: 'var(--chip-shadow)'
+            })}
+
           />
         </Tooltip>
       </Grow>

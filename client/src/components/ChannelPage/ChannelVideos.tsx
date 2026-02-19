@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Card,
@@ -10,29 +10,20 @@ import {
   Zoom,
   Fab,
   Badge,
-  Drawer,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  Divider,
-  IconButton,
-  Pagination,
   Tabs,
   Tab,
+  Pagination,
+  Portal,
+  alpha,
 } from '@mui/material';
 
 import DownloadIcon from '@mui/icons-material/Download';
-import SelectAllIcon from '@mui/icons-material/SelectAll';
-import ClearIcon from '@mui/icons-material/Clear';
-import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AlarmOnIcon from '@mui/icons-material/AlarmOn';
 
 import useMediaQuery from '@mui/material/useMediaQuery';
-import { useTheme } from '@mui/material/styles';
+import { Theme, useTheme } from '@mui/material/styles';
 import { useNavigate } from 'react-router-dom';
-import { useSwipeable } from 'react-swipeable';
 import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
 import { useVideoDeletion } from '../shared/useVideoDeletion';
 import { getVideoStatus } from '../../utils/videoStatus';
@@ -47,6 +38,7 @@ import { useChannelFetchStatus } from './hooks/useChannelFetchStatus';
 import { useChannelVideoFilters } from './hooks/useChannelVideoFilters';
 import ChannelVideosFilters from './components/ChannelVideosFilters';
 import { useConfig } from '../../hooks/useConfig';
+import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
 
 interface ChannelVideosProps {
@@ -64,13 +56,14 @@ type SortOrder = 'asc' | 'desc';
 function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelId, channelVideoQuality, channelAudioFormat }: ChannelVideosProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { themeMode } = useThemeEngine();
 
   // View and display states
   const [viewMode, setViewMode] = useState<ViewMode>(isMobile ? 'list' : 'grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortBy>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [maxRating, setMaxRating] = useState('');
   const [filtersExpanded, setFiltersExpanded] = useState(false);
 
   // Tab states
@@ -92,6 +85,12 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const scrollRestoreRef = useRef<{ top: number | null; armed: boolean }>({ top: null, armed: false });
+  const lastVideosCountRef = useRef<number>(0);
+  const lastTriggerTimeRef = useRef<number>(0);
+  const lastTriggerScrollTopRef = useRef<number>(0);
+  const canTriggerNextRef = useRef<boolean>(true);
 
   // Local state to track ignore status changes without refetching
   const [localIgnoreStatus, setLocalIgnoreStatus] = useState<Record<string, boolean>>({});
@@ -231,37 +230,13 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     });
   }, [channelAutoDownloadTabs, availableTabs]);
 
-  // Use custom hooks for data fetching
-  const channelVideosParams = useMemo(() => ({
-    channelId,
-    page,
-    pageSize,
-    hideDownloaded,
-    searchQuery,
-    sortBy,
-    sortOrder,
-    tabType: selectedTab,
-    token,
-    minDuration: filters.minDuration,
-    maxDuration: filters.maxDuration,
-    dateFrom: filters.dateFrom,
-    dateTo: filters.dateTo,
-  }), [
-    channelId,
-    page,
-    pageSize,
-    hideDownloaded,
-    searchQuery,
-    sortBy,
-    sortOrder,
-    selectedTab,
-    token,
-    filters.minDuration,
-    filters.maxDuration,
-    filters.dateFrom,
-    filters.dateTo,
-  ]);
+  const { config } = useConfig(token);
+  const hasChannelOverride = Boolean(channelVideoQuality);
+  const defaultResolution = channelVideoQuality || config.preferredResolution || '1080';
+  const defaultResolutionSource: 'channel' | 'global' = hasChannelOverride ? 'channel' : 'global';
+  const useInfiniteScroll = config.channelVideosHotLoad ?? true;
 
+  // Use custom hooks for data fetching
   const {
     videos,
     totalCount,
@@ -271,7 +246,24 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     availableTabs: availableTabsFromVideos,
     loading: videosLoading,
     refetch: refetchVideos,
-  } = useChannelVideos(channelVideosParams);
+  } = useChannelVideos({
+    channelId,
+    page,
+    pageSize,
+    hideDownloaded,
+    searchQuery,
+    sortBy,
+    sortOrder,
+    tabType: selectedTab,
+    maxRating,
+    token,
+    append: useInfiniteScroll && page > 1,
+    resetKey: JSON.stringify({ channelId, hideDownloaded, searchQuery, sortBy, sortOrder, selectedTab, maxRating, pageSize, filters }),
+    minDuration: filters.minDuration,
+    maxDuration: filters.maxDuration,
+    dateFrom: filters.dateFrom,
+    dateTo: filters.dateTo,
+  });
 
   // Update available tabs from video fetch response if available
   useEffect(() => {
@@ -283,17 +275,48 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   // Clear local ignore status overrides when videos are refetched (page change, tab change, etc)
   useEffect(() => {
     setLocalIgnoreStatus({});
-  }, [page, selectedTab, hideDownloaded, searchQuery, sortBy, sortOrder, filters]);
+  }, [page, selectedTab, hideDownloaded, searchQuery, sortBy, sortOrder, maxRating, filters.minDuration, filters.maxDuration, filters.dateFrom, filters.dateTo]);
 
   // Reset page to 1 when filters change
   useEffect(() => {
     setPage(1);
   }, [filters.minDuration, filters.maxDuration, filters.dateFrom, filters.dateTo]);
 
-  const { config } = useConfig(token);
-  const hasChannelOverride = Boolean(channelVideoQuality);
-  const defaultResolution = channelVideoQuality || config.preferredResolution || '1080';
-  const defaultResolutionSource: 'channel' | 'global' = hasChannelOverride ? 'channel' : 'global';
+  useEffect(() => {
+    setPage(1);
+  }, [useInfiniteScroll]);
+
+  useEffect(() => {
+    if (!useInfiniteScroll) {
+      scrollRestoreRef.current = { top: null, armed: false };
+      lastVideosCountRef.current = videos.length;
+      return;
+    }
+
+    if (videosLoading) {
+      return;
+    }
+
+    const previousCount = lastVideosCountRef.current;
+    if (
+      scrollRestoreRef.current.armed &&
+      scrollRestoreRef.current.top !== null &&
+      videos.length > previousCount
+    ) {
+      // Disabled scroll restore as it conflicts with infinite scroll behavior
+      /*
+      if (typeof window !== 'undefined') {
+        const currentTop = window.scrollY || 0;
+        if (Math.abs(currentTop - scrollRestoreRef.current.top) < 24) {
+          window.scrollTo({ top: scrollRestoreRef.current.top, behavior: 'auto' });
+        }
+      }
+      */
+      scrollRestoreRef.current = { top: null, armed: false };
+    }
+
+    lastVideosCountRef.current = videos.length;
+  }, [videos.length, videosLoading, useInfiniteScroll]);
 
   const hasChannelAudioOverride = Boolean(channelAudioFormat);
   const defaultAudioFormat = channelAudioFormat || null;
@@ -345,11 +368,19 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   // Videos are already filtered, sorted, and paginated by the server
   const paginatedVideos = videosWithOverrides;
 
-  // Use server-provided total count for pagination
+  // Use server-provided total count for pagination/infinite scroll
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
+  const hasNextPage = page < totalPages;
+  const selectionMode = checkedBoxes.length > 0 ? 'download' : selectedForDeletion.length > 0 ? 'delete' : null;
+  const canSelectDownload = selectionMode !== 'delete';
+  const canSelectDeletion = selectionMode !== 'download';
 
   // Event handlers
   const handleCheckChange = useCallback((videoId: string, isChecked: boolean) => {
+    if (selectedForDeletion.length > 0 && isChecked) {
+      setErrorMessage('Clear delete selections before choosing videos to download.');
+      return;
+    }
     setCheckedBoxes((prevState) => {
       if (isChecked) {
         return [...prevState, videoId];
@@ -357,9 +388,36 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         return prevState.filter((id) => id !== videoId);
       }
     });
-  }, []);
+  }, [selectedForDeletion.length]);
+
+  const handleDeletionChange = useCallback((videoId: string, isChecked: boolean) => {
+    if (checkedBoxes.length > 0 && isChecked) {
+      setErrorMessage('Clear download selections before choosing videos to delete.');
+      return;
+    }
+    setSelectedForDeletion((prevState) => {
+      if (isChecked) {
+        return [...prevState, videoId];
+      }
+      return prevState.filter((id) => id !== videoId);
+    });
+  }, [checkedBoxes.length]);
 
   const handleSelectAll = useCallback(() => {
+    if (!canSelectDownload && !canSelectDeletion) {
+      return;
+    }
+
+    if (selectionMode === 'delete') {
+      const deletableVideos = paginatedVideos.filter((video) => video.added && !video.removed);
+      const videoIds = deletableVideos.map((video) => video.youtube_id);
+      setSelectedForDeletion((prevState) => {
+        const newIds = videoIds.filter((id) => !prevState.includes(id));
+        return [...prevState, ...newIds];
+      });
+      return;
+    }
+
     const selectableVideos = paginatedVideos.filter((video) => {
       const status = getVideoStatus(video);
       return status === 'never_downloaded' || status === 'missing' || status === 'ignored';
@@ -369,10 +427,11 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
       const newIds = videoIds.filter((id) => !prevState.includes(id));
       return [...prevState, ...newIds];
     });
-  }, [paginatedVideos]);
+  }, [canSelectDeletion, canSelectDownload, paginatedVideos, selectionMode]);
 
   const handleClearSelection = useCallback(() => {
     setCheckedBoxes([]);
+    setSelectedForDeletion([]);
   }, []);
 
   const handleDownloadClick = useCallback(() => {
@@ -389,14 +448,13 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           allowRedownload: settings.allowRedownload,
           subfolder: settings.subfolder,
           audioFormat: settings.audioFormat,
-          rating: settings.rating,
         }
       : undefined;
 
     await triggerDownloads({ urls, overrideSettings, channelId });
 
     setCheckedBoxes([]);
-    navigate('/downloads');
+    navigate('/downloads/activity');
   };
 
   const handleRefreshClick = () => {
@@ -418,13 +476,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   };
 
   const toggleDeletionSelection = (youtubeId: string) => {
-    setSelectedForDeletion(prev => {
-      if (prev.includes(youtubeId)) {
-        return prev.filter(id => id !== youtubeId);
-      } else {
-        return [...prev, youtubeId];
-      }
-    });
+    handleDeletionChange(youtubeId, !selectedForDeletion.includes(youtubeId));
   };
 
   const handleDeleteClick = () => {
@@ -577,41 +629,6 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     clearAllFilters(); // Clear filters when changing tabs
   };
 
-  const handleAutoDownloadChange = async (enabled: boolean) => {
-    if (!channelId || !token || !selectedTab) return;
-
-    // Store selectedTab in a const so TypeScript knows it's not null
-    const currentTab = selectedTab;
-
-    try {
-      const response = await fetch(`/api/channels/${channelId}/tabs/${currentTab}/auto-download`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-access-token': token,
-        },
-        body: JSON.stringify({ enabled }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update auto download setting');
-      }
-
-      // Update local state to reflect the change immediately
-      setTabAutoDownloadStatus(prev => ({
-        ...prev,
-        [currentTab]: enabled,
-      }));
-    } catch (error) {
-      console.error('Error updating auto download setting:', error);
-      setErrorMessage('Failed to update auto download setting');
-    }
-  };
-
-  const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
-    setPage(value);
-  };
-
   const handleViewModeChange = (event: React.MouseEvent<HTMLElement>, newMode: ViewMode | null) => {
     if (newMode !== null) {
       setViewMode(newMode);
@@ -663,137 +680,149 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     const label = getTabLabel(tabType);
     const isEnabled = isTabAutoDownloadEnabled(tabType);
 
-    if (!isEnabled) return label;
-
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        {label}
-        <AlarmOnIcon sx={{ fontSize: '1rem', color: 'error.main' }} />
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+        <Typography
+          variant="caption"
+          sx={{
+            fontWeight: 700,
+            color: 'inherit',
+          }}
+        >
+          {label}
+        </Typography>
+        <Box
+          sx={(theme) => ({
+            width: 12,
+            height: 12,
+            borderRadius: '50%',
+            backgroundColor: isEnabled 
+              ? (theme.palette.mode === 'dark' ? 'success.light' : 'success.main')
+              : alpha(theme.palette.text.primary, 0.1),
+            border: isEnabled 
+              ? `2px solid ${theme.palette.success.dark}` 
+              : `1px solid ${alpha(theme.palette.text.primary, 0.3)}`,
+            transition: 'all 200ms ease',
+            display: 'inline-block',
+            boxShadow: isEnabled ? `0 0 8px ${alpha(theme.palette.success.main, 0.4)}` : 'none',
+          })}
+          title={isEnabled ? 'Auto-download enabled' : 'Auto-download disabled'}
+        />
       </Box>
     );
   };
 
-  // Swipe handlers for mobile
-  const handlers = useSwipeable({
-    onSwipedLeft: () => {
-      if (page < totalPages) {
-        setPage(page + 1);
+  useEffect(() => {
+    if (!loadMoreRef.current) return;
+    if (videosLoading || !hasNextPage) return;
+    if (!useInfiniteScroll) return;
+
+    let didTrigger = false;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        const now = Date.now();
+        const currentTop = typeof window !== 'undefined' ? window.scrollY || 0 : 0;
+        const viewportHeight = entry.rootBounds?.height ?? (typeof window !== 'undefined' ? window.innerHeight : 0);
+        const sentinelBottom = entry.boundingClientRect.bottom;
+        const nearBottom = viewportHeight === 0 || sentinelBottom >= viewportHeight - 120;
+
+        if (!entry.isIntersecting) {
+          canTriggerNextRef.current = true;
+          return;
+        }
+
+        if (
+          entry.isIntersecting &&
+          nearBottom &&
+          canTriggerNextRef.current &&
+          !didTrigger &&
+          now - lastTriggerTimeRef.current > 500
+        ) {
+          didTrigger = true;
+          canTriggerNextRef.current = false;
+          lastTriggerTimeRef.current = now;
+          lastTriggerScrollTopRef.current = currentTop;
+          if (typeof window !== 'undefined') {
+            // scrollRestoreRef.current = { top: window.scrollY || 0, armed: true };
+          }
+          setPage((prev) => prev + 1);
+        }
+
+      },
+      {
+        root: null,
+        rootMargin: '0px 0px 200px 0px',
+        threshold: 0,
       }
-    },
-    onSwipedRight: () => {
-      if (page > 1) {
-        setPage(page - 1);
-      }
-    },
-    trackMouse: false,
-  });
+    );
 
-  // Mobile drawer render
-  const renderDrawer = () => (
-    <Drawer
-      anchor="bottom"
-      open={mobileDrawerOpen}
-      onClose={() => setMobileDrawerOpen(false)}
-      sx={{
-        '& .MuiDrawer-paper': {
-          borderTopLeftRadius: 16,
-          borderTopRightRadius: 16,
-          maxHeight: '70vh',
-        },
-      }}
-    >
-      <Box sx={{ p: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">Batch Actions</Typography>
-          <IconButton onClick={() => setMobileDrawerOpen(false)}>
-            <CloseIcon />
-          </IconButton>
-        </Box>
+    observer.observe(loadMoreRef.current);
 
-        <List>
-          <ListItem button onClick={handleSelectAll}>
-            <ListItemIcon><SelectAllIcon /></ListItemIcon>
-            <ListItemText primary="Select All This Page" secondary={`Select videos that can be downloaded`} />
-          </ListItem>
+    return () => {
+      observer.disconnect();
+    };
+  }, [videosLoading, hasNextPage, useInfiniteScroll, page, themeMode]);
 
-          <ListItem button onClick={handleClearSelection}>
-            <ListItemIcon><ClearIcon /></ListItemIcon>
-            <ListItemText primary="Clear Selection" secondary={`${checkedBoxes.length} selected`} />
-          </ListItem>
+  const renderSelectionAction = () => {
+    if (!selectionMode) return null;
 
-          <Divider sx={{ my: 1 }} />
-
-          <ListItem button onClick={handleDownloadClick} disabled={checkedBoxes.length === 0}>
-            <ListItemIcon><DownloadIcon /></ListItemIcon>
-            <ListItemText
-              primary={`Download ${checkedBoxes.length} ${checkedBoxes.length === 1 ? 'Video' : 'Videos'}`}
-              secondary={getMissingVideoCount() > 0 ? `${getMissingVideoCount()} missing files will be re-downloaded` : undefined}
-            />
-          </ListItem>
-
-          <ListItem button onClick={handleDeleteClick} disabled={selectedForDeletion.length === 0 || deleteLoading}>
-            <ListItemIcon><DeleteIcon color={selectedForDeletion.length > 0 ? "error" : "disabled"} /></ListItemIcon>
-            <ListItemText
-              primary={`Delete ${selectedForDeletion.length} ${selectedForDeletion.length === 1 ? 'Video' : 'Videos'}`}
-              secondary={selectedForDeletion.length > 0 ? `Remove videos from disk` : 'No videos selected for deletion'}
-            />
-          </ListItem>
-        </List>
-      </Box>
-    </Drawer>
-  );
-
-  // Mobile floating action buttons
-  const renderFAB = () => {
-    // if (!isMobile) return null;
-
-    const hasDownloadSelection = checkedBoxes.length > 0;
-    const hasDeletionSelection = selectedForDeletion.length > 0;
-
-    if (!hasDownloadSelection && !hasDeletionSelection) return null;
+    const isDownloadAction = selectionMode === 'download';
+    const count = isDownloadAction ? checkedBoxes.length : selectedForDeletion.length;
+    const icon = isDownloadAction ? <DownloadIcon /> : <DeleteIcon />;
+    const handleActionClick = isDownloadAction ? handleDownloadClick : handleDeleteClick;
 
     return (
-      <>
-        {/* Download FAB */}
-        {hasDownloadSelection && (
-          <Zoom in={hasDownloadSelection}>
+      <Portal container={typeof window !== 'undefined' ? document.body : undefined}>
+        <Zoom in>
+          <Badge
+            badgeContent={count}
+            color={isDownloadAction ? 'primary' : 'error'}
+            overlap="circular"
+            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+            sx={(theme: Theme) => ({
+              position: 'fixed',
+              bottom: isMobile ? 84 : 56,
+              right: isMobile ? 20 : 56,
+              transform: 'translateY(-50%)',
+              zIndex: theme.zIndex.snackbar - 1,
+              '& .MuiBadge-badge': {
+                border: `2px solid ${theme.palette.background.paper}`,
+                fontWeight: 800,
+                minWidth: 22,
+                height: 22,
+                fontSize: '0.75rem',
+                zIndex: theme.zIndex.snackbar + 1,
+                boxShadow: 'var(--shadow-hard)',
+              },
+            })}
+          >
             <Fab
-              color="primary"
-              sx={{
-                position: 'fixed',
-                bottom: hasDeletionSelection ? 88 : 16,
-                right: 16,
-                zIndex: theme.zIndex.fab,
-              }}
-              onClick={() => setMobileDrawerOpen(true)}
+              color={isDownloadAction ? 'primary' : 'error'}
+              onClick={handleActionClick}
+              sx={(theme: Theme) => ({
+                backgroundColor: isDownloadAction ? 'var(--fab-primary-bg)' : 'var(--fab-error-bg)',
+                color: isDownloadAction ? 'var(--fab-primary-fg)' : 'var(--fab-error-fg)',
+                boxShadow: 'var(--shadow-hard)',
+                border: theme.palette.mode === 'light' ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                '& .MuiSvgIcon-root': {
+                  color: 'inherit',
+                },
+                '&:hover': {
+                  backgroundColor: isDownloadAction ? 'var(--fab-primary-hover-bg)' : 'var(--fab-error-hover-bg)',
+                  color: isDownloadAction ? 'var(--fab-primary-hover-fg)' : 'var(--fab-error-hover-fg)',
+                },
+                '&:focus-visible': {
+                  outline: `3px solid ${isDownloadAction ? theme.palette.primary.main : theme.palette.error.main}`,
+                  outlineOffset: 3,
+                },
+              })}
             >
-              <Badge badgeContent={checkedBoxes.length} color="error">
-                <DownloadIcon />
-              </Badge>
+              {icon}
             </Fab>
-          </Zoom>
-        )}
-
-        {/* Delete FAB */}
-        {hasDeletionSelection && (
-          <Zoom in={hasDeletionSelection}>
-            <Fab
-              color="error"
-              sx={{
-                position: 'fixed',
-                bottom: 16,
-                right: 16,
-                zIndex: theme.zIndex.fab,
-              }}
-              onClick={handleDeleteClick}
-            >
-              <Badge badgeContent={selectedForDeletion.length} color="primary">
-                <DeleteIcon />
-              </Badge>
-            </Fab>
-          </Zoom>
-        )}
-      </>
+          </Badge>
+        </Zoom>
+      </Portal>
     );
   };
 
@@ -810,10 +839,12 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           fetchingAllVideos={fetchingAllVideos}
           checkedBoxes={checkedBoxes}
           selectedForDeletion={selectedForDeletion}
+          selectionMode={selectionMode}
           deleteLoading={deleteLoading}
           paginatedVideos={paginatedVideos}
           autoDownloadsEnabled={selectedTab ? (tabAutoDownloadStatus[selectedTab] ?? autoDownloadsEnabled) : autoDownloadsEnabled}
           selectedTab={selectedTab || 'videos'}
+          maxRating={maxRating}
           onViewModeChange={handleViewModeChange}
           onSearchChange={(query) => {
             setSearchQuery(query);
@@ -823,7 +854,6 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
             setHideDownloaded(hide);
             setPage(1);
           }}
-          onAutoDownloadChange={handleAutoDownloadChange}
           onRefreshClick={handleRefreshClick}
           onDownloadClick={handleDownloadClick}
           onSelectAll={handleSelectAll}
@@ -831,6 +861,10 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           onDeleteClick={handleDeleteClick}
           onBulkIgnoreClick={handleBulkIgnore}
           onInfoIconClick={(tooltip) => setMobileTooltip(tooltip)}
+          onMaxRatingChange={(value) => {
+            setMaxRating(value);
+            setPage(1);
+          }}
           activeFilterCount={activeFilterCount}
           filtersExpanded={filtersExpanded}
           onFiltersExpandedChange={setFiltersExpanded}
@@ -870,27 +904,13 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           </Box>
         )}
 
-        {/* Pagination - directly under tabs */}
-        {totalPages > 1 && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2, px: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-            <Pagination
-              count={totalPages}
-              page={page}
-              onChange={handlePageChange}
-              color="primary"
-              size={isMobile ? 'small' : 'medium'}
-              siblingCount={isMobile ? 0 : 1}
-            />
-          </Box>
-        )}
-
         {/* Content area */}
-        <Box sx={{ p: 2 }} {...(isMobile ? handlers : {})}>
+        <Box sx={{ p: 2, position: 'relative', minHeight: '100vh' }}>
           {videoFailed && videos.length === 0 && !hasActiveFilters && !searchQuery ? (
             <Alert severity="error">
               Failed to fetch channel videos. Please try again later.
             </Alert>
-          ) : videosLoading ? (
+          ) : videosLoading && videos.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <Typography variant="body1" color="text.secondary" gutterBottom>
                 Loading and fetching/indexing new videos for this channel tab...
@@ -926,9 +946,10 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                       checkedBoxes={checkedBoxes}
                       hoveredVideo={hoveredVideo}
                       selectedForDeletion={selectedForDeletion}
+                      selectionMode={selectionMode}
                       onCheckChange={handleCheckChange}
                       onHoverChange={setHoveredVideo}
-                      onToggleDeletion={toggleDeletionSelection}
+                      onDeletionChange={handleDeletionChange}
                       onToggleIgnore={toggleIgnore}
                       onMobileTooltip={setMobileTooltip}
                     />
@@ -944,8 +965,9 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                       video={video}
                       checkedBoxes={checkedBoxes}
                       selectedForDeletion={selectedForDeletion}
+                      selectionMode={selectionMode}
                       onCheckChange={handleCheckChange}
-                      onToggleDeletion={toggleDeletionSelection}
+                      onDeletionChange={handleDeletionChange}
                       onToggleIgnore={toggleIgnore}
                       onMobileTooltip={setMobileTooltip}
                     />
@@ -958,41 +980,75 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                   videos={paginatedVideos}
                   checkedBoxes={checkedBoxes}
                   selectedForDeletion={selectedForDeletion}
+                  selectionMode={selectionMode}
                   sortBy={sortBy}
                   sortOrder={sortOrder}
                   onCheckChange={handleCheckChange}
                   onSelectAll={handleSelectAll}
                   onClearSelection={handleClearSelection}
                   onSortChange={handleSortChange}
-                  onToggleDeletion={toggleDeletionSelection}
+                  onDeletionChange={handleDeletionChange}
                   onToggleIgnore={toggleIgnore}
                   onMobileTooltip={setMobileTooltip}
                 />
               )}
 
-              {/* Pagination */}
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-                <Pagination
-                  count={totalPages}
-                  page={page}
-                  onChange={handlePageChange}
-                  color="primary"
-                  size={isMobile ? 'small' : 'medium'}
-                  siblingCount={isMobile ? 0 : 1}
-                />
-              </Box>
             </>
+          )}
+
+          {renderSelectionAction()}
+
+          {useInfiniteScroll && (
+            <>
+              {/* Sentinel for infinite scroll - needs height and safe padding to ensure intersection triggers */}
+              <Box
+                ref={loadMoreRef}
+                sx={{
+                  height: 24,
+                  width: '100%',
+                  mt: 4,
+                  mb: 4,
+                }}
+              />
+              {videosLoading && videos.length > 0 && hasNextPage && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                  <Box className="playful-loading-dots" aria-label="Loading more videos">
+                    <span />
+                    <span />
+                    <span />
+                  </Box>
+                </Box>
+              )}
+              {!hasNextPage && videos.length > 0 && (
+                <Typography variant="caption" color="text.secondary" align="center" sx={{ display: 'block', py: 2 }}>
+                  {"You're all caught up."}
+                </Typography>
+              )}
+            </>
+          )}
+
+          {!useInfiniteScroll && totalPages > 1 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+              <Pagination
+                count={totalPages}
+                page={page}
+                color="primary"
+                onChange={(_, value) => {
+                  setPage(value);
+                  if (typeof window !== 'undefined') {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }
+                }}
+                showFirstButton
+                showLastButton
+              />
+            </Box>
           )}
         </Box>
       </Card>
 
-      {/* Mobile components */}
-      {renderFAB()}
-      {renderDrawer()}
-
       {/* Dialogs and Snackbars */}
       <ChannelVideosDialogs
-        channelId={channelId}
         token={token}
         downloadDialogOpen={downloadDialogOpen}
         refreshConfirmOpen={refreshConfirmOpen}
