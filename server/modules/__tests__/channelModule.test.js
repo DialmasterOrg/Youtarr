@@ -1,6 +1,7 @@
 /* eslint-env jest */
 
 const { Op } = require('sequelize');
+const realHttps = require('https');
 
 jest.mock('fs');
 jest.mock('child_process');
@@ -2500,6 +2501,41 @@ describe('ChannelModule', () => {
           autoDownloadEnabledTabs: 'video,short'
         });
       });
+
+      test('should fallback to videos tab when all RSS checks fail', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          available_tabs: null, // Not yet populated
+          auto_download_enabled_tabs: null
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+        Channel.update.mockResolvedValue([1]);
+
+        // Mock fetch to always reject (simulating network timeout/failure)
+        const originalFetch = global.fetch;
+        global.fetch = jest.fn().mockRejectedValue(new Error('Network timeout'));
+
+        try {
+          const result = await ChannelModule.detectAndSaveChannelTabs('UC123');
+
+          // Should fallback to videos tab
+          expect(result).toEqual({
+            availableTabs: ['videos'],
+            autoDownloadEnabledTabs: 'video'
+          });
+
+          // Should save the fallback to the database
+          expect(Channel.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+              available_tabs: 'videos',
+              auto_download_enabled_tabs: 'video'
+            }),
+            expect.anything()
+          );
+        } finally {
+          global.fetch = originalFetch;
+        }
+      });
     });
 
     describe('buildRssFeedUrl', () => {
@@ -2534,7 +2570,7 @@ describe('ChannelModule', () => {
           expect(exists).toBe(true);
           expect(global.fetch).toHaveBeenCalledWith(
             'https://www.youtube.com/feeds/videos.xml?playlist_id=UULF123',
-            { method: 'GET' }
+            expect.objectContaining({ method: 'GET', signal: expect.any(AbortSignal) })
           );
         } finally {
           global.fetch = originalFetch;
@@ -2967,6 +3003,97 @@ describe('ChannelModule', () => {
       await ChannelModule.processChannelThumbnail(channelData, channelId, channelUrl);
 
       expect(ChannelModule.resizeChannelThumbnail).toHaveBeenCalledWith(channelId);
+    });
+  });
+
+  describe('downloadChannelThumbnailFromUrl', () => {
+    let fsExtra;
+    let mockWriteStream;
+    let mockRequest;
+    let mockResponse;
+    let originalGet;
+    let originalCreateWriteStream;
+
+    beforeEach(() => {
+      originalGet = realHttps.get;
+      fsExtra = require('fs-extra');
+      originalCreateWriteStream = fsExtra.createWriteStream;
+
+      mockWriteStream = {
+        on: jest.fn(),
+        close: jest.fn(),
+      };
+      fsExtra.createWriteStream = jest.fn().mockReturnValue(mockWriteStream);
+
+      mockRequest = {
+        on: jest.fn().mockReturnThis(),
+        destroy: jest.fn(),
+      };
+
+      mockResponse = {
+        statusCode: 200,
+        pipe: jest.fn(),
+        headers: {},
+      };
+    });
+
+    afterEach(() => {
+      realHttps.get = originalGet;
+      fsExtra.createWriteStream = originalCreateWriteStream;
+    });
+
+    test('should pass timeout option to protocol.get', async () => {
+      realHttps.get = jest.fn((url, opts, cb) => {
+        cb(mockResponse);
+        const finishCb = mockWriteStream.on.mock.calls.find(c => c[0] === 'finish')[1];
+        finishCb();
+        return mockRequest;
+      });
+
+      await ChannelModule.downloadChannelThumbnailFromUrl('https://example.com/thumb.jpg', 'UC123');
+
+      expect(realHttps.get).toHaveBeenCalledWith(
+        'https://example.com/thumb.jpg',
+        expect.objectContaining({ timeout: 15000 }),
+        expect.any(Function)
+      );
+    });
+
+    test('should reject and clean up partial file on timeout', async () => {
+      fsExtra.existsSync = jest.fn().mockReturnValue(true);
+      fsExtra.unlinkSync = jest.fn();
+
+      realHttps.get = jest.fn(() => {
+        return mockRequest;
+      });
+
+      const promise = ChannelModule.downloadChannelThumbnailFromUrl('https://example.com/thumb.jpg', 'UC123');
+
+      const timeoutHandler = mockRequest.on.mock.calls.find(c => c[0] === 'timeout')[1];
+      timeoutHandler();
+
+      await expect(promise).rejects.toThrow('Thumbnail download timed out');
+      expect(mockRequest.destroy).toHaveBeenCalled();
+      expect(mockWriteStream.close).toHaveBeenCalled();
+      expect(fsExtra.unlinkSync).toHaveBeenCalled();
+    });
+
+    test('should reject on network error and clean up', async () => {
+      fsExtra.existsSync = jest.fn().mockReturnValue(true);
+      fsExtra.unlinkSync = jest.fn();
+
+      realHttps.get = jest.fn(() => {
+        return mockRequest;
+      });
+
+      const promise = ChannelModule.downloadChannelThumbnailFromUrl('https://example.com/thumb.jpg', 'UC123');
+
+      const errorHandler = mockRequest.on.mock.calls.find(c => c[0] === 'error')[1];
+      errorHandler(new Error('ECONNREFUSED'));
+
+      await expect(promise).rejects.toThrow('ECONNREFUSED');
+      expect(mockWriteStream.close).toHaveBeenCalled();
+      expect(fsExtra.unlinkSync).toHaveBeenCalled();
     });
   });
 });
