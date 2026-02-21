@@ -250,8 +250,13 @@ class DownloadExecutor {
    * @throws {Error} If the directory is not writable or the check times out
    */
   async checkOutputDirectoryHealth(outputDir, timeoutMs = 10000) {
+    if (!outputDir) {
+      throw new Error('Output directory path is not configured (directoryPath is undefined)');
+    }
+
     const fsPromises = require('fs').promises;
-    const testFile = path.join(outputDir, `.youtarr_healthcheck_${Date.now()}`);
+    const crypto = require('crypto');
+    const testFile = path.join(outputDir, `.youtarr_healthcheck_${crypto.randomUUID()}`);
 
     let timer;
     const timeoutPromise = new Promise((_, reject) => {
@@ -260,16 +265,23 @@ class DownloadExecutor {
       )), timeoutMs);
     });
 
+    let fileWritten = false;
     try {
       await Promise.race([
         (async () => {
           await fsPromises.writeFile(testFile, 'healthcheck');
+          fileWritten = true;
           await fsPromises.unlink(testFile);
         })(),
         timeoutPromise
       ]);
     } finally {
       clearTimeout(timer);
+      // Best-effort cleanup if the file was written but unlink didn't complete
+      // (e.g. timeout fired between writeFile and unlink)
+      if (fileWritten) {
+        fsPromises.unlink(testFile).catch(() => {});
+      }
     }
   }
 
@@ -947,6 +959,14 @@ class DownloadExecutor {
           const archiveModule = require('../archiveModule');
           for (const failedVideo of failedVideosList) {
             if (failedVideo.youtubeId) {
+              // Only remove from archive if the video was explicitly marked as failed during download.
+              // Videos classified as "failed" solely because stat/waitForFile couldn't confirm the file
+              // (e.g. NFS lag) may actually exist on disk — removing them would cause spurious re-downloads.
+              const wasExplicitlyFailed = failedVideos.has(failedVideo.youtubeId);
+              if (!wasExplicitlyFailed) {
+                logger.info({ youtubeId: failedVideo.youtubeId }, 'Skipping archive removal — video was not explicitly failed (file may exist but stat failed)');
+                continue;
+              }
               const removed = await archiveModule.removeVideoFromArchive(failedVideo.youtubeId);
               if (removed) {
                 logger.info({ youtubeId: failedVideo.youtubeId }, 'Removed failed video from archive for retry on next run');

@@ -32,26 +32,19 @@ async function ensureDir(dirPath) {
  * @throws {Error} If all retries fail
  */
 async function ensureDirWithRetries(dirPath, { retries = 5, delayMs = 200 } = {}) {
-  let attempt = 0;
-  let lastError;
-
-  while (attempt <= retries) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       await fs.ensureDir(dirPath);
       return;
     } catch (err) {
-      lastError = err;
       if (attempt === retries) {
         throw err;
       }
       const backoff = delayMs * Math.pow(2, attempt);
       logger.debug({ dirPath, attempt, backoff }, 'ensureDir failed, retrying after backoff');
       await sleep(backoff);
-      attempt += 1;
     }
   }
-
-  throw lastError;
 }
 
 /**

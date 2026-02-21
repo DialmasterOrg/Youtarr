@@ -30,26 +30,19 @@ function sleep(ms) {
  * @throws {Error} If all retries fail
  */
 async function moveWithRetries(src, dest, { retries = 5, delayMs = 200, overwrite = true } = {}) {
-  let attempt = 0;
-  let lastError;
-
-  while (attempt <= retries) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       await fs.move(src, dest, { overwrite });
       return;
     } catch (err) {
-      lastError = err;
       if (attempt === retries) {
         throw err;
       }
       const backoff = delayMs * Math.pow(2, attempt);
       logger.debug({ src, dest, attempt, backoff }, 'Move failed, retrying after backoff');
       await sleep(backoff);
-      attempt += 1;
     }
   }
-
-  throw lastError;
 }
 
 /**
