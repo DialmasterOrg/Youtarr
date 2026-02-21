@@ -480,6 +480,26 @@ describe('DownloadExecutor', () => {
 
       jest.useRealTimers();
     });
+
+    it('should throw a clear error when outputDir is undefined', async () => {
+      await expect(executor.checkOutputDirectoryHealth(undefined)).rejects.toThrow(
+        'Output directory path is not configured'
+      );
+    });
+
+    it('should attempt cleanup if writeFile succeeds but unlink fails', async () => {
+      mockFsPromises.writeFile.mockResolvedValue();
+      const unlinkError = new Error('NFS stale handle');
+      // First call (inside the health check) rejects, second call (cleanup in finally) resolves
+      mockFsPromises.unlink
+        .mockRejectedValueOnce(unlinkError)
+        .mockResolvedValueOnce();
+
+      await expect(executor.checkOutputDirectoryHealth('/mock/output')).rejects.toThrow('NFS stale handle');
+
+      // unlink should have been called twice: once in the main flow, once in the finally cleanup
+      expect(mockFsPromises.unlink).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('doDownload', () => {
@@ -1374,10 +1394,10 @@ describe('DownloadExecutor', () => {
       );
     });
 
-    it('should remove failed videos from archive when allowRedownload is false', async () => {
+    it('should not remove videos from archive when failure was only detected by missing file size (stat failure)', async () => {
       VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
         { youtubeId: 'success1', filePath: '/output/video1.mp4', fileSize: '1024', youTubeVideoName: 'Good', youTubeChannelName: 'Channel' },
-        { youtubeId: 'failed1', filePath: '/output/video2.mp4', fileSize: null, youTubeVideoName: 'Bad', youTubeChannelName: 'Channel' }
+        { youtubeId: 'statfail1', filePath: '/output/video2.mp4', fileSize: null, youTubeVideoName: 'Maybe OK', youTubeChannelName: 'Channel' }
       ]);
       archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/success1']);
 
@@ -1385,10 +1405,31 @@ describe('DownloadExecutor', () => {
         mockProcess.emit('exit', 0, null);
       }, 10);
 
-      // allowRedownload = false (default)
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
 
-      // Should remove the failed video from archive so it can be retried
+      // Should NOT remove from archive — the video was not explicitly failed,
+      // only missing file size (e.g. NFS stat timeout). Removing would cause spurious re-downloads.
+      expect(archiveModule.removeVideoFromArchive).not.toHaveBeenCalledWith('statfail1');
+      expect(archiveModule.removeVideoFromArchive).not.toHaveBeenCalledWith('success1');
+    });
+
+    it('should remove explicitly failed videos from archive when allowRedownload is false', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        { youtubeId: 'success1', filePath: '/output/video1.mp4', fileSize: '1024', youTubeVideoName: 'Good', youTubeChannelName: 'Channel' },
+        { youtubeId: 'failed1', filePath: '/output/video2.mp4', fileSize: null, youTubeVideoName: 'Bad', youTubeChannelName: 'Channel' }
+      ]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/success1']);
+
+      setTimeout(() => {
+        // Simulate yt-dlp explicitly reporting an error for failed1
+        mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=failed1\n');
+        mockProcess.stdout.emit('data', 'ERROR: Failed to download\n');
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Should remove the explicitly failed video from archive so it can be retried
       expect(archiveModule.removeVideoFromArchive).toHaveBeenCalledWith('failed1');
       // Should NOT remove the successful video
       expect(archiveModule.removeVideoFromArchive).not.toHaveBeenCalledWith('success1');
