@@ -240,6 +240,40 @@ class DownloadExecutor {
   }
 
   /**
+   * Verify the output directory is writable before starting a download.
+   * Catches stale NFS mounts and permission issues early, before yt-dlp
+   * downloads to temp and contaminates the archive with un-movable entries.
+   *
+   * @param {string} outputDir - The output directory path to check
+   * @param {number} timeoutMs - Maximum time to wait (default: 10s, for hung NFS)
+   * @returns {Promise<void>}
+   * @throws {Error} If the directory is not writable or the check times out
+   */
+  async checkOutputDirectoryHealth(outputDir, timeoutMs = 10000) {
+    const fsPromises = require('fs').promises;
+    const testFile = path.join(outputDir, `.youtarr_healthcheck_${Date.now()}`);
+
+    let timer;
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(
+        `Output directory health check timed out after ${timeoutMs / 1000}s — the filesystem may be unresponsive (stale NFS mount?)`
+      )), timeoutMs);
+    });
+
+    try {
+      await Promise.race([
+        (async () => {
+          await fsPromises.writeFile(testFile, 'healthcheck');
+          await fsPromises.unlink(testFile);
+        })(),
+        timeoutPromise
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
    * Determine if a message should bypass throttling and be sent immediately
    * Important messages include state changes, errors, warnings, and completion events
    * @param {string} line - The raw line from yt-dlp
@@ -404,6 +438,42 @@ class DownloadExecutor {
     } catch (error) {
       logger.error({ err: error }, 'Error cleaning temp directory before job start');
       // Continue anyway - don't fail the job just because cleanup failed
+    }
+
+    // Pre-flight health check: verify output directory is writable before downloading.
+    // Catches stale NFS mounts early, before yt-dlp downloads to temp and adds to archive.
+    try {
+      await this.checkOutputDirectoryHealth(configModule.directoryPath);
+    } catch (error) {
+      const errorMsg = `Output directory is not accessible: ${error.message}`;
+      logger.error({ err: error, outputDir: configModule.directoryPath }, errorMsg);
+
+      await jobModule.updateJob(jobId, {
+        status: 'Error',
+        endDate: Date.now(),
+        output: errorMsg,
+        notes: 'The output directory could not be written to. If using NFS, check that the mount is healthy (not stale). See Youtarr docs for NFS mount recommendations.',
+      });
+
+      MessageEmitter.emitMessage(
+        'broadcast',
+        null,
+        'download',
+        'downloadProgress',
+        {
+          text: errorMsg,
+          progress: monitor.snapshot('error'),
+          error: true
+        }
+      );
+
+      if (!skipJobTransition) {
+        jobModule.startNextJob().catch(err => {
+          logger.error({ err }, 'Failed to start next job');
+        });
+      }
+
+      return;
     }
 
     return new Promise((resolve, reject) => {
@@ -867,6 +937,23 @@ class DownloadExecutor {
 
         // Use successful videos for further processing (archive, database, etc.)
         videoData = successfulVideos;
+
+        // Remove failed videos from the yt-dlp archive so they can be retried on the next run.
+        // yt-dlp writes to the archive BEFORE calling --exec (the post-processor), so when
+        // the post-processor fails (e.g. EACCES on NFS move), the video is stuck as archived
+        // but never actually made it to the final location. Without this cleanup, the video
+        // would be permanently skipped with "already been recorded in the archive".
+        if (!allowRedownload && failedVideosList.length > 0) {
+          const archiveModule = require('../archiveModule');
+          for (const failedVideo of failedVideosList) {
+            if (failedVideo.youtubeId) {
+              const removed = await archiveModule.removeVideoFromArchive(failedVideo.youtubeId);
+              if (removed) {
+                logger.info({ youtubeId: failedVideo.youtubeId }, 'Removed failed video from archive for retry on next run');
+              }
+            }
+          }
+        }
 
         // If allowRedownload is true, we need to manually update the archive since yt-dlp won't
         if (allowRedownload && videoData.length > 0) {

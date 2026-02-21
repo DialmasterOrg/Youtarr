@@ -15,7 +15,8 @@ const mockFsPromises = {
   stat: jest.fn(),
   unlink: jest.fn(),
   rm: jest.fn(),
-  rmdir: jest.fn()
+  rmdir: jest.fn(),
+  writeFile: jest.fn(),
 };
 jest.mock('fs', () => {
   const mockActualFs = jest.requireActual('fs');
@@ -31,7 +32,8 @@ jest.mock('../../../logger');
 
 // Mock dependencies
 jest.mock('../../configModule', () => ({
-  getConfig: jest.fn()
+  getConfig: jest.fn(),
+  directoryPath: '/mock/output'
 }));
 
 jest.mock('../../plexModule', () => ({
@@ -52,7 +54,8 @@ jest.mock('../../messageEmitter', () => ({
 jest.mock('../../archiveModule', () => ({
   readCompleteListLines: jest.fn().mockReturnValue([]),
   getNewVideoUrlsSince: jest.fn().mockReturnValue([]),
-  addVideoToArchive: jest.fn().mockResolvedValue()
+  addVideoToArchive: jest.fn().mockResolvedValue(),
+  removeVideoFromArchive: jest.fn().mockResolvedValue(true)
 }));
 
 jest.mock('../../notificationModule', () => ({
@@ -152,6 +155,10 @@ describe('DownloadExecutor', () => {
 
     // Setup VideoMetadataProcessor mock
     VideoMetadataProcessor.processVideoMetadata = jest.fn().mockResolvedValue([]);
+
+    // Setup health check mocks (succeed by default so existing tests pass)
+    mockFsPromises.writeFile.mockResolvedValue();
+    mockFsPromises.unlink.mockResolvedValue();
 
     // Setup tempPathManager mock
     tempPathManager.cleanTempDirectory = jest.fn().mockResolvedValue();
@@ -434,6 +441,47 @@ describe('DownloadExecutor', () => {
     });
   });
 
+  describe('checkOutputDirectoryHealth', () => {
+    it('should succeed when output directory is writable', async () => {
+      mockFsPromises.writeFile.mockResolvedValue();
+      mockFsPromises.unlink.mockResolvedValue();
+
+      await expect(executor.checkOutputDirectoryHealth('/mock/output')).resolves.toBeUndefined();
+
+      expect(mockFsPromises.writeFile).toHaveBeenCalledWith(
+        expect.stringContaining('/mock/output/.youtarr_healthcheck_'),
+        'healthcheck'
+      );
+      expect(mockFsPromises.unlink).toHaveBeenCalledWith(
+        expect.stringContaining('/mock/output/.youtarr_healthcheck_')
+      );
+    });
+
+    it('should throw when output directory returns EACCES', async () => {
+      const error = new Error('EACCES: permission denied');
+      error.code = 'EACCES';
+      mockFsPromises.writeFile.mockRejectedValue(error);
+
+      await expect(executor.checkOutputDirectoryHealth('/mock/output')).rejects.toThrow('EACCES');
+    });
+
+    it('should throw on timeout for unresponsive filesystem', async () => {
+      jest.useFakeTimers();
+
+      // Simulate a hung NFS mount — writeFile never resolves
+      mockFsPromises.writeFile.mockReturnValue(new Promise(() => {}));
+
+      const healthPromise = executor.checkOutputDirectoryHealth('/mock/output', 5000);
+
+      // Advance past the timeout
+      jest.advanceTimersByTime(5000);
+
+      await expect(healthPromise).rejects.toThrow('timed out');
+
+      jest.useRealTimers();
+    });
+  });
+
   describe('doDownload', () => {
     const mockArgs = ['--format', 'best', 'https://youtube.com/watch?v=test'];
     const mockJobId = 'job-123';
@@ -462,6 +510,67 @@ describe('DownloadExecutor', () => {
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
 
       expect(tempPathManager.cleanTempDirectory).toHaveBeenCalled();
+    });
+
+    it('should fail job early when output directory health check fails', async () => {
+      const error = new Error('EACCES: permission denied');
+      error.code = 'EACCES';
+      mockFsPromises.writeFile.mockRejectedValue(error);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Should NOT have spawned yt-dlp
+      expect(mockSpawn).not.toHaveBeenCalled();
+
+      // Should update job as Error
+      expect(jobModule.updateJob).toHaveBeenCalledWith(
+        mockJobId,
+        expect.objectContaining({
+          status: 'Error',
+          output: expect.stringContaining('Output directory is not accessible'),
+        })
+      );
+
+      // Should emit error via WebSocket
+      expect(MessageEmitter.emitMessage).toHaveBeenCalledWith(
+        'broadcast',
+        null,
+        'download',
+        'downloadProgress',
+        expect.objectContaining({
+          error: true,
+          text: expect.stringContaining('Output directory is not accessible'),
+        })
+      );
+
+      // Should start next job
+      expect(jobModule.startNextJob).toHaveBeenCalled();
+    });
+
+    it('should not start next job on health check failure when skipJobTransition is true', async () => {
+      const error = new Error('EACCES: permission denied');
+      error.code = 'EACCES';
+      mockFsPromises.writeFile.mockRejectedValue(error);
+
+      // skipJobTransition is 7th argument
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true);
+
+      expect(mockSpawn).not.toHaveBeenCalled();
+      expect(jobModule.startNextJob).not.toHaveBeenCalled();
+    });
+
+    it('should proceed normally when output directory health check passes', async () => {
+      mockFsPromises.writeFile.mockResolvedValue();
+      mockFsPromises.unlink.mockResolvedValue();
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Should have spawned yt-dlp
+      expect(mockSpawn).toHaveBeenCalled();
     });
 
     it('should emit initial progress message', async () => {
@@ -1263,6 +1372,62 @@ describe('DownloadExecutor', () => {
         { currentVideoId: 'second', url: 'https://youtube.com/watch?v=second' },
         'Tracking video extraction'
       );
+    });
+
+    it('should remove failed videos from archive when allowRedownload is false', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        { youtubeId: 'success1', filePath: '/output/video1.mp4', fileSize: '1024', youTubeVideoName: 'Good', youTubeChannelName: 'Channel' },
+        { youtubeId: 'failed1', filePath: '/output/video2.mp4', fileSize: null, youTubeVideoName: 'Bad', youTubeChannelName: 'Channel' }
+      ]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/success1']);
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      // allowRedownload = false (default)
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Should remove the failed video from archive so it can be retried
+      expect(archiveModule.removeVideoFromArchive).toHaveBeenCalledWith('failed1');
+      // Should NOT remove the successful video
+      expect(archiveModule.removeVideoFromArchive).not.toHaveBeenCalledWith('success1');
+    });
+
+    it('should not remove failed videos from archive when allowRedownload is true', async () => {
+      const fs = require('fs');
+      fs.existsSync.mockReturnValue(true);
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        { youtubeId: 'success1', filePath: '/output/video1.mp4', fileSize: '1024', youTubeVideoName: 'Good', youTubeChannelName: 'Channel' },
+        { youtubeId: 'failed1', filePath: '/output/video2.mp4', fileSize: null, youTubeVideoName: 'Bad', youTubeChannelName: 'Channel' }
+      ]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue(['https://youtu.be/success1']);
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      // allowRedownload = true (6th argument)
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, true);
+
+      // Should NOT remove from archive when allowRedownload is true
+      expect(archiveModule.removeVideoFromArchive).not.toHaveBeenCalled();
+    });
+
+    it('should remove failed videos from archive that have no metadata', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([]);
+      archiveModule.getNewVideoUrlsSince.mockReturnValue([]);
+
+      setTimeout(() => {
+        mockProcess.stdout.emit('data', '[youtube] Extracting URL: https://youtube.com/watch?v=nodata123\n');
+        mockProcess.stdout.emit('data', 'ERROR: This video is not available\n');
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      // Should remove from archive even if no metadata was available
+      expect(archiveModule.removeVideoFromArchive).toHaveBeenCalledWith('nodata123');
     });
   });
 

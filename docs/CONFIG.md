@@ -423,6 +423,43 @@ The old `discordWebhookUrl` and `notificationService` fields are automatically r
 - **Description**: External temporary directory for downloads when `useTmpForDownloads` is `true`
 - **Note**: Only used when `useTmpForDownloads` is enabled. Internal path in Youtarr container.
 
+### NFS Output Directory Considerations
+
+If your output directory (`YOUTUBE_OUTPUT_DIR`) is on an NFS mount, be aware of the following:
+
+**When `useTmpForDownloads: true`:** Downloads are staged on a different filesystem from the output directory. The move from temp to output is a cross-filesystem copy+delete, which is vulnerable to NFS stale mount errors. If the NFS mount goes stale, downloads succeed to the temp dir but fail during the move phase. Critically, yt-dlp marks the video as "downloaded" in its archive *before* the move, so the video becomes permanently stuck — it won't be retried on the next scheduled run because yt-dlp thinks it already succeeded.
+
+**Recommended NFS mount options:** If using NFS, mount with options that prevent stale file handles:
+```
+server:/export /mnt/nfs-output nfs hard,intr,actimeo=3,timeo=300,retrans=5 0 0
+```
+- `hard` — retries NFS operations indefinitely instead of failing immediately
+- `intr` — allows signals to interrupt hung NFS operations
+- `actimeo=3` — refreshes NFS attribute cache every 3 seconds (default 60s can cause stale metadata)
+- `timeo=300,retrans=5` — longer timeouts before declaring failure
+
+**Docker native NFS volumes (recommended):** Instead of bind-mounting a host NFS directory, let Docker mount NFS directly. This is more resilient because Docker manages the NFS connection rather than inheriting a potentially-stale host mount:
+
+```yaml
+services:
+  youtarr:
+    volumes:
+      - youtube-data:/usr/src/app/data        # named NFS volume
+      - ./server/images:/app/server/images
+      - ./config:/app/config
+      - ./jobs:/app/jobs
+
+volumes:
+  youtube-data:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=YOUR_NFS_SERVER_IP,hard,intr,nfsvers=4,actimeo=3
+      device: ":/path/to/your/nfs/export"
+```
+
+**Simplest workaround:** Set `useTmpForDownloads: false` (the default). Downloads are staged inside the output directory itself, so the move is a same-filesystem rename — atomic and immune to this class of error. Note: if the NFS mount is stale, downloads will still fail, but they will fail *before* yt-dlp marks them as archived — so they'll be automatically retried on the next scheduled run rather than getting permanently stuck.
+
 ## Auto-Removal Settings
 
 ### Enable Auto-Removal

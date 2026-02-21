@@ -9,7 +9,7 @@ const tempPathManager = require('./download/tempPathManager');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const { JobVideoDownload } = require('../models');
 const logger = require('../logger');
-const { buildChannelPath, cleanupEmptyParents } = require('./filesystem');
+const { buildChannelPath, cleanupEmptyParents, moveWithRetries, ensureDirWithRetries } = require('./filesystem');
 
 const activeJobId = process.env.YOUTARR_JOB_ID;
 
@@ -492,8 +492,8 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       logger.info({ from: videoDirectory, to: targetVideoDirectory }, '[Post-Process] Moving video directory');
 
       try {
-        // Ensure parent channel directory exists
-        await fs.ensureDir(targetChannelFolderForMove);
+        // Ensure parent channel directory exists (with retries for NFS/cross-filesystem transient errors)
+        await ensureDirWithRetries(targetChannelFolderForMove, { retries: 5, delayMs: 500 });
 
         // Clean up yt-dlp intermediate files before moving
         // In video_mp3 mode with --extract-audio --keep-video, yt-dlp doesn't always
@@ -528,8 +528,8 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
           await fs.remove(targetVideoDirectory);
         }
 
-        // Move the entire video directory from temp to final location (atomic move)
-        await fs.move(videoDirectory, targetVideoDirectory);
+        // Move the entire video directory from temp to final location (with retries for NFS/cross-filesystem transient errors)
+        await moveWithRetries(videoDirectory, targetVideoDirectory, { retries: 5, delayMs: 500 });
 
         // Update paths to reflect final locations
         finalVideoPath = path.join(targetVideoDirectory, videoFileName);
@@ -548,8 +548,32 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
         }
 
       } catch (error) {
-        logger.error({ error, videoDirectory }, '[Post-Process] ERROR during move operation');
+        logger.error({
+          error: error.message,
+          code: error.code,
+          syscall: error.syscall,
+          src: videoDirectory,
+          dest: targetVideoDirectory
+        }, '[Post-Process] ERROR during move operation (all retries exhausted)');
         logger.error({ videoDirectory }, '[Post-Process] Files remain in temp location');
+        // Log filesystem diagnostics to help debug NFS/permission issues
+        // Use async stat with timeout to avoid hanging on stale NFS mounts
+        try {
+          const parentDir = path.dirname(targetVideoDirectory);
+          const statPromise = require('fs').promises.stat(parentDir);
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('stat timed out')), 5000)
+          );
+          const parentStats = await Promise.race([statPromise, timeoutPromise]);
+          logger.error({
+            parentDir,
+            mode: parentStats.mode.toString(8),
+            uid: parentStats.uid,
+            gid: parentStats.gid
+          }, '[Post-Process] Target parent directory permissions');
+        } catch (diagErr) {
+          logger.error({ diagErr: diagErr.message }, '[Post-Process] Could not read target parent directory stats');
+        }
         process.exit(1);
       }
     }
