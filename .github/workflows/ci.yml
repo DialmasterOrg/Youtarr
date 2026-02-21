@@ -178,12 +178,42 @@ jobs:
             client/coverage/coverage-summary.json
             client/coverage/lcov.info
 
+  test-storybook:
+    name: Storybook Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install client dependencies
+        run: |
+          cd client
+          npm ci
+
+      - name: Build Storybook for validation
+        run: cd client && npm run build-storybook
+
+      - name: Run Jest story validation tests
+        run: cd client && npm test -- src/tests/storybook_coverage.test.js --passWithNoTests
+        env:
+          CI: true
+
   # This job is required for branch protection rules
   # It will only succeed if all tests and linting pass
   check-all:
     name: All Checks
     runs-on: ubuntu-latest
-    needs: [lint, test-backend, test-frontend]
+    needs: [lint, test-backend, test-frontend, test-storybook]
     if: always()
     steps:
       - name: Check all results
@@ -192,10 +222,12 @@ jobs:
           echo "Lint: ${{ needs.lint.result }}"
           echo "Backend Tests: ${{ needs.test-backend.result }}"
           echo "Frontend Tests: ${{ needs.test-frontend.result }}"
+          echo "Storybook Tests: ${{ needs.test-storybook.result }}"
 
           if [ "${{ needs.lint.result }}" != "success" ] || \
              [ "${{ needs.test-backend.result }}" != "success" ] || \
-             [ "${{ needs.test-frontend.result }}" != "success" ]; then
+             [ "${{ needs.test-frontend.result }}" != "success" ] || \
+             [ "${{ needs.test-storybook.result }}" != "success" ]; then
             echo ""
             echo "❌ One or more checks failed!"
             echo ""
@@ -203,6 +235,7 @@ jobs:
             [ "${{ needs.lint.result }}" != "success" ] && echo "  - Linting"
             [ "${{ needs.test-backend.result }}" != "success" ] && echo "  - Backend Tests"
             [ "${{ needs.test-frontend.result }}" != "success" ] && echo "  - Frontend Tests"
+            [ "${{ needs.test-storybook.result }}" != "success" ] && echo "  - Storybook Tests"
             exit 1
           fi
 
