@@ -8,6 +8,7 @@ const fsPromises = require('fs').promises;
 const path = require('path');
 const logger = require('../../logger');
 const { YOUTUBE_ID_PATTERN, SUBFOLDER_PREFIX, MAIN_VIDEO_FILE_PATTERN, FRAGMENT_FILE_PATTERN } = require('./constants');
+const { sleep } = require('./fileOperations');
 
 /**
  * Ensure a directory exists, creating it if necessary
@@ -17,6 +18,33 @@ const { YOUTUBE_ID_PATTERN, SUBFOLDER_PREFIX, MAIN_VIDEO_FILE_PATTERN, FRAGMENT_
  */
 async function ensureDir(dirPath) {
   await fs.ensureDir(dirPath);
+}
+
+/**
+ * Ensure a directory exists with exponential backoff retries
+ * Handles transient filesystem errors (EACCES on NFS stale handles, etc.)
+ *
+ * @param {string} dirPath - Directory path to ensure
+ * @param {Object} options - Options
+ * @param {number} options.retries - Number of retry attempts (default: 5)
+ * @param {number} options.delayMs - Base delay in milliseconds (default: 200)
+ * @returns {Promise<void>}
+ * @throws {Error} If all retries fail
+ */
+async function ensureDirWithRetries(dirPath, { retries = 5, delayMs = 200 } = {}) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      await fs.ensureDir(dirPath);
+      return;
+    } catch (err) {
+      if (attempt === retries) {
+        throw err;
+      }
+      const backoff = delayMs * Math.pow(2, attempt);
+      logger.debug({ dirPath, attempt, backoff }, 'ensureDir failed, retrying after backoff');
+      await sleep(backoff);
+    }
+  }
 }
 
 /**
@@ -273,6 +301,7 @@ function isMainVideoFile(filePath) {
 module.exports = {
   ensureDir,
   ensureDirSync,
+  ensureDirWithRetries,
   isDirectoryEmpty,
   removeIfEmpty,
   isVideoDirectory,
