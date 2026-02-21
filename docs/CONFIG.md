@@ -406,6 +406,7 @@ The old `discordWebhookUrl` and `notificationService` fields are automatically r
 - **Default**: `""` (empty)
 - **Description**: HTTP/HTTPS proxy for downloads
 - **Format**: `"http://proxy:port"` or `"socks5://proxy:port"`
+- **Note**: The proxy is used by yt-dlp for all YouTube requests (downloads, metadata, thumbnails). Some operations like thumbnail downloads and RSS feed checks first attempt a direct HTTP request with a 15-second timeout before falling back to yt-dlp. SOCKS5 proxy users may notice brief delays (~15 seconds) during these fallbacks when adding or refreshing channels, but the operations will complete successfully via yt-dlp.
 
 ### Use External Temporary Directory
 - **Config Key**: `useTmpForDownloads`

@@ -641,7 +641,7 @@ class ChannelModule {
       const protocol = thumbnailUrl.startsWith('https') ? https : http;
       const file = fs.createWriteStream(imagePath);
 
-      protocol.get(thumbnailUrl, (response) => {
+      const req = protocol.get(thumbnailUrl, { timeout: 15000 }, (response) => {
         // Handle redirects
         if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
           file.close();
@@ -663,7 +663,18 @@ class ChannelModule {
           logger.debug({ channelId, imagePath }, 'Channel thumbnail downloaded via HTTP');
           resolve();
         });
-      }).on('error', (err) => {
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        file.close();
+        if (fs.existsSync(imagePath)) {
+          fs.unlinkSync(imagePath);
+        }
+        reject(new Error('Thumbnail download timed out'));
+      });
+
+      req.on('error', (err) => {
         file.close();
         if (fs.existsSync(imagePath)) {
           fs.unlinkSync(imagePath);
