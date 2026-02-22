@@ -8,7 +8,7 @@
  *   cd client && npx msw init public/ --save
  */
 import { http, HttpResponse } from 'msw';
-import { DEFAULT_CONFIG } from '../src/config/configSchema';
+import { DEFAULT_CONFIG } from '../../src/config/configSchema';
 
 export const defaultMswHandlers = [
   http.get('/getconfig', () =>
