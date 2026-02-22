@@ -1413,14 +1413,15 @@ describe('ChannelSettingsDialog', () => {
       await user.click(saveButton);
 
       // Verify the PUT call includes skip_video_folder: true
+      let putCall: any[];
       await waitFor(() => {
-        const putCall = mockFetch.mock.calls.find(
+        putCall = mockFetch.mock.calls.find(
           (call: any[]) => call[0] === '/api/channels/channel123/settings' && call[1]?.method === 'PUT'
         );
         expect(putCall).toBeDefined();
-        const body = JSON.parse(putCall![1].body);
-        expect(body.skip_video_folder).toBe(true);
       });
+      const body = JSON.parse(putCall![1].body);
+      expect(body.skip_video_folder).toBe(true);
     });
 
     test('loads skip_video_folder true from server and shows toggle checked', async () => {
