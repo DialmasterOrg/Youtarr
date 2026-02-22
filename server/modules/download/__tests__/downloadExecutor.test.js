@@ -299,7 +299,7 @@ describe('DownloadExecutor', () => {
       expect(mockVideoDownload.destroy).toHaveBeenCalled();
     });
 
-    it('should skip non-video directories', async () => {
+    it('should clean up individual files in flat mode (non-video directories)', async () => {
       const mockVideoDownload = {
         youtube_id: 'abc123XYZ_d',
         file_path: '/output/Channel',
@@ -308,15 +308,32 @@ describe('DownloadExecutor', () => {
 
       JobVideoDownload.findAll.mockResolvedValue([mockVideoDownload]);
       mockFsPromises.access.mockResolvedValue(); // Directory exists
-      // Mock filesystem.isVideoDirectory to return false for this path
+      // Mock filesystem.isVideoDirectory to return false (flat mode)
       filesystem.isVideoDirectory.mockReturnValue(false);
+      // Mock directory contents with matching files
+      mockFsPromises.readdir.mockResolvedValue([
+        'Channel - Title [abc123XYZ_d].mp4',
+        'Channel - Title [abc123XYZ_d].jpg',
+        'other-video.mp4'
+      ]);
+      mockFsPromises.stat.mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+      mockFsPromises.unlink.mockResolvedValue();
 
       await executor.cleanupInProgressVideos('job-123');
 
-      expect(logger.info).toHaveBeenCalledWith({ dirPath: '/output/Channel' }, 'Skipping non-video directory');
+      expect(logger.info).toHaveBeenCalledWith(
+        { youtubeId: 'abc123XYZ_d', dirPath: '/output/Channel' },
+        'Flat structure detected, cleaning up individual files'
+      );
+      // Should NOT remove the directory itself
       expect(mockFsPromises.rmdir).not.toHaveBeenCalled();
-      // Should still destroy the entry since cleanup was attempted
-      expect(mockVideoDownload.destroy).not.toHaveBeenCalled();
+      // Should delete files matching the youtube ID
+      expect(mockFsPromises.unlink).toHaveBeenCalledWith('/output/Channel/Channel - Title [abc123XYZ_d].mp4');
+      expect(mockFsPromises.unlink).toHaveBeenCalledWith('/output/Channel/Channel - Title [abc123XYZ_d].jpg');
+      // Should NOT delete unrelated files
+      expect(mockFsPromises.unlink).not.toHaveBeenCalledWith('/output/Channel/other-video.mp4');
+      // Should destroy the tracking entry
+      expect(mockVideoDownload.destroy).toHaveBeenCalled();
     });
 
     it('should check temp location when file path is final path', async () => {

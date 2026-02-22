@@ -2,9 +2,25 @@ const { Video } = require('../models');
 const fs = require('fs').promises;
 const path = require('path');
 const logger = require('../logger');
+const { isVideoDirectory } = require('./filesystem');
 
 class VideoDeletionModule {
   constructor() {}
+
+  /**
+   * Determine if a video's file path indicates flat structure (no video subfolder)
+   * In nested mode, the parent directory name ends with " - <youtubeId>"
+   * In flat mode, the video file sits directly in the channel folder
+   * @param {string} filePath - Full path to the video file
+   * @param {string} youtubeId - YouTube video ID
+   * @returns {boolean} - True if flat structure
+   */
+  isFlat(filePath) {
+    const parentDir = path.dirname(filePath);
+    // If the parent directory looks like a video directory (ends with " - youtubeId"),
+    // then this is nested mode. Otherwise, it's flat mode.
+    return !isVideoDirectory(parentDir);
+  }
 
   /**
    * Prepare minimal video metadata for dry-run responses
@@ -62,31 +78,53 @@ class VideoDeletionModule {
       }
 
       // Get the video directory path
-      // filePath format: /path/to/channel/channel - title - id/video.mp4
-      // We need to delete the parent directory (channel - title - id)
+      // Nested: filePath = /path/to/channel/channel - title - id/video.mp4
+      // Flat:   filePath = /path/to/channel/video.mp4
       const videoDirectory = path.dirname(video.filePath);
+      const flat = this.isFlat(video.filePath);
 
-      // Safety check: ensure the directory path contains the youtube ID
-      // This prevents accidentally deleting the wrong directory
-      if (!videoDirectory.includes(video.youtubeId)) {
-        logger.error({ videoId, videoDirectory, youtubeId: video.youtubeId }, 'Safety check failed: directory path doesn\'t contain youtube ID');
+      // Safety check: ensure the path contains the youtube ID
+      // This prevents accidentally deleting the wrong files
+      if (!video.filePath.includes(video.youtubeId)) {
+        logger.error({ videoId, filePath: video.filePath, youtubeId: video.youtubeId }, 'Safety check failed: file path doesn\'t contain youtube ID');
         return {
           success: false,
           videoId,
-          error: 'Safety check failed: invalid directory path'
+          error: 'Safety check failed: invalid file path'
         };
       }
 
-      // Delete the video directory
+      // Delete the video files
       try {
-        await fs.rm(videoDirectory, { recursive: true, force: true });
-        logger.info({ videoId, videoDirectory }, 'Deleted video directory');
+        if (flat) {
+          // Flat structure: delete only files matching this video's youtube ID
+          // NEVER delete the directory itself (it's the channel folder containing other videos)
+          logger.info({ videoId, videoDirectory, youtubeId: video.youtubeId }, 'Flat structure detected, deleting individual files');
+          const files = await fs.readdir(videoDirectory);
+          for (const file of files) {
+            if (file.includes(`[${video.youtubeId}]`) || file.includes(` - ${video.youtubeId}`)) {
+              const fullPath = path.join(videoDirectory, file);
+              try {
+                await fs.unlink(fullPath);
+                logger.info({ videoId, file }, 'Deleted video file (flat mode)');
+              } catch (unlinkErr) {
+                if (unlinkErr.code !== 'ENOENT') {
+                  logger.error({ videoId, file, err: unlinkErr }, 'Failed to delete file (flat mode)');
+                }
+              }
+            }
+          }
+        } else {
+          // Nested structure: delete the entire video directory
+          await fs.rm(videoDirectory, { recursive: true, force: true });
+          logger.info({ videoId, videoDirectory }, 'Deleted video directory');
+        }
       } catch (fsError) {
         if (fsError.code === 'ENOENT') {
-          // Directory already gone; treat as success but still mark removed in DB
-          logger.info({ videoId, videoDirectory, error: fsError.message }, 'Directory already removed');
+          // Directory/files already gone; treat as success but still mark removed in DB
+          logger.info({ videoId, videoDirectory, error: fsError.message }, 'Files already removed');
         } else {
-          logger.error({ videoId, videoDirectory, err: fsError }, 'Failed to delete directory');
+          logger.error({ videoId, videoDirectory, err: fsError }, 'Failed to delete video files');
           return {
             success: false,
             videoId,

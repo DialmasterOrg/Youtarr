@@ -81,7 +81,8 @@ Add a single YouTube video to the download queue.
 {
   "url": "https://www.youtube.com/watch?v=VIDEO_ID",
   "resolution": "1080",
-  "subfolder": "Movies"
+  "subfolder": "Movies",
+  "skipVideoFolder": true
 }
 ```
 
@@ -90,6 +91,7 @@ Add a single YouTube video to the download queue.
 | `url` | Yes | string | YouTube video URL |
 | `resolution` | No | string | Override resolution (360, 480, 720, 1080, 1440, 2160) |
 | `subfolder` | No | string | Override download subfolder |
+| `skipVideoFolder` | No | boolean | When `true`, download files directly into the channel folder without creating a video subfolder |
 
 **Success Response (200):**
 ```json

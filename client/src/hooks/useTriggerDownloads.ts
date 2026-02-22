@@ -6,6 +6,7 @@ interface DownloadOverrideSettings {
   subfolder?: string | null;
   audioFormat?: string | null;
   rating?: string | null;
+  skipVideoFolder?: boolean;
 }
 
 interface TriggerDownloadsParams {
@@ -43,7 +44,8 @@ export function useTriggerDownloads(token: string | null): UseTriggerDownloadsRe
             allowRedownload: overrideSettings.allowRedownload,
             subfolder: overrideSettings.subfolder,
             audioFormat: overrideSettings.audioFormat,
-            rating: overrideSettings.rating
+            rating: overrideSettings.rating,
+            skipVideoFolder: overrideSettings.skipVideoFolder
           };
         }
 

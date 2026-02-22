@@ -390,7 +390,8 @@ class DownloadModule {
       // Pass filter config for channel-specific duration and title filtering
       // Pass audioFormat from filterConfig for MP3 downloads
       const audioFormat = group.filterConfig?.audioFormat || null;
-      const args = YtdlpCommandBuilder.getBaseCommandArgs(group.quality, allowRedownload, null, group.filterConfig, audioFormat);
+      const skipVideoFolder = group.filterConfig?.skipVideoFolder || false;
+      const args = YtdlpCommandBuilder.getBaseCommandArgs(group.quality, allowRedownload, null, group.filterConfig, audioFormat, skipVideoFolder);
       args.push('-a', tempChannelsFile);
       args.push('--playlist-end', String(videoCount));
 
@@ -398,7 +399,7 @@ class DownloadModule {
       this.downloadExecutor.tempChannelsFile = tempChannelsFile;
 
       // Execute download with skipJobTransition flag
-      await this.downloadExecutor.doDownload(args, jobId, jobType, 0, null, allowRedownload, skipJobTransition);
+      await this.downloadExecutor.doDownload(args, jobId, jobType, 0, null, allowRedownload, skipJobTransition, null, undefined, skipVideoFolder);
     } catch (err) {
       logger.error({ err, jobType }, 'Error executing group download');
       if (tempChannelsFile) {
@@ -455,7 +456,7 @@ class DownloadModule {
           const Channel = require('../models/channel');
           channelRecord = await Channel.findOne({
             where: { channel_id: channelId },
-            attributes: ['video_quality', 'audio_format'],
+            attributes: ['video_quality', 'audio_format', 'skip_video_folder'],
           });
 
           if (!effectiveQuality && channelRecord && channelRecord.video_quality) {
@@ -477,10 +478,18 @@ class DownloadModule {
       // Persist resolved quality for any subsequent retries of this job
       this.setJobDataValue(jobData, 'effectiveQuality', resolution);
 
+      // Determine skipVideoFolder from override settings or channel setting
+      let skipVideoFolder = false;
+      if (overrideSettings.skipVideoFolder !== undefined) {
+        skipVideoFolder = !!overrideSettings.skipVideoFolder;
+      } else if (channelRecord && channelRecord.skip_video_folder) {
+        skipVideoFolder = true;
+      }
+
       // For manual downloads, we don't apply duration filters but still exclude members-only
       // Subfolder override is passed to post-processor via environment variable
       // Pass audioFormat for MP3 downloads
-      const args = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload(resolution, allowRedownload, audioFormat);
+      const args = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload(resolution, allowRedownload, audioFormat, skipVideoFolder);
 
       // Check if any URLs are for videos marked as ignored, and remove them from archive
       // This allows users to manually download videos they've marked to ignore for channel downloads
@@ -538,7 +547,8 @@ class DownloadModule {
         false,
         subfolderOverride,
         // Pass rating override from overrideSettings if present
-        overrideSettings.rating !== undefined ? overrideSettings.rating : undefined
+        overrideSettings.rating !== undefined ? overrideSettings.rating : undefined,
+        skipVideoFolder
       );
     }
   }

@@ -7,11 +7,12 @@ const { buildOutputTemplate, buildThumbnailTemplate } = require('./filesystem');
  * Encapsulates channel filter settings for download filtering
  */
 class ChannelFilterConfig {
-  constructor(minDuration = null, maxDuration = null, titleFilterRegex = null, audioFormat = null) {
+  constructor(minDuration = null, maxDuration = null, titleFilterRegex = null, audioFormat = null, skipVideoFolder = false) {
     this.minDuration = minDuration;
     this.maxDuration = maxDuration;
     this.titleFilterRegex = titleFilterRegex;
     this.audioFormat = audioFormat;
+    this.skipVideoFolder = !!skipVideoFolder;
   }
 
   /**
@@ -25,7 +26,8 @@ class ChannelFilterConfig {
       min: this.minDuration,
       max: this.maxDuration,
       regex: this.titleFilterRegex,
-      audio: this.audioFormat
+      audio: this.audioFormat,
+      skipVF: this.skipVideoFolder
     });
   }
 
@@ -37,7 +39,8 @@ class ChannelFilterConfig {
     return this.minDuration !== null ||
            this.maxDuration !== null ||
            this.titleFilterRegex !== null ||
-           this.audioFormat !== null;
+           this.audioFormat !== null ||
+           this.skipVideoFolder;
   }
 
   /**
@@ -50,7 +53,8 @@ class ChannelFilterConfig {
       channel.min_duration,
       channel.max_duration,
       channel.title_filter_regex,
-      channel.audio_format
+      channel.audio_format,
+      channel.skip_video_folder
     );
   }
 }
@@ -76,7 +80,8 @@ class ChannelDownloadGrouper {
         'min_duration',
         'max_duration',
         'title_filter_regex',
-        'audio_format'
+        'audio_format',
+        'skip_video_folder'
       ]
     });
 

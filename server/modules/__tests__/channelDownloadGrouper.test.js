@@ -61,14 +61,14 @@ describe('ChannelDownloadGrouper', () => {
         const filterConfig = new ChannelFilterConfig(300, 3600, 'test.*regex');
         const key = filterConfig.buildFilterKey();
 
-        expect(key).toBe('{"min":300,"max":3600,"regex":"test.*regex","audio":null}');
+        expect(key).toBe('{"min":300,"max":3600,"regex":"test.*regex","audio":null,"skipVF":false}');
       });
 
       it('should build unique key with null values', () => {
         const filterConfig = new ChannelFilterConfig(null, null, null);
         const key = filterConfig.buildFilterKey();
 
-        expect(key).toBe('{"min":null,"max":null,"regex":null,"audio":null}');
+        expect(key).toBe('{"min":null,"max":null,"regex":null,"audio":null,"skipVF":false}');
       });
 
       it('should build different keys for different filters', () => {
@@ -194,7 +194,8 @@ describe('ChannelDownloadGrouper', () => {
           'min_duration',
           'max_duration',
           'title_filter_regex',
-          'audio_format'
+          'audio_format',
+          'skip_video_folder'
         ]
       });
       expect(result).toEqual(mockChannels);

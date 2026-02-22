@@ -24,7 +24,9 @@ describe('VideoDeletionModule', () => {
 
     // Mock fs.promises
     mockFs = {
-      rm: jest.fn()
+      rm: jest.fn(),
+      readdir: jest.fn().mockResolvedValue([]),
+      unlink: jest.fn()
     };
 
     // Mock the models
@@ -35,6 +37,12 @@ describe('VideoDeletionModule', () => {
     // Mock fs
     jest.doMock('fs', () => ({
       promises: mockFs
+    }));
+
+    // Mock the filesystem module (isVideoDirectory)
+    // Default to true (nested structure) for backwards compatibility with existing tests
+    jest.doMock('../filesystem', () => ({
+      isVideoDirectory: jest.fn(() => true)
     }));
 
     // Require the module after mocks are in place
@@ -147,7 +155,7 @@ describe('VideoDeletionModule', () => {
       expect(result).toEqual({
         success: false,
         videoId: 1,
-        error: 'Safety check failed: invalid directory path'
+        error: 'Safety check failed: invalid file path'
       });
       expect(mockFs.rm).not.toHaveBeenCalled();
     });
@@ -171,7 +179,7 @@ describe('VideoDeletionModule', () => {
 
       expect(mockLogger.info).toHaveBeenCalledWith(
         expect.objectContaining({ videoId: 1 }),
-        'Directory already removed'
+        'Files already removed'
       );
       expect(mockVideoRecord.update).toHaveBeenCalledWith({ removed: true });
       expect(result).toEqual({
@@ -199,7 +207,7 @@ describe('VideoDeletionModule', () => {
 
       expect(mockLogger.error).toHaveBeenCalledWith(
         expect.objectContaining({ videoId: 1, err: permissionError }),
-        'Failed to delete directory'
+        'Failed to delete video files'
       );
       expect(result).toEqual({
         success: false,
@@ -402,7 +410,7 @@ describe('VideoDeletionModule', () => {
 
       expect(result.failed[0]).toEqual({
         videoId: 1,
-        error: 'Safety check failed: invalid directory path'
+        error: 'Safety check failed: invalid file path'
       });
     });
   });
@@ -537,7 +545,7 @@ describe('VideoDeletionModule', () => {
         failed: [
           {
             youtubeId: 'abc123',
-            error: 'Safety check failed: invalid directory path'
+            error: 'Safety check failed: invalid file path'
           }
         ]
       });
