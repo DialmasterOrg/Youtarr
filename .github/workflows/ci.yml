@@ -200,7 +200,17 @@ jobs:
           cd client
           npm ci
 
+      - name: Cache Storybook build
+        id: cache-storybook
+        uses: actions/cache@v3
+        with:
+          path: client/storybook-static
+          key: ${{ runner.os }}-storybook-${{ hashFiles('client/src/**', 'client/.storybook/**', 'client/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-storybook-
+
       - name: Build Storybook for validation
+        if: steps.cache-storybook.outputs.cache-hit != 'true'
         run: cd client && npm run build-storybook
 
       - name: Run Jest story validation tests

@@ -76,6 +76,7 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
           {video.isAlreadyDownloaded && (
             <IconButton
               size="small"
+              aria-label="Download history"
               onClick={handlePopoverOpen}
               sx={{
                 p: 0,

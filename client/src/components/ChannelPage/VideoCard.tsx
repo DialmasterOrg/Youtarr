@@ -61,6 +61,7 @@ function VideoCard({
     <Fade in timeout={300} key={video.youtube_id}>
       <Grid item xs={12} sm={6} md={4} lg={3}>
         <Card
+          data-testid="video-card"
           sx={{
             height: '100%',
             display: 'flex',

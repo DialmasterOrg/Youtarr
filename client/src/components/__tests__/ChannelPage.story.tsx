@@ -131,9 +131,8 @@ export const Default: Story = {
     await userEvent.click(settingsButton);
     await expect(await body.findByText(/effective channel quality/i)).toBeInTheDocument();
 
-    // Test filter/regex interactions
-    const [filterLabel] = await body.findAllByText(/title filter/i);
-    const filterChip = filterLabel.closest('button') ?? filterLabel;
+    // Test filter/regex interactions — select by role to avoid DOM traversal
+    const filterChip = await body.findByRole('button', { name: /title filter/i });
     await userEvent.click(filterChip);
     await expect(await body.findByText(/title filter regex pattern/i)).toBeInTheDocument();
     await expect(await body.findByText(/\(\?i\)\^\(\?!\.\*short\)\.\*/i)).toBeInTheDocument();

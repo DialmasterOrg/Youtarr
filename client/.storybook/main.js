@@ -15,7 +15,9 @@ const config = {
       plugins: [tsconfigPaths()],
       define: {
         ...(config.define ?? {}),
-        'process.env': {},
+        // Explicitly define NODE_ENV rather than wiping all of process.env,
+        // which would conflict with envPrefix env-var injection.
+        'process.env.NODE_ENV': JSON.stringify('development'),
       },
       envPrefix: ['VITE_', 'REACT_APP_'],
     });

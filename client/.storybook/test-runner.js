@@ -1,3 +1,13 @@
+/**
+ * Storybook test-runner configuration (Playwright-based).
+ *
+ * Used for LOCAL development testing via `npm run test-storybook`.
+ * NOT used in CI — the CI workflow validates stories through Jest
+ * (see client/src/tests/storybook_coverage.test.js and the
+ * test-storybook job in .github/workflows/ci.yml).
+ *
+ * Enable debug output with: STORYBOOK_TEST_RUNNER_DEBUG=1 npm run test-storybook
+ */
 const DEBUG = process.env.STORYBOOK_TEST_RUNNER_DEBUG === '1';
 
 function logLine(line) {

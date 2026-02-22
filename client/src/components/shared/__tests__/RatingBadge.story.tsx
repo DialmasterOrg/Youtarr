@@ -16,9 +16,9 @@ export const Default: Story = {
     showNA: false,
   },
   play: async ({ canvasElement }: { canvasElement: HTMLElement }) => {
-    const container = canvasElement;
-    // Default should render nothing
-    await expect(container.querySelector('div')).toBeInTheDocument();
+    const canvas = within(canvasElement);
+    // When rating is null and showNA is false, RatingBadge renders null
+    expect(canvas.queryByText(/.+/i)).not.toBeInTheDocument();
   },
 };
 

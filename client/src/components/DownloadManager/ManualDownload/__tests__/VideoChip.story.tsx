@@ -30,10 +30,10 @@ type Story = StoryObj<typeof VideoChip>;
 export const ShowsHistoryPopover: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const historyIcon = canvasElement.querySelector('button svg[data-testid="HistoryIcon"]');
-    const historyButton = historyIcon?.closest('button');
-    await expect(historyButton as HTMLElement).toBeInTheDocument();
-    await userEvent.click(historyButton as HTMLElement);
+    // Select by accessible label (set on the IconButton) to avoid DOM traversal
+    const historyButton = canvas.getByRole('button', { name: /download history/i });
+    await expect(historyButton).toBeInTheDocument();
+    await userEvent.click(historyButton);
 
     const body = within(canvasElement.ownerDocument.body);
     await expect(await body.findByText('This video was previously downloaded')).toBeInTheDocument();

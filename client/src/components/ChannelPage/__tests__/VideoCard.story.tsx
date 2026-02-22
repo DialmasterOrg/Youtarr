@@ -87,18 +87,15 @@ export const Downloaded: Story = {
     await expect(duration).toBeInTheDocument();
 
     // Verify status is shown (completed)
-    const statusElement = canvasElement.querySelector('[data-testid*="status"]') ||
-                         canvas.queryByText(/completed|downloaded/i);
+    const statusElement = canvas.queryByText(/completed|downloaded/i);
     if (statusElement) {
       await expect(statusElement).toBeInTheDocument();
     }
 
-    // Test hover interaction
-    const card = canvasElement.querySelector('[class*="MuiCard-root"]');
-    if (card) {
-      await userEvent.hover(card as HTMLElement);
-      await expect(args.onHoverChange).toHaveBeenCalledWith(mockVideo.youtube_id);
-    }
+    // Test hover interaction - data-testid avoids brittle class-based selectors
+    const card = canvas.getByTestId('video-card');
+    await userEvent.hover(card);
+    await expect(args.onHoverChange).toHaveBeenCalledWith(mockVideo.youtube_id);
   },
 };
 
