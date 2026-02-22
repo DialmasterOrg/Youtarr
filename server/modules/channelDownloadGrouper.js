@@ -40,6 +40,8 @@ class ChannelFilterConfig {
            this.maxDuration !== null ||
            this.titleFilterRegex !== null ||
            this.audioFormat !== null ||
+           // skipVideoFolder affects download path structure, so channels with
+           // different settings must be in separate download groups
            this.skipVideoFolder;
   }
 

@@ -12,7 +12,6 @@ class VideoDeletionModule {
    * In nested mode, the parent directory name ends with " - <youtubeId>"
    * In flat mode, the video file sits directly in the channel folder
    * @param {string} filePath - Full path to the video file
-   * @param {string} youtubeId - YouTube video ID
    * @returns {boolean} - True if flat structure
    */
   isFlat(filePath) {
@@ -102,6 +101,8 @@ class VideoDeletionModule {
           logger.info({ videoId, videoDirectory, youtubeId: video.youtubeId }, 'Flat structure detected, deleting individual files');
           const files = await fs.readdir(videoDirectory);
           for (const file of files) {
+            // Match files by YouTube ID: bracketed form [ID] is the yt-dlp default;
+            // dash form " - ID" is a fallback for non-standard naming patterns
             if (file.includes(`[${video.youtubeId}]`) || file.includes(` - ${video.youtubeId}`)) {
               const fullPath = path.join(videoDirectory, file);
               try {

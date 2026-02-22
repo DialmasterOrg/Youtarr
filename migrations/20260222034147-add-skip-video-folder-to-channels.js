@@ -7,6 +7,7 @@ module.exports = {
       type: Sequelize.BOOLEAN,
       allowNull: true,
       defaultValue: null,
+      comment: 'When true, videos are stored directly in the channel folder without per-video subfolders',
     });
   },
 

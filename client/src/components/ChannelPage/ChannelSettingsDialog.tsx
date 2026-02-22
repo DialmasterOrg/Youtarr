@@ -191,7 +191,8 @@ function ChannelSettingsDialog({
           default_rating: Object.prototype.hasOwnProperty.call(settingsData, 'default_rating')
             ? settingsData.default_rating
             : null,
-          skip_video_folder: settingsData.skip_video_folder ?? null,
+          skip_video_folder: Object.prototype.hasOwnProperty.call(settingsData, 'skip_video_folder')
+            ? settingsData.skip_video_folder : null,
         };
         setSettings(loadedSettings);
         setOriginalSettings(loadedSettings);
@@ -281,7 +282,9 @@ function ChannelSettingsDialog({
         default_rating: result?.settings && Object.prototype.hasOwnProperty.call(result.settings, 'default_rating')
           ? result.settings.default_rating
           : settings.default_rating ?? null,
-        skip_video_folder: result?.settings?.skip_video_folder ?? settings.skip_video_folder ?? null,
+        skip_video_folder: result?.settings && Object.prototype.hasOwnProperty.call(result.settings, 'skip_video_folder')
+          ? result.settings.skip_video_folder
+          : settings.skip_video_folder ?? null,
       };
 
       setSettings(updatedSettings);

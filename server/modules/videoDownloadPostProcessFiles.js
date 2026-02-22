@@ -543,7 +543,11 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
 
         if (isFlatMode) {
           // Flat mode: move individual files from temp channel folder to final channel folder
-          const updatedFilesInDir = await fs.readdir(videoDirectory);
+          // Filter by video ID to avoid moving files belonging to other downloads
+          const allFilesInDir = await fs.readdir(videoDirectory);
+          const updatedFilesInDir = allFilesInDir.filter(
+            file => file.includes(`[${id}]`)
+          );
           for (const file of updatedFilesInDir) {
             const srcPath = path.join(videoDirectory, file);
             const destPath = path.join(targetVideoDirectory, file);
