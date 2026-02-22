@@ -30,9 +30,9 @@ const colorMap: Record<string, string> = {
   textPrimary: 'text-foreground',
   textSecondary: 'text-muted-foreground',
   error: 'text-destructive',
-  warning: 'text-amber-500',
-  success: 'text-green-600',
-  info: 'text-blue-500',
+  warning: 'text-warning',
+  success: 'text-success',
+  info: 'text-info',
   inherit: 'text-inherit',
   initial: '',
 };

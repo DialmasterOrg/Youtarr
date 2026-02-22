@@ -59,6 +59,12 @@ export const flatTheme: ThemeDefinition = {
       'accent-foreground': '0 0% 100%',
       destructive: '0 84% 60%', // Red
       'destructive-foreground': '0 0% 100%',
+      'success': '142 71% 42%',
+      'success-foreground': '0 0% 100%',
+      'warning': '38 92% 50%',
+      'warning-foreground': '0 0% 10%',
+      'info': '199 89% 46%',
+      'info-foreground': '0 0% 100%',
       border: '210 14% 90%', // #E5E7EB - Gray 200
       'border-strong': '217 32% 10%', // Dark Gray
       input: '210 40% 96%', // #F3F4F6 - Gray 100
@@ -141,6 +147,12 @@ export const flatTheme: ThemeDefinition = {
       'accent-foreground': '0 0% 0%',
       destructive: '0 84% 65%',
       'destructive-foreground': '0 0% 100%',
+      'success': '142 62% 45%',
+      'success-foreground': '0 0% 10%',
+      'warning': '38 85% 55%',
+      'warning-foreground': '0 0% 10%',
+      'info': '199 80% 55%',
+      'info-foreground': '0 0% 10%',
       border: '222 47% 20%',
       'border-strong': '0 0% 100%',
       input: '222 47% 15%',
