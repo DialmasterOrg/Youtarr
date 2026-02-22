@@ -37,6 +37,7 @@ describe('ChannelSettingsDialog', () => {
     title_filter_regex: null,
     audio_format: null,
     default_rating: null,
+    skip_video_folder: null,
   };
 
   const mockSubfolders = ['__Sports', '__Music', '__Tech'];
@@ -1324,6 +1325,126 @@ describe('ChannelSettingsDialog', () => {
           /These filters only apply to channel downloads\. Manually selected videos will always download\./i
         )
       ).toBeInTheDocument();
+    });
+  });
+
+  describe('Skip Video Folder Toggle', () => {
+    test('renders the flat file structure toggle', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+        });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+
+      expect(screen.getByLabelText('Flat file structure (no video subfolders)')).toBeInTheDocument();
+    });
+
+    test('toggles skip_video_folder when switch is clicked', async () => {
+      const user = userEvent.setup();
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+        });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+
+      const toggle = screen.getByRole('checkbox', { name: /Flat file structure/i });
+      expect(toggle).not.toBeChecked();
+
+      await user.click(toggle);
+      expect(toggle).toBeChecked();
+
+      // Save button should now be enabled since there's a change
+      const saveButton = screen.getByRole('button', { name: 'Save' });
+      expect(saveButton).not.toBeDisabled();
+    });
+
+    test('sends skip_video_folder in the API save call', async () => {
+      const user = userEvent.setup();
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockChannelSettings),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            settings: { ...mockChannelSettings, skip_video_folder: true },
+          }),
+        });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+
+      // Toggle the flat file structure switch
+      const toggle = screen.getByRole('checkbox', { name: /Flat file structure/i });
+      await user.click(toggle);
+
+      // Click save
+      const saveButton = screen.getByRole('button', { name: 'Save' });
+      await user.click(saveButton);
+
+      // Verify the PUT call includes skip_video_folder: true
+      await waitFor(() => {
+        const putCall = mockFetch.mock.calls.find(
+          (call: any[]) => call[0] === '/api/channels/channel123/settings' && call[1]?.method === 'PUT'
+        );
+        expect(putCall).toBeDefined();
+        const body = JSON.parse(putCall![1].body);
+        expect(body.skip_video_folder).toBe(true);
+      });
+    });
+
+    test('loads skip_video_folder true from server and shows toggle checked', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            ...mockChannelSettings,
+            skip_video_folder: true,
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+        });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+
+      const toggle = screen.getByRole('checkbox', { name: /Flat file structure/i });
+      expect(toggle).toBeChecked();
     });
   });
 

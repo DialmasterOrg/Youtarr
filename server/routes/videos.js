@@ -663,6 +663,13 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
           });
         }
       }
+
+      // Validate skipVideoFolder if provided
+      if (overrideSettings.skipVideoFolder !== undefined && typeof overrideSettings.skipVideoFolder !== 'boolean') {
+        return res.status(400).json({
+          error: 'skipVideoFolder must be a boolean'
+        });
+      }
     }
 
     downloadModule.doSpecificDownloads(req);

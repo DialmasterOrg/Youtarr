@@ -6,9 +6,11 @@ import {
   DialogActions,
   Button,
   FormControl,
+  FormControlLabel,
   InputLabel,
   Select,
   MenuItem,
+  Switch,
   TextField,
   CircularProgress,
   Alert,
@@ -39,6 +41,7 @@ interface ChannelSettings {
   title_filter_regex: string | null;
   audio_format: string | null;
   default_rating: string | null;
+  skip_video_folder: boolean | null;
 }
 
 interface FilterPreviewVideo {
@@ -96,7 +99,8 @@ function ChannelSettingsDialog({
     max_duration: null,
     title_filter_regex: null,
     audio_format: null,
-    default_rating: null
+    default_rating: null,
+    skip_video_folder: null
   });
   const [originalSettings, setOriginalSettings] = useState<ChannelSettings>({
     sub_folder: null,
@@ -105,7 +109,8 @@ function ChannelSettingsDialog({
     max_duration: null,
     title_filter_regex: null,
     audio_format: null,
-    default_rating: null
+    default_rating: null,
+    skip_video_folder: null
   });
   const [subfolders, setSubfolders] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,6 +191,7 @@ function ChannelSettingsDialog({
           default_rating: Object.prototype.hasOwnProperty.call(settingsData, 'default_rating')
             ? settingsData.default_rating
             : null,
+          skip_video_folder: settingsData.skip_video_folder ?? null,
         };
         setSettings(loadedSettings);
         setOriginalSettings(loadedSettings);
@@ -242,7 +248,8 @@ function ChannelSettingsDialog({
           max_duration: settings.max_duration,
           title_filter_regex: settings.title_filter_regex || null,
           audio_format: settings.audio_format || null,
-          default_rating: settings.default_rating || null
+          default_rating: settings.default_rating || null,
+          skip_video_folder: settings.skip_video_folder
         })
       });
 
@@ -274,6 +281,7 @@ function ChannelSettingsDialog({
         default_rating: result?.settings && Object.prototype.hasOwnProperty.call(result.settings, 'default_rating')
           ? result.settings.default_rating
           : settings.default_rating ?? null,
+        skip_video_folder: result?.settings?.skip_video_folder ?? settings.skip_video_folder ?? null,
       };
 
       setSettings(updatedSettings);
@@ -313,7 +321,8 @@ function ChannelSettingsDialog({
            settings.max_duration !== originalSettings.max_duration ||
            settings.title_filter_regex !== originalSettings.title_filter_regex ||
           settings.audio_format !== originalSettings.audio_format ||
-          settings.default_rating !== originalSettings.default_rating;
+          settings.default_rating !== originalSettings.default_rating ||
+          settings.skip_video_folder !== originalSettings.skip_video_folder;
   };
 
   const handlePreviewFilter = async () => {
@@ -460,6 +469,24 @@ function ChannelSettingsDialog({
                 MP3 files are saved at 192kbps in the same folder as videos.
               </Typography>
             )}
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={!!settings.skip_video_folder}
+                  onChange={(e) => setSettings({
+                    ...settings,
+                    skip_video_folder: e.target.checked ? true : null
+                  })}
+                  color="primary"
+                />
+              }
+              label="Flat file structure (no video subfolders)"
+              sx={{ mt: 1 }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ mt: -1, mb: 1 }}>
+              When enabled, video files are saved directly in the channel folder instead of individual video subfolders. Only affects new downloads.
+            </Typography>
 
             <Alert severity="info" sx={{ mb: 2 }}>
               <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>

@@ -18,6 +18,7 @@ export interface DownloadSettings {
   subfolder?: string | null;
   audioFormat?: string | null;
   rating?: string | null;
+  skipVideoFolder?: boolean;
 }
 
 export interface ValidationResponse {

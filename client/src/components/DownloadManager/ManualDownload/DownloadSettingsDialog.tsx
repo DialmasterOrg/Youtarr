@@ -80,6 +80,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [subfolderOverride, setSubfolderOverride] = useState<string | null>(null);
   const [audioFormat, setAudioFormat] = useState<string | null>(defaultAudioFormat);
+  const [skipVideoFolder, setSkipVideoFolder] = useState(false);
 
   // Fetch available subfolders
   const { subfolders, loading: subfoldersLoading } = useSubfolders(token);
@@ -123,6 +124,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       setSubfolderOverride(null);
       setAudioFormat(defaultAudioFormat);
       setRating(defaultRating ?? null);
+      setSkipVideoFolder(false);
     }
   }, [open, defaultAudioFormat]);
 
@@ -196,7 +198,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
     // Include subfolder override if set (only for manual mode)
     const hasOverride = useCustomSettings || allowRedownload ||
       (mode === 'manual' && subfolderOverride !== null) ||
-      (mode === 'manual' && audioFormat !== null);
+      (mode === 'manual' && audioFormat !== null) ||
+      (mode === 'manual' && skipVideoFolder);
 
     if (hasOverride) {
       onConfirm({
@@ -207,7 +210,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
         audioFormat: mode === 'manual' ? audioFormat : undefined,
         // Include rating only if custom settings are enabled (user explicitly selected it)
         // Use an explicit sentinel 'NR' when the user selected "No Rating" (null)
-        rating: useCustomSettings ? (rating === null ? 'NR' : (rating ?? undefined)) : undefined
+        rating: useCustomSettings ? (rating === null ? 'NR' : (rating ?? undefined)) : undefined,
+        skipVideoFolder: mode === 'manual' ? skipVideoFolder : undefined
       });
     } else {
       onConfirm(null); // Use defaults - post-processor will apply channel default rating
@@ -507,6 +511,24 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                       <MenuItem value="TV-MA"><RatingBadge rating="TV-MA" size="small" sx={{ mr: 1 }} /> TV-MA</MenuItem>
                     </Select>
                   </FormControl>
+
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={skipVideoFolder}
+                        onChange={(e) => {
+                          setSkipVideoFolder(e.target.checked);
+                          setHasUserInteracted(true);
+                        }}
+                        color="primary"
+                      />
+                    }
+                    label="Flat file structure (no video subfolders)"
+                    sx={{ mb: 1 }}
+                  />
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+                    Save files directly in the channel folder instead of individual video subfolders.
+                  </Typography>
                 </>
               )}
             </Box>

@@ -149,7 +149,26 @@ class DownloadExecutor {
             foundExistingPath = true;
 
             if (!filesystem.isVideoDirectory(dirPath)) {
-              logger.info({ dirPath }, 'Skipping non-video directory');
+              // Flat mode (no video subfolder) - only delete files matching the youtube ID
+              const youtubeId = videoDownload.youtube_id;
+              logger.info({ youtubeId, dirPath }, 'Flat structure detected, cleaning up individual files');
+
+              const dirFiles = await fsPromises.readdir(dirPath);
+              for (const fileName of dirFiles) {
+                if (fileName.includes(`[${youtubeId}]`) || fileName.includes(` - ${youtubeId}`)) {
+                  const fullPath = path.join(dirPath, fileName);
+                  try {
+                    const stats = await fsPromises.stat(fullPath);
+                    if (stats.isFile()) {
+                      await fsPromises.unlink(fullPath);
+                      logger.info({ fileName }, 'Removed file (flat mode)');
+                    }
+                  } catch (fileError) {
+                    logger.error({ err: fileError, fileName }, 'Error removing file (flat mode)');
+                  }
+                }
+              }
+              cleanedAny = true;
               continue;
             }
 
@@ -431,7 +450,7 @@ class DownloadExecutor {
     this.pendingProgressMessage = null;
   }
 
-  async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false, subfolderOverride = null, ratingOverride = undefined) {
+  async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false, subfolderOverride = null, ratingOverride = undefined, skipVideoFolder = false) {
     const initialCount = this.getCountOfDownloadedVideos();
     const config = configModule.getConfig();
     const monitor = new DownloadProgressMonitor(jobId, jobType);
@@ -499,6 +518,11 @@ class DownloadExecutor {
       // Pass subfolder override to post-processor (empty string means no override)
       if (subfolderOverride !== null && subfolderOverride !== undefined) {
         procEnv.YOUTARR_SUBFOLDER_OVERRIDE = subfolderOverride;
+      }
+
+      // Pass skip video folder flag to post-processor
+      if (skipVideoFolder) {
+        procEnv.YOUTARR_SKIP_VIDEO_FOLDER = 'true';
       }
 
       // Pass explicit rating override if provided

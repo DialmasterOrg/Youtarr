@@ -13,6 +13,9 @@ const { buildChannelPath, cleanupEmptyParents, moveWithRetries, ensureDirWithRet
 
 const activeJobId = process.env.YOUTARR_JOB_ID;
 
+// Flat mode: skip video subfolder, files go directly in channel folder
+const isFlatMode = process.env.YOUTARR_SKIP_VIDEO_FOLDER === 'true';
+
 const videoPath = process.argv[2]; // get the media file path (video or audio)
 const parsedPath = path.parse(videoPath);
 // Note that MP4 videos contain embedded metadata for Plex
@@ -31,7 +34,10 @@ const imagePath = path.join(videoDirectory, parsedPath.name + '.jpg');
 // Extract the actual channel folder name that yt-dlp created (already sanitized)
 // This is more reliable than using jsonData.uploader which may contain special characters
 // that yt-dlp sanitizes differently (e.g., #, :, <, >, etc.)
-const actualChannelFolderName = path.basename(path.dirname(videoDirectory));
+// In flat mode, videoDirectory IS the channel folder; in nested mode, parent is channel folder
+const actualChannelFolderName = isFlatMode
+  ? path.basename(videoDirectory)
+  : path.basename(path.dirname(videoDirectory));
 
 function shouldWriteChannelPosters() {
   const config = configModule.getConfig() || {};
@@ -279,9 +285,13 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
 
     if (targetChannelFolder) {
       // Channel has subfolder - calculate path with subfolder included
-      const videoDirectoryName = path.basename(videoDirectory);
       const videoFileName = path.basename(videoPath);
-      finalVideoPathForJson = path.join(targetChannelFolder, videoDirectoryName, videoFileName);
+      if (isFlatMode) {
+        finalVideoPathForJson = path.join(targetChannelFolder, videoFileName);
+      } else {
+        const videoDirectoryName = path.basename(videoDirectory);
+        finalVideoPathForJson = path.join(targetChannelFolder, videoDirectoryName, videoFileName);
+      }
     } else {
       // No subfolder - use standard temp-to-final conversion
       finalVideoPathForJson = tempPathManager.convertTempToFinal(videoPath);
@@ -468,7 +478,7 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
     let finalVideoPath = videoPath;
 
     if (tempPathManager.isTempPath(videoPath)) {
-      logger.info('[Post-Process] Moving files from temp to final location');
+      logger.info({ isFlatMode }, '[Post-Process] Moving files from temp to final location');
 
       // Calculate target video directory based on subfolder setting
       const videoDirectoryName = path.basename(videoDirectory);
@@ -477,19 +487,30 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
       let targetChannelFolderForMove;
 
       if (targetChannelFolder) {
-        // Channel has subfolder - move directly to subfolder location (atomic move)
-        targetVideoDirectory = path.join(targetChannelFolder, videoDirectoryName);
+        if (isFlatMode) {
+          // Flat mode with subfolder - files go directly into channel folder
+          targetVideoDirectory = targetChannelFolder;
+        } else {
+          // Nested mode with subfolder - move video directory into subfolder location (atomic move)
+          targetVideoDirectory = path.join(targetChannelFolder, videoDirectoryName);
+        }
         targetChannelFolderForMove = targetChannelFolder;
         console.log(`[Post-Process] Moving to subfolder location: ${channelSubFolder}`);
       } else {
         // No subfolder - move to standard location
         const standardFinalPath = tempPathManager.convertTempToFinal(videoPath);
-        const standardChannelFolder = path.dirname(path.dirname(standardFinalPath));
-        targetVideoDirectory = path.join(standardChannelFolder, videoDirectoryName);
-        targetChannelFolderForMove = standardChannelFolder;
+        if (isFlatMode) {
+          // Flat mode without subfolder - channel folder is parent of final file
+          targetChannelFolderForMove = path.dirname(standardFinalPath);
+          targetVideoDirectory = targetChannelFolderForMove;
+        } else {
+          const standardChannelFolder = path.dirname(path.dirname(standardFinalPath));
+          targetVideoDirectory = path.join(standardChannelFolder, videoDirectoryName);
+          targetChannelFolderForMove = standardChannelFolder;
+        }
       }
 
-      logger.info({ from: videoDirectory, to: targetVideoDirectory }, '[Post-Process] Moving video directory');
+      logger.info({ from: videoDirectory, to: targetVideoDirectory, isFlatMode }, '[Post-Process] Moving video directory');
 
       try {
         // Ensure parent channel directory exists (with retries for NFS/cross-filesystem transient errors)
@@ -520,25 +541,48 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
           }
         }
 
-        // Check if target video directory already exists (rare, but handle gracefully)
-        const targetExists = await fs.pathExists(targetVideoDirectory);
+        if (isFlatMode) {
+          // Flat mode: move individual files from temp channel folder to final channel folder
+          const updatedFilesInDir = await fs.readdir(videoDirectory);
+          for (const file of updatedFilesInDir) {
+            const srcPath = path.join(videoDirectory, file);
+            const destPath = path.join(targetVideoDirectory, file);
+            // Overwrite if the file already exists at destination
+            if (await fs.pathExists(destPath)) {
+              logger.warn({ destPath }, '[Post-Process] Target file already exists, overwriting');
+              await fs.remove(destPath);
+            }
+            await moveWithRetries(srcPath, destPath, { retries: 5, delayMs: 500 });
+            logger.info({ file }, '[Post-Process] Moved file (flat mode)');
+          }
 
-        if (targetExists) {
-          logger.warn({ targetVideoDirectory }, '[Post-Process] Target directory already exists, removing before move');
-          await fs.remove(targetVideoDirectory);
+          // Update paths to reflect final locations
+          finalVideoPath = path.join(targetVideoDirectory, videoFileName);
+
+          logger.info({ targetVideoDirectory }, '[Post-Process] Successfully moved files to final location (flat mode)');
+        } else {
+          // Nested mode: move the entire video directory atomically
+
+          // Check if target video directory already exists (rare, but handle gracefully)
+          const targetExists = await fs.pathExists(targetVideoDirectory);
+
+          if (targetExists) {
+            logger.warn({ targetVideoDirectory }, '[Post-Process] Target directory already exists, removing before move');
+            await fs.remove(targetVideoDirectory);
+          }
+
+          // Move the entire video directory from temp to final location (with retries for NFS/cross-filesystem transient errors)
+          await moveWithRetries(videoDirectory, targetVideoDirectory, { retries: 5, delayMs: 500 });
+
+          // Update paths to reflect final locations
+          finalVideoPath = path.join(targetVideoDirectory, videoFileName);
+
+          logger.info({ targetVideoDirectory }, '[Post-Process] Successfully moved to final location');
         }
-
-        // Move the entire video directory from temp to final location (with retries for NFS/cross-filesystem transient errors)
-        await moveWithRetries(videoDirectory, targetVideoDirectory, { retries: 5, delayMs: 500 });
-
-        // Update paths to reflect final locations
-        finalVideoPath = path.join(targetVideoDirectory, videoFileName);
-
-        logger.info({ targetVideoDirectory }, '[Post-Process] Successfully moved to final location');
 
         // Clean up empty parent directories in the temp path (e.g., empty channel folder)
         const tempBasePath = tempPathManager.getTempBasePath();
-        const parentDir = path.dirname(videoDirectory); // This was the channel folder in temp
+        const parentDir = isFlatMode ? videoDirectory : path.dirname(videoDirectory);
         await cleanupEmptyParents(parentDir, tempBasePath);
 
         // Verify the final file exists
@@ -619,7 +663,10 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
 
     // Copy channel thumbnail as poster.jpg to channel folder (must be done AFTER all moves)
     // Calculate the final channel folder path based on the final video path
-    const finalChannelFolderPath = path.dirname(path.dirname(finalVideoPath));
+    // In flat mode, the file is directly in the channel folder
+    const finalChannelFolderPath = isFlatMode
+      ? path.dirname(finalVideoPath)
+      : path.dirname(path.dirname(finalVideoPath));
     if (jsonData.channel_id) {
       await copyChannelPosterIfNeeded(jsonData.channel_id, finalChannelFolderPath);
     }
