@@ -1,21 +1,13 @@
 const tokens = require('./src/theme/tokens.json');
 
-const withOpacity = (hex) => ({ opacityValue }) => {
-  if (opacityValue === undefined) return hex;
-  const alpha = Math.round(Number(opacityValue) * 255)
-    .toString(16)
-    .padStart(2, '0');
-
-  return `${hex}${alpha}`;
-};
-
 module.exports = {
   darkMode: ['class', '[data-theme="dark"]'],
   content: ['./index.html', './src/**/*.{ts,tsx,js,jsx,mdx}', './.storybook/**/*.{ts,tsx,js,jsx,mdx}'],
   theme: {
     extend: {
       fontFamily: {
-        sans: tokens.typography.fontFamily.split(','),
+        sans: ['var(--font-body)', 'Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display)', 'Outfit', 'system-ui', 'sans-serif'],
       },
       fontSize: {
         xs: tokens.typography.size.xs,
@@ -26,6 +18,9 @@ module.exports = {
         '2xl': tokens.typography.size['2xl'],
       },
       borderRadius: {
+        ui: 'var(--radius-ui)',
+        input: 'var(--radius-input)',
+        thumb: 'var(--radius-thumb)',
         sm: tokens.radius.sm,
         md: tokens.radius.md,
         lg: tokens.radius.lg,
@@ -34,32 +29,87 @@ module.exports = {
       },
       spacing: tokens.spacing,
       colors: {
-        app: {
-          light: {
-            primary: withOpacity(tokens.colors.light.primary.main),
-            secondary: withOpacity(tokens.colors.light.secondary.main),
-            bg: tokens.colors.light.background.default,
-            surface: tokens.colors.light.background.surface,
-            text: tokens.colors.light.text.primary,
-            mutedText: tokens.colors.light.text.secondary,
-            success: tokens.colors.light.semantic.success,
-            warning: tokens.colors.light.semantic.warning,
-            error: tokens.colors.light.semantic.error,
-            info: tokens.colors.light.semantic.info,
-          },
-          dark: {
-            primary: withOpacity(tokens.colors.dark.primary.main),
-            secondary: withOpacity(tokens.colors.dark.secondary.main),
-            bg: tokens.colors.dark.background.default,
-            surface: tokens.colors.dark.background.surface,
-            text: tokens.colors.dark.text.primary,
-            mutedText: tokens.colors.dark.text.secondary,
-            success: tokens.colors.dark.semantic.success,
-            warning: tokens.colors.dark.semantic.warning,
-            error: tokens.colors.dark.semantic.error,
-            info: tokens.colors.dark.semantic.info,
-          },
+        // Semantic CSS variable-driven colors (theme-aware)
+        background: 'var(--background)',
+        foreground: 'var(--foreground)',
+        card: {
+          DEFAULT: 'var(--card)',
+          foreground: 'var(--card-foreground)',
         },
+        popover: {
+          DEFAULT: 'var(--popover)',
+          foreground: 'var(--popover-foreground)',
+        },
+        primary: {
+          DEFAULT: 'var(--primary)',
+          foreground: 'var(--primary-foreground)',
+        },
+        secondary: {
+          DEFAULT: 'var(--secondary)',
+          foreground: 'var(--secondary-foreground)',
+        },
+        tertiary: {
+          DEFAULT: 'var(--tertiary)',
+          foreground: 'var(--tertiary-foreground)',
+        },
+        muted: {
+          DEFAULT: 'var(--muted)',
+          foreground: 'var(--muted-foreground)',
+        },
+        accent: {
+          DEFAULT: 'var(--accent)',
+          foreground: 'var(--accent-foreground)',
+        },
+        destructive: {
+          DEFAULT: 'var(--destructive)',
+          foreground: 'var(--destructive-foreground)',
+        },
+        border: 'var(--border)',
+        'border-strong': 'var(--border-strong)',
+        input: 'var(--input)',
+        ring: 'var(--ring)',
+      },
+      boxShadow: {
+        soft: 'var(--shadow-soft)',
+        hard: 'var(--shadow-hard)',
+        'hard-hover': 'var(--shadow-hard-hover)',
+        neumo: 'var(--shadow-neumo)',
+      },
+      transitionTimingFunction: {
+        bouncy: 'var(--transition-bouncy)',
+      },
+      keyframes: {
+        wiggle: {
+          '0%': { transform: 'rotate(0deg) scale(1)' },
+          '35%': { transform: 'rotate(1deg) scale(1.02)' },
+          '70%': { transform: 'rotate(-1deg) scale(1.02)' },
+          '100%': { transform: 'rotate(0deg) scale(1)' },
+        },
+        'pop-in': {
+          '0%': { transform: 'scale(0)', opacity: '0' },
+          '50%': { transform: 'scale(1.1)' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+        'fade-in': {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        'slide-up': {
+          '0%': { transform: 'translateY(8px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+        'slide-down': {
+          '0%': { transform: 'translateY(-8px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+      },
+      animation: {
+        wiggle: 'wiggle 320ms var(--transition-bouncy)',
+        'pop-in': 'pop-in 200ms ease',
+        'fade-in': 'fade-in 150ms ease',
+        'slide-up': 'slide-up 150ms ease',
+        'slide-down': 'slide-down 150ms ease',
+        spin: 'spin 1s linear infinite',
       },
     },
   },
