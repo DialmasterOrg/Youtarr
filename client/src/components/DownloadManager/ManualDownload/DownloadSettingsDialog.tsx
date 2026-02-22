@@ -132,12 +132,14 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
     const checked = event.target.checked;
     setUseCustomSettings(checked);
     setHasUserInteracted(true);
-    // When enabling custom settings, if rating is not set, initialize to channel/defaultRating
-    if (checked && (rating === null || rating === undefined)) {
-      // defaultRating prop may be undefined in some usages
-      // prefer to leave null if no defaultRating available
-      if (typeof defaultRating !== 'undefined' && defaultRating !== null) {
-        setRating(defaultRating);
+    if (checked) {
+      // When enabling custom settings, if rating is not set, initialize to channel/defaultRating
+      if (rating === null || rating === undefined) {
+        // defaultRating prop may be undefined in some usages
+        // prefer to leave null if no defaultRating available
+        if (typeof defaultRating !== 'undefined' && defaultRating !== null) {
+          setRating(defaultRating);
+        }
       }
     }
   };
@@ -198,8 +200,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
     // Include subfolder override if set (only for manual mode)
     const hasOverride = useCustomSettings || allowRedownload ||
       (mode === 'manual' && subfolderOverride !== null) ||
-      (mode === 'manual' && audioFormat !== null) ||
-      (mode === 'manual' && skipVideoFolder);
+      (mode === 'manual' && audioFormat !== null);
 
     if (hasOverride) {
       onConfirm({
@@ -211,7 +212,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
         // Include rating only if custom settings are enabled (user explicitly selected it)
         // Use an explicit sentinel 'NR' when the user selected "No Rating" (null)
         rating: useCustomSettings ? (rating === null ? 'NR' : (rating ?? undefined)) : undefined,
-        skipVideoFolder: mode === 'manual' ? skipVideoFolder : undefined
+        skipVideoFolder: mode === 'manual' ? (useCustomSettings ? skipVideoFolder : false) : undefined
       });
     } else {
       onConfirm(null); // Use defaults - post-processor will apply channel default rating

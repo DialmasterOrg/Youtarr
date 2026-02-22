@@ -826,27 +826,32 @@ describe('DownloadSettingsDialog', () => {
       );
     });
 
-    test('triggers override when only skipVideoFolder is toggled (no custom settings)', () => {
+    test('sends skipVideoFolder false when custom settings are disabled', () => {
       render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
 
       // Enable custom settings to access toggle
       const customToggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
       fireEvent.click(customToggle);
 
-      // Toggle skipVideoFolder
+      // Toggle skipVideoFolder on
       const skipToggle = screen.getByRole('checkbox', { name: /Flat file structure/i });
       fireEvent.click(skipToggle);
+      expect(skipToggle).toBeChecked();
 
-      // Disable custom settings - skipVideoFolder should still trigger override
+      // Also enable re-download so hasOverride is true even with custom off
+      const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      fireEvent.click(redownloadToggle);
+
+      // Disable custom settings
       fireEvent.click(customToggle);
 
       const confirmButton = screen.getByRole('button', { name: /Start Download/i });
       fireEvent.click(confirmButton);
 
-      // With skipVideoFolder true and mode manual, hasOverride should be true
+      // Payload should have skipVideoFolder: false when custom settings are off
       expect(mockOnConfirm).toHaveBeenCalledWith(
         expect.objectContaining({
-          skipVideoFolder: true,
+          skipVideoFolder: false,
         })
       );
     });

@@ -32,10 +32,12 @@ class ChannelFilterConfig {
   }
 
   /**
-   * Check if any filters are set
-   * @returns {boolean} - True if at least one filter is configured
+   * Check if any grouping criteria (filters or structural settings) are set.
+   * Includes duration/title filters and structural options like skipVideoFolder
+   * that affect how downloads are organized on disk.
+   * @returns {boolean} - True if at least one criterion is configured
    */
-  hasFilters() {
+  hasGroupingCriteria() {
     return this.minDuration !== null ||
            this.maxDuration !== null ||
            this.titleFilterRegex !== null ||

@@ -86,35 +86,35 @@ describe('ChannelDownloadGrouper', () => {
       });
     });
 
-    describe('hasFilters', () => {
+    describe('hasGroupingCriteria', () => {
       it('should return true when minDuration is set', () => {
         const filterConfig = new ChannelFilterConfig(300, null, null);
-        expect(filterConfig.hasFilters()).toBe(true);
+        expect(filterConfig.hasGroupingCriteria()).toBe(true);
       });
 
       it('should return true when maxDuration is set', () => {
         const filterConfig = new ChannelFilterConfig(null, 3600, null);
-        expect(filterConfig.hasFilters()).toBe(true);
+        expect(filterConfig.hasGroupingCriteria()).toBe(true);
       });
 
       it('should return true when titleFilterRegex is set', () => {
         const filterConfig = new ChannelFilterConfig(null, null, 'test');
-        expect(filterConfig.hasFilters()).toBe(true);
+        expect(filterConfig.hasGroupingCriteria()).toBe(true);
       });
 
       it('should return true when all filters are set', () => {
         const filterConfig = new ChannelFilterConfig(300, 3600, 'test');
-        expect(filterConfig.hasFilters()).toBe(true);
+        expect(filterConfig.hasGroupingCriteria()).toBe(true);
       });
 
       it('should return false when no filters are set', () => {
         const filterConfig = new ChannelFilterConfig(null, null, null);
-        expect(filterConfig.hasFilters()).toBe(false);
+        expect(filterConfig.hasGroupingCriteria()).toBe(false);
       });
 
       it('should return false for default constructor', () => {
         const filterConfig = new ChannelFilterConfig();
-        expect(filterConfig.hasFilters()).toBe(false);
+        expect(filterConfig.hasGroupingCriteria()).toBe(false);
       });
     });
 

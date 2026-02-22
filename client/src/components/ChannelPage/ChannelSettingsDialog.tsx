@@ -192,7 +192,8 @@ function ChannelSettingsDialog({
             ? settingsData.default_rating
             : null,
           skip_video_folder: Object.prototype.hasOwnProperty.call(settingsData, 'skip_video_folder')
-            ? settingsData.skip_video_folder : null,
+            ? settingsData.skip_video_folder
+            : null,
         };
         setSettings(loadedSettings);
         setOriginalSettings(loadedSettings);

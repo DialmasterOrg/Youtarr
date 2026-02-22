@@ -360,7 +360,7 @@ describe('DownloadModule', () => {
             minDuration: 300,
             maxDuration: 3600,
             titleFilterRegex: null,
-            hasFilters: jest.fn().mockReturnValue(true)
+            hasGroupingCriteria: jest.fn().mockReturnValue(true)
           },
           channels: [{ channel_id: 'UC1' }]
         }
@@ -370,7 +370,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doChannelDownloads();
 
-      expect(groups[0].filterConfig.hasFilters).toHaveBeenCalled();
+      expect(groups[0].filterConfig.hasGroupingCriteria).toHaveBeenCalled();
       expect(spy).toHaveBeenCalledWith({}, groups, false);
     });
 
@@ -795,7 +795,7 @@ describe('DownloadModule', () => {
         minDuration: 300,
         maxDuration: 3600,
         titleFilterRegex: 'test.*',
-        hasFilters: jest.fn().mockReturnValue(true)
+        hasGroupingCriteria: jest.fn().mockReturnValue(true)
       };
       const group = {
         quality: '1080',

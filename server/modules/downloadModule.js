@@ -103,7 +103,7 @@ class DownloadModule {
         groups.length > 1 ||
         groups.some((g) => g.subFolder !== null) ||
         groups.some((g) => g.quality !== effectiveGlobalQuality) ||
-        groups.some((g) => g.filterConfig && g.filterConfig.hasFilters && g.filterConfig.hasFilters());
+        groups.some((g) => g.filterConfig && g.filterConfig.hasGroupingCriteria && g.filterConfig.hasGroupingCriteria());
 
       if (needsGrouping) {
         console.log(`Using grouped downloads: ${groups.length} group(s) with resolved settings`);

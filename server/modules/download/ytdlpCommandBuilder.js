@@ -328,9 +328,9 @@ class YtdlpCommandBuilder {
     // If no filter config provided or no filters set, return base filters only
     if (
       !filterConfig ||
-      !filterConfig.hasFilters ||
-      (typeof filterConfig.hasFilters === 'function' &&
-        !filterConfig.hasFilters())
+      !filterConfig.hasGroupingCriteria ||
+      (typeof filterConfig.hasGroupingCriteria === 'function' &&
+        !filterConfig.hasGroupingCriteria())
     ) {
       return baseFilters.join(' & ');
     }

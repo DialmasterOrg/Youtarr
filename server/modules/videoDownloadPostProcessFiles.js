@@ -545,8 +545,9 @@ async function copyChannelPosterIfNeeded(channelId, channelFolderPath) {
           // Flat mode: move individual files from temp channel folder to final channel folder
           // Filter by video ID to avoid moving files belonging to other downloads
           const allFilesInDir = await fs.readdir(videoDirectory);
+          // Bracketed form [ID] is the yt-dlp default; dash form " - ID" is a fallback
           const updatedFilesInDir = allFilesInDir.filter(
-            file => file.includes(`[${id}]`)
+            file => file.includes(`[${id}]`) || file.includes(` - ${id}`)
           );
           for (const file of updatedFilesInDir) {
             const srcPath = path.join(videoDirectory, file);
