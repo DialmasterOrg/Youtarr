@@ -274,6 +274,18 @@ class ChannelSettingsModule {
   }
 
   /**
+   * Validate skip_video_folder setting
+   * @param {boolean|null} value - Skip video folder setting to validate
+   * @returns {Object} - { valid: boolean, error?: string }
+   */
+  validateSkipVideoFolder(value) {
+    if (value === null || value === undefined || value === true || value === false) {
+      return { valid: true };
+    }
+    return { valid: false, error: 'skip_video_folder must be true, false, or null' };
+  }
+
+  /**
    * Get the full directory path for a channel, including subfolder if set
    * @param {Object} channel - Channel database record
    * @returns {string} - Full directory path
@@ -497,6 +509,7 @@ class ChannelSettingsModule {
       title_filter_regex: channel.title_filter_regex,
       audio_format: channel.audio_format,
       default_rating: channel.default_rating,
+      skip_video_folder: channel.skip_video_folder,
     };
   }
 
@@ -585,6 +598,14 @@ class ChannelSettingsModule {
       }
     }
 
+    // Validate skip_video_folder if provided
+    if (settings.skip_video_folder !== undefined) {
+      const validation = this.validateSkipVideoFolder(settings.skip_video_folder);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+    }
+
     // Store old subfolder for potential move
     const oldSubFolder = channel.sub_folder;
     const newSubFolder = settings.sub_folder !== undefined ?
@@ -620,6 +641,9 @@ class ChannelSettingsModule {
     }
     if (settings.audio_format !== undefined) {
       updateData.audio_format = settings.audio_format;
+    }
+    if (settings.skip_video_folder !== undefined) {
+      updateData.skip_video_folder = settings.skip_video_folder;
     }
 
     // Update database FIRST to ensure changes are persisted before slow file operations
@@ -667,6 +691,7 @@ class ChannelSettingsModule {
         title_filter_regex: updatedChannel.title_filter_regex,
         audio_format: updatedChannel.audio_format,
         default_rating: updatedChannel.default_rating,
+        skip_video_folder: updatedChannel.skip_video_folder,
       },
       folderMoved: subFolderChanged,
       moveResult
