@@ -21,11 +21,9 @@ const meta: Meta<typeof ChannelManager> = {
 export default meta;
 type Story = StoryObj<typeof ChannelManager>;
 
-export const Default: Story = {  render: (args) => (
-    <MemoryRouter>
-      <ChannelManager {...args} />
-    </MemoryRouter>
-  ),  parameters: {
+export const Default: Story = {
+  render: (args) => <ChannelManager {...args} />,
+  parameters: {
     msw: {
       handlers: [
         http.get('/getconfig', () =>

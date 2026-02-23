@@ -1,11 +1,27 @@
 import React from 'react';
 import { render } from '@testing-library/react';
+import { ThemeProvider } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+import { LocalizationProvider } from '@mui/x-date-pickers';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { MemoryRouter } from 'react-router-dom';
+import WebSocketContext from '../../contexts/WebSocketContext';
+import { lightTheme, darkTheme } from '../../theme';
 
 type AnyObject = Record<string, any>;
 
 type StoryModule = {
   default: AnyObject;
   [key: string]: any;
+};
+
+/**
+ * Mock WebSocket context for stories.
+ */
+const mockWebSocketContext = {
+  socket: null,
+  subscribe: () => {},
+  unsubscribe: () => {},
 };
 
 function applyDecorators(storyNode: React.ReactNode, decorators: any[], context: AnyObject) {
@@ -33,7 +49,7 @@ export async function runStoryWithPlay(storyModule: StoryModule, storyName: stri
       ...(meta.parameters || {}),
       ...(story.parameters || {}),
     },
-    globals: {},
+    globals: { theme: 'light' },
     viewMode: 'story',
     hooks: {},
   };
@@ -47,7 +63,22 @@ export async function runStoryWithPlay(storyModule: StoryModule, storyName: stri
   const StoryRenderComponent = () => renderFn(args, context);
   const initialNode = <StoryRenderComponent />;
   const decoratedNode = applyDecorators(initialNode, decorators, context);
-  const utils = render(<>{decoratedNode}</>);
+  
+  // Apply global providers (mimicking preview.js setup)
+  const selectedTheme = context.globals.theme === 'dark' ? darkTheme : lightTheme;
+  
+  const withProviders = (
+    <LocalizationProvider dateAdapter={AdapterDateFns}>
+      <ThemeProvider theme={selectedTheme}>
+        <CssBaseline />
+        <WebSocketContext.Provider value={mockWebSocketContext}>
+          {decoratedNode}
+        </WebSocketContext.Provider>
+      </ThemeProvider>
+    </LocalizationProvider>
+  );
+  
+  const utils = render(<>{withProviders}</>);
 
   if (typeof story.play === 'function') {
     await story.play({

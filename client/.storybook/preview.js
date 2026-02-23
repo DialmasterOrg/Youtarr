@@ -4,10 +4,47 @@ import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { MemoryRouter } from 'react-router-dom';
 import WebSocketContext from '../src/contexts/WebSocketContext';
 import { lightTheme, darkTheme } from '../src/theme';
 import { defaultMswHandlers } from './fixtures/mswHandlers';
+
+/**
+ * STORYBOOK ROUTER CONFIGURATION
+ * 
+ * Stories for components that use React Router hooks (useNavigate, useParams, useLocation)
+ * must explicitly wrap their components with MemoryRouter to avoid runtime errors.
+ * 
+ * Router-dependent components with stories:
+ * - ChannelManager (.../ChannelManager.story.tsx)
+ * - ChannelPage (.../ChannelPage.story.tsx)
+ * - DownloadManager (.../DownloadManager.story.tsx)
+ * - ChannelVideos (.../ChannelPage/__tests__/ChannelVideos.story.tsx)
+ * - DownloadProgress (.../DownloadManager/__tests__/DownloadProgress.story.tsx)
+ * 
+ * To add routing to a story:
+ * 
+ * 1. For components that need routing context but no specific routes:
+ *    import { MemoryRouter } from 'react-router-dom';
+ *    const meta: Meta<typeof MyComponent> = {
+ *      // ...
+ *      decorators: [
+ *        (Story) => <MemoryRouter><Story /></MemoryRouter>
+ *      ]
+ *    };
+ * 
+ * 2. For components that need specific routes/parameters:
+ *    import { MemoryRouter, Routes, Route } from 'react-router-dom';
+ *    const meta: Meta<typeof MyComponent> = {
+ *      // ...
+ *      render: (args) => (
+ *        <MemoryRouter initialEntries={['/path/to/route']}>
+ *          <Routes>
+ *            <Route path="/path/:id" element={<MyComponent {...args} />} />
+ *          </Routes>
+ *        </MemoryRouter>
+ *      )
+ *    };
+ */
 
 initialize({
   onUnhandledRequest: 'bypass',
@@ -81,20 +118,16 @@ const preview = {
       const selectedTheme = context.globals.theme === 'dark' ? darkTheme : lightTheme;
 
       return React.createElement(
-        MemoryRouter,
-        null,
+        LocalizationProvider,
+        { dateAdapter: AdapterDateFns },
         React.createElement(
-          LocalizationProvider,
-          { dateAdapter: AdapterDateFns },
+          ThemeProvider,
+          { theme: selectedTheme },
+          React.createElement(CssBaseline, null),
           React.createElement(
-            ThemeProvider,
-            { theme: selectedTheme },
-            React.createElement(CssBaseline, null),
-            React.createElement(
-              WebSocketContext.Provider,
-              { value: mockWebSocketContext },
-              React.createElement(Story)
-            )
+            WebSocketContext.Provider,
+            { value: mockWebSocketContext },
+            React.createElement(Story)
           )
         )
       );

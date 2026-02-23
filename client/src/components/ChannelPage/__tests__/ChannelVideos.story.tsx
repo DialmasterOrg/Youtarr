@@ -13,13 +13,6 @@ const meta: Meta<typeof ChannelVideos> = {
     channelId: 'chan-1',
     channelAutoDownloadTabs: 'video',
   },
-  decorators: [
-    (Story) => (
-      <MemoryRouter>
-        <Story />
-      </MemoryRouter>
-    ),
-  ],
   parameters: {
     layout: 'fullscreen',
     msw: {
@@ -43,6 +36,13 @@ const meta: Meta<typeof ChannelVideos> = {
       ],
     },
   },
+  decorators: [
+    (Story) => (
+      <MemoryRouter>
+        <Story />
+      </MemoryRouter>
+    ),
+  ],
 };
 
 export default meta;
