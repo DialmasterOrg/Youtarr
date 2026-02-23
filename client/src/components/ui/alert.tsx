@@ -32,6 +32,9 @@ const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
         className={cn(
           'flex gap-3 rounded-[var(--radius-ui)] border px-4 py-3 text-sm font-sans',
           config.classes,
+          variant === 'standard' && `MuiAlert-standard MuiAlert-standard${severity.charAt(0).toUpperCase()}${severity.slice(1)}`,
+          variant === 'outlined' && `MuiAlert-outlined MuiAlert-outlined${severity.charAt(0).toUpperCase()}${severity.slice(1)}`,
+          variant === 'filled' && `MuiAlert-filled MuiAlert-filled${severity.charAt(0).toUpperCase()}${severity.slice(1)}`,
           className
         )}
         {...props}

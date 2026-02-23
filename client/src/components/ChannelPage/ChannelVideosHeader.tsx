@@ -105,7 +105,7 @@ function ChannelVideosHeader({
           style={{ marginLeft: 4, padding: 4, background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', color: 'var(--foreground)' }}
           onClick={handleClick}
         >
-          <InfoIcon size={16} />
+          <InfoIcon size={16} data-testid="InfoIcon" />
         </button>
       );
     }
@@ -113,7 +113,7 @@ function ChannelVideosHeader({
     return (
       <Tooltip title={message} arrow placement="top">
         <button style={{ marginLeft: 4, padding: 4, background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', color: 'var(--foreground)' }} onClick={(e) => e.stopPropagation()}>
-          <InfoIcon size={16} />
+          <InfoIcon size={16} data-testid="InfoIcon" />
         </button>
       </Tooltip>
     );
@@ -240,6 +240,16 @@ function ChannelVideosHeader({
             label="Hide Downloaded"
             />
           )}
+
+          <FormControlLabel
+            control={<Switch checked={autoDownloadsEnabled} onChange={() => {}} size="small" />}
+            label={
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                Enable Channel Downloads for this tab
+                {renderInfoIcon(autoDownloadTooltip)}
+              </div>
+            }
+          />
         </div>
 
         {/* Action buttons for desktop */}

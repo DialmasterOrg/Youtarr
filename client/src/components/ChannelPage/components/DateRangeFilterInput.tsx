@@ -29,8 +29,15 @@ function DateRangeFilterInput({
           Date:
         </Typography>
       )}
+      {compact && (
+        <label htmlFor="filter-from-date" style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)' }}>
+          From
+        </label>
+      )}
       <input
+        id="filter-from-date"
         type="date"
+        role="textbox"
         value={toInputValue(dateFrom)}
         onChange={(e) => onFromChange(fromInputValue(e.target.value))}
         aria-label="Filter from date"
@@ -40,8 +47,15 @@ function DateRangeFilterInput({
       <Typography variant="body2" color="text.secondary">
         to
       </Typography>
+      {compact && (
+        <label htmlFor="filter-to-date" style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)' }}>
+          To
+        </label>
+      )}
       <input
+        id="filter-to-date"
         type="date"
+        role="textbox"
         value={toInputValue(dateTo)}
         onChange={(e) => onToChange(fromInputValue(e.target.value))}
         aria-label="Filter to date"

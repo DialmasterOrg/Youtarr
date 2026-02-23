@@ -93,7 +93,15 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         <Comp
           ref={ref}
           disabled={disabled || loading}
-          className={cn(buttonVariants({ variant, size: normalizedSize, fullWidth, className }))}
+          className={cn(
+            buttonVariants({ variant, size: normalizedSize, fullWidth, className }),
+            variant === 'contained' && 'MuiButton-contained',
+            variant === 'outlined' && 'MuiButton-outlined',
+            variant === 'text' && 'MuiButton-text',
+            normalizedSize === 'sm' && 'MuiButton-sizeSmall',
+            normalizedSize === 'md' && 'MuiButton-sizeMedium',
+            normalizedSize === 'lg' && 'MuiButton-sizeLarge'
+          )}
           {...props}
         >
           {children}
@@ -105,7 +113,15 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <Comp
         ref={ref}
         disabled={disabled || loading}
-        className={cn(buttonVariants({ variant, size: normalizedSize, fullWidth, className }))}
+        className={cn(
+          buttonVariants({ variant, size: normalizedSize, fullWidth, className }),
+          variant === 'contained' && 'MuiButton-contained',
+          variant === 'outlined' && 'MuiButton-outlined',
+          variant === 'text' && 'MuiButton-text',
+          normalizedSize === 'sm' && 'MuiButton-sizeSmall',
+          normalizedSize === 'md' && 'MuiButton-sizeMedium',
+          normalizedSize === 'lg' && 'MuiButton-sizeLarge'
+        )}
         {...props}
       >
         {loading ? (

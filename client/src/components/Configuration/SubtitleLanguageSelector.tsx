@@ -32,34 +32,44 @@ function SubtitleLanguageSelector({
   onChange,
   disabled = false,
 }: SubtitleLanguageSelectorProps) {
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
-
-  // Convert string value to array when component mounts or value changes
-  useEffect(() => {
-    if (value && value.trim()) {
-      const languages = value.split(',').map((lang) => lang.trim()).filter(Boolean);
-      // Filter out invalid codes
+  const parseInitialLanguages = React.useCallback((rawValue: string) => {
+    if (rawValue && rawValue.trim()) {
+      const languages = rawValue.split(',').map((lang) => lang.trim()).filter(Boolean);
       const validLanguages = languages.filter((lang) =>
         LANGUAGE_OPTIONS.some((opt) => opt.code === lang)
       );
-      setSelectedLanguages(validLanguages.length > 0 ? validLanguages : ['en']);
-    } else {
-      setSelectedLanguages(['en']);
+      return validLanguages.length > 0 ? validLanguages : ['en'];
     }
-  }, [value]);
+    return ['en'];
+  }, []);
 
-  const handleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const options = Array.from(event.target.selectedOptions).map((o) => o.value);
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(() => parseInitialLanguages(value));
+  const [open, setOpen] = useState(false);
 
-    // Ensure at least one language is selected
-    if (options.length === 0) {
-      setSelectedLanguages(['en']);
-      onChange('en');
+  // Convert string value to array when component mounts or value changes
+  useEffect(() => {
+    setSelectedLanguages(parseInitialLanguages(value));
+  }, [value, parseInitialLanguages]);
+
+  const handleToggleLanguage = (code: string) => {
+    if (disabled) return;
+    const isSelected = selectedLanguages.includes(code);
+
+    if (isSelected) {
+      const next = selectedLanguages.filter((lang) => lang !== code);
+      if (next.length === 0) {
+        setSelectedLanguages(['en']);
+        onChange('en');
+        return;
+      }
+      setSelectedLanguages(next);
+      onChange(next.join(','));
       return;
     }
 
-    setSelectedLanguages(options);
-    onChange(options.join(','));
+    const next = [...selectedLanguages, code];
+    setSelectedLanguages(next);
+    onChange(next.join(','));
   };
 
   return (
@@ -70,32 +80,55 @@ function SubtitleLanguageSelector({
       >
         Subtitle Languages
       </label>
-      <select
+      <button
         id="subtitle-language-select"
-        multiple
-        value={selectedLanguages}
-        onChange={handleChange}
+        type="button"
+        onClick={() => { if (!disabled) setOpen((v) => !v); }}
         disabled={disabled}
         aria-disabled={disabled ? 'true' : undefined}
-        size={5}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-label="Subtitle Languages"
         style={{
           width: '100%',
+          textAlign: 'left',
           border: '1px solid var(--border)',
           borderRadius: 'var(--radius-input)',
           backgroundColor: 'var(--background)',
           color: 'var(--foreground)',
-          padding: '4px',
+          padding: '8px',
           fontSize: '0.875rem',
           opacity: disabled ? 0.5 : 1,
           cursor: disabled ? 'not-allowed' : 'auto',
         }}
       >
-        {LANGUAGE_OPTIONS.map((option) => (
-          <option key={option.code} value={option.code}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+        {selectedLanguages
+          .map((code) => LANGUAGE_OPTIONS.find((o) => o.code === code)?.label || code)
+          .join(', ')}
+      </button>
+      {open && !disabled && (
+        <div role="listbox" aria-label="Subtitle Languages options" style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-input)', padding: 4, maxHeight: 220, overflowY: 'auto' }}>
+          {LANGUAGE_OPTIONS.map((option) => {
+            const selected = selectedLanguages.includes(option.code);
+            return (
+              <div
+                key={option.code}
+                role="option"
+                aria-selected={selected}
+                onClick={() => handleToggleLanguage(option.code)}
+                style={{
+                  padding: '6px 8px',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  background: selected ? 'var(--muted)' : 'transparent',
+                }}
+              >
+                {option.label}
+              </div>
+            );
+          })}
+        </div>
+      )}
       <span style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)' }}>
         Selected: {selectedLanguages.map((code) => {
           const opt = LANGUAGE_OPTIONS.find((o) => o.code === code);

@@ -25,7 +25,7 @@ import {
   FolderOpen as FolderIcon,
   Gauge as QualityIcon,
   Video as VideocamIcon
-} from 'lucide-react';
+} from '../../../lib/icons';
 import { DownloadSettings } from './types';
 import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
 import { useSubfolders } from '../../../hooks/useSubfolders';
@@ -204,7 +204,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       BackdropProps={{ 'data-testid': 'dialog-backdrop' } as any}
     >
       <DialogTitle className="flex items-center gap-2">
-        <SettingsIcon size={20} />
+        <SettingsIcon size={20} data-testid="SettingsIcon" />
         Download Settings
       </DialogTitle>
 
@@ -277,7 +277,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
 
               {mode === 'channel' && (
                 <Box className="flex items-center gap-2 mb-3">
-                  <DownloadIcon size={16} className="text-muted-foreground" />
+                  <DownloadIcon size={16} data-testid="DownloadIcon" className="text-muted-foreground" />
                   <Typography variant="body2">
                     <strong>Videos per channel:</strong> {defaultVideoCount}
                   </Typography>
@@ -451,7 +451,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
         <Button
           onClick={handleConfirm}
           variant="contained"
-          startIcon={<DownloadIcon />}
+          startIcon={<DownloadIcon data-testid="DownloadIcon" />}
           color="primary"
         >
           Start Download

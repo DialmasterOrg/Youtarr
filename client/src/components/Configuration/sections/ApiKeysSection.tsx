@@ -282,6 +282,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
                         size="small"
                         onClick={() => openDeleteConfirmDialog(key.id, key.name)}
                         color="error"
+                        aria-label="Delete"
                       >
                         <DeleteIcon fontSize="small" />
                       </IconButton>

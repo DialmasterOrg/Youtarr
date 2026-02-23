@@ -24,7 +24,7 @@ export interface MenuProps {
  * For backwards-compat with MUI's anchorEl pattern we use a fixed-pos
  * div portal positioned at anchorEl's bounding box.
  */
-const Menu: React.FC<MenuProps> = ({ open, anchorEl, onClose, children, className, PaperProps }) => {
+const Menu: React.FC<MenuProps> = ({ open, anchorEl, onClose, children, className, PaperProps, keepMounted = false }) => {
   const [pos, setPos] = React.useState<{ top: number; left: number } | null>(null);
 
   React.useEffect(() => {
@@ -34,16 +34,18 @@ const Menu: React.FC<MenuProps> = ({ open, anchorEl, onClose, children, classNam
     }
   }, [open, anchorEl]);
 
-  if (!open) return null;
+  if (!open && !keepMounted) return null;
 
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-40" onClick={onClose} />
+      {open && <div className="fixed inset-0 z-40" onClick={onClose} />}
       {/* Menu panel */}
       <div
         role="menu"
-        style={pos ? { position: 'absolute', top: pos.top + 4, left: pos.left, zIndex: 1300 } : undefined}
+        style={pos ? { position: 'absolute', top: pos.top + 4, left: pos.left, zIndex: 1300 } : { position: 'absolute', top: 0, left: 0, zIndex: 1300 }}
+        hidden={!open}
+        aria-hidden={!open}
         className={cn(
           'min-w-[12rem] overflow-hidden',
           'rounded-[var(--radius-ui)]',

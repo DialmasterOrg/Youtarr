@@ -29,7 +29,7 @@ const TerminateJobDialog: React.FC<TerminateJobDialogProps> = ({
       fullWidth
     >
       <DialogTitle style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <WarningIcon size={20} color="var(--warning)" />
+        <WarningIcon size={20} color="var(--warning)" data-testid="WarningIcon" />
         Confirm Download Termination
       </DialogTitle>
 
@@ -80,7 +80,7 @@ const TerminateJobDialog: React.FC<TerminateJobDialogProps> = ({
           onClick={onConfirm}
           variant="outlined"
           color="warning"
-          startIcon={<StopIcon />}
+          startIcon={<StopIcon data-testid="StopIcon" />}
         >
           Terminate Download
         </Button>

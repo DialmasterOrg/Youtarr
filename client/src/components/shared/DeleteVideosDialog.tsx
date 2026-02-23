@@ -34,7 +34,7 @@ const DeleteVideosDialog: React.FC<DeleteVideosDialogProps> = ({
       fullWidth
     >
       <DialogTitle style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <WarningIcon size={20} />
+        <WarningIcon size={20} data-testid="WarningIcon" />
         Confirm Video Deletion
       </DialogTitle>
 
@@ -86,7 +86,7 @@ const DeleteVideosDialog: React.FC<DeleteVideosDialogProps> = ({
           onClick={onConfirm}
           variant="outlined"
           color="error"
-          startIcon={<DeleteIcon size={16} />}
+          startIcon={<DeleteIcon size={16} data-testid="DeleteForeverIcon" />}
         >
           Delete {videoCount === 1 ? 'Video' : 'Videos'}
         </Button>

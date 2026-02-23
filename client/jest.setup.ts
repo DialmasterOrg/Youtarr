@@ -155,3 +155,15 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
     disconnect() {}
   };
 }
+
+if (typeof globalThis.IntersectionObserver === 'undefined') {
+  globalThis.IntersectionObserver = class IntersectionObserver {
+    readonly root = null;
+    readonly rootMargin = '';
+    readonly thresholds = [];
+    disconnect() {}
+    observe() {}
+    unobserve() {}
+    takeRecords() { return []; }
+  } as any;
+}

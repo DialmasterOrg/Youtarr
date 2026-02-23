@@ -63,6 +63,7 @@ export interface DialogProps {
   children?: React.ReactNode;
   className?: string;
   disableEscapeKeyDown?: boolean;
+  [key: string]: any;
 }
 
 const Dialog: React.FC<DialogProps> = ({
@@ -75,6 +76,7 @@ const Dialog: React.FC<DialogProps> = ({
   children,
   className,
   disableEscapeKeyDown = false,
+  ...contentProps
 }) => (
   <DialogRoot
     open={open}
@@ -100,6 +102,7 @@ const Dialog: React.FC<DialogProps> = ({
         )}
         onEscapeKeyDown={(e) => { if (disableEscapeKeyDown) e.preventDefault(); else onClose?.({}, 'escapeKeyDown'); }}
         onInteractOutside={() => { onClose?.({}, 'backdropClick'); }}
+        {...contentProps}
       >
         {children}
       </DialogPrimitive.Content>

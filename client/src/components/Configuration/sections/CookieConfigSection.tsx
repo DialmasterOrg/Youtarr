@@ -31,6 +31,7 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
   setSnackbar,
   onMobileTooltipClick,
 }) => {
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const {
     cookieStatus,
     uploadingCookie,
@@ -103,20 +104,19 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                   <Button
                     variant="contained"
-                    asChild
                     disabled={uploadingCookie}
+                    onClick={() => fileInputRef.current?.click()}
                   >
-                    <label style={{ cursor: uploadingCookie ? 'not-allowed' : 'pointer' }}>
-                      {uploadingCookie ? 'Uploading...' : 'Upload Cookie File'}
-                      <input
-                        type="file"
-                        hidden
-                        accept=".txt,text/plain"
-                        data-testid="cookie-file-input"
-                        onChange={handleCookieUpload}
-                      />
-                    </label>
+                    {uploadingCookie ? 'Uploading...' : 'Upload Cookie File'}
                   </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    hidden
+                    accept=".txt,text/plain"
+                    data-testid="cookie-file-input"
+                    onChange={handleCookieUpload}
+                  />
                   {cookieStatus?.customFileExists && (
                     <>
                       <Chip

@@ -64,7 +64,7 @@ const FilterMenu: React.FC<FilterMenuProps> = ({
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
           InputProps={{
-            startAdornment: <SearchIcon size={16} style={{ marginRight: 4, color: 'var(--muted-foreground)' }} />,
+            startAdornment: <SearchIcon size={16} data-testid="SearchIcon" style={{ marginRight: 4, color: 'var(--muted-foreground)' }} />,
           }}
           autoFocus
         />
@@ -79,7 +79,7 @@ const FilterMenu: React.FC<FilterMenuProps> = ({
         All
         {filter === '' && (
           <ListItemIcon>
-            <CheckIcon />
+            <CheckIcon data-testid="CheckIcon" />
           </ListItemIcon>
         )}
       </MenuItem>
@@ -100,7 +100,7 @@ const FilterMenu: React.FC<FilterMenuProps> = ({
             {channel}
             {filter === channel && (
               <ListItemIcon>
-                <CheckIcon />
+                <CheckIcon data-testid="CheckIcon" />
               </ListItemIcon>
             )}
           </MenuItem>
