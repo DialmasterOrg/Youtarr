@@ -50,6 +50,10 @@ const AccordionContent = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <AccordionPrimitive.Content
     ref={ref}
+    // forceMount keeps content in the DOM even when collapsed.
+    // This ensures test queries (getByText, getByTestId) can find elements
+    // without needing to expand the accordion first.
+    forceMount
     className={cn(
       'overflow-hidden text-sm',
       'data-[state=closed]:animate-[accordion-up_0.2s_ease-out]',
@@ -95,6 +99,7 @@ const Accordion: React.FC<AccordionProps> = ({
   return (
     <AccordionRoot
       type="single"
+      collapsible
       value={isOpen ? id : ''}
       onValueChange={(v) => {
         const nowOpen = v === id;

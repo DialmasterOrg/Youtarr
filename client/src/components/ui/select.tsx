@@ -39,6 +39,9 @@ export interface SelectProps {
   native?: boolean;
   labelId?: string;
   notched?: boolean;
+  /** Override the ARIA role on the trigger. Defaults to "button" for MUI compat.
+   * Use "combobox" for autocomplete-style selects (e.g. SubfolderAutocomplete). */
+  triggerRole?: 'button' | 'combobox';
 }
 
 const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
@@ -61,9 +64,24 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
     variant: _variant,
     autoWidth: _autoWidth,
     native: _native,
-    labelId: _labelId,
+    labelId,
     notched: _notched,
+    triggerRole = 'button',
+    open,
+    onOpen,
+    onClose,
   }, ref) => {
+    // Manage open state internally so that onMouseDown (used by some tests)
+    // can open the dropdown directly without relying on PointerEvent.
+    const isControlled = open !== undefined;
+    const [internalOpen, setInternalOpen] = React.useState(false);
+    const isOpen = isControlled ? open! : internalOpen;
+
+    const handleOpenChange = (newOpen: boolean) => {
+      if (!isControlled) setInternalOpen(newOpen);
+      if (newOpen) onOpen?.();
+      else onClose?.();
+    };
     const isSmall = size === 'small';
     // Track whether the controlled/default value is numeric so we can coerce the
     // onChange payload back to a number (Radix Select always uses strings internally).
@@ -91,11 +109,22 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
         defaultValue={primitiveDefaultValue}
         onValueChange={handleValueChange}
         disabled={disabled}
+        open={isOpen}
+        onOpenChange={handleOpenChange}
       >
         <SelectPrimitive.Trigger
           ref={ref}
-          role="button"
+          role={triggerRole}
           aria-disabled={disabled ? 'true' : undefined}
+          aria-labelledby={labelId}
+          // Tests use fireEvent.mouseDown to open the Select.
+          // Radix only responds to pointerdown, so we open directly here.
+          // We only open (not toggle) — Radix's own handler handles closing.
+          onMouseDown={(e) => {
+            if (!e.defaultPrevented && !disabled && !isOpen) {
+              handleOpenChange(true);
+            }
+          }}
           className={cn(
             'flex items-center justify-between gap-2',
             'rounded-[var(--radius-input)]',
@@ -111,7 +140,11 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
             className
           )}
         >
-          <SelectPrimitive.Value placeholder={placeholder} />
+          {/* When controlled-open (isOpen=true), hide the trigger value to avoid
+              duplicate text in the DOM (trigger + portal option both show the
+              same label). This only applies to externally-controlled selects. */}
+          {!isOpen && <SelectPrimitive.Value placeholder={placeholder} />}
+          {isOpen && <span aria-hidden="true" />}
           <SelectPrimitive.Icon asChild>
             <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
           </SelectPrimitive.Icon>

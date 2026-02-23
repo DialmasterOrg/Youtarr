@@ -158,6 +158,7 @@ const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
             id={id}
             disabled={disabled}
             required={required}
+            aria-invalid={error ? 'true' : 'false'}
             placeholder={effectivePlaceholder}
             value={value}
             defaultValue={defaultValue}

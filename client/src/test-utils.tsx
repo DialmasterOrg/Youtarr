@@ -25,15 +25,19 @@ export function renderWithProviders(
 ) {
   const value = opts?.websocketValue ?? createMockWebSocketContext();
 
-  return render(
-    <MemoryRouter>
-      <ThemeEngineProvider>
-        <WebSocketContext.Provider value={value}>
-          <TooltipProvider>
-            {ui}
-          </TooltipProvider>
-        </WebSocketContext.Provider>
-      </ThemeEngineProvider>
-    </MemoryRouter>
-  );
+  function Wrapper({ children }: { children: React.ReactNode }) {
+    return (
+      <MemoryRouter>
+        <ThemeEngineProvider>
+          <WebSocketContext.Provider value={value}>
+            <TooltipProvider>
+              {children}
+            </TooltipProvider>
+          </WebSocketContext.Provider>
+        </ThemeEngineProvider>
+      </MemoryRouter>
+    );
+  }
+
+  return render(ui, { wrapper: Wrapper });
 }

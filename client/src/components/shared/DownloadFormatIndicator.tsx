@@ -64,7 +64,7 @@ const DownloadFormatIndicator: React.FC<DownloadFormatIndicatorProps> = ({
         <Tooltip title={displayAudioPath} arrow placement="top" enterTouchDelay={0}>
           <Chip
             size="small"
-            icon={<AudioIcon size={14} className="text-secondary" />}
+            icon={<AudioIcon size={14} className="text-secondary" data-testid="AudiotrackOutlinedIcon" />}
             label={audioSizeLabel}
             variant="outlined"
             style={{ height: 20, fontSize: '0.7rem' }}

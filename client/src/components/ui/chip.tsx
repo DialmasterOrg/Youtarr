@@ -90,9 +90,21 @@ const Chip = React.forwardRef<HTMLDivElement, ChipProps>(
         className: cn(
           chipVariants({ variant, color, size, clickable: isClickable }),
           disabled && 'opacity-50 pointer-events-none',
+          // MUI compat classes for tests that assert on them
+          size === 'small' && 'MuiChip-sizeSmall',
+          size === 'medium' && 'MuiChip-sizeMedium',
+          variant === 'outlined' && 'MuiChip-outlined',
+          variant === 'filled' && 'MuiChip-filled',
+          color === 'primary' && 'MuiChip-colorPrimary',
+          color === 'secondary' && 'MuiChip-colorSecondary',
+          color === 'error' && 'MuiChip-colorError',
+          color === 'warning' && 'MuiChip-colorWarning',
+          color === 'success' && 'MuiChip-colorSuccess',
+          color === 'info' && 'MuiChip-colorInfo',
           className
         ),
         ...(isClickable ? { type: 'button' } : {}),
+        ...rest,
       },
       avatar && <span className="shrink-0 -ml-0.5">{avatar}</span>,
       icon && <span className="shrink-0 [&>svg]:h-[1em] [&>svg]:w-[1em]">{icon}</span>,

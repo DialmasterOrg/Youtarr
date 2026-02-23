@@ -70,17 +70,33 @@ export interface TabsProps {
   scrollButtons?: string | boolean;
 }
 
-const Tabs: React.FC<TabsProps> = ({ value, onChange, children, className }) => (
-  <TabsRoot
-    value={value !== undefined ? String(value) : undefined}
-    onValueChange={(v) => onChange?.({} as React.SyntheticEvent, v)}
-    className={cn('w-full', className)}
-  >
-    {/* MUI Tabs renders Tab children directly; Radix requires them inside a
-        TabsList for the RovingFocusGroup context. We wrap automatically. */}
-    <TabsList>{children}</TabsList>
-  </TabsRoot>
-);
+const Tabs: React.FC<TabsProps> = ({ value, onChange, children, className }) => {
+  // MUI auto-assigns integer indices to Tab children that have no explicit value.
+  const indexedChildren = React.Children.map(children, (child, index) => {
+    if (!React.isValidElement(child)) return child;
+    if ((child.props as TabProps).value === undefined) {
+      return React.cloneElement(child as React.ReactElement<TabProps>, { value: index });
+    }
+    return child;
+  });
+
+  return (
+    <TabsRoot
+      value={value !== undefined ? String(value) : undefined}
+      onValueChange={(v) => {
+        // Coerce back to number if the value looks like an integer string
+        const num = parseInt(v, 10);
+        const output: string | number = !isNaN(num) && String(num) === v ? num : v;
+        onChange?.({} as React.SyntheticEvent, output);
+      }}
+      className={cn('w-full', className)}
+    >
+      {/* MUI Tabs renders Tab children directly; Radix requires them inside a
+          TabsList for the RovingFocusGroup context. We wrap automatically. */}
+      <TabsList>{indexedChildren}</TabsList>
+    </TabsRoot>
+  );
+};
 
 export interface TabProps {
   value?: string | number;

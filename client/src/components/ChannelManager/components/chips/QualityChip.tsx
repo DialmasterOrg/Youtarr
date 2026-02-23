@@ -16,7 +16,7 @@ const QualityChip: React.FC<QualityChipProps> = ({ videoQuality, globalPreferred
       label={`${resolvedQuality}p`}
       size="small"
       color={isOverride ? 'success' : 'default'}
-      icon={isOverride ? <SettingsIcon size={14} /> : undefined}
+      icon={isOverride ? <SettingsIcon size={14} data-testid="SettingsIcon" /> : undefined}
       data-testid="quality-chip"
       data-override={isOverride ? 'true' : 'false'}
       style={{ fontSize: '0.7rem' }}

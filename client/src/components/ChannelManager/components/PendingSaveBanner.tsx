@@ -27,7 +27,7 @@ const PendingSaveBanner: React.FC<PendingSaveBannerProps> = ({ show }) => {
       >
         <Alert
           severity="warning"
-          icon={<WarningAmberIcon fontSize="small" />}
+          icon={<WarningAmberIcon fontSize="small" data-testid="WarningAmberIcon" />}
           variant="outlined"
           style={{
             alignItems: 'center',

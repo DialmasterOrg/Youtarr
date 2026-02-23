@@ -38,12 +38,13 @@ const DurationFilterChip: React.FC<DurationFilterChipProps> = ({
   return (
     <Tooltip title={`Channel download duration filter: ${durationLabel}`}>
       <Chip
-        icon={<AccessTimeIcon size={16} />}
+        icon={<AccessTimeIcon size={16} data-testid="AccessTimeIcon" />}
         label={durationLabel}
         size="small"
         variant="outlined"
         color="primary"
         style={{ fontSize: '0.65rem' }}
+        aria-label={`Channel download duration filter: ${durationLabel}`}
       />
     </Tooltip>
   );

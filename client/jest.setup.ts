@@ -147,3 +147,11 @@ if (typeof HTMLElement !== 'undefined') {
     HTMLElement.prototype.scrollIntoView = function () {};
   }
 }
+// Radix UI uses ResizeObserver for popover/tooltip positioning; JSDOM lacks it.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}

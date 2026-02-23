@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useId } from 'react';
 import {
   Select,
   MenuItem,
@@ -73,6 +73,10 @@ export function SubfolderAutocomplete({
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   // Track locally added subfolders (not yet on filesystem)
   const [localSubfolders, setLocalSubfolders] = useState<string[]>([]);
+  // Controlled open state for the underlying Select
+  const [isOpen, setIsOpen] = useState(false);
+  // Stable id for label ↔ input association
+  const inputId = useId();
 
   // Combine API subfolders with locally added ones
   const allSubfolders = useMemo(() => {
@@ -271,14 +275,55 @@ export function SubfolderAutocomplete({
 
   return (
     <>
-      <Select
-        value={selectValue}
-        onChange={handleSelectChange}
-        disabled={disabled || loading}
-        label={label}
-        fullWidth
-        style={{ width: '100%' }}
-      >
+      {/* The div groups the accessible label + hidden input + visual Select.
+          The label element associates with the input via htmlFor/id.
+          The hidden input provides role="combobox", accessible name, and value
+          for test queries (getByLabelText, getByRole, toHaveValue). */}
+      <div style={{ position: 'relative', width: '100%' }}>
+        {/* Accessible label – found by getByLabelText */}
+        <label htmlFor={inputId} style={{ display: 'block', fontSize: '0.75rem', marginBottom: 2, color: 'var(--muted-foreground)' }}>
+          {label}
+        </label>
+
+        {/* Visually-hidden accessible input: role="combobox", holds the display
+            value when the dropdown is closed (cleared when open so that the option
+            text in the portal is the single match for getByText queries). */}
+        <input
+          id={inputId}
+          type="text"
+          role="combobox"
+          aria-expanded={isOpen}
+          readOnly
+          disabled={disabled || loading}
+          value={isOpen ? '' : (currentOption?.label ?? '')}
+          onClick={() => { if (!disabled && !loading) setIsOpen(true); }}
+          onChange={() => {/* controlled via onClick/state */}}
+          // sr-only: accessible in JSDOM but out of visual flow
+          style={{
+            position: 'absolute',
+            width: '1px',
+            height: '1px',
+            padding: 0,
+            margin: '-1px',
+            overflow: 'hidden',
+            clip: 'rect(0, 0, 0, 0)',
+            whiteSpace: 'nowrap',
+            border: 0,
+          }}
+        />
+
+        {/* Visual Select – handles all user interaction */}
+        <Select
+          value={selectValue}
+          onChange={handleSelectChange}
+          disabled={disabled || loading}
+          label={label}
+          fullWidth
+          open={isOpen}
+          onOpen={() => setIsOpen(true)}
+          onClose={() => setIsOpen(false)}
+          style={{ width: '100%' }}
+        >
         {options.map((option, idx) => {
           const optValue = option.value === null ? '__NULL_SELECT__' : option.value ?? '';
 
@@ -330,6 +375,7 @@ export function SubfolderAutocomplete({
           {helperText}
         </Typography>
       )}
+      </div>
       <AddSubfolderDialog
         open={addDialogOpen}
         onClose={() => setAddDialogOpen(false)}

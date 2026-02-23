@@ -76,6 +76,7 @@ function SubtitleLanguageSelector({
         value={selectedLanguages}
         onChange={handleChange}
         disabled={disabled}
+        aria-disabled={disabled ? 'true' : undefined}
         size={5}
         style={{
           width: '100%',

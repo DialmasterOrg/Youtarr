@@ -20,7 +20,7 @@ const TitleFilterChip: React.FC<TitleFilterChipProps> = ({
   return (
     <Tooltip title="Title filter for channel downloads">
       <Chip
-        icon={<HelpOutlineIcon size={16} />}
+        icon={<HelpOutlineIcon size={16} data-testid="HelpOutlineIcon" />}
         label="Filters"
         size="small"
         variant="outlined"

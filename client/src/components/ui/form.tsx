@@ -24,6 +24,8 @@ const Switch = React.forwardRef<React.ElementRef<typeof SwitchPrimitive.Root>, S
         ref={ref}
         checked={checked}
         name={name}
+        // Tests (and MUI compat) expect role="checkbox", not role="switch"
+        role="checkbox"
         data-testid={inputProps?.['data-testid']}
         onCheckedChange={(v) =>
           onChange?.({ target: { checked: v, name: name } } as React.ChangeEvent<HTMLInputElement>)
@@ -112,23 +114,28 @@ export interface FormControlLabelProps extends Omit<React.LabelHTMLAttributes<HT
 }
 
 const FormControlLabel = React.forwardRef<HTMLLabelElement, FormControlLabelProps>(
-  ({ control, label, labelPlacement = 'end', disabled, className, ...props }, ref) => (
-    <label
-      ref={ref}
-      className={cn(
-        'inline-flex items-center gap-2 cursor-pointer select-none font-sans text-sm text-foreground',
-        labelPlacement === 'start' && 'flex-row-reverse',
-        labelPlacement === 'top' && 'flex-col-reverse items-center gap-1',
-        labelPlacement === 'bottom' && 'flex-col items-center gap-1',
-        disabled && 'opacity-50 cursor-not-allowed',
-        className
-      )}
-      {...props}
-    >
-      {React.cloneElement(control, { disabled: disabled ?? (control.props as any).disabled })}
-      <span>{label}</span>
-    </label>
-  )
+  ({ control, label, labelPlacement = 'end', disabled, className, ...props }, ref) => {
+    const generatedId = React.useId();
+    const controlId = (control.props as any).id ?? generatedId;
+    return (
+      <label
+        ref={ref}
+        htmlFor={controlId}
+        className={cn(
+          'inline-flex items-center gap-2 cursor-pointer select-none font-sans text-sm text-foreground',
+          labelPlacement === 'start' && 'flex-row-reverse',
+          labelPlacement === 'top' && 'flex-col-reverse items-center gap-1',
+          labelPlacement === 'bottom' && 'flex-col items-center gap-1',
+          disabled && 'opacity-50 cursor-not-allowed',
+          className
+        )}
+        {...props}
+      >
+        {React.cloneElement(control, { id: controlId, disabled: disabled ?? (control.props as any).disabled })}
+        <span>{label}</span>
+      </label>
+    );
+  }
 );
 FormControlLabel.displayName = 'FormControlLabel';
 

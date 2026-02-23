@@ -80,7 +80,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                             alt={`${channel.uploader || 'Channel'} thumbnail`}
                             style={{ width: 190, height: 190, boxShadow: '0 4px 12px rgba(15, 23, 42, 0.2)' }}
                         >
-                            <ImageIcon size={48} />
+                            <ImageIcon size={48} data-testid="ImageIcon" />
                         </Avatar>
                     </div>
 
@@ -133,7 +133,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                                 onDelete();
                             }}
                         >
-                            <DeleteIcon size={16} />
+                            <DeleteIcon size={16} data-testid="DeleteIcon" />
                         </button>
                     </Tooltip>
                 </div>
@@ -147,7 +147,7 @@ const ChannelCard: React.FC<ChannelCardProps> = ({
                                 </Typography>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                                <FolderIcon size={16} style={{ color: 'var(--muted-foreground)' }} />
+                                <FolderIcon size={16} style={{ color: 'var(--muted-foreground)' }} data-testid="FolderIcon" />
                                 <Typography variant="body2" color="text.secondary" noWrap>
                                     {channel.sub_folder ? `/${channel.sub_folder}` : 'Default Folder'}
                                 </Typography>
