@@ -8,7 +8,7 @@ import {
   Fade,
   Tooltip,
 } from '../ui';
-import { CalendarToday as CalendarTodayIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon } from '../../lib/icons';
+import { CalendarToday as CalendarTodayIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon, Delete as DeleteIcon } from '../../lib/icons';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml } from '../../utils/formatters';
@@ -52,7 +52,7 @@ function VideoCard({
   const isDownloadSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !isStillLive;
   const isDeleteSelectable = video.added && !video.removed && !isStillLive;
   const isDownloadAllowed = selectionMode !== 'delete';
-  const isDeleteAllowed = selectionMode !== 'download';
+  const isDeleteAllowed = selectionMode === 'delete';
   const isChecked = checkedBoxes.includes(video.youtube_id);
   const isDeleteChecked = selectedForDeletion.includes(video.youtube_id);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
@@ -65,6 +65,7 @@ function VideoCard({
     <Fade in timeout={300} key={video.youtube_id}>
       <Grid item xs={12} sm={6} md={4} lg={3}>
         <Card
+          data-testid="video-card"
           className={isInteractive ? 'wiggle-card' : undefined}
           style={{
             height: '100%',
@@ -194,7 +195,7 @@ function VideoCard({
               </div>
             )}
 
-            {/* Delete checkbox for downloaded videos */}
+            {/* Delete checkbox for downloaded videos (only in explicit delete mode) */}
             {isDeleteSelectable && isDeleteAllowed && (
               <Checkbox
                 checked={isDeleteChecked}
@@ -211,6 +212,25 @@ function VideoCard({
                   backgroundColor: 'rgba(0,0,0,0.5)',
                 }}
               />
+            )}
+
+            {/* Visual delete indicator when video is queued for deletion (outside delete mode) */}
+            {isDeleteSelectable && !isDeleteAllowed && isDeleteChecked && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  left: 8,
+                  color: 'white',
+                  backgroundColor: 'rgba(220,38,38,0.8)',
+                  padding: 4,
+                  borderRadius: 4,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                }}
+              >
+                <DeleteIcon size={16} data-testid="DeleteIcon" />
+              </div>
             )}
 
             {/* Ignore/Unignore button - for videos not currently on disk (never downloaded or missing) */}
@@ -241,7 +261,7 @@ function VideoCard({
                     zIndex: 3,
                   }}
                 >
-                  {isIgnored ? <CheckCircleOutlineIcon size={16} /> : <BlockIcon size={16} />}
+                  {isIgnored ? <CheckCircleOutlineIcon size={16} data-testid="CheckCircleOutlineIcon" /> : <BlockIcon size={16} data-testid="BlockIcon" />}
                 </button>
               </Tooltip>
             )}

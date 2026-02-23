@@ -35,7 +35,7 @@ function StillLiveDot({ isMobile = false, onMobileClick }: StillLiveDotProps) {
 
   const liveDot = (
     <Chip
-      icon={<Circle size={12} style={{ animationName: 'pulse', animationDuration: '2s', animationIterationCount: 'infinite' }} />}
+      icon={<Circle size={12} data-testid="FiberManualRecordIcon" style={{ animationName: 'pulse', animationDuration: '2s', animationIterationCount: 'infinite' }} />}
       label="LIVE"
       size="small"
       onClick={handleClick}

@@ -526,8 +526,7 @@ describe('VideoCard Component', () => {
         <VideoCard {...defaultProps} onHoverChange={onHoverChange} />
       );
 
-      // eslint-disable-next-line testing-library/no-container, testing-library/no-node-access
-      const card = container.querySelector('.MuiCard-root');
+      const card = screen.getByTestId('video-card');
       expect(card).toBeTruthy();
       if (card) {
         await user.hover(card);
@@ -539,12 +538,11 @@ describe('VideoCard Component', () => {
       const user = userEvent.setup();
       const onHoverChange = jest.fn();
 
-      const { container } = renderWithProviders(
+      renderWithProviders(
         <VideoCard {...defaultProps} onHoverChange={onHoverChange} />
       );
 
-      // eslint-disable-next-line testing-library/no-container, testing-library/no-node-access
-      const card = container.querySelector('.MuiCard-root');
+      const card = screen.getByTestId('video-card');
       expect(card).toBeTruthy();
       if (card) {
         await user.hover(card);
@@ -660,8 +658,7 @@ describe('VideoCard Component', () => {
       const { container } = renderWithProviders(
         <VideoCard {...defaultProps} video={ignoredVideo} />
       );
-      // eslint-disable-next-line testing-library/no-container, testing-library/no-node-access
-      const card = container.querySelector('.MuiCard-root');
+      const card = screen.getByTestId('video-card');
       expect(card).toHaveStyle({ opacity: 0.7 });
     });
 

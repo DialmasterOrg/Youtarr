@@ -257,7 +257,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                         top: '100%',
                         left: 0,
                         zIndex: 1500,
-                        marginTop: 8,
+                        paddingTop: 8,
                       }}
                     >
                       <Paper style={menuPaperStyle}>

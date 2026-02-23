@@ -97,13 +97,11 @@ function DownloadManager({ token }: DownloadManagerProps) {
       <Route
         path="manual"
         element={
-          <Grid container spacing={2}>
-            <DownloadManualPage
-              token={token}
-              fetchRunningJobs={fetchRunningJobs}
-              downloadInitiatedRef={downloadInitiatedRef}
-            />
-          </Grid>
+          <DownloadManualPage
+            token={token}
+            fetchRunningJobs={fetchRunningJobs}
+            downloadInitiatedRef={downloadInitiatedRef}
+          />
         }
       />
       <Route

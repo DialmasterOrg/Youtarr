@@ -3,6 +3,7 @@ import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import WebSocketContext from './contexts/WebSocketContext';
 import { ThemeEngineProvider } from './contexts/ThemeEngineContext';
+import { TooltipProvider } from './components/ui/tooltip';
 
 type WebSocketValue = {
   socket: any;
@@ -28,7 +29,9 @@ export function renderWithProviders(
     <MemoryRouter>
       <ThemeEngineProvider>
         <WebSocketContext.Provider value={value}>
-          {ui}
+          <TooltipProvider>
+            {ui}
+          </TooltipProvider>
         </WebSocketContext.Provider>
       </ThemeEngineProvider>
     </MemoryRouter>

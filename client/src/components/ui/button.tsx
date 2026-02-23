@@ -85,6 +85,22 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, fullWidth, asChild = false, startIcon, endIcon, loading, children, disabled, component: _component, to: _to, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button';
     const normalizedSize = size === 'small' ? 'sm' : size === 'medium' ? 'md' : size === 'large' ? 'lg' : size;
+    
+    // When asChild={true}, just pass children through to Slot
+    // Don't render extra elements as Slot expects a single element child
+    if (asChild) {
+      return (
+        <Comp
+          ref={ref}
+          disabled={disabled || loading}
+          className={cn(buttonVariants({ variant, size: normalizedSize, fullWidth, className }))}
+          {...props}
+        >
+          {children}
+        </Comp>
+      );
+    }
+    
     return (
       <Comp
         ref={ref}
@@ -176,6 +192,7 @@ const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
     );
   }
 );
+IconButton.displayName = 'IconButton';
 /* ─── Fab ───────────────────────────────────────────────
    Floating Action Button shim
 ──────────────────────────────────────────────────────── */

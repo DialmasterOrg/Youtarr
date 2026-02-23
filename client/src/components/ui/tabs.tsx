@@ -72,11 +72,13 @@ export interface TabsProps {
 
 const Tabs: React.FC<TabsProps> = ({ value, onChange, children, className }) => (
   <TabsRoot
-    value={String(value)}
+    value={value !== undefined ? String(value) : undefined}
     onValueChange={(v) => onChange?.({} as React.SyntheticEvent, v)}
     className={cn('w-full', className)}
   >
-    {children}
+    {/* MUI Tabs renders Tab children directly; Radix requires them inside a
+        TabsList for the RovingFocusGroup context. We wrap automatically. */}
+    <TabsList>{children}</TabsList>
   </TabsRoot>
 );
 

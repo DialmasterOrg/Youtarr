@@ -149,4 +149,6 @@ export {
   ListChecks,
   List,
   RefreshCw,
+  Plus,
+  FolderX,
 } from 'lucide-react';

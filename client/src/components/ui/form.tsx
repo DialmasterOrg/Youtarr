@@ -12,17 +12,21 @@ export interface SwitchProps extends Omit<React.ComponentPropsWithoutRef<typeof 
   disabled?: boolean;
   size?: 'small' | 'medium';
   color?: string;
+  /** MUI-compatible: data-testid and other input-level attributes forwarded to the root element */
+  inputProps?: React.HTMLAttributes<HTMLElement> & { 'data-testid'?: string };
 }
 
 const Switch = React.forwardRef<React.ElementRef<typeof SwitchPrimitive.Root>, SwitchProps>(
-  ({ checked, onChange, size = 'medium', color: _color, className, ...props }, ref) => {
+  ({ checked, onChange, size = 'medium', color: _color, inputProps, className, name, ...props }, ref) => {
     const isSmall = size === 'small';
     return (
       <SwitchPrimitive.Root
         ref={ref}
         checked={checked}
+        name={name}
+        data-testid={inputProps?.['data-testid']}
         onCheckedChange={(v) =>
-          onChange?.({ target: { checked: v } } as React.ChangeEvent<HTMLInputElement>)
+          onChange?.({ target: { checked: v, name: name } } as React.ChangeEvent<HTMLInputElement>)
         }
         className={cn(
           'peer inline-flex shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent',
@@ -54,18 +58,26 @@ export interface CheckboxProps extends Omit<React.ComponentPropsWithoutRef<typeo
   size?: 'small' | 'medium';
   color?: string;
   indeterminate?: boolean;
+  /** MUI-compatible: data-testid and other input-level attributes forwarded to the root element */
+  inputProps?: React.HTMLAttributes<HTMLElement> & { 'data-testid'?: string };
 }
 
 const Checkbox = React.forwardRef<React.ElementRef<typeof CheckboxPrimitive.Root>, CheckboxProps>(
-  ({ checked, onChange, size = 'medium', color: _color, indeterminate, className, ...props }, ref) => {
+  ({ checked, onChange, size = 'medium', color: _color, indeterminate, inputProps, className, name, ...props }, ref) => {
     const isSmall = size === 'small';
     const effectiveChecked = indeterminate ? 'indeterminate' : checked;
     return (
       <CheckboxPrimitive.Root
         ref={ref}
         checked={effectiveChecked}
+        name={name}
+        data-testid={inputProps?.['data-testid']}
         onCheckedChange={(v) =>
-          onChange?.({ target: { checked: v === true } } as React.ChangeEvent<HTMLInputElement>)
+          onChange?.({
+            target: { checked: v === true, name: name },
+            stopPropagation: () => {},
+            preventDefault: () => {},
+          } as unknown as React.ChangeEvent<HTMLInputElement>)
         }
         className={cn(
           'peer shrink-0 rounded border-2 border-primary',

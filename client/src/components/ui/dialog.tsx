@@ -40,31 +40,14 @@ const maxWidthMap: Record<string, string> = {
 };
 
 const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, DialogContentProps>(
-  ({ className, children, maxWidth = 'sm', fullWidth = false, fullScreen = false, PaperProps, ...props }, ref) => (
-    <DialogPortal>
-      <DialogOverlay />
-      <DialogPrimitive.Content
-        ref={ref}
-        className={cn(
-          'fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
-          'bg-card text-foreground',
-          'rounded-[var(--radius-ui)]',
-          'border-[length:var(--border-weight)] border-[var(--border-strong)]',
-          'shadow-2xl',
-          'flex flex-col max-h-[90vh] overflow-hidden',
-          'focus-visible:outline-none',
-          'data-[state=open]:animate-slide-up',
-          !fullScreen && maxWidth && maxWidthMap[maxWidth],
-          !fullScreen && fullWidth && 'w-[calc(100vw-48px)]',
-          fullScreen && 'inset-0 translate-x-0 translate-y-0 w-screen h-screen max-w-none rounded-none',
-          PaperProps?.className,
-          className
-        )}
-        {...props}
-      >
-        {children}
-      </DialogPrimitive.Content>
-    </DialogPortal>
+  ({ className, children, maxWidth: _maxWidth, fullWidth: _fullWidth, fullScreen: _fullScreen, PaperProps: _PaperProps, ...props }, ref) => (
+    <div
+      ref={ref as React.Ref<HTMLDivElement>}
+      className={cn('flex-1 overflow-y-auto px-6 py-4 text-sm', className)}
+      {...(props as React.HTMLAttributes<HTMLDivElement>)}
+    >
+      {children}
+    </div>
   )
 );
 DialogContent.displayName = 'DialogContent';
@@ -97,17 +80,30 @@ const Dialog: React.FC<DialogProps> = ({
     open={open}
     onOpenChange={(o) => { if (!o) onClose?.({}, 'backdropClick'); }}
   >
-    <DialogContent
-      maxWidth={maxWidth}
-      fullWidth={fullWidth}
-      fullScreen={fullScreen}
-      PaperProps={PaperProps}
-      className={className}
-      onEscapeKeyDown={(e) => { if (disableEscapeKeyDown) e.preventDefault(); else onClose?.({}, 'escapeKeyDown'); }}
-      onInteractOutside={(e) => { onClose?.({}, 'backdropClick'); }}
-    >
-      {children}
-    </DialogContent>
+    <DialogPortal>
+      <DialogOverlay />
+      <DialogPrimitive.Content
+        className={cn(
+          'fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
+          'bg-card text-foreground',
+          'rounded-[var(--radius-ui)]',
+          'border-[length:var(--border-weight)] border-[var(--border-strong)]',
+          'shadow-2xl',
+          'flex flex-col max-h-[90vh] overflow-hidden',
+          'focus-visible:outline-none',
+          'data-[state=open]:animate-slide-up',
+          !fullScreen && maxWidth && maxWidthMap[maxWidth],
+          !fullScreen && fullWidth && 'w-[calc(100vw-48px)]',
+          fullScreen && 'inset-0 translate-x-0 translate-y-0 w-screen h-screen max-w-none rounded-none',
+          PaperProps?.className,
+          className
+        )}
+        onEscapeKeyDown={(e) => { if (disableEscapeKeyDown) e.preventDefault(); else onClose?.({}, 'escapeKeyDown'); }}
+        onInteractOutside={() => { onClose?.({}, 'backdropClick'); }}
+      >
+        {children}
+      </DialogPrimitive.Content>
+    </DialogPortal>
   </DialogRoot>
 );
 

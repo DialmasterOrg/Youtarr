@@ -28,11 +28,11 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
     return null;
   }
 
-  // No rating assigned - show "NR" chip (no color, grey)
+  // No rating assigned - show "Unrated" chip (no color, grey)
   if (!rating) {
     return (
       <Chip
-        label="NR"
+        label="Unrated"
         size={size}
         color="default"
         variant="outlined"
@@ -77,7 +77,7 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
     return (
       <Tooltip title={tooltipText} placement="top">
         <Box className="inline-flex items-center gap-1">
-          <EighteenUpRatingIcon size={size === 'small' ? 16 : 20} style={{ color: resolvedColor }} />
+          <EighteenUpRatingIcon size={size === 'small' ? 16 : 20} style={{ color: resolvedColor }} data-testid="EighteenUpRatingIcon" />
           <Typography
             variant="caption"
             style={{
@@ -101,7 +101,7 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
         label={rating}
         size={size}
         color={chipColor}
-        icon={<EighteenUpRatingIcon size={size === 'small' ? 12 : 16} />}
+        icon={<EighteenUpRatingIcon size={size === 'small' ? 12 : 16} data-testid="EighteenUpRatingIcon" />}
         style={{ fontSize: size === 'small' ? '0.7rem' : '0.875rem' }}
       />
     </Tooltip>

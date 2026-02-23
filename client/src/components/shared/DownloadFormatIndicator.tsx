@@ -53,7 +53,7 @@ const DownloadFormatIndicator: React.FC<DownloadFormatIndicatorProps> = ({
         <Tooltip title={displayVideoPath} arrow placement="top" enterTouchDelay={0}>
           <Chip
             size="small"
-            icon={<VideoIcon size={14} className="text-primary" />}
+            icon={<VideoIcon size={14} className="text-primary" data-testid="MovieOutlinedIcon" />}
             label={videoSizeLabel}
             variant="outlined"
             style={{ height: 20, fontSize: '0.7rem' }}

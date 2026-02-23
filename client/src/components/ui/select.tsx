@@ -4,11 +4,18 @@ import { ChevronDown, Check } from 'lucide-react';
 import { cn } from '../../lib/cn';
 
 export type SelectChangeEvent<T = string> = { target: { value: T; name?: string } };
+const EMPTY_SELECT_VALUE = '__EMPTY_SELECT_VALUE__';
+const toPrimitiveValue = (value?: string | number) => {
+  if (value === '') return EMPTY_SELECT_VALUE;
+  if (value === undefined) return undefined;
+  return String(value);
+};
+const fromPrimitiveValue = (value: string) => (value === EMPTY_SELECT_VALUE ? '' : value);
 
 /* ─── Radix-based Select ──────────────────────────────── */
 export interface SelectProps {
-  value?: string;
-  defaultValue?: string;
+  value?: string | number;
+  defaultValue?: string | number;
   onChange?: (event: SelectChangeEvent) => void;
   onValueChange?: (value: string) => void;
   disabled?: boolean;
@@ -58,21 +65,37 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
     notched: _notched,
   }, ref) => {
     const isSmall = size === 'small';
+    // Track whether the controlled/default value is numeric so we can coerce the
+    // onChange payload back to a number (Radix Select always uses strings internally).
+    const wasNumericRef = React.useRef(
+      typeof value === 'number' || typeof defaultValue === 'number'
+    );
+    const primitiveValue = value !== undefined ? toPrimitiveValue(value) : undefined;
+    const primitiveDefaultValue = defaultValue !== undefined ? toPrimitiveValue(defaultValue) : undefined;
 
     const handleValueChange = (val: string) => {
-      onValueChange?.(val);
-      onChange?.({ target: { value: val, name } });
+      const normalizedValue = fromPrimitiveValue(val);
+      onValueChange?.(normalizedValue);
+      // If the initial value was a number, coerce back so handlers like
+      // `(e) => onConfigChange({ [key]: e.target.value })` receive the right type.
+      const outputValue =
+        wasNumericRef.current && normalizedValue !== '' && !isNaN(Number(normalizedValue))
+          ? Number(normalizedValue)
+          : normalizedValue;
+      onChange?.({ target: { value: outputValue as any, name } });
     };
 
     return (
       <SelectPrimitive.Root
-        value={value}
-        defaultValue={defaultValue}
+        value={primitiveValue}
+        defaultValue={primitiveDefaultValue}
         onValueChange={handleValueChange}
         disabled={disabled}
       >
         <SelectPrimitive.Trigger
           ref={ref}
+          role="button"
+          aria-disabled={disabled ? 'true' : undefined}
           className={cn(
             'flex items-center justify-between gap-2',
             'rounded-[var(--radius-input)]',
@@ -119,7 +142,7 @@ Select.displayName = 'Select';
 
 /* ─── MenuItem (also used as SelectItem) ─────────────── */
 export interface MenuItemProps extends React.ButtonHTMLAttributes<HTMLDivElement> {
-  value?: string;
+  value?: string | number;
   selected?: boolean;
   dense?: boolean;
   disableGutters?: boolean;
@@ -130,9 +153,10 @@ const MenuItem = React.forwardRef<HTMLDivElement, MenuItemProps>(
   ({ value, selected, dense, disableGutters, divider, className, children, onClick, ...props }, ref) => {
     if (value !== undefined) {
       // Render as Radix SelectItem when inside a Select
+      const normalizedValue = toPrimitiveValue(value);
       return (
         <SelectPrimitive.Item
-          value={value}
+          value={normalizedValue}
           className={cn(
             'relative flex items-center gap-2 rounded-md cursor-default select-none outline-none',
             'text-sm font-sans text-foreground',

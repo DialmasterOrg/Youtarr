@@ -8,7 +8,7 @@ import {
   Fade,
   Tooltip,
 } from '../ui';
-import { CalendarToday as CalendarTodayIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon } from '../../lib/icons';
+import { CalendarToday as CalendarTodayIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon, Delete as DeleteIcon } from '../../lib/icons';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml } from '../../utils/formatters';
@@ -44,7 +44,7 @@ function VideoListItem({
   const isDownloadSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !isStillLive;
   const isDeleteSelectable = video.added && !video.removed && !isStillLive;
   const isDownloadAllowed = selectionMode !== 'delete';
-  const isDeleteAllowed = selectionMode !== 'download';
+  const isDeleteAllowed = selectionMode === 'delete';
   const isChecked = checkedBoxes.includes(video.youtube_id);
   const isDeleteChecked = selectedForDeletion.includes(video.youtube_id);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
@@ -167,7 +167,7 @@ function VideoListItem({
             />
           )}
 
-          {/* Delete checkbox for downloaded videos */}
+          {/* Delete checkbox for downloaded videos (only in explicit delete mode) */}
           {isDeleteSelectable && isDeleteAllowed && (
             <Checkbox
               checked={isDeleteChecked}
@@ -187,6 +187,25 @@ function VideoListItem({
             />
           )}
 
+          {/* Visual delete indicator when video is queued for deletion (outside delete mode) */}
+          {isDeleteSelectable && !isDeleteAllowed && isDeleteChecked && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 2,
+                left: 2,
+                color: 'white',
+                backgroundColor: 'rgba(220,38,38,0.8)',
+                padding: 4,
+                borderRadius: 4,
+                display: 'inline-flex',
+                alignItems: 'center',
+              }}
+            >
+              <DeleteIcon size={18} data-testid="DeleteIcon" />
+            </div>
+          )}
+
           {/* Ignore/Unignore button - for videos not currently on disk (never downloaded or missing) */}
           {!isStillLive && (!video.added || video.removed) && (
             <Tooltip
@@ -195,6 +214,7 @@ function VideoListItem({
               placement="top"
             >
               <button
+                aria-label={isIgnored ? "Click to unignore" : "Click to ignore"}
                 onClick={(e) => {
                   e.stopPropagation();
                   onToggleIgnore(video.youtube_id);
@@ -214,7 +234,7 @@ function VideoListItem({
                   transition: 'all 0.2s',
                 }}
               >
-                {isIgnored ? <CheckCircleOutlineIcon size={18} /> : <BlockIcon size={18} />}
+                {isIgnored ? <CheckCircleOutlineIcon size={18} data-testid="CheckCircleOutlineIcon" /> : <BlockIcon size={18} data-testid="BlockIcon" />}
               </button>
             </Tooltip>
           )}

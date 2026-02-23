@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import axios from 'axios';
@@ -120,9 +121,11 @@ describe('DownloadManager', () => {
 
   const renderWithContext = (component: React.ReactElement) => {
     return render(
-      <WebSocketContext.Provider value={mockWebSocketContextValue}>
-        {component}
-      </WebSocketContext.Provider>
+      <MemoryRouter>
+        <WebSocketContext.Provider value={mockWebSocketContextValue}>
+          {component}
+        </WebSocketContext.Provider>
+      </MemoryRouter>
     );
   };
 

@@ -38,15 +38,15 @@ export const getStatusColor = (status: VideoStatus) => {
 export const getStatusIcon = (status: VideoStatus) => {
   switch (status) {
     case 'downloaded':
-      return <CheckCircleIcon size={16} />;
+      return <CheckCircleIcon size={16} data-testid="CheckCircleIcon" />;
     case 'missing':
-      return <CloudOffIcon size={16} />;
+      return <CloudOffIcon size={16} data-testid="CloudOffIcon" />;
     case 'members_only':
-      return <LockIcon size={16} />;
+      return <LockIcon size={16} data-testid="LockIcon" />;
     case 'ignored':
-      return <BlockIcon size={16} />;
+      return <BlockIcon size={16} data-testid="BlockIcon" />;
     default:
-      return <NewReleasesIcon size={16} />;
+      return <NewReleasesIcon size={16} data-testid="NewReleasesIcon" />;
   }
 };
 

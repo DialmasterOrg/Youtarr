@@ -34,26 +34,28 @@ const Tooltip: React.FC<TooltipProps> = ({
   const align = placement.includes('-start') ? 'start' : placement.includes('-end') ? 'end' : 'center';
 
   return (
-    <TooltipPrimitive.Root delayDuration={enterDelay}>
-      <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
-      <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Content
-          side={side}
-          align={align}
-          sideOffset={arrow ? 4 : 6}
-          className={cn(
-            'z-50 max-w-xs rounded-md bg-foreground px-2.5 py-1.5',
-            'text-xs font-medium text-background leading-snug',
-            'shadow-lg animate-fade-in',
-            'select-none break-words',
-            className
-          )}
-        >
-          {title}
-          {arrow && <TooltipPrimitive.Arrow className="fill-foreground" />}
-        </TooltipPrimitive.Content>
-      </TooltipPrimitive.Portal>
-    </TooltipPrimitive.Root>
+    <TooltipProvider>
+      <TooltipPrimitive.Root delayDuration={enterDelay}>
+        <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
+        <TooltipPrimitive.Portal>
+          <TooltipPrimitive.Content
+            side={side}
+            align={align}
+            sideOffset={arrow ? 4 : 6}
+            className={cn(
+              'z-50 max-w-xs rounded-md bg-foreground px-2.5 py-1.5',
+              'text-xs font-medium text-background leading-snug',
+              'shadow-lg animate-fade-in',
+              'select-none break-words',
+              className
+            )}
+          >
+            {title}
+            {arrow && <TooltipPrimitive.Arrow className="fill-foreground" />}
+          </TooltipPrimitive.Content>
+        </TooltipPrimitive.Portal>
+      </TooltipPrimitive.Root>
+    </TooltipProvider>
   );
 };
 

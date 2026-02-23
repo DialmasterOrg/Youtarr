@@ -8,7 +8,7 @@ import {
   FormControlLabel,
   Typography,
 } from '../../ui';
-import { RadioGroupItem } from '../../ui/form';
+import { RadioGroup, RadioGroupItem } from '../../ui/form';
 import { ConfigurationCard } from '../common/ConfigurationCard';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { useThemeEngine } from '../../../contexts/ThemeEngineContext';
@@ -77,6 +77,9 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
           </div>
         </Grid>
 
+        <Grid item xs={12}>
+          <RadioGroup value={themeMode} onValueChange={(v) => setThemeMode(v as any)}>
+            <Grid container spacing={2}>
         {Object.values(ALL_THEMES).map((theme) => (
           <Grid item xs={12} md={3} key={theme.id}>
             <Card
@@ -98,7 +101,7 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
                     <Typography variant="subtitle1" className="font-bold">
                       {theme.name}
                     </Typography>
-                    <RadioGroupItem value={theme.id} checked={themeMode === theme.id} onChange={() => setThemeMode(theme.id)} />
+                    <RadioGroupItem value={theme.id} />
                   </div>
                   <div className="flex items-center w-full px-0 py-2" style={{ minHeight: 120 }}>
                     {theme.preview}
@@ -111,6 +114,9 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
             </Card>
           </Grid>
         ))}
+            </Grid>
+          </RadioGroup>
+        </Grid>
       </Grid>
     </ConfigurationCard>
   );

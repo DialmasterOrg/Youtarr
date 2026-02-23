@@ -27,6 +27,7 @@ export const InfoTooltip: React.FC<InfoTooltipProps> = ({ text, onMobileClick })
   if (isMobile) {
     return (
       <button
+        aria-label="More information"
         style={{ marginLeft: 4, padding: 4, background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', color: 'var(--muted-foreground)' }}
         onClick={handleClick}
       >
@@ -37,7 +38,10 @@ export const InfoTooltip: React.FC<InfoTooltipProps> = ({ text, onMobileClick })
 
   return (
     <Tooltip title={text} arrow placement="top">
-      <button style={{ marginLeft: 4, padding: 4, background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', color: 'var(--muted-foreground)' }}>
+      <button
+        aria-label="More information"
+        style={{ marginLeft: 4, padding: 4, background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', color: 'var(--muted-foreground)' }}
+      >
         <InfoIcon size={16} />
       </button>
     </Tooltip>

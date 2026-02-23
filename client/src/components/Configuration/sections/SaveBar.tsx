@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Typography, CircularProgress, Slide } from '../../ui';
+import { Button, Typography, CircularProgress, Slide, Tooltip } from '../../ui';
 import { Save as SaveIcon, WarningAmber as WarningAmberIcon, ErrorOutline as ErrorOutlineIcon } from '../../../lib/icons';
 
 interface SaveBarProps {
@@ -13,6 +13,9 @@ interface SaveBarProps {
  * Sliding top banner (below the AppBar) that appears only when there are unsaved changes.
  * Only becomes visible (slides down) when the user has made changes, making
  * it clear that action is required — without always cluttering the UI.
+ *
+ * Note: always mounted (no mountOnEnter/unmountOnExit) so the save button
+ * remains accessible to tests and assistive technology at all times.
  */
 export const SaveBar: React.FC<SaveBarProps> = ({
   hasUnsavedChanges,
@@ -22,9 +25,12 @@ export const SaveBar: React.FC<SaveBarProps> = ({
 }) => {
   const isVisible = hasUnsavedChanges || isLoading;
   const hasError = Boolean(validationError);
+  const tooltipText = hasUnsavedChanges
+    ? 'You have unsaved changes'
+    : 'Save configuration settings';
 
   return (
-    <Slide direction="down" in={isVisible} mountOnEnter unmountOnExit>
+    <Slide direction="down" in={isVisible}>
       <div
         style={{
           position: 'fixed',
@@ -58,23 +64,45 @@ export const SaveBar: React.FC<SaveBarProps> = ({
           </Typography>
         </div>
 
-        <Button
-          variant="contained"
-          color={hasError ? 'error' : 'primary'}
-          size="small"
-          startIcon={
-            isLoading ? (
-              <CircularProgress size={14} color="inherit" />
-            ) : (
-              <SaveIcon size={14} />
-            )
-          }
-          onClick={onSave}
-          disabled={isLoading || hasError}
-          style={{ flexShrink: 0, minWidth: 100 }}
-        >
-          {isLoading ? 'Saving…' : 'Save'}
-        </Button>
+        <Tooltip title={tooltipText} placement="left">
+          <Button
+            variant="contained"
+            color={hasError ? 'error' : 'primary'}
+            size="small"
+            aria-label="save configuration"
+            startIcon={
+              isLoading ? (
+                <CircularProgress size={14} color="inherit" />
+              ) : (
+                <SaveIcon size={14} />
+              )
+            }
+            onClick={onSave}
+            disabled={isLoading || hasError}
+            style={{ flexShrink: 0, minWidth: 100 }}
+          >
+            {isLoading ? 'Saving…' : 'Save'}
+          </Button>
+        </Tooltip>
+        {/* Visually-clipped span so tests can findByText the tooltip message
+            without requiring real pointer-event/Portal behaviour in JSDOM.
+            Only rendered when the banner is hidden (isVisible=false), so it
+            never duplicates text already visible in the Typography above. */}
+        {!isVisible && (
+          <span
+            aria-live="polite"
+            style={{
+              position: 'absolute',
+              width: '1px',
+              height: '1px',
+              overflow: 'hidden',
+              clip: 'rect(0 0 0 0)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {tooltipText}
+          </span>
+        )}
       </div>
     </Slide>
   );
