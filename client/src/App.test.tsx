@@ -3,7 +3,7 @@ import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import App from './App';
-import { useMediaQuery } from '@mui/material';
+import { useMediaQuery } from './hooks/useMediaQuery';
 
 // Mock axios before any imports that use it
 jest.mock('axios', () => ({
@@ -159,25 +159,8 @@ afterEach(() => {
   // Global resets in jest.setup.ts handle this
 });
 
-// Mock MUI's useTheme and useMediaQuery hooks
-jest.mock('@mui/material/styles', () => ({
-  ...jest.requireActual('@mui/material/styles'),
-  useTheme: () => ({
-    breakpoints: {
-      down: jest.fn(() => 'sm'),
-      up: jest.fn(),
-      between: jest.fn(),
-      values: { xs: 0, sm: 600, md: 960, lg: 1280, xl: 1920 }
-    },
-    palette: {},
-    spacing: jest.fn()
-  })
-}));
-
-jest.mock('@mui/material', () => ({
-  ...jest.requireActual('@mui/material'),
-  useMediaQuery: jest.fn(() => false) // Default to desktop view
-}));
+// Mock custom hooks
+jest.mock('./hooks/useMediaQuery');
 
 describe('App Component', () => {
   // Helper function to create a standard fetch mock with common endpoints

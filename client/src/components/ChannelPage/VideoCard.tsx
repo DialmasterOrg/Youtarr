@@ -1,18 +1,14 @@
 import React from 'react';
 import {
   Card,
-  Box,
   Typography,
   Checkbox,
   Chip,
-  IconButton,
   Grid,
   Fade,
   Tooltip,
-} from '@mui/material';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import BlockIcon from '@mui/icons-material/Block';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+} from '../ui';
+import { CalendarToday as CalendarTodayIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon } from '../../lib/icons';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml } from '../../utils/formatters';
@@ -69,9 +65,8 @@ function VideoCard({
     <Fade in timeout={300} key={video.youtube_id}>
       <Grid item xs={12} sm={6} md={4} lg={3}>
         <Card
-          /* toggle 'hover:animate-wiggle' here */
           className={isInteractive ? 'wiggle-card' : undefined}
-          sx={{
+          style={{
             height: '100%',
             display: 'flex',
             flexDirection: 'column',
@@ -81,9 +76,6 @@ function VideoCard({
             opacity: status === 'members_only' || isIgnored ? 0.7 : 1,
             transform: hoveredVideo === video.youtube_id ? 'var(--sticker-hover-transform)' : baseTransform,
             boxShadow: hoveredVideo === video.youtube_id ? 'var(--card-hover-shadow)' : 'var(--shadow-soft)',
-            '&:hover': {
-              boxShadow: 'var(--card-hover-shadow)',
-            },
           }}
           onMouseEnter={() => onHoverChange(video.youtube_id)}
           onMouseLeave={() => onHoverChange(null)}
@@ -98,11 +90,10 @@ function VideoCard({
           }}
         >
           {/* Thumbnail with overlay */}
-          <Box sx={{
+          <div style={{
             position: 'relative',
-            // Keep container size consistent - shorts use contain to show with black bars
             paddingTop: isMobile ? '52%' : '56.25%',
-            bgcolor: 'grey.900',
+            backgroundColor: '#111',
             borderRadius: 'var(--radius-ui)',
             overflow: 'hidden',
           }}>
@@ -124,8 +115,8 @@ function VideoCard({
 
             {/* YouTube Removed Banner */}
             {video.youtube_removed ? (
-              <Box
-                sx={{
+              <div
+                style={{
                   position: 'absolute',
                   top: 0,
                   left: 0,
@@ -140,7 +131,7 @@ function VideoCard({
                 }}
               >
                 Removed From YouTube
-              </Box>
+              </div>
             ) : null}
 
             {/* Duration overlay - hide for shorts since duration isn't available from flat-playlist */}
@@ -148,11 +139,11 @@ function VideoCard({
               <Chip
                 label={formatDuration(video.duration)}
                 size="small"
-                sx={{
+                style={{
                   position: 'absolute',
                   bottom: 8,
                   right: 8,
-                  bgcolor: 'rgba(0,0,0,0.8)',
+                  backgroundColor: 'rgba(0,0,0,0.8)',
                   color: 'white',
                   fontSize: '0.75rem',
                   height: 22,
@@ -162,8 +153,8 @@ function VideoCard({
 
             {/* Still Live indicator or Selection overlay for download */}
             {isStillLive ? (
-              <Box
-                sx={{
+              <div
+                style={{
                   position: 'absolute',
                   top: 8,
                   left: 8,
@@ -171,20 +162,20 @@ function VideoCard({
                 }}
               >
                 <StillLiveDot isMobile={isMobile} onMobileClick={onMobileTooltip} />
-              </Box>
+              </div>
             ) : isDownloadSelectable && isDownloadAllowed && (
-              <Box
-                sx={{
+              <div
+                style={{
                   position: 'absolute',
                   top: 0,
                   left: 0,
                   right: 0,
                   bottom: 0,
-                  bgcolor: isChecked ? 'rgba(25, 118, 210, 0.3)' : 'transparent',
+                  backgroundColor: isChecked ? 'rgba(25, 118, 210, 0.3)' : 'transparent',
                   display: 'flex',
                   alignItems: 'flex-start',
                   justifyContent: 'flex-start',
-                  p: 1,
+                  padding: 8,
                   transition: 'background-color 0.2s',
                 }}
               >
@@ -195,18 +186,12 @@ function VideoCard({
                     e.stopPropagation();
                     onCheckChange(video.youtube_id, e.target.checked);
                   }}
-                  sx={{
+                  style={{
                     color: 'white',
-                    bgcolor: 'rgba(0,0,0,0.5)',
-                    '&.Mui-checked': {
-                      color: 'primary.main',
-                    },
-                    '&:hover': {
-                      bgcolor: 'rgba(0,0,0,0.7)',
-                    },
+                    backgroundColor: 'rgba(0,0,0,0.5)',
                   }}
                 />
-              </Box>
+              </div>
             )}
 
             {/* Delete checkbox for downloaded videos */}
@@ -218,18 +203,12 @@ function VideoCard({
                   e.stopPropagation();
                   onDeletionChange(video.youtube_id, e.target.checked);
                 }}
-                sx={{
+                style={{
                   position: 'absolute',
                   top: 8,
                   left: 8,
                   color: 'white',
-                  bgcolor: 'rgba(0,0,0,0.5)',
-                  '&.Mui-checked': {
-                    color: 'error.main',
-                  },
-                  '&:hover': {
-                    bgcolor: 'rgba(0,0,0,0.7)',
-                  },
+                  backgroundColor: 'rgba(0,0,0,0.5)',
                 }}
               />
             )}
@@ -241,37 +220,39 @@ function VideoCard({
                 arrow
                 placement="top"
               >
-                <IconButton
+                <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onToggleIgnore(video.youtube_id);
                   }}
-                  sx={{
+                  style={{
                     position: 'absolute',
                     top: 8,
                     right: 8,
-                    bgcolor: isIgnored ? 'warning.main' : 'rgba(0,0,0,0.6)',
+                    background: isIgnored ? 'var(--warning)' : 'rgba(0,0,0,0.6)',
                     color: 'white',
-                    '&:hover': {
-                      bgcolor: isIgnored ? 'warning.dark' : 'rgba(0,0,0,0.8)',
-                    },
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 4,
+                    borderRadius: 4,
+                    display: 'inline-flex',
+                    alignItems: 'center',
                     transition: 'all 0.2s',
                     zIndex: 3,
                   }}
-                  size="small"
                 >
-                  {isIgnored ? <CheckCircleOutlineIcon fontSize="small" /> : <BlockIcon fontSize="small" />}
-                </IconButton>
+                  {isIgnored ? <CheckCircleOutlineIcon size={16} /> : <BlockIcon size={16} />}
+                </button>
               </Tooltip>
             )}
-          </Box>
+          </div>
 
           {/* Card content */}
-          <Box sx={{ p: isMobile ? 1.5 : 2, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: isMobile ? 12 : 16, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
             <Typography
               variant="body2"
-              sx={{
-                mb: 1,
+              style={{
+                marginBottom: 8,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 display: '-webkit-box',
@@ -285,12 +266,12 @@ function VideoCard({
               {decodeHtml(video.title)}
             </Typography>
 
-            <Box sx={{ mt: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
               {/* Date and download format info */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-              {video.media_type !== 'short' && video.publishedAt && (
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <CalendarTodayIcon sx={{ fontSize: 12 }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {video.media_type !== 'short' && video.publishedAt && (
+                <Typography variant="caption" color="text.secondary" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <CalendarTodayIcon size={12} />
                   {isMobile
                     ? new Date(video.publishedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
                     : new Date(video.publishedAt).toLocaleDateString()
@@ -305,10 +286,10 @@ function VideoCard({
                     audioFileSize={video.audioFileSize}
                   />
                 )}
-              </Box>
+              </div>
 
               {/* Media type, rating, and status chips on same line */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
                 {mediaTypeInfo && (
                   <Chip
                     size="small"
@@ -316,16 +297,13 @@ function VideoCard({
                     label={mediaTypeInfo.label}
                     color={mediaTypeInfo.color}
                     variant="outlined"
-                  sx={{
-                    height: 24,
-                    fontSize: '0.7rem',
-                    minWidth: 'fit-content',
-                    boxShadow: 'var(--chip-shadow)',
-                    transition: 'box-shadow 200ms var(--transition-bouncy)',
-                    '&:hover': {
-                      boxShadow: 'var(--chip-shadow-hover)'
-                    }
-                  }}
+                    style={{
+                      height: 24,
+                      fontSize: '0.7rem',
+                      minWidth: 'fit-content',
+                      boxShadow: 'var(--chip-shadow)',
+                      transition: 'box-shadow 200ms var(--transition-bouncy)',
+                    }}
                   />
                 )}
                 <RatingBadge
@@ -333,7 +311,7 @@ function VideoCard({
                   ratingSource={video.rating_source}
                   showNA={true}
                   size="small"
-                  sx={{ height: 24, flexShrink: 0 }}
+                  style={{ height: 24, flexShrink: 0 }}
                 />
                 <Chip
                   icon={getStatusIcon(status)}
@@ -341,28 +319,18 @@ function VideoCard({
                   size="small"
                   color={getStatusColor(status)}
                   variant={statusVariant}
-                  sx={{ 
-                    height: 24, 
-                    fontSize: '0.7rem', 
+                  style={{
+                    height: 24,
+                    fontSize: '0.7rem',
                     flex: '0 0 auto',
                     minWidth: 'fit-content',
                     boxShadow: 'var(--chip-shadow)',
                     transition: 'box-shadow 200ms var(--transition-bouncy)',
-                    '& .MuiChip-label': {
-                      display: 'inline-block',
-                      maxWidth: 'var(--status-chip-max-width)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    },
-                    '&:hover': {
-                      boxShadow: 'var(--chip-shadow-hover)'
-                    }
                   }}
                 />
-              </Box>
-            </Box>
-          </Box>
+              </div>
+            </div>
+          </div>
         </Card>
       </Grid>
     </Fade>

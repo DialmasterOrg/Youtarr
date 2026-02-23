@@ -1,6 +1,6 @@
 import React from 'react';
-import { Box, Tooltip } from '@mui/material';
-import { MovieOutlined as VideoIcon, AudiotrackOutlined as AudioIcon } from '@mui/icons-material';
+import { Tooltip } from '../../../../components/ui';
+import { VideoIcon, AudioIcon } from '../../../../lib/icons';
 
 interface DownloadFormatConfigIndicatorProps {
   audioFormat: string | null | undefined;
@@ -17,11 +17,11 @@ const DownloadFormatConfigIndicator: React.FC<DownloadFormatConfigIndicatorProps
   const showAudio = audioFormat === 'video_mp3' || audioFormat === 'mp3_only';
 
   return (
-    <Box
-      sx={{
+    <div
+      style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 0.25,
+        gap: 2,
       }}
       data-testid="download-format-config-indicator"
     >
@@ -29,10 +29,8 @@ const DownloadFormatConfigIndicator: React.FC<DownloadFormatConfigIndicatorProps
         <Tooltip title="Video downloads" arrow placement="top" enterTouchDelay={0}>
           <VideoIcon
             data-testid="video-format-icon"
-            sx={{
-              fontSize: '1rem',
-              color: 'primary.main',
-            }}
+            size={16}
+            style={{ color: 'var(--primary)' }}
           />
         </Tooltip>
       )}
@@ -40,14 +38,12 @@ const DownloadFormatConfigIndicator: React.FC<DownloadFormatConfigIndicatorProps
         <Tooltip title="MP3 downloads" arrow placement="top" enterTouchDelay={0}>
           <AudioIcon
             data-testid="audio-format-icon"
-            sx={{
-              fontSize: '1rem',
-              color: 'secondary.main',
-            }}
+            size={16}
+            style={{ color: 'var(--muted-foreground)' }}
           />
         </Tooltip>
       )}
-    </Box>
+    </div>
   );
 };
 

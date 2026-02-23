@@ -1,6 +1,6 @@
 import React from 'react';
-import { Box, Chip } from '@mui/material';
-import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import { Chip } from '../../../../components/ui';
+import { FileDownload as FileDownloadIcon } from '../../../../lib/icons';
 
 interface AutoDownloadChipsProps {
   availableTabs: string | null | undefined;
@@ -53,13 +53,8 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
           size="small"
           variant={isAutoDownloadEnabled ? 'filled' : 'outlined'}
           color={isAutoDownloadEnabled ? 'primary' : 'default'}
-          icon={isAutoDownloadEnabled ? <FileDownloadIcon sx={{ fontSize: '0.85rem' }} /> : undefined}
-          sx={{
-            fontSize: '0.7rem',
-            '& .MuiChip-icon': {
-              ml: 0.3,
-            },
-          }}
+          icon={isAutoDownloadEnabled ? <FileDownloadIcon size={14} /> : undefined}
+            style={{ fontSize: '0.7rem' }}
         />
       );
     })
@@ -70,9 +65,9 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
   }
 
   return (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
       {chips}
-    </Box>
+    </div>
   );
 };
 

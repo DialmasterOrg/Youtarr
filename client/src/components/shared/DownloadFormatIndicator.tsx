@@ -1,6 +1,6 @@
 import React from 'react';
-import { Box, Chip, Tooltip } from '@mui/material';
-import { MovieOutlined as VideoIcon, AudiotrackOutlined as AudioIcon } from '@mui/icons-material';
+import { Box, Chip, Tooltip } from '../ui';
+import { MovieOutlined as VideoIcon, AudiotrackOutlined as AudioIcon } from '../../lib/icons';
 import { formatFileSize } from '../../utils/formatters';
 
 interface DownloadFormatIndicatorProps {
@@ -48,21 +48,15 @@ const DownloadFormatIndicator: React.FC<DownloadFormatIndicatorProps> = ({
   const audioSizeLabel = audioSizeNum ? formatFileSize(audioSizeNum) : 'Unknown';
 
   return (
-    <Box
-      sx={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 0.5
-      }}
-    >
+    <Box className="inline-flex items-center gap-1">
       {hasVideo && (
         <Tooltip title={displayVideoPath} arrow placement="top" enterTouchDelay={0}>
           <Chip
             size="small"
-            icon={<VideoIcon sx={{ color: 'primary.main' }} />}
+            icon={<VideoIcon size={14} className="text-primary" />}
             label={videoSizeLabel}
             variant="outlined"
-            sx={{ height: 20, fontSize: '0.7rem' }}
+            style={{ height: 20, fontSize: '0.7rem' }}
           />
         </Tooltip>
       )}
@@ -70,10 +64,10 @@ const DownloadFormatIndicator: React.FC<DownloadFormatIndicatorProps> = ({
         <Tooltip title={displayAudioPath} arrow placement="top" enterTouchDelay={0}>
           <Chip
             size="small"
-            icon={<AudioIcon sx={{ color: 'secondary.main' }} />}
+            icon={<AudioIcon size={14} className="text-secondary" />}
             label={audioSizeLabel}
             variant="outlined"
-            sx={{ height: 20, fontSize: '0.7rem' }}
+            style={{ height: 20, fontSize: '0.7rem' }}
           />
         </Tooltip>
       )}

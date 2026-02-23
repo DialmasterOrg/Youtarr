@@ -9,14 +9,13 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
   Paper,
   Box,
   IconButton,
   Button,
-  TableSortLabel,
   Alert,
   TextField,
-  InputAdornment,
   Stack,
   Chip,
   Tooltip,
@@ -29,34 +28,22 @@ import {
   InputLabel,
   Select,
   MenuItem,
-} from '@mui/material';
-import Pagination from '@mui/material/Pagination';
-import FilterListIcon from '@mui/icons-material/FilterList';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import StorageIcon from '@mui/icons-material/Storage';
-import DeleteIcon from '@mui/icons-material/Delete';
-import DownloadIcon from '@mui/icons-material/Download';
-import ScheduleIcon from '@mui/icons-material/Schedule';
-import AlarmOnIcon from '@mui/icons-material/AlarmOn';
-import useMediaQuery from '@mui/material/useMediaQuery';
-import { useTheme } from '@mui/material/styles';
+  Pagination,
+} from './ui';
+import { Filter as FilterListIcon, AlertCircle as ErrorOutlineIcon, CheckCircle as CheckCircleIcon, HardDrive as StorageIcon, Trash2 as DeleteIcon, Download as DownloadIcon, Clock as ScheduleIcon, AlarmCheck as AlarmOnIcon, Search as SearchIcon, Video as VideoLibraryIcon } from 'lucide-react';
+import { useMediaQuery } from '../hooks/useMediaQuery';
+import { EighteenUpRating as EighteenUpRatingIcon } from '../lib/icons';
 import { formatDuration, formatYTDate } from '../utils';
 import { formatFileSize } from '../utils/formatters';
 import { VideoData, PaginatedVideosResponse, EnabledChannel } from '../types/VideoData';
 import { useSwipeable } from 'react-swipeable';
 import FilterMenu from './VideosPage/FilterMenu';
-import SearchIcon from '@mui/icons-material/Search';
-import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { debounce } from 'lodash';
 import { Link as RouterLink } from 'react-router-dom';
-import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
 import DeleteVideosDialog from './shared/DeleteVideosDialog';
 import { useVideoDeletion } from './shared/useVideoDeletion';
 import RatingBadge from './shared/RatingBadge';
 import ChangeRatingDialog from './shared/ChangeRatingDialog';
-import EighteenUpRatingIcon from '@mui/icons-material/EighteenUpRating';
 import VideoActionsDropdown from './shared/VideoActionsDropdown';
 import { RATING_OPTIONS } from '../utils/ratings';
 import DownloadFormatIndicator from './shared/DownloadFormatIndicator';
@@ -66,8 +53,7 @@ interface VideosPageProps {
 }
 
 function VideosPage({ token }: VideosPageProps) {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery('(max-width: 599px)');
   const [videos, setVideos] = useState<VideoData[]>([]);
   const [totalVideos, setTotalVideos] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -82,8 +68,8 @@ function VideosPage({ token }: VideosPageProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
-  const [dateFrom, setDateFrom] = useState<Date | null>(null);
-  const [dateTo, setDateTo] = useState<Date | null>(null);
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
   const [uniqueChannels, setUniqueChannels] = useState<string[]>([]);
   const [enabledChannels, setEnabledChannels] = useState<EnabledChannel[]>([]);
   const [selectedVideos, setSelectedVideos] = useState<number[]>([]);
@@ -126,8 +112,8 @@ function VideosPage({ token }: VideosPageProps) {
 
     if (search) params.append('search', search);
     if (filter) params.append('channelFilter', filter);
-    if (dateFrom) params.append('dateFrom', dateFrom.toISOString().split('T')[0]);
-    if (dateTo) params.append('dateTo', dateTo.toISOString().split('T')[0]);
+    if (dateFrom) params.append('dateFrom', dateFrom);
+    if (dateTo) params.append('dateTo', dateTo);
     if (maxRatingFilter) params.append('maxRating', maxRatingFilter);
 
     try {
@@ -331,7 +317,7 @@ function VideosPage({ token }: VideosPageProps) {
   });
 
   return (
-    <Box sx={{ mb: 2 }}>
+    <Box className="mb-4">
       <Box>
         <Typography
           variant={isMobile ? 'h6' : 'h5'}
@@ -343,62 +329,58 @@ function VideosPage({ token }: VideosPageProps) {
         </Typography>
 
         {loadError && (
-          <Alert severity="error" sx={{ mb: 2 }}>
+          <Alert severity="error" className="mb-4">
             {loadError}
           </Alert>
         )}
 
         {/* Search and Filter Controls */}
-        <Stack spacing={2} sx={{ mb: 3 }}>
+        <Stack spacing={2} className="mb-6">
           <TextField
             fullWidth
             variant="outlined"
             placeholder="Search videos by name or channel..."
             onChange={(e) => debouncedSearch(e.target.value)}
             InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
+              startAdornment: <SearchIcon size={16} className="text-muted-foreground" />,
             }}
           />
 
           {!isMobile && (
-            <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <Stack direction="row" spacing={2}>
-                <DatePicker
-                  label="From Date"
-                  value={dateFrom}
-                  onChange={(newValue: Date | null) => {
-                    setDateFrom(newValue);
+            <Stack direction="row" spacing={2}>
+              <TextField
+                label="From Date"
+                type="date"
+                value={dateFrom}
+                size="small"
+                onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+                InputLabelProps={{ shrink: true }}
+                variant="outlined"
+                fullWidth
+              />
+              <TextField
+                label="To Date"
+                type="date"
+                value={dateTo}
+                size="small"
+                onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+                InputLabelProps={{ shrink: true }}
+                variant="outlined"
+                fullWidth
+              />
+              {(dateFrom || dateTo) && (
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    setDateFrom('');
+                    setDateTo('');
                     setPage(1);
                   }}
-                  renderInput={(params) => <TextField {...params} variant="outlined" fullWidth />}
-                />
-                <DatePicker
-                  label="To Date"
-                  value={dateTo}
-                  onChange={(newValue: Date | null) => {
-                    setDateTo(newValue);
-                    setPage(1);
-                  }}
-                  renderInput={(params) => <TextField {...params} variant="outlined" fullWidth />}
-                />
-                {(dateFrom || dateTo) && (
-                  <Button
-                    variant="outlined"
-                    onClick={() => {
-                      setDateFrom(null);
-                      setDateTo(null);
-                      setPage(1);
-                    }}
-                  >
-                    Clear Dates
-                  </Button>
-                )}
-              </Stack>
-            </LocalizationProvider>
+                >
+                  Clear Dates
+                </Button>
+              )}
+            </Stack>
           )}
 
           <FormControl fullWidth size="small">
@@ -433,15 +415,7 @@ function VideosPage({ token }: VideosPageProps) {
               <Button
                 variant="outlined"
                 onClick={() => setSelectedVideos([])}
-                sx={{
-                  color: 'text.primary',
-                  borderColor: 'divider',
-                  '&:hover': {
-                    bgcolor: 'action.hover',
-                    borderColor: 'text.primary',
-                    color: 'text.primary',
-                  }
-                }}
+                className="text-foreground border-border hover:bg-muted hover:border-foreground"
               >
                 Clear Selection
               </Button>
@@ -455,15 +429,7 @@ function VideosPage({ token }: VideosPageProps) {
               variant='outlined'
               startIcon={<FilterListIcon />}
               onClick={handleFilterClick}
-              sx={{
-                color: 'text.primary',
-                borderColor: 'divider',
-                '&:hover': {
-                  bgcolor: 'action.hover',
-                  borderColor: 'text.primary',
-                  color: 'text.primary',
-                }
-              }}
+              className="text-foreground border-border hover:bg-muted hover:border-foreground"
             >
               Filter by Channel
             </Button>
@@ -497,19 +463,19 @@ function VideosPage({ token }: VideosPageProps) {
               {isMobile ? null : (
                 <TableHead>
                   <TableRow>
-                    <TableCell colSpan={1} sx={{ py: 1.5 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <TableCell colSpan={1} className="py-3">
+                      <Box className="flex items-center justify-between gap-4">
+                        <Box className="flex items-center gap-2">
                           <Checkbox
                             indeterminate={selectedVideos.length > 0 && selectedVideos.length < videos.filter(v => !v.removed).length}
                             checked={videos.filter(v => !v.removed).length > 0 && selectedVideos.length === videos.filter(v => !v.removed).length}
                             onChange={handleSelectAll}
                           />
-                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                          <Typography variant="subtitle2" className="font-bold">
                             Downloaded Videos
                           </Typography>
                           <IconButton onClick={handleFilterClick} size="small">
-                            <FilterListIcon fontSize="small" />
+                            <FilterListIcon size={16} />
                           </IconButton>
                           <FilterMenu
                             anchorEl={anchorEl}
@@ -566,17 +532,14 @@ function VideosPage({ token }: VideosPageProps) {
                             flexDirection='column'
                             alignItems='stretch'
                             justifyContent='flex-start'
-                            sx={{ gap: 1 }}
+                            className="gap-4"
                           >
                             {/* Title at the top */}
-                            <Box sx={{ flexGrow: 1 }}>
+                            <Box className="flex-grow">
                               <Typography 
                                 variant='subtitle2' 
-                                sx={{ 
-                                  fontWeight: 600,
-                                  lineHeight: 1.3,
-                                  mb: 0.5,
-                                }}
+                                className="font-semibold mb-1"
+                                style={{ lineHeight: 1.3 }}
                               >
                                 {video.youTubeVideoName}
                               </Typography>
@@ -587,14 +550,7 @@ function VideosPage({ token }: VideosPageProps) {
                                     component={RouterLink}
                                     to={`/channel/${channelId}`}
                                     variant='caption'
-                                    sx={{
-                                      color: 'primary.main',
-                                      textDecoration: 'none',
-                                      '&:hover': {
-                                        textDecoration: 'underline',
-                                      },
-                                      display: 'block',
-                                    }}
+                                    className="text-primary no-underline hover:underline block"
                                   >
                                     {video.youTubeChannelName}
                                   </Typography>
@@ -602,7 +558,7 @@ function VideosPage({ token }: VideosPageProps) {
                                   <Typography
                                     variant='caption'
                                     color='text.secondary'
-                                    sx={{ display: 'block' }}
+                                    className="block"
                                   >
                                     {video.youTubeChannelName}
                                   </Typography>
@@ -694,8 +650,8 @@ function VideosPage({ token }: VideosPageProps) {
                                   }}
                                 >
                                   <ErrorOutlineIcon
-                                    sx={{
-                                      color: 'error.main',
+                                    className="text-destructive"
+                                    style={{
                                       fontSize: '2.5rem',
                                       filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))'
                                     }}
@@ -709,61 +665,57 @@ function VideosPage({ token }: VideosPageProps) {
                                     e.stopPropagation();
                                     toggleDeletionSelection(video.id);
                                   }}
-                                  sx={{
+                                  style={{
                                     position: 'absolute',
                                     top: 4,
                                     right: 4,
-                                    bgcolor: selectedForDeletion.includes(video.id) ? 'error.main' : 'rgba(0,0,0,0.6)',
+                                    backgroundColor: selectedForDeletion.includes(video.id) ? 'hsl(var(--destructive))' : 'rgba(0,0,0,0.6)',
                                     color: 'white',
-                                    '&:hover': {
-                                      bgcolor: selectedForDeletion.includes(video.id) ? 'error.dark' : 'rgba(0,0,0,0.8)',
-                                    },
                                     transition: 'all 0.2s',
                                     zIndex: 3,
                                   }}
                                   size="small"
                                 >
-                                  <DeleteIcon sx={{ fontSize: '1.125rem' }} />
+                                  <DeleteIcon size={18} />
                                 </IconButton>
                               )}
                             </Box>
 
                             {/* Compact metadata below thumbnail */}
-                            <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+                            <Stack spacing={0.5} className="mt-1">
                               {/* Duration, Size, Published, Downloaded in a compact grid */}
-                              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.5, fontSize: '0.75rem' }}>
+                              <Box className="grid grid-cols-2 gap-2 text-xs">
                                 {video.duration && (
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <AlarmOnIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} />
-                                    <Typography variant='caption' sx={{ color: 'text.secondary' }}>
+                                  <Box className="flex items-center gap-1">
+                                    <AlarmOnIcon size={14} className="text-muted-foreground" />
+                                    <Typography variant='caption' className="text-muted-foreground">
                                       {formatDuration(video.duration)}
                                     </Typography>
                                   </Box>
                                 )}
                                 {video.fileSize && (
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <StorageIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} />
-                                    <Typography variant='caption' sx={{ color: 'text.secondary' }}>
+                                  <Box className="flex items-center gap-1">
+                                    <StorageIcon size={14} className="text-muted-foreground" />
+                                    <Typography variant='caption' className="text-muted-foreground">
                                       {formatFileSize(typeof video.fileSize === 'string' ? parseInt(video.fileSize, 10) : video.fileSize)}
                                     </Typography>
                                   </Box>
                                 )}
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                  <ScheduleIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} />
-                                  <Typography variant='caption' sx={{ color: 'text.secondary' }}>
+                                <Box className="flex items-center gap-1">
+                                  <ScheduleIcon size={14} className="text-muted-foreground" />
+                                  <Typography variant='caption' className="text-muted-foreground">
                                     Pub: {formatYTDate(video.originalDate)}
                                   </Typography>
                                 </Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                  <DownloadIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} />
-                                  <Typography variant='caption' sx={{ color: 'text.secondary' }}>
+                                <Box className="flex items-center gap-1">
+                                  <DownloadIcon size={14} className="text-muted-foreground" />
+                                  <Typography variant='caption' className="text-muted-foreground">
                                     {new Date(video.timeCreated).toLocaleDateString()}
                                   </Typography>
                                 </Box>
                               </Box>
 
-                              {/* Status chips in a flexible row */}
-                              <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                              <Stack direction="row" spacing={0.5} className="flex-wrap gap-1 mt-1">
                                 {!video.removed && (video.filePath || video.audioFilePath) && (
                                   <DownloadFormatIndicator
                                     filePath={video.filePath}
@@ -781,7 +733,7 @@ function VideosPage({ token }: VideosPageProps) {
                                       label={mediaTypeInfo.label}
                                       color={mediaTypeInfo.color}
                                       variant="outlined"
-                                      sx={{ height: 20, fontSize: '0.65rem' }}
+                                      style={{ height: 20, fontSize: '0.65rem' }}
                                     />
                                   ) : null;
                                 })()}
@@ -790,33 +742,27 @@ function VideosPage({ token }: VideosPageProps) {
                                   ratingSource={video.rating_source}
                                   showNA={true}
                                   size="small"
-                                  sx={{ height: 20, fontSize: '0.65rem', boxShadow: 'none' }}
                                 />
                                 {video.removed ? (
                                   <Tooltip title="Video file not found on disk" enterTouchDelay={0}>
                                     <Chip
                                       size="small"
-                                      icon={<ErrorOutlineIcon />}
+                                      icon={<ErrorOutlineIcon size={12} />}
                                       label="Missing"
                                       color="error"
                                       variant="outlined"
-                                      sx={{ height: 20, fontSize: '0.65rem' }}
+                                      style={{ height: 20, fontSize: '0.65rem' }}
                                     />
                                   </Tooltip>
                                 ) : video.fileSize ? (
                                   <Tooltip title="Video file exists on disk" enterTouchDelay={0}>
                                     <Chip
                                       size="small"
-                                      icon={<CheckCircleIcon />}
+                                      icon={<CheckCircleIcon size={12} />}
                                       label="Available"
                                       color="success"
                                       variant="filled"
-                                      sx={{
-                                        height: 20,
-                                        fontSize: '0.65rem',
-                                        '& .MuiChip-icon': { fontSize: 12, ml: 0.25 },
-                                        '& .MuiChip-label': { px: 0.5 },
-                                      }}
+                                      style={{ height: 20, fontSize: '0.65rem' }}
                                     />
                                   </Tooltip>
                                 ) : null}
@@ -825,21 +771,13 @@ function VideosPage({ token }: VideosPageProps) {
                           </Box>
                         </TableCell>
                       ) : (
-                        <TableCell colSpan={1} sx={{ p: 0 }}>
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'stretch',
-                              gap: 2,
-                              py: 1.5,
-                              px: 2,
-                            }}
-                          >
+                        <TableCell colSpan={1} className="p-0">
+                          <Box className="flex items-stretch gap-4 py-3 px-4">
                             <Checkbox
                               checked={selectedVideos.includes(video.id)}
                               onChange={() => handleSelectVideo(video.id)}
                               disabled={Boolean(video.removed)}
-                              sx={{ alignSelf: 'flex-start', mt: 0.5 }}
+                              className="self-start mt-1"
                             />
                             <Box
                               width={256}
@@ -912,8 +850,8 @@ function VideosPage({ token }: VideosPageProps) {
                                   }}
                                 >
                                   <ErrorOutlineIcon
-                                    sx={{
-                                      color: 'error.main',
+                                    className="text-destructive"
+                                    style={{
                                       fontSize: '4rem',
                                       filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))'
                                     }}
@@ -921,15 +859,14 @@ function VideosPage({ token }: VideosPageProps) {
                                 </Box>
                               ) : null}
                               <Box
-                                sx={{
+                                style={{
                                   position: 'absolute',
                                   left: 0,
                                   right: 0,
                                   bottom: 0,
-                                  bgcolor: 'rgba(0, 0, 0, 0.6)',
-                                  color: 'common.white',
-                                  px: 1,
-                                  py: 0.5,
+                                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                                  color: 'white',
+                                  padding: '4px 8px',
                                   fontSize: '0.75rem',
                                   fontWeight: 600,
                                   textOverflow: 'ellipsis',
@@ -944,11 +881,7 @@ function VideosPage({ token }: VideosPageProps) {
                                     <Typography
                                       component={RouterLink}
                                       to={`/channel/${channelId}`}
-                                      sx={{
-                                        color: 'inherit',
-                                        textDecoration: 'none',
-                                        '&:hover': { textDecoration: 'underline' },
-                                      }}
+                                      className="text-inherit no-underline hover:underline"
                                     >
                                       {video.youTubeChannelName}
                                     </Typography>
@@ -958,9 +891,9 @@ function VideosPage({ token }: VideosPageProps) {
                                 })()}
                               </Box>
                             </Box>
-                            <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                              <Box sx={{ minWidth: 0 }}>
-                                <Typography variant='subtitle1' sx={{ fontWeight: 700, lineHeight: 1.3 }}>
+                            <Box className="flex-1 min-w-0 flex flex-col gap-4">
+                              <Box className="min-w-0">
+                                <Typography variant='subtitle1' className="font-bold" style={{ lineHeight: 1.3 }}>
                                   {video.youTubeVideoName}
                                 </Typography>
                                 {video.duration && (
@@ -969,7 +902,7 @@ function VideosPage({ token }: VideosPageProps) {
                                   </Typography>
                                 )}
                               </Box>
-                              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" sx={{ rowGap: 0.5 }}>
+                              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" className="gap-y-1">
                                 {(() => {
                                   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
                                   return mediaTypeInfo ? (
@@ -979,7 +912,7 @@ function VideosPage({ token }: VideosPageProps) {
                                       label={mediaTypeInfo.label}
                                       color={mediaTypeInfo.color}
                                       variant="outlined"
-                                      sx={{ height: 20, fontSize: '0.7rem' }}
+                                      style={{ height: 20, fontSize: '0.7rem' }}
                                     />
                                   ) : null;
                                 })()}
@@ -988,7 +921,6 @@ function VideosPage({ token }: VideosPageProps) {
                                   ratingSource={video.rating_source}
                                   showNA={true}
                                   size="small"
-                                  sx={{ height: 20, fontSize: '0.7rem', boxShadow: 'none' }}
                                 />
                                 {!video.removed && (video.filePath || video.audioFilePath) && (
                                   <DownloadFormatIndicator
@@ -1002,47 +934,42 @@ function VideosPage({ token }: VideosPageProps) {
                                   <Tooltip title="Video file not found on disk. It may have been deleted or moved." enterTouchDelay={0}>
                                     <Chip
                                       size="small"
-                                      icon={<ErrorOutlineIcon />}
+                                      icon={<ErrorOutlineIcon size={12} />}
                                       label="Missing"
                                       color="error"
                                       variant="outlined"
-                                      sx={{ height: 20, fontSize: '0.7rem' }}
+                                      style={{ height: 20, fontSize: '0.7rem' }}
                                     />
                                   </Tooltip>
                                 ) : video.fileSize ? (
                                   <Tooltip title="Video file exists on disk" enterTouchDelay={0}>
                                     <Chip
                                       size="small"
-                                      icon={<CheckCircleIcon />}
+                                      icon={<CheckCircleIcon size={12} />}
                                       label="Available"
                                       color="success"
                                       variant="filled"
-                                      sx={{
-                                        height: 20,
-                                        fontSize: '0.7rem',
-                                        '& .MuiChip-icon': { fontSize: 14, ml: 0.5 },
-                                        '& .MuiChip-label': { px: 0.75 },
-                                      }}
+                                      style={{ height: 20, fontSize: '0.7rem' }}
                                     />
                                   </Tooltip>
                                 ) : null}
                               </Stack>
                               <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <ScheduleIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                  <Box className="flex items-center gap-1">
+                                    <ScheduleIcon size={16} className="text-muted-foreground" />
                                     <Typography variant="caption" color="text.secondary">
                                       Published: {formatYTDate(video.originalDate)}
                                     </Typography>
                                   </Box>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <DownloadIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                  <Box className="flex items-center gap-1">
+                                    <DownloadIcon size={16} className="text-muted-foreground" />
                                     <Typography variant="caption" color="text.secondary">
                                       Downloaded: {new Date(video.timeCreated).toLocaleDateString()} {new Date(video.timeCreated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </Typography>
                                   </Box>
                                 </Stack>
                               </Box>
-                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <Box className="flex items-center">
                                 <Tooltip title="Delete video from disk">
                                   <span>
                                     <IconButton
@@ -1089,7 +1016,7 @@ function VideosPage({ token }: VideosPageProps) {
         <Zoom in={selectedForDeletion.length > 0}>
           <Fab
             color="primary"
-            sx={{
+            style={{
               position: 'fixed',
               bottom: 80,
               right: 16,
@@ -1107,7 +1034,7 @@ function VideosPage({ token }: VideosPageProps) {
         <Zoom in={selectedForDeletion.length > 0}>
           <Fab
             color="error"
-            sx={{
+            style={{
               position: 'fixed',
               bottom: 16,
               right: 16,

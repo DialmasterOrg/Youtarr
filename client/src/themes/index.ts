@@ -1,10 +1,10 @@
-import { createTheme, ThemeOptions, Theme } from '@mui/material/styles';
+// MUI removed — this module now only wires our theme definitions together.
+// All actual styling is driven by CSS variables via ThemeEngineContext.
 import { ThemeMode, ThemeDefinition } from './types';
 import { playfulTheme } from './playful';
 import { linearTheme } from './linear';
 import { neumorphicTheme } from './neumorphic';
 import { flatTheme } from './flat';
-import { commonThemeOptions } from './shared';
 
 export const ALL_THEMES: Record<ThemeMode, ThemeDefinition> = {
   playful: playfulTheme,
@@ -19,61 +19,7 @@ export const getThemeById = (id: ThemeMode): ThemeDefinition => {
   return ALL_THEMES[id] || playfulTheme;
 };
 
-const hslTripletPattern = /^-?[\d.]+\s+-?[\d.]+%\s+-?[\d.]+%$/;
-
-const resolveColorValue = (value?: string): string | undefined => {
-  if (!value) return undefined;
-  const trimmed = value.trim();
-  if (
-    trimmed.startsWith('#') ||
-    trimmed.startsWith('rgb') ||
-    trimmed.startsWith('hsl') ||
-    trimmed.startsWith('var(')
-  ) {
-    return trimmed;
-  }
-
-  if (hslTripletPattern.test(trimmed)) {
-    return `hsl(${trimmed})`;
-  }
-
-  return trimmed;
-};
-
-export const createAppTheme = (mode: 'light' | 'dark', themeId: ThemeMode): Theme => {
-  const themeDef = getThemeById(themeId);
-  const modeTokens = themeDef.tokens[mode];
-
-  const palette: ThemeOptions['palette'] = {
-    mode,
-    background: {
-      default: resolveColorValue(modeTokens.background) || '#ffffff',
-      paper:
-        resolveColorValue(modeTokens.card) || resolveColorValue(modeTokens.background) || '#ffffff',
-    },
-    primary: {
-      main: resolveColorValue(modeTokens.primary) || '#8b5cf6',
-      contrastText: resolveColorValue(modeTokens['primary-foreground']) || '#ffffff',
-    },
-    secondary: {
-      main: resolveColorValue(modeTokens.secondary) || '#6b7280',
-      contrastText: resolveColorValue(modeTokens['secondary-foreground']) || '#ffffff',
-    },
-    text: {
-      primary: resolveColorValue(modeTokens.foreground) || '#111827',
-      secondary: resolveColorValue(modeTokens['muted-foreground']) || '#6b7280',
-    },
-    divider: resolveColorValue(modeTokens.border) || '#e5e7eb',
-  };
-
-  const themeOptions: ThemeOptions = {
-    ...commonThemeOptions,
-    palette,
-    components: {
-      ...commonThemeOptions.components,
-      ...(themeDef.muiOverrides || {}),
-    },
-  };
-
-  return createTheme(themeOptions);
-};
+// createAppTheme is kept as a no-op stub so any remaining import sites don't
+// cause compile errors during migration.  Delete callers, then delete this.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const createAppTheme = (_mode: 'light' | 'dark', _themeId: ThemeMode): any => ({});

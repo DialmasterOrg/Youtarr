@@ -1,15 +1,14 @@
 import React from 'react';
 import {
-  Box,
   Grid,
   Card,
   CardActionArea,
   CardContent,
   Switch,
   FormControlLabel,
-  Radio,
   Typography,
-} from '@mui/material';
+} from '../../ui';
+import { RadioGroupItem } from '../../ui/form';
 import { ConfigurationCard } from '../common/ConfigurationCard';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { useThemeEngine } from '../../../contexts/ThemeEngineContext';
@@ -26,10 +25,10 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
 
   return (
     <ConfigurationCard title="Appearance" subtitle="Theme, visual style, and motion settings">
-      <Grid container spacing={2} sx={{ mt: 1 }}>
+      <Grid container spacing={2} className="mt-1">
         {/* Dark Mode Toggle */}
         <Grid item xs={12}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <div className="flex items-center">
             <FormControlLabel
               control={
                 <Switch
@@ -43,12 +42,12 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
               text="Toggle between light and dark color mode. Your preference is saved locally."
               onMobileClick={onMobileTooltipClick}
             />
-          </Box>
+          </div>
         </Grid>
 
         {/* Theme Animation Toggle */}
         <Grid item xs={12}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <div className="flex items-center">
             <FormControlLabel
               control={
                 <Switch
@@ -62,29 +61,27 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
               text="Enable smooth transitions, floating animations, and motion accents throughout the interface."
               onMobileClick={onMobileTooltipClick}
             />
-          </Box>
+          </div>
         </Grid>
 
         {/* Visual Style Selection */}
         <Grid item xs={12}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+          <div className="flex items-center gap-2">
+            <Typography variant="h6" className="font-bold">
               Visual Style
             </Typography>
             <InfoTooltip
               text="Choose between the Playful Geometric, Neumorphic Soft UI, and Linear Modern visual systems."
               onMobileClick={onMobileTooltipClick}
             />
-          </Box>
+          </div>
         </Grid>
 
         {Object.values(ALL_THEMES).map((theme) => (
           <Grid item xs={12} md={3} key={theme.id}>
             <Card
-              sx={{
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
+              className="h-full flex flex-col"
+              style={{
                 borderRadius: theme.tokens.light['radius-ui'] || 'var(--radius-ui)',
                 border: themeMode === theme.id ? '2px solid var(--primary)' : '2px solid var(--border-strong)',
                 boxShadow: themeMode === theme.id ? 'var(--shadow-hard)' : 'var(--shadow-soft)',
@@ -94,19 +91,19 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
               <CardActionArea
                 onClick={() => setThemeMode(theme.id)}
                 aria-label={`Select ${theme.name} theme`}
-                sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+                className="h-full flex flex-col"
               >
-                <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, flex: 1, width: '100%' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                <CardContent className="flex flex-col gap-3 flex-1 w-full">
+                  <div className="flex items-center justify-between">
+                    <Typography variant="subtitle1" className="font-bold">
                       {theme.name}
                     </Typography>
-                    <Radio checked={themeMode === theme.id} />
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', minHeight: 120, px: 0, py: 1 }}>
+                    <RadioGroupItem value={theme.id} checked={themeMode === theme.id} onChange={() => setThemeMode(theme.id)} />
+                  </div>
+                  <div className="flex items-center w-full px-0 py-2" style={{ minHeight: 120 }}>
                     {theme.preview}
-                  </Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 'auto' }}>
+                  </div>
+                  <Typography variant="body2" color="secondary" className="mt-auto">
                     {theme.description}
                   </Typography>
                 </CardContent>

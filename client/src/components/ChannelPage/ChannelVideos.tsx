@@ -1,28 +1,21 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import {
   Card,
-  Box,
   Typography,
   Alert,
   Skeleton,
   Grid,
-  Zoom,
-  Fab,
+  Grow,
   Badge,
   Tabs,
   Tab,
-  Pagination,
-  Portal,
-  alpha,
-} from '@mui/material';
+} from '../ui';
 
-import DownloadIcon from '@mui/icons-material/Download';
-import DeleteIcon from '@mui/icons-material/Delete';
-import AlarmOnIcon from '@mui/icons-material/AlarmOn';
+import { Download as DownloadIcon, Trash2 as DeleteIcon } from '../../lib/icons';
 
-import useMediaQuery from '@mui/material/useMediaQuery';
-import { Theme, useTheme } from '@mui/material/styles';
+import useMediaQuery from '../../hooks/useMediaQuery';
 import { useNavigate } from 'react-router-dom';
 import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
 import { useVideoDeletion } from '../shared/useVideoDeletion';
@@ -54,8 +47,7 @@ type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
 
 function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelId, channelVideoQuality, channelAudioFormat }: ChannelVideosProps) {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery('(max-width: 599px)');
   const { themeMode } = useThemeEngine();
 
   // View and display states
@@ -681,34 +673,30 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     const isEnabled = isTabAutoDownloadEnabled(tabType);
 
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <Typography
           variant="caption"
-          sx={{
+          style={{
             fontWeight: 700,
             color: 'inherit',
           }}
         >
           {label}
         </Typography>
-        <Box
-          sx={(theme) => ({
+        <div
+          style={{
             width: 12,
             height: 12,
             borderRadius: '50%',
-            backgroundColor: isEnabled 
-              ? (theme.palette.mode === 'dark' ? 'success.light' : 'success.main')
-              : alpha(theme.palette.text.primary, 0.1),
-            border: isEnabled 
-              ? `2px solid ${theme.palette.success.dark}` 
-              : `1px solid ${alpha(theme.palette.text.primary, 0.3)}`,
+            backgroundColor: isEnabled ? 'var(--success)' : 'rgba(0,0,0,0.08)',
+            border: isEnabled ? '2px solid var(--success)' : '1px solid rgba(0,0,0,0.25)',
             transition: 'all 200ms ease',
             display: 'inline-block',
-            boxShadow: isEnabled ? `0 0 8px ${alpha(theme.palette.success.main, 0.4)}` : 'none',
-          })}
+            boxShadow: isEnabled ? '0 0 8px rgba(34,197,94,0.4)' : 'none',
+          }}
           title={isEnabled ? 'Auto-download enabled' : 'Auto-download disabled'}
         />
-      </Box>
+      </div>
     );
   };
 
@@ -769,66 +757,48 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
     const isDownloadAction = selectionMode === 'download';
     const count = isDownloadAction ? checkedBoxes.length : selectedForDeletion.length;
-    const icon = isDownloadAction ? <DownloadIcon /> : <DeleteIcon />;
+    const icon = isDownloadAction ? <DownloadIcon size={24} /> : <DeleteIcon size={24} />;
     const handleActionClick = isDownloadAction ? handleDownloadClick : handleDeleteClick;
 
-    return (
-      <Portal container={typeof window !== 'undefined' ? document.body : undefined}>
-        <Zoom in>
+    if (typeof window === 'undefined') return null;
+
+    return createPortal(
+      <Grow in>
+        <div style={{ position: 'fixed', bottom: isMobile ? 84 : 56, right: isMobile ? 20 : 56, transform: 'translateY(-50%)', zIndex: 1399 }}>
           <Badge
             badgeContent={count}
             color={isDownloadAction ? 'primary' : 'error'}
             overlap="circular"
             anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-            sx={(theme: Theme) => ({
-              position: 'fixed',
-              bottom: isMobile ? 84 : 56,
-              right: isMobile ? 20 : 56,
-              transform: 'translateY(-50%)',
-              zIndex: theme.zIndex.snackbar - 1,
-              '& .MuiBadge-badge': {
-                border: `2px solid ${theme.palette.background.paper}`,
-                fontWeight: 800,
-                minWidth: 22,
-                height: 22,
-                fontSize: '0.75rem',
-                zIndex: theme.zIndex.snackbar + 1,
-                boxShadow: 'var(--shadow-hard)',
-              },
-            })}
           >
-            <Fab
-              color={isDownloadAction ? 'primary' : 'error'}
+            <button
               onClick={handleActionClick}
-              sx={(theme: Theme) => ({
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: '50%',
                 backgroundColor: isDownloadAction ? 'var(--fab-primary-bg)' : 'var(--fab-error-bg)',
                 color: isDownloadAction ? 'var(--fab-primary-fg)' : 'var(--fab-error-fg)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 boxShadow: 'var(--shadow-hard)',
-                border: theme.palette.mode === 'light' ? 'none' : '1px solid rgba(255,255,255,0.1)',
-                '& .MuiSvgIcon-root': {
-                  color: 'inherit',
-                },
-                '&:hover': {
-                  backgroundColor: isDownloadAction ? 'var(--fab-primary-hover-bg)' : 'var(--fab-error-hover-bg)',
-                  color: isDownloadAction ? 'var(--fab-primary-hover-fg)' : 'var(--fab-error-hover-fg)',
-                },
-                '&:focus-visible': {
-                  outline: `3px solid ${isDownloadAction ? theme.palette.primary.main : theme.palette.error.main}`,
-                  outlineOffset: 3,
-                },
-              })}
+              }}
             >
               {icon}
-            </Fab>
+            </button>
           </Badge>
-        </Zoom>
-      </Portal>
+        </div>
+      </Grow>,
+      document.body
     );
   };
 
   return (
     <>
-      <Card elevation={3} sx={{ mb: 2 }}>
+      <Card elevation={3} style={{ marginBottom: 16 }}>
         <ChannelVideosHeader
           isMobile={isMobile}
           viewMode={viewMode}
@@ -889,7 +859,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
         {/* Tabs */}
           { availableTabs.length > 0 && (
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
+          <div style={{ borderBottom: '1px solid var(--border)', padding: '0 16px' }}>
             <Tabs
               value={selectedTab || 'videos'}
               onChange={handleTabChange}
@@ -901,38 +871,38 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                 <Tab key={tab} label={renderTabLabel(tab)} value={tab} />
               ))}
             </Tabs>
-          </Box>
+          </div>
         )}
 
         {/* Content area */}
-        <Box sx={{ p: 2, position: 'relative', minHeight: '100vh' }}>
+        <div style={{ padding: 16, position: 'relative', minHeight: '100vh' }}>
           {videoFailed && videos.length === 0 && !hasActiveFilters && !searchQuery ? (
             <Alert severity="error">
               Failed to fetch channel videos. Please try again later.
             </Alert>
           ) : videosLoading && videos.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 4 }}>
+            <div style={{ textAlign: 'center', paddingTop: 32, paddingBottom: 32 }}>
               <Typography variant="body1" color="text.secondary" gutterBottom>
                 Loading and fetching/indexing new videos for this channel tab...
               </Typography>
-              <Grid container spacing={2} sx={{ mt: 2 }}>
+              <Grid container spacing={2} style={{ marginTop: 16 }}>
                 {[...Array(pageSize)].map((_, index) => (
                   <Grid item xs={12} sm={6} md={4} lg={3} key={`skeleton-${index}`}>
                     <Skeleton variant="rectangular" height={200} />
-                    <Skeleton variant="text" sx={{ mt: 1 }} />
+                    <Skeleton variant="text" style={{ marginTop: 8 }} />
                     <Skeleton variant="text" width="60%" />
                   </Grid>
                 ))}
               </Grid>
-            </Box>
+            </div>
           ) : videos.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 4 }}>
+            <div style={{ textAlign: 'center', paddingTop: 32, paddingBottom: 32 }}>
               <Typography variant="body1" color="text.secondary">
                 {hasActiveFilters || searchQuery
                   ? 'No videos found matching your search and filter criteria'
                   : 'No videos found'}
               </Typography>
-            </Box>
+            </div>
           ) : (
             <>
               {/* View mode content */}
@@ -958,7 +928,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
               )}
 
               {viewMode === 'list' && (
-                <Box>
+                <div>
                   {paginatedVideos.map((video) => (
                     <VideoListItem
                       key={video.youtube_id}
@@ -972,7 +942,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                       onMobileTooltip={setMobileTooltip}
                     />
                   ))}
-                </Box>
+                </div>
               )}
 
               {viewMode === 'table' && (
@@ -1001,26 +971,26 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           {useInfiniteScroll && (
             <>
               {/* Sentinel for infinite scroll - needs height and safe padding to ensure intersection triggers */}
-              <Box
+              <div
                 ref={loadMoreRef}
-                sx={{
+                style={{
                   height: 24,
                   width: '100%',
-                  mt: 4,
-                  mb: 4,
+                  marginTop: 32,
+                  marginBottom: 32,
                 }}
               />
               {videosLoading && videos.length > 0 && hasNextPage && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-                  <Box className="playful-loading-dots" aria-label="Loading more videos">
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0' }}>
+                  <div className="playful-loading-dots" aria-label="Loading more videos">
                     <span />
                     <span />
                     <span />
-                  </Box>
-                </Box>
+                  </div>
+                </div>
               )}
               {!hasNextPage && videos.length > 0 && (
-                <Typography variant="caption" color="text.secondary" align="center" sx={{ display: 'block', py: 2 }}>
+                <Typography variant="caption" color="text.secondary" align="center" style={{ display: 'block', padding: '16px 0' }}>
                   {"You're all caught up."}
                 </Typography>
               )}
@@ -1028,29 +998,25 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           )}
 
           {!useInfiniteScroll && totalPages > 1 && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-              <Pagination
-                count={totalPages}
-                page={page}
-                color="primary"
-                onChange={(_, value) => {
-                  setPage(value);
-                  if (typeof window !== 'undefined') {
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }
-                }}
-                showFirstButton
-                showLastButton
-              />
-            </Box>
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button onClick={() => { setPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={page <= 1} style={{ padding: '4px 8px', cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.4 : 1, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'inherit' }}>«</button>
+              <button onClick={() => { setPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={page <= 1} style={{ padding: '4px 8px', cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.4 : 1, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'inherit' }}>‹</button>
+              {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
+                const start = Math.max(1, Math.min(page - 3, totalPages - 6));
+                const p = start + i;
+                if (p > totalPages) return null;
+                return (
+                  <button key={p} onClick={() => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ padding: '4px 10px', cursor: 'pointer', border: '1px solid var(--border)', borderRadius: 4, background: p === page ? 'var(--primary)' : 'transparent', color: p === page ? 'white' : 'inherit' }}>{p}</button>
+                );
+              })}
+              <button onClick={() => { setPage(p => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={page >= totalPages} style={{ padding: '4px 8px', cursor: page >= totalPages ? 'not-allowed' : 'pointer', opacity: page >= totalPages ? 0.4 : 1, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'inherit' }}>›</button>
+              <button onClick={() => { setPage(totalPages); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={page >= totalPages} style={{ padding: '4px 8px', cursor: page >= totalPages ? 'not-allowed' : 'pointer', opacity: page >= totalPages ? 0.4 : 1, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'inherit' }}>»</button>
+            </div>
           )}
-        </Box>
+        </div>
       </Card>
-
-      {/* Dialogs and Snackbars */}
       <ChannelVideosDialogs
-        token={token}
-        downloadDialogOpen={downloadDialogOpen}
+          downloadDialogOpen={downloadDialogOpen}
         refreshConfirmOpen={refreshConfirmOpen}
         deleteDialogOpen={deleteDialogOpen}
         fetchAllError={fetchAllError}

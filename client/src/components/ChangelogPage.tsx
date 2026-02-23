@@ -3,15 +3,13 @@ import {
   Card,
   CardContent,
   Typography,
-  Box,
   CircularProgress,
   Alert,
   Button,
   Link,
-  useTheme,
-  useMediaQuery,
-} from '@mui/material';
-import RefreshIcon from '@mui/icons-material/Refresh';
+} from './ui';
+import { Refresh as RefreshIcon } from '../lib/icons';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import ReactMarkdown from 'react-markdown';
 import { useChangelog } from '../hooks/useChangelog';
 
@@ -19,24 +17,20 @@ const CHANGELOG_GITHUB_URL =
   'https://github.com/DialmasterOrg/Youtarr/blob/main/CHANGELOG.md';
 
 function ChangelogPage() {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery('(max-width: 599px)');
   const { content, loading, error, refetch } = useChangelog();
 
   return (
     <Card elevation={8} style={{ marginBottom: '16px' }}>
       <CardContent>
-        <Box
-          display="flex"
-          justifyContent="space-between"
-          alignItems="center"
-          mb={2}
+        <div
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}
         >
           <Typography
             variant={isMobile ? 'h6' : 'h5'}
             component="h2"
             align="center"
-            sx={{ flexGrow: 1 }}
+            style={{ flexGrow: 1 }}
           >
             Changelog
           </Typography>
@@ -48,17 +42,17 @@ function ChangelogPage() {
           >
             Refresh
           </Button>
-        </Box>
+        </div>
 
         {loading && (
-          <Box display="flex" justifyContent="center" py={4}>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '32px 0' }}>
             <CircularProgress />
-          </Box>
+          </div>
         )}
 
         {error && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            <Typography variant="body2" sx={{ mb: 1 }}>
+          <Alert severity="warning" style={{ marginBottom: 16 }}>
+            <Typography variant="body2" style={{ marginBottom: 8 }}>
               Unable to load changelog: {error}
             </Typography>
             <Typography variant="body2">
@@ -71,55 +65,16 @@ function ChangelogPage() {
                 {CHANGELOG_GITHUB_URL}
               </Link>
             </Typography>
-            <Button onClick={refetch} size="small" sx={{ mt: 1 }}>
+            <Button onClick={refetch} size="small" style={{ marginTop: 8 }}>
               Retry
             </Button>
           </Alert>
         )}
 
         {content && !loading && (
-          <Box
-            sx={{
-              '& h1, & h2, & h3': {
-                color: 'primary.main',
-                mt: 2,
-                mb: 1,
-              },
-              '& h1': { fontSize: '1.75rem' },
-              '& h2': {
-                fontSize: '1.5rem',
-                borderBottom: `1px solid ${theme.palette.divider}`,
-                pb: 1,
-              },
-              '& h3': { fontSize: '1.25rem' },
-              '& a': {
-                color: 'primary.main',
-                textDecoration: 'none',
-                '&:hover': { textDecoration: 'underline' },
-              },
-              '& ul, & ol': {
-                pl: 3,
-                mb: 2,
-              },
-              '& li': {
-                mb: 0.5,
-              },
-              '& code': {
-                backgroundColor: 'action.hover',
-                padding: '2px 6px',
-                borderRadius: 1,
-                fontFamily: 'monospace',
-              },
-              '& pre': {
-                backgroundColor: 'action.hover',
-                padding: 2,
-                borderRadius: 1,
-                overflow: 'auto',
-              },
-            }}
-          >
+          <div className="changelog-markdown">
             <ReactMarkdown>{content}</ReactMarkdown>
-          </Box>
+          </div>
         )}
       </CardContent>
     </Card>

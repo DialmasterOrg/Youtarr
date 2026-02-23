@@ -13,7 +13,7 @@ import {
   Alert,
   AlertTitle,
   Typography,
-} from '@mui/material';
+} from '../../ui';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { ConfigState } from '../types';
@@ -36,7 +36,7 @@ export const DownloadPerformanceSection: React.FC<DownloadPerformanceSectionProp
       chipColor={config.enableStallDetection ? "success" : "default"}
       defaultExpanded={false}
     >
-      <Alert severity="info" sx={{ mb: 2 }}>
+      <Alert severity="info" className="mb-4">
         <AlertTitle>Performance Optimization</AlertTitle>
         <Typography variant="body2">
           Configure download timeouts, retry attempts, and stall detection to handle slow or interrupted downloads automatically.
@@ -113,7 +113,7 @@ export const DownloadPerformanceSection: React.FC<DownloadPerformanceSectionProp
               />
             }
             label={
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Box className="flex items-center">
                 Enable Stall Detection
                 <InfoTooltip
                   text="Automatically detect and retry downloads that stall at slow speeds"

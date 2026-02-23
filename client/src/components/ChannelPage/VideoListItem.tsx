@@ -1,19 +1,14 @@
 import React from 'react';
 import {
   Card,
-  Box,
   Typography,
   Checkbox,
   Chip,
-  IconButton,
   CardContent,
   Fade,
   Tooltip,
-} from '@mui/material';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import BlockIcon from '@mui/icons-material/Block';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import { useTheme } from '@mui/material/styles';
+} from '../ui';
+import { CalendarToday as CalendarTodayIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon } from '../../lib/icons';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml } from '../../utils/formatters';
@@ -43,7 +38,6 @@ function VideoListItem({
   onToggleIgnore,
   onMobileTooltip,
 }: VideoListItemProps) {
-  const theme = useTheme();
   const status = getVideoStatus(video);
   // Check if video is still live (not "was_live" and not null/undefined)
   const isStillLive = video.live_status && video.live_status !== 'was_live';
@@ -61,16 +55,13 @@ function VideoListItem({
   return (
     <Fade in timeout={300} key={video.youtube_id}>
       <Card
-        sx={{
-          mb: 1.5,
+        style={{
+          marginBottom: 12,
           display: 'flex',
           position: 'relative',
           transition: 'all 0.2s ease',
           cursor: isClickable ? 'pointer' : 'default',
           opacity: status === 'members_only' || isIgnored ? 0.7 : 1,
-          '&:hover': {
-            boxShadow: theme.shadows[3],
-          },
         }}
         onClick={() => {
           if (isDownloadSelectable && isDownloadAllowed) {
@@ -83,14 +74,13 @@ function VideoListItem({
         }}
       >
         {/* Thumbnail */}
-        <Box
-          sx={{
+        <div
+          style={{
             position: 'relative',
-            // Keep container size consistent for all videos
             width: 120,
             minWidth: 120,
             height: 90,
-            bgcolor: 'grey.900',
+            backgroundColor: '#111',
             borderRadius: 'var(--radius-thumb)',
             overflow: 'hidden',
           }}
@@ -110,8 +100,8 @@ function VideoListItem({
 
           {/* YouTube Removed Banner */}
           {video.youtube_removed ? (
-            <Box
-              sx={{
+            <div
+              style={{
                 position: 'absolute',
                 top: 0,
                 left: 0,
@@ -126,7 +116,7 @@ function VideoListItem({
               }}
             >
               Removed From YouTube
-            </Box>
+            </div>
           ) : null}
 
           {/* Duration overlay - hide for shorts since duration isn't available from flat-playlist */}
@@ -134,23 +124,22 @@ function VideoListItem({
             <Chip
               label={formatDuration(video.duration)}
               size="small"
-              sx={{
+              style={{
                 position: 'absolute',
                 bottom: 4,
                 right: 4,
-                bgcolor: 'rgba(0,0,0,0.8)',
+                backgroundColor: 'rgba(0,0,0,0.8)',
                 color: 'white',
                 fontSize: '0.7rem',
                 height: 18,
-                '& .MuiChip-label': { px: 0.5 },
               }}
             />
           )}
 
           {/* Still Live indicator or Checkbox for selectable videos */}
           {isStillLive ? (
-            <Box
-              sx={{
+            <div
+              style={{
                 position: 'absolute',
                 top: 4,
                 left: 4,
@@ -158,7 +147,7 @@ function VideoListItem({
               }}
             >
               <StillLiveDot isMobile onMobileClick={onMobileTooltip} />
-            </Box>
+            </div>
           ) : isDownloadSelectable && isDownloadAllowed && (
             <Checkbox
               checked={isChecked}
@@ -167,18 +156,13 @@ function VideoListItem({
                 e.stopPropagation();
                 onCheckChange(video.youtube_id, e.target.checked);
               }}
-              sx={{
+              style={{
                 position: 'absolute',
                 top: 2,
                 left: 2,
                 color: 'white',
-                bgcolor: 'rgba(0,0,0,0.5)',
-                padding: 0.5,
-                '&.Mui-checked': {
-                  color: 'primary.main',
-                  bgcolor: 'rgba(0,0,0,0.7)',
-                },
-                '& .MuiSvgIcon-root': { fontSize: 20 },
+                backgroundColor: 'rgba(0,0,0,0.5)',
+                padding: 4,
               }}
             />
           )}
@@ -192,18 +176,13 @@ function VideoListItem({
                 e.stopPropagation();
                 onDeletionChange(video.youtube_id, e.target.checked);
               }}
-              sx={{
+              style={{
                 position: 'absolute',
                 top: 2,
                 left: 2,
                 color: 'white',
-                bgcolor: 'rgba(0,0,0,0.5)',
-                padding: 0.5,
-                '&.Mui-checked': {
-                  color: 'error.main',
-                  bgcolor: 'rgba(0,0,0,0.7)',
-                },
-                '& .MuiSvgIcon-root': { fontSize: 20 },
+                backgroundColor: 'rgba(0,0,0,0.5)',
+                padding: 4,
               }}
             />
           )}
@@ -215,38 +194,39 @@ function VideoListItem({
               arrow
               placement="top"
             >
-              <IconButton
+              <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onToggleIgnore(video.youtube_id);
                 }}
-                sx={{
+                style={{
                   position: 'absolute',
                   top: 2,
                   right: 2,
-                  bgcolor: isIgnored ? 'warning.main' : 'rgba(0,0,0,0.6)',
+                  background: isIgnored ? 'var(--warning)' : 'rgba(0,0,0,0.6)',
                   color: 'white',
-                  padding: 0.5,
-                  '&:hover': {
-                    bgcolor: isIgnored ? 'warning.dark' : 'rgba(0,0,0,0.8)',
-                  },
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 4,
+                  borderRadius: 4,
+                  display: 'inline-flex',
+                  alignItems: 'center',
                   transition: 'all 0.2s',
                 }}
-                size="small"
               >
-                {isIgnored ? <CheckCircleOutlineIcon sx={{ fontSize: 18 }} /> : <BlockIcon sx={{ fontSize: 18 }} />}
-              </IconButton>
+                {isIgnored ? <CheckCircleOutlineIcon size={18} /> : <BlockIcon size={18} />}
+              </button>
             </Tooltip>
           )}
-        </Box>
+        </div>
 
         {/* Content */}
-        <CardContent sx={{ flex: 1, py: 1, px: 1.5, '&:last-child': { pb: 1 } }}>
+        <CardContent style={{ flex: 1, paddingTop: 8, paddingBottom: 8, paddingLeft: 12, paddingRight: 12 }}>
           {/* Title */}
           <Typography
             variant="body2"
-            sx={{
-              mb: 0.5,
+            style={{
+              marginBottom: 4,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               display: '-webkit-box',
@@ -260,11 +240,10 @@ function VideoListItem({
             {decodeHtml(video.title)}
           </Typography>
 
-          {/* Date, Size, and Status on same line */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mt: 'auto' }}>
-          {video.media_type !== 'short' && video.publishedAt && (
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.3, fontSize: '0.7rem' }}>
-              <CalendarTodayIcon sx={{ fontSize: 11 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 'auto' }}>
+            {video.media_type !== 'short' && video.publishedAt && (
+            <Typography variant="caption" color="text.secondary" style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.7rem' }}>
+                <CalendarTodayIcon size={11} />
               {new Date(video.publishedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' })}
             </Typography>
           )}
@@ -283,16 +262,11 @@ function VideoListItem({
                 label={mediaTypeInfo.label}
                 color={mediaTypeInfo.color}
                 variant="outlined"
-                sx={{
+                style={{
                   height: 18,
                   fontSize: '0.7rem',
-                  '& .MuiChip-icon': { fontSize: 14, ml: 0.5 },
-                  '& .MuiChip-label': { px: 0.6 },
                   boxShadow: 'var(--chip-shadow)',
                   transition: 'box-shadow 200ms var(--transition-bouncy)',
-                  '&:hover': {
-                    boxShadow: 'var(--chip-shadow-hover)',
-                  }
                 }}
               />
             )}
@@ -309,27 +283,15 @@ function VideoListItem({
               size="small"
               color={getStatusColor(status)}
               variant={statusVariant}
-              sx={(theme) => ({
+              style={{
                 height: 20,
                 fontSize: '0.7rem',
-                '& .MuiChip-icon': { fontSize: 14, ml: 0.5 },
-                '& .MuiChip-label': {
-                  px: 0.75,
-                  display: 'inline-block',
-                  maxWidth: 120,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                },
                 flex: '0 0 auto',
                 boxShadow: 'var(--chip-shadow)',
                 transition: 'box-shadow 200ms var(--transition-bouncy)',
-                '&:hover': {
-                  boxShadow: 'var(--chip-shadow-hover)',
-                }
-              })}
+              }}
             />
-          </Box>
+          </div>
         </CardContent>
       </Card>
     </Fade>

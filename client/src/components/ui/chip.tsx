@@ -65,7 +65,7 @@ const chipVariants = cva(
 export interface ChipProps extends VariantProps<typeof chipVariants> {
   label?: React.ReactNode;
   onDelete?: () => void;
-  onClick?: () => void;
+  onClick?: React.MouseEventHandler<HTMLElement>;
   icon?: React.ReactNode;
   avatar?: React.ReactNode;
   disabled?: boolean;

@@ -1,7 +1,6 @@
 import React, { useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Alert,
-  Box,
   Button,
   Card,
   CardHeader,
@@ -11,36 +10,30 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  Fab,
   Grid,
-  IconButton,
   List,
   Menu,
   MenuItem,
-  Pagination,
   Popover,
-  Stack,
   TextField,
-  ToggleButton,
-  ToggleButtonGroup,
   Tooltip,
   Typography,
-  Zoom,
   ListItemText,
-} from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
-import FilterAltIcon from '@mui/icons-material/FilterAlt';
-import SortByAlphaIcon from '@mui/icons-material/SortByAlpha';
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
-import TableChartIcon from '@mui/icons-material/TableChart';
-import ViewListIcon from '@mui/icons-material/ViewList';
-import SaveIcon from '@mui/icons-material/Save';
-import UndoIcon from '@mui/icons-material/Undo';
-import FolderSpecialIcon from '@mui/icons-material/FolderSpecial';
-import { useTheme } from '@mui/material/styles';
-import useMediaQuery from '@mui/material/useMediaQuery';
+  Grow,
+} from './ui';
+import {
+  Add as AddIcon,
+  HelpOutline as HelpOutlineIcon,
+  FilterAlt as FilterAltIcon,
+  SortByAlpha as SortByAlphaIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon,
+  TableChart as TableChartIcon,
+  ViewList as ViewListIcon,
+  Save as SaveIcon,
+} from '../lib/icons';
+import { Undo2 as UndoIcon, FolderOpen as FolderSpecialIcon } from 'lucide-react';
+import useMediaQuery from '../hooks/useMediaQuery';
 import { useNavigate } from 'react-router-dom';
 import WebSocketContext, { Message } from '../contexts/WebSocketContext';
 import { useConfig } from '../hooks/useConfig';
@@ -72,8 +65,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   }
 
   const navigate = useNavigate();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery('(max-width: 599px)');
   const { config } = useConfig(token);
   const globalPreferredResolution = config.preferredResolution || '1080';
 
@@ -312,21 +304,21 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
 
   return (
     <>
-      <Card sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <Card style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <CardHeader
           title="Channels"
           action={
             <Tooltip title="Learn how channel downloads work">
-              <IconButton onClick={() => setHelpDialogOpen(true)}>
-                <HelpOutlineIcon />
-              </IconButton>
+              <button type="button" onClick={() => setHelpDialogOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 8 }}>
+                <HelpOutlineIcon size={20} />
+              </button>
             </Tooltip>
           }
         />
         <Divider />
-        <Box
-          sx={{
-            p: { xs: 2, md: 3 },
+        <div
+          style={{
+            padding: '16px',
             display: 'flex',
             flexDirection: 'column',
             flexGrow: 1,
@@ -334,12 +326,12 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
           }}
         >
           {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert severity="error" style={{ marginBottom: 16 }}>
               {error}
             </Alert>
           )}
 
-          <Grid container spacing={2} alignItems="center" sx={{ mb: isMobile ? 1 : 2 }}>
+          <Grid container spacing={2} alignItems="center" style={{ marginBottom: isMobile ? 8 : 16 }}>
             <Grid item xs={12} md={9}>
               <TextField
                 fullWidth
@@ -372,105 +364,103 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
             </Grid>
           </Grid>
 
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              mb: 2,
-            }}
+          <div
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {!isMobile && (
-                <ToggleButtonGroup
-                  exclusive
-                  size="small"
-                  value={viewMode}
-                  onChange={handleViewChange}
-                  aria-label="Channel view mode"
-                >
-                  <ToggleButton value="list" aria-label="List view">
-                    <ViewListIcon fontSize="small" />
-                  </ToggleButton>
-                  <ToggleButton value="grid" aria-label="Grid view">
-                    <TableChartIcon fontSize="small" />
-                  </ToggleButton>
-                </ToggleButtonGroup>
+                <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleViewChange(null as any, 'list')}
+                    aria-label="List view"
+                    style={{ background: viewMode === 'list' ? 'var(--primary)' : 'transparent', color: viewMode === 'list' ? 'white' : 'inherit', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: '4px 8px' }}
+                  >
+                    <ViewListIcon size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleViewChange(null as any, 'grid')}
+                    aria-label="Grid view"
+                    style={{ background: viewMode === 'grid' ? 'var(--primary)' : 'transparent', color: viewMode === 'grid' ? 'white' : 'inherit', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: '4px 8px' }}
+                  >
+                    <TableChartIcon size={18} />
+                  </button>
+                </div>
               )}
 
               <Tooltip title={`Sort alphabetically (${sortOrder === 'asc' ? 'A → Z' : 'Z → A'})`}>
-                <IconButton onClick={handleSortToggle} color="primary" size="small">
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <SortByAlphaIcon />
+                <button type="button" onClick={handleSortToggle} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', padding: 4, borderRadius: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <SortByAlphaIcon size={18} />
                     {sortOrder === 'asc' ?
-                      <ArrowUpwardIcon style={{ transform: 'scale(0.75,1)', marginLeft: -8 }} fontSize="small" /> :
-                      <ArrowDownwardIcon style={{ transform: 'scale(0.75,1)', marginLeft: -8 }} fontSize="small" />}
-                  </Box>
-                </IconButton>
+                      <ArrowUpwardIcon size={14} style={{ transform: 'scale(0.75,1)', marginLeft: -8 }} /> :
+                      <ArrowDownwardIcon size={14} style={{ transform: 'scale(0.75,1)', marginLeft: -8 }} />}
+                  </div>
+                </button>
               </Tooltip>
 
               <Tooltip title="Filter by channel name">
-                <IconButton
+                <button
+                  type="button"
                   onClick={handleFilterIconClick}
-                  color={filterValue ? 'primary' : 'default'}
-                  size="small"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: filterValue ? 'var(--primary)' : 'inherit', display: 'inline-flex', alignItems: 'center', padding: 4, borderRadius: 4 }}
                 >
-                  <FilterAltIcon />
-                </IconButton>
+                  <FilterAltIcon size={18} />
+                </button>
               </Tooltip>
 
               <Tooltip title={folderTooltip}>
-                <IconButton
+                <button
+                  type="button"
                   onClick={handleFolderMenuOpen}
-                  color={folderControlActive ? 'primary' : 'default'}
-                  size="small"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: folderControlActive ? 'var(--primary)' : 'inherit', display: 'inline-flex', alignItems: 'center', padding: 4, borderRadius: 4 }}
                 >
-                  <FolderSpecialIcon fontSize="small" />
-                </IconButton>
+                  <FolderSpecialIcon size={18} />
+                </button>
               </Tooltip>
-            </Box>
+            </div>
 
             <Typography variant="body2" color="text.secondary">
               {(folderControlActive && filterValue) ? `Total matching channels: ${total}` : `Total channels: ${total}`}
             </Typography>
-          </Box>
+          </div>
 
-          <Divider sx={{ mb: 2 }} />
+          <Divider style={{ marginBottom: 16 }} />
 
-          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             {loading ? (
-              <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                 <CircularProgress />
-              </Box>
+              </div>
             ) : displayChannels.length === 0 ? (
-              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography color="text.secondary">No channels found. Try adjusting your filter.</Typography>
-              </Box>
+              </div>
             ) : (
-              <Box sx={{ flex: 1, overflowY: 'auto', pr: { md: 1 }, pb: 2 }}>
+              <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 16 }}>
                 {viewMode === 'list' ? (
                   <List disablePadding>
                     {showDesktopListColumns && (
-                      <Box
-                        sx={{
+                      <div
+                        style={{
                           display: 'grid',
                           gridTemplateColumns: CHANNEL_LIST_DESKTOP_TEMPLATE,
-                          columnGap: 2,
-                          px: { xs: 1, md: 2 },
-                          py: 1,
-                          color: 'text.secondary',
+                          columnGap: 16,
+                          padding: '4px 16px',
+                          color: 'var(--muted-foreground)',
                           textTransform: 'uppercase',
-                          letterSpacing: 0.4,
+                          letterSpacing: '0.4px',
                           fontSize: '0.75rem',
                         }}
                       >
                         {listColumnLabels.map((label) => (
-                          <Typography key={label} variant="caption" sx={{ fontWeight: 600 }}>
+                          <Typography key={label} variant="caption" style={{ fontWeight: 600 }}>
                             {label}
                           </Typography>
                         ))}
-                        <Box />
-                      </Box>
+                        <div />
+                      </div>
                     )}
                     {displayChannels.map((channel) => {
                       const rowIndex = listRowIndex;
@@ -491,8 +481,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
                     })}
                   </List>
                 ) : (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                    <Grid container spacing={2}>
+                  <Grid container spacing={2}>
                       {displayChannels.map((channel) => (
                         <Grid item xs={12} sm={6} md={4} key={channel.channel_id || channel.url}>
                           <ChannelCard
@@ -507,43 +496,40 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
                         </Grid>
                       ))}
                     </Grid>
-                  </Box>
                 )}
-              </Box>
+              </div>
             )}
 
-            <Box
-              sx={{
+            <div
+              style={{
                 position: 'sticky',
                 bottom: 0,
-                borderTop: '1px solid',
-                borderColor: 'divider',
-                pt: isMobile ? 1 : 1.5,
-                pb: isMobile ? 1 : 1.5,
-                bgcolor: 'background.paper',
+                borderTop: '1px solid var(--border)',
+                paddingTop: isMobile ? 8 : 12,
+                paddingBottom: isMobile ? 8 : 12,
+                backgroundColor: 'var(--card)',
                 display: 'flex',
                 justifyContent: 'center',
                 zIndex: 1,
               }}
             >
-              <Pagination
-                count={pageCount}
-                page={page}
-                color="primary"
-                onChange={(_, value) => setPage(value)}
-                showFirstButton
-                showLastButton
-              />
-            </Box>
-          </Box>
-        </Box>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <button type="button" onClick={() => setPage(1)} disabled={page === 1} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}>{'\u00AB'}</button>
+                <button type="button" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}>{'\u2039'}</button>
+                <span style={{ padding: '2px 8px', fontSize: '0.875rem' }}>{page} / {pageCount}</span>
+                <button type="button" onClick={() => setPage(p => Math.min(pageCount, p + 1))} disabled={page === pageCount} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}>{'\u203A'}</button>
+                <button type="button" onClick={() => setPage(pageCount)} disabled={page === pageCount} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}>{'\u00BB'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </Card>
 
       <Menu anchorEl={folderMenuAnchor} open={Boolean(folderMenuAnchor)} onClose={handleFolderMenuClose}>
         <MenuItem selected={!selectedSubFolder} onClick={() => handleSubFolderSelect(null)}>
           <ListItemText primary="All folders" secondary="Show every channel" />
         </MenuItem>
-        <Divider sx={{ my: 0.5 }} />
+        <Divider style={{ margin: '4px 0' }} />
         {availableFolderOptions.length === 0 ? (
           <MenuItem disabled>
             <ListItemText primary="No folders available" />
@@ -568,7 +554,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
         transformOrigin={{vertical: 'bottom', horizontal: 'center'}}
       >
-        <Box sx={{ p: 2, minWidth: 240 }}>
+        <div style={{ padding: 16, minWidth: 240 }}>
           <TextField
             label="Filter channels"
             value={filterValue}
@@ -577,11 +563,11 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
             autoFocus
           />
           {filterValue && (
-            <Button size="small" onClick={clearFilter} sx={{ mt: 1 }}>
+            <Button size="small" onClick={clearFilter} style={{ marginTop: 8 }}>
               Clear filter
             </Button>
           )}
-        </Box>
+        </div>
       </Popover>
 
       <Dialog open={dialogOpen} onClose={() => { setDialogOpen(false); setDialogMessage(null); }}>
@@ -602,42 +588,40 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
 
       <PendingSaveBanner show={hasPendingAdditions} />
 
-      <Zoom in={hasPendingChanges}>
-        <Box
-          sx={{
+      <Grow in={hasPendingChanges}>
+        <div
+          style={{
             position: 'fixed',
             bottom: 72,
             right: isMobile ? 16 : 32,
-            zIndex: (theme) => theme.zIndex.snackbar + 1,
-            pointerEvents: 'none',
+            zIndex: 1401,
+            pointerEvents: hasPendingChanges ? 'auto' : 'none',
           }}
         >
-          <Stack spacing={1} alignItems="flex-end" sx={{ pointerEvents: 'auto' }}>
-            <Fab
-              variant="extended"
-              color="default"
-              size={isMobile ? 'medium' : 'large'}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+            <button
+              type="button"
               onClick={undoChanges}
               disabled={isSaving}
               aria-label="Undo changes"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: isMobile ? '6px 16px' : '8px 20px', borderRadius: 28, background: 'var(--card)', border: '1px solid var(--border)', cursor: 'pointer', fontWeight: 600, color: 'var(--foreground)', boxShadow: 'var(--shadow-hard, 0 4px 12px rgba(0,0,0,0.2))' }}
             >
-              <UndoIcon sx={{ mr: 1 }} />
+              <UndoIcon size={18} />
               Undo
-            </Fab>
-            <Fab
-              variant="extended"
-              color="primary"
-              size={isMobile ? 'medium' : 'large'}
+            </button>
+            <button
+              type="button"
               onClick={handleSaveChanges}
               disabled={isSaving}
               aria-label="Save changes"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: isMobile ? '6px 16px' : '8px 20px', borderRadius: 28, background: 'var(--primary)', border: 'none', cursor: 'pointer', fontWeight: 600, color: 'white', boxShadow: 'var(--shadow-hard, 0 4px 12px rgba(0,0,0,0.2))' }}
             >
-              {isSaving ? <CircularProgress size={20} color="inherit" sx={{ mr: 1 }} /> : <SaveIcon sx={{ mr: 1 }} />}
+              {isSaving ? <CircularProgress size={18} color="inherit" style={{ marginRight: 4 }} /> : <SaveIcon size={18} style={{ marginRight: 4 }} />}
               {isSaving ? 'Saving…' : 'Save'}
-            </Fab>
-          </Stack>
-        </Box>
-      </Zoom>
+            </button>
+          </div>
+        </div>
+      </Grow>
 
       <Dialog
         open={deleteConfirmOpen}
@@ -666,26 +650,26 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
         transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Box sx={{ p: 2, maxWidth: 400 }}>
-          <Typography variant="subtitle2" sx={{ mb: 0 }}>
+        <div style={{ padding: 16, maxWidth: 400 }}>
+          <Typography variant="subtitle2" style={{ marginBottom: 0 }}>
             Title Filter Regex
           </Typography>
-          <Typography variant="caption" sx={{ mt: 0, fontStyle: 'italic' }}>
+          <Typography variant="caption" style={{ marginTop: 0, fontStyle: 'italic' }}>
             Filters videos downloaded for channel downloads.
           </Typography>
           <Typography
             variant="body2"
-            sx={{
+            style={{
               fontFamily: 'monospace',
-              bgcolor: 'action.hover',
-              p: 1,
-              borderRadius: 1,
+              backgroundColor: 'var(--muted)',
+              padding: 8,
+              borderRadius: 4,
               wordBreak: 'break-all',
             }}
           >
             {regexPopoverAnchor?.regex}
           </Typography>
-        </Box>
+        </div>
       </Popover>
     </>
   );

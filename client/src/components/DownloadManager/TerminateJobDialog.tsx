@@ -6,13 +6,9 @@ import {
   DialogActions,
   Button,
   Typography,
-  Box,
-  Alert
-} from '@mui/material';
-import {
-  Stop as StopIcon,
-  Warning as WarningIcon
-} from '@mui/icons-material';
+  Alert,
+} from '../ui';
+import { Stop as StopIcon, Warning as WarningIcon } from '../../lib/icons';
 
 interface TerminateJobDialogProps {
   open: boolean;
@@ -32,23 +28,23 @@ const TerminateJobDialog: React.FC<TerminateJobDialogProps> = ({
       maxWidth="sm"
       fullWidth
     >
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <WarningIcon color="warning" />
+      <DialogTitle style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <WarningIcon size={20} color="var(--warning)" />
         Confirm Download Termination
       </DialogTitle>
 
       <DialogContent>
-        <Box sx={{ pt: 1 }}>
-          <Alert severity="warning" sx={{ mb: 2 }}>
+        <div style={{ paddingTop: 8 }}>
+          <Alert severity="warning" style={{ marginBottom: 16 }}>
             <Typography variant="body2">
               You are about to terminate the currently running download job.
             </Typography>
           </Alert>
 
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography variant="body2" color="text.secondary" style={{ marginBottom: 16 }}>
             This action will:
           </Typography>
-          <Box component="ul" sx={{ ml: 2, mb: 2 }}>
+          <ul style={{ marginLeft: 16, marginBottom: 16 }}>
             <Typography component="li" variant="body2" color="text.secondary">
               Stop the current download, terminating the download currently in progress.
             </Typography>
@@ -61,17 +57,17 @@ const TerminateJobDialog: React.FC<TerminateJobDialogProps> = ({
             <Typography component="li" variant="body2" color="text.secondary">
               NOT affect any queued jobs (they will continue after this one)
             </Typography>
-          </Box>
+          </ul>
 
-          <Alert severity="info" sx={{ mb: 1 }}>
+          <Alert severity="info" style={{ marginBottom: 8 }}>
             <Typography variant="body2">
               The job will show as &quot;Terminated&quot; in your download history with a list of completed videos.
             </Typography>
           </Alert>
-        </Box>
+        </div>
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, pb: 2 }}>
+      <DialogActions style={{ padding: '0 24px 16px' }}>
         <Button
           onClick={onClose}
           variant="contained"

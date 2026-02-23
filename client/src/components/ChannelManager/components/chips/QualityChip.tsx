@@ -1,6 +1,6 @@
 import React from 'react';
-import { Chip } from '@mui/material';
-import SettingsIcon from '@mui/icons-material/Settings';
+import { Chip } from '../../../../components/ui';
+import { Settings as SettingsIcon } from '../../../../lib/icons';
 
 interface QualityChipProps {
   videoQuality: string | null | undefined;
@@ -16,15 +16,10 @@ const QualityChip: React.FC<QualityChipProps> = ({ videoQuality, globalPreferred
       label={`${resolvedQuality}p`}
       size="small"
       color={isOverride ? 'success' : 'default'}
-      icon={isOverride ? <SettingsIcon sx={{ fontSize: '0.85rem' }} /> : undefined}
+      icon={isOverride ? <SettingsIcon size={14} /> : undefined}
       data-testid="quality-chip"
       data-override={isOverride ? 'true' : 'false'}
-      sx={{
-        fontSize: '0.7rem',
-        '& .MuiChip-icon': {
-          ml: 0.3,
-        },
-      }}
+      style={{ fontSize: '0.7rem' }}
     />
   );
 };

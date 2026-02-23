@@ -70,22 +70,26 @@ const buttonVariants = cva(
 );
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
+  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'size'>,
+    Omit<VariantProps<typeof buttonVariants>, 'size'> {
+  size?: 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm' | 'small' | 'medium' | 'large' | null;
   asChild?: boolean;
   startIcon?: React.ReactNode;
   endIcon?: React.ReactNode;
   loading?: boolean;
+  component?: React.ElementType;
+  to?: string;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, fullWidth, asChild = false, startIcon, endIcon, loading, children, disabled, ...props }, ref) => {
+  ({ className, variant, size, fullWidth, asChild = false, startIcon, endIcon, loading, children, disabled, component: _component, to: _to, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button';
+    const normalizedSize = size === 'small' ? 'sm' : size === 'medium' ? 'md' : size === 'large' ? 'lg' : size;
     return (
       <Comp
         ref={ref}
         disabled={disabled || loading}
-        className={cn(buttonVariants({ variant, size, fullWidth, className }))}
+        className={cn(buttonVariants({ variant, size: normalizedSize, fullWidth, className }))}
         {...props}
       >
         {loading ? (
@@ -141,22 +145,26 @@ const iconButtonVariants = cva(
 );
 
 export interface IconButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof iconButtonVariants> {
+  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'color' | 'size'>,
+    Omit<VariantProps<typeof iconButtonVariants>, 'size'> {
+  size?: 'sm' | 'md' | 'lg' | 'small' | 'medium' | 'large' | null;
   'aria-label': string;
   asChild?: boolean;
   edge?: 'start' | 'end' | false;
+  component?: React.ElementType;
+  to?: string;
 }
 
 const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
-  ({ className, size, color, asChild = false, edge, children, ...props }, ref) => {
+  ({ className, size, color, asChild = false, edge, children, component: _component, to: _to, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button';
+    const normalizedSize = size === 'small' ? 'sm' : size === 'medium' ? 'md' : size === 'large' ? 'lg' : size;
     return (
       <Comp
         ref={ref}
         type="button"
         className={cn(
-          iconButtonVariants({ size, color }),
+          iconButtonVariants({ size: normalizedSize, color }),
           edge === 'start' && '-ml-2',
           edge === 'end' && '-mr-2',
           className
@@ -168,6 +176,50 @@ const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
     );
   }
 );
-IconButton.displayName = 'IconButton';
+/* ─── Fab ───────────────────────────────────────────────
+   Floating Action Button shim
+──────────────────────────────────────────────────────── */
+export interface FabProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  color?: 'primary' | 'secondary' | 'error' | 'default';
+  size?: 'small' | 'medium' | 'large';
+  variant?: 'circular' | 'extended';
+  children?: React.ReactNode;
+}
 
-export { Button, IconButton, buttonVariants };
+const colorMap: Record<string, string> = {
+  primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
+  secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/90',
+  error: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+  default: 'bg-muted text-foreground hover:bg-muted/80',
+};
+
+const sizeMap: Record<string, string> = {
+  small: 'w-10 h-10',
+  medium: 'w-14 h-14',
+  large: 'w-16 h-16',
+};
+
+const Fab = React.forwardRef<HTMLButtonElement, FabProps>(
+  ({ color = 'primary', size = 'medium', variant = 'circular', className, children, style, ...props }, ref) => {
+    return (
+      <button
+        ref={ref}
+        type="button"
+        className={cn(
+          'rounded-full flex items-center justify-center shadow-lg transition-all duration-[var(--transition-base)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          colorMap[color] ?? colorMap.primary,
+          sizeMap[size] ?? sizeMap.medium,
+          variant === 'extended' ? 'rounded-2xl px-4 gap-2' : '',
+          className
+        )}
+        style={style}
+        {...props}
+      >
+        {children}
+      </button>
+    );
+  }
+);
+Fab.displayName = 'Fab';
+
+export { Button, IconButton, Fab, buttonVariants };

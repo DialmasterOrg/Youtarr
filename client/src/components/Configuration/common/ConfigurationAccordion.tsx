@@ -5,8 +5,8 @@ import {
   AccordionDetails,
   Typography,
   Chip,
-} from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+} from '../../ui';
+import { ExpandMore as ExpandMoreIcon } from '../../../lib/icons';
 
 interface ConfigurationAccordionProps {
   title: string;
@@ -27,9 +27,9 @@ export const ConfigurationAccordion: React.FC<ConfigurationAccordionProps> = ({
   children,
 }) => {
   return (
-    <Accordion elevation={1} defaultExpanded={defaultExpanded} sx={{ mb: 3 }}>
+    <Accordion elevation={1} defaultExpanded={defaultExpanded} style={{ marginBottom: 24 }}>
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Typography variant="h6" sx={{ flexGrow: 1 }}>
+        <Typography variant="h6" style={{ flexGrow: 1 }}>
           {title}
         </Typography>
         {chipLabel && (
@@ -37,7 +37,7 @@ export const ConfigurationAccordion: React.FC<ConfigurationAccordionProps> = ({
             label={chipLabel}
             color={chipColor}
             size="small"
-            sx={{ mr: 1 }}
+            style={{ marginRight: 8 }}
           />
         )}
       </AccordionSummary>

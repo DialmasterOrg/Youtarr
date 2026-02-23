@@ -53,15 +53,17 @@ export interface CheckboxProps extends Omit<React.ComponentPropsWithoutRef<typeo
   onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
   size?: 'small' | 'medium';
   color?: string;
+  indeterminate?: boolean;
 }
 
 const Checkbox = React.forwardRef<React.ElementRef<typeof CheckboxPrimitive.Root>, CheckboxProps>(
-  ({ checked, onChange, size = 'medium', color: _color, className, ...props }, ref) => {
+  ({ checked, onChange, size = 'medium', color: _color, indeterminate, className, ...props }, ref) => {
     const isSmall = size === 'small';
+    const effectiveChecked = indeterminate ? 'indeterminate' : checked;
     return (
       <CheckboxPrimitive.Root
         ref={ref}
-        checked={checked}
+        checked={effectiveChecked}
         onCheckedChange={(v) =>
           onChange?.({ target: { checked: v === true } } as React.ChangeEvent<HTMLInputElement>)
         }
@@ -70,6 +72,7 @@ const Checkbox = React.forwardRef<React.ElementRef<typeof CheckboxPrimitive.Root
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
           'disabled:cursor-not-allowed disabled:opacity-50',
           'data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground',
+          'data-[state=indeterminate]:bg-primary data-[state=indeterminate]:text-primary-foreground',
           'data-[state=unchecked]:bg-transparent',
           isSmall ? 'h-4 w-4' : 'h-5 w-5',
           className
@@ -77,7 +80,9 @@ const Checkbox = React.forwardRef<React.ElementRef<typeof CheckboxPrimitive.Root
         {...props}
       >
         <CheckboxPrimitive.Indicator className="flex items-center justify-center text-current">
-          <Check className={isSmall ? 'h-3 w-3' : 'h-3.5 w-3.5'} strokeWidth={3} />
+          {effectiveChecked === 'indeterminate'
+            ? <div className={isSmall ? 'h-0.5 w-2.5 bg-current rounded' : 'h-0.5 w-3 bg-current rounded'} />
+            : <Check className={isSmall ? 'h-3 w-3' : 'h-3.5 w-3.5'} strokeWidth={3} />}
         </CheckboxPrimitive.Indicator>
       </CheckboxPrimitive.Root>
     );

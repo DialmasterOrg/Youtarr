@@ -7,6 +7,11 @@ type BoxOwnProps<C extends React.ElementType = 'div'> = AsProp<C> & {
   children?: React.ReactNode;
   /** sx is accepted but ignored – convert to className when migrating */
   sx?: Record<string, unknown>;
+  component?: React.ElementType;
+  display?: string;
+  width?: string | number;
+  fontWeight?: string | number;
+  paddingBottom?: string | number;
 };
 
 type BoxProps<C extends React.ElementType = 'div'> = BoxOwnProps<C> &
@@ -17,10 +22,10 @@ type BoxProps<C extends React.ElementType = 'div'> = BoxOwnProps<C> &
  * `sx` prop is accepted but intentionally dropped; use `className` with Tailwind instead.
  */
 function Box<C extends React.ElementType = 'div'>(
-  { as, className, sx: _sx, children, ...rest }: BoxProps<C>,
+  { as, component, className, sx: _sx, display: _display, width: _width, fontWeight: _fw, paddingBottom: _pb, children, ...rest }: BoxProps<C>,
   ref: React.ForwardedRef<React.ElementRef<C>>
 ) {
-  const Tag: React.ElementType = as ?? 'div';
+  const Tag: React.ElementType = as ?? component ?? 'div';
   return (
     <Tag ref={ref} className={cn(className)} {...rest}>
       {children}

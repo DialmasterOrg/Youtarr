@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
 import {
-  Box,
-  Container,
   Paper,
   Typography,
   TextField,
   Button,
   Alert,
   LinearProgress,
-} from '@mui/material';
+} from './ui';
 import { useThemeEngine } from '../contexts/ThemeEngineContext';
 import axios from 'axios';
 import packageJson from '../../package.json';
@@ -65,8 +63,8 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
   };
 
   return (
-    <Box
-      sx={{
+    <div
+      style={{
         position: 'fixed',
         top: 0,
         left: 0,
@@ -84,16 +82,12 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
         backgroundPosition: 'center',
       }}
     >
-      <Container maxWidth="sm">
+      <div style={{ width: '100%', maxWidth: 600, padding: '0 16px', boxSizing: 'border-box' }}>
         <Paper
           elevation={isLinear ? 0 : isNeumorphic ? 0 : 8}
-          sx={{
-            p: isPlayful ? 5 : 4,
-            borderRadius: isPlayful
-              ? 'var(--radius-ui)'
-              : isLinear
-                ? 'var(--radius-ui)'
-                : 'var(--radius-ui)',
+          style={{
+            padding: isPlayful ? 40 : 32,
+            borderRadius: 'var(--radius-ui)',
             border: isPlayful
               ? '4px solid var(--border-strong)'
               : isLinear
@@ -104,26 +98,25 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
               : isNeumorphic
                 ? '20px 20px 40px rgba(163, 177, 198, 0.6), -20px -20px 40px rgba(255, 255, 255, 0.6)'
                 : '0 20px 60px rgba(0, 0, 0, 0.3)',
-            bgcolor: isLinear
+            backgroundColor: isLinear
               ? 'rgba(18, 18, 20, 0.95)'
               : isNeumorphic
                 ? '#E0E5EC'
-                : 'background.paper',
+                : 'var(--card)',
             backdropFilter: isLinear ? 'blur(20px)' : 'none',
             transform: isPlayful ? 'rotate(-0.5deg)' : 'none',
           }}
         >
           {/* Logo/Branding */}
-          <Box sx={{ textAlign: 'center', mb: 3 }}>
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
             <Typography
               variant="h3"
               component="h1"
-              sx={{
+              style={{
                 fontFamily: 'var(--font-display)',
                 fontWeight: isPlayful ? 800 : 700,
                 fontSize: isPlayful ? '3rem' : '2.5rem',
-                mb: 1,
-                color: 'text.primary',
+                marginBottom: 8,
                 letterSpacing: isLinear ? '0.02em' : 'normal',
                 textShadow: isNeumorphic
                   ? '2px 2px 4px rgba(163, 177, 198, 0.4), -2px -2px 4px rgba(255, 255, 255, 0.4)'
@@ -136,19 +129,19 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
             </Typography>
             <Typography
               variant="subtitle1"
-              sx={{
-                color: 'text.secondary',
+              style={{
                 fontWeight: 500,
                 fontSize: isLinear ? '0.9rem' : '1rem',
                 fontFamily: 'var(--font-body)',
               }}
+              color="text.secondary"
             >
               Login below
             </Typography>
-          </Box>
+          </div>
 
           {/* Login Form */}
-          <Box component="form" onSubmit={handleLogin}>
+          <form onSubmit={handleLogin}>
             <TextField
               fullWidth
               label="Username"
@@ -157,11 +150,6 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
               margin="normal"
               required
               autoFocus
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 'var(--radius-input)',
-                },
-              }}
             />
             <TextField
               fullWidth
@@ -171,21 +159,15 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
               onChange={(e) => setPassword(e.target.value)}
               margin="normal"
               required
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 'var(--radius-input)',
-                },
-              }}
             />
 
             {error && (
               <Alert
                 severity="error"
-                sx={{
-                  mt: 2,
+                style={{
+                  marginTop: 16,
                   borderRadius: 'var(--radius-ui)',
-                  border: '1px solid',
-                  borderColor: 'error.main',
+                  border: '1px solid var(--destructive)',
                 }}
               >
                 {error}
@@ -198,9 +180,10 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
               variant="contained"
               size="large"
               disabled={loading}
-              sx={{
-                mt: 3,
-                py: 1.5,
+              style={{
+                marginTop: 24,
+                paddingTop: 12,
+                paddingBottom: 12,
                 fontWeight: 700,
                 fontSize: '1.1rem',
                 borderRadius: 'var(--radius-ui)',
@@ -209,12 +192,6 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
                 boxShadow: isNeumorphic
                   ? '10px 10px 20px rgba(163, 177, 198, 0.6), -10px -10px 20px rgba(255, 255, 255, 0.6)'
                   : undefined,
-                '&:hover': {
-                  transform: isPlayful ? 'scale(1.02)' : 'none',
-                  boxShadow: isNeumorphic
-                    ? '5px 5px 10px rgba(163, 177, 198, 0.6), -5px -5px 10px rgba(255, 255, 255, 0.6)'
-                    : undefined,
-                },
               }}
             >
               {loading ? 'Signing in...' : 'Login'}
@@ -222,29 +199,29 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
 
             {loading && (
               <LinearProgress
-                sx={{
-                  mt: 2,
+                style={{
+                  marginTop: 16,
                   borderRadius: 'var(--radius-ui)',
                 }}
               />
             )}
-          </Box>
+          </form>
 
           {/* Footer */}
           <Typography
             variant="caption"
-            sx={{
+            style={{
               display: 'block',
               textAlign: 'center',
-              mt: 3,
-              color: 'text.secondary',
+              marginTop: 24,
               fontFamily: 'var(--font-body)',
             }}
+            color="text.secondary"
           >
             Youtarr v{packageJson.version}
           </Typography>
         </Paper>
-      </Container>
-    </Box>
+      </div>
+    </div>
   );
 };

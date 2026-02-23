@@ -4,10 +4,10 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { InfoTooltip } from '../InfoTooltip';
 import { renderWithProviders } from '../../../../test-utils';
-import useMediaQuery from '@mui/material/useMediaQuery';
+import { useMediaQuery } from '../../../../hooks/useMediaQuery';
 
 // Mock useMediaQuery to control mobile/desktop behavior
-jest.mock('@mui/material/useMediaQuery');
+jest.mock('../../../../hooks/useMediaQuery');
 const mockUseMediaQuery = useMediaQuery as jest.MockedFunction<typeof useMediaQuery>;
 
 describe('InfoTooltip Component', () => {

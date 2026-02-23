@@ -16,5 +16,6 @@ export interface ThemeDefinition {
     dark: ThemeTokens;
   };
   preview: React.ReactNode;
-  muiOverrides?: any;
+  /** @deprecated MUI overrides — removed after MUI migration */
+  muiOverrides?: Record<string, unknown>;
 }

@@ -14,7 +14,7 @@ import {
   Typography,
   Button,
   CircularProgress,
-} from '@mui/material';
+} from '../../ui';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { ConfigState, AutoRemovalDryRunResult } from '../types';
@@ -106,7 +106,7 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
       chipColor={config.autoRemovalEnabled ? "success" : "default"}
       defaultExpanded={false}
     >
-      <Alert severity="warning" sx={{ mb: 2 }}>
+      <Alert severity="warning" className="mb-4">
         <AlertTitle>Automatic Deletion</AlertTitle>
         <Typography variant="body2">
           This feature automatically deletes downloaded videos based on your configured thresholds.
@@ -126,7 +126,7 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
               />
             }
             label={
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Box className="flex items-center">
                 Enable Automatic Video Removal
                 <InfoTooltip
                   text="Automatically delete videos based on the thresholds configured below. Deletions run nightly at 2:00 AM."
@@ -141,7 +141,7 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
           <>
             {!autoRemovalHasStrategy && (
               <Grid item xs={12}>
-                <Alert severity="error" sx={{ mb: 1 }}>
+                <Alert severity="error" className="mb-2">
                   <Typography variant="body2">
                     You must configure at least one removal threshold (Free Space or Video Age) when automatic removal is enabled.
                   </Typography>
@@ -151,9 +151,9 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
 
             {storageAvailable === false && (
               <Grid item xs={12}>
-                <Alert severity="warning" sx={{ mb: 1 }}>
+                <Alert severity="warning" className="mb-2">
                   <AlertTitle>Space-Based Removal Unavailable</AlertTitle>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    <Typography variant="body2" className="mb-2">
                     Storage reporting is not available on your system, so the Free Space Threshold option is disabled.
                     This can happen with certain mount types like network shares, cloud storage, or virtual filesystems.
                   </Typography>
@@ -170,7 +170,7 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
 
             {storageAvailable !== false && (
               <Grid item xs={12} md={6}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Box className="flex items-center">
                   <FormControl fullWidth disabled={storageAvailable === null}>
                     <InputLabel id={freeSpaceLabelId}>Free Space Threshold (Optional)</InputLabel>
                     <Select
@@ -242,8 +242,8 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
 
             {(config.autoRemovalFreeSpaceThreshold || config.autoRemovalVideoAgeThreshold) && (
               <Grid item xs={12}>
-                <Alert severity="success" sx={{ mt: 1 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 1 }}>
+                <Alert severity="success" className="mt-2">
+                  <Typography variant="body2" className="font-medium mb-2">
                     Active Removal Strategy:
                   </Typography>
                   <Typography variant="body2" component="div">
@@ -263,7 +263,7 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
             )}
 
             <Grid item xs={12}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: autoRemovalHasStrategy ? 1 : 0 }}>
+              <Box className={`flex items-center gap-2 ${autoRemovalHasStrategy ? 'mt-2' : ''}`}>
                 <Button
                   variant="outlined"
                   onClick={handleRunDryRun}
@@ -274,7 +274,7 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
                 {autoRemovalDryRun.loading && <CircularProgress size={18} />}
               </Box>
               {!autoRemovalHasStrategy && (
-                <FormHelperText sx={{ mt: 1 }}>
+                <FormHelperText className="mt-2">
                   Select at least one threshold to run a preview.
                 </FormHelperText>
               )}
@@ -282,7 +282,7 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
 
             {autoRemovalDryRun.error && (
               <Grid item xs={12}>
-                <Alert severity="error" sx={{ mt: 1 }}>
+                <Alert severity="error" className="mt-2">
                   {autoRemovalDryRun.error}
                 </Alert>
               </Grid>
@@ -292,9 +292,9 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
               <Grid item xs={12}>
                 <Alert
                   severity={autoRemovalDryRun.result.errors.length > 0 ? 'warning' : 'info'}
-                  sx={{ mt: 1 }}
+                  className="mt-2"
                 >
-                  <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                  <Typography variant="body2" className="font-medium">
                     Preview Summary
                   </Typography>
                   <Typography variant="body2">
@@ -316,8 +316,8 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
                     </Typography>
                   )}
                   {dryRunSampleVideos.length > 0 && (
-                    <Box sx={{ mt: 1 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                    <Box className="mt-2">
+                      <Typography variant="body2" className="font-medium">
                         Sample videos
                       </Typography>
                       {dryRunSampleVideos.map((video) => (
@@ -328,8 +328,8 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
                     </Box>
                   )}
                   {autoRemovalDryRun.result.errors.length > 0 && (
-                    <Box sx={{ mt: 1 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                    <Box className="mt-2">
+                      <Typography variant="body2" className="font-medium">
                         Warnings
                       </Typography>
                       {autoRemovalDryRun.result.errors.map((err, index) => (

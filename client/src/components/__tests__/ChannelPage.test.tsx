@@ -2,7 +2,7 @@ import { render, screen, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ChannelPage from '../ChannelPage';
 import { BrowserRouter } from 'react-router-dom';
-import useMediaQuery from '@mui/material/useMediaQuery';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 
 const dialogPropsStore: { current: any } = { current: null };
 
@@ -32,14 +32,8 @@ jest.mock('../ChannelPage/ChannelSettingsDialog', () => ({
   }
 }));
 
-// Mock Material-UI hooks
-jest.mock('@mui/material/useMediaQuery');
-jest.mock('@mui/material/styles', () => ({
-  ...jest.requireActual('@mui/material/styles'),
-  useTheme: () => ({
-    breakpoints: { down: () => false },
-  }),
-}));
+// Mock custom hooks
+jest.mock('../../hooks/useMediaQuery');
 
 // Mock react-router-dom
 const mockParams = { channel_id: 'UC123456' };

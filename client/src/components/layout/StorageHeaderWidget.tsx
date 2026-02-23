@@ -1,6 +1,6 @@
 import React from 'react';
-import { Box, LinearProgress, Tooltip, Typography, useTheme } from '@mui/material';
-import StorageIcon from '@mui/icons-material/Storage';
+import { Box, LinearProgress, Tooltip, Typography } from '../ui';
+import { Storage as StorageIcon } from '../../lib/icons';
 import { useStorageStatus } from '../../hooks/useStorageStatus';
 
 interface StorageHeaderWidgetProps {
@@ -12,7 +12,6 @@ export function StorageHeaderWidget({ token }: StorageHeaderWidgetProps) {
     poll: true,
     pollInterval: 120000,
   });
-  const theme = useTheme();
 
   if (!token || error) return null;
 
@@ -26,25 +25,16 @@ export function StorageHeaderWidget({ token }: StorageHeaderWidgetProps) {
   const percentFreeLabel = Number.isFinite(percentFree) ? percentFree.toFixed(1) : '0.0';
 
   const tooltipTitle = (
-    <Box sx={{ p: 1, minWidth: 180, textAlign: 'center' }}>
+    <Box className="p-2 min-w-[180px] text-center">
       <LinearProgress
         variant="determinate"
         value={progressValue}
-        sx={{ 
-          height: 8, 
-          borderRadius: 'var(--radius-ui)',
-          mb: 1.5,
-          backgroundColor: 'rgba(255, 255, 255, 0.1)',
-          '& .MuiLinearProgress-bar': {
-            borderRadius: 'var(--radius-ui)',
-            backgroundColor: theme.palette.primary.main,
-          }
-        }}
+        className="h-2 rounded-[var(--radius-ui)] mb-3"
       />
-      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+      <Typography variant="body2" style={{ fontWeight: 600 }}>
         {availableGB} GB / {totalGB} GB
       </Typography>
-      <Typography variant="caption" sx={{ mt: 0.5, color: 'rgba(255, 255, 255, 0.7)' }}>
+      <Typography variant="caption" className="mt-1 opacity-70">
         {percentFreeLabel}% free
       </Typography>
     </Box>
@@ -55,47 +45,17 @@ export function StorageHeaderWidget({ token }: StorageHeaderWidgetProps) {
       title={tooltipTitle} 
       placement="bottom" 
       arrow
-      PopperProps={{
-        modifiers: [
-          {
-            name: 'offset',
-            options: {
-              offset: [0, 10],
-            },
-          },
-        ],
-      }}
     >
       <Box 
-        sx={{ 
-          display: 'flex', 
-          flexDirection: 'column', 
-          alignItems: 'center', 
-          justifyContent: 'center',
-          cursor: 'help',
-          mx: 0.5,
-          width: 44,
-          height: 44,
-          borderRadius: 'var(--radius-ui)',
-          transition: 'background-color 0.2s ease',
-          '&:hover': {
-            bgcolor: 'rgba(0, 0, 0, 0.04)',
-          }
-        }}
+        className="flex flex-col items-center justify-center cursor-help mx-0.5 hover:bg-black/5 transition-colors"
+        style={{ width: 44, height: 44, borderRadius: 'var(--radius-ui)' }}
       >
-        <StorageIcon sx={{ fontSize: '1.2rem', color: 'text.secondary' }} />
-        <Box sx={{ width: '32px', mt: 0.5 }}>
+        <StorageIcon size={18} className="text-muted-foreground" />
+        <Box className="w-8 mt-0.5">
           <LinearProgress
             variant={loading ? 'indeterminate' : 'determinate'}
             value={loading ? undefined : progressValue}
-            sx={{ 
-              height: 6, 
-              borderRadius: 'var(--radius-ui)',
-              backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)',
-              '& .MuiLinearProgress-bar': {
-                backgroundColor: theme.palette.primary.main,
-              }
-            }}
+            className="h-1.5 rounded-[var(--radius-ui)]"
           />
         </Box>
       </Box>

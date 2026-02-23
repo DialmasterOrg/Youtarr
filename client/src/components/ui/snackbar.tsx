@@ -32,6 +32,8 @@ export interface SnackbarProps {
   TransitionComponent?: React.ElementType;
   ContentProps?: Record<string, unknown>;
   key?: React.Key;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
 const Snackbar: React.FC<SnackbarProps> = ({
@@ -42,6 +44,8 @@ const Snackbar: React.FC<SnackbarProps> = ({
   anchorOrigin = { vertical: 'bottom', horizontal: 'center' },
   action,
   children,
+  className,
+  style,
 }) => {
   React.useEffect(() => {
     if (open && autoHideDuration) {
@@ -64,7 +68,8 @@ const Snackbar: React.FC<SnackbarProps> = ({
     <div
       role="status"
       aria-live="polite"
-      className={cn(posClass, 'animate-slide-up')}
+      className={cn(posClass, 'animate-slide-up', className)}
+      style={style}
     >
       {children ?? (
         <div className="flex items-center gap-3 px-4 py-3 bg-foreground text-background rounded-[var(--radius-ui)] shadow-hard min-w-[280px] max-w-[400px]">

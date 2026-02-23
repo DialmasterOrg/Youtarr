@@ -1,21 +1,10 @@
 import React from 'react';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Checkbox,
-  Box,
   Typography,
   Chip,
-  IconButton,
-} from '@mui/material';
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
-import BlockIcon from '@mui/icons-material/Block';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+} from '../ui';
+import { ArrowUpward as ArrowUpwardIcon, ArrowDownward as ArrowDownwardIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon } from '../../lib/icons';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml } from '../../utils/formatters';
@@ -70,11 +59,11 @@ function VideoTableView({
   });
 
   return (
-    <TableContainer>
-      <Table size="small" sx={{ tableLayout: 'fixed' }}>
-        <TableHead>
-          <TableRow>
-            <TableCell padding="checkbox" sx={{ width: 48, maxWidth: 48 }}>
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+        <thead>
+          <tr style={{ borderBottom: '2px solid var(--border)' }}>
+            <th style={{ width: 48, maxWidth: 48, padding: '8px 4px' }}>
               <Checkbox
                 indeterminate={effectiveSelection.length > 0 && effectiveSelection.length < selectableVideos.length}
                 checked={selectableVideos.length > 0 && effectiveSelection.length === selectableVideos.length}
@@ -86,49 +75,48 @@ function VideoTableView({
                   }
                 }}
               />
-            </TableCell>
-            <TableCell sx={{ width: 140 }}>Thumbnail</TableCell>
-            <TableCell onClick={() => onSortChange('title')} sx={{ cursor: 'pointer', width: '36%' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            </th>
+            <th style={{ width: 140, padding: '8px 4px', textAlign: 'left' }}>Thumbnail</th>
+            <th style={{ cursor: 'pointer', width: '36%', padding: '8px 4px', textAlign: 'left' }} onClick={() => onSortChange('title')}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 Title
                 {sortBy === 'title' && (
-                  sortOrder === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                  sortOrder === 'asc' ? <ArrowUpwardIcon size={16} /> : <ArrowDownwardIcon size={16} />
                 )}
-              </Box>
-            </TableCell>
-            <TableCell onClick={() => onSortChange('date')} sx={{ cursor: 'pointer', whiteSpace: 'nowrap', width: 110 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              </div>
+            </th>
+            <th style={{ cursor: 'pointer', whiteSpace: 'nowrap', width: 110, padding: '8px 4px', textAlign: 'left' }} onClick={() => onSortChange('date')}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 Published
                 {sortBy === 'date' && (
-                  sortOrder === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                  sortOrder === 'asc' ? <ArrowUpwardIcon size={16} /> : <ArrowDownwardIcon size={16} />
                 )}
-              </Box>
-            </TableCell>
-            <TableCell onClick={() => onSortChange('duration')} sx={{ cursor: 'pointer', whiteSpace: 'nowrap', width: 90 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              </div>
+            </th>
+            <th style={{ cursor: 'pointer', whiteSpace: 'nowrap', width: 90, padding: '8px 4px', textAlign: 'left' }} onClick={() => onSortChange('duration')}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 Duration
                 {sortBy === 'duration' && (
-                  sortOrder === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                  sortOrder === 'asc' ? <ArrowUpwardIcon size={16} /> : <ArrowDownwardIcon size={16} />
                 )}
-              </Box>
-            </TableCell>
-            <TableCell sx={{ width: 90, whiteSpace: 'normal' }}>Rating</TableCell>
-            <TableCell onClick={() => onSortChange('size')} sx={{ cursor: 'pointer', whiteSpace: 'nowrap', width: 90 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              </div>
+            </th>
+            <th style={{ width: 90, padding: '8px 4px', textAlign: 'left' }}>Rating</th>
+            <th style={{ cursor: 'pointer', whiteSpace: 'nowrap', width: 90, padding: '8px 4px', textAlign: 'left' }} onClick={() => onSortChange('size')}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 Size
                 {sortBy === 'size' && (
-                  sortOrder === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
+                  sortOrder === 'asc' ? <ArrowUpwardIcon size={16} /> : <ArrowDownwardIcon size={16} />
                 )}
-              </Box>
-            </TableCell>
-            <TableCell sx={{ whiteSpace: 'nowrap', width: 140 }}>Status</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
+              </div>
+            </th>
+            <th style={{ whiteSpace: 'nowrap', width: 140, padding: '8px 4px', textAlign: 'left' }}>Status</th>
+          </tr>
+        </thead>
+        <tbody>
           {videos.map((video) => {
             const status = getVideoStatus(video);
             const statusVariant = status === 'downloaded' || status === 'missing' ? 'filled' : 'outlined';
-            // Check if video is still live (not "was_live" and not null/undefined)
             const isStillLive = video.live_status && video.live_status !== 'was_live';
             const isDownloadSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !video.youtube_removed && !isStillLive;
             const isDeleteSelectable = video.added && !video.removed && !isStillLive;
@@ -140,16 +128,16 @@ function VideoTableView({
             const isClickable = (isDownloadSelectable && isDownloadAllowed) || (isDeleteSelectable && isDeleteAllowed);
 
             return (
-              <TableRow
+              <tr
                 key={video.youtube_id}
-                hover
-                sx={{
+                style={{
                   opacity: status === 'members_only' || status === 'ignored' ? 0.7 : 1,
                   cursor: isClickable ? 'pointer' : 'default',
+                  borderBottom: '1px solid var(--border)',
                 }}
               >
-                <TableCell padding="checkbox" sx={{ width: 48, maxWidth: 48 }}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.25 }}>
+                <td style={{ width: 48, maxWidth: 48, padding: '8px 4px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                     {isStillLive ? (
                       <StillLiveDot isMobile={false} onMobileClick={onMobileTooltip} />
                     ) : isDownloadSelectable && isDownloadAllowed && (
@@ -162,42 +150,36 @@ function VideoTableView({
                       <Checkbox
                         checked={isDeleteChecked}
                         onChange={(e) => onDeletionChange(video.youtube_id, e.target.checked)}
-                        sx={{
-                          '&.Mui-checked': {
-                            color: 'error.main',
-                          },
-                        }}
                       />
                     )}
-                    {/* Ignore/Unignore button - for videos not currently on disk (never downloaded or missing) */}
                     {!isStillLive && (!video.added || video.removed) && (
-                      <IconButton
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
                           onToggleIgnore(video.youtube_id);
                         }}
-                        sx={{
-                          color: status === 'ignored' ? 'warning.main' : 'action.active',
-                          '&:hover': {
-                            color: status === 'ignored' ? 'warning.dark' : 'warning.main',
-                            bgcolor: 'warning.light',
-                          },
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: 4,
+                          color: status === 'ignored' ? 'var(--warning)' : 'var(--muted-foreground)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
                         }}
-                        size="small"
                         title={status === 'ignored' ? 'Unignore' : 'Ignore'}
                       >
-                        {status === 'ignored' ? <CheckCircleOutlineIcon fontSize="small" /> : <BlockIcon fontSize="small" />}
-                      </IconButton>
+                        {status === 'ignored' ? <CheckCircleOutlineIcon size={16} /> : <BlockIcon size={16} />}
+                      </button>
                     )}
-                  </Box>
-                </TableCell>
-                <TableCell sx={{ width: 140 }}>
-                  <Box sx={{ position: 'relative', display: 'inline-block', bgcolor: 'grey.900', borderRadius: 'var(--radius-thumb)', overflow: 'hidden' }}>
+                  </div>
+                </td>
+                <td style={{ width: 140, padding: '8px 4px' }}>
+                  <div style={{ position: 'relative', display: 'inline-block', backgroundColor: '#111', borderRadius: 'var(--radius-thumb)', overflow: 'hidden' }}>
                     <img
                       src={video.thumbnail}
                       alt={decodeHtml(video.title)}
                       style={{
-                        // Keep container size consistent - shorts use contain to show with black bars
                         width: 120,
                         height: 67,
                         objectFit: video.media_type === 'short' ? 'contain' : 'cover',
@@ -207,8 +189,8 @@ function VideoTableView({
                       loading="lazy"
                     />
                     {video.youtube_removed && (
-                      <Box
-                        sx={{
+                      <div
+                        style={{
                           position: 'absolute',
                           top: 0,
                           left: 0,
@@ -224,15 +206,15 @@ function VideoTableView({
                         }}
                       >
                         Removed From YouTube
-                      </Box>
+                      </div>
                     )}
-                  </Box>
-                </TableCell>
-                <TableCell sx={{ width: '36%' }}>
+                  </div>
+                </td>
+                <td style={{ width: '36%', padding: '8px 4px' }}>
                   <Typography
                     variant="body2"
-                    sx={{
-                      mb: 0.5,
+                    style={{
+                      marginBottom: 4,
                       whiteSpace: 'normal',
                       overflow: 'hidden',
                       display: '-webkit-box',
@@ -242,25 +224,25 @@ function VideoTableView({
                   >
                     {decodeHtml(video.title)}
                   </Typography>
-                </TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                </td>
+                <td style={{ whiteSpace: 'nowrap', padding: '8px 4px' }}>
                   {video.media_type === 'short' || !video.publishedAt
                     ? 'N/A'
                     : new Date(video.publishedAt).toLocaleDateString()}
-                </TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                </td>
+                <td style={{ whiteSpace: 'nowrap', padding: '8px 4px' }}>
                   {video.media_type === 'short' ? 'N/A' : formatDuration(video.duration)}
-                </TableCell>
-                <TableCell sx={{ width: 90, whiteSpace: 'nowrap' }}>
+                </td>
+                <td style={{ width: 90, whiteSpace: 'nowrap', padding: '8px 4px' }}>
                   <RatingBadge
                     rating={video.normalized_rating}
                     ratingSource={video.rating_source}
                     showNA={true}
                     size="small"
-                    sx={{ flexWrap: 'nowrap', justifyContent: 'center' }}
+                    style={{ flexWrap: 'nowrap', justifyContent: 'center' }}
                   />
-                </TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                </td>
+                <td style={{ whiteSpace: 'nowrap', padding: '8px 4px' }}>
                   {(video.filePath || video.audioFilePath) ? (
                     <DownloadFormatIndicator
                       filePath={video.filePath}
@@ -269,9 +251,9 @@ function VideoTableView({
                       audioFileSize={video.audioFileSize}
                     />
                   ) : '-'}
-                </TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap', overflow: 'hidden' }}>
+                </td>
+                <td style={{ whiteSpace: 'nowrap', padding: '8px 4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap', overflow: 'hidden' }}>
                     {mediaTypeInfo && (
                       <Chip
                         size="small"
@@ -288,14 +270,14 @@ function VideoTableView({
                       color={getStatusColor(status)}
                       variant={statusVariant}
                     />
-                  </Box>
-                </TableCell>
-              </TableRow>
+                  </div>
+                </td>
+              </tr>
             );
           })}
-        </TableBody>
-      </Table>
-    </TableContainer>
+        </tbody>
+      </table>
+    </div>
   );
 }
 

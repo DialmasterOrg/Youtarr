@@ -12,33 +12,23 @@ import {
   TextField,
   CircularProgress,
   Alert,
-  Box,
   Typography,
   Divider,
   List,
   ListItem,
   ListItemText,
   ListItemIcon,
-  IconButton,
   Link,
   Collapse,
   Switch,
   FormControlLabel,
-  useMediaQuery,
-  useTheme,
   ListItemButton,
   Tab,
   Tabs,
-} from '@mui/material';
-import Chip from '@mui/material/Chip';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import CancelIcon from '@mui/icons-material/Cancel';
-import InfoIcon from '@mui/icons-material/Info';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import SettingsIcon from '@mui/icons-material/Settings';
-import DownloadIcon from '@mui/icons-material/Download';
-import FilterAltIcon from '@mui/icons-material/FilterAlt';
-import RatingIcon from '@mui/icons-material/EighteenUpRating';
+  Chip,
+} from '../ui';
+import { CheckCircle as CheckCircleIcon, XCircle as CancelIcon, Info as InfoIcon, Copy as ContentCopyIcon, Settings as SettingsIcon, Download as DownloadIcon, Filter as FilterAltIcon, Shield as RatingIcon } from '../../lib/icons';
+import useMediaQuery from '../../hooks/useMediaQuery';
 import { useConfig } from '../../hooks/useConfig';
 import { SubfolderAutocomplete } from '../shared/SubfolderAutocomplete';
 import { RATING_OPTIONS } from '../../utils/ratings';
@@ -103,8 +93,7 @@ function ChannelSettingsDialog({
   token,
   onSettingsSaved
 }: ChannelSettingsDialogProps) {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery('(max-width: 599px)');
   const [activeSection, setActiveSection] = useState('general');
 
   const [settings, setSettings] = useState<ChannelSettings>({
@@ -164,10 +153,10 @@ function ChannelSettingsDialog({
   ];
 
   const sections = [
-    { id: 'general', label: 'General', icon: <SettingsIcon /> },
-    { id: 'auto-download', label: 'Auto Download', icon: <DownloadIcon /> },
-    { id: 'filters', label: 'Filters', icon: <FilterAltIcon /> },
-    { id: 'ratings', label: 'Ratings', icon: <RatingIcon /> }
+    { id: 'general', label: 'General', icon: <SettingsIcon size={18} /> },
+    { id: 'auto-download', label: 'Auto Download', icon: <DownloadIcon size={18} /> },
+    { id: 'filters', label: 'Filters', icon: <FilterAltIcon size={18} /> },
+    { id: 'ratings', label: 'Ratings', icon: <RatingIcon size={18} /> }
   ];
 
   useEffect(() => {
@@ -435,9 +424,9 @@ function ChannelSettingsDialog({
     switch (activeSection) {
       case 'general':
         return (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <Box>
-              <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div>
+              <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
                 Resolution Override
               </Typography>
               <FormControl fullWidth size="small">
@@ -463,12 +452,12 @@ function ChannelSettingsDialog({
                   ))}
                 </Select>
               </FormControl>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+              <Typography variant="caption" color="text.secondary" style={{ marginTop: 8, display: 'block' }}>
                 Effective channel quality: {effectiveQualityDisplay}.
               </Typography>
-            </Box>
+            </div>
 
-            <FormControl fullWidth sx={{ mt: 1 }}>
+            <FormControl fullWidth style={{ marginTop: 8 }}>
               <InputLabel id="audio-format-label" shrink>Download Type</InputLabel>
               <Select
                 labelId="audio-format-label"
@@ -490,13 +479,13 @@ function ChannelSettingsDialog({
             </FormControl>
 
             {settings.audio_format && (
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+              <Typography variant="caption" color="text.secondary" style={{ marginTop: 8, display: 'block' }}>
                 MP3 files are saved at 192kbps in the same folder as videos.
               </Typography>
             )}
 
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+            <Alert severity="info" style={{ marginBottom: 16 }}>
+              <Typography variant="body2" style={{ fontWeight: 'bold', marginBottom: 8 }}>
                 Subfolder Organization
               </Typography>
               <Typography variant="body2">
@@ -506,8 +495,8 @@ function ChannelSettingsDialog({
 
             <Divider />
 
-            <Box>
-              <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+            <div>
+              <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
                 Subfolder
               </Typography>
               <SubfolderAutocomplete
@@ -524,24 +513,24 @@ function ChannelSettingsDialog({
                 label="Subfolder"
                 helperText="Choose where this channel's videos are saved"
               />
-              <Alert severity="info" sx={{ mt: 1 }}>
+              <Alert severity="info" style={{ marginTop: 8 }}>
                 <Typography variant="caption">
                   Subfolders are automatically prefixed with <code>__</code> on the filesystem.
                 </Typography>
               </Alert>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+              <Typography variant="caption" color="text.secondary" style={{ marginTop: 8, display: 'block' }}>
                 Note: Changing the subfolder will move the channel&apos;s existing folder and files!
               </Typography>
-            </Box>
-          </Box>
+            </div>
+          </div>
         );
       case 'auto-download':
         return (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
               Automatic Download
             </Typography>
-            <Alert severity="info" sx={{ mb: 2 }}>
+            <Alert severity="info" style={{ marginBottom: 16 }}>
               <Typography variant="body2">
                 Enable these to automatically download new content from this channel during scheduled tasks.
               </Typography>
@@ -564,16 +553,16 @@ function ChannelSettingsDialog({
               }
               label="Automatically download new Shorts"
             />
-          </Box>
+          </div>
         );
       case 'filters':
         return (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <Box>
-              <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div>
+              <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
                 Duration Filters
               </Typography>
-              <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+              <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
                 <TextField
                   label="Min Duration (mins)"
                   type="number"
@@ -582,7 +571,7 @@ function ChannelSettingsDialog({
                   placeholder="No minimum"
                   fullWidth
                   size="small"
-                  InputProps={{ inputProps: { min: 0 } }}
+                  inputProps={{ min: 0 }}
                   InputLabelProps={{ shrink: true }}
                 />
                 <TextField
@@ -593,19 +582,19 @@ function ChannelSettingsDialog({
                   placeholder="No maximum"
                   fullWidth
                   size="small"
-                  InputProps={{ inputProps: { min: 0 } }}
+                  inputProps={{ min: 0 }}
                   InputLabelProps={{ shrink: true }}
                 />
-              </Box>
-            </Box>
+              </div>
+            </div>
 
             <Divider />
 
-            <Box>
-              <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+            <div>
+              <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
                 Title Regex Filter
               </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mt: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 8 }}>
                 <TextField
                   label="Title Regex Pattern"
                   value={settings.title_filter_regex || ''}
@@ -618,100 +607,71 @@ function ChannelSettingsDialog({
                   size="small"
                   InputLabelProps={{ shrink: true }}
                 />
-                <IconButton
-                  size="small"
-                  component={Link}
+                <a
                   href="https://docs.python.org/3/library/re.html#regular-expression-syntax"
                   target="_blank"
                   rel="noopener noreferrer"
-                  sx={{ mt: 0.5 }}
+                  style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', color: 'var(--muted-foreground)' }}
                 >
-                  <InfoIcon fontSize="small" />
-                </IconButton>
-              </Box>
+                  <InfoIcon size={16} />
+                </a>
+              </div>
 
-              <Box sx={{ mt: 1 }}>
-                <Typography
-                  variant="body2"
-                  component="button"
+              <div style={{ marginTop: 8 }}>
+                <button
                   onClick={() => setShowRegexExamples(!showRegexExamples)}
-                  sx={{
-                    color: 'primary.main',
-                    cursor: 'pointer',
-                    background: 'none',
-                    border: 'none',
-                    padding: 0,
-                    textDecoration: 'underline',
-                    fontSize: '0.75rem',
-                    '&:hover': { color: 'primary.dark' }
-                  }}
+                  style={{ color: 'var(--primary)', cursor: 'pointer', background: 'none', border: 'none', padding: 0, textDecoration: 'underline', fontSize: '0.75rem' }}
                 >
                   {showRegexExamples ? 'Hide examples' : 'Show examples'}
-                </Typography>
-              </Box>
+                </button>
+              </div>
 
               <Collapse in={showRegexExamples}>
-                <Box sx={{
-                  mt: 1,
-                  p: 1.5,
-                  bgcolor: 'action.hover',
-                  borderRadius: 1,
-                  border: '1px solid',
-                  borderColor: 'divider'
-                }}>
+                <div style={{ marginTop: 8, padding: 12, backgroundColor: 'var(--muted)', borderRadius: 4, border: '1px solid var(--border)' }}>
                   {regexExamples.map((example, index) => (
-                    <Box key={index} sx={{ mb: index < regexExamples.length - 1 ? 1.5 : 0 }}>
-                      <Typography variant="caption" sx={{ fontWeight: 600 }} gutterBottom>
+                    <div key={index} style={{ marginBottom: index < regexExamples.length - 1 ? 12 : 0 }}>
+                      <Typography variant="caption" style={{ fontWeight: 600 }} gutterBottom>
                         {example.label}
                       </Typography>
-                      <Box sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1,
-                        bgcolor: 'background.paper',
-                        p: 0.5,
-                        px: 1,
-                        borderRadius: 1,
-                        mb: 0.5
-                      }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, backgroundColor: 'var(--card)', padding: '4px 8px', borderRadius: 4, marginBottom: 4 }}>
                         <Typography
                           variant="caption"
-                          sx={{ fontFamily: 'var(--font-body)', flex: 1, wordBreak: 'break-all' }}
+                          style={{ fontFamily: 'var(--font-body)', flex: 1, wordBreak: 'break-all' }}
                         >
                           {example.pattern}
                         </Typography>
-                        <IconButton
-                          size="small"
+                        <button
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 2, color: 'var(--muted-foreground)' }}
                           onClick={() => handleCopyRegex(example.pattern)}
                         >
-                          <ContentCopyIcon sx={{ fontSize: '0.75rem' }} />
-                        </IconButton>
-                      </Box>
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                          <ContentCopyIcon size={12} />
+                        </button>
+                      </div>
+                      <Typography variant="caption" color="text.secondary" style={{ fontSize: '0.7rem' }}>
                         {example.description}
                       </Typography>
-                    </Box>
+                    </div>
                   ))}
-                </Box>
+                </div>
               </Collapse>
-            </Box>
+            </div>
 
-            <Box sx={{ mt: 1 }}>
+            <div style={{ marginTop: 8 }}>
               <Button
                 variant="outlined"
                 onClick={handlePreviewFilter}
                 disabled={loadingPreview || !settings.title_filter_regex}
                 size="small"
               >
-                {loadingPreview ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                {loadingPreview ? <CircularProgress size={16} style={{ marginRight: 8 }} /> : null}
                 Preview Filter
               </Button>
               {previewResult && (
-                <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
+                <Typography variant="caption" color="text.secondary" style={{ marginLeft: 16 }}>
                   {previewResult.matchCount} of {previewResult.totalCount} matches
                 </Typography>
               )}
-            </Box>
+            </div>
 
             {previewError && (
               <Alert severity="error" onClose={() => setPreviewError(null)}>
@@ -720,21 +680,21 @@ function ChannelSettingsDialog({
             )}
 
             {previewResult && (
-              <Box sx={{ maxHeight: 200, overflow: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+              <div style={{ maxHeight: 200, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 4 }}>
                 <List dense>
                   {previewResult.videos.map((video) => (
                     <ListItem key={video.video_id}>
-                      <ListItemIcon sx={{ minWidth: 32 }}>
+                      <ListItemIcon style={{ minWidth: 32 }}>
                         {video.matches ? (
-                          <CheckCircleIcon color="success" sx={{ fontSize: '1rem' }} />
+                          <CheckCircleIcon size={16} style={{ color: 'var(--success)' }} />
                         ) : (
-                          <CancelIcon color="error" sx={{ fontSize: '1rem' }} />
+                          <CancelIcon size={16} style={{ color: 'var(--destructive)' }} />
                         )}
                       </ListItemIcon>
                       <ListItemText
                         primary={video.title}
                         primaryTypographyProps={{
-                          sx: {
+                          style: {
                             fontSize: '0.75rem',
                             opacity: video.matches ? 1 : 0.5,
                             textDecoration: video.matches ? 'none' : 'line-through'
@@ -744,17 +704,17 @@ function ChannelSettingsDialog({
                     </ListItem>
                   ))}
                 </List>
-              </Box>
+              </div>
             )}
-          </Box>
+          </div>
         );
       case 'ratings': {
         const effectiveRatingLabel = settings.default_rating
           ? (RATING_OPTIONS.find((option) => option.value === settings.default_rating)?.label || settings.default_rating)
           : 'Global';
         return (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 600 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
               Content Ratings
             </Typography>
             <Alert severity="info">
@@ -780,7 +740,7 @@ function ChannelSettingsDialog({
                 ))}
               </Select>
             </FormControl>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <Typography variant="caption" color="text.secondary">
                 Effective default rating:
               </Typography>
@@ -788,8 +748,8 @@ function ChannelSettingsDialog({
                 rating={effectiveRatingLabel} 
                 size="small" 
               />
-            </Box>
-          </Box>
+            </div>
+          </div>
         );
       }
       default:
@@ -803,19 +763,14 @@ function ChannelSettingsDialog({
       onClose={handleCancel} 
       maxWidth="md" 
       fullWidth
-      PaperProps={{
-        sx: { 
-          minHeight: isMobile ? '80vh' : '500px',
-          maxHeight: '90vh'
-        }
-      }}
+      style={{ minHeight: isMobile ? '80vh' : '500px', maxHeight: '90vh' }}
     >
-      <DialogTitle sx={{ pb: 1 }}>
+      <DialogTitle style={{ paddingBottom: 8 }}>
         Channel Settings: {channelName}
       </DialogTitle>
       
       {isMobile ? (
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
+        <div style={{ borderBottom: '1px solid var(--border)', padding: '0 16px' }}>
           <Tabs
             value={activeSection}
             onChange={(_, newValue) => setActiveSection(newValue)}
@@ -829,67 +784,68 @@ function ChannelSettingsDialog({
                 label={section.label} 
                 icon={section.icon}
                 iconPosition="start"
-                sx={{ minHeight: 48, textTransform: 'none' }}
+                style={{ minHeight: 48, textTransform: 'none' }}
               />
             ))}
           </Tabs>
-        </Box>
+        </div>
       ) : null}
 
-      <DialogContent sx={{ p: 0, display: 'flex' }}>
+      <DialogContent style={{ padding: 0, display: 'flex' }}>
         {!isMobile && (
-          <Box sx={{ 
+          <div style={{ 
             width: 200, 
-            borderRight: '1px solid', 
-            borderColor: 'divider',
-            bgcolor: 'action.hover',
+            borderRight: '1px solid var(--border)',
+            backgroundColor: 'var(--muted)',
             display: 'flex',
             flexDirection: 'column'
           }}>
-            <List sx={{ pt: 1 }}>
+            <List style={{ paddingTop: 8 }}>
               {sections.map((section) => (
                 <ListItemButton
                   key={section.id}
                   selected={activeSection === section.id}
                   onClick={() => setActiveSection(section.id)}
-                  sx={{
-                    py: 1.5,
-                    borderLeft: activeSection === section.id ? '4px solid' : '4px solid transparent',
-                    borderColor: 'primary.main',
+                  style={{
+                    paddingTop: 12,
+                    paddingBottom: 12,
+                    borderLeft: activeSection === section.id ? '4px solid var(--primary)' : '4px solid transparent',
                   }}
                 >
-                  <ListItemIcon sx={{ minWidth: 40, color: activeSection === section.id ? 'primary.main' : 'inherit' }}>
+                  <ListItemIcon style={{ minWidth: 40, color: activeSection === section.id ? 'var(--primary)' : 'inherit' }}>
                     {section.icon}
                   </ListItemIcon>
                   <ListItemText 
                     primary={section.label} 
                     primaryTypographyProps={{ 
                       variant: 'body2',
-                      fontWeight: activeSection === section.id ? 600 : 400,
-                      color: activeSection === section.id ? 'primary.main' : 'text.primary'
+                      style: {
+                        fontWeight: activeSection === section.id ? 600 : 400,
+                        color: activeSection === section.id ? 'var(--primary)' : 'inherit'
+                      }
                     }} 
                   />
                 </ListItemButton>
               ))}
             </List>
-          </Box>
+          </div>
         )}
 
-        <Box sx={{ flex: 1, p: { xs: 2, sm: 3 }, overflowY: 'auto' }}>
+        <div style={{ flex: 1, padding: isMobile ? 16 : 24, overflowY: 'auto' }}>
           {loading ? (
-            <Box display="flex" justifyContent="center" alignItems="center" py={10}>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', paddingTop: 80, paddingBottom: 80 }}>
               <CircularProgress />
-            </Box>
+            </div>
           ) : (
             <>
               {error && (
-                <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+                <Alert severity="error" style={{ marginBottom: 16 }} onClose={() => setError(null)}>
                   {error}
                 </Alert>
               )}
 
               {success && (
-                <Alert severity="success" sx={{ mb: 2 }}>
+                <Alert severity="success" style={{ marginBottom: 16 }}>
                   Settings saved successfully!
                 </Alert>
               )}
@@ -897,9 +853,9 @@ function ChannelSettingsDialog({
               {renderSectionContent()}
             </>
           )}
-        </Box>
+        </div>
       </DialogContent>
-      <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+      <DialogActions style={{ padding: '16px 24px', borderTop: '1px solid var(--border)' }}>
         <Button onClick={handleCancel} disabled={saving} variant="outlined">
           Cancel
         </Button>
@@ -907,15 +863,7 @@ function ChannelSettingsDialog({
           onClick={handleSave}
           variant="contained"
           disabled={saving || loading || !hasChanges()}
-          sx={(theme) => ({ 
-            minWidth: 100,
-            color: 'primary.contrastText',
-            bgcolor: 'primary.main',
-            '&:hover': {
-              bgcolor: 'primary.dark',
-              color: 'primary.contrastText',
-            }
-          })}
+          style={{ minWidth: 100 }}
         >
           {saving ? <CircularProgress size={24} /> : 'Save Settings'}
         </Button>

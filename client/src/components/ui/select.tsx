@@ -30,6 +30,8 @@ export interface SelectProps {
   variant?: 'outlined' | 'standard' | 'filled';
   autoWidth?: boolean;
   native?: boolean;
+  labelId?: string;
+  notched?: boolean;
 }
 
 const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
@@ -52,6 +54,8 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
     variant: _variant,
     autoWidth: _autoWidth,
     native: _native,
+    labelId: _labelId,
+    notched: _notched,
   }, ref) => {
     const isSmall = size === 'small';
 

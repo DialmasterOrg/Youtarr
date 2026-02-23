@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Tooltip, Chip } from '@mui/material';
-import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
+import { Tooltip, Chip } from '../ui';
+import { Circle } from 'lucide-react';
 
 interface StillLiveDotProps {
   isMobile?: boolean;
@@ -35,29 +35,15 @@ function StillLiveDot({ isMobile = false, onMobileClick }: StillLiveDotProps) {
 
   const liveDot = (
     <Chip
-      icon={<FiberManualRecordIcon sx={{ fontSize: 12, animation: 'pulse 2s infinite' }} />}
+      icon={<Circle size={12} style={{ animationName: 'pulse', animationDuration: '2s', animationIterationCount: 'infinite' }} />}
       label="LIVE"
       size="small"
       onClick={handleClick}
-      sx={{
-        bgcolor: 'error.main',
+      style={{
+        backgroundColor: 'var(--destructive)',
         color: 'white',
         fontWeight: 'bold',
         cursor: 'pointer',
-        '&:hover': {
-          bgcolor: 'error.dark',
-        },
-        '@keyframes pulse': {
-          '0%': {
-            opacity: 1,
-          },
-          '50%': {
-            opacity: 0.6,
-          },
-          '100%': {
-            opacity: 1,
-          },
-        },
       }}
     />
   );

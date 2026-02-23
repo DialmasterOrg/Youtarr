@@ -1,8 +1,7 @@
 import React from 'react';
-import { Box, BoxProps } from '@mui/material';
 import { ThemeMode } from '../../themes';
 
-interface ActionBarProps extends BoxProps {
+interface ActionBarProps extends React.HTMLAttributes<HTMLDivElement> {
   variant: ThemeMode;
   compact?: boolean;
 }
@@ -24,8 +23,8 @@ export const ActionBar: React.FC<ActionBarProps> = ({
     .join(' ');
 
   return (
-    <Box className={classes} {...rest}>
+    <div className={classes} {...rest}>
       {children}
-    </Box>
+    </div>
   );
 };

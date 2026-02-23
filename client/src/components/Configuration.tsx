@@ -6,8 +6,8 @@ import {
   Button,
   Alert,
   Snackbar,
-} from '@mui/material';
-import InfoIcon from '@mui/icons-material/Info';
+} from './ui';
+import { Info as InfoIcon } from 'lucide-react';
 import PlexLibrarySelector from './PlexLibrarySelector';
 import PlexAuthDialog from './PlexAuthDialog';
 import ConfigurationSkeleton from './Configuration/common/ConfigurationSkeleton';

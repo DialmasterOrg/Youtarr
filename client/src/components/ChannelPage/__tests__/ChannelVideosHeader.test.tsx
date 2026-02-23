@@ -1,13 +1,13 @@
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import useMediaQuery from '@mui/material/useMediaQuery';
+import useMediaQuery from '../../../hooks/useMediaQuery';
 import ChannelVideosHeader from '../ChannelVideosHeader';
 import { ChannelVideo } from '../../../types/ChannelVideo';
 import { renderWithProviders } from '../../../test-utils';
 
-// Mock Material-UI hooks
-jest.mock('@mui/material/useMediaQuery');
+// Mock custom hooks
+jest.mock('../../../hooks/useMediaQuery');
 
 const mockVideos: ChannelVideo[] = [
   {

@@ -23,10 +23,8 @@ import {
   Link,
   Typography,
   Divider,
-} from '@mui/material';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import SystemUpdateIcon from '@mui/icons-material/SystemUpdate';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+} from '../../ui';
+import { CheckCircle2 as CheckCircleIcon, Download as SystemUpdateIcon, ArrowRight as ArrowForwardIcon } from 'lucide-react';
 import { YtDlpVersionInfo, YtDlpUpdateStatus } from '../hooks/useYtDlpUpdate';
 import { ConfigurationCard } from '../common/ConfigurationCard';
 import { InfoTooltip } from '../common/InfoTooltip';
@@ -150,17 +148,17 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
       title="Core Settings"
       subtitle="Required settings for YouTube video downloads"
     >
-      <Grid container spacing={2} sx={{ mt: 1 }}>
+      <Grid container spacing={2} className="mt-2">
         <Grid item xs={12}>
           <TextField
             fullWidth
             label={
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Box className="flex items-center">
                 YouTube Output Directory
                 <Chip
                   label="Docker Volume"
                   size="small"
-                  sx={{ ml: 1 }}
+                  className="ml-2"
                 />
               </Box>
             }
@@ -177,7 +175,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box className="flex items-center">
             <FormControlLabel
               control={
                 <Checkbox
@@ -196,7 +194,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box className="flex items-center">
             <FormControl fullWidth>
               <InputLabel>Download Frequency</InputLabel>
               <Select
@@ -222,7 +220,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box className="flex items-center">
             <FormControl fullWidth>
               <InputLabel>Files to Download per Channel</InputLabel>
               <Select
@@ -245,7 +243,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box className="flex items-center">
             <FormControl fullWidth>
               <InputLabel>Preferred Resolution</InputLabel>
               <Select
@@ -271,8 +269,8 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box className="flex flex-col items-stretch">
+            <Box className="flex items-center">
               <FormControl fullWidth>
                 <InputLabel>Preferred Video Codec</InputLabel>
                 <Select
@@ -292,14 +290,14 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                 onMobileClick={onMobileTooltipClick}
               />
             </Box>
-            <Box component="span" sx={{ mt: 0.5, fontSize: '0.75rem', color: 'text.secondary' }}>
+            <Box component="span" className="mt-1 text-xs text-muted-foreground">
               Note: H.264 produces larger file sizes but offers maximum compatibility for Apple TV. This is a preference and will fall back to available codecs.
             </Box>
           </Box>
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box className="flex items-center">
             <SubfolderAutocomplete
               mode="global"
               value={config.defaultSubfolder || null}
@@ -317,7 +315,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box className="flex items-center">
             <FormControlLabel
               control={
                 <Checkbox
@@ -328,7 +326,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                 />
               }
               label={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box className="flex items-center gap-2">
                   Use external temp directory
                   {isPlatformManaged.useTmpForDownloads && (
                     <Chip
@@ -351,7 +349,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
         </Grid>
 
         <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box className="flex items-center">
             <FormControlLabel
               control={
                 <Checkbox
@@ -371,7 +369,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
 
         {config.subtitlesEnabled && (
           <Grid item xs={12} md={6}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Box className="flex items-center">
               <SubtitleLanguageSelector
                 value={config.subtitleLanguage}
                 onChange={(value) => onConfigChange({ subtitleLanguage: value })}
@@ -385,7 +383,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
         )}
 
         <Grid item xs={12} md={6}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box className="flex items-center">
             <FormControlLabel
               control={
                 <Switch
@@ -403,24 +401,24 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
       {/* yt-dlp Version Section */}
       {ytDlpVersionInfo && ytDlpVersionInfo.currentVersion && (
         <>
-          <Divider sx={{ mt: 3, mb: 2 }} />
+          <Divider className="mt-6 mb-4" />
           <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', mb: 1 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
+            <Box className="flex items-center gap-3 flex-wrap mb-2">
+              <Typography variant="subtitle1" className="font-medium">
                 yt-dlp:
               </Typography>
               <Typography
                 variant="body1"
-                sx={{ fontFamily: 'monospace', fontWeight: 500 }}
+                style={{ fontFamily: 'monospace', fontWeight: 500 }}
               >
                 {ytDlpVersionInfo.currentVersion}
               </Typography>
               {ytDlpVersionInfo.updateAvailable && ytDlpVersionInfo.latestVersion ? (
                 <>
-                  <ArrowForwardIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                  <ArrowForwardIcon style={{ fontSize: 16 }} className="text-muted-foreground" />
                   <Typography
                     variant="body1"
-                    sx={{ fontFamily: 'monospace', fontWeight: 500, color: 'warning.main' }}
+                    style={{ fontFamily: 'monospace', fontWeight: 500, color: 'var(--warning)' }}
                   >
                     {ytDlpVersionInfo.latestVersion}
                   </Typography>
@@ -466,7 +464,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
             <strong>{ytDlpVersionInfo?.currentVersion || 'current version'}</strong> to{' '}
             <strong>{ytDlpVersionInfo?.latestVersion || 'latest version'}</strong>.
           </DialogContentText>
-          <DialogContentText sx={{ mt: 2 }}>
+          <DialogContentText className="mt-4">
             Newer versions are not guaranteed to be fully compatible with Youtarr. Updating is only recommended if you are experiencing issues with downloading videos.
           </DialogContentText>
         </DialogContent>
@@ -492,15 +490,15 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
           <DialogContentText>
             Setting a default subfolder will affect where videos are downloaded for:
           </DialogContentText>
-          <Box component="ul" sx={{ mt: 1, pl: 2 }}>
+          <Box component="ul" className="mt-2 pl-4">
             <li>Untracked channels (manual URL downloads)</li>
             <li>Channels configured to use &quot;Default Subfolder&quot;</li>
           </Box>
 
           {/* Affected channels section */}
-          <Box sx={{ mt: 2, mb: 2 }}>
+          <Box className="mt-4 mb-4">
             {loadingAffectedChannels ? (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box className="flex items-center gap-2">
                 <CircularProgress size={16} />
                 <DialogContentText component="span">
                   Checking affected channels...
@@ -519,22 +517,14 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                   component="button"
                   variant="body2"
                   onClick={() => setShowAffectedList(!showAffectedList)}
-                  sx={{ mt: 0.5, display: 'block', cursor: 'pointer' }}
+                  className="mt-1 block cursor-pointer"
                 >
                   {showAffectedList ? 'Hide affected channels ▲' : 'Show affected channels ▼'}
                 </Link>
                 <Collapse in={showAffectedList}>
                   <Box
                     component="ul"
-                    sx={{
-                      mt: 1,
-                      pl: 2,
-                      maxHeight: 200,
-                      overflow: 'auto',
-                      bgcolor: 'action.hover',
-                      borderRadius: 1,
-                      py: 1,
-                    }}
+                    className="mt-2 pl-4 max-h-[200px] overflow-auto bg-muted/50 rounded py-2"
                   >
                     {affectedChannels.channelNames.map((name, index) => (
                       <li key={index}>{name}</li>
@@ -551,7 +541,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
               {pendingDefaultSubfolder ? `__${pendingDefaultSubfolder}` : 'the root directory'}
             </strong>
           </DialogContentText>
-          <DialogContentText sx={{ mt: 1, fontStyle: 'italic' }}>
+          <DialogContentText className="mt-2" style={{ fontStyle: 'italic' }}>
             Existing videos will not be moved. Continue?
           </DialogContentText>
         </DialogContent>

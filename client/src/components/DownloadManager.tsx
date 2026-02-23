@@ -5,9 +5,8 @@ import React, {
   useRef,
   useCallback,
 } from 'react';
-import { Grid } from '@mui/material';
-import useMediaQuery from '@mui/material/useMediaQuery';
-import { useTheme } from '@mui/material/styles';
+import { Grid } from './ui';
+import useMediaQuery from '../hooks/useMediaQuery';
 import axios from 'axios';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import DownloadProgress from './DownloadManager/DownloadProgress';
@@ -33,8 +32,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
     throw new Error('WebSocketContext not found');
   }
 
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery('(max-width: 599px)');
 
   const { subscribe, unsubscribe } = wsContext;
 

@@ -2,20 +2,13 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import useMediaQuery from '@mui/material/useMediaQuery';
+import useMediaQuery from '../../hooks/useMediaQuery';
 import ChannelManager from '../ChannelManager';
 import { renderWithProviders, createMockWebSocketContext } from '../../test-utils';
 import { Channel } from '../../types/Channel';
 
-// Mock Material-UI hooks
-jest.mock('@mui/material/useMediaQuery');
-jest.mock('@mui/material/styles', () => ({
-  ...jest.requireActual('@mui/material/styles'),
-  useTheme: () => ({
-    breakpoints: { down: () => false },
-    zIndex: { snackbar: 1000, fab: 1050 },
-  }),
-}));
+// Mock custom hooks
+jest.mock('../../hooks/useMediaQuery');
 
 // Mock react-router-dom
 const mockNavigate = jest.fn();

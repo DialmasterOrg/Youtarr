@@ -7,10 +7,17 @@ export interface LinearProgressProps extends React.HTMLAttributes<HTMLDivElement
   value?: number;
   variant?: 'determinate' | 'indeterminate' | 'buffer' | 'query';
   color?: 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success' | 'inherit';
+  /** Custom bar height in pixels (overrides the default h-1 class) */
+  height?: number;
+  /** Custom CSS color for the progress bar indicator */
+  barColor?: string;
+  /** Additional className for the progress bar indicator */
+  barClassName?: string;
+  sx?: Record<string, unknown>;
 }
 
 const LinearProgress = React.forwardRef<HTMLDivElement, LinearProgressProps>(
-  ({ value, variant = 'indeterminate', color = 'primary', className, ...props }, ref) => {
+  ({ value, variant = 'indeterminate', color = 'primary', height, barColor, barClassName, className, style, sx: _sx, ...props }, ref) => {
     const colorClass: Record<string, string> = {
       primary: 'bg-primary',
       secondary: 'bg-secondary',
@@ -26,18 +33,24 @@ const LinearProgress = React.forwardRef<HTMLDivElement, LinearProgressProps>(
         ref={ref}
         value={variant === 'determinate' ? value : undefined}
         className={cn(
-          'relative h-1 w-full overflow-hidden rounded-full bg-muted',
+          'relative w-full overflow-hidden rounded-full bg-muted',
+          !height && 'h-1',
           className
         )}
+        style={height ? { height, borderRadius: 'var(--radius-ui)', ...style } : style}
         {...props}
       >
         <ProgressPrimitive.Indicator
           className={cn(
-            'h-full w-full flex-1 rounded-full transition-all',
-            colorClass[color] ?? 'bg-primary',
+            'h-full w-full flex-1 rounded-full',
+            !barColor && (colorClass[color] ?? 'bg-primary'),
             variant === 'indeterminate' && 'animate-[indeterminate_1.5s_ease-in-out_infinite]',
+            barClassName,
           )}
-          style={variant === 'determinate' ? { transform: `translateX(-${100 - (value ?? 0)}%)` } : { transform: 'translateX(-40%)' }}
+          style={{
+            ...(variant === 'determinate' ? { transform: `translateX(-${100 - (value ?? 0)}%)` } : { transform: 'translateX(-40%)' }),
+            ...(barColor ? { backgroundColor: barColor, transition: 'background-color 0.3s ease, width 0.3s ease' } : { transition: 'width 0.3s ease' }),
+          }}
         />
       </ProgressPrimitive.Root>
     );

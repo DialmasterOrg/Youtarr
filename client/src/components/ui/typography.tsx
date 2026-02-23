@@ -39,16 +39,19 @@ const colorMap: Record<string, string> = {
 
 export interface TypographyProps extends React.HTMLAttributes<HTMLElement> {
   variant?: TypographyVariant;
-  component?: keyof React.JSX.IntrinsicElements;
+  component?: keyof React.JSX.IntrinsicElements | React.ElementType;
   color?: string;
   gutterBottom?: boolean;
   paragraph?: boolean;
   noWrap?: boolean;
   align?: 'left' | 'center' | 'right' | 'justify' | 'inherit';
+  fontWeight?: string | number;
+  to?: string;
+  display?: string;
 }
 
 const Typography = React.forwardRef<HTMLElement, TypographyProps>(
-  ({ variant = 'body1', component, color, gutterBottom, paragraph, noWrap, align, className, children, ...props }, ref) => {
+  ({ variant = 'body1', component, color, gutterBottom, paragraph, noWrap, align, fontWeight, display: displayProp, to: _to, className, children, style, ...props }, ref) => {
     const mapping = variantMap[variant];
     const Tag = (component || (paragraph ? 'p' : mapping.tag)) as keyof React.JSX.IntrinsicElements;
 
@@ -69,6 +72,9 @@ const Typography = React.forwardRef<HTMLElement, TypographyProps>(
           align && align !== 'inherit' && `text-${align}`,
           className
         ),
+        style: (fontWeight !== undefined || displayProp !== undefined)
+          ? { fontWeight, display: displayProp, ...style }
+          : style,
         ...props,
       },
       children

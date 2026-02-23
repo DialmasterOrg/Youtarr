@@ -1,13 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import {
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Chip,
-  Box,
-  SelectChangeEvent,
-} from '@mui/material';
 
 interface SubtitleLanguageSelectorProps {
   value: string;
@@ -57,54 +48,60 @@ function SubtitleLanguageSelector({
     }
   }, [value]);
 
-  const handleChange = (event: SelectChangeEvent<string[]>) => {
-    const newValue = event.target.value as string[];
+  const handleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const options = Array.from(event.target.selectedOptions).map((o) => o.value);
 
     // Ensure at least one language is selected
-    if (newValue.length === 0) {
+    if (options.length === 0) {
       setSelectedLanguages(['en']);
       onChange('en');
       return;
     }
 
-    setSelectedLanguages(newValue);
-    onChange(newValue.join(','));
-  };
-
-  const getLanguageLabel = (code: string): string => {
-    const option = LANGUAGE_OPTIONS.find((opt) => opt.code === code);
-    return option ? option.label : code;
+    setSelectedLanguages(options);
+    onChange(options.join(','));
   };
 
   return (
-    <FormControl fullWidth disabled={disabled}>
-      <InputLabel id="subtitle-language-label">Subtitle Languages</InputLabel>
-      <Select
-        labelId="subtitle-language-label"
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <label
+        htmlFor="subtitle-language-select"
+        style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)', fontWeight: 500 }}
+      >
+        Subtitle Languages
+      </label>
+      <select
         id="subtitle-language-select"
         multiple
         value={selectedLanguages}
         onChange={handleChange}
-        label="Subtitle Languages"
-        renderValue={(selected) => (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-            {selected.map((code) => (
-              <Chip
-                key={code}
-                label={getLanguageLabel(code)}
-                size="small"
-              />
-            ))}
-          </Box>
-        )}
+        disabled={disabled}
+        size={5}
+        style={{
+          width: '100%',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-input)',
+          backgroundColor: 'var(--background)',
+          color: 'var(--foreground)',
+          padding: '4px',
+          fontSize: '0.875rem',
+          opacity: disabled ? 0.5 : 1,
+          cursor: disabled ? 'not-allowed' : 'auto',
+        }}
       >
         {LANGUAGE_OPTIONS.map((option) => (
-          <MenuItem key={option.code} value={option.code}>
+          <option key={option.code} value={option.code}>
             {option.label}
-          </MenuItem>
+          </option>
         ))}
-      </Select>
-    </FormControl>
+      </select>
+      <span style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)' }}>
+        Selected: {selectedLanguages.map((code) => {
+          const opt = LANGUAGE_OPTIONS.find((o) => o.code === code);
+          return opt ? opt.label : code;
+        }).join(', ')}
+      </span>
+    </div>
   );
 }
 

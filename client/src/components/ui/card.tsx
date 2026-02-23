@@ -6,10 +6,11 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   elevation?: number;
   variant?: 'elevation' | 'outlined';
   raised?: boolean;
+  disabled?: boolean;
 }
 
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ className, variant, children, ...props }, ref) => (
+  ({ className, variant, disabled, children, ...props }, ref) => (
     <div
       ref={ref}
       className={cn(
@@ -18,6 +19,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
         'transition-all duration-[var(--transition-base)]',
         'hover:[transform:var(--card-hover-transform)] hover:shadow-[var(--card-hover-shadow)]',
         variant === 'outlined' && 'shadow-none',
+        disabled && 'opacity-50 pointer-events-none',
         className
       )}
       {...props}
@@ -61,7 +63,7 @@ const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
 CardContent.displayName = 'CardContent';
 
 /* ─── CardHeader ──────────────────────────────────────── */
-export interface CardHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface CardHeaderProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
   title?: React.ReactNode;
   subheader?: React.ReactNode;
   avatar?: React.ReactNode;

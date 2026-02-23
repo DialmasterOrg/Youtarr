@@ -116,8 +116,8 @@ export interface AccordionSummaryProps extends React.HTMLAttributes<HTMLDivEleme
   children?: React.ReactNode;
 }
 
-const AccordionSummary: React.FC<AccordionSummaryProps> = ({ expandIcon, children, className, ...props }) => (
-  <AccordionTrigger className={cn('px-4', className)} {...props}>
+const AccordionSummary: React.FC<AccordionSummaryProps> = ({ expandIcon, children, className }) => (
+  <AccordionTrigger className={cn('px-4', className)}>
     <span className="flex items-center gap-2 flex-1">{children}</span>
     {expandIcon && <span className="shrink-0">{expandIcon}</span>}
   </AccordionTrigger>

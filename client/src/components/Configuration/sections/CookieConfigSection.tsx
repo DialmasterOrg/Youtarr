@@ -3,13 +3,12 @@ import {
   FormControlLabel,
   Switch,
   Grid,
-  Box,
   Alert,
   AlertTitle,
   Typography,
   Button,
   Chip,
-} from '@mui/material';
+} from '../../ui';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { useCookieManagement } from '../hooks/useCookieManagement';
@@ -52,9 +51,9 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
       chipColor={config.cookiesEnabled ? "success" : "default"}
       defaultExpanded={false}
     >
-      <Alert severity="warning" sx={{ mb: 2 }}>
+      <Alert severity="warning" style={{ marginBottom: 16 }}>
         <AlertTitle>Security Warning</AlertTitle>
-        <Typography variant="body2" paragraph>
+        <Typography variant="body2" style={{ marginBottom: 16 }}>
           Cookie files contain authentication information for your Google account.
           We strongly recommend using a throwaway account instead of your main account.
         </Typography>
@@ -69,7 +68,7 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
         </Typography>
       </Alert>
 
-      <Alert severity="info" sx={{ mb: 2 }}>
+      <Alert severity="info" style={{ marginBottom: 16 }}>
         <Typography variant="body2">
           Cookies help bypass YouTube's bot detection. If you encounter "Sign in to confirm you're not a bot" errors,
           enabling cookies can resolve the issue.
@@ -86,13 +85,13 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
               />
             }
             label={
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
                 Enable Cookies
                 <InfoTooltip
                   text="Use cookies to bypass YouTube bot detection and access age-restricted content."
                   onMobileClick={onMobileTooltipClick}
                 />
-              </Box>
+              </div>
             }
           />
         </Grid>
@@ -100,21 +99,23 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
         {config.cookiesEnabled && (
           <>
             <Grid item xs={12}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                   <Button
                     variant="contained"
-                    component="label"
+                    asChild
                     disabled={uploadingCookie}
                   >
-                    {uploadingCookie ? 'Uploading...' : 'Upload Cookie File'}
-                    <input
-                      type="file"
-                      hidden
-                      accept=".txt,text/plain"
-                      data-testid="cookie-file-input"
-                      onChange={handleCookieUpload}
-                    />
+                    <label style={{ cursor: uploadingCookie ? 'not-allowed' : 'pointer' }}>
+                      {uploadingCookie ? 'Uploading...' : 'Upload Cookie File'}
+                      <input
+                        type="file"
+                        hidden
+                        accept=".txt,text/plain"
+                        data-testid="cookie-file-input"
+                        onChange={handleCookieUpload}
+                      />
+                    </label>
                   </Button>
                   {cookieStatus?.customFileExists && (
                     <>
@@ -133,17 +134,17 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
                       </Button>
                     </>
                   )}
-                </Box>
-                <Typography variant="caption" color="text.secondary">
+                </div>
+                <Typography variant="caption" style={{ color: 'var(--muted-foreground)' }}>
                   Upload a Netscape format cookie file exported from your browser.
                   File must be less than 1MB.
                 </Typography>
-              </Box>
+              </div>
             </Grid>
 
             {cookieStatus && (
               <Grid item xs={12}>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" style={{ color: 'var(--muted-foreground)' }}>
                   Status: {cookieStatus.customFileExists ?
                     'Using custom cookies' :
                     'No cookie file uploaded'}

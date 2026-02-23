@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Chip, Tooltip, CircularProgress, useTheme, useMediaQuery, Snackbar, Alert } from '@mui/material';
-import StorageIcon from '@mui/icons-material/Storage';
+import { Chip, Tooltip, CircularProgress, Snackbar, Alert } from './ui';
+import { Storage as StorageIcon } from '../lib/icons';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useStorageStatus } from '../hooks/useStorageStatus';
 
 interface StorageStatusProps {
@@ -13,8 +14,7 @@ const StorageStatus: React.FC<StorageStatusProps> = ({ token }) => {
     pollInterval: 120000
   });
   const [mobileSnackbar, setMobileSnackbar] = useState(false);
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery('(max-width: 599px)');
 
   if (!token || error) return null;
 
@@ -27,9 +27,9 @@ const StorageStatus: React.FC<StorageStatusProps> = ({ token }) => {
 
   const getStatusIcon = () => {
     if (loading) {
-      return <CircularProgress size={16} sx={{ color: 'inherit', mr: 0.5 }} />;
+      return <CircularProgress size={16} style={{ color: 'inherit', marginRight: 4 }} />;
     }
-    return <StorageIcon sx={{ fontSize: 16, mr: 0.5 }} />;
+    return <StorageIcon size={16} style={{ marginRight: 4 }} />;
   };
 
   if (loading) {
@@ -38,7 +38,7 @@ const StorageStatus: React.FC<StorageStatusProps> = ({ token }) => {
         icon={getStatusIcon()}
         label="Loading..."
         size="small"
-        sx={{
+        style={{
           position: 'absolute',
           top: isMobile ? 'auto' : 5,
           bottom: isMobile ? 5 : 'auto',
@@ -68,7 +68,7 @@ const StorageStatus: React.FC<StorageStatusProps> = ({ token }) => {
       color={getChipColor()}
       variant="outlined"
       onClick={handleChipClick}
-      sx={{
+      style={{
         position: 'absolute',
         top: isMobile ? 'auto' : 5,
         bottom: isMobile ? 5 : 'auto',
@@ -78,10 +78,6 @@ const StorageStatus: React.FC<StorageStatusProps> = ({ token }) => {
         fontWeight: 500,
         borderWidth: 1.5,
         cursor: isMobile ? 'pointer' : 'default',
-        '& .MuiChip-icon': {
-          marginLeft: '4px',
-          marginRight: '-2px',
-        },
       }}
     />
   );
@@ -109,7 +105,7 @@ const StorageStatus: React.FC<StorageStatusProps> = ({ token }) => {
         <Alert
           onClose={() => setMobileSnackbar(false)}
           severity="info"
-          sx={{ width: '100%' }}
+          style={{ width: '100%' }}
         >
           {`${storageData.availableGB} GB free of ${storageData.totalGB} GB total`}
         </Alert>

@@ -1,7 +1,6 @@
 import React from 'react';
-import { Box, Chip } from '@mui/material';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import { Chip } from '../../ui';
+import { AccessTime as AccessTimeIcon, CalendarToday as CalendarTodayIcon } from '../../../lib/icons';
 import { VideoFilters } from '../hooks/useChannelVideoFilters';
 
 interface FilterChipsProps {
@@ -49,7 +48,7 @@ function FilterChips({
   }
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       {hasDurationFilter && (
         <Chip
           icon={<AccessTimeIcon />}
@@ -70,7 +69,7 @@ function FilterChips({
           variant="outlined"
         />
       )}
-    </Box>
+    </div>
   );
 }
 

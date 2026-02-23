@@ -1,21 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  Box,
-  CssBaseline,
-  useMediaQuery,
-  useTheme,
-} from '@mui/material';
+import { Box, CssBaseline } from '../ui';
 import { SETTINGS_PAGES } from '../Settings/SettingsIndex';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { NavHeader } from './NavHeader';
 import { NavSidebar } from './NavSidebar';
 import { BackgroundDecorations } from './BackgroundDecorations';
 import { getThemeById } from '../../themes';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 
-import SubscriptionsIcon from '@mui/icons-material/Subscriptions';
-import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
-import DownloadIcon from '@mui/icons-material/Download';
-import SettingsIcon from '@mui/icons-material/Settings';
+import { Tv as SubscriptionsIcon, Library as VideoLibraryIcon } from 'lucide-react';
+import { Download as DownloadIcon, Settings as SettingsIcon } from '../../lib/icons';
 
 export type AppNavKey = 'channels' | 'videos' | 'downloads' | 'settings';
 
@@ -48,7 +42,6 @@ export function AppShell({
   ytDlpUpdateTooltip,
   children,
 }: AppShellProps) {
-  const theme = useTheme();
   const isMobile = useMediaQuery('(max-width: 767px)');
   const { themeMode } = useThemeEngine();
   
@@ -128,16 +121,16 @@ export function AppShell({
   };
 
   return (
-    <Box
-      sx={{
+    <div
+      style={{
         display: 'flex',
         gap: isTopNav ? 0 : 'var(--shell-gap)',
         minHeight: '100vh',
         position: 'relative',
-        bgcolor: 'background.default',
+        backgroundColor: 'var(--background)',
         background: themeMode === 'linear'
           ? '#050506'
-          : `linear-gradient(180deg, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 55%, ${theme.palette.background.default} 100%)`,
+          : 'linear-gradient(180deg, var(--card) 0%, var(--background) 55%, var(--background) 100%)',
       }}
     >
       <CssBaseline />
@@ -175,20 +168,17 @@ export function AppShell({
         onCloseMobile={() => setDrawerOpenMobile(false)}
       />
 
-      <Box
-        component="main"
-        sx={
+      <main
+        style={
           isTopNav
             ? {
                 flexGrow: 1,
-                width: { xs: '100vw', md: '100vw' },
-                mt: '64px',
-                mb: 0,
-                mr: 0,
-                ml: 0,
-                px: { xs: 2, sm: 3, md: 4 },
-                pb: 6,
-                pt: 4,
+                width: '100vw',
+                marginTop: 64,
+                marginBottom: 0,
+                marginRight: 0,
+                marginLeft: 0,
+                padding: '32px 32px 48px 32px',
                 position: 'relative',
                 zIndex: 1,
                 transition: 'all 300ms cubic-bezier(0.4, 0, 0.2, 1)',
@@ -203,35 +193,36 @@ export function AppShell({
                 flexDirection: 'column',
                 minHeight: '100vh',
                 minWidth: 0,
-              pt: isMobile ? 'calc(60px + var(--shell-gap))' : 'calc(80px + var(--shell-gap))',
-                pb: 'var(--shell-gap)',
-                px: 'var(--shell-gap)',
+                paddingTop: isMobile ? 'calc(60px + var(--shell-gap))' : 'calc(80px + var(--shell-gap))',
+                paddingBottom: 'var(--shell-gap)',
+                paddingLeft: 'var(--shell-gap)',
+                paddingRight: 'var(--shell-gap)',
                 boxSizing: 'border-box',
                 position: 'relative',
                 zIndex: 1,
               }
         }
       >
-        <Box
-          sx={(theme) => ({
+        <div
+          style={{
             maxWidth: themeMode === 'playful' ? 'none' : 1400,
-            mx: themeMode === 'playful' ? 0 : 'auto',
+            marginLeft: themeMode === 'playful' ? 0 : 'auto',
+            marginRight: themeMode === 'playful' ? 0 : 'auto',
             width: '100%',
-            px: themeMode === 'playful' ? { xs: 2, sm: 2.5 } : { xs: 2, sm: 3, md: 4 },
-            py: { xs: 2.5, md: 3 },
+            padding: themeMode === 'playful' ? '20px 16px' : '24px 32px',
             ...(themeMode === 'playful'
               ? {
-                  bgcolor: 'background.paper',
+                  backgroundColor: 'var(--card)',
                   border: '2px solid var(--foreground)',
                   borderRadius: 'var(--radius-ui)',
                   boxShadow: 'var(--shadow-soft)',
                 }
               : {}),
-          })}
+          }}
         >
           {children}
-        </Box>
-      </Box>
-    </Box>
+        </div>
+      </main>
+    </div>
   );
 }

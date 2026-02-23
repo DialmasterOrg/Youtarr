@@ -88,12 +88,14 @@ export interface TabProps {
   disabled?: boolean;
   className?: string;
   wrapped?: boolean;
+  style?: React.CSSProperties;
 }
 
-const Tab: React.FC<TabProps> = ({ value, label, icon, iconPosition = 'start', disabled, className }) => (
+const Tab: React.FC<TabProps> = ({ value, label, icon, iconPosition = 'start', disabled, className, style }) => (
   <TabsTrigger
     value={String(value)}
     disabled={disabled}
+    style={style}
     className={cn(iconPosition === 'top' && 'flex-col', className)}
   >
     {(iconPosition === 'start' || iconPosition === 'top') && icon}

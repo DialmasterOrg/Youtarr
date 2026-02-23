@@ -5,10 +5,9 @@ import {
   CardContent,
   CardHeader,
   Grid,
-  Box,
   Tabs,
   Tab,
-} from '@mui/material';
+} from '../ui';
 import ManualDownload from './ManualDownload/ManualDownload';
 import DownloadSettingsDialog from './ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from './ManualDownload/types';
@@ -105,12 +104,12 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
           style={{ marginBottom: '-16px' }}
         />
         <CardContent>
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+          <div style={{ borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
             <Tabs value={tabValue} onChange={handleTabChange} centered>
               <Tab label="Manual Download" />
               <Tab label="ForceChannel Download" />
             </Tabs>
-          </Box>
+          </div>
 
           {tabValue === 0 ? (
             <ErrorBoundary
@@ -128,13 +127,8 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
               fallbackMessage="An error occurred with channel downloads. Please refresh the page and try again."
               onReset={() => setTabValue(1)}
             >
-              <Box
-                display='flex'
-                flexDirection='column'
-                justifyContent='center'
-                alignItems='center'
-                gap={2}
-                mt={3}
+              <div
+                style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 24 }}
               >
                 <Button
                   variant='contained'
@@ -143,7 +137,7 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
                 >
                   Download new from all channels
                 </Button>
-              </Box>
+              </div>
             </ErrorBoundary>
           )}
         </CardContent>

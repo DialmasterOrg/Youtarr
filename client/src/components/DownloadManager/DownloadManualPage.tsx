@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Box, Grid, Typography } from '@mui/material';
+import { Typography } from '../ui';
 import ManualDownload from './ManualDownload/ManualDownload';
 import { DownloadSettings } from './ManualDownload/types';
 import { useConfig } from '../../hooks/useConfig';
@@ -45,9 +45,9 @@ const DownloadManualPage: React.FC<DownloadManualPageProps> = ({
   );
 
   return (
-    <Grid item xs={12} md={12}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 800, textAlign: 'center' }}>
+    <div style={{ width: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Typography variant="h5" style={{ fontWeight: 800, textAlign: 'center' }}>
           Manual Download
         </Typography>
         <ManualDownload
@@ -55,8 +55,8 @@ const DownloadManualPage: React.FC<DownloadManualPageProps> = ({
           token={token}
           defaultResolution={defaultResolution}
         />
-      </Box>
-    </Grid>
+      </div>
+    </div>
   );
 };
 

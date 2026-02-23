@@ -1,5 +1,4 @@
 import React from 'react';
-import { Box } from '@mui/material';
 import { ThemeDefinition } from './types';
 
 export const neumorphicTheme: ThemeDefinition = {
@@ -7,12 +6,12 @@ export const neumorphicTheme: ThemeDefinition = {
   name: 'Neumorphic (Soft)',
   description: 'Soft UI with inner and outer shadows for a tactile feel.',
   layoutMode: 'top-nav',
-  preview: React.createElement(Box, {
+  preview: React.createElement('div', {
     key: 'preview-root',
-    sx: {
-      p: 2.5,
-      borderRadius: 3,
-      bgcolor: '#e0e5ec',
+    style: {
+      padding: '20px',
+      borderRadius: '12px',
+      backgroundColor: '#e0e5ec',
       boxShadow: '9px 9px 16px rgba(163, 177, 198, 0.6), -9px -9px 16px rgba(255, 255, 255, 0.5)',
       display: 'flex',
       alignItems: 'center',
@@ -21,21 +20,21 @@ export const neumorphicTheme: ThemeDefinition = {
       minHeight: 80,
     }
   }, [
-    React.createElement(Box, {
+    React.createElement('div', {
       key: 'b1',
-      sx: {
+      style: {
         width: 44,
         height: 44,
-        borderRadius: '999px',
+        borderRadius: '9999px',
         boxShadow: 'inset 6px 6px 10px rgba(163, 177, 198, 0.6), inset -6px -6px 10px rgba(255, 255, 255, 0.5)',
       }
     }),
-    React.createElement(Box, {
+    React.createElement('div', {
       key: 'b2',
-      sx: {
+      style: {
         width: 90,
         height: 16,
-        borderRadius: '999px',
+        borderRadius: '9999px',
         boxShadow: '9px 9px 16px rgba(163, 177, 198, 0.6), -9px -9px 16px rgba(255, 255, 255, 0.5)',
       }
     })
@@ -225,250 +224,6 @@ export const neumorphicTheme: ThemeDefinition = {
       'card-hover-shadow': '20px 20px 60px #0a0a0a, -20px -20px 60px #1e1e1e',
       'shadow-input-rest': 'inset 4px 4px 8px #0a0a0a, inset -4px -4px 8px #1e1e1e',
       'shadow-input-focus': 'inset 6px 6px 12px #0a0a0a, inset -6px -6px 12px #1e1e1e',
-    },
-  },
-  muiOverrides: {
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          borderRadius: 'var(--radius-ui)',
-          border: 'none',
-          boxShadow: 'var(--shadow-soft)',
-          backgroundColor: 'var(--card)',
-        },
-      },
-    },
-    MuiCard: {
-      styleOverrides: {
-        root: {
-          borderRadius: 'var(--radius-ui)',
-          border: 'none',
-          boxShadow: 'var(--shadow-soft)',
-          '&:hover': {
-            transform: 'var(--card-hover-transform)',
-            boxShadow: 'var(--card-hover-shadow)',
-          },
-        },
-      },
-    },
-    MuiChip: {
-      styleOverrides: {
-        root: {
-          borderRadius: 'var(--radius-ui)',
-          border: 'none',
-          backgroundColor: 'hsl(var(--background))',
-          boxShadow: 'var(--shadow-soft)',
-          color: 'var(--foreground)',
-          fontWeight: 700,
-          transition: 'all 0.3s ease',
-        },
-        filledPrimary: {
-          backgroundColor: 'hsl(var(--primary))',
-          color: 'hsl(var(--primary-foreground))',
-          boxShadow: 'var(--shadow-input-rest)',
-        },
-        filledSuccess: {
-          backgroundColor: 'hsl(var(--background))',
-          color: 'var(--secondary)',
-          boxShadow: 'var(--shadow-input-rest)',
-        },
-        outlinedSuccess: {
-          color: 'var(--secondary)',
-          boxShadow: 'var(--shadow-soft)',
-        },
-        filledWarning: {
-          backgroundColor: 'hsl(var(--background))',
-          color: 'var(--accent)',
-          boxShadow: 'var(--shadow-input-rest)',
-        },
-      },
-    },
-    MuiOutlinedInput: {
-      styleOverrides: {
-        root: {
-          borderRadius: 16,
-          backgroundColor: '#E0E5EC',
-          '& .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'transparent',
-          },
-          boxShadow:
-            'inset 6px 6px 10px rgba(163, 177, 198, 0.6), inset -6px -6px 10px rgba(255, 255, 255, 0.5)',
-          '&.Mui-focused': {
-            boxShadow:
-              'inset 10px 10px 20px rgba(163, 177, 198, 0.7), inset -10px -10px 20px rgba(255, 255, 255, 0.6), 0 0 0 2px rgba(108, 99, 255, 0.35)',
-          },
-        },
-      },
-    },
-    MuiSwitch: {
-      styleOverrides: {
-        switchBase: {
-          '&.Mui-checked': {
-            color: '#6C63FF',
-            '& + .MuiSwitch-track': {
-              backgroundColor: '#E0E5EC',
-              opacity: 1,
-              boxShadow:
-                'inset 3px 3px 6px rgba(163, 177, 198, 0.6), inset -3px -3px 6px rgba(255, 255, 255, 0.5)',
-            },
-          },
-        },
-        track: {
-          backgroundColor: '#E0E5EC',
-          opacity: 1,
-          boxShadow:
-            'inset 3px 3px 6px rgba(163, 177, 198, 0.6), inset -3px -3px 6px rgba(255, 255, 255, 0.5)',
-        },
-        thumb: {
-          boxShadow: '5px 5px 10px rgba(163, 177, 198, 0.6), -5px -5px 10px rgba(255, 255, 255, 0.5)',
-        },
-      },
-    },
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          borderRadius: 'var(--radius-ui)',
-          border: 'none',
-          boxShadow: 'var(--shadow-soft)',
-          backgroundColor: 'var(--background)',
-          color: 'var(--foreground)',
-          textTransform: 'none',
-          fontWeight: 700,
-          transition: 'all 300ms var(--transition-bouncy)',
-          '&:hover': {
-            transform: 'translateY(-2px)',
-            boxShadow: 'var(--shadow-hard)',
-            backgroundColor: 'var(--background)',
-          },
-          '&:active': {
-            transform: 'translateY(1px)',
-            boxShadow: 'var(--shadow-input-rest)',
-          },
-        },
-        outlined: {
-          border: 'none',
-          backgroundColor: 'var(--background)',
-          color: 'var(--foreground)',
-          boxShadow: 'var(--shadow-soft)',
-          '&:hover': {
-            boxShadow: 'var(--shadow-hard)',
-            backgroundColor: 'var(--background)',
-            color: 'var(--primary)',
-          },
-        },
-        outlinedPrimary: {
-          color: 'var(--primary)',
-          '&:hover': {
-            backgroundColor: 'var(--primary)',
-            color: 'var(--primary-foreground)',
-            boxShadow: 'var(--shadow-hard)',
-          },
-          '&.Mui-disabled': {
-            color: 'var(--muted-foreground)',
-            opacity: 0.5,
-          },
-        },
-        outlinedWarning: {
-          color: 'var(--accent)',
-          '&:hover': {
-            backgroundColor: 'var(--accent)',
-            color: 'var(--accent-foreground)',
-            boxShadow: 'var(--shadow-hard)',
-          },
-          '&.Mui-disabled': {
-            color: 'var(--muted-foreground)',
-            opacity: 0.5,
-          },
-        },
-        outlinedError: {
-          color: 'var(--destructive)',
-          '&:hover': {
-            backgroundColor: 'var(--destructive)',
-            color: 'var(--destructive-foreground)',
-            boxShadow: 'var(--shadow-hard)',
-          },
-          '&.Mui-disabled': {
-            color: 'var(--muted-foreground)',
-            opacity: 0.5,
-          },
-        },
-      },
-    },
-    MuiToggleButton: {
-      styleOverrides: {
-        root: {
-          color: '#3D4852',
-          backgroundColor: '#E0E5EC',
-          boxShadow: '6px 6px 12px rgba(163, 177, 198, 0.4), -6px -6px 12px rgba(255, 255, 255, 0.3)',
-          border: 'none',
-          transition: 'all 300ms ease-out',
-          '&:hover': {
-            backgroundColor: '#E0E5EC',
-            boxShadow: '8px 8px 16px rgba(163, 177, 198, 0.5), -8px -8px 16px rgba(255, 255, 255, 0.4)',
-          },
-          '&.Mui-selected': {
-            backgroundColor: '#10B981',
-            color: '#FFFFFF',
-            boxShadow: '8px 8px 16px rgba(163, 177, 198, 0.5), -8px -8px 16px rgba(255, 255, 255, 0.4)',
-            '&:hover': {
-              backgroundColor: '#059669',
-              boxShadow: '10px 10px 20px rgba(163, 177, 198, 0.6), -10px -10px 20px rgba(255, 255, 255, 0.5)',
-            },
-          },
-        },
-      },
-    },
-    MuiSvgIcon: {
-      styleOverrides: {
-        root: {
-          color: '#3D4852',
-        },
-      },
-    },
-    MuiLinearProgress: {
-      styleOverrides: {
-        root: {
-          backgroundColor: '#E0E5EC',
-          borderRadius: 'var(--radius-ui)',
-          boxShadow: 'inset 2px 2px 5px rgba(163, 177, 198, 0.6), inset -2px -2px 5px rgba(255, 255, 255, 0.5)',
-          overflow: 'hidden',
-          height: 10,
-        },
-        bar: {
-          backgroundColor: '#8B5CF6',
-          borderRadius: 'var(--radius-ui)',
-          boxShadow: '3px 3px 6px rgba(163, 177, 198, 0.4)',
-        },
-      },
-    },
-    MuiFab: {
-      styleOverrides: {
-        root: {
-          backgroundColor: 'var(--card)',
-          color: 'var(--foreground)',
-          boxShadow: 'var(--shadow-soft)',
-          border: 'none',
-          transition: 'all 200ms ease',
-          '&:hover': {
-            backgroundColor: 'var(--card)',
-            boxShadow: 'var(--shadow-hard)',
-            transform: 'scale(1.05)',
-          },
-          '&:active': {
-            boxShadow: 'var(--shadow-input-focus)',
-            transform: 'scale(0.98)',
-          },
-          '&.Mui-primary': {
-            backgroundColor: 'var(--fab-primary-bg)',
-            color: 'var(--fab-primary-fg)',
-            '&:hover': {
-              backgroundColor: 'var(--fab-primary-hover-bg)',
-              color: 'var(--fab-primary-hover-fg)',
-              filter: 'brightness(1.1)',
-            },
-          },
-        },
-      },
     },
   },
 };

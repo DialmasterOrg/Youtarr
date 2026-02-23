@@ -1,6 +1,6 @@
 import React from 'react';
-import { Chip, Tooltip, SxProps, Theme, Box, Typography } from '@mui/material';
-import EighteenUpRatingIcon from '@mui/icons-material/EighteenUpRating';
+import { Chip, Tooltip, Box, Typography } from '../ui';
+import { EighteenUpRating as EighteenUpRatingIcon } from '../../lib/icons';
 
 interface RatingBadgeProps {
   rating: string | null | undefined;
@@ -8,7 +8,7 @@ interface RatingBadgeProps {
   size?: 'small' | 'medium';
   showNA?: boolean;
   variant?: 'pill' | 'text';
-  sx?: SxProps<Theme>;
+  sx?: Record<string, unknown>;
 }
 
 /**
@@ -36,14 +36,11 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
         size={size}
         color="default"
         variant="outlined"
-        sx={{
+        style={{
           fontSize: size === 'small' ? '0.65rem' : '0.8rem',
           height: size === 'small' ? 20 : 24,
-          color: 'text.disabled',
-          borderColor: 'text.disabled',
-          '& .MuiChip-label': { px: 0.75 },
-          ...sx,
         }}
+        className="text-muted-foreground/50 border-muted-foreground/50"
       />
     );
   }
@@ -79,11 +76,11 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
 
     return (
       <Tooltip title={tooltipText} placement="top">
-        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, ...sx }}>
-          <EighteenUpRatingIcon sx={{ fontSize: size === 'small' ? 16 : 20, color: resolvedColor }} />
+        <Box className="inline-flex items-center gap-1">
+          <EighteenUpRatingIcon size={size === 'small' ? 16 : 20} style={{ color: resolvedColor }} />
           <Typography
             variant="caption"
-            sx={{
+            style={{
               fontWeight: 600,
               color: resolvedColor,
               fontSize: size === 'small' ? '0.75rem' : '0.875rem',
@@ -104,12 +101,8 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
         label={rating}
         size={size}
         color={chipColor}
-        icon={<EighteenUpRatingIcon sx={{ fontSize: size === 'small' ? '0.85rem' : '1rem' }} />}
-        sx={{
-          fontSize: size === 'small' ? '0.7rem' : '0.875rem',
-          '& .MuiChip-icon': { ml: 0.3 },
-          ...sx,
-        }}
+        icon={<EighteenUpRatingIcon size={size === 'small' ? 12 : 16} />}
+        style={{ fontSize: size === 'small' ? '0.7rem' : '0.875rem' }}
       />
     </Tooltip>
   );

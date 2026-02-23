@@ -1,6 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { Box, Typography, Button, Paper, Alert } from '@mui/material';
-import { Error as ErrorIcon, Refresh as RefreshIcon } from '@mui/icons-material';
+import { Box, Typography, Button, Paper, Alert } from './ui';
+import { Error as ErrorIcon, Refresh as RefreshIcon } from '../lib/icons';
 
 interface Props {
   children: ReactNode;
@@ -57,39 +57,21 @@ class ErrorBoundary extends Component<Props, State> {
       const { fallbackMessage = 'Something went wrong. Please try refreshing the page.' } = this.props;
 
       return (
-        <Paper elevation={3} sx={{ p: 4, m: 2 }}>
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 2,
-              textAlign: 'center'
-            }}
-          >
-            <ErrorIcon color="error" sx={{ fontSize: 48 }} />
+        <Paper elevation={3} className="p-8 m-4">
+          <Box className="flex flex-col items-center gap-4 text-center">
+            <ErrorIcon className="text-destructive" size={48} />
 
             <Typography variant="h5" component="h2" gutterBottom>
               Oops! Something went wrong
             </Typography>
 
-            <Alert severity="error" sx={{ width: '100%', maxWidth: 600 }}>
+            <Alert severity="error" className="w-full max-w-[600px]">
               {fallbackMessage}
             </Alert>
 
             {process.env.NODE_ENV === 'development' && this.state.error && (
-              <Box
-                sx={{
-                  mt: 2,
-                  p: 2,
-                  bgcolor: 'grey.100',
-                  borderRadius: 1,
-                  width: '100%',
-                  maxWidth: 600,
-                  overflow: 'auto'
-                }}
-              >
-                <Typography variant="caption" component="pre" sx={{ textAlign: 'left' }}>
+              <Box className="mt-4 p-4 bg-muted rounded-[var(--radius-ui)] w-full max-w-[600px] overflow-auto">
+                <Typography variant="caption" component="pre" className="text-left">
                   {this.state.error.toString()}
                   {this.state.errorInfo && this.state.errorInfo.componentStack}
                 </Typography>
@@ -99,9 +81,9 @@ class ErrorBoundary extends Component<Props, State> {
             <Button
               variant="contained"
               color="primary"
-              startIcon={<RefreshIcon />}
+              startIcon={<RefreshIcon size={16} />}
               onClick={this.handleReset}
-              sx={{ mt: 2 }}
+              className="mt-4"
             >
               Try Again
             </Button>

@@ -11,6 +11,8 @@ export interface TooltipProps {
   arrow?: boolean;
   disableHoverListener?: boolean;
   enterDelay?: number;
+  enterTouchDelay?: number;
+  leaveTouchDelay?: number;
   className?: string;
   sx?: Record<string, unknown>;
 }
@@ -22,6 +24,8 @@ const Tooltip: React.FC<TooltipProps> = ({
   arrow = false,
   disableHoverListener = false,
   enterDelay = 200,
+  enterTouchDelay: _enterTouchDelay,
+  leaveTouchDelay: _leaveTouchDelay,
   className,
 }) => {
   if (!title || disableHoverListener) return children;

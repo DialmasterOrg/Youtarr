@@ -1,6 +1,6 @@
 import React from 'react';
-import { Box, LinearProgress, Tooltip, Typography } from '@mui/material';
-import HardDriveIcon from '@mui/icons-material/Storage';
+import { Box, LinearProgress, Tooltip, Typography } from '../ui';
+import { Storage as HardDriveIcon } from '../../lib/icons';
 import { useStorageStatus } from '../../hooks/useStorageStatus';
 
 interface StorageFooterWidgetProps {
@@ -33,24 +33,19 @@ export function StorageFooterWidget({ token, collapsed, compact = false, inline 
   const showDetails = !collapsed && !compact;
 
   const content = (
-    <Box sx={{ px: compact ? 1.25 : collapsed ? 1 : 2, py: compact ? 0.75 : 1.5 }}>
+    <Box style={{ paddingLeft: compact ? 10 : collapsed ? 8 : 16, paddingRight: compact ? 10 : collapsed ? 8 : 16, paddingTop: compact ? 6 : 12, paddingBottom: compact ? 6 : 12 }}>
       <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: compact ? 0.5 : 1,
-          mb: inline ? 0 : compact ? 0.5 : 1,
-          justifyContent: inline ? justify : (collapsed || compact ? 'center' : 'flex-start'),
-        }}
+        className="flex items-center"
+        style={{ gap: compact ? 4 : 8, marginBottom: inline ? 0 : compact ? 4 : 8, justifyContent: inline ? justify : (collapsed || compact ? 'center' : 'flex-start') }}
       >
-        <HardDriveIcon fontSize="small" />
+        <HardDriveIcon size={16} />
         {inline && (
-          <Typography variant="caption" sx={{ fontWeight: 600 }}>
+          <Typography variant="caption" style={{ fontWeight: 600 }}>
             {loading ? 'Loading…' : inlineLabel}
           </Typography>
         )}
         {showDetails && !inline && (
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          <Typography variant="body2" style={{ fontWeight: 600 }}>
             Storage
           </Typography>
         )}
@@ -60,19 +55,13 @@ export function StorageFooterWidget({ token, collapsed, compact = false, inline 
         <LinearProgress
           variant={loading ? 'indeterminate' : 'determinate'}
           value={loading ? undefined : progressValue}
-          sx={(theme) => ({
-            height: compact ? 4 : collapsed ? 6 : 8,
-            borderRadius: 'var(--radius-ui)',
-            backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)',
-            '& .MuiLinearProgress-bar': {
-              backgroundColor: theme.palette.primary.main,
-            }
-          })}
+          className="rounded-[var(--radius-ui)]"
+          style={{ height: compact ? 4 : collapsed ? 6 : 8 }}
         />
       )}
 
       {showDetails && !inline && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+        <Typography variant="caption" color="text.secondary" className="block mt-1.5">
           {loading ? 'Loading…' : `${availableGB} GB free of ${totalGB} GB (${percentFreeLabel}% free)`}
         </Typography>
       )}

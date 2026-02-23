@@ -11,15 +11,13 @@ import {
   useLocation,
 } from 'react-router-dom';
 import {
-  Container,
+  Box,
   Typography,
   Snackbar,
   Alert,
-  Box,
-  CssBaseline,
-} from '@mui/material';
-import { ThemeProvider } from '@mui/material/styles';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+  Container,
+} from './components/ui';
+import { AlertTriangle as WarningAmberIcon } from 'lucide-react';
 import { AppShell } from './components/layout/AppShell';
 import { Settings } from './components/Settings/Settings';
 import ChannelManager from './components/ChannelManager';
@@ -34,7 +32,6 @@ import { useConfig } from './hooks/useConfig';
 import ErrorBoundary from './components/ErrorBoundary';
 import DatabaseErrorOverlay from './components/DatabaseErrorOverlay';
 import { useThemeEngine } from './contexts/ThemeEngineContext';
-import { createAppTheme } from './themes';
 import { YTDLP_UPDATED_EVENT } from './components/Configuration/hooks/useYtDlpUpdate';
 
 // Event name for database error detection
@@ -81,10 +78,6 @@ function AppContent() {
   const ytDlpUpdateTooltip = ytDlpUpdateAvailable && ytDlpLatestVersion
     ? `yt-dlp update available (${ytDlpLatestVersion}). Go to Settings to update.`
     : undefined;
-
-  const selectedTheme = useMemo(() => {
-    return createAppTheme(colorMode, themeMode);
-  }, [colorMode, themeMode]);
 
   // On first load, sync dark mode from server config if user hasn't set a local preference
   useEffect(() => {
@@ -421,9 +414,7 @@ function AppContent() {
   }, [fetchYtDlpVersionInfo]);
 
   return (
-    <ThemeProvider theme={selectedTheme}>
-      <CssBaseline />
-      <>
+    <>
         {/* Database Error Overlay - shows when database is unavailable or recovered */}
         {(dbStatus === 'error' || dbRecovered) && (
           <DatabaseErrorOverlay
@@ -435,9 +426,9 @@ function AppContent() {
         )}
 
         {checkingSetup ? (
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+          <div className="flex items-center justify-center min-h-screen">
             <Typography>Loading...</Typography>
-          </Box>
+          </div>
         ) : (
           <Routes>
             {/* Setup Route - Full Screen */}
@@ -490,16 +481,8 @@ function AppContent() {
                   >
                     <Container
                       maxWidth={false}
-                      sx={{
-                        width: '100%',
-                        ...(location.pathname === '/channels'
-                          ? {
-                              display: 'flex',
-                              flexDirection: 'column',
-                              minHeight: 'calc(100vh - 140px)',
-                            }
-                          : {}),
-                      }}
+                      className={location.pathname === '/channels' ? 'w-full flex flex-col' : 'w-full'}
+                      style={location.pathname === '/channels' ? { minHeight: 'calc(100vh - 140px)' } : undefined}
                     >
                       <ErrorBoundary fallbackMessage="An unexpected error occurred. Please refresh the page to continue.">
                         <Routes>
@@ -528,27 +511,18 @@ function AppContent() {
         <Snackbar
           open={showTmpWarning}
           anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-          sx={{
-            mt: 8,
-            width: '100%',
-            justifyContent: 'center',
-            zIndex: (theme) => theme.zIndex.drawer + 10,
-          }}
+          className="mt-16 w-full flex justify-center"
+          style={{ zIndex: 1210 }}
           onClose={() => setShowTmpWarning(false)}
         >
           <Alert
             severity="error"
-            icon={<WarningAmberIcon />}
+            icon={<WarningAmberIcon className="h-5 w-5" />}
             onClose={() => setShowTmpWarning(false)}
-            sx={{
-              maxWidth: '600px',
-              '& .MuiAlert-message': {
-                width: '100%',
-              },
-            }}
+            className="max-w-[600px] w-full"
           >
-            <Box>
-              <Typography variant="body2" gutterBottom>
+            <div>
+              <Typography variant="body2" className="mb-1">
                 <strong>Warning:</strong> Your video directory is mounted to {tmpDirectory}. This means your downloaded videos will not persist between restarts.
               </Typography>
               {platformName && platformName.toLowerCase() === 'elfhosted' && (
@@ -564,11 +538,10 @@ function AppContent() {
                   </a>
                 </Typography>
               )}
-            </Box>
+            </div>
           </Alert>
         </Snackbar>
-      </>
-    </ThemeProvider>
+    </>
   );
 }
 

@@ -10,10 +10,9 @@ import {
   Select,
   MenuItem,
   Typography,
-  Box,
   CircularProgress,
   Alert,
-} from '@mui/material';
+} from '../ui';
 import RatingBadge from './RatingBadge';
 
 interface ChangeRatingDialogProps {
@@ -63,13 +62,13 @@ const ChangeRatingDialog: React.FC<ChangeRatingDialogProps> = ({
     <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
       <DialogTitle>Content Rating</DialogTitle>
       <DialogContent>
-        <Box sx={{ mt: 1 }}>
+        <div style={{ marginTop: 8 }}>
           {error && (
-            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+            <Alert severity="error" style={{ marginBottom: 16 }} onClose={() => setError(null)}>
               {error}
             </Alert>
           )}
-          <Typography variant="body2" sx={{ mb: 2 }}>
+          <Typography variant="body2" style={{ marginBottom: 16 }}>
             You are changing the content rating for <strong>{selectedCount}</strong> video{selectedCount !== 1 ? 's' : ''}.
           </Typography>
           <FormControl fullWidth>
@@ -85,12 +84,12 @@ const ChangeRatingDialog: React.FC<ChangeRatingDialogProps> = ({
               {RATING_OPTIONS.map((opt) => (
                 <MenuItem key={opt} value={opt}>
                   {opt === 'NR' ? (
-                    <Typography variant="body2" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                    <Typography variant="body2" style={{ color: 'var(--muted-foreground)', fontStyle: 'italic' }}>
                       Clear Rating
                     </Typography>
                   ) : (
                     <>
-                      <RatingBadge rating={opt} size="small" sx={{ mr: 1 }} />
+                      <RatingBadge rating={opt} size="small" style={{ marginRight: 8 }} />
                       {opt}
                     </>
                   )}
@@ -98,7 +97,7 @@ const ChangeRatingDialog: React.FC<ChangeRatingDialogProps> = ({
               ))}
             </Select>
           </FormControl>
-        </Box>
+        </div>
       </DialogContent>
       <DialogActions>
         <Button onClick={handleClose} disabled={loading}>

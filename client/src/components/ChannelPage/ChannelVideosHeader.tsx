@@ -1,36 +1,21 @@
 import React from 'react';
 import {
-  Box,
   Typography,
   Button,
   TextField,
-  InputAdornment,
-  ToggleButton,
-  ToggleButtonGroup,
   FormControlLabel,
   Switch,
   Tooltip,
   Chip,
   LinearProgress,
-  IconButton,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
   Badge,
-} from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import ViewModuleIcon from '@mui/icons-material/ViewModule';
-import TableChartIcon from '@mui/icons-material/TableChart';
-import ViewListIcon from '@mui/icons-material/ViewList';
-import DownloadIcon from '@mui/icons-material/Download';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import DeleteIcon from '@mui/icons-material/Delete';
-import BlockIcon from '@mui/icons-material/Block';
-import InfoIcon from '@mui/icons-material/Info';
-import ChecklistIcon from '@mui/icons-material/Checklist';
-import ClearIcon from '@mui/icons-material/Clear';
-import FilterListIcon from '@mui/icons-material/FilterList';
+} from '../ui';
+import { Search as SearchIcon, LayoutGrid as ViewModuleIcon, LayoutGrid as TableChartIcon, List as ViewListIcon, Download as DownloadIcon, RefreshCw as RefreshIcon, Trash2 as DeleteIcon, Ban as BlockIcon, Info as InfoIcon, ListChecks as ChecklistIcon, X as ClearIcon, ListFilter as FilterListIcon } from '../../lib/icons';
+import { LayoutList } from 'lucide-react';
 import { getVideoStatus } from '../../utils/videoStatus';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { RATING_OPTIONS } from '../../utils/ratings';
@@ -116,21 +101,20 @@ function ChannelVideosHeader({
 
     if (isMobile) {
       return (
-        <IconButton
-          size="small"
-          sx={{ ml: 0.5, p: 0.5, color: 'var(--foreground)' }}
+        <button
+          style={{ marginLeft: 4, padding: 4, background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', color: 'var(--foreground)' }}
           onClick={handleClick}
         >
-          <InfoIcon fontSize="small" />
-        </IconButton>
+          <InfoIcon size={16} />
+        </button>
       );
     }
 
     return (
       <Tooltip title={message} arrow placement="top">
-        <IconButton size="small" sx={{ ml: 0.5, p: 0.5, color: 'var(--foreground)' }} onClick={(e) => e.stopPropagation()}>
-          <InfoIcon fontSize="small" />
-        </IconButton>
+        <button style={{ marginLeft: 4, padding: 4, background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', color: 'var(--foreground)' }} onClick={(e) => e.stopPropagation()}>
+          <InfoIcon size={16} />
+        </button>
       </Tooltip>
     );
   };
@@ -149,19 +133,18 @@ function ChannelVideosHeader({
   const selectableDeleteCount = paginatedVideos.filter((video) => video.added && !video.removed).length;
 
   return (
-    <Box
-      sx={{
+    <div
+      style={{
         position: 'sticky',
         top: 0,
         zIndex: 10,
-        bgcolor: 'background.paper',
-        borderBottom: '1px solid',
-        borderColor: 'divider',
+        backgroundColor: 'var(--card)',
+        borderBottom: '1px solid var(--border)',
       }}
     >
-      <Box sx={{ p: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }} data-testid="channel-videos-header">
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+      <div style={{ padding: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }} data-testid="channel-videos-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {totalCount > 0 && (
               <Chip label={totalCount + ' ' + (totalCount === 1 ? 'item' : 'items')} size="small" color="primary" />
             )}
@@ -171,39 +154,34 @@ function ChannelVideosHeader({
               </Typography>
             )}
             {renderInfoIcon(dateTooltipText)}
-          </Box>
-
+          </div>
           <Button
             onClick={onRefreshClick}
             variant="outlined"
             size="small"
             color="inherit"
             disabled={fetchingAllVideos}
-            startIcon={<RefreshIcon />}
+            startIcon={<RefreshIcon size={16} />}
             className={intentStyles.base}
           >
             {fetchingAllVideos ? 'Loading...' : 'Load More'}
           </Button>
-        </Box>
+        </div>
 
         {/* Search and filters */}
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
           <TextField
             placeholder="Search videos..."
             size="small"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
-                </InputAdornment>
-              ),
+              startAdornment: <SearchIcon size={16} />,
             }}
-            sx={{ flexGrow: 1, minWidth: 200, width: isMobile ? '50%' : 'auto' }}
+            style={{ flexGrow: 1, minWidth: 200, width: isMobile ? '50%' : 'auto' }}
           />
 
-          <FormControl size="small" sx={{ minWidth: 200 }}>
+          <FormControl size="small" style={{ minWidth: 200 }}>
             <InputLabel>Max Rating</InputLabel>
             <Select
               value={maxRating}
@@ -219,32 +197,36 @@ function ChannelVideosHeader({
           </FormControl>
 
           {/* View mode toggle - mobile shows list/grid, desktop shows table/grid */}
-          <ToggleButtonGroup
-            value={viewMode}
-            exclusive
-            onChange={onViewModeChange}
-            size="small"
-          >
+          <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden' }}>
             {!isMobile && (
-              <ToggleButton value="table">
-                <Tooltip title="Table View">
-                  <TableChartIcon fontSize="small" />
-                </Tooltip>
-              </ToggleButton>
+              <button
+                onClick={(e) => onViewModeChange(e, 'table')}
+                style={{ padding: '6px 8px', background: viewMode === 'table' ? 'var(--primary)' : 'transparent', color: viewMode === 'table' ? 'white' : 'inherit', border: 'none', borderRight: '1px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                title="Table View"
+                aria-label="Table View"
+              >
+                <TableChartIcon size={16} />
+              </button>
             )}
-            <ToggleButton value="grid">
-              <Tooltip title="Grid View">
-                <ViewModuleIcon fontSize="small" />
-              </Tooltip>
-            </ToggleButton>
+            <button
+              onClick={(e) => onViewModeChange(e, 'grid')}
+              style={{ padding: '6px 8px', background: viewMode === 'grid' ? 'var(--primary)' : 'transparent', color: viewMode === 'grid' ? 'white' : 'inherit', border: 'none', borderRight: isMobile ? '1px solid var(--border)' : 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+              title="Grid View"
+              aria-label="Grid View"
+            >
+              <ViewModuleIcon size={16} />
+            </button>
             {isMobile && (
-              <ToggleButton value="list">
-                <Tooltip title="List View">
-                  <ViewListIcon fontSize="small" />
-                </Tooltip>
-              </ToggleButton>
+              <button
+                onClick={(e) => onViewModeChange(e, 'list')}
+                style={{ padding: '6px 8px', background: viewMode === 'list' ? 'var(--primary)' : 'transparent', color: viewMode === 'list' ? 'white' : 'inherit', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                title="List View"
+                aria-label="List View"
+              >
+                <LayoutList size={16} />
+              </button>
             )}
-          </ToggleButtonGroup>
+          </div>
 
           {!isMobile && (
             <FormControlLabel
@@ -258,18 +240,18 @@ function ChannelVideosHeader({
             label="Hide Downloaded"
             />
           )}
-        </Box>
+        </div>
 
         {/* Action buttons for desktop */}
         {!isMobile && (
-          <ActionBar variant={themeMode} sx={{ mt: 2 }}>
+          <ActionBar variant={themeMode} style={{ marginTop: 16 }}>
             {onFiltersExpandedChange && (
               <Button
                 variant={filtersExpanded ? 'contained' : 'outlined'}
                 size="small"
                 startIcon={
                   <Badge badgeContent={activeFilterCount} color="primary" invisible={activeFilterCount === 0}>
-                    <FilterListIcon />
+                    <FilterListIcon size={16} />
                   </Badge>
                 }
                 onClick={() => onFiltersExpandedChange(!filtersExpanded)}
@@ -282,7 +264,7 @@ function ChannelVideosHeader({
               variant="outlined"
               size="small"
               color="inherit"
-              startIcon={<DownloadIcon />}
+              startIcon={<DownloadIcon size={16} />}
               onClick={onDownloadClick}
               disabled={checkedBoxes.length === 0}
               className={intentStyles.success}
@@ -299,7 +281,7 @@ function ChannelVideosHeader({
                   ? selectableDeleteCount === 0
                   : checkedBoxes.length === 0 && selectableDownloadCount === 0
               }
-              startIcon={<ChecklistIcon />}
+              startIcon={<ChecklistIcon size={16} />}
               className={intentStyles.base}
             >
               Select All This Page
@@ -309,7 +291,7 @@ function ChannelVideosHeader({
               size="small"
               onClick={onClearSelection}
               disabled={checkedBoxes.length === 0}
-              startIcon={<ClearIcon />}
+              startIcon={<ClearIcon size={16} />}
             >
               Clear
             </Button>
@@ -317,7 +299,7 @@ function ChannelVideosHeader({
               variant="outlined"
               size="small"
               color="inherit"
-              startIcon={<BlockIcon />}
+              startIcon={<BlockIcon size={16} />}
               onClick={onBulkIgnoreClick}
               disabled={checkedBoxes.length === 0}
               className={intentStyles.warning}
@@ -328,7 +310,7 @@ function ChannelVideosHeader({
               variant="outlined"
               size="small"
               color="inherit"
-              startIcon={<DeleteIcon />}
+              startIcon={<DeleteIcon size={16} />}
               onClick={onDeleteClick}
               disabled={selectedForDeletion.length === 0 || deleteLoading}
               className={intentStyles.danger}
@@ -340,9 +322,9 @@ function ChannelVideosHeader({
 
         {/* Action buttons for mobile */}
         {isMobile && (
-          <ActionBar variant={themeMode} compact sx={{ mt: 2 }}>
-            <IconButton
-              size="small"
+          <ActionBar variant={themeMode} compact style={{ marginTop: 16 }}>
+            <button
+              style={{ padding: 6, background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
               onClick={onSelectAll}
               disabled={
                 selectionMode === 'delete'
@@ -352,24 +334,24 @@ function ChannelVideosHeader({
               className={intentStyles.base}
               aria-label="Select all this page"
             >
-              <ChecklistIcon fontSize="small" />
-            </IconButton>
-            <IconButton
-              size="small"
+              <ChecklistIcon size={16} />
+            </button>
+            <button
+              style={{ padding: 6, background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
               onClick={onClearSelection}
               disabled={checkedBoxes.length === 0}
               className={intentStyles.base}
               aria-label="Clear selection"
             >
-              <ClearIcon fontSize="small" />
-            </IconButton>
+              <ClearIcon size={16} />
+            </button>
           </ActionBar>
         )}
-      </Box>
+      </div>
 
       {/* Progress bar */}
       {fetchingAllVideos && <LinearProgress />}
-    </Box>
+    </div>
   );
 }
 

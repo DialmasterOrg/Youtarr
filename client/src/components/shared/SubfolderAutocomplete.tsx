@@ -1,14 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Autocomplete,
-  TextField,
-  Box,
+  Select,
+  MenuItem,
   Typography,
   Divider,
-} from '@mui/material';
-import SettingsIcon from '@mui/icons-material/Settings';
-import FolderOffIcon from '@mui/icons-material/FolderOff';
-import AddIcon from '@mui/icons-material/Add';
+} from '../ui';
+import { Settings as SettingsIcon, FolderX as FolderOffIcon, Plus as AddIcon } from '../../lib/icons';
 import {
   GLOBAL_DEFAULT_SENTINEL,
   ROOT_SENTINEL,
@@ -240,25 +237,18 @@ export function SubfolderAutocomplete({
     return null;
   }, [value, options, mode]);
 
-  // Handle option selection
-  const handleChange = (
-    _event: React.SyntheticEvent,
-    newValue: SubfolderOption | null
-  ) => {
-    if (newValue === null) {
-      // Cleared the field - use null for root
+  // Handle option selection from Select
+  const handleSelectChange = (event: { target: { value: string } }) => {
+    const val = event.target.value;
+    if (val === ADD_NEW_SENTINEL) {
+      setAddDialogOpen(true);
+      return;
+    }
+    if (val === '__NULL_SELECT__') {
       onChange(null);
       return;
     }
-
-    // Check if "Add Subfolder" was clicked
-    if (newValue.isAddNew) {
-      setAddDialogOpen(true);
-      return; // Don't change the current selection
-    }
-
-    // Selected a regular option
-    onChange(newValue.value);
+    onChange(val);
   };
 
   // Handle new subfolder addition from dialog
@@ -271,126 +261,75 @@ export function SubfolderAutocomplete({
     setAddDialogOpen(false);
   };
 
-  // Render option with icons for special options
-  const renderOption = (
-    props: React.HTMLAttributes<HTMLLIElement>,
-    option: SubfolderOption
-  ) => {
-    const { key, ...otherProps } = props as { key?: string } & React.HTMLAttributes<HTMLLIElement>;
+  // Convert the current option value to a string for Select
+  const selectValue = currentOption
+    ? (currentOption.value === null ? '__NULL_SELECT__' : currentOption.value)
+    : '__NULL_SELECT__';
 
-    // Render "Add Subfolder" distinctly
-    if (option.isAddNew) {
-      return (
-        <li key={key} {...otherProps}>
-          <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', color: 'primary.main' }}>
-            <AddIcon fontSize="small" sx={{ mr: 1 }} />
-            <Typography sx={{ fontWeight: 500 }}>
-              {option.label}
-            </Typography>
-          </Box>
-        </li>
-      );
-    }
-
-    return (
-      <li key={key} {...otherProps}>
-        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-          {option.isSpecial && option.value === null && (
-            <FolderOffIcon
-              fontSize="small"
-              sx={{ mr: 1, color: 'text.secondary' }}
-            />
-          )}
-          {option.isSpecial && option.value === ROOT_SENTINEL && (
-            <FolderOffIcon
-              fontSize="small"
-              sx={{ mr: 1, color: 'text.secondary' }}
-            />
-          )}
-          {option.isSpecial && option.value === GLOBAL_DEFAULT_SENTINEL && (
-            <SettingsIcon
-              fontSize="small"
-              sx={{ mr: 1, color: 'text.secondary' }}
-            />
-          )}
-          <Typography
-            sx={{
-              fontStyle: option.isSpecial ? 'italic' : 'normal',
-              color: option.isSpecial ? 'text.secondary' : 'text.primary',
-            }}
-          >
-            {option.label}
-          </Typography>
-        </Box>
-      </li>
-    );
-  };
-
-  // Group options with divider
-  const groupBy = (option: SubfolderOption) => option.group;
-
-  const renderGroup = (params: {
-    key: string;
-    group: string;
-    children?: React.ReactNode;
-  }) => {
-    const hasSubfolders = options.some((o) => o.group === 'subfolders');
-    const hasActions = options.some((o) => o.group === 'actions');
-
-    return (
-      <React.Fragment key={params.key}>
-        {params.children}
-        {/* Divider after special options if there are subfolders or actions */}
-        {params.group === 'special' && (hasSubfolders || hasActions) && (
-          <Divider sx={{ my: 0.5 }} component="li" />
-        )}
-        {/* Divider after subfolders if there are actions */}
-        {params.group === 'subfolders' && hasActions && (
-          <Divider sx={{ my: 0.5 }} component="li" />
-        )}
-      </React.Fragment>
-    );
-  };
-
-  // Filter out the "Add Subfolder" option from being the selected value displayed in the input
-  const filterOptions = (opts: SubfolderOption[]) => opts;
+  const hasSubfolders = options.some((o) => o.group === 'subfolders');
+  const hasActions = options.some((o) => o.group === 'actions');
 
   return (
     <>
-      <Autocomplete
-        options={options}
-        value={currentOption}
-        onChange={handleChange}
-        disabled={disabled}
-        loading={loading}
-        groupBy={groupBy}
-        renderGroup={renderGroup}
-        renderOption={renderOption}
-        filterOptions={filterOptions}
-        getOptionLabel={(option) => {
-          if (typeof option === 'string') return option;
-          // Don't show "Add Subfolder" label in the input field
-          if (option.isAddNew) return '';
-          return option.label;
-        }}
-        isOptionEqualToValue={(option, val) => {
-          // Never match the "Add Subfolder" option as selected
-          if (option.isAddNew) return false;
-          return option.value === val.value;
-        }}
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            label={label}
-            helperText={helperText}
-            fullWidth
-            InputLabelProps={{
-              shrink: true,
-            }}
-          />
-        )}
-        sx={{ width: '100%' }}
-      />
+      <Select
+        value={selectValue}
+        onChange={handleSelectChange}
+        disabled={disabled || loading}
+        label={label}
+        fullWidth
+        style={{ width: '100%' }}
+      >
+        {options.map((option, idx) => {
+          const optValue = option.value === null ? '__NULL_SELECT__' : option.value ?? '';
+
+          const menuItemContent = (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
+              {option.isAddNew && <AddIcon size={14} style={{ color: 'var(--primary)' }} />}
+              {option.isSpecial && (option.value === null || option.value === ROOT_SENTINEL) && (
+                <FolderOffIcon size={14} style={{ color: 'var(--muted-foreground)' }} />
+              )}
+              {option.isSpecial && option.value === GLOBAL_DEFAULT_SENTINEL && (
+                <SettingsIcon size={14} style={{ color: 'var(--muted-foreground)' }} />
+              )}
+              <Typography
+                component="span"
+                variant="body2"
+                style={{
+                  fontStyle: option.isSpecial ? 'italic' : 'normal',
+                  color: option.isAddNew
+                    ? 'var(--primary)'
+                    : option.isSpecial
+                    ? 'var(--muted-foreground)'
+                    : undefined,
+                  fontWeight: option.isAddNew ? 500 : undefined,
+                }}
+              >
+                {option.label}
+              </Typography>
+            </span>
+          );
+
+          // Insert dividers between groups
+          const prevOption = options[idx - 1];
+          const showDivider = prevOption && prevOption.group !== option.group
+            && ((option.group === 'subfolders' && hasSubfolders)
+              || (option.group === 'actions' && (hasSubfolders || hasActions)));
+
+          return (
+            <React.Fragment key={`${optValue}-${idx}`}>
+              {showDivider && <Divider style={{ margin: '4px 0' }} />}
+              <MenuItem value={optValue}>
+                {menuItemContent}
+              </MenuItem>
+            </React.Fragment>
+          );
+        })}
+      </Select>
+      {helperText && (
+        <Typography variant="caption" color="text.secondary" style={{ marginTop: 4, display: 'block' }}>
+          {helperText}
+        </Typography>
+      )}
       <AddSubfolderDialog
         open={addDialogOpen}
         onClose={() => setAddDialogOpen(false)}

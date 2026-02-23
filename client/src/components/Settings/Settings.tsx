@@ -2,10 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Snackbar,
-  Box,
   Typography,
-} from '@mui/material';
-import InfoIcon from '@mui/icons-material/Info';
+} from '../ui';
+import { Info as InfoIcon } from '../../lib/icons';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import PlexLibrarySelector from '../PlexLibrarySelector';
 import PlexAuthDialog from '../PlexAuthDialog';
@@ -179,7 +178,7 @@ export function Settings({ token }: SettingsProps) {
   }
 
   return (
-    <Box>
+    <div>
       <SaveBar
         hasUnsavedChanges={hasUnsavedChanges}
         isLoading={isLoading}
@@ -187,11 +186,11 @@ export function Settings({ token }: SettingsProps) {
         validationError={validationError}
       />
 
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 800 }}>
+      <div style={{ marginBottom: 16 }}>
+        <Typography variant="h5" style={{ fontWeight: 800 }}>
           {pageTitle}
         </Typography>
-      </Box>
+      </div>
 
       <Routes>
         <Route index element={<SettingsIndex />} />
@@ -352,7 +351,7 @@ export function Settings({ token }: SettingsProps) {
           {mobileTooltip}
         </Alert>
       </Snackbar>
-    </Box>
+    </div>
   );
 }
 

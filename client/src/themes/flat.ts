@@ -1,19 +1,17 @@
 import React from 'react';
-import { Box } from '@mui/material';
 import { ThemeDefinition } from './types';
-import { fabBase } from './shared';
 
 export const flatTheme: ThemeDefinition = {
   id: 'flat',
   name: 'Bold Flat',
   description: 'Zero depth, bold colors, and geometric precision. No shadows, pure flat design with color as structure.',
   layoutMode: 'top-nav',
-  preview: React.createElement(Box, {
+  preview: React.createElement('div', {
     key: 'preview-root',
-    sx: {
-      p: 2.5,
+    style: {
+      padding: '20px',
       borderRadius: '8px',
-      bgcolor: '#FFFFFF',
+      backgroundColor: '#FFFFFF',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
@@ -24,19 +22,19 @@ export const flatTheme: ThemeDefinition = {
       minHeight: 80,
     }
   }, [
-    React.createElement(Box, {
+    React.createElement('div', {
       key: 'b1',
-      sx: {
+      style: {
         width: 44,
         height: 44,
         borderRadius: '50%',
-        bgcolor: '#3B82F6',
+        backgroundColor: '#3B82F6',
         border: '2px solid #111827',
       }
     }),
-    React.createElement(Box, {
+    React.createElement('div', {
       key: 'b2',
-      sx: { width: 90, height: 16, borderRadius: '6px', bgcolor: '#F3F4F6', border: '2px solid #111827' }
+      style: { width: 90, height: 16, borderRadius: '6px', backgroundColor: '#F3F4F6', border: '2px solid #111827' }
     })
   ]),
   tokens: {
@@ -217,335 +215,5 @@ export const flatTheme: ThemeDefinition = {
       'nav-item-text-selected': '#FFFFFF',
     },
   },
-  muiOverrides: {
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          borderRadius: 'var(--radius-ui)',
-          border: 'var(--border-weight) solid var(--border)',
-          boxShadow: 'none',
-          backgroundColor: 'var(--card)',
-          color: 'var(--card-foreground)',
-        },
-      },
-    },
-    MuiCard: {
-      styleOverrides: {
-        root: {
-          borderRadius: 'var(--radius-ui)',
-          border: '1px solid var(--border)',
-          boxShadow: 'none',
-          backgroundColor: 'var(--card)',
-          color: 'var(--card-foreground)',
-          transition: 'transform 200ms ease, border-color 200ms ease, border-width 200ms ease',
-          '&:hover': {
-            transform: 'scale(1.02)',
-            border: 'var(--border-weight) solid var(--primary)',
-            boxShadow: 'none',
-          },
-        },
-      },
-    },
-    MuiChip: {
-      styleOverrides: {
-        root: {
-          borderRadius: 'var(--radius-ui)',
-          border: 'var(--border-weight) solid var(--border)',
-          boxShadow: 'none',
-          backgroundColor: 'transparent',
-          color: 'var(--foreground)',
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          fontSize: '0.65rem',
-          letterSpacing: '0.05em',
-          transition: 'all 0.2s ease',
-          '&:hover': {
-            borderColor: 'var(--primary)',
-            backgroundColor: 'rgba(59, 130, 246, 0.05)',
-          },
-        },
-        filledPrimary: {
-          backgroundColor: 'var(--primary)',
-          color: 'var(--primary-foreground)',
-          borderColor: 'var(--primary)',
-          '&:hover': {
-            filter: 'brightness(1.1)',
-            backgroundColor: 'var(--primary)',
-          },
-        },
-        filledSuccess: {
-          backgroundColor: 'var(--secondary)',
-          color: '#FFFFFF',
-          borderColor: 'var(--secondary)',
-          '&:hover': {
-            backgroundColor: 'var(--secondary)',
-            filter: 'brightness(1.1)',
-            borderColor: 'var(--secondary)',
-          },
-        },
-        outlinedSuccess: {
-          color: 'var(--secondary)',
-          border: 'var(--border-weight) solid var(--secondary)',
-          backgroundColor: 'transparent',
-        },
-        filledWarning: {
-          backgroundColor: 'var(--accent)',
-          color: '#000000',
-          borderColor: 'var(--accent)',
-          '&:hover': {
-            backgroundColor: 'var(--accent)',
-            filter: 'brightness(1.1)',
-            borderColor: 'var(--accent)',
-          },
-        },
-        filledError: {
-          backgroundColor: 'var(--destructive)',
-          color: '#FFFFFF',
-          borderColor: 'var(--destructive)',
-          '&:hover': {
-            backgroundColor: 'var(--destructive)',
-            filter: 'brightness(1.1)',
-            borderColor: 'var(--destructive)',
-          },
-        },
-      },
-    },
-    MuiOutlinedInput: {
-      styleOverrides: {
-        root: {
-          borderRadius: 'var(--radius-input)',
-          backgroundColor: 'var(--input)',
-          color: 'var(--foreground)',
-          '& .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'transparent',
-          },
-          '&:hover .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'var(--border)',
-          },
-          '&.Mui-focused': {
-            backgroundColor: 'var(--card)',
-          },
-          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'var(--primary)',
-            borderWidth: 2,
-          },
-        },
-      },
-    },
-    MuiInputLabel: {
-      styleOverrides: {
-        root: {
-          fontWeight: 600,
-          letterSpacing: '0.03em',
-          textTransform: 'uppercase',
-          color: 'var(--foreground)',
-        },
-      },
-    },
-    MuiSwitch: {
-      styleOverrides: {
-        switchBase: {
-          '&.Mui-checked': {
-            color: 'var(--primary)',
-            '& + .MuiSwitch-track': {
-              backgroundColor: 'var(--primary)',
-              opacity: 1,
-            },
-          },
-        },
-        track: {
-          backgroundColor: 'var(--muted-foreground)',
-          opacity: 0.6,
-        },
-      },
-    },
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          textTransform: 'uppercase',
-          fontWeight: 700,
-          fontFamily: 'var(--font-body)',
-          fontSize: '0.75rem',
-          letterSpacing: '0.05em',
-          borderRadius: 'var(--radius-ui)',
-          border: 'var(--border-weight) solid transparent',
-          boxShadow: 'none',
-          transition: 'all 200ms ease',
-          '&:hover': {
-            boxShadow: 'none',
-            transform: 'translateY(-1px)',
-            borderColor: 'var(--primary)',
-          },
-          '&:active': {
-            transform: 'translateY(0)',
-          },
-        },
-        containedPrimary: {
-          backgroundColor: 'var(--primary)',
-          color: 'var(--primary-foreground)',
-          '&:hover': {
-            backgroundColor: 'var(--primary)',
-            filter: 'brightness(1.1)',
-          },
-        },
-        outlinedPrimary: {
-          borderWidth: 'var(--border-weight)',
-          borderColor: 'var(--primary)',
-          color: 'var(--primary)',
-          '&:hover': {
-            backgroundColor: 'var(--primary)',
-            color: 'var(--primary-foreground)',
-            borderColor: 'var(--primary)',
-          },
-          '&.Mui-disabled': {
-            borderColor: 'var(--muted)',
-            color: 'var(--muted-foreground)',
-            opacity: 0.5,
-          },
-        },
-        outlinedWarning: {
-          borderWidth: 'var(--border-weight)',
-          borderColor: 'var(--accent)',
-          color: 'var(--accent)',
-          '&:hover': {
-            backgroundColor: 'var(--accent)',
-            color: 'var(--accent-foreground)',
-            borderColor: 'var(--accent)',
-          },
-          '&.Mui-disabled': {
-            borderColor: 'var(--muted)',
-            color: 'var(--muted-foreground)',
-            opacity: 0.5,
-          },
-        },
-        outlinedError: {
-          borderWidth: 'var(--border-weight)',
-          borderColor: 'var(--destructive)',
-          color: 'var(--destructive)',
-          '&:hover': {
-            backgroundColor: 'var(--destructive)',
-            color: 'var(--destructive-foreground)',
-            borderColor: 'var(--destructive)',
-          },
-          '&.Mui-disabled': {
-            borderColor: 'var(--muted)',
-            color: 'var(--muted-foreground)',
-            opacity: 0.5,
-          },
-        },
-        outlined: {
-          color: 'var(--foreground)',
-          borderColor: 'var(--border)',
-          borderWidth: 'var(--border-weight)',
-          '&:hover': {
-            backgroundColor: 'var(--foreground)',
-            color: 'var(--background)',
-          },
-        },
-      },
-    },
-    MuiToggleButton: {
-      styleOverrides: {
-        root: {
-          color: 'var(--foreground)',
-          borderColor: 'var(--border)',
-          backgroundColor: 'transparent',
-          borderWidth: '2px',
-          transition: 'all 200ms ease',
-          '&:hover': {
-            backgroundColor: 'var(--muted)',
-            borderColor: 'var(--primary)',
-            color: 'var(--primary)',
-          },
-          '&.Mui-selected': {
-            backgroundColor: 'var(--primary)',
-            color: 'var(--primary-foreground)',
-            borderColor: 'var(--primary)',
-            '&:hover': {
-              backgroundColor: 'var(--primary)',
-              filter: 'brightness(0.9)',
-              borderColor: 'var(--primary)',
-            },
-          },
-        },
-      },
-    },
-    MuiIconButton: {
-      styleOverrides: {
-        root: {
-          color: 'var(--foreground)',
-          transition: 'transform 200ms ease, background-color 200ms ease',
-          '&:hover': {
-            transform: 'scale(1.08)',
-            backgroundColor: 'rgba(59, 130, 246, 0.08)',
-          },
-        },
-      },
-    },
-    MuiFab: {
-      styleOverrides: {
-        root: {
-          '&.Mui-primary': {
-            backgroundColor: 'var(--fab-primary-bg)',
-            color: 'var(--fab-primary-fg)',
-            boxShadow: 'none',
-            border: '2px solid var(--primary)',
-            transition: 'transform 200ms ease, background-color 200ms ease, border-color 200ms ease',
-            '&:hover': {
-              backgroundColor: 'var(--fab-primary-hover-bg)',
-              color: 'var(--fab-primary-hover-fg)',
-              borderColor: 'var(--primary)',
-              transform: 'scale(1.08)',
-              boxShadow: 'none',
-              '& .MuiSvgIcon-root': {
-                color: 'inherit',
-              },
-            },
-          },
-          '&.Mui-secondary': {
-            backgroundColor: 'var(--fab-secondary-bg)',
-            color: 'var(--fab-secondary-fg)',
-            border: '2px solid var(--secondary)',
-            '&:hover': {
-              backgroundColor: 'var(--fab-secondary-hover-bg)',
-              color: 'var(--fab-secondary-hover-fg)',
-              borderColor: 'var(--secondary)',
-              '& .MuiSvgIcon-root': {
-                color: 'inherit',
-              },
-            },
-          },
-          '&.Mui-error': {
-            backgroundColor: 'var(--fab-error-bg)',
-            color: 'var(--fab-error-fg)',
-            border: '2px solid var(--destructive)',
-            '&:hover': {
-              backgroundColor: 'var(--fab-error-hover-bg)',
-              color: 'var(--fab-error-hover-fg)',
-              borderColor: 'var(--destructive)',
-              '& .MuiSvgIcon-root': {
-                color: 'inherit',
-              },
-            },
-          },
-        },
-      },
-    },
-    MuiLinearProgress: {
-      styleOverrides: {
-        root: {
-          backgroundColor: 'var(--muted)',
-          borderRadius: 'var(--radius-ui)',
-          overflow: 'hidden',
-          height: 8,
-        },
-        bar: {
-          backgroundColor: 'var(--primary)',
-          borderRadius: 0,
-        },
-      },
-    },
-  },
 };
-
 

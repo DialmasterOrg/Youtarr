@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
   TextField,
   Button,
   Typography,
   Alert,
-  Paper,
-  Container,
-  LinearProgress,
   AlertTitle,
-} from '@mui/material';
+  Paper,
+  LinearProgress,
+} from './ui';
 import axios from 'axios';
 import { useThemeEngine } from '../contexts/ThemeEngineContext';
 import packageJson from '../../package.json';
@@ -94,14 +92,14 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
 
   if (isLocalhost === false) {
     return (
-      <Box sx={bgStyle}>
-        <Container maxWidth="sm">
+      <div style={bgStyle}>
+        <div style={{ width: '100%', maxWidth: 600, padding: '0 16px', boxSizing: 'border-box' }}>
           <Paper
             elevation={isLinear ? 0 : isNeumorphic ? 0 : 8}
-            sx={{
-              p: 4,
+            style={{
+              padding: 32,
               borderRadius: 'var(--radius-ui)',
-              bgcolor: isLinear ? 'rgba(18, 18, 20, 0.95)' : isNeumorphic ? '#E0E5EC' : 'background.paper',
+              backgroundColor: isLinear ? 'rgba(18, 18, 20, 0.95)' : isNeumorphic ? '#E0E5EC' : 'var(--card)',
               border: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : isPlayful ? '4px solid var(--border-strong)' : 'none',
             }}
           >
@@ -114,22 +112,22 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
             <Alert severity="info">
               http://localhost:3087
             </Alert>
-            <Typography variant="body2" sx={{ mt: 2 }}>
+            <Typography variant="body2" style={{ marginTop: 16 }}>
               This security measure prevents unauthorized users from claiming your Youtarr instance.
             </Typography>
           </Paper>
-        </Container>
-      </Box>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Box sx={bgStyle}>
-      <Container maxWidth="sm">
+    <div style={bgStyle}>
+      <div style={{ width: '100%', maxWidth: 600, padding: '0 16px', boxSizing: 'border-box' }}>
         <Paper
           elevation={isLinear ? 0 : isNeumorphic ? 0 : 8}
-          sx={{
-            p: isPlayful ? 5 : 4,
+          style={{
+            padding: isPlayful ? 40 : 32,
             borderRadius: 'var(--radius-ui)',
             border: isPlayful
               ? '4px solid var(--border-strong)'
@@ -141,44 +139,43 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
               : isNeumorphic
                 ? '20px 20px 40px rgba(163, 177, 198, 0.6), -20px -20px 40px rgba(255, 255, 255, 0.6)'
                 : '0 20px 60px rgba(0, 0, 0, 0.3)',
-            bgcolor: isLinear
+            backgroundColor: isLinear
               ? 'rgba(18, 18, 20, 0.95)'
               : isNeumorphic
                 ? '#E0E5EC'
-                : 'background.paper',
+                : 'var(--card)',
             backdropFilter: isLinear ? 'blur(20px)' : 'none',
             transform: isPlayful ? 'rotate(-0.5deg)' : 'none',
           }}
         >
           {/* Branding */}
-          <Box sx={{ textAlign: 'center', mb: 3 }}>
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
             <Typography
               variant="h3"
               component="h1"
-              sx={{
+              style={{
                 fontFamily: 'var(--font-display)',
                 fontWeight: isPlayful ? 800 : 700,
                 fontSize: isPlayful ? '3rem' : '2.5rem',
-                mb: 1,
-                color: 'text.primary',
+                marginBottom: 8,
               }}
             >
               Youtarr
             </Typography>
             <Typography
               variant="subtitle1"
-              sx={{
-                color: 'text.secondary',
+              color="text.secondary"
+              style={{
                 fontWeight: 500,
                 fontFamily: 'var(--font-body)',
               }}
             >
               First-time Setup
             </Typography>
-          </Box>
+          </div>
 
           {/* Info alert */}
-          <Alert severity="info" sx={{ mb: 3, borderRadius: 'var(--radius-ui)' }}>
+          <Alert severity="info" style={{ marginBottom: 24, borderRadius: 'var(--radius-ui)' }}>
             <AlertTitle>Create your admin account</AlertTitle>
             <Typography variant="body2">
               Set your login credentials to secure your Youtarr instance. Access via localhost is required for this step.
@@ -186,7 +183,7 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
           </Alert>
 
           {/* Form */}
-          <Box component="form" onSubmit={handleSetup}>
+          <form onSubmit={handleSetup}>
             <TextField
               fullWidth
               label="Username"
@@ -195,7 +192,6 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
               margin="normal"
               required
               helperText="Choose a username for login"
-              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 'var(--radius-input)' } }}
             />
 
             <TextField
@@ -207,7 +203,6 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
               margin="normal"
               required
               helperText={`Password strength: ${password ? passwordStrength(password) : 'Enter password'}`}
-              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 'var(--radius-input)' } }}
             />
 
             <TextField
@@ -218,13 +213,12 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
               onChange={(e) => setConfirmPassword(e.target.value)}
               margin="normal"
               required
-              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 'var(--radius-input)' } }}
             />
 
             {error && (
               <Alert
                 severity="error"
-                sx={{ mt: 2, borderRadius: 'var(--radius-ui)', border: '1px solid', borderColor: 'error.main' }}
+                style={{ marginTop: 16, borderRadius: 'var(--radius-ui)', border: '1px solid var(--destructive)' }}
               >
                 {error}
               </Alert>
@@ -236,9 +230,10 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
               variant="contained"
               size="large"
               disabled={loading || isLocalhost === null}
-              sx={{
-                mt: 3,
-                py: 1.5,
+              style={{
+                marginTop: 24,
+                paddingTop: 12,
+                paddingBottom: 12,
                 fontWeight: 700,
                 fontSize: '1.1rem',
                 borderRadius: 'var(--radius-ui)',
@@ -249,25 +244,25 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
               {loading ? 'Setting up...' : 'Create Account'}
             </Button>
 
-            {loading && <LinearProgress sx={{ mt: 2, borderRadius: 'var(--radius-ui)' }} />}
-          </Box>
+            {loading && <LinearProgress style={{ marginTop: 16, borderRadius: 'var(--radius-ui)' }} />}
+          </form>
 
           {/* Footer */}
           <Typography
             variant="caption"
-            sx={{
+            color="text.secondary"
+            style={{
               display: 'block',
               textAlign: 'center',
-              mt: 3,
-              color: 'text.secondary',
+              marginTop: 24,
               fontFamily: 'var(--font-body)',
             }}
           >
             Youtarr v{packageJson.version}
           </Typography>
         </Paper>
-      </Container>
-    </Box>
+      </div>
+    </div>
   );
 };
 

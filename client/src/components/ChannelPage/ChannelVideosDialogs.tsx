@@ -8,7 +8,7 @@ import {
   Button,
   Snackbar,
   Alert,
-} from '@mui/material';
+} from '../ui';
 import DownloadSettingsDialog from '../DownloadManager/ManualDownload/DownloadSettingsDialog';
 import DeleteVideosDialog from '../shared/DeleteVideosDialog';
 import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
@@ -95,7 +95,6 @@ function ChannelVideosDialogs({
         onClose={onRefreshCancel}
         aria-labelledby="refresh-dialog-title"
         aria-describedby="refresh-dialog-description"
-        PaperProps={{ sx: { bgcolor: 'background.paper' } }}
       >
         <DialogTitle id="refresh-dialog-title">
           Load More {tabLabel}

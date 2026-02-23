@@ -2,17 +2,15 @@ import React, { useState, useEffect } from "react";
 import {
   SelectChangeEvent,
   InputLabel,
-  Modal,
   Select,
   MenuItem,
   Button,
   Card,
-  Box,
-  IconButton,
-} from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import useMediaQuery from "@mui/material/useMediaQuery";
-import { useTheme } from "@mui/material/styles";
+  Dialog,
+  DialogContent,
+} from "./ui";
+import { Close as CloseIcon } from "../lib/icons";
+import useMediaQuery from "../hooks/useMediaQuery";
 
 interface PlexLibrarySelectorProps {
   open: boolean;
@@ -38,8 +36,7 @@ function PlexLibrarySelector({
   const [libraries, setLibraries] = useState<PlexLibrary[]>([]);
   const [selectedLibrary, setSelectedLibrary] = useState<string>("");
   const [plexError, setPlexError] = useState<boolean>(false);
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const isMobile = useMediaQuery('(max-width: 599px)');
 
   useEffect(() => {
     if (!open) return;
@@ -96,34 +93,30 @@ function PlexLibrarySelector({
   };
 
   return (
-    <Modal open={open} onClose={handleClose} onBackdropClick={handleClose}>
-      <Box
-        sx={{
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: isMobile ? "85vw" : 400,
-          bgcolor: "background.paper",
-          boxShadow: 24,
-          p: 4,
-        }}
-      >
-        <Card elevation={0}>
-          <IconButton
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+      <DialogContent>
+        <Card elevation={0} style={{ position: 'relative', width: isMobile ? '85vw' : undefined }}>  
+          <button
             aria-label="close"
             onClick={handleClose}
-            sx={{
-              position: "absolute",
+            style={{
+              position: 'absolute',
               right: 8,
               top: 8,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 4,
+              display: 'flex',
+              alignItems: 'center',
+              color: 'var(--muted-foreground)',
             }}
           >
-            <CloseIcon />
-          </IconButton>
+            <CloseIcon size={20} />
+          </button>
           <h2>Select a Plex Library</h2>
           {plexError ? (
-            <Box sx={{ color: 'error.main', mb: 2 }}>
+            <div style={{ color: 'var(--destructive)', marginBottom: 16 }}>
               <p>Unable to connect to Plex server. Please check:</p>
               <ul style={{ fontSize: 'small' }}>
                 <li>Plex server is running</li>
@@ -131,7 +124,7 @@ function PlexLibrarySelector({
                 <li>Plex API key is valid</li>
               </ul>
               <p>Note: Without connecting to Plex, downloading videos will still work, but you will not be able to refresh the library in Plex.</p>
-            </Box>
+            </div>
           ) : (
             <>
               <InputLabel id="select-plex-library">
@@ -160,7 +153,7 @@ function PlexLibrarySelector({
           )}
           {!plexError && (
             <>
-              <Box style={{ marginTop: "16px" }}>
+              <div style={{ marginTop: '16px' }}>
                 <Button
                   variant="contained"
                   color="primary"
@@ -169,12 +162,12 @@ function PlexLibrarySelector({
                 >
                   Save Selection
                 </Button>
-              </Box>
+              </div>
             </>
           )}
         </Card>
-      </Box>
-    </Modal>
+      </DialogContent>
+    </Dialog>
   );
 }
 

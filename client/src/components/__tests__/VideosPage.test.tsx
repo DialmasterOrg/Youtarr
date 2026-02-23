@@ -25,16 +25,7 @@ jest.mock('../../utils', () => ({
   })
 }));
 
-jest.mock('@mui/material/useMediaQuery');
-
-jest.mock('@mui/material/styles', () => ({
-  ...jest.requireActual('@mui/material/styles'),
-  useTheme: () => ({
-    breakpoints: {
-      down: (breakpoint: string) => false
-    }
-  })
-}));
+jest.mock('../../hooks/useMediaQuery');
 
 jest.mock('../shared/DeleteVideosDialog', () => ({
   __esModule: true,
@@ -121,14 +112,14 @@ const setupUser = () => userEvent.setup({ delay: null });
 
 describe('VideosPage Component', () => {
   const mockToken = 'test-token';
-  const useMediaQuery = require('@mui/material/useMediaQuery');
+  const { useMediaQuery } = require('../../hooks/useMediaQuery');
   const { useVideoDeletion } = require('../shared/useVideoDeletion');
 
   const mockDeleteVideos = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
-    useMediaQuery.default.mockReturnValue(false);
+    (useMediaQuery as jest.Mock).mockReturnValue(false);
 
     // Mock useVideoDeletion to return a mock function
     useVideoDeletion.mockReturnValue({
@@ -386,7 +377,7 @@ describe('VideosPage Component', () => {
 
   describe('Mobile View', () => {
     beforeEach(() => {
-      useMediaQuery.default.mockReturnValue(true);
+      (useMediaQuery as jest.Mock).mockReturnValue(true);
     });
 
     test('renders mobile layout without table headers', async () => {
@@ -949,7 +940,7 @@ describe('VideosPage Component', () => {
 
     describe('Mobile View - FAB Deletion', () => {
       beforeEach(() => {
-        useMediaQuery.default.mockReturnValue(true);
+        (useMediaQuery as jest.Mock).mockReturnValue(true);
       });
 
       test('shows delete icon on video thumbnails in mobile view', async () => {

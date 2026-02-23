@@ -4,12 +4,10 @@ import {
   MenuItem,
   ListItemIcon,
   TextField,
-  Box,
   Typography,
-  Divider
-} from '@mui/material';
-import CheckIcon from '@mui/icons-material/Check';
-import SearchIcon from '@mui/icons-material/Search';
+  Divider,
+} from '../ui';
+import { Check as CheckIcon, Search as SearchIcon } from '../../lib/icons';
 
 interface FilterMenuProps {
   anchorEl: null | HTMLElement;
@@ -56,7 +54,7 @@ const FilterMenu: React.FC<FilterMenuProps> = ({
         },
       }}
     >
-      <Box sx={{ px: 2, py: 1, position: 'sticky', top: 0, bgcolor: 'background.paper', zIndex: 1 }}>
+      <div style={{ padding: '8px 16px', position: 'sticky', top: 0, backgroundColor: 'var(--card)', zIndex: 1 }}>
         <TextField
           size="small"
           fullWidth
@@ -66,11 +64,11 @@ const FilterMenu: React.FC<FilterMenuProps> = ({
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
           InputProps={{
-            startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />,
+            startAdornment: <SearchIcon size={16} style={{ marginRight: 4, color: 'var(--muted-foreground)' }} />,
           }}
           autoFocus
         />
-      </Box>
+      </div>
       <Divider />
 
       <MenuItem
@@ -87,11 +85,11 @@ const FilterMenu: React.FC<FilterMenuProps> = ({
       </MenuItem>
 
       {filteredChannels.length === 0 ? (
-        <Box sx={{ px: 2, py: 1 }}>
+        <div style={{ padding: '8px 16px' }}>
           <Typography variant="body2" color="text.secondary">
             No channels found
           </Typography>
-        </Box>
+        </div>
       ) : (
         filteredChannels.map((channel) => (
           <MenuItem

@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import {
-  Box,
   Button,
   Badge,
   Collapse,
   Typography,
-} from '@mui/material';
-import FilterListIcon from '@mui/icons-material/FilterList';
+} from '../../ui';
+import { ListFilter as FilterListIcon } from '../../../lib/icons';
 import DurationFilterInput from './DurationFilterInput';
 import DateRangeFilterInput from './DateRangeFilterInput';
 import FilterChips from './FilterChips';
@@ -59,18 +58,18 @@ function ChannelVideosFilters({
   // Mobile: Show filter button that opens drawer
   if (isMobile) {
     return (
-      <Box sx={{ px: 2, py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <Button
             variant="outlined"
             size="small"
             startIcon={
               <Badge badgeContent={activeFilterCount} color="primary" invisible={activeFilterCount === 0}>
-                <FilterListIcon />
+                <FilterListIcon size={16} />
               </Badge>
             }
             onClick={() => setDrawerOpen(true)}
-            sx={{ alignSelf: 'flex-start' }}
+            style={{ alignSelf: 'flex-start' }}
           >
             Filters
           </Button>
@@ -83,7 +82,7 @@ function ChannelVideosFilters({
               onClearDateRange={handleClearDateRange}
             />
           )}
-        </Box>
+        </div>
 
         <MobileFilterDrawer
           open={drawerOpen}
@@ -99,15 +98,15 @@ function ChannelVideosFilters({
           hasActiveFilters={hasActiveFilters}
           hideDateFilter={hideDateFilter}
         />
-      </Box>
+      </div>
     );
   }
 
   // Desktop: Collapsible filter panel (button is in header, controlled by parent)
   return (
     <Collapse in={filtersExpanded}>
-      <Box sx={{ px: 2, py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
           <DurationFilterInput
             minDuration={inputMinDuration}
             maxDuration={inputMaxDuration}
@@ -122,21 +121,21 @@ function ChannelVideosFilters({
               onToChange={onDateToChange}
             />
           ) : (
-            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-              Shorts do not have date information
-            </Typography>
+            <Typography variant="body2" color="text.secondary" style={{ fontStyle: 'italic' }}>
+                Shorts do not have date information
+              </Typography>
           )}
           {hasActiveFilters && (
             <Button
               size="small"
               onClick={onClearAll}
-              sx={{ textTransform: 'none' }}
+              style={{ textTransform: 'none' }}
             >
               Clear All
             </Button>
           )}
-        </Box>
-      </Box>
+        </div>
+      </div>
     </Collapse>
   );
 }

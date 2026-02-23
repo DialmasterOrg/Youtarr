@@ -1,6 +1,6 @@
 import React from 'react';
-import { Chip, Tooltip } from '@mui/material';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import { Chip, Tooltip } from '../../../../components/ui';
+import { AccessTime as AccessTimeIcon } from '../../../../lib/icons';
 
 interface DurationFilterChipProps {
   minDuration: number | null | undefined;
@@ -38,12 +38,12 @@ const DurationFilterChip: React.FC<DurationFilterChipProps> = ({
   return (
     <Tooltip title={`Channel download duration filter: ${durationLabel}`}>
       <Chip
-        icon={<AccessTimeIcon />}
+        icon={<AccessTimeIcon size={16} />}
         label={durationLabel}
         size="small"
         variant="outlined"
         color="primary"
-        sx={{ fontSize: '0.65rem', '& .MuiChip-icon': { ml: 0.3 } }}
+        style={{ fontSize: '0.65rem' }}
       />
     </Tooltip>
   );

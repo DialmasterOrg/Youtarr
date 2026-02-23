@@ -6,13 +6,12 @@ import {
   DialogActions,
   Button,
   Typography,
-  Box,
   Alert
-} from '@mui/material';
+} from '../ui';
 import {
-  DeleteForever as DeleteIcon,
+  Trash2 as DeleteIcon,
   Warning as WarningIcon
-} from '@mui/icons-material';
+} from '../../lib/icons';
 
 interface DeleteVideosDialogProps {
   open: boolean;
@@ -34,23 +33,23 @@ const DeleteVideosDialog: React.FC<DeleteVideosDialogProps> = ({
       maxWidth="sm"
       fullWidth
     >
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <WarningIcon color="warning" />
+      <DialogTitle style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <WarningIcon size={20} />
         Confirm Video Deletion
       </DialogTitle>
 
       <DialogContent>
-        <Box sx={{ pt: 1 }}>
-          <Alert severity="warning" sx={{ mb: 2 }}>
+        <div style={{ paddingTop: 8 }}>
+          <Alert severity="warning" style={{ marginBottom: 16 }}>
             <Typography variant="body2">
               You are about to permanently delete {videoCount} {videoCount === 1 ? 'video' : 'videos'} from disk.
             </Typography>
           </Alert>
 
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography variant="body2" color="text.secondary" style={{ marginBottom: 16 }}>
             This action will:
           </Typography>
-          <Box component="ul" sx={{ ml: 2, mb: 2 }}>
+          <ul style={{ marginLeft: 16, marginBottom: 16 }}>
             <Typography component="li" variant="body2" color="text.secondary">
               Remove the video {videoCount === 1 ? 'file' : 'files'} and associated metadata from your disk
             </Typography>
@@ -60,10 +59,10 @@ const DeleteVideosDialog: React.FC<DeleteVideosDialogProps> = ({
             <Typography component="li" variant="body2" color="text.secondary">
               Free up storage space on your system
             </Typography>
-          </Box>
+          </ul>
 
-          <Alert severity="error" sx={{ mb: 1 }}>
-            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+          <Alert severity="error" style={{ marginBottom: 8 }}>
+            <Typography variant="body2" style={{ fontWeight: 'bold' }}>
               This action cannot be undone!
             </Typography>
           </Alert>
@@ -71,10 +70,10 @@ const DeleteVideosDialog: React.FC<DeleteVideosDialogProps> = ({
           <Typography variant="body2" color="text.secondary">
             You can re-download deleted videos later if needed.
           </Typography>
-        </Box>
+        </div>
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, pb: 2 }}>
+      <DialogActions style={{ paddingLeft: 24, paddingRight: 24, paddingBottom: 16 }}>
         <Button
           onClick={onClose}
           variant="contained"
@@ -87,7 +86,7 @@ const DeleteVideosDialog: React.FC<DeleteVideosDialogProps> = ({
           onClick={onConfirm}
           variant="outlined"
           color="error"
-          startIcon={<DeleteIcon />}
+          startIcon={<DeleteIcon size={16} />}
         >
           Delete {videoCount === 1 ? 'Video' : 'Videos'}
         </Button>

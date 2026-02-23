@@ -1,6 +1,6 @@
 import React from 'react';
-import { Chip } from '@mui/material';
-import FolderIcon from '@mui/icons-material/Folder';
+import { Chip } from '../../../../components/ui';
+import { Folder as FolderIcon } from '../../../../lib/icons';
 import { isUsingDefaultSubfolder, isExplicitlyNoSubfolder } from '../../../../utils/channelHelpers';
 
 interface SubFolderChipProps {
@@ -16,7 +16,7 @@ const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
         data-default="false"
         data-root="true"
         size="small"
-        icon={<FolderIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} data-testid="FolderIcon" />}
+        icon={<FolderIcon size={14} style={{ color: 'var(--muted-foreground)' }} data-testid="FolderIcon" />}
         label="root"
         sx={{
           fontSize: '0.7rem',
@@ -33,7 +33,7 @@ const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
         data-testid="subfolder-chip"
         data-default="true"
         size="small"
-        icon={<FolderIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} data-testid="FolderIcon" />}
+        icon={<FolderIcon size={14} style={{ color: 'var(--muted-foreground)' }} data-testid="FolderIcon" />}
         label="global default"
         sx={{
           fontSize: '0.7rem',
@@ -49,9 +49,9 @@ const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
       data-testid="subfolder-chip"
       data-default="false"
       size="small"
-      icon={<FolderIcon sx={{ fontSize: '0.9rem', color: 'primary.main' }} data-testid="FolderIcon" />}
+      icon={<FolderIcon size={14} style={{ color: 'var(--primary)' }} data-testid="FolderIcon" />}
       label={`__${subFolder}/`}
-      sx={{
+      style={{
         fontSize: '0.7rem',
       }}
     />

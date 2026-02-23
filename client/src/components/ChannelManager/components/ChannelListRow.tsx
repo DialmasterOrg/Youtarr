@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
 import {
   Avatar,
-  Box,
   Chip,
-  IconButton,
   ListItem,
   Tooltip,
   Typography,
   Divider,
-} from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
+} from '../../ui';
+import { Delete as DeleteIcon } from '../../../lib/icons';
 import { Channel } from '../../../types/Channel';
 import { SubFolderChip, QualityChip, AutoDownloadChips, DurationFilterChip, TitleFilterChip, DownloadFormatConfigIndicator } from './chips';
 import RatingBadge from '../../shared/RatingBadge';
@@ -45,11 +43,11 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
     : '/images/channelthumb-default.jpg';
 
   const renderChannelHeader = () => (
-    <Box
-      sx={{
+    <div
+      style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 2,
+        gap: 16,
         cursor: isPendingAddition ? 'not-allowed' : 'pointer',
       }}
       onClick={isPendingAddition ? undefined : onNavigate}
@@ -59,52 +57,57 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
         <Avatar
           src={thumbnailSrc}
           alt={`${channel.uploader} thumbnail`}
-          sx={{ width: 56, height: 56 }}
+          style={{ width: 56, height: 56 }}
           imgProps={{ onError: () => setThumbnailVisible(false) }}
         />
       )}
-      <Box sx={{ minWidth: 0 }}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0, gap: 0 }}>
-          <Typography variant={isMobile ? 'h6' : 'h5'} noWrap sx={{ minWidth: 0 }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, gap: 0 }}>
+          <Typography variant={isMobile ? 'h6' : 'h5'} noWrap style={{ minWidth: 0 }}>
             {channel.uploader || 'Unknown Channel'}
           </Typography>
           {/* On mobile we show folder and quality chips right under the channel name */}
           {isMobile && (
-            <Box sx={{ mt: 0.25, display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ marginTop: 2, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
               <QualityChip videoQuality={channel.video_quality} globalPreferredResolution={globalPreferredResolution} />
               <SubFolderChip subFolder={channel.sub_folder} />
               <RatingBadge rating={channel.default_rating} />
-            </Box>)}
-        </Box>
-        {isPendingAddition && <Chip label="Pending addition" size="small" color="warning" sx={{ mt: 0.5 }} />}
-      </Box>
-    </Box>
+            </div>)}
+        </div>
+        {isPendingAddition && <Chip label="Pending addition" size="small" color="warning" style={{ marginTop: 4 }} />}
+      </div>
+    </div>
   );
 
-  const zebraBackground = typeof rowIndex === 'number' && rowIndex % 2 === 1 ? 'action.hover' : undefined;
+  const zebraBackground = typeof rowIndex === 'number' && rowIndex % 2 === 1 ? 'var(--muted)' : undefined;
 
   if (isMobile) {
     return (
       <ListItem
         divider
-        sx={{
+        style={{
           flexDirection: 'column',
           alignItems: 'stretch',
-          bgcolor: isPendingAddition ? 'action.hover' : zebraBackground,
-          border: isPendingAddition ? (theme) => `1px dashed ${theme.palette.warning.main}` : '1px solid transparent',
-          gap: 1,
-          px: 1,
+          backgroundColor: isPendingAddition ? 'var(--muted)' : zebraBackground,
+          border: isPendingAddition ? '1px dashed var(--warning)' : '1px solid transparent',
+          gap: 8,
+          paddingLeft: 8,
+          paddingRight: 8,
         }}
       >
-        <Box sx={{ display: 'flex', width: '100%', gap: 1 }}>
-          <Box sx={{ flex: 1 }}>{renderChannelHeader()}</Box>
+        <div style={{ display: 'flex', width: '100%', gap: 8 }}>
+          <div style={{ flex: 1 }}>{renderChannelHeader()}</div>
           <Tooltip title="Remove channel">
-            <IconButton color="error" onClick={onDelete} aria-label="Remove channel" size="small">
-              <DeleteIcon fontSize="medium" />
-            </IconButton>
+            <button
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--destructive)', display: 'inline-flex', alignItems: 'center', padding: 4 }}
+              onClick={onDelete}
+              aria-label="Remove channel"
+            >
+              <DeleteIcon size={20} />
+            </button>
           </Tooltip>
-        </Box>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'center' }}>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
           <DownloadFormatConfigIndicator audioFormat={channel.audio_format} />
           <AutoDownloadChips
             availableTabs={channel.available_tabs}
@@ -115,15 +118,11 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
             <Divider
               orientation="vertical"
               flexItem
-              sx={{ alignSelf: 'stretch', mx: 0.5 }}
+              style={{ alignSelf: 'stretch', marginLeft: 4, marginRight: 4 }}
               aria-hidden
             />
           )}
-          <Box
-            component="span"
-            sx={{ display: 'inline-flex', gap: 0.5 }}
-            data-testid="mobile-filter-chips"
-          >
+          <span style={{ display: 'inline-flex', gap: 4 }} data-testid="mobile-filter-chips">
             <DurationFilterChip
               minDuration={channel.min_duration}
               maxDuration={channel.max_duration}
@@ -134,8 +133,8 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
               onRegexClick={onRegexClick}
               isMobile={isMobile}
             />
-          </Box>
-        </Box>
+          </span>
+        </div>
       </ListItem>
     );
   }
@@ -143,48 +142,50 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
   return (
     <ListItem
       divider
-      sx={{
+      style={{
         flexDirection: 'column',
         alignItems: 'stretch',
-        bgcolor: isPendingAddition ? 'action.hover' : zebraBackground,
-        borderLeft: isPendingAddition ? (theme) => `4px solid ${theme.palette.warning.main}` : '4px solid transparent',
-        px: { xs: 1, md: 2 },
-        py: 1,
+        backgroundColor: isPendingAddition ? 'var(--muted)' : zebraBackground,
+        borderLeft: isPendingAddition ? '4px solid var(--warning)' : '4px solid transparent',
+        paddingLeft: 16,
+        paddingRight: 16,
+        paddingTop: 8,
+        paddingBottom: 8,
       }}
     >
-      <Box
-        sx={{
+      <div
+        style={{
           width: '100%',
           display: 'grid',
           gridTemplateColumns: CHANNEL_LIST_DESKTOP_TEMPLATE,
-          columnGap: 2,
+          columnGap: 16,
           alignItems: 'center',
         }}
       >
-        <Box sx={{ minWidth: 0, pr: 1 }}>{renderChannelHeader()}</Box>
+        <div style={{ minWidth: 0, paddingRight: 8 }}>{renderChannelHeader()}</div>
 
         {/* Quality / Folder / Rating Column */}
-        <Box
-          sx={{
+        <div
+          style={{
             minWidth: 0,
             display: 'flex',
             flexWrap: 'wrap',
-            gap: 0.5,
+            gap: 4,
             alignItems: 'center',
           }}
         >
           <QualityChip videoQuality={channel.video_quality} globalPreferredResolution={globalPreferredResolution} />
           <SubFolderChip subFolder={channel.sub_folder} />
           <RatingBadge rating={channel.default_rating} />
-        </Box>
+        </div>
 
         {/* Auto Downloads Column */}
-        <Box
-          sx={{
+        <div
+          style={{
             minWidth: 0,
             display: 'flex',
             flexWrap: 'wrap',
-            gap: 0.5,
+            gap: 4,
             alignItems: 'center',
           }}
         >
@@ -194,30 +195,34 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
             autoDownloadTabs={channel.auto_download_enabled_tabs}
             isMobile={isMobile}
           />
-        </Box>
+        </div>
 
         {/* Filters Column */}
-        <Box
-          sx={{
+        <div
+          style={{
             minWidth: 0,
             display: 'flex',
             flexWrap: 'wrap',
-            gap: 0.5,
+            gap: 4,
             alignItems: 'center',
           }}
         >
           <DurationFilterChip minDuration={channel.min_duration} maxDuration={channel.max_duration} isMobile={isMobile} />
           <TitleFilterChip titleFilterRegex={channel.title_filter_regex} onRegexClick={onRegexClick} isMobile={isMobile} />
-        </Box>
+        </div>
 
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Tooltip title="Remove channel">
-            <IconButton color="error" onClick={onDelete} aria-label="Remove channel">
-              <DeleteIcon />
-            </IconButton>
+            <button
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--destructive)', display: 'inline-flex', alignItems: 'center', padding: 4 }}
+              onClick={onDelete}
+              aria-label="Remove channel"
+            >
+              <DeleteIcon size={20} />
+            </button>
           </Tooltip>
-        </Box>
-      </Box>
+        </div>
+      </div>
     </ListItem>
   );
 };

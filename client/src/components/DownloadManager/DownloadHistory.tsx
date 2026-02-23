@@ -19,9 +19,8 @@ import {
   Card,
   CardHeader,
   CardContent,
-} from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+} from '../ui';
+import { ChevronDown as ExpandMoreIcon, ChevronUp as ExpandLessIcon } from 'lucide-react';
 import { Job } from '../../types/Job';
 import { useSwipeable } from 'react-swipeable';
 
@@ -74,7 +73,7 @@ import { useSwipeable } from 'react-swipeable';
           <Card>
             <CardHeader title="Download History" />
             <CardContent>
-              <Toolbar disableGutters sx={{ justifyContent: 'space-between', mb: 1, gap: 1, flexWrap: 'wrap' }}>
+              <Toolbar disableGutters className="justify-between mb-2 gap-2 flex-wrap">
                 <FormControlLabel
                   control={<Checkbox checked={showNoVideoJobs} onChange={(e) => { setShowNoVideoJobs(e.target.checked); setCurrentPage(1); }} />}
                   label="Show jobs without videos"
@@ -83,7 +82,7 @@ import { useSwipeable } from 'react-swipeable';
               </Toolbar>
 
               <Box {...handlers}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                <Box className="flex flex-col gap-2.5">
                   {currentJobs.length === 0 && (
                     <Typography variant="body2">No jobs currently</Typography>
                   )}
@@ -132,14 +131,11 @@ import { useSwipeable } from 'react-swipeable';
                     return (
                       <Box
                         key={job.id}
-                        sx={{
-                          border: 'var(--border-weight) solid var(--border)',
-                          borderRadius: 'var(--radius-ui)',
-                          p: 1.5,
-                        }}
+                        style={{ border: 'var(--border-weight) solid var(--border)', borderRadius: 'var(--radius-ui)' }}
+                        className="p-3"
                       >
-                        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                        <Box className="flex items-start justify-between gap-2">
+                          <Typography variant="subtitle2" className="font-semibold">
                             {singleVideo ? (
                               <Link href={`https://www.youtube.com/watch?v=${singleVideo.youtubeId}`} target="_blank" rel="noopener noreferrer">
                                 {singleVideo.youTubeVideoName}
@@ -157,13 +153,13 @@ import { useSwipeable } from 'react-swipeable';
 
                         {thumbnailSrc && (
                           <Box
-                            sx={{
-                              mt: 0.75,
+                            style={{
+                              marginTop: '6px',
                               width: 96,
                               height: 72,
                               borderRadius: 'var(--radius-thumb)',
                               overflow: 'hidden',
-                              bgcolor: 'grey.900',
+                              backgroundColor: 'rgb(17 24 39)',
                             }}
                           >
                             <img
@@ -175,34 +171,34 @@ import { useSwipeable } from 'react-swipeable';
                           </Box>
                         )}
 
-                        <Box sx={{ mt: 0.75, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                        <Box className="mt-1.5 flex flex-col gap-0.5">
                           {channelText && (
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" color="secondary">
                               {channelText}
                             </Typography>
                           )}
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" color="secondary">
                             Date: {formattedTimeCreated}
                           </Typography>
                           {formattedJobType && (
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" color="secondary">
                               Source: {formattedJobType}
                             </Typography>
                           )}
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" color="secondary">
                             Status: {durationString}
                           </Typography>
                         </Box>
 
                         {hasMultiple && (
                           <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                            <Box sx={{ mt: 0.75, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            <Box className="mt-1.5 flex flex-col gap-1">
                               {videos.map((video: any) => (
-                                <Box key={video.youtubeId} sx={{ display: 'flex', flexDirection: 'column' }}>
+                                <Box key={video.youtubeId} className="flex flex-col">
                                   <Link href={`https://www.youtube.com/watch?v=${video.youtubeId}`} target="_blank" rel="noopener noreferrer">
                                     {video.youTubeVideoName}
                                   </Link>
-                                  <Typography variant="caption" color="text.secondary">
+                                  <Typography variant="caption" color="secondary">
                                     {video.youTubeChannelName}
                                   </Typography>
                                 </Box>
@@ -216,7 +212,7 @@ import { useSwipeable } from 'react-swipeable';
                 </Box>
               </Box>
 
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+              <Box className="flex justify-center mt-4">
                 <Pagination count={totalPages} page={currentPage} onChange={(_, p) => setCurrentPage(p)} />
               </Box>
             </CardContent>
@@ -230,7 +226,7 @@ import { useSwipeable } from 'react-swipeable';
         <Card>
           <CardHeader title="Download History" />
           <CardContent>
-            <Toolbar disableGutters sx={{ justifyContent: 'space-between', mb: 1 }}>
+            <Toolbar disableGutters className="justify-between mb-2">
               <FormControlLabel
                 control={<Checkbox checked={showNoVideoJobs} onChange={(e) => { setShowNoVideoJobs(e.target.checked); setCurrentPage(1); }} />}
                 label="Show jobs without videos"
@@ -307,17 +303,17 @@ import { useSwipeable } from 'react-swipeable';
                             </TableRow>
 
                             <TableRow>
-                              <TableCell colSpan={5} sx={{ p: 0, border: 'none' }}>
+                              <TableCell colSpan={5} style={{ padding: 0, border: 'none' }}>
                                 <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                                  <Box sx={{ p: 1 }}>
+                                  <Box className="p-2">
                                     <Table size="small">
                                       <TableBody>
                                         {videos.map((video: any) => (
-                                          <TableRow key={video.youtubeId} hover>
-                                            <TableCell sx={{ width: 180 }}>{formattedTimeCreated}</TableCell>
+                                          <TableRow key={video.youtubeId}>
+                                            <TableCell style={{ width: 180 }}>{formattedTimeCreated}</TableCell>
                                             <TableCell>
                                               <Link href={`https://www.youtube.com/watch?v=${video.youtubeId}`} target="_blank" rel="noopener noreferrer">{video.youTubeVideoName}</Link>
-                                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{video.youTubeChannelName}</Typography>
+                                              <Typography variant="caption" color="secondary" className="block">{video.youTubeChannelName}</Typography>
                                             </TableCell>
                                             <TableCell>{formattedJobType}</TableCell>
                                             <TableCell>{job.status}</TableCell>
@@ -342,7 +338,7 @@ import { useSwipeable } from 'react-swipeable';
                             {singleVideo ? (
                               <>
                                 <Link href={`https://www.youtube.com/watch?v=${singleVideo.youtubeId}`} target="_blank" rel="noopener noreferrer">{singleVideo.youTubeVideoName}</Link>
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{singleVideo.youTubeChannelName}</Typography>
+                                <Typography variant="caption" color="secondary" className="block">{singleVideo.youTubeChannelName}</Typography>
                               </>
                             ) : (
                               <span>{job.jobType}</span>
@@ -359,7 +355,7 @@ import { useSwipeable } from 'react-swipeable';
               </div>
             </TableContainer>
 
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+            <Box className="flex justify-center mt-4">
               <Pagination count={totalPages} page={currentPage} onChange={(_, p) => setCurrentPage(p)} />
             </Box>
           </CardContent>

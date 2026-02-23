@@ -22,11 +22,8 @@ import {
   Skeleton,
   Snackbar,
   Divider,
-} from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import AddIcon from '@mui/icons-material/Add';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import WarningIcon from '@mui/icons-material/Warning';
+} from '../../ui';
+import { Trash2 as DeleteIcon, Plus as AddIcon, Copy as ContentCopyIcon, AlertTriangle as WarningIcon } from 'lucide-react';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 
@@ -189,13 +186,13 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
 
   return (
     <ConfigurationAccordion title="API Keys & External Access">
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography variant="body2" color="secondary" className="mb-4">
         API keys allow external tools like bookmarklets and mobile shortcuts to send individual videos to Youtarr.
         <strong> Note:</strong> API keys currently support single video downloads only—playlists and channels require the web UI.
       </Typography>
 
       {/* Rate Limit Setting */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+      <Box className="flex items-center mb-6">
         <TextField
           type="number"
           label="Rate Limit (requests/min)"
@@ -208,18 +205,18 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
           }}
           inputProps={{ min: 1, max: 100 }}
           size="small"
-          sx={{ width: 200 }}
+          className="w-[200px]"
         />
         <InfoTooltip text="Maximum download requests per minute per API key. Helps prevent abuse." />
       </Box>
 
-      <Divider sx={{ mb: 3 }} />
+      <Divider className="mb-6" />
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+      <Box className="flex justify-between items-center mb-4">
         <Typography variant="subtitle1">Manage API Keys</Typography>
         <Button
           variant="contained"
-          startIcon={<AddIcon />}
+          startIcon={<AddIcon size={16} />}
           onClick={() => setCreateDialogOpen(true)}
           size="small"
         >
@@ -228,20 +225,20 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
       </Box>
 
       {isHttpWarning && (
-        <Alert severity="warning" sx={{ mb: 2 }} icon={<WarningIcon />}>
+        <Alert severity="warning" className="mb-4" icon={<WarningIcon size={20} />}>
           Creating API keys over HTTP is insecure. Use HTTPS in production.
         </Alert>
       )}
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+        <Alert severity="error" className="mb-4" onClose={() => setError(null)}>
           {error}
         </Alert>
       )}
 
       {apiKeys.length === 0 ? (
-        <Paper sx={{ p: 3, textAlign: 'center' }}>
-          <Typography color="text.secondary">
+        <Paper className="p-6 text-center">
+          <Typography color="secondary">
             No API keys created yet. Create one to enable external integrations.
           </Typography>
         </Paper>
@@ -334,7 +331,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
       >
         <DialogTitle>✓ API Key Created</DialogTitle>
         <DialogContent>
-          <Alert severity="warning" sx={{ mb: 3 }}>
+          <Alert severity="warning" className="mb-6">
             Save this key now - it will not be shown again!
           </Alert>
 
@@ -342,33 +339,24 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
             Your API Key
           </Typography>
           <Paper
-            sx={{
-              p: 2,
-              mb: 3,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              bgcolor: 'action.hover',
-              fontFamily: 'monospace',
-              wordBreak: 'break-all',
-            }}
+            className="p-4 mb-6 flex items-center justify-between bg-muted/50 font-mono break-all"
           >
             <code>{createdKey?.key}</code>
             <IconButton
               onClick={() => copyToClipboard(createdKey?.key || '', 'API key')}
               size="small"
             >
-              <ContentCopyIcon fontSize="small" />
+              <ContentCopyIcon size={16} />
             </IconButton>
           </Paper>
 
           <Typography variant="subtitle2" gutterBottom>
             📚 Add to Bookmarks
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          <Typography variant="body2" color="secondary" className="mb-2">
             Drag this button to your bookmarks bar:
           </Typography>
-          <Box sx={{ mb: 2 }}>
+          <Box className="mb-4">
             <a
               href={createdKey ? generateBookmarklet(createdKey.key) : '#'}
               onClick={(e) => e.preventDefault()}
@@ -388,20 +376,11 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
             </a>
           </Box>
 
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          <Typography variant="body2" color="secondary" className="mb-2">
             Or copy the bookmarklet code:
           </Typography>
           <Paper
-            sx={{
-              p: 2,
-              mb: 3,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              bgcolor: 'action.hover',
-              maxHeight: 100,
-              overflow: 'auto',
-            }}
+            className="p-4 mb-6 flex items-center justify-between bg-muted/50 max-h-[100px] overflow-auto"
           >
             <code style={{ fontSize: '0.75rem', wordBreak: 'break-all' }}>
               {createdKey ? generateBookmarklet(createdKey.key) : ''}
@@ -415,27 +394,27 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
               }
               size="small"
             >
-              <ContentCopyIcon fontSize="small" />
+              <ContentCopyIcon size={16} />
             </IconButton>
           </Paper>
 
           <Typography variant="subtitle2" gutterBottom>
             📱 Mobile / Shortcuts
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          <Typography variant="body2" color="secondary" className="mb-2">
             Use this URL in Apple Shortcuts, Tasker, or other tools:
           </Typography>
-          <Paper sx={{ p: 2, bgcolor: 'action.hover' }}>
-            <Typography variant="body2" sx={{ fontFamily: 'monospace', mb: 1 }}>
+          <Paper className="p-4 bg-muted/50">
+            <Typography variant="body2" style={{ fontFamily: 'monospace' }} className="mb-2">
               <strong>URL:</strong> {locationUtils.getOrigin()}/api/videos/download
             </Typography>
-            <Typography variant="body2" sx={{ fontFamily: 'monospace', mb: 1 }}>
+            <Typography variant="body2" style={{ fontFamily: 'monospace' }} className="mb-2">
               <strong>Method:</strong> POST
             </Typography>
-            <Typography variant="body2" sx={{ fontFamily: 'monospace', mb: 1 }}>
+            <Typography variant="body2" style={{ fontFamily: 'monospace' }} className="mb-2">
               <strong>Header:</strong> x-api-key: {createdKey?.key?.substring(0, 8)}...
             </Typography>
-            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+            <Typography variant="body2" style={{ fontFamily: 'monospace' }}>
               <strong>Body:</strong> {`{ "url": "<youtube-url>" }`}
             </Typography>
           </Paper>
@@ -457,7 +436,7 @@ const ApiKeysSection: React.FC<ApiKeysSectionProps> = ({ token, apiKeyRateLimit,
           <Typography>
             Are you sure you want to delete the API key <strong>"{deleteConfirmDialog.keyName}"</strong>?
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          <Typography variant="body2" color="secondary" className="mt-2">
             This action cannot be undone. Any integrations using this key will stop working.
           </Typography>
         </DialogContent>

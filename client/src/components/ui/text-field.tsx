@@ -22,6 +22,8 @@ export interface TextFieldProps extends Omit<React.InputHTMLAttributes<HTMLInput
   SelectProps?: Record<string, unknown>;
   type?: string;
   onChange?: React.ChangeEventHandler<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>;
+  margin?: string;
+  InputLabelProps?: { shrink?: boolean; [key: string]: any };
 }
 
 /**
@@ -50,6 +52,8 @@ const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
       defaultValue,
       placeholder,
       onChange,
+      margin: _margin,
+      InputLabelProps: _inputLabelProps,
       ...rest
     },
     ref

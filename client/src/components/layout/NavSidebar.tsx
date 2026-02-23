@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   Box,
   Divider,
-  Drawer,
   List,
   ListItemButton,
   ListItemIcon,
@@ -10,14 +9,10 @@ import {
   Tooltip,
   Typography,
   Collapse,
-  BottomNavigation,
-  BottomNavigationAction,
   Paper,
-} from '@mui/material';
+} from '../ui';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
-import ExpandLess from '@mui/icons-material/ExpandLess';
-import ExpandMore from '@mui/icons-material/ExpandMore';
-import DownloadIcon from '@mui/icons-material/Download';
+import { ChevronUp as ExpandLess, ChevronDown as ExpandMore, Download as DownloadIcon } from '../../lib/icons';
 import { StorageFooterWidget } from './StorageFooterWidget';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 
@@ -48,6 +43,9 @@ const NAV_DRAWER_DESKTOP_MAX_HEIGHT = 'calc(100vh - (80px + var(--shell-gap)) - 
 const NAV_DRAWER_MOBILE_TOP_OFFSET = 'calc(60px + var(--shell-gap))';
 const NAV_DRAWER_MOBILE_BOTTOM_GAP = 'var(--shell-gap)';
 const NAV_DRAWER_MOBILE_MAX_HEIGHT = 'calc(100vh - (60px + (var(--shell-gap) * 2)))';
+
+// MUI spacing helper: 1 unit = 8px
+const sp = (n: number) => `${n * 8}px`;
 
 interface NavSidebarProps {
   isMobile: boolean;
@@ -111,13 +109,14 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
 
   // Common Drawer Content (used for Industrial mobile and all Desktop)
   const drawerContent = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      <Box sx={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto' }}>
         <List
-          sx={{
-            px: isCompactStorage ? 1.25 : 0,
-            pt: isCompactStorage ? 1 : 0.5,
-            gap: NAV_MAIN_GAP,
+          style={{
+            paddingLeft: isCompactStorage ? 10 : 0,
+            paddingRight: isCompactStorage ? 10 : 0,
+            paddingTop: isCompactStorage ? 8 : 4,
+            gap: `${NAV_MAIN_GAP * 8}px`,
             display: 'flex',
             flexDirection: 'column',
           }}
@@ -130,43 +129,39 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
             const isExpanded = expandedItems[item.key] || (selected && !isNavCollapsed);
 
             const button = (
-              <Box key={item.key} sx={{ px: 0.5, py: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
+              <div key={item.key} style={{ paddingLeft: 4, paddingRight: 4, paddingTop: 0, paddingBottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
                 <ListItemButton
                   component={RouterLink}
                   to={item.to}
                   selected={selected}
-                  onClick={(e) => {
+                  onClick={(e: React.MouseEvent) => {
                     if (isMobile && item.subItems) {
                       toggleExpand(item.key, e);
                     } else if (isMobile) {
                       onCloseMobile();
                     }
                   }}
-                  sx={{
+                  style={{
                     borderRadius: 'var(--radius-ui)',
                     justifyContent: 'flex-start',
                     alignItems: 'center',
-                    pl: isNavCollapsed ? NAV_COLLAPSED_HORIZONTAL_PADDING : NAV_EXPANDED_HORIZONTAL_PADDING,
-                    pr: isNavCollapsed ? NAV_COLLAPSED_HORIZONTAL_PADDING : NAV_EXPANDED_HORIZONTAL_PADDING,
-                    py: 0,
+                    paddingLeft: isNavCollapsed ? NAV_COLLAPSED_HORIZONTAL_PADDING * 8 : NAV_EXPANDED_HORIZONTAL_PADDING * 8,
+                    paddingRight: isNavCollapsed ? NAV_COLLAPSED_HORIZONTAL_PADDING * 8 : NAV_EXPANDED_HORIZONTAL_PADDING * 8,
+                    paddingTop: 0,
+                    paddingBottom: 0,
                     minHeight: NAV_MAIN_MIN_HEIGHT,
                     height: NAV_MAIN_MIN_HEIGHT,
                     width: '100%',
                     border: selected ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)',
-                    bgcolor: selected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
-                    color: selected ? 'var(--nav-item-text-selected)' : 'text.primary',
+                    backgroundColor: selected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
+                    color: selected ? 'var(--nav-item-text-selected)' : 'inherit',
                     boxShadow: selected ? 'var(--nav-item-shadow-selected)' : 'var(--nav-item-shadow)',
                     transition: 'all 300ms var(--transition-bouncy)',
                     cursor: 'pointer',
-                    '&:hover': {
-                      bgcolor: selected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg-hover)',
-                      transform: selected ? 'var(--nav-item-transform-hover)' : 'var(--nav-item-transform)',
-                      boxShadow: selected ? 'var(--nav-item-shadow-hover)' : 'var(--nav-item-shadow)',
-                    },
                   }}
                 >
                   <ListItemIcon
-                    sx={{
+                    style={{
                       minWidth: iconBoxSize,
                       width: iconBoxSize,
                       height: iconBoxSize,
@@ -174,10 +169,9 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                       display: 'flex',
                       justifyContent: 'center',
                       alignItems: 'center',
-                      color: selected ? 'var(--nav-item-text-selected)' : 'text.primary',
+                      color: selected ? 'var(--nav-item-text-selected)' : 'inherit',
                       flexShrink: 0,
-                      mr: NAV_ICON_MARGIN,
-                      '& svg': { fontSize: iconBoxSize - 4 },
+                      marginRight: NAV_ICON_MARGIN * 8,
                     }}
                   >
                     {item.icon}
@@ -185,7 +179,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                   <ListItemText
                     primary={item.label}
                     secondary={item.oldLabel}
-                    sx={{
+                    style={{
                       opacity: isNavCollapsed ? 0 : 1,
                       maxWidth: isNavCollapsed ? 0 : '100%',
                       flex: 1,
@@ -195,7 +189,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                       transition: 'opacity 200ms var(--transition-bouncy), max-width 200ms var(--transition-bouncy)',
                     }}
                     primaryTypographyProps={{
-                      sx: {
+                      style: {
                         fontWeight: 700,
                         fontSize: NAV_PRIMARY_FONT_SIZE,
                         lineHeight: NAV_PRIMARY_LINE_HEIGHT,
@@ -204,11 +198,11 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                     }}
                     secondaryTypographyProps={{
                       variant: 'caption',
-                      color: selected ? 'var(--nav-item-text-selected)' : 'text.secondary',
-                      sx: {
+                      style: {
                         fontSize: NAV_SECONDARY_FONT_SIZE,
                         lineHeight: NAV_SECONDARY_LINE_HEIGHT,
-                        mt: 0.1,
+                        marginTop: 0.8,
+                        color: selected ? 'var(--nav-item-text-selected)' : undefined,
                       },
                       noWrap: true,
                     }}
@@ -220,7 +214,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                 
                 <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                   {item.subItems && (
-                    <List disablePadding sx={{ mt: NAV_SUB_VERTICAL_GAP, display: 'flex', flexDirection: 'column', gap: NAV_SUB_VERTICAL_GAP }}>
+                    <List disablePadding style={{ marginTop: NAV_SUB_VERTICAL_GAP * 8, display: 'flex', flexDirection: 'column', gap: `${NAV_SUB_VERTICAL_GAP * 8}px` }}>
                       {item.subItems.map((subItem: any) => {
                         const subSelected = location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/');
                         return (
@@ -232,38 +226,34 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                             onClick={() => {
                               if (isMobile) onCloseMobile();
                             }}
-                            sx={(theme) => ({
+                            style={{
                               borderRadius: 'var(--radius-ui)',
-                              pl: 0,
-                              pr: NAV_SUB_PADDING_RIGHT,
-                              py: 0,
+                              paddingLeft: 0,
+                              paddingRight: NAV_SUB_PADDING_RIGHT * 8,
+                              paddingTop: 0,
+                              paddingBottom: 0,
                               minHeight: NAV_SUB_MIN_HEIGHT,
                               height: NAV_SUB_MIN_HEIGHT,
-                              width: `calc(100% - ${theme.spacing(NAV_SUB_TEXT_INDENT)})`,
-                              ml: theme.spacing(NAV_SUB_TEXT_INDENT),
+                              width: `calc(100% - ${sp(NAV_SUB_TEXT_INDENT)})`,
+                              marginLeft: sp(NAV_SUB_TEXT_INDENT),
                               border: subSelected ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)',
-                              bgcolor: subSelected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
+                              backgroundColor: subSelected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
                               boxShadow: subSelected ? 'var(--nav-item-shadow-selected)' : 'var(--nav-item-shadow)',
-                              color: subSelected ? 'var(--nav-item-text-selected)' : 'text.secondary',
-                              '&:hover': {
-                                bgcolor: subSelected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg-hover)',
-                                transform: subSelected ? 'var(--nav-item-transform-hover)' : 'var(--nav-item-transform)',
-                                boxShadow: subSelected ? 'var(--nav-item-shadow-hover)' : 'var(--nav-item-shadow)',
-                              },
-                            })}
+                              color: subSelected ? 'var(--nav-item-text-selected)' : 'inherit',
+                            }}
                           >
                             <ListItemText
                               primary={subItem.label}
-                              sx={(theme) => ({
+                              style={{
                                 minWidth: 0,
-                                pl: theme.spacing(NAV_SUB_HIGHLIGHT_LEFT_PADDING),
+                                paddingLeft: sp(NAV_SUB_HIGHLIGHT_LEFT_PADDING),
                                 overflow: 'hidden',
                                 whiteSpace: 'nowrap',
                                 textOverflow: 'ellipsis',
-                              })}
+                              }}
                               primaryTypographyProps={{
                                 variant: 'body2',
-                                sx: {
+                                style: {
                                   fontWeight: subSelected ? 700 : 500,
                                   fontSize: NAV_SUB_FONT_SIZE,
                                   lineHeight: NAV_SUB_LINE_HEIGHT,
@@ -279,7 +269,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                     </List>
                   )}
                 </Collapse>
-              </Box>
+              </div>
             );
 
             if (!isNavCollapsed) return button;
@@ -291,17 +281,17 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
             );
           })}
         </List>
-      </Box>
+      </div>
 
-      {!isNavCollapsed && !isCompactStorage && <Divider sx={{ my: 1 }} />}
+      {!isNavCollapsed && !isCompactStorage && <Divider style={{ marginTop: 8, marginBottom: 8 }} />}
 
       {!isCompactStorage && (
-        <Box sx={{ px: collapsed ? 1 : 2, pb: 0.5, textAlign: 'left' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: isNavCollapsed ? 'center' : 'flex-start', gap: 0.5 }}>
+        <div style={{ paddingLeft: collapsed ? 8 : 16, paddingRight: collapsed ? 8 : 16, paddingBottom: 4, textAlign: 'left' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: isNavCollapsed ? 'center' : 'flex-start', gap: 4 }}>
             <Typography
               variant="caption"
               color="text.secondary"
-              sx={{
+              style={{
                 display: 'block',
                 whiteSpace: 'nowrap',
                 overflow: isNavCollapsed ? 'visible' : 'hidden',
@@ -316,34 +306,36 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
             </Typography>
             {ytDlpUpdateAvailable && ytDlpUpdateTooltip && (
               <Tooltip title={ytDlpUpdateTooltip} placement="right" arrow>
-                <DownloadIcon sx={{ fontSize: '0.65rem', color: 'warning.main' }} />
+                <DownloadIcon size={11} style={{ color: 'var(--warning, orange)' }} />
               </Tooltip>
             )}
-          </Box>
-        </Box>
+          </div>
+        </div>
       )}
 
       {isCompactStorage ? (
-        <Box
-          sx={{
-            px: 1.5,
-            py: 0.75,
+        <div
+          style={{
+            paddingLeft: 12,
+            paddingRight: 12,
+            paddingTop: 6,
+            paddingBottom: 6,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 1,
+            gap: 8,
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Typography variant="caption" color="text.secondary" style={{ fontWeight: 600 }}>
               {versionLabel || 'yt-dlp'}
             </Typography>
             {ytDlpUpdateAvailable && ytDlpUpdateTooltip && (
               <Tooltip title={ytDlpUpdateTooltip} placement="top" arrow>
-                <DownloadIcon sx={{ fontSize: '0.65rem', color: 'warning.main' }} />
+                <DownloadIcon size={11} style={{ color: 'var(--warning, orange)' }} />
               </Tooltip>
             )}
-          </Box>
+          </div>
           <StorageFooterWidget
             token={token}
             collapsed={collapsed}
@@ -351,63 +343,67 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
             inline
             justify="flex-end"
           />
-        </Box>
+        </div>
       ) : (
         <StorageFooterWidget token={token} collapsed={collapsed} />
       )}
 
-      <Box sx={{ height: 8 }} />
-    </Box>
+      <div style={{ height: 8 }} />
+    </div>
   );
 
   // --- MOBILE SPECIFIC RENDERING ---
 
   // 1. Playful Bottom Navigation
   if (isMobile && isPlayful) {
+    const activeIndex = navItems.findIndex(item => location.pathname === item.to || location.pathname.startsWith(item.to + '/'));
     return (
-      <Paper 
-        elevation={3} 
-        sx={{ 
-          position: 'fixed', 
-          bottom: 0, 
-          left: 0, 
-          right: 0, 
+      <Paper
+        elevation={3}
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
           zIndex: 1300,
-          pb: 'env(safe-area-inset-bottom)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
           borderRadius: 'var(--radius-ui) var(--radius-ui) 0 0',
           borderTop: 'var(--nav-border)',
-          bgcolor: 'background.paper',
-          overflow: 'hidden'
+          backgroundColor: 'var(--card)',
+          overflow: 'hidden',
         }}
       >
-        <BottomNavigation
-          showLabels
-          value={navItems.findIndex(item => location.pathname === item.to || location.pathname.startsWith(item.to + '/'))}
-          onChange={(_, newValue) => {
-            if (navItems[newValue]) {
-              navigate(navItems[newValue].to);
-            }
-          }}
-          sx={{ height: 64, bgcolor: 'transparent' }}
-        >
-          {navItems.map((item) => (
-            <BottomNavigationAction
-              key={item.key}
-              label={item.label}
-              icon={item.icon}
-              sx={{
-                color: 'text.secondary',
-                '&.Mui-selected': {
-                  color: 'primary.main',
-                  '& .MuiSvgIcon-root': {
-                    transform: 'scale(1.2)',
-                    transition: 'transform 0.2s'
-                  }
-                },
-              }}
-            />
-          ))}
-        </BottomNavigation>
+        <nav style={{ display: 'flex', height: 64, backgroundColor: 'transparent' }}>
+          {navItems.map((item, index) => {
+            const isActive = index === activeIndex;
+            return (
+              <button
+                key={item.key}
+                onClick={() => navigate(item.to)}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 2,
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: isActive ? 'var(--primary)' : 'var(--muted-foreground)',
+                  padding: '4px 0',
+                  transition: 'color 0.2s',
+                }}
+              >
+                {React.cloneElement(item.icon as React.ReactElement, {
+                  size: isActive ? 26 : 22,
+                  style: { transition: 'all 0.2s' },
+                })}
+                <span style={{ fontSize: '0.65rem', lineHeight: 1 }}>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
       </Paper>
     );
   }
@@ -416,8 +412,8 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
   if (isMobile && isNeumorphic) {
     const activePodItem = navItems.find((item) => expandedItems[item.key]);
     return (
-      <Box
-        sx={{
+      <div
+        style={{
           position: 'fixed',
           bottom: 'calc(8px + env(safe-area-inset-bottom))',
           left: '50%',
@@ -430,7 +426,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
         {activePodItem?.subItems && (
           <Paper
             className="neumo-breathe"
-            sx={{
+            style={{
               position: 'fixed',
               left: '50%',
               transform: 'translateX(-50%)',
@@ -438,8 +434,8 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
               width: '88%',
               maxWidth: 360,
               borderRadius: 'var(--radius-ui)',
-              p: 0.75,
-              bgcolor: 'background.paper',
+              padding: 6,
+              backgroundColor: 'var(--card)',
               border: 'var(--nav-border)',
               boxShadow: 'var(--nav-shadow)',
               zIndex: 1301,
@@ -447,7 +443,10 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
               overflowY: 'auto',
             }}
           >
-            <List disablePadding sx={{ px: 0.25, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            <List
+              disablePadding
+              style={{ paddingLeft: 2, paddingRight: 2, display: 'flex', flexDirection: 'column', gap: 4 }}
+            >
               {activePodItem.subItems.map((subItem: any) => {
                 const subSelected = location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/');
                 return (
@@ -459,26 +458,22 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                     onClick={() => {
                       setExpandedItems({});
                     }}
-                    sx={{
+                    style={{
                       borderRadius: 'var(--radius-ui)',
                       minHeight: 32,
-                      px: 1,
+                      paddingLeft: 8,
+                      paddingRight: 8,
                       border: subSelected ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)',
-                      bgcolor: subSelected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
+                      backgroundColor: subSelected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
                       boxShadow: subSelected ? 'var(--nav-item-shadow-selected)' : 'var(--nav-item-shadow)',
-                      color: subSelected ? 'var(--nav-item-text-selected)' : 'text.secondary',
-                      '&:hover': {
-                        bgcolor: subSelected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg-hover)',
-                        transform: subSelected ? 'var(--nav-item-transform-hover)' : 'var(--nav-item-transform)',
-                        boxShadow: subSelected ? 'var(--nav-item-shadow-hover)' : 'var(--nav-item-shadow)',
-                      },
+                      color: subSelected ? 'var(--nav-item-text-selected)' : 'inherit',
                     }}
                   >
                     <ListItemText
                       primary={subItem.label}
                       primaryTypographyProps={{
                         variant: 'body2',
-                        sx: {
+                        style: {
                           fontWeight: subSelected ? 700 : 500,
                           fontSize: NAV_SUB_FONT_SIZE,
                           lineHeight: NAV_SUB_LINE_HEIGHT,
@@ -496,13 +491,13 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
         )}
         <Paper
           className="neumo-breathe"
-          sx={{
+          style={{
             borderRadius: 'var(--radius-ui)',
-            p: 0.5,
+            padding: 4,
             display: 'flex',
             justifyContent: 'space-around',
             alignItems: 'center',
-            bgcolor: 'background.paper',
+            backgroundColor: 'var(--card)',
             border: 'var(--nav-border)',
             boxShadow: 'var(--nav-shadow)',
           }}
@@ -510,7 +505,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
           {navItems.map((item) => {
             const selected = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
             return (
-              <Box
+              <div
                 key={item.key}
                 onClick={() => {
                   if (item.subItems) {
@@ -520,8 +515,8 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                     navigate(item.to);
                   }
                 }}
-                sx={{
-                  p: 1,
+                style={{
+                  padding: 8,
                   borderRadius: 'var(--radius-ui)',
                   display: 'flex',
                   alignItems: 'center',
@@ -529,60 +524,75 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                   cursor: 'pointer',
                   transition: 'all 0.2s',
                   border: selected ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)',
-                  bgcolor: selected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
+                  backgroundColor: selected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
                   boxShadow: selected ? 'var(--nav-item-shadow-selected)' : 'var(--nav-item-shadow)',
-                  color: selected ? 'var(--nav-item-text-selected)' : 'text.secondary',
-                  '&:active': {
-                    transform: 'scale(0.9)',
-                  }
+                  color: selected ? 'var(--nav-item-text-selected)' : 'inherit',
                 }}
               >
-                {React.cloneElement(item.icon as React.ReactElement, { sx: { fontSize: 24 } })}
-              </Box>
+                {React.cloneElement(item.icon as React.ReactElement, { size: 24 })}
+              </div>
             );
           })}
         </Paper>
-      </Box>
+      </div>
     );
   }
 
   // 3. Desktop or Industrial Mobile Drawer
+  const drawerBorderRadius = isMobile && isLinearFlat
+    ? 'var(--radius-ui) var(--radius-ui) 0 0'
+    : NAV_DRAWER_BORDER_RADIUS;
+
+  const panelStyle: React.CSSProperties = {
+    position: 'fixed',
+    borderRadius: drawerBorderRadius,
+    border: 'var(--nav-border)',
+    boxShadow: 'var(--nav-shadow)',
+    backgroundColor: 'var(--card)',
+    marginTop: isMobile && isLinearFlat ? 'auto' : isMobile ? NAV_DRAWER_MOBILE_TOP_OFFSET : NAV_DRAWER_DESKTOP_TOP_OFFSET,
+    marginBottom: isMobile && isLinearFlat ? 0 : isMobile ? NAV_DRAWER_MOBILE_BOTTOM_GAP : NAV_DRAWER_DESKTOP_BOTTOM_GAP,
+    marginLeft: isMobile ? 0 : 'var(--shell-gap)',
+    maxHeight: isMobile && isLinearFlat ? '65vh' : isMobile ? NAV_DRAWER_MOBILE_MAX_HEIGHT : NAV_DRAWER_DESKTOP_MAX_HEIGHT,
+    overflow: 'hidden',
+    overflowX: 'hidden',
+    width: isMobile && isLinearFlat ? '100%' : drawerWidth,
+    boxSizing: 'border-box',
+    transition: 'width 300ms var(--transition-bouncy), padding 300ms var(--transition-bouncy)',
+    top: isMobile && isLinearFlat ? 'auto' : 0,
+    left: isMobile && isLinearFlat ? 0 : undefined,
+    right: isMobile && isLinearFlat ? 0 : undefined,
+    bottom: isMobile && isLinearFlat ? 0 : undefined,
+    zIndex: 1200,
+  };
+
+  // Mobile temporary drawer
+  if (isMobile) {
+    return (
+      <>
+        {drawerOpenMobile && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 1199,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+            }}
+            onClick={onCloseMobile}
+          />
+        )}
+        {drawerOpenMobile && (
+          <div className="app-nav-paper neumo-breathe" style={panelStyle}>
+            {drawerContent}
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // Desktop permanent drawer
   return (
-    <Drawer
-      variant={isMobile ? 'temporary' : 'permanent'}
-      anchor={isMobile && isLinearFlat ? 'bottom' : 'left'}
-      open={isMobile ? drawerOpenMobile : true}
-      onClose={onCloseMobile}
-      ModalProps={{ keepMounted: true }}
-      PaperProps={{
-        className: 'app-nav-paper neumo-breathe',
-        sx: {
-          borderRadius: isMobile && isLinearFlat ? 'var(--radius-ui) var(--radius-ui) 0 0' : NAV_DRAWER_BORDER_RADIUS,
-          borderBottomLeftRadius: isMobile && isLinearFlat ? 0 : NAV_DRAWER_BORDER_RADIUS,
-          borderBottomRightRadius: isMobile && isLinearFlat ? 0 : NAV_DRAWER_BORDER_RADIUS,
-          border: 'var(--nav-border)',
-          boxShadow: 'var(--nav-shadow)',
-          bgcolor: 'background.paper',
-          mt: isMobile && isLinearFlat ? 'auto' : isMobile ? NAV_DRAWER_MOBILE_TOP_OFFSET : NAV_DRAWER_DESKTOP_TOP_OFFSET,
-          mb: isMobile && isLinearFlat ? 0 : isMobile ? NAV_DRAWER_MOBILE_BOTTOM_GAP : NAV_DRAWER_DESKTOP_BOTTOM_GAP,
-          ml: isMobile ? 0 : 'var(--shell-gap)',
-          maxHeight: isMobile && isLinearFlat ? '65vh' : isMobile ? NAV_DRAWER_MOBILE_MAX_HEIGHT : NAV_DRAWER_DESKTOP_MAX_HEIGHT,
-          overflow: 'hidden',
-          overflowX: 'hidden',
-        },
-      }}
-      sx={{
-        width: isMobile ? (isLinearFlat ? '100%' : 0) : 'calc(var(--nav-width) + var(--shell-gap))',
-        flexShrink: 0,
-        transition: 'width 300ms var(--transition-bouncy)',
-        '& .MuiDrawer-paper': {
-          width: isMobile && isLinearFlat ? '100%' : drawerWidth,
-          boxSizing: 'border-box',
-          transition: 'width 300ms var(--transition-bouncy), padding 300ms var(--transition-bouncy)',
-        },
-      }}
-    >
+    <div className="app-nav-paper neumo-breathe" style={panelStyle}>
       {drawerContent}
-    </Drawer>
+    </div>
   );
 };

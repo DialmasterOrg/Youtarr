@@ -1,8 +1,6 @@
 import React from 'react';
-import { Box, Button, Typography, CircularProgress, Slide } from '@mui/material';
-import SaveIcon from '@mui/icons-material/Save';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import { Button, Typography, CircularProgress, Slide } from '../../ui';
+import { Save as SaveIcon, WarningAmber as WarningAmberIcon, ErrorOutline as ErrorOutlineIcon } from '../../../lib/icons';
 
 interface SaveBarProps {
   hasUnsavedChanges: boolean;
@@ -27,42 +25,38 @@ export const SaveBar: React.FC<SaveBarProps> = ({
 
   return (
     <Slide direction="down" in={isVisible} mountOnEnter unmountOnExit>
-      <Box
-        sx={{
+      <div
+        style={{
           position: 'fixed',
           top: 'calc(64px + var(--shell-gap, 0px))',
           left: 0,
           right: 0,
-          zIndex: (theme) => theme.zIndex.drawer + 2,
-          bgcolor: 'background.paper',
-          borderBottom: '2px solid',
-          borderTop: '1px solid',
-          borderColor: hasError ? 'error.main' : 'warning.main',
-          borderTopColor: 'transparent',
+          zIndex: 1302,
+          backgroundColor: 'var(--card)',
+          borderBottom: `2px solid ${hasError ? 'var(--destructive)' : 'var(--warning)'}`,
+          borderTop: '1px solid transparent',
           boxShadow: '0 4px 24px rgba(0,0,0,0.15)',
-          px: { xs: 2, sm: 4 },
-          py: 1,
+          padding: '8px 16px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 2,
+          gap: 16,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           {hasError ? (
-            <ErrorOutlineIcon color="error" fontSize="small" sx={{ flexShrink: 0 }} />
+            <ErrorOutlineIcon size={16} color="var(--destructive)" style={{ flexShrink: 0 }} />
           ) : (
-            <WarningAmberIcon color="warning" fontSize="small" sx={{ flexShrink: 0 }} />
+            <WarningAmberIcon size={16} color="var(--warning)" style={{ flexShrink: 0 }} />
           )}
           <Typography
             variant="body2"
             fontWeight={600}
-            color={hasError ? 'error.main' : 'warning.main'}
-            sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            style={{ color: hasError ? 'var(--destructive)' : 'var(--warning)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
           >
             {validationError ?? 'You have unsaved changes'}
           </Typography>
-        </Box>
+        </div>
 
         <Button
           variant="contained"
@@ -72,16 +66,16 @@ export const SaveBar: React.FC<SaveBarProps> = ({
             isLoading ? (
               <CircularProgress size={14} color="inherit" />
             ) : (
-              <SaveIcon />
+              <SaveIcon size={14} />
             )
           }
           onClick={onSave}
           disabled={isLoading || hasError}
-          sx={{ flexShrink: 0, minWidth: 100 }}
+          style={{ flexShrink: 0, minWidth: 100 }}
         >
           {isLoading ? 'Saving…' : 'Save'}
         </Button>
-      </Box>
+      </div>
     </Slide>
   );
 };
