@@ -481,7 +481,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                   <Button
                     color="inherit"
                     size="small"
-                    onClick={() => navigate('/settings')}
+                    onClick={() => navigate('/settings/integrations')}
                   >
                     Go to Settings
                   </Button>

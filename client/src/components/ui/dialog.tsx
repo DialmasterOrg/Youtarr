@@ -60,6 +60,7 @@ export interface DialogProps {
   fullWidth?: boolean;
   fullScreen?: boolean;
   PaperProps?: { sx?: Record<string, unknown>; className?: string };
+  BackdropProps?: Record<string, any>;
   children?: React.ReactNode;
   className?: string;
   disableEscapeKeyDown?: boolean;
@@ -73,6 +74,7 @@ const Dialog: React.FC<DialogProps> = ({
   fullWidth = false,
   fullScreen = false,
   PaperProps,
+  BackdropProps: backdropProps,
   children,
   className,
   disableEscapeKeyDown = false,
@@ -83,7 +85,7 @@ const Dialog: React.FC<DialogProps> = ({
     onOpenChange={(o) => { if (!o) onClose?.({}, 'backdropClick'); }}
   >
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay onClick={() => onClose?.({}, 'backdropClick')} {...(backdropProps || {})} />
       <DialogPrimitive.Content
         className={cn(
           'fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
@@ -101,7 +103,7 @@ const Dialog: React.FC<DialogProps> = ({
           className
         )}
         onEscapeKeyDown={(e) => { if (disableEscapeKeyDown) e.preventDefault(); else onClose?.({}, 'escapeKeyDown'); }}
-        onInteractOutside={() => { onClose?.({}, 'backdropClick'); }}
+        onInteractOutside={(e) => { e.preventDefault(); }}
         {...contentProps}
       >
         {children}

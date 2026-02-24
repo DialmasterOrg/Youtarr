@@ -35,6 +35,7 @@ const getMediaTypeInfo = (mediaType?: string) => {
 
 const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [tooltipOpen, setTooltipOpen] = useState(false);
 
   const handlePopoverOpen = (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();
@@ -136,8 +137,10 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
   return (
     <>
       <Grow in={true} timeout={300}>
-        <Tooltip title={getTooltipTitle()}>
+        <Tooltip title={getTooltipTitle()} open={tooltipOpen}>
           <Chip
+            onMouseOver={() => setTooltipOpen(true)}
+            onMouseOut={() => setTooltipOpen(false)}
             onClick={() => {}}
             aria-label={getTooltipTitle()}
             label={chipLabel}

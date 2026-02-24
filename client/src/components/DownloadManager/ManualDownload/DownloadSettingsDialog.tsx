@@ -158,7 +158,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       const settingsToSave: any = {
         useCustom: useCustomSettings,
         resolution: resolution,
-        allowRedownload: allowRedownload
+        allowRedownload: allowRedownload,
+        rating: null,
       };
 
       if (mode === 'channel') {
@@ -182,7 +183,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
         videoCount: mode === 'channel' ? (useCustomSettings ? channelVideoCount : defaultVideoCount) : 0,
         allowRedownload,
         subfolder: mode === 'manual' ? subfolderOverride : undefined,
-        audioFormat: mode === 'manual' ? audioFormat : undefined
+        audioFormat: mode === 'manual' ? audioFormat : undefined,
+        rating: 'NR',
       });
     } else {
       onConfirm(null); // Use defaults

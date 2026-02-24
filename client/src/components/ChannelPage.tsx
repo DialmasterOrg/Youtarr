@@ -304,6 +304,7 @@ function ChannelPage({ token }: ChannelPageProps) {
                 src={channel ? `/images/channelthumb-${channel_id}.jpg` : ''}
                 alt="Channel thumbnail"
                 className="w-full h-full object-cover rounded-xl bg-muted block"
+                style={{ border: '1px solid' }}
               />
             </Grid>
             <Grid
@@ -345,6 +346,7 @@ function ChannelPage({ token }: ChannelPageProps) {
                 >
                   <Typography
                     variant={isMobile ? 'body2' : 'body1'}
+                    component="span"
                     align="left"
                     color="text.secondary"
                     style={{ lineHeight: 1.6 }}

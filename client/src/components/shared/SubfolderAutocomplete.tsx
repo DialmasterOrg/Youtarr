@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useId } from 'react';
+import React, { useMemo, useState, useId, useEffect } from 'react';
 import {
   Select,
   MenuItem,
@@ -71,10 +71,20 @@ export function SubfolderAutocomplete({
 }: SubfolderAutocompleteProps) {
   // State for the Add Subfolder dialog
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  // Pending flag: true → open the dialog on the next effect flush (avoids Radix layer conflicts)
+  const [pendingAddDialog, setPendingAddDialog] = useState(false);
   // Track locally added subfolders (not yet on filesystem)
   const [localSubfolders, setLocalSubfolders] = useState<string[]>([]);
   // Controlled open state for the underlying Select
   const [isOpen, setIsOpen] = useState(false);
+
+  // Open AddSubfolderDialog after the Select has closed and React has flushed
+  useEffect(() => {
+    if (pendingAddDialog) {
+      setAddDialogOpen(true);
+      setPendingAddDialog(false);
+    }
+  }, [pendingAddDialog]);
   // Stable id for label ↔ input association
   const inputId = useId();
 
@@ -161,14 +171,8 @@ export function SubfolderAutocomplete({
       });
     });
 
-    // Add "Add Subfolder" option at the end
-    opts.push({
-      label: 'Add Subfolder',
-      value: ADD_NEW_SENTINEL,
-      isSpecial: false,
-      isAddNew: true,
-      group: 'actions',
-    });
+    // Note: "Add Subfolder" is rendered as a button BELOW the Select, not as a dropdown option.
+    // This makes it reliably clickable in tests without depending on Radix Select portal events.
 
     return opts;
   }, [mode, allSubfolders, defaultSubfolderDisplay]);
@@ -370,6 +374,30 @@ export function SubfolderAutocomplete({
           );
         })}
       </Select>
+      {/* "Add Subfolder" lives outside the Radix portal so it sits inside the
+          Dialog's DOM subtree and keeps pointer-events: auto even when a parent
+          Radix Dialog has set body pointer-events to none. */}
+      <button
+        type="button"
+        onClick={() => { setIsOpen(false); setPendingAddDialog(true); }}
+        style={{
+          marginTop: 4,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          color: 'var(--primary)',
+          fontSize: '0.8rem',
+          fontWeight: 500,
+          padding: '2px 0',
+          pointerEvents: 'auto',
+        }}
+      >
+        <AddIcon size={14} style={{ color: 'var(--primary)' }} />
+        Add Subfolder
+      </button>
       {helperText && (
         <Typography variant="caption" color="text.secondary" style={{ marginTop: 4, display: 'block' }}>
           {helperText}

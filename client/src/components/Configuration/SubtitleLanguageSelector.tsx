@@ -47,8 +47,10 @@ function SubtitleLanguageSelector({
   const [open, setOpen] = useState(false);
 
   // Convert string value to array when component mounts or value changes
+  // Also close dropdown when value prop changes externally (controlled rerender)
   useEffect(() => {
     setSelectedLanguages(parseInitialLanguages(value));
+    setOpen(false);
   }, [value, parseInitialLanguages]);
 
   const handleToggleLanguage = (code: string) => {

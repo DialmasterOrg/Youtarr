@@ -97,6 +97,7 @@ const Popover: React.FC<PopoverProps> = ({ open, anchorEl, onClose, children, cl
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
+        onKeyDown={(e) => { if (e.key === 'Escape') onClose?.(); }}
         style={pos ? { position: 'absolute', top: pos.top + 4, left: pos.left, zIndex: 1300 } : undefined}
         className={cn(
           'rounded-[var(--radius-ui)]',
