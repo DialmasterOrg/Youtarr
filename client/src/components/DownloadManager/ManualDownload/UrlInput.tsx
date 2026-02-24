@@ -29,18 +29,20 @@ const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled 
       }
 
       debounceTimerRef.current = setTimeout(async () => {
-        await onValidate(pastedText);
-        // Always clear input after validation attempt
-        setInputValue('');
+        const isValid = await onValidate(pastedText);
+        if (isValid) {
+          setInputValue('');
+        }
       }, 500);
     }
   }, [onValidate]);
 
   const handleAddClick = useCallback(async () => {
     if (inputValue.trim() && !isValidating) {
-      await onValidate(inputValue.trim());
-      // Always clear input after validation attempt
-      setInputValue('');
+      const isValid = await onValidate(inputValue.trim());
+      if (isValid) {
+        setInputValue('');
+      }
     }
   }, [inputValue, isValidating, onValidate]);
 
@@ -68,9 +70,10 @@ const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled 
         }
 
         debounceTimerRef.current = setTimeout(async () => {
-          await onValidate(text);
-          // Always clear input after validation attempt
-          setInputValue('');
+          const isValid = await onValidate(text);
+          if (isValid) {
+            setInputValue('');
+          }
         }, 500);
       }
     } catch (error) {
@@ -114,10 +117,11 @@ const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled 
             <button
               type="button"
               onClick={handlePasteButtonClick}
+              aria-label="Paste from clipboard"
               style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 4, opacity: (disabled || isValidating) ? 0.5 : 1 }}
               disabled={disabled || isValidating}
             >
-              <PasteIcon size={18} />
+              <PasteIcon size={18} data-testid="ContentPasteIcon" />
             </button>
           </Tooltip>
         ),
@@ -131,6 +135,7 @@ const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled 
                   <button
                     type="button"
                     onClick={handleClear}
+                    aria-label="Clear"
                     style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 4, opacity: disabled ? 0.5 : 1 }}
                     disabled={disabled}
                   >
@@ -140,6 +145,7 @@ const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled 
                 <button
                   type="button"
                   onClick={handleAddClick}
+                  aria-label="Add"
                   style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 4, color: 'var(--primary)', opacity: (!inputValue.trim() || disabled) ? 0.5 : 1 }}
                   disabled={!inputValue.trim() || disabled}
                 >

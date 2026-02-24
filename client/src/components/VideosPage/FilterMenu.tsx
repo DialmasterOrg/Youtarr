@@ -56,6 +56,7 @@ const FilterMenu: React.FC<FilterMenuProps> = ({
     >
       <div style={{ padding: '8px 16px', position: 'sticky', top: 0, backgroundColor: 'var(--card)', zIndex: 1 }}>
         <TextField
+          type="text"
           size="small"
           fullWidth
           placeholder="Search channels..."

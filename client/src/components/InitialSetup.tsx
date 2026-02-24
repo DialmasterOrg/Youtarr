@@ -160,7 +160,7 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
                 marginBottom: 8,
               }}
             >
-              Youtarr
+              Welcome to Youtarr Setup
             </Typography>
             <Typography
               variant="subtitle1"
@@ -176,9 +176,9 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
 
           {/* Info alert */}
           <Alert severity="info" style={{ marginBottom: 24, borderRadius: 'var(--radius-ui)' }}>
-            <AlertTitle>Create your admin account</AlertTitle>
+            <AlertTitle>Important</AlertTitle>
             <Typography variant="body2">
-              Set your login credentials to secure your Youtarr instance. Access via localhost is required for this step.
+              Youtarr uses local authentication by default. Initial setup requires access via localhost.
             </Typography>
           </Alert>
 
@@ -241,7 +241,7 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
                 letterSpacing: isLinear ? '0.1em' : 'normal',
               }}
             >
-              {loading ? 'Setting up...' : 'Create Account'}
+              {loading ? 'Setting up...' : 'Complete Setup'}
             </Button>
 
             {loading && <LinearProgress style={{ marginTop: 16, borderRadius: 'var(--radius-ui)' }} />}
@@ -255,6 +255,18 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
               display: 'block',
               textAlign: 'center',
               marginTop: 24,
+              fontFamily: 'var(--font-body)',
+            }}
+          >
+            After setup, you can access Youtarr from anywhere.
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            style={{
+              display: 'block',
+              textAlign: 'center',
+              marginTop: 4,
               fontFamily: 'var(--font-body)',
             }}
           >

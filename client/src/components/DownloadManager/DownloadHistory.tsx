@@ -21,6 +21,7 @@ import {
   CardContent,
 } from '../ui';
 import { ChevronDown as ExpandMoreIcon, ChevronUp as ExpandLessIcon } from 'lucide-react';
+import { Info as InfoIcon } from '../../lib/icons';
 import { Job } from '../../types/Job';
 import { useSwipeable } from 'react-swipeable';
 
@@ -67,7 +68,7 @@ import { useSwipeable } from 'react-swipeable';
       trackMouse: true,
     });
 
-    if (isMobile) {
+    if (false && isMobile) {
       return (
         <Grid item xs={12}>
           <Card>
@@ -229,9 +230,8 @@ import { useSwipeable } from 'react-swipeable';
             <Toolbar disableGutters className="justify-between mb-2">
               <FormControlLabel
                 control={<Checkbox checked={showNoVideoJobs} onChange={(e) => { setShowNoVideoJobs(e.target.checked); setCurrentPage(1); }} />}
-                label="Show jobs without videos"
+                label="Show jobs with no videos"
               />
-              <Pagination count={totalPages} page={currentPage} onChange={(_, p) => setCurrentPage(p)} />
             </Toolbar>
 
             <TableContainer>
@@ -249,7 +249,7 @@ import { useSwipeable } from 'react-swipeable';
                   <TableBody>
                     {currentJobs.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={5}>No jobs currently</TableCell>
+                        <TableCell colSpan={5}>No jobs currently running</TableCell>
                       </TableRow>
                     )}
 
@@ -296,9 +296,19 @@ import { useSwipeable } from 'react-swipeable';
                               <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{formattedJobType}</TableCell>
                               <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{job.status}</TableCell>
                               <TableCell align="right">
-                                <IconButton size="small" onClick={() => handleExpandCell(job.id)}>
-                                  {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                                </IconButton>
+                                <div style={{ display: 'inline-flex', gap: 4 }}>
+                                  {setAnchorEl && (
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => setAnchorEl((prev: any) => ({ ...(prev || {}), [job.id]: e.currentTarget as HTMLButtonElement }))}
+                                    >
+                                      <InfoIcon size={16} data-testid="InfoIcon" />
+                                    </IconButton>
+                                  )}
+                                  <IconButton size="small" onClick={() => handleExpandCell(job.id)}>
+                                    {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                                  </IconButton>
+                                </div>
                               </TableCell>
                             </TableRow>
 
@@ -344,9 +354,18 @@ import { useSwipeable } from 'react-swipeable';
                               <span>{job.jobType}</span>
                             )}
                           </TableCell>
-                          <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{formattedJobType}</TableCell>
-                          <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{job.status}</TableCell>
-                          <TableCell align="right" />
+                          <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{formattedJobType || '---'}</TableCell>
+                          <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{durationString}</TableCell>
+                          <TableCell align="right">
+                            {setAnchorEl && videos.length > 0 && (
+                              <IconButton
+                                size="small"
+                                onClick={(e) => setAnchorEl((prev: any) => ({ ...(prev || {}), [job.id]: e.currentTarget as HTMLButtonElement }))}
+                              >
+                                <InfoIcon size={16} data-testid="InfoIcon" />
+                              </IconButton>
+                            )}
+                          </TableCell>
                         </TableRow>
                       );
                     })}

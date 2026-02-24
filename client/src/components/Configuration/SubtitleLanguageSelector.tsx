@@ -83,7 +83,11 @@ function SubtitleLanguageSelector({
       <button
         id="subtitle-language-select"
         type="button"
-        onClick={() => { if (!disabled) setOpen((v) => !v); }}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          if (!disabled) setOpen(true);
+        }}
+        onClick={() => { if (!disabled) setOpen(true); }}
         disabled={disabled}
         aria-disabled={disabled ? 'true' : undefined}
         aria-expanded={open}
@@ -100,11 +104,19 @@ function SubtitleLanguageSelector({
           fontSize: '0.875rem',
           opacity: disabled ? 0.5 : 1,
           cursor: disabled ? 'not-allowed' : 'auto',
+          display: 'flex',
+          gap: 6,
+          flexWrap: 'wrap',
         }}
       >
-        {selectedLanguages
-          .map((code) => LANGUAGE_OPTIONS.find((o) => o.code === code)?.label || code)
-          .join(', ')}
+        {selectedLanguages.map((code) => {
+          const label = LANGUAGE_OPTIONS.find((o) => o.code === code)?.label || code;
+          return (
+            <span key={code} style={{ padding: '2px 6px', borderRadius: 999, background: 'var(--muted)' }}>
+              {label}
+            </span>
+          );
+        })}
       </button>
       {open && !disabled && (
         <div role="listbox" aria-label="Subtitle Languages options" style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-input)', padding: 4, maxHeight: 220, overflowY: 'auto' }}>
@@ -130,10 +142,7 @@ function SubtitleLanguageSelector({
         </div>
       )}
       <span style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)' }}>
-        Selected: {selectedLanguages.map((code) => {
-          const opt = LANGUAGE_OPTIONS.find((o) => o.code === code);
-          return opt ? opt.label : code;
-        }).join(', ')}
+        Selected: {selectedLanguages.join(', ')}
       </span>
     </div>
   );

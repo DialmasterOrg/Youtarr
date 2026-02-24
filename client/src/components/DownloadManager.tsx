@@ -8,10 +8,9 @@ import React, {
 import { Grid } from './ui';
 import useMediaQuery from '../hooks/useMediaQuery';
 import axios from 'axios';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import DownloadNew from './DownloadManager/DownloadNew';
 import DownloadProgress from './DownloadManager/DownloadProgress';
 import DownloadHistory from './DownloadManager/DownloadHistory';
-import DownloadManualPage from './DownloadManager/DownloadManualPage';
 import WebSocketContext from '../contexts/WebSocketContext';
 import { Job } from '../types/Job';
 
@@ -20,9 +19,11 @@ interface DownloadManagerProps {
 }
 
 function DownloadManager({ token }: DownloadManagerProps) {
+  const [videoUrls, setVideoUrls] = useState('');
   const [jobs, setJobs] = useState<Job[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [anchorEl, setAnchorEl] = useState<Record<string, null | HTMLButtonElement>>({});
   const downloadInitiatedRef = useRef(false);
   const downloadProgressRef = useRef<{ index: number | null; message: string }>(
     { index: null, message: '' }
@@ -92,47 +93,30 @@ function DownloadManager({ token }: DownloadManagerProps) {
   const pendingJobs = jobs.filter(job => job.status === 'Pending');
 
   return (
-    <Routes>
-      <Route index element={<Navigate to="manual" replace />} />
-      <Route
-        path="manual"
-        element={
-          <DownloadManualPage
-            token={token}
-            fetchRunningJobs={fetchRunningJobs}
-            downloadInitiatedRef={downloadInitiatedRef}
-          />
-        }
+    <Grid container spacing={2}>
+      <DownloadNew
+        videoUrls={videoUrls}
+        setVideoUrls={setVideoUrls}
+        token={token}
+        fetchRunningJobs={fetchRunningJobs}
+        downloadInitiatedRef={downloadInitiatedRef}
       />
-      <Route
-        path="activity"
-        element={
-          <Grid container spacing={2}>
-            <DownloadProgress
-              downloadProgressRef={downloadProgressRef}
-              downloadInitiatedRef={downloadInitiatedRef}
-              pendingJobs={pendingJobs}
-              token={token}
-            />
-          </Grid>
-        }
+      <DownloadProgress
+        downloadProgressRef={downloadProgressRef}
+        downloadInitiatedRef={downloadInitiatedRef}
+        pendingJobs={pendingJobs}
+        token={token}
       />
-      <Route
-        path="history"
-        element={
-          <Grid container spacing={2}>
-            <DownloadHistory
-              jobs={jobs}
-              expanded={expanded}
-              handleExpandCell={handleExpandCell}
-              currentTime={currentTime}
-              isMobile={isMobile}
-            />
-          </Grid>
-        }
+      <DownloadHistory
+        jobs={jobs}
+        expanded={expanded}
+        anchorEl={anchorEl}
+        setAnchorEl={setAnchorEl}
+        handleExpandCell={handleExpandCell}
+        currentTime={currentTime}
+        isMobile={isMobile}
       />
-      <Route path="*" element={<Navigate to="manual" replace />} />
-    </Routes>
+    </Grid>
   );
 }
 

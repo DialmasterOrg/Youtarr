@@ -32,6 +32,8 @@ const LinearProgress = React.forwardRef<HTMLDivElement, LinearProgressProps>(
       <ProgressPrimitive.Root
         ref={ref}
         value={variant === 'determinate' ? value : undefined}
+        role="progressbar"
+        aria-valuenow={variant === 'determinate' ? Math.round(value ?? 0) : undefined}
         className={cn(
           'relative w-full overflow-hidden rounded-full bg-muted',
           !height && 'h-1',

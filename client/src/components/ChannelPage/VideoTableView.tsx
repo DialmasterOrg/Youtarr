@@ -4,7 +4,7 @@ import {
   Typography,
   Chip,
 } from '../ui';
-import { ArrowUpward as ArrowUpwardIcon, ArrowDownward as ArrowDownwardIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon } from '../../lib/icons';
+import { ArrowUpward as ArrowUpwardIcon, ArrowDownward as ArrowDownwardIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon, Delete as DeleteIcon } from '../../lib/icons';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml } from '../../utils/formatters';
@@ -81,7 +81,7 @@ function VideoTableView({
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 Title
                 {sortBy === 'title' && (
-                  sortOrder === 'asc' ? <ArrowUpwardIcon size={16} /> : <ArrowDownwardIcon size={16} />
+                  sortOrder === 'asc' ? <ArrowUpwardIcon size={16} data-testid="ArrowUpwardIcon" /> : <ArrowDownwardIcon size={16} data-testid="ArrowDownwardIcon" />
                 )}
               </div>
             </th>
@@ -89,7 +89,7 @@ function VideoTableView({
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 Published
                 {sortBy === 'date' && (
-                  sortOrder === 'asc' ? <ArrowUpwardIcon size={16} /> : <ArrowDownwardIcon size={16} />
+                  sortOrder === 'asc' ? <ArrowUpwardIcon size={16} data-testid="ArrowUpwardIcon" /> : <ArrowDownwardIcon size={16} data-testid="ArrowDownwardIcon" />
                 )}
               </div>
             </th>
@@ -97,7 +97,7 @@ function VideoTableView({
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 Duration
                 {sortBy === 'duration' && (
-                  sortOrder === 'asc' ? <ArrowUpwardIcon size={16} /> : <ArrowDownwardIcon size={16} />
+                  sortOrder === 'asc' ? <ArrowUpwardIcon size={16} data-testid="ArrowUpwardIcon" /> : <ArrowDownwardIcon size={16} data-testid="ArrowDownwardIcon" />
                 )}
               </div>
             </th>
@@ -106,7 +106,7 @@ function VideoTableView({
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 Size
                 {sortBy === 'size' && (
-                  sortOrder === 'asc' ? <ArrowUpwardIcon size={16} /> : <ArrowDownwardIcon size={16} />
+                  sortOrder === 'asc' ? <ArrowUpwardIcon size={16} data-testid="ArrowUpwardIcon" /> : <ArrowDownwardIcon size={16} data-testid="ArrowDownwardIcon" />
                 )}
               </div>
             </th>
@@ -147,10 +147,32 @@ function VideoTableView({
                       />
                     )}
                     {isDeleteSelectable && isDeleteAllowed && (
-                      <Checkbox
-                        checked={isDeleteChecked}
-                        onChange={(e) => onDeletionChange(video.youtube_id, e.target.checked)}
-                      />
+                      isDeleteMode ? (
+                        <Checkbox
+                          checked={isDeleteChecked}
+                          onChange={(e) => onDeletionChange(video.youtube_id, e.target.checked)}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          aria-label="delete"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeletionChange(video.youtube_id, !isDeleteChecked);
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: 4,
+                            color: 'var(--destructive)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <DeleteIcon size={16} data-testid="DeleteIcon" />
+                        </button>
+                      )
                     )}
                     {!isStillLive && (!video.added || video.removed) && (
                       <button

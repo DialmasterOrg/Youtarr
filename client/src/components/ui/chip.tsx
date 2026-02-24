@@ -97,6 +97,7 @@ const Chip = React.forwardRef<HTMLDivElement, ChipProps>(
           variant === 'filled' && 'MuiChip-filled',
           color === 'primary' && 'MuiChip-colorPrimary',
           color === 'secondary' && 'MuiChip-colorSecondary',
+          color === 'default' && 'MuiChip-colorDefault',
           color === 'error' && 'MuiChip-colorError',
           color === 'warning' && 'MuiChip-colorWarning',
           color === 'success' && 'MuiChip-colorSuccess',
@@ -110,16 +111,14 @@ const Chip = React.forwardRef<HTMLDivElement, ChipProps>(
       icon && <span className="shrink-0 [&>svg]:h-[1em] [&>svg]:w-[1em]">{icon}</span>,
       <span key="label" className="px-0.5 truncate">{label}</span>,
       onDelete && (
-        <button
+        <span
           key="delete"
-          type="button"
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          disabled={disabled}
           aria-label="Remove"
           className="shrink-0 ml-0.5 -mr-1 rounded-full p-0.5 hover:bg-black/10 focus-visible:outline-none"
         >
           {deleteIcon ?? <X className="h-3 w-3" />}
-        </button>
+        </span>
       )
     );
   }

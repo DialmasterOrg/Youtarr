@@ -325,7 +325,7 @@ function VideosPage({ token }: VideosPageProps) {
           gutterBottom
           align='center'
         >
-          Downloaded Videos ({totalVideos} total)
+          Library ({totalVideos} total)
         </Typography>
 
         {loadError && (
@@ -427,7 +427,7 @@ function VideosPage({ token }: VideosPageProps) {
           <Box display='flex' justifyContent='center' mb={2}>
             <Button
               variant='outlined'
-              startIcon={<FilterListIcon />}
+              startIcon={<FilterListIcon data-testid="FilterListIcon" />}
               onClick={handleFilterClick}
               className="text-foreground border-border hover:bg-muted hover:border-foreground"
             >
@@ -475,7 +475,7 @@ function VideosPage({ token }: VideosPageProps) {
                             Downloaded Videos
                           </Typography>
                           <IconButton onClick={handleFilterClick} size="small">
-                            <FilterListIcon size={16} />
+                            <FilterListIcon size={16} data-testid="FilterListIcon" />
                           </IconButton>
                           <FilterMenu
                             anchorEl={anchorEl}
@@ -501,9 +501,15 @@ function VideosPage({ token }: VideosPageProps) {
                             direction={orderBy === 'added' ? sortOrder : 'asc'}
                             onClick={() => handleSortChange('added')}
                           >
-                            Downloaded
+                            Added
                           </TableSortLabel>
                         </Stack>
+                      </Box>
+                      <Box style={{ display: 'flex', gap: 16, marginTop: 8 }}>
+                        <Typography variant="caption">Thumbnail</Typography>
+                        <Typography variant="caption">Channel</Typography>
+                        <Typography variant="caption">Video Information</Typography>
+                        <Typography variant="caption">File Info</Typography>
                       </Box>
                     </TableCell>
                   </TableRow>
@@ -665,6 +671,7 @@ function VideosPage({ token }: VideosPageProps) {
                                     e.stopPropagation();
                                     toggleDeletionSelection(video.id);
                                   }}
+                                  data-testid="DeleteIcon"
                                   style={{
                                     position: 'absolute',
                                     top: 4,
@@ -704,13 +711,13 @@ function VideosPage({ token }: VideosPageProps) {
                                 <Box className="flex items-center gap-1">
                                   <ScheduleIcon size={14} className="text-muted-foreground" />
                                   <Typography variant='caption' className="text-muted-foreground">
-                                    Pub: {formatYTDate(video.originalDate)}
+                                    Published: {formatYTDate(video.originalDate)}
                                   </Typography>
                                 </Box>
                                 <Box className="flex items-center gap-1">
                                   <DownloadIcon size={14} className="text-muted-foreground" />
                                   <Typography variant='caption' className="text-muted-foreground">
-                                    {new Date(video.timeCreated).toLocaleDateString()}
+                                    Added: {new Date(video.timeCreated).toLocaleDateString()}
                                   </Typography>
                                 </Box>
                               </Box>
@@ -975,6 +982,7 @@ function VideosPage({ token }: VideosPageProps) {
                                     <IconButton
                                       color="error"
                                       size="small"
+                                      data-testid="DeleteIcon"
                                       onClick={() => handleDeleteSingleVideo(video.id)}
                                       disabled={Boolean(video.removed) || deleteLoading}
                                     >

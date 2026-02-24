@@ -73,6 +73,7 @@ const Checkbox = React.forwardRef<React.ElementRef<typeof CheckboxPrimitive.Root
         ref={ref}
         checked={effectiveChecked}
         name={name}
+        data-indeterminate={indeterminate ? 'true' : undefined}
         data-testid={inputProps?.['data-testid']}
         onCheckedChange={(v) =>
           onChange?.({

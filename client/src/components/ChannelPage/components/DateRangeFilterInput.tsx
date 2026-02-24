@@ -16,11 +16,21 @@ function DateRangeFilterInput({
   onToChange,
   compact = false,
 }: DateRangeFilterInputProps) {
-  const toInputValue = (date: Date | null) =>
-    date ? date.toISOString().split('T')[0] : '';
+  const toInputValue = (date: Date | null) => {
+    if (!date) return '';
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${month}/${day}/${year}`;
+  };
 
-  const fromInputValue = (val: string): Date | null =>
-    val ? new Date(val + 'T00:00:00') : null;
+  const fromInputValue = (val: string): Date | null => {
+    if (!val) return null;
+    const [month, day, year] = val.split('/').map((part) => Number(part));
+    if (!month || !day || !year) return null;
+    const parsed = new Date(year, month - 1, day);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  };
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -36,7 +46,7 @@ function DateRangeFilterInput({
       )}
       <input
         id="filter-from-date"
-        type="date"
+        type="text"
         role="textbox"
         value={toInputValue(dateFrom)}
         onChange={(e) => onFromChange(fromInputValue(e.target.value))}
@@ -54,7 +64,7 @@ function DateRangeFilterInput({
       )}
       <input
         id="filter-to-date"
-        type="date"
+        type="text"
         role="textbox"
         value={toInputValue(dateTo)}
         onChange={(e) => onToChange(fromInputValue(e.target.value))}

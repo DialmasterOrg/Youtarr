@@ -158,7 +158,7 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
       <Paper elevation={1} className="p-4 mb-4">
         <Typography variant="h6" gutterBottom className="flex items-center gap-2">
           <PlaylistAddIcon size={20} />
-          Download Youtube Video Manually
+          Add Videos to Download
         </Typography>
         <Typography variant="body2" color="text.secondary" className="mb-4">
           Paste YouTube video URLs to add to queue

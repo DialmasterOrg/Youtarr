@@ -82,7 +82,7 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
               onClick={handlePopoverOpen}
               style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 0, marginLeft: 4 }}
             >
-              <HistoryIcon size={14} style={{ color: 'var(--muted-foreground)' }} />
+              <HistoryIcon size={14} data-testid="HistoryIcon" style={{ color: 'var(--muted-foreground)' }} />
             </button>
           )}
         </div>
@@ -119,7 +119,7 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
           {formatDuration(video.duration)}
         </span>
       </div>
-      {video.isMembersOnly && <Lock size={16} style={{ marginLeft: 4 }} />}
+      {video.isMembersOnly && <Lock size={16} data-testid="LockIcon" style={{ marginLeft: 4 }} />}
     </div>
   );
 
@@ -138,9 +138,11 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
       <Grow in={true} timeout={300}>
         <Tooltip title={getTooltipTitle()}>
           <Chip
+            onClick={() => {}}
+            aria-label={getTooltipTitle()}
             label={chipLabel}
             onDelete={() => onDelete(video.youtubeId)}
-            deleteIcon={<CloseIcon size={14} />}
+            deleteIcon={<CloseIcon size={14} data-testid="CloseIcon" />}
             color={getChipColor()}
             variant="filled"
             style={{

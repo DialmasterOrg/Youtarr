@@ -309,7 +309,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
           title="Channels"
           action={
             <Tooltip title="Learn how channel downloads work">
-              <button type="button" onClick={() => setHelpDialogOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 8 }}>
+              <button aria-label="Learn how channel downloads work" className="MuiIconButton-root" type="button" onClick={() => setHelpDialogOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 8 }}>
                 <HelpOutlineIcon size={20} />
               </button>
             </Tooltip>
@@ -390,7 +390,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
               )}
 
               <Tooltip title={`Sort alphabetically (${sortOrder === 'asc' ? 'A → Z' : 'Z → A'})`}>
-                <button type="button" onClick={handleSortToggle} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', padding: 4, borderRadius: 4 }}>
+                <button aria-label={`Sort alphabetically (${sortOrder === 'asc' ? 'A → Z' : 'Z → A'})`} className="MuiIconButton-root" type="button" onClick={handleSortToggle} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', padding: 4, borderRadius: 4 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <SortByAlphaIcon size={18} />
                     {sortOrder === 'asc' ?
@@ -402,6 +402,8 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
 
               <Tooltip title="Filter by channel name">
                 <button
+                  aria-label="Filter by channel name"
+                  className={`MuiIconButton-root ${filterValue ? 'MuiIconButton-colorPrimary' : ''}`.trim()}
                   type="button"
                   onClick={handleFilterIconClick}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: filterValue ? 'var(--primary)' : 'inherit', display: 'inline-flex', alignItems: 'center', padding: 4, borderRadius: 4 }}
@@ -412,6 +414,8 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
 
               <Tooltip title={folderTooltip}>
                 <button
+                  aria-label={folderTooltip}
+                  className={`MuiIconButton-root ${folderControlActive ? 'MuiIconButton-colorPrimary' : ''}`.trim()}
                   type="button"
                   onClick={handleFolderMenuOpen}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: folderControlActive ? 'var(--primary)' : 'inherit', display: 'inline-flex', alignItems: 'center', padding: 4, borderRadius: 4 }}
@@ -513,13 +517,29 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
                 zIndex: 1,
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <button type="button" onClick={() => setPage(1)} disabled={page === 1} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}>{'\u00AB'}</button>
-                <button type="button" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}>{'\u2039'}</button>
+              <nav role="navigation" aria-label="pagination" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <button aria-label="go to first page" type="button" onClick={() => setPage(1)} disabled={page === 1} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}>{'\u00AB'}</button>
+                <button aria-label="go to previous page" type="button" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}>{'\u2039'}</button>
+                {Array.from({ length: Math.min(pageCount, 7) }, (_, idx) => {
+                  const startPage = Math.max(1, Math.min(page - 3, pageCount - 6));
+                  const pageNumber = startPage + idx;
+                  if (pageNumber > pageCount) return null;
+                  return (
+                    <button
+                      key={pageNumber}
+                      aria-label={`go to page ${pageNumber}`}
+                      type="button"
+                      onClick={() => setPage(pageNumber)}
+                      style={{ background: pageNumber === page ? 'var(--primary)' : 'none', color: pageNumber === page ? 'white' : 'inherit', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}
+                    >
+                      {pageNumber}
+                    </button>
+                  );
+                })}
                 <span style={{ padding: '2px 8px', fontSize: '0.875rem' }}>{page} / {pageCount}</span>
-                <button type="button" onClick={() => setPage(p => Math.min(pageCount, p + 1))} disabled={page === pageCount} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}>{'\u203A'}</button>
-                <button type="button" onClick={() => setPage(pageCount)} disabled={page === pageCount} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}>{'\u00BB'}</button>
-              </div>
+                <button aria-label="go to next page" type="button" onClick={() => setPage(p => Math.min(pageCount, p + 1))} disabled={page === pageCount} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}>{'\u203A'}</button>
+                <button aria-label="go to last page" type="button" onClick={() => setPage(pageCount)} disabled={page === pageCount} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}>{'\u00BB'}</button>
+              </nav>
             </div>
           </div>
         </div>

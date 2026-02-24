@@ -540,12 +540,12 @@ const Pagination: React.FC<PaginationProps> = ({ count, page, onChange, size = '
   const pages = Array.from({ length: count }, (_, i) => i + 1);
   const btnSize = size === 'small' ? 'h-7 w-7 text-xs' : size === 'large' ? 'h-10 w-10 text-base' : 'h-8 w-8 text-sm';
   return (
-    <div className={cn('flex items-center gap-1', className)} aria-label="pagination">
+    <nav className={cn('flex items-center gap-1', className)} aria-label="pagination" role="navigation">
       <button
         onClick={(e) => onChange?.(e, Math.max(1, page - 1))}
         disabled={page === 1}
         className={cn(btnSize, 'rounded border border-border disabled:opacity-40 hover:bg-muted transition-colors')}
-        aria-label="previous page"
+        aria-label="go to previous page"
       >
         ‹
       </button>
@@ -560,7 +560,7 @@ const Pagination: React.FC<PaginationProps> = ({ count, page, onChange, size = '
               ? 'bg-primary text-primary-foreground border-primary'
               : 'border-border hover:bg-muted'
           )}
-          aria-label={`page ${p}`}
+          aria-label={`go to page ${p}`}
           aria-current={p === page ? 'page' : undefined}
         >
           {p}
@@ -570,11 +570,11 @@ const Pagination: React.FC<PaginationProps> = ({ count, page, onChange, size = '
         onClick={(e) => onChange?.(e, Math.min(count, page + 1))}
         disabled={page === count}
         className={cn(btnSize, 'rounded border border-border disabled:opacity-40 hover:bg-muted transition-colors')}
-        aria-label="next page"
+        aria-label="go to next page"
       >
         ›
       </button>
-    </div>
+    </nav>
   );
 };
 

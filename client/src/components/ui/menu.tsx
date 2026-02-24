@@ -43,6 +43,9 @@ const Menu: React.FC<MenuProps> = ({ open, anchorEl, onClose, children, classNam
       {/* Menu panel */}
       <div
         role="menu"
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onClose?.();
+        }}
         style={pos ? { position: 'absolute', top: pos.top + 4, left: pos.left, zIndex: 1300 } : { position: 'absolute', top: 0, left: 0, zIndex: 1300 }}
         hidden={!open}
         aria-hidden={!open}

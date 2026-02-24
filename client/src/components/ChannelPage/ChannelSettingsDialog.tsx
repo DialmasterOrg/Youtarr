@@ -296,7 +296,15 @@ function ChannelSettingsDialog({
       setSuccess(true);
 
       if (onSettingsSaved) {
-        onSettingsSaved(updatedSettings);
+        onSettingsSaved({
+          sub_folder: updatedSettings.sub_folder,
+          video_quality: updatedSettings.video_quality,
+          min_duration: updatedSettings.min_duration,
+          max_duration: updatedSettings.max_duration,
+          title_filter_regex: updatedSettings.title_filter_regex,
+          audio_format: updatedSettings.audio_format,
+          default_rating: updatedSettings.default_rating,
+        } as ChannelSettings);
       }
 
       // Show success message briefly then close
@@ -306,6 +314,7 @@ function ChannelSettingsDialog({
 
       // If folder was moved, show additional info
       if (result.folderMoved && result.moveResult) {
+        console.log('Channel folder moved:', result.moveResult);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to save settings';
@@ -420,8 +429,8 @@ function ChannelSettingsDialog({
     return currentTabs.includes(tab);
   };
 
-  const renderSectionContent = () => {
-    switch (activeSection) {
+  const renderSectionContent = (sectionId: string) => {
+    switch (sectionId) {
       case 'general':
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -592,11 +601,17 @@ function ChannelSettingsDialog({
 
             <div>
               <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
-                Title Regex Filter
+                Download Filters
+              </Typography>
+              <Typography variant="caption" color="text.secondary" style={{ display: 'block', marginBottom: 8 }}>
+                Only download videos with titles matching regex pattern
+              </Typography>
+              <Typography variant="caption" color="text.secondary" style={{ display: 'block', marginBottom: 8 }}>
+                These filters only apply to channel downloads. Manually selected videos will always download.
               </Typography>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 8 }}>
                 <TextField
-                  label="Title Regex Pattern"
+                  label="Title Filter (Python Regex)"
                   value={settings.title_filter_regex || ''}
                   onChange={(e) => setSettings({
                     ...settings,
@@ -611,6 +626,7 @@ function ChannelSettingsDialog({
                   href="https://docs.python.org/3/library/re.html#regular-expression-syntax"
                   target="_blank"
                   rel="noopener noreferrer"
+                  title="Python regex documentation"
                   style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', color: 'var(--muted-foreground)' }}
                 >
                   <InfoIcon size={16} />
@@ -664,11 +680,11 @@ function ChannelSettingsDialog({
                 size="small"
               >
                 {loadingPreview ? <CircularProgress size={16} style={{ marginRight: 8 }} /> : null}
-                Preview Filter
+                Preview Regex
               </Button>
               {previewResult && (
                 <Typography variant="caption" color="text.secondary" style={{ marginLeft: 16 }}>
-                  {previewResult.matchCount} of {previewResult.totalCount} matches
+                  {previewResult.matchCount} of {previewResult.totalCount} recent videos match
                 </Typography>
               )}
             </div>
@@ -850,7 +866,19 @@ function ChannelSettingsDialog({
                 </Alert>
               )}
 
-              {renderSectionContent()}
+              {isMobile ? (
+                renderSectionContent(activeSection)
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                  {renderSectionContent('general')}
+                  <Divider />
+                  {renderSectionContent('auto-download')}
+                  <Divider />
+                  {renderSectionContent('filters')}
+                  <Divider />
+                  {renderSectionContent('ratings')}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -865,7 +893,7 @@ function ChannelSettingsDialog({
           disabled={saving || loading || !hasChanges()}
           style={{ minWidth: 100 }}
         >
-          {saving ? <CircularProgress size={24} /> : 'Save Settings'}
+          {saving ? <CircularProgress size={24} /> : 'Save'}
         </Button>
       </DialogActions>
     </Dialog>

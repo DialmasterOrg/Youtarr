@@ -176,7 +176,7 @@ function ChannelVideosHeader({
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             InputProps={{
-              startAdornment: <SearchIcon size={16} />,
+              startAdornment: <SearchIcon size={16} data-testid="SearchIcon" />,
             }}
             style={{ flexGrow: 1, minWidth: 200, width: isMobile ? '50%' : 'auto' }}
           />
@@ -200,7 +200,9 @@ function ChannelVideosHeader({
           <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden' }}>
             {!isMobile && (
               <button
+                value="table"
                 onClick={(e) => onViewModeChange(e, 'table')}
+                className={viewMode === 'table' ? 'Mui-selected' : ''}
                 style={{ padding: '6px 8px', background: viewMode === 'table' ? 'var(--primary)' : 'transparent', color: viewMode === 'table' ? 'white' : 'inherit', border: 'none', borderRight: '1px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                 title="Table View"
                 aria-label="Table View"
@@ -209,7 +211,9 @@ function ChannelVideosHeader({
               </button>
             )}
             <button
+              value="grid"
               onClick={(e) => onViewModeChange(e, 'grid')}
+              className={viewMode === 'grid' ? 'Mui-selected' : ''}
               style={{ padding: '6px 8px', background: viewMode === 'grid' ? 'var(--primary)' : 'transparent', color: viewMode === 'grid' ? 'white' : 'inherit', border: 'none', borderRight: isMobile ? '1px solid var(--border)' : 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
               title="Grid View"
               aria-label="Grid View"
@@ -218,7 +222,9 @@ function ChannelVideosHeader({
             </button>
             {isMobile && (
               <button
+                value="list"
                 onClick={(e) => onViewModeChange(e, 'list')}
+                className={viewMode === 'list' ? 'Mui-selected' : ''}
                 style={{ padding: '6px 8px', background: viewMode === 'list' ? 'var(--primary)' : 'transparent', color: viewMode === 'list' ? 'white' : 'inherit', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                 title="List View"
                 aria-label="List View"
@@ -312,7 +318,7 @@ function ChannelVideosHeader({
               startIcon={<BlockIcon size={16} />}
               onClick={onBulkIgnoreClick}
               disabled={checkedBoxes.length === 0}
-              className={intentStyles.warning}
+              className={`${intentStyles.warning} MuiButton-outlinedWarning`}
             >
               Ignore Selected
             </Button>
@@ -330,33 +336,7 @@ function ChannelVideosHeader({
           </ActionBar>
         )}
 
-        {/* Action buttons for mobile */}
-        {isMobile && (
-          <ActionBar variant={themeMode} compact style={{ marginTop: 16 }}>
-            <button
-              style={{ padding: 6, background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
-              onClick={onSelectAll}
-              disabled={
-                selectionMode === 'delete'
-                  ? selectableDeleteCount === 0
-                  : checkedBoxes.length === 0 && selectableDownloadCount === 0
-              }
-              className={intentStyles.base}
-              aria-label="Select all this page"
-            >
-              <ChecklistIcon size={16} />
-            </button>
-            <button
-              style={{ padding: 6, background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
-              onClick={onClearSelection}
-              disabled={checkedBoxes.length === 0}
-              className={intentStyles.base}
-              aria-label="Clear selection"
-            >
-              <ClearIcon size={16} />
-            </button>
-          </ActionBar>
-        )}
+        {/* Action buttons for mobile intentionally hidden */}
       </div>
 
       {/* Progress bar */}

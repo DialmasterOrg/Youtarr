@@ -58,10 +58,6 @@ function ChannelPage({ token }: ChannelPageProps) {
         if (!response.ok) {
           throw new Error(response.statusText);
         }
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          throw new Error('Unexpected response format');
-        }
         return response.json();
       })
       .then((data) => setChannel(data))

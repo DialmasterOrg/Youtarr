@@ -73,6 +73,7 @@ export interface ButtonProps
   extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'size'>,
     Omit<VariantProps<typeof buttonVariants>, 'size'> {
   size?: 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm' | 'small' | 'medium' | 'large' | null;
+  color?: 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success' | 'inherit';
   asChild?: boolean;
   startIcon?: React.ReactNode;
   endIcon?: React.ReactNode;
@@ -82,7 +83,7 @@ export interface ButtonProps
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, fullWidth, asChild = false, startIcon, endIcon, loading, children, disabled, component: _component, to: _to, ...props }, ref) => {
+  ({ className, variant, size, fullWidth, color = 'primary', asChild = false, startIcon, endIcon, loading, children, disabled, component: _component, to: _to, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button';
     const normalizedSize = size === 'small' ? 'sm' : size === 'medium' ? 'md' : size === 'large' ? 'lg' : size;
     
@@ -98,6 +99,14 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             variant === 'contained' && 'MuiButton-contained',
             variant === 'outlined' && 'MuiButton-outlined',
             variant === 'text' && 'MuiButton-text',
+            variant === 'contained' && color === 'primary' && 'MuiButton-containedPrimary',
+            variant === 'contained' && color === 'secondary' && 'MuiButton-containedSecondary',
+            variant === 'contained' && color === 'error' && 'MuiButton-containedError',
+            variant === 'contained' && color === 'warning' && 'MuiButton-containedWarning',
+            variant === 'outlined' && color === 'primary' && 'MuiButton-outlinedPrimary',
+            variant === 'outlined' && color === 'secondary' && 'MuiButton-outlinedSecondary',
+            variant === 'outlined' && color === 'error' && 'MuiButton-outlinedError',
+            variant === 'outlined' && color === 'warning' && 'MuiButton-outlinedWarning',
             normalizedSize === 'sm' && 'MuiButton-sizeSmall',
             normalizedSize === 'md' && 'MuiButton-sizeMedium',
             normalizedSize === 'lg' && 'MuiButton-sizeLarge'
@@ -118,6 +127,14 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           variant === 'contained' && 'MuiButton-contained',
           variant === 'outlined' && 'MuiButton-outlined',
           variant === 'text' && 'MuiButton-text',
+          variant === 'contained' && color === 'primary' && 'MuiButton-containedPrimary',
+          variant === 'contained' && color === 'secondary' && 'MuiButton-containedSecondary',
+          variant === 'contained' && color === 'error' && 'MuiButton-containedError',
+          variant === 'contained' && color === 'warning' && 'MuiButton-containedWarning',
+          variant === 'outlined' && color === 'primary' && 'MuiButton-outlinedPrimary',
+          variant === 'outlined' && color === 'secondary' && 'MuiButton-outlinedSecondary',
+          variant === 'outlined' && color === 'error' && 'MuiButton-outlinedError',
+          variant === 'outlined' && color === 'warning' && 'MuiButton-outlinedWarning',
           normalizedSize === 'sm' && 'MuiButton-sizeSmall',
           normalizedSize === 'md' && 'MuiButton-sizeMedium',
           normalizedSize === 'lg' && 'MuiButton-sizeLarge'

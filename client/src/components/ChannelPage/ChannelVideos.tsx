@@ -250,7 +250,6 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     maxRating,
     token,
     append: useInfiniteScroll && page > 1,
-    resetKey: JSON.stringify({ channelId, hideDownloaded, searchQuery, sortBy, sortOrder, selectedTab, maxRating, pageSize, filters }),
     minDuration: filters.minDuration,
     maxDuration: filters.maxDuration,
     dateFrom: filters.dateFrom,
@@ -997,21 +996,21 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
             </>
           )}
 
-          {!useInfiniteScroll && totalPages > 1 && (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-              <button onClick={() => { setPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={page <= 1} style={{ padding: '4px 8px', cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.4 : 1, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'inherit' }}>«</button>
-              <button onClick={() => { setPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={page <= 1} style={{ padding: '4px 8px', cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.4 : 1, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'inherit' }}>‹</button>
+          {totalPages > 1 && (
+            <nav role="navigation" aria-label="pagination" style={{ display: 'flex', justifyContent: 'center', padding: '16px 0', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button aria-label="go to first page" onClick={() => { setPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={page <= 1} style={{ padding: '4px 8px', cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.4 : 1, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'inherit' }}>«</button>
+              <button aria-label="go to previous page" onClick={() => { setPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={page <= 1} style={{ padding: '4px 8px', cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.4 : 1, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'inherit' }}>‹</button>
               {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
                 const start = Math.max(1, Math.min(page - 3, totalPages - 6));
                 const p = start + i;
                 if (p > totalPages) return null;
                 return (
-                  <button key={p} onClick={() => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ padding: '4px 10px', cursor: 'pointer', border: '1px solid var(--border)', borderRadius: 4, background: p === page ? 'var(--primary)' : 'transparent', color: p === page ? 'white' : 'inherit' }}>{p}</button>
+                  <button aria-label={`go to page ${p}`} key={p} onClick={() => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ padding: '4px 10px', cursor: 'pointer', border: '1px solid var(--border)', borderRadius: 4, background: p === page ? 'var(--primary)' : 'transparent', color: p === page ? 'white' : 'inherit' }}>{p}</button>
                 );
               })}
-              <button onClick={() => { setPage(p => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={page >= totalPages} style={{ padding: '4px 8px', cursor: page >= totalPages ? 'not-allowed' : 'pointer', opacity: page >= totalPages ? 0.4 : 1, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'inherit' }}>›</button>
-              <button onClick={() => { setPage(totalPages); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={page >= totalPages} style={{ padding: '4px 8px', cursor: page >= totalPages ? 'not-allowed' : 'pointer', opacity: page >= totalPages ? 0.4 : 1, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'inherit' }}>»</button>
-            </div>
+              <button aria-label="go to next page" onClick={() => { setPage(p => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={page >= totalPages} style={{ padding: '4px 8px', cursor: page >= totalPages ? 'not-allowed' : 'pointer', opacity: page >= totalPages ? 0.4 : 1, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'inherit' }}>›</button>
+              <button aria-label="go to last page" onClick={() => { setPage(totalPages); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={page >= totalPages} style={{ padding: '4px 8px', cursor: page >= totalPages ? 'not-allowed' : 'pointer', opacity: page >= totalPages ? 0.4 : 1, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'inherit' }}>»</button>
+            </nav>
           )}
         </div>
       </Card>

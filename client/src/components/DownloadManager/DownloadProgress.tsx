@@ -408,6 +408,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             <Box style={{ position: 'absolute', right: 16 }}>
               <Tooltip title="Stop the current download job">
                 <Button
+                  aria-label="Stop the current download job"
                   onClick={() => setShowTerminateDialog(true)}
                   disabled={isTerminating}
                   variant="contained"

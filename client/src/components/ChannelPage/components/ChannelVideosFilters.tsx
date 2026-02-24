@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   Button,
   Badge,
-  Collapse,
   Typography,
 } from '../../ui';
 import { ListFilter as FilterListIcon } from '../../../lib/icons';
@@ -104,7 +103,7 @@ function ChannelVideosFilters({
 
   // Desktop: Collapsible filter panel (button is in header, controlled by parent)
   return (
-    <Collapse in={filtersExpanded}>
+    <div style={{ display: filtersExpanded ? 'block' : 'none' }}>
       <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
           <DurationFilterInput
@@ -136,7 +135,7 @@ function ChannelVideosFilters({
           )}
         </div>
       </div>
-    </Collapse>
+    </div>
   );
 }
 

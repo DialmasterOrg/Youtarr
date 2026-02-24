@@ -79,7 +79,7 @@ const VideoActionsDropdown: React.FC<VideoActionsDropdownProps> = ({
           style={{ color: 'var(--destructive)' }}
         >
           <ListItemIcon style={{ color: 'var(--destructive)' }}>
-            <DeleteIcon size={16} />
+            <DeleteIcon size={16} data-testid="DeleteIcon" />
           </ListItemIcon>
           <ListItemText>Delete Selected</ListItemText>
         </MenuItem>
