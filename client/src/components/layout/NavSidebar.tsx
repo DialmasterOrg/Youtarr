@@ -138,7 +138,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
             const selected = location.pathname === item.to || location.pathname.startsWith(item.to + '/') || Boolean(hasSubMatch);
             const isExpanded = isMobile
               ? expandedItems[item.key] || selected
-              : !isNavCollapsed && Boolean(item.subItems) && selected;
+              : !isNavCollapsed && Boolean(item.subItems);
             const isHovered = hoveredItem === item.key;
 
             const button = (
@@ -247,9 +247,9 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                               paddingBottom: 0,
                               minHeight: NAV_SUB_MIN_HEIGHT,
                               height: NAV_SUB_MIN_HEIGHT,
-                              width: '100%',
+                              width: `calc(100% - ${sp(NAV_SUB_TEXT_INDENT)} - 2px)`,
                               marginLeft: sp(NAV_SUB_TEXT_INDENT),
-                              marginRight: 2,
+                              marginRight: 0,
                               border: subSelected ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)',
                               backgroundColor: subSelected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
                               boxShadow: subSelected ? 'var(--nav-item-shadow-selected)' : 'var(--nav-item-shadow)',

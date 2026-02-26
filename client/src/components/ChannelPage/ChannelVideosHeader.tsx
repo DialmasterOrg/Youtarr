@@ -16,7 +16,7 @@ import {
   MenuItem,
   ListItemText,
 } from '../ui';
-import { Search as SearchIcon, LayoutGrid as ViewModuleIcon, LayoutGrid as TableChartIcon, List as ViewListIcon, Download as DownloadIcon, RefreshCw as RefreshIcon, Trash2 as DeleteIcon, Ban as BlockIcon, Info as InfoIcon, X as ClearIcon, ListFilter as FilterListIcon, MoreVertical as MoreVertIcon } from '../../lib/icons';
+import { Search as SearchIcon, LayoutGrid as ViewModuleIcon, LayoutGrid as TableChartIcon, List as ViewListIcon, Download as DownloadIcon, RefreshCw as RefreshIcon, Trash2 as DeleteIcon, Ban as BlockIcon, Info as InfoIcon, X as ClearIcon, ListFilter as FilterListIcon, MoreVert as MoreVertIcon } from '../../lib/icons';
 import { LayoutList } from 'lucide-react';
 import { getVideoStatus } from '../../utils/videoStatus';
 import { ChannelVideo } from '../../types/ChannelVideo';
