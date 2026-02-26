@@ -31,24 +31,37 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
 Card.displayName = 'Card';
 
 /* ─── CardActionArea ──────────────────────────────────── */
-const CardActionArea = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, children, onClick, ...props }, ref) => (
-    <div
-      ref={ref}
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick?.(e as any); }}
-      className={cn(
-        'w-full cursor-pointer rounded-[var(--radius-ui)] outline-none',
-        'focus-visible:ring-2 focus-visible:ring-ring',
-        className
-      )}
-      {...props}
-    >
-      {children}
-    </div>
-  )
+export interface CardActionAreaProps extends React.HTMLAttributes<HTMLElement> {
+  component?: React.ElementType;
+  to?: string;
+  href?: string;
+}
+const CardActionArea = React.forwardRef<HTMLElement, CardActionAreaProps>(
+  ({ className, children, onClick, component: Component = 'div', to, href, ...props }, ref) => {
+    const isDiv = Component === 'div';
+    return React.createElement(
+      Component,
+      {
+        ref,
+        ...(isDiv && { role: 'button', tabIndex: 0 }),
+        onClick,
+        ...(isDiv && {
+          onKeyDown: (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') onClick?.(e as any);
+          },
+        }),
+        className: cn(
+          'w-full cursor-pointer rounded-[var(--radius-ui)] outline-none',
+          'focus-visible:ring-2 focus-visible:ring-ring',
+          className
+        ),
+        ...(to !== undefined && { to }),
+        ...(href !== undefined && { href }),
+        ...props,
+      },
+      children
+    );
+  }
 );
 CardActionArea.displayName = 'CardActionArea';
 

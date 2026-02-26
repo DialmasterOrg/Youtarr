@@ -574,14 +574,15 @@ function VideosPage({ token }: VideosPageProps) {
 
                             {/* Smaller thumbnail - 16:9 aspect ratio at reduced size */}
                             <Box
-                              width='100%'
-                              height='0'
-                              paddingTop='56.25%'
-                              border={1}
-                              borderColor='grey.500'
-                              overflow='hidden'
-                              position='relative'
-                              bgcolor='grey.900'
+                              style={{
+                                position: 'relative',
+                                width: '100%',
+                                height: 0,
+                                paddingTop: '56.25%',
+                                overflow: 'hidden',
+                                backgroundColor: '#111827',
+                                border: '1px solid rgba(107, 114, 128, 0.4)',
+                              }}
                             >
                               {imageErrors[video.youtubeId] ? (
                                 <Box

@@ -128,6 +128,7 @@ export const neumorphicTheme: ThemeDefinition = {
       'card-hover-shadow': '20px 20px 60px #bebebe, -20px -20px 60px #ffffff',
       'shadow-input-rest': 'inset 4px 4px 8px #bebebe, inset -4px -4px 8px #ffffff',
       'shadow-input-focus': 'inset 6px 6px 12px #bebebe, inset -6px -6px 12px #ffffff',
+      'neumo-breathe': 'neumo-breathe 3s ease-in-out infinite',
     },
     dark: {
       'font-body': "'DM Sans'",
@@ -224,6 +225,7 @@ export const neumorphicTheme: ThemeDefinition = {
       'card-hover-shadow': '20px 20px 60px #0a0a0a, -20px -20px 60px #1e1e1e',
       'shadow-input-rest': 'inset 4px 4px 8px #0a0a0a, inset -4px -4px 8px #1e1e1e',
       'shadow-input-focus': 'inset 6px 6px 12px #0a0a0a, inset -6px -6px 12px #1e1e1e',
+      'neumo-breathe': 'neumo-breathe-dark 3s ease-in-out infinite',
     },
   },
 };

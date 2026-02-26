@@ -195,7 +195,7 @@ export function AppShell({
                 minWidth: 0,
                 paddingTop: isMobile ? 'calc(60px + var(--shell-gap))' : 'calc(80px + var(--shell-gap))',
                 paddingBottom: 'var(--shell-gap)',
-                paddingLeft: 'var(--shell-gap)',
+                paddingLeft: isMobile ? 'var(--shell-gap)' : 'calc(var(--nav-width) + var(--shell-gap) * 2)',
                 paddingRight: 'var(--shell-gap)',
                 boxSizing: 'border-box',
                 position: 'relative',

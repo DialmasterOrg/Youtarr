@@ -288,7 +288,7 @@ export interface ListItemButtonProps extends React.ButtonHTMLAttributes<HTMLButt
 
 const ListItemButton = React.forwardRef<HTMLButtonElement, ListItemButtonProps>(
   (
-    { dense, disableGutters, selected, alignItems = 'center', className, children, sx: _sx, component: Component = 'button', to: _to, ...props },
+    { dense, disableGutters, selected, alignItems = 'center', className, children, sx: _sx, component: Component = 'button', to, ...props },
     ref
   ) =>
     React.createElement(
@@ -296,6 +296,7 @@ const ListItemButton = React.forwardRef<HTMLButtonElement, ListItemButtonProps>(
       {
         ref,
         type: Component === 'button' ? 'button' : undefined,
+        ...(to !== undefined && { to }),
         className: cn(
           'flex w-full text-left cursor-pointer transition-colors',
           'hover:bg-muted/50 active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -319,20 +320,27 @@ export interface ListItemTextProps extends React.HTMLAttributes<HTMLDivElement> 
   inset?: boolean;
   sx?: Record<string, unknown>;
   primaryTypographyProps?: Record<string, any>;
+  secondaryTypographyProps?: Record<string, any>;
 }
 
 const ListItemText = React.forwardRef<HTMLDivElement, ListItemTextProps>(
-  ({ primary, secondary, inset, className, children, sx: _sx, primaryTypographyProps: _primaryTypographyProps, ...props }, ref) => (
+  ({ primary, secondary, inset, className, children, sx: _sx, primaryTypographyProps, secondaryTypographyProps, ...props }, ref) => (
     <div
       ref={ref}
       className={cn('flex-1 min-w-0', inset && 'pl-14', className)}
       {...props}
     >
       {primary && (
-        <span className="block text-sm font-medium text-foreground truncate">{primary}</span>
+        <span
+          className="block text-sm font-medium text-foreground truncate"
+          style={primaryTypographyProps?.style}
+        >{primary}</span>
       )}
       {secondary && (
-        <span className="block text-xs text-muted-foreground truncate">{secondary}</span>
+        <span
+          className="block text-xs font-normal text-muted-foreground truncate"
+          style={secondaryTypographyProps?.style}
+        >{secondary}</span>
       )}
       {children}
     </div>

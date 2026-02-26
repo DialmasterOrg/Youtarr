@@ -199,9 +199,10 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                     secondaryTypographyProps={{
                       variant: 'caption',
                       style: {
+                        fontWeight: 400,
                         fontSize: NAV_SECONDARY_FONT_SIZE,
                         lineHeight: NAV_SECONDARY_LINE_HEIGHT,
-                        marginTop: 0.8,
+                        marginTop: '1px',
                         color: selected ? 'var(--nav-item-text-selected)' : undefined,
                       },
                       noWrap: true,
@@ -254,7 +255,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                               primaryTypographyProps={{
                                 variant: 'body2',
                                 style: {
-                                  fontWeight: subSelected ? 700 : 500,
+                                  fontWeight: subSelected ? 600 : 400,
                                   fontSize: NAV_SUB_FONT_SIZE,
                                   lineHeight: NAV_SUB_LINE_HEIGHT,
                                   overflow: 'hidden',
@@ -550,9 +551,9 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
     boxShadow: 'var(--nav-shadow)',
     backgroundColor: 'var(--card)',
     marginTop: isMobile && isLinearFlat ? 'auto' : isMobile ? NAV_DRAWER_MOBILE_TOP_OFFSET : NAV_DRAWER_DESKTOP_TOP_OFFSET,
-    marginBottom: isMobile && isLinearFlat ? 0 : isMobile ? NAV_DRAWER_MOBILE_BOTTOM_GAP : NAV_DRAWER_DESKTOP_BOTTOM_GAP,
-    marginLeft: isMobile ? 0 : 'var(--shell-gap)',
-    maxHeight: isMobile && isLinearFlat ? '65vh' : isMobile ? NAV_DRAWER_MOBILE_MAX_HEIGHT : NAV_DRAWER_DESKTOP_MAX_HEIGHT,
+  marginBottom: isMobile && isLinearFlat ? 0 : isMobile ? NAV_DRAWER_MOBILE_BOTTOM_GAP : 0,
+  marginLeft: isMobile ? 0 : 'var(--shell-gap)',
+  maxHeight: isMobile && isLinearFlat ? '65vh' : isMobile ? NAV_DRAWER_MOBILE_MAX_HEIGHT : 'none',
     overflow: 'hidden',
     overflowX: 'hidden',
     width: isMobile && isLinearFlat ? '100%' : drawerWidth,

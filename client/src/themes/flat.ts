@@ -124,6 +124,8 @@ export const flatTheme: ThemeDefinition = {
       'nav-item-shadow-hover': 'none',
       'nav-item-transform': 'translate(0, 0)',
       'nav-item-transform-hover': 'translate(0, 0)',
+      'transition-bouncy': 'ease',
+      'card-hover-transform': 'none',
       'nav-item-text-selected': '#FFFFFF',
     },
     dark: {
@@ -212,6 +214,8 @@ export const flatTheme: ThemeDefinition = {
       'nav-item-shadow-hover': 'none',
       'nav-item-transform': 'translate(0, 0)',
       'nav-item-transform-hover': 'translate(0, 0)',
+      'transition-bouncy': 'ease',
+      'card-hover-transform': 'none',
       'nav-item-text-selected': '#FFFFFF',
     },
   },
