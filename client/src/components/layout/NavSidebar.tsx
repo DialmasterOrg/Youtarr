@@ -120,7 +120,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
   // Common Drawer Content (used for Industrial mobile and all Desktop)
   const drawerContent = (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto' }}>
+      <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', paddingRight: 10 }}>
         <List
           style={{
             paddingLeft: isCompactStorage ? 10 : 0,
@@ -138,11 +138,11 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
             const selected = location.pathname === item.to || location.pathname.startsWith(item.to + '/') || Boolean(hasSubMatch);
             const isExpanded = isMobile
               ? expandedItems[item.key] || selected
-              : !isNavCollapsed && Boolean(item.subItems);
+              : !isNavCollapsed && Boolean(item.subItems) && selected;
             const isHovered = hoveredItem === item.key;
 
             const button = (
-              <div key={item.key} style={{ paddingLeft: 4, paddingRight: 4, paddingTop: 0, paddingBottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
+              <div key={item.key} style={{ paddingLeft: 4, paddingRight: 0, paddingTop: 0, paddingBottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
                 <ListItemButton
                   component={RouterLink}
                   to={item.to}
@@ -370,61 +370,122 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
 
   // 1. Playful Bottom Navigation
   if (isMobile && isPlayful) {
-    const activeIndex = navItems.findIndex(item => location.pathname === item.to || location.pathname.startsWith(item.to + '/'));
+    const activeItem = navItems.find(item =>
+      location.pathname === item.to ||
+      location.pathname.startsWith(item.to + '/') ||
+      item.subItems?.some((sub: any) => location.pathname === sub.to || location.pathname.startsWith(sub.to + '/'))
+    );
+    const activeIndex = navItems.findIndex(item => item === activeItem);
+    const activeItemWithSubItems = activeItem?.subItems ? activeItem : null;
+
     return (
-      <Paper
-        elevation={3}
-        style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 1300,
-          paddingBottom: 'env(safe-area-inset-bottom)',
-          borderRadius: 'var(--radius-ui) var(--radius-ui) 0 0',
-          borderTop: 'var(--nav-border)',
-          backgroundColor: 'var(--card)',
-          overflow: 'hidden',
-        }}
-      >
-        <nav style={{ display: 'flex', height: 64, backgroundColor: 'transparent' }}>
-          {navItems.map((item, index) => {
-            const isActive = index === activeIndex;
-            return (
-              <button
-                key={item.key}
-                onClick={() => navigate(item.to)}
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 2,
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: isActive ? 'var(--primary)' : 'var(--muted-foreground)',
-                  padding: '4px 0',
-                  transition: 'color 0.2s',
-                }}
-              >
-                {React.cloneElement(item.icon as React.ReactElement, {
-                  size: isActive ? 26 : 22,
-                  style: { transition: 'all 0.2s' },
-                })}
-                <span style={{ fontSize: '0.65rem', lineHeight: 1 }}>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-      </Paper>
+      <>
+        {/* Sub-items tray: shown above BottomNav when active section has sub-pages */}
+        {activeItemWithSubItems && (
+          <div
+            style={{
+              position: 'fixed',
+              bottom: 'calc(64px + env(safe-area-inset-bottom))',
+              left: 0,
+              right: 0,
+              zIndex: 1299,
+              backgroundColor: 'var(--card)',
+              borderTop: 'var(--nav-border)',
+              padding: '6px 8px',
+              display: 'flex',
+              gap: 6,
+              overflowX: 'auto',
+            }}
+          >
+            {activeItemWithSubItems.subItems.map((subItem: any) => {
+              const subSelected = location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/');
+              return (
+                <button
+                  key={subItem.key}
+                  onClick={() => navigate(subItem.to)}
+                  style={{
+                    background: subSelected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
+                    border: subSelected ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)',
+                    borderRadius: 'var(--radius-ui)',
+                    color: subSelected ? 'var(--nav-item-text-selected)' : 'inherit',
+                    boxShadow: subSelected ? 'var(--nav-item-shadow-selected)' : 'none',
+                    cursor: 'pointer',
+                    fontSize: NAV_SUB_FONT_SIZE,
+                    fontWeight: subSelected ? 700 : 400,
+                    padding: '4px 14px',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 200ms var(--transition-bouncy)',
+                  }}
+                >
+                  {subItem.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <Paper
+          elevation={3}
+          style={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 1300,
+            paddingBottom: 'env(safe-area-inset-bottom)',
+            borderRadius: 'var(--radius-ui) var(--radius-ui) 0 0',
+            borderTop: 'var(--nav-border)',
+            backgroundColor: 'var(--card)',
+            overflow: 'hidden',
+          }}
+        >
+          <nav style={{ display: 'flex', height: 64, backgroundColor: 'transparent' }}>
+            {navItems.map((item, index) => {
+              const isActive = index === activeIndex;
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => navigate(item.to)}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 2,
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: isActive ? 'var(--primary)' : 'var(--muted-foreground)',
+                    padding: '4px 0',
+                    transition: 'color 0.2s',
+                  }}
+                >
+                  {React.cloneElement(item.icon as React.ReactElement, {
+                    size: isActive ? 26 : 22,
+                    style: { transition: 'all 0.2s' },
+                  })}
+                  <span style={{ fontSize: '0.65rem', lineHeight: 1 }}>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </Paper>
+      </>
     );
   }
 
   // 2. Neumorphic Floating Pod
   if (isMobile && isNeumorphic) {
-    const activePodItem = navItems.find((item) => expandedItems[item.key]);
+    const activePodItem = navItems.find((item) => {
+      // Respect explicit collapse (false), fall back to selected state when not explicitly set
+      if (expandedItems[item.key] === false) return false;
+      if (expandedItems[item.key] === true) return true;
+      const isSelected =
+        location.pathname === item.to ||
+        location.pathname.startsWith(item.to + '/') ||
+        item.subItems?.some((sub: any) => location.pathname === sub.to || location.pathname.startsWith(sub.to + '/'));
+      return Boolean(item.subItems) && isSelected;
+    });
     return (
       <div
         style={{
@@ -571,7 +632,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
     paddingRight: isMobile ? 0 : 4,
     maxHeight: isMobile && isLinearFlat ? '65vh' : isMobile ? NAV_DRAWER_MOBILE_MAX_HEIGHT : NAV_DRAWER_DESKTOP_MAX_HEIGHT,
     overflow: 'hidden',
-    overflowX: 'hidden',
+    overflowX: 'visible',
     width: isMobile && isLinearFlat ? '100%' : drawerWidth,
     boxSizing: 'border-box',
     transition: 'width 300ms var(--transition-bouncy), padding 300ms var(--transition-bouncy)',

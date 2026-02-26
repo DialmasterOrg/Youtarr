@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import {
   Grid,
@@ -28,7 +28,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Pagination,
 } from './ui';
 import { Filter as FilterListIcon, AlertCircle as ErrorOutlineIcon, CheckCircle as CheckCircleIcon, HardDrive as StorageIcon, Trash2 as DeleteIcon, Download as DownloadIcon, Clock as ScheduleIcon, AlarmCheck as AlarmOnIcon, Search as SearchIcon, Video as VideoLibraryIcon } from 'lucide-react';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -47,6 +46,8 @@ import ChangeRatingDialog from './shared/ChangeRatingDialog';
 import VideoActionsDropdown from './shared/VideoActionsDropdown';
 import { RATING_OPTIONS } from '../utils/ratings';
 import DownloadFormatIndicator from './shared/DownloadFormatIndicator';
+import { useConfig } from '../hooks/useConfig';
+import PageControls from './shared/PageControls';
 
 interface VideosPageProps {
   token: string | null;
@@ -79,8 +80,11 @@ function VideosPage({ token }: VideosPageProps) {
   const [maxRatingFilter, setMaxRatingFilter] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const { deleteVideos, loading: deleteLoading } = useVideoDeletion();
+  const configState = useConfig(token);
+  const useInfiniteScroll = configState?.config?.channelVideosHotLoad ?? false;
 
   const videosPerPage = isMobile ? 6 : 12;
 
@@ -123,7 +127,20 @@ function VideosPage({ token }: VideosPageProps) {
         },
       });
 
-      setVideos(response.data.videos);
+      const incomingVideos = response.data.videos || [];
+      setVideos((prev) => {
+        if (!useInfiniteScroll || page <= 1) {
+          return incomingVideos;
+        }
+
+        const merged = [...prev, ...incomingVideos];
+        const seen = new Set<number>();
+        return merged.filter((video) => {
+          if (seen.has(video.id)) return false;
+          seen.add(video.id);
+          return true;
+        });
+      });
       setTotalVideos(response.data.total);
       setTotalPages(response.data.totalPages);
 
@@ -136,18 +153,39 @@ function VideosPage({ token }: VideosPageProps) {
     } finally {
       setLoading(false);
     }
-  }, [token, page, videosPerPage, orderBy, sortOrder, search, filter, dateFrom, dateTo, maxRatingFilter]);
+  }, [token, page, videosPerPage, orderBy, sortOrder, search, filter, dateFrom, dateTo, maxRatingFilter, useInfiniteScroll]);
 
   useEffect(() => {
     fetchVideos();
   }, [fetchVideos]);
 
-  const handlePageChange = (
-    event: React.ChangeEvent<unknown>,
-    value: number
-  ) => {
-    setPage(value);
-  };
+  useEffect(() => {
+    setVideos([]);
+    setPage(1);
+  }, [useInfiniteScroll]);
+
+  useEffect(() => {
+    if (!useInfiniteScroll) return;
+    if (!loadMoreRef.current) return;
+    if (loading || page >= totalPages) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting) {
+          setPage((prev) => (prev < totalPages ? prev + 1 : prev));
+        }
+      },
+      {
+        root: null,
+        rootMargin: '0px 0px 160px 0px',
+        threshold: 0,
+      }
+    );
+
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [useInfiniteScroll, loading, page, totalPages]);
 
   const handleFilterClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -304,11 +342,13 @@ function VideosPage({ token }: VideosPageProps) {
 
   const handlers = useSwipeable({
     onSwipedLeft: () => {
+      if (useInfiniteScroll) return;
       if (page < totalPages) {
         setPage(page + 1);
       }
     },
     onSwipedRight: () => {
+      if (useInfiniteScroll) return;
       if (page > 1) {
         setPage(page - 1);
       }
@@ -443,18 +483,19 @@ function VideosPage({ token }: VideosPageProps) {
           </Box>
         )}
 
-        <Grid
-          container
-          spacing={2}
-          style={{ marginTop: '8px', marginBottom: '8px', display: 'flex', justifyContent: 'center' }}
-        >
-          <Pagination
-            count={totalPages}
-            page={page}
-            onChange={handlePageChange}
-            disabled={loading}
-          />
-        </Grid>
+        {!useInfiniteScroll && totalPages > 1 && (
+          <Grid
+            container
+            spacing={2}
+            style={{ marginTop: '8px', marginBottom: '8px', display: 'flex', justifyContent: 'center' }}
+          >
+            <PageControls
+              page={page}
+              totalPages={totalPages}
+              onPageChange={(newPage) => setPage(newPage)}
+            />
+          </Grid>
+        )}
 
         <TableContainer component={Paper}>
           <div {...handlers}>
@@ -1000,6 +1041,30 @@ function VideosPage({ token }: VideosPageProps) {
                 )}
               </TableBody>
             </Table>
+
+            {useInfiniteScroll && (
+              <>
+                <div
+                  ref={loadMoreRef}
+                  style={{
+                    height: 24,
+                    width: '100%',
+                    marginTop: 12,
+                    marginBottom: 16,
+                  }}
+                />
+                {loading && videos.length > 0 && page < totalPages && (
+                  <Box style={{ display: 'flex', justifyContent: 'center', padding: '8px 0 16px 0' }}>
+                    <Typography variant="caption" color="text.secondary">Loading more videos...</Typography>
+                  </Box>
+                )}
+                {!loading && page >= totalPages && videos.length > 0 && (
+                  <Typography variant="caption" color="text.secondary" align="center" style={{ display: 'block', paddingBottom: 12 }}>
+                    You're all caught up.
+                  </Typography>
+                )}
+              </>
+            )}
           </div>
         </TableContainer>
       </Box>

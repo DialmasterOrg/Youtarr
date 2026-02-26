@@ -244,6 +244,25 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
 
         <Grid item xs={12} md={6}>
           <Box className="flex items-center">
+            <FormControlLabel
+              control={
+                <Switch
+                  name="channelVideosHotLoad"
+                  checked={config.channelVideosHotLoad}
+                  onChange={handleCheckboxChange}
+                />
+              }
+              label="Enable Hot Loading"
+            />
+            <InfoTooltip
+              text="When enabled, channel lists, channel videos, and download history use infinite hot loading. When disabled, they use page-by-page controls."
+              onMobileClick={onMobileTooltipClick}
+            />
+          </Box>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Box className="flex items-center">
             <FormControl fullWidth>
               <InputLabel>Preferred Resolution</InputLabel>
               <Select

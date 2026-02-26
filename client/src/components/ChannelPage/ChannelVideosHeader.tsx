@@ -55,6 +55,7 @@ interface ChannelVideosHeaderProps {
   onBulkIgnoreClick: () => void;
   onInfoIconClick: (tooltip: string) => void;
   onMaxRatingChange: (value: string) => void;
+  onAutoDownloadToggle: (enabled: boolean) => void;
   // Filter-related props (desktop only)
   activeFilterCount?: number;
   filtersExpanded?: boolean;
@@ -89,6 +90,7 @@ function ChannelVideosHeader({
   onBulkIgnoreClick,
   onInfoIconClick,
   onMaxRatingChange,
+  onAutoDownloadToggle,
   activeFilterCount = 0,
   filtersExpanded = false,
   onFiltersExpandedChange,
@@ -261,7 +263,7 @@ function ChannelVideosHeader({
           )}
 
           <FormControlLabel
-            control={<Switch checked={autoDownloadsEnabled} onChange={() => {}} size="small" />}
+            control={<Switch checked={autoDownloadsEnabled} onChange={(e) => onAutoDownloadToggle(e.target.checked)} size="small" />}
             label={
               <div style={{ display: 'flex', alignItems: 'center' }}>
                 Enable Channel Downloads for this tab

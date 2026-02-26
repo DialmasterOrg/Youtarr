@@ -1,6 +1,5 @@
 import React from 'react';
 import { Chip } from '../../../../components/ui';
-import { FileDownload as FileDownloadIcon } from '../../../../lib/icons';
 
 interface AutoDownloadChipsProps {
   availableTabs: string | null | undefined;
@@ -51,10 +50,16 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
           data-autodownload={isAutoDownloadEnabled ? 'true' : 'false'}
           label={isMobile ? tabInfo.short : tabInfo.full}
           size="small"
-          variant={isAutoDownloadEnabled ? 'filled' : 'outlined'}
+          variant="filled"
           color={isAutoDownloadEnabled ? 'primary' : 'default'}
-          icon={isAutoDownloadEnabled ? <FileDownloadIcon size={14} /> : undefined}
-            style={{ fontSize: '0.7rem' }}
+          style={{
+            fontSize: '0.7rem',
+            height: 24,
+            lineHeight: '14px',
+            minWidth: isMobile ? 56 : 64,
+            borderRadius: 'var(--radius-ui)',
+            opacity: isAutoDownloadEnabled ? 1 : 0.55,
+          }}
         />
       );
     })

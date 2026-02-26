@@ -100,6 +100,33 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
   }
 
   const chipColor = getRatingColor(rating);
+  const chipStyleByColor: Record<string, React.CSSProperties> = {
+    success: {
+      backgroundColor: 'var(--success)',
+      color: 'var(--success-foreground)',
+      borderColor: 'var(--success)',
+    },
+    warning: {
+      backgroundColor: 'var(--warning)',
+      color: 'var(--warning-foreground)',
+      borderColor: 'var(--warning)',
+    },
+    error: {
+      backgroundColor: 'var(--destructive)',
+      color: 'var(--destructive-foreground)',
+      borderColor: 'var(--destructive)',
+    },
+    secondary: {
+      backgroundColor: 'var(--secondary)',
+      color: 'var(--secondary-foreground)',
+      borderColor: 'var(--secondary)',
+    },
+    default: {
+      backgroundColor: 'var(--muted)',
+      color: 'var(--muted-foreground)',
+      borderColor: 'var(--border)',
+    },
+  };
 
   return (
     <Tooltip title={tooltipText} placement="top">
@@ -110,7 +137,13 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
         color={chipColor}
         icon={<EighteenUpRatingIcon size={size === 'small' ? 12 : 16} data-testid="EighteenUpRatingIcon" />}
         className={className}
-        style={{ fontSize: size === 'small' ? '0.7rem' : '0.875rem', ...style }}
+        style={{
+          fontSize: size === 'small' ? '0.7rem' : '0.875rem',
+          height: size === 'small' ? 24 : 30,
+          borderRadius: 'var(--radius-ui)',
+          ...(chipStyleByColor[chipColor] || chipStyleByColor.default),
+          ...style,
+        }}
       />
     </Tooltip>
   );

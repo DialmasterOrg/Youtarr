@@ -54,7 +54,7 @@ import PageControls from '../shared/PageControls';
     const [visibleCount, setVisibleCount] = useState(12);
     const loadMoreRef = useRef<HTMLDivElement | null>(null);
     const { config } = useConfig(token);
-    const useInfiniteScroll = config.channelVideosHotLoad ?? true;
+    const useInfiniteScroll = config.channelVideosHotLoad ?? false;
 
     let jobsToDisplay = jobs.filter((job) => {
       if (showNoVideoJobs) return true;

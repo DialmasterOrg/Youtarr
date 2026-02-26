@@ -26,6 +26,11 @@ jest.mock('../../utils', () => ({
 }));
 
 jest.mock('../../hooks/useMediaQuery');
+jest.mock('../../hooks/useConfig', () => ({
+  useConfig: jest.fn(() => ({
+    config: { channelVideosHotLoad: false },
+  })),
+}));
 
 jest.mock('../shared/DeleteVideosDialog', () => ({
   __esModule: true,

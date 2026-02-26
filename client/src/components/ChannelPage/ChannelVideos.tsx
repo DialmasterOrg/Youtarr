@@ -227,7 +227,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const hasChannelOverride = Boolean(channelVideoQuality);
   const defaultResolution = channelVideoQuality || config.preferredResolution || '1080';
   const defaultResolutionSource: 'channel' | 'global' = hasChannelOverride ? 'channel' : 'global';
-  const useInfiniteScroll = config.channelVideosHotLoad ?? true;
+  const useInfiniteScroll = config.channelVideosHotLoad ?? false;
   const resetKey = useMemo(
     () => [
       channelId || '',
@@ -473,6 +473,48 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     setCheckedBoxes([]);
     setSelectedForDeletion([]);
   }, []);
+
+  const handleAutoDownloadChange = useCallback(async (enabled: boolean) => {
+    if (!channelId || !selectedTab || !token) return;
+
+    const mediaTypeMap: Record<string, string> = {
+      videos: 'video',
+      shorts: 'short',
+      streams: 'livestream',
+    };
+
+    // Optimistic local update
+    setTabAutoDownloadStatus(prev => ({ ...prev, [selectedTab]: enabled }));
+
+    // Build the new enabled-tabs string from all current tab statuses
+    const newStatus = { ...tabAutoDownloadStatus, [selectedTab]: enabled };
+    const enabledMediaTypes = Object.entries(newStatus)
+      .filter(([, isEnabled]) => isEnabled)
+      .map(([tab]) => mediaTypeMap[tab])
+      .filter(Boolean)
+      .join(',');
+
+    try {
+      const response = await fetch(`/api/channels/${channelId}/settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-access-token': token,
+        },
+        body: JSON.stringify({ auto_download_enabled_tabs: enabledMediaTypes }),
+      });
+
+      if (!response.ok) {
+        // Revert on failure
+        setTabAutoDownloadStatus(prev => ({ ...prev, [selectedTab]: !enabled }));
+        console.error('Failed to update auto-download setting:', response.status);
+      }
+    } catch (err) {
+      // Revert on error
+      setTabAutoDownloadStatus(prev => ({ ...prev, [selectedTab]: !enabled }));
+      console.error('Failed to update auto-download setting:', err);
+    }
+  }, [channelId, selectedTab, token, tabAutoDownloadStatus]);
 
   const handleDownloadClick = useCallback(() => {
     setDownloadDialogOpen(true);
@@ -884,6 +926,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
             setMaxRating(value);
             setPage(1);
           }}
+          onAutoDownloadToggle={handleAutoDownloadChange}
           activeFilterCount={activeFilterCount}
           filtersExpanded={filtersExpanded}
           onFiltersExpandedChange={setFiltersExpanded}

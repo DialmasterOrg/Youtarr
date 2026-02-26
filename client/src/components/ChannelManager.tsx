@@ -68,7 +68,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const navigate = useNavigate();
   const isMobile = useMediaQuery('(max-width: 599px)');
   const { config } = useConfig(token);
-  const useInfiniteScroll = config.channelVideosHotLoad ?? true;
+  const useInfiniteScroll = config.channelVideosHotLoad ?? false;
   const globalPreferredResolution = config.preferredResolution || '1080';
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
