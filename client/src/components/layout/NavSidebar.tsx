@@ -38,7 +38,6 @@ const NAV_SUB_FONT_SIZE = '0.8rem';
 const NAV_SUB_LINE_HEIGHT = 1.2;
 const NAV_DRAWER_BORDER_RADIUS = 'var(--nav-radius)';
 const NAV_DRAWER_DESKTOP_TOP_OFFSET = 'calc(80px + var(--shell-gap))';
-const NAV_DRAWER_DESKTOP_BOTTOM_GAP = 'var(--shell-gap)';
 const NAV_DRAWER_DESKTOP_MAX_HEIGHT = 'calc(100vh - (80px + var(--shell-gap)) - var(--shell-gap))';
 const NAV_DRAWER_MOBILE_TOP_OFFSET = 'calc(60px + var(--shell-gap))';
 const NAV_DRAWER_MOBILE_BOTTOM_GAP = 'var(--shell-gap)';
@@ -126,7 +125,9 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
               location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/')
             ));
             const selected = location.pathname === item.to || location.pathname.startsWith(item.to + '/') || Boolean(hasSubMatch);
-            const isExpanded = expandedItems[item.key] || (selected && !isNavCollapsed);
+            const isExpanded = isMobile
+              ? expandedItems[item.key] || selected
+              : !isNavCollapsed && Boolean(item.subItems);
 
             const button = (
               <div key={item.key} style={{ paddingLeft: 4, paddingRight: 4, paddingTop: 0, paddingBottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
@@ -562,7 +563,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
     top: isMobile && isLinearFlat ? 'auto' : 0,
     left: isMobile && isLinearFlat ? 0 : undefined,
     right: isMobile && isLinearFlat ? 0 : undefined,
-    bottom: isMobile && isLinearFlat ? 0 : undefined,
+    bottom: isMobile && isLinearFlat ? 0 : isMobile ? undefined : 0,
     zIndex: 1200,
   };
 

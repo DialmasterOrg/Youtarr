@@ -97,7 +97,7 @@ export function AppShell({
           label: 'Downloads',
           oldLabel: 'Manage Video Downloads',
           icon: <DownloadIcon />,
-          to: '/downloads/manual',
+          to: '/downloads',
           subItems: downloadsSubItems,
         },
         {

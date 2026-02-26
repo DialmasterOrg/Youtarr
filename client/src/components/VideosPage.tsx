@@ -788,16 +788,17 @@ function VideosPage({ token }: VideosPageProps) {
                               className="self-start mt-1"
                             />
                             <Box
-                              width={256}
-                              height={144}
-                              border={1}
-                              borderColor='grey.500'
-                              display='flex'
-                              alignItems='center'
-                              justifyContent='center'
-                              position='relative'
-                              overflow='hidden'
-                              bgcolor='grey.900'
+                              style={{
+                                width: 256,
+                                height: 144,
+                                border: '1px solid rgba(107, 114, 128, 0.4)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                position: 'relative',
+                                overflow: 'hidden',
+                                backgroundColor: '#111827',
+                              }}
                             >
                               {imageErrors[video.youtubeId] ? (
                                 <Typography
