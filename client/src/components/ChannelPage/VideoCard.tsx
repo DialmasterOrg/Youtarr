@@ -16,6 +16,7 @@ import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMedia
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
+import { SHARED_STATUS_CHIP_STYLE } from '../shared/chipStyles';
 
 interface VideoCardProps {
   video: ChannelVideo;
@@ -71,8 +72,7 @@ function VideoCard({
             height: '100%',
             display: 'flex',
             flexDirection: 'column',
-            position: 'relative',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    ...SHARED_STATUS_CHIP_STYLE,
             cursor: isClickable ? 'pointer' : 'default',
             opacity: status === 'members_only' || isIgnored ? 0.7 : 1,
             transform: hoveredVideo === video.youtube_id ? 'var(--sticker-hover-transform)' : baseTransform,
@@ -80,7 +80,7 @@ function VideoCard({
             overflow: 'hidden',
             borderRadius: 'var(--radius-ui)',
           }}
-          onMouseEnter={() => onHoverChange(video.youtube_id)}
+                  style={{ ...SHARED_STATUS_CHIP_STYLE, height: 24, flexShrink: 0 }}
           onMouseLeave={() => onHoverChange(null)}
           onClick={() => {
             if (isDownloadSelectable && isDownloadAllowed) {
@@ -346,8 +346,7 @@ function VideoCard({
                     fontSize: '0.7rem',
                     flex: '0 0 auto',
                     minWidth: 'fit-content',
-                    boxShadow: 'var(--chip-shadow)',
-                    transition: 'box-shadow 200ms var(--transition-bouncy)',
+                    ...SHARED_STATUS_CHIP_STYLE,
                   }}
                 />
               </div>

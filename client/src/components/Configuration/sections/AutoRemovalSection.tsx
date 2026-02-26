@@ -4,8 +4,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  FormControlLabel,
-  Switch,
   FormHelperText,
   Grid,
   Box,
@@ -104,6 +102,13 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
       title="Automatic Video Removal"
       chipLabel={config.autoRemovalEnabled ? "Enabled" : "Disabled"}
       chipColor={config.autoRemovalEnabled ? "success" : "default"}
+      statusBanner={{
+        enabled: config.autoRemovalEnabled,
+        label: 'Enable Automatic Video Removal',
+        onToggle: (enabled) => onConfigChange({ autoRemovalEnabled: enabled }),
+        onText: 'Automatic Removal Enabled',
+        offText: 'Automatic Removal Disabled',
+      }}
       defaultExpanded={false}
     >
       <Alert severity="warning" className="mb-4">
@@ -117,26 +122,6 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
       </Alert>
 
       <Grid container spacing={2}>
-        <Grid item xs={12}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={config.autoRemovalEnabled}
-                onChange={(e) => onConfigChange({ autoRemovalEnabled: e.target.checked })}
-              />
-            }
-            label={
-              <Box className="flex items-center">
-                Enable Automatic Video Removal
-                <InfoTooltip
-                  text="Automatically delete videos based on the thresholds configured below. Deletions run nightly at 2:00 AM."
-                  onMobileClick={onMobileTooltipClick}
-                />
-              </Box>
-            }
-          />
-        </Grid>
-
         {config.autoRemovalEnabled && (
           <>
             {!autoRemovalHasStrategy && (

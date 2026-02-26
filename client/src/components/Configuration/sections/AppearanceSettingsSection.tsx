@@ -9,7 +9,7 @@ import {
   Typography,
 } from '../../ui';
 import { RadioGroup, RadioGroupItem } from '../../ui/form';
-import { ConfigurationCard } from '../common/ConfigurationCard';
+import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { useThemeEngine } from '../../../contexts/ThemeEngineContext';
 import { ALL_THEMES } from '../../../themes';
@@ -24,7 +24,17 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
   const { themeMode, setThemeMode, motionEnabled, setMotionEnabled, colorMode, setColorMode } = useThemeEngine();
 
   return (
-    <ConfigurationCard title="Appearance" subtitle="Theme, visual style, and motion settings">
+    <ConfigurationAccordion
+      title="Appearance"
+      statusBanner={{
+        enabled: motionEnabled,
+        label: 'Enable Theme Animations & Motion',
+        onToggle: (enabled) => setMotionEnabled(enabled),
+        onText: 'Motion Enabled',
+        offText: 'Motion Disabled',
+      }}
+      defaultExpanded={false}
+    >
       <Grid container spacing={2} className="mt-1">
         {/* Dark Mode Toggle */}
         <Grid item xs={12}>
@@ -47,21 +57,9 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
 
         {/* Theme Animation Toggle */}
         <Grid item xs={12}>
-          <div className="flex items-center">
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={motionEnabled}
-                  onChange={(event) => setMotionEnabled(event.target.checked)}
-                />
-              }
-              label="Enable Theme Animations & Motion"
-            />
-            <InfoTooltip
-              text="Enable smooth transitions, floating animations, and motion accents throughout the interface."
-              onMobileClick={onMobileTooltipClick}
-            />
-          </div>
+          <Typography variant="body2" color="secondary">
+            Motion affects transitions, floating animations, and motion accents throughout the interface.
+          </Typography>
         </Grid>
 
         {/* Visual Style Selection */}
@@ -118,7 +116,7 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
           </RadioGroup>
         </Grid>
       </Grid>
-    </ConfigurationCard>
+    </ConfigurationAccordion>
   );
 };
 

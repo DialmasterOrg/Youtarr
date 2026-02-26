@@ -17,6 +17,7 @@ import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 
 import RatingBadge from '../shared/RatingBadge';
+import { SHARED_STATUS_CHIP_STYLE } from '../shared/chipStyles';
 interface VideoListItemProps {
   video: ChannelVideo;
   checkedBoxes: string[];
@@ -285,8 +286,7 @@ function VideoListItem({
                 style={{
                   height: 18,
                   fontSize: '0.7rem',
-                  boxShadow: 'var(--chip-shadow)',
-                  transition: 'box-shadow 200ms var(--transition-bouncy)',
+                  ...SHARED_STATUS_CHIP_STYLE,
                 }}
               />
             )}
@@ -294,8 +294,9 @@ function VideoListItem({
               rating={video.normalized_rating}
               ratingSource={video.rating_source}
               size="small"
-              variant="text"
+              variant="pill"
               showNA
+              style={{ ...SHARED_STATUS_CHIP_STYLE, height: 20 }}
             />
             <Chip
               icon={getStatusIcon(status)}
@@ -307,8 +308,7 @@ function VideoListItem({
                 height: 20,
                 fontSize: '0.7rem',
                 flex: '0 0 auto',
-                boxShadow: 'var(--chip-shadow)',
-                transition: 'box-shadow 200ms var(--transition-bouncy)',
+                ...SHARED_STATUS_CHIP_STYLE,
               }}
             />
           </div>

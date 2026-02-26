@@ -100,11 +100,13 @@ describe('CoreSettingsSection Component', () => {
       expect(screen.getByText('Core Settings')).toBeInTheDocument();
     });
 
-    test('renders title and subtitle', () => {
+    test('renders title and section headers', () => {
       const props = createSectionProps();
       renderWithProviders(<CoreSettingsSection {...props} />);
       expect(screen.getByText('Core Settings')).toBeInTheDocument();
-      expect(screen.getByText('Required settings for YouTube video downloads')).toBeInTheDocument();
+      expect(screen.getByText('General Settings')).toBeInTheDocument();
+      expect(screen.getByText('Download Settings')).toBeInTheDocument();
+      expect(screen.getByText('File Structure Settings')).toBeInTheDocument();
     });
   });
 

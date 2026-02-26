@@ -11,7 +11,7 @@ import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { LogOut as LogoutIcon, Download as DownloadIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from '../../lib/icons';
 import { ThemeMode } from '../../themes';
 import { StorageHeaderWidget } from './StorageHeaderWidget';
-import { NAV_BUTTON_OUTER_PADDING_X, NAV_DRAWER_SECTION_BUTTON_GUTTER } from './navLayoutConstants';
+import { NAV_DRAWER_SECTION_BUTTON_GUTTER } from './navLayoutConstants';
 
 interface NavHeaderProps {
   appName: string;
@@ -145,9 +145,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   };
 
   // Match the drawer button inset so the toggle sits flush with the sidebar edges.
-  const headerHorizontalGutter = isPlayful && !isMobile
-    ? NAV_BUTTON_OUTER_PADDING_X
-    : NAV_DRAWER_SECTION_BUTTON_GUTTER;
+  const headerHorizontalGutter = NAV_DRAWER_SECTION_BUTTON_GUTTER;
 
   return (
     <header

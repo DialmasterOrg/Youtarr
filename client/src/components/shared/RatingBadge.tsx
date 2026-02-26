@@ -1,6 +1,7 @@
 import React from 'react';
 import { Chip, Tooltip, Box, Typography } from '../ui';
 import { EighteenUpRating as EighteenUpRatingIcon } from '../../lib/icons';
+import { SHARED_CHANNEL_META_CHIP_STYLE, SHARED_STATUS_CHIP_STYLE } from './chipStyles';
 
 interface RatingBadgeProps {
   rating: string | null | undefined;
@@ -41,9 +42,9 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
         color="default"
         variant="outlined"
         style={{
+          ...SHARED_CHANNEL_META_CHIP_STYLE,
           fontSize: size === 'small' ? '0.65rem' : '0.8rem',
           height: size === 'small' ? 20 : 24,
-          borderRadius: 'var(--video-chip-radius, var(--radius-ui))',
         }}
         className="text-muted-foreground/50 border-muted-foreground/50"
       />
@@ -141,7 +142,7 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
         style={{
           fontSize: size === 'small' ? '0.7rem' : '0.875rem',
           height: size === 'small' ? 24 : 30,
-          borderRadius: 'var(--video-chip-radius, var(--radius-ui))',
+          ...SHARED_STATUS_CHIP_STYLE,
           ...(chipStyleByColor[chipColor] || chipStyleByColor.default),
           ...style,
         }}

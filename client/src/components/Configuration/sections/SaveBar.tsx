@@ -7,6 +7,7 @@ interface SaveBarProps {
   isLoading: boolean;
   onSave: () => void;
   validationError?: string | null;
+  placement?: 'fixed' | 'inline';
 }
 
 /**
@@ -22,6 +23,7 @@ export const SaveBar: React.FC<SaveBarProps> = ({
   isLoading,
   onSave,
   validationError,
+  placement = 'fixed',
 }) => {
   const isVisible = hasUnsavedChanges || isLoading;
   const hasError = Boolean(validationError);
@@ -33,20 +35,22 @@ export const SaveBar: React.FC<SaveBarProps> = ({
     <Slide direction="down" in={isVisible}>
       <div
         style={{
-          position: 'fixed',
-          top: 'calc(64px + var(--shell-gap, 0px))',
-          left: 0,
-          right: 0,
-          zIndex: 1302,
+          position: placement === 'inline' ? 'sticky' : 'fixed',
+          top: placement === 'inline' ? 0 : 'calc(64px + var(--shell-gap, 0px))',
+          left: placement === 'inline' ? undefined : 0,
+          right: placement === 'inline' ? undefined : 0,
+          zIndex: placement === 'inline' ? 15 : 1302,
           backgroundColor: 'var(--card)',
           borderBottom: `2px solid ${hasError ? 'var(--destructive)' : 'var(--warning)'}`,
           borderTop: '1px solid transparent',
-          boxShadow: '0 4px 24px rgba(0,0,0,0.15)',
+          boxShadow: placement === 'inline' ? 'var(--shadow-soft)' : '0 4px 24px rgba(0,0,0,0.15)',
           padding: '8px 16px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 16,
+          borderRadius: placement === 'inline' ? 'var(--radius-ui)' : 0,
+          marginBottom: placement === 'inline' ? 12 : 0,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>

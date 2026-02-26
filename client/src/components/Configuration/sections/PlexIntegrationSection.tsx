@@ -59,6 +59,7 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
   const handleCheckboxChange = (event: ChangeEvent<HTMLInputElement>) => {
     onConfigChange({ [event.target.name]: event.target.checked });
   };
+  const plexIntegrationEnabled = Boolean(hasPlexServerConfigured && config.plexApiKey);
 
   const getChipLabel = (): string => {
     switch (plexConnectionStatus) {
@@ -91,6 +92,12 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
       title="Plex Media Server Integration"
       chipLabel={getChipLabel()}
       chipColor={getChipColor()}
+      statusBanner={{
+        enabled: plexIntegrationEnabled,
+        onText: 'Plex Integration Enabled',
+        offText: 'Plex Integration Disabled',
+        showToggle: false,
+      }}
       defaultExpanded={false}
     >
       <Alert severity="info" className="mb-4">

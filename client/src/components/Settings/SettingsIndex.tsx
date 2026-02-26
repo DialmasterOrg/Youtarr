@@ -9,7 +9,6 @@ export const SETTINGS_PAGES = [
   { key: 'appearance', title: 'Appearance', description: 'Theme, animations, and visual preferences.' },
   { key: 'autoremove', title: 'Auto Removal', description: 'Automated cleanup and retention policies.' },
   { key: 'cookies', title: 'Cookies', description: 'Cookie configuration and login helpers.' },
-  { key: 'kodi', title: 'Kodi', description: 'Kodi compatibility and metadata options.' },
   { key: 'notifications', title: 'Notifications', description: 'Toast notifications and alert behavior.' },
   { key: 'plex', title: 'Plex', description: 'Plex integration and library configuration.' },
   { key: 'security', title: 'Account Security', description: 'Authentication and password management.' },

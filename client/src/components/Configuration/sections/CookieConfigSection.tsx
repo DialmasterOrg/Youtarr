@@ -1,7 +1,5 @@
 import React from 'react';
 import {
-  FormControlLabel,
-  Switch,
   Grid,
   Alert,
   AlertTitle,
@@ -10,7 +8,6 @@ import {
   Chip,
 } from '../../ui';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
-import { InfoTooltip } from '../common/InfoTooltip';
 import { useCookieManagement } from '../hooks/useCookieManagement';
 import { ConfigState, SnackbarState } from '../types';
 
@@ -50,6 +47,13 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
       title="Cookie Configuration"
       chipLabel={config.cookiesEnabled ? "Cookies Enabled" : "Cookies Disabled"}
       chipColor={config.cookiesEnabled ? "success" : "default"}
+      statusBanner={{
+        enabled: config.cookiesEnabled,
+        label: 'Enable Cookies',
+        onToggle: (enabled) => onConfigChange({ cookiesEnabled: enabled }),
+        onText: 'Cookies Enabled',
+        offText: 'Cookies Disabled',
+      }}
       defaultExpanded={false}
     >
       <Alert severity="warning" style={{ marginBottom: 16 }}>
@@ -77,26 +81,6 @@ export const CookieConfigSection: React.FC<CookieConfigSectionProps> = ({
       </Alert>
 
       <Grid container spacing={2}>
-        <Grid item xs={12}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={config.cookiesEnabled}
-                onChange={(e) => onConfigChange({ cookiesEnabled: e.target.checked })}
-              />
-            }
-            label={
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                Enable Cookies
-                <InfoTooltip
-                  text="Use cookies to bypass YouTube bot detection and access age-restricted content."
-                  onMobileClick={onMobileTooltipClick}
-                />
-              </div>
-            }
-          />
-        </Grid>
-
         {config.cookiesEnabled && (
           <>
             <Grid item xs={12}>

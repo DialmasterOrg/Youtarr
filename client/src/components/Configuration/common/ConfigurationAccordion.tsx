@@ -4,7 +4,6 @@ import {
   AccordionSummary,
   AccordionDetails,
   Typography,
-  Chip,
   Box,
   FormControlLabel,
   Switch,
@@ -12,11 +11,13 @@ import {
 
 interface StatusBannerConfig {
   enabled: boolean;
-  label: string;
-  onToggle: (enabled: boolean) => void;
+  label?: string;
+  onToggle?: (enabled: boolean) => void;
   onText?: string;
   offText?: string;
   toggleTestId?: string;
+  showToggle?: boolean;
+  successWhenEnabled?: boolean;
 }
 
 interface ConfigurationAccordionProps {
@@ -42,30 +43,25 @@ export const ConfigurationAccordion: React.FC<ConfigurationAccordionProps> = ({
   const statusText = statusBanner
     ? (statusBanner.enabled ? (statusBanner.onText || 'On') : (statusBanner.offText || 'Off'))
     : null;
+  const bannerUsesSuccessVisual = Boolean(statusBanner?.enabled && (statusBanner.successWhenEnabled ?? true));
+  const showStatusToggle = Boolean(statusBanner?.showToggle ?? statusBanner?.onToggle);
 
   return (
     <Accordion elevation={1} defaultExpanded={defaultExpanded} style={{ marginBottom: 24 }}>
       <AccordionSummary>
+      <AccordionSummary hideChevron>
         <Typography variant="h6" style={{ flexGrow: 1 }}>
           {title}
         </Typography>
-        {chipLabel && (
-          <Chip
-            label={chipLabel}
-            color={chipColor}
-            size="small"
-            style={{ marginRight: 8 }}
-          />
-        )}
       </AccordionSummary>
       <AccordionDetails>
         {statusBanner && (
           <Box
             className="mb-4"
             style={{
-              border: 'var(--border-weight) solid var(--border)',
+              border: `var(--border-weight) solid ${bannerUsesSuccessVisual ? 'var(--success)' : 'var(--border)'}`,
               borderRadius: 'var(--radius-ui)',
-              backgroundColor: 'var(--muted)',
+              backgroundColor: bannerUsesSuccessVisual ? 'color-mix(in srgb, var(--success) 12%, var(--card))' : 'var(--muted)',
               padding: '10px 12px',
               display: 'flex',
               alignItems: 'center',
@@ -74,20 +70,37 @@ export const ConfigurationAccordion: React.FC<ConfigurationAccordionProps> = ({
               flexWrap: 'wrap',
             }}
           >
-            <Typography variant="body2" style={{ fontWeight: 600 }}>
+            <Typography
+              variant="body2"
+              style={{
+                fontWeight: 600,
+                color: bannerUsesSuccessVisual ? 'var(--success)' : 'inherit',
+              }}
+            >
               {statusText}
             </Typography>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={statusBanner.enabled}
-                  onChange={(event) => statusBanner.onToggle(event.target.checked)}
-                  inputProps={statusBanner.toggleTestId ? ({ 'data-testid': statusBanner.toggleTestId } as any) : undefined}
+            {showStatusToggle && statusBanner.onToggle && (
+              <Box
+                style={{
+                  border: `var(--border-weight) solid ${statusBanner.enabled ? 'var(--success)' : 'var(--border-strong)'}`,
+                  borderRadius: 'var(--radius-ui)',
+                  padding: '2px 8px',
+                  backgroundColor: 'var(--card)',
+                }}
+              >
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={statusBanner.enabled}
+                      onChange={(event) => statusBanner.onToggle?.(event.target.checked)}
+                      inputProps={statusBanner.toggleTestId ? ({ 'data-testid': statusBanner.toggleTestId } as any) : undefined}
+                    />
+                  }
+                  label={statusBanner.label || 'Enabled'}
+                  style={{ marginRight: 0 }}
                 />
-              }
-              label={statusBanner.label}
-              style={{ marginRight: 0 }}
-            />
+              </Box>
+            )}
           </Box>
         )}
         {children}

@@ -13,6 +13,7 @@
   /* Max widths for status/rating chips to prevent overflow; per-theme overrides encouraged */
   --status-chip-max-width: 140px;
   --rating-chip-max-width: 120px;
+  --ui-chip-radius: var(--video-chip-radius, var(--radius-ui));
 
   /* Settings splash-specific tokens (override per-theme) */
   --settings-splash-shadow-hover: var(--nav-item-shadow-hover);

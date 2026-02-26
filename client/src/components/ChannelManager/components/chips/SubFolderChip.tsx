@@ -2,17 +2,14 @@ import React from 'react';
 import { Chip } from '../../../../components/ui';
 import { Folder as FolderIcon } from '../../../../lib/icons';
 import { isUsingDefaultSubfolder, isExplicitlyNoSubfolder } from '../../../../utils/channelHelpers';
+import { SHARED_CHANNEL_META_CHIP_STYLE } from '../../../shared/chipStyles';
 
 interface SubFolderChipProps {
   subFolder: string | null | undefined;
 }
 
 const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
-  const chipStyle = {
-    fontSize: '0.7rem',
-    height: 24,
-    borderRadius: 'var(--video-chip-radius, var(--radius-ui))',
-  };
+  const chipStyle = SHARED_CHANNEL_META_CHIP_STYLE;
 
   // NULL or empty = "root" (backwards compatible, download to root)
   if (isExplicitlyNoSubfolder(subFolder)) {

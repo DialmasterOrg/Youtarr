@@ -1,5 +1,6 @@
 import React from 'react';
 import { Chip } from '../../../../components/ui';
+import { SHARED_CHIP_RADIUS } from '../../../shared/chipStyles';
 
 interface AutoDownloadChipsProps {
   availableTabs: string | null | undefined;
@@ -57,7 +58,7 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
             height: 24,
             lineHeight: '14px',
             minWidth: isMobile ? 56 : 64,
-            borderRadius: 'var(--radius-ui)',
+            borderRadius: SHARED_CHIP_RADIUS,
             opacity: isAutoDownloadEnabled ? 1 : 0.55,
           }}
         />

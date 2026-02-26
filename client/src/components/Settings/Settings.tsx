@@ -13,7 +13,6 @@ import { CoreSettingsSection } from '../Configuration/sections/CoreSettingsSecti
 import AppearanceSettingsSection from '../Configuration/sections/AppearanceSettingsSection';
 import { PlexIntegrationSection } from '../Configuration/sections/PlexIntegrationSection';
 import { SponsorBlockSection } from '../Configuration/sections/SponsorBlockSection';
-import { KodiCompatibilitySection } from '../Configuration/sections/KodiCompatibilitySection';
 import { CookieConfigSection } from '../Configuration/sections/CookieConfigSection';
 import { NotificationsSection } from '../Configuration/sections/NotificationsSection';
 import { DownloadPerformanceSection } from '../Configuration/sections/DownloadPerformanceSection';
@@ -185,6 +184,7 @@ export function Settings({ token }: SettingsProps) {
         isLoading={isLoading}
         onSave={handleSave}
         validationError={validationError}
+        placement="inline"
       />
 
       <div style={{ marginBottom: 16 }}>
@@ -229,16 +229,6 @@ export function Settings({ token }: SettingsProps) {
           path="sponsorblock"
           element={
             <SponsorBlockSection
-              config={config}
-              onConfigChange={handleConfigChange}
-              onMobileTooltipClick={setMobileTooltip}
-            />
-          }
-        />
-        <Route
-          path="kodi"
-          element={
-            <KodiCompatibilitySection
               config={config}
               onConfigChange={handleConfigChange}
               onMobileTooltipClick={setMobileTooltip}

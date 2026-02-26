@@ -15,7 +15,7 @@ import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { Download as DownloadIcon } from '../../lib/icons';
 import { StorageFooterWidget } from './StorageFooterWidget';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
-import { NAV_BUTTON_OUTER_PADDING_X, NAV_MAIN_BUTTON_SIDE_PADDING } from './navLayoutConstants';
+import { NAV_BUTTON_OUTER_PADDING_X, NAV_DRAWER_PANEL_PADDING_X, NAV_MAIN_BUTTON_SIDE_PADDING } from './navLayoutConstants';
 
 const EXPANDED_WIDTH = 200;
 const COLLAPSED_WIDTH = 65;
@@ -126,7 +126,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
   // Common Drawer Content (used for Industrial mobile and all Desktop)
   const drawerContent = (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', paddingRight: 10 }}>
+      <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', paddingRight: 0 }}>
         <List
           style={{
             paddingLeft: isCompactStorage ? 10 : 0,
@@ -507,8 +507,8 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
     marginBottom: isMobile && isLinearFlat ? 0 : isMobile ? NAV_DRAWER_MOBILE_BOTTOM_GAP : 'var(--shell-gap)',
   marginLeft: isMobile ? 0 : 'var(--shell-gap)',
     marginRight: isMobile ? 0 : 'var(--shell-gap)',
-    paddingLeft: isMobile ? 0 : 4,
-    paddingRight: isMobile ? 0 : 4,
+    paddingLeft: isMobile ? 0 : NAV_DRAWER_PANEL_PADDING_X,
+    paddingRight: isMobile ? 0 : NAV_DRAWER_PANEL_PADDING_X,
     maxHeight: isMobile && isLinearFlat ? '65vh' : isMobile ? NAV_DRAWER_MOBILE_MAX_HEIGHT : NAV_DRAWER_DESKTOP_MAX_HEIGHT,
     overflow: 'hidden',
     overflowX: 'visible',
