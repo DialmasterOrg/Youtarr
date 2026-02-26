@@ -39,7 +39,7 @@ const Menu: React.FC<MenuProps> = ({ open, anchorEl, onClose, children, classNam
   return (
     <>
       {/* Backdrop */}
-      {open && <div className="fixed inset-0 z-40" onClick={onClose} />}
+      {open && <div data-testid="menu-backdrop" className="fixed inset-0 z-40" onClick={onClose} />}
       {/* Menu panel */}
       <div
         role="menu"

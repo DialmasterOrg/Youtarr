@@ -43,6 +43,7 @@ const LinearProgress = React.forwardRef<HTMLDivElement, LinearProgressProps>(
         {...props}
       >
         <ProgressPrimitive.Indicator
+          data-testid="progress-indicator"
           className={cn(
             'h-full w-full flex-1 rounded-full',
             !barColor && (colorClass[color] ?? 'bg-primary'),
@@ -103,6 +104,7 @@ const CircularProgress = React.forwardRef<HTMLSpanElement, CircularProgressProps
       >
         <svg viewBox="22 22 44 44" fill="none" className="w-full h-full">
           <circle
+            data-testid="progress-circle"
             cx="44"
             cy="44"
             r={r}

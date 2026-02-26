@@ -39,7 +39,7 @@ const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
         )}
         {...props}
       >
-        {showIcon && <span>{icon ?? config.icon}</span>}
+        {showIcon && <span data-testid="alert-icon">{icon ?? config.icon}</span>}
         <div className="flex-1 min-w-0">{children}</div>
         {action && <div className="shrink-0">{action}</div>}
         {onClose && (

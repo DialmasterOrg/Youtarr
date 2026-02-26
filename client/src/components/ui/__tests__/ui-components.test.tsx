@@ -316,9 +316,7 @@ describe('Grow', () => {
 
   it('transitions visible=true when inProp changes from false to true', async () => {
     const { rerender } = render(<Grow in={false}><div>Toggle</div></Grow>);
-    act(() => {
-      rerender(<Grow in><div>Toggle</div></Grow>);
-    });
+    rerender(<Grow in><div>Toggle</div></Grow>);
     expect(screen.getByText('Toggle')).toBeInTheDocument();
   });
 });
