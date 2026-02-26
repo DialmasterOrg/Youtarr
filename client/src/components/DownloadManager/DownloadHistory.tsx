@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Grid,
   Table,
@@ -13,7 +13,6 @@ import {
   Toolbar,
   FormControlLabel,
   Box,
-  Pagination,
   Collapse,
   Link,
   Card,
@@ -24,14 +23,18 @@ import { ChevronDown as ExpandMoreIcon, ChevronUp as ExpandLessIcon } from 'luci
 import { Info as InfoIcon } from '../../lib/icons';
 import { Job } from '../../types/Job';
 import { useSwipeable } from 'react-swipeable';
+import { useConfig } from '../../hooks/useConfig';
+import PageControls from '../shared/PageControls';
 
   interface DownloadHistoryProps {
     jobs: Job[];
     currentTime: Date;
     expanded: Record<string, boolean>;
     handleExpandCell: (id: string) => void;
+    anchorEl?: Record<string, null | HTMLButtonElement>;
     setAnchorEl?: React.Dispatch<React.SetStateAction<Record<string, null | HTMLButtonElement>>>;
     isMobile: boolean;
+    token: string | null;
   }
 
   const DownloadHistory: React.FC<DownloadHistoryProps> = ({
@@ -39,13 +42,19 @@ import { useSwipeable } from 'react-swipeable';
     currentTime,
     expanded,
     handleExpandCell,
+    anchorEl,
     setAnchorEl,
     isMobile,
+    token,
   }) => {
     const [showNoVideoJobs, setShowNoVideoJobs] = useState(false);
     const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(12);
+    const [visibleCount, setVisibleCount] = useState(12);
+    const loadMoreRef = useRef<HTMLDivElement | null>(null);
+    const { config } = useConfig(token);
+    const useInfiniteScroll = config.channelVideosHotLoad ?? true;
 
     let jobsToDisplay = jobs.filter((job) => {
       if (showNoVideoJobs) return true;
@@ -54,9 +63,47 @@ import { useSwipeable } from 'react-swipeable';
     });
 
     const totalPages = Math.max(1, Math.ceil(jobsToDisplay.length / itemsPerPage));
-    const indexOfLastJob = currentPage * itemsPerPage;
-    const indexOfFirstJob = indexOfLastJob - itemsPerPage;
-    const currentJobs = jobsToDisplay.slice(indexOfFirstJob, indexOfLastJob);
+    const hasMoreHotLoadItems = visibleCount < jobsToDisplay.length;
+    const currentJobs = useMemo(() => {
+      if (useInfiniteScroll) {
+        return jobsToDisplay.slice(0, visibleCount);
+      }
+
+      const indexOfLastJob = currentPage * itemsPerPage;
+      const indexOfFirstJob = indexOfLastJob - itemsPerPage;
+      return jobsToDisplay.slice(indexOfFirstJob, indexOfLastJob);
+    }, [useInfiniteScroll, jobsToDisplay, visibleCount, currentPage, itemsPerPage]);
+
+    React.useEffect(() => {
+      setCurrentPage(1);
+      setVisibleCount(itemsPerPage);
+    }, [showNoVideoJobs, itemsPerPage]);
+
+    React.useEffect(() => {
+      if (!useInfiniteScroll) {
+        return;
+      }
+      if (!loadMoreRef.current || !hasMoreHotLoadItems) {
+        return;
+      }
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          const [entry] = entries;
+          if (entry.isIntersecting) {
+            setVisibleCount((prev) => Math.min(prev + itemsPerPage, jobsToDisplay.length));
+          }
+        },
+        {
+          root: null,
+          rootMargin: '0px 0px 180px 0px',
+          threshold: 0,
+        }
+      );
+
+      observer.observe(loadMoreRef.current);
+      return () => observer.disconnect();
+    }, [useInfiniteScroll, hasMoreHotLoadItems, itemsPerPage, jobsToDisplay.length]);
 
     const handlers = useSwipeable({
       onSwipedLeft: () => {
@@ -79,7 +126,9 @@ import { useSwipeable } from 'react-swipeable';
                   control={<Checkbox checked={showNoVideoJobs} onChange={(e) => { setShowNoVideoJobs(e.target.checked); setCurrentPage(1); }} />}
                   label="Show jobs without videos"
                 />
-                <Pagination count={totalPages} page={currentPage} onChange={(_, p) => setCurrentPage(p)} />
+                {!useInfiniteScroll && (
+                  <PageControls page={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} compact />
+                )}
               </Toolbar>
 
               <Box {...handlers}>
@@ -213,9 +262,15 @@ import { useSwipeable } from 'react-swipeable';
                 </Box>
               </Box>
 
-              <Box className="flex justify-center mt-4">
-                <Pagination count={totalPages} page={currentPage} onChange={(_, p) => setCurrentPage(p)} />
-              </Box>
+              {!useInfiniteScroll && (
+                <Box className="flex justify-center mt-4">
+                  <PageControls page={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+                </Box>
+              )}
+
+              {useInfiniteScroll && hasMoreHotLoadItems && (
+                <div ref={loadMoreRef} style={{ height: 24, width: '100%', marginTop: 8 }} />
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -378,9 +433,15 @@ import { useSwipeable } from 'react-swipeable';
               </div>
             </TableContainer>
 
-            <Box className="flex justify-center mt-4">
-              <Pagination count={totalPages} page={currentPage} onChange={(_, p) => setCurrentPage(p)} />
-            </Box>
+            {!useInfiniteScroll && (
+              <Box className="flex justify-center mt-4">
+                <PageControls page={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+              </Box>
+            )}
+
+            {useInfiniteScroll && hasMoreHotLoadItems && (
+              <div ref={loadMoreRef} style={{ height: 24, width: '100%', marginTop: 8 }} />
+            )}
           </CardContent>
         </Card>
       </Grid>

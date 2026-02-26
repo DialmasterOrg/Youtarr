@@ -121,6 +121,22 @@
   color: var(--action-bar-disabled-foreground) !important;
 } 
 
+.action-bar .MuiButton-root.intent-warning.Mui-disabled,
+.action-bar .MuiIconButton-root.intent-warning.Mui-disabled,
+.action-bar .MuiButton-root.intent-warning.Mui-disabled.MuiButton-outlined {
+  color: var(--warning) !important;
+  border-color: var(--warning) !important;
+  opacity: 0.55 !important;
+}
+
+.action-bar .MuiButton-root.intent-danger.Mui-disabled,
+.action-bar .MuiIconButton-root.intent-danger.Mui-disabled,
+.action-bar .MuiButton-root.intent-danger.Mui-disabled.MuiButton-outlined {
+  color: var(--destructive) !important;
+  border-color: var(--destructive) !important;
+  opacity: 0.55 !important;
+}
+
 .MuiButton-root.intent-base,
 .MuiIconButton-root.intent-base {
   color: var(--foreground);

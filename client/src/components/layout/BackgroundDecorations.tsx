@@ -92,6 +92,41 @@ export const BackgroundDecorations: React.FC<BackgroundDecorationsProps> = ({ th
             opacity: 0.55, zIndex: 0, pointerEvents: 'none',
           }}
         />
+        {/* Mid-top compact circle */}
+        <div
+          aria-hidden
+          className="playful-shape hidden sm:block"
+          style={{
+            position: 'absolute', top: 150, left: '48%',
+            width: 40, height: 40, borderRadius: '50%',
+            backgroundColor: 'var(--secondary)', border: '3px solid var(--foreground)',
+            boxShadow: 'var(--shadow-hard)', opacity: 0.58, zIndex: 0, pointerEvents: 'none',
+          }}
+        />
+        {/* Mid-lower rotated square */}
+        <div
+          aria-hidden
+          className="playful-shape hidden md:block"
+          style={{
+            position: 'absolute', top: '58%', left: '38%',
+            width: 54, height: 54, borderRadius: 8,
+            backgroundColor: 'var(--accent)', border: '3px solid var(--foreground)',
+            boxShadow: 'var(--shadow-hard)', transform: 'rotate(20deg)',
+            opacity: 0.52, zIndex: 0, pointerEvents: 'none',
+          }}
+        />
+        {/* Bottom-center pill */}
+        <div
+          aria-hidden
+          className="playful-shape hidden sm:block"
+          style={{
+            position: 'absolute', bottom: 26, left: '52%',
+            width: 132, height: 32, borderRadius: '999px',
+            backgroundColor: 'var(--quaternary)', border: '3px solid var(--foreground)',
+            boxShadow: 'var(--shadow-hard)', transform: 'rotate(-8deg)',
+            opacity: 0.5, zIndex: 0, pointerEvents: 'none',
+          }}
+        />
       </>
     );
   }

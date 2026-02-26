@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent, Grid, Typography, Box, Tooltip, Chip, Popover, Dialog, DialogTitle, DialogContent, Button } from './ui';
-import { Settings as SettingsIcon, Folder as FolderIcon, Video as VideocamIcon, Clock as AccessTimeIcon, Filter as FilterAltIcon } from 'lucide-react';
+import { Settings as SettingsIcon, Clock as AccessTimeIcon, Filter as FilterAltIcon } from 'lucide-react';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { Channel } from '../types/Channel';
 import RatingBadge from './shared/RatingBadge';
 import ChannelVideos from './ChannelPage/ChannelVideos';
 import ChannelSettingsDialog from './ChannelPage/ChannelSettingsDialog';
-import { isUsingDefaultSubfolder, isExplicitlyNoSubfolder } from '../utils/channelHelpers';
+import { useThemeEngine } from '../contexts/ThemeEngineContext';
+import { useConfig } from '../hooks/useConfig';
+import SubFolderChip from './ChannelManager/components/chips/SubFolderChip';
+import QualityChip from './ChannelManager/components/chips/QualityChip';
+import AutoDownloadChips from './ChannelManager/components/chips/AutoDownloadChips';
 
 interface ChannelPageProps {
   token: string | null;
@@ -15,12 +19,15 @@ interface ChannelPageProps {
 
 function ChannelPage({ token }: ChannelPageProps) {
   const isMobile = useMediaQuery('(max-width: 599px)');
+  const { themeMode } = useThemeEngine();
   const [channel, setChannel] = useState<Channel | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [regexAnchorEl, setRegexAnchorEl] = useState<HTMLElement | null>(null);
   const [regexDialogOpen, setRegexDialogOpen] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const { channel_id } = useParams();
+  const { config } = useConfig(token);
+  const globalPreferredResolution = config.preferredResolution || '1080';
 
   const handleSettingsSaved = (updated: {
     sub_folder: string | null;
@@ -80,65 +87,28 @@ function ChannelPage({ token }: ChannelPageProps) {
   const channelChipSx: React.CSSProperties = {
     height: chipHeight,
     fontSize: chipFontSize,
-    borderRadius: 'var(--radius-ui)',
+    borderRadius: themeMode === 'playful' ? 999 : 'var(--radius-ui)',
     boxShadow: 'none',
     textTransform: 'none',
     paddingLeft: '10px',
     paddingRight: '10px',
   };
 
-  const getSubFolderLabel = (subFolder: string | null | undefined) => {
-    if (isExplicitlyNoSubfolder(subFolder)) {
-      return { label: 'root', isSpecial: true };
-    }
-    if (isUsingDefaultSubfolder(subFolder)) {
-      return { label: 'global default', isSpecial: true };
-    }
-    return { label: `__${subFolder}/`, isSpecial: false };
-  };
-
   const renderSubFolder = () => {
     if (!channel) {
       return null;
     }
-    const { label, isSpecial } = getSubFolderLabel(channel.sub_folder);
-    return (
-      <Chip
-        icon={<FolderIcon size={isMobile ? 12 : 14} />}
-        label={label}
-        size="small"
-        variant="outlined"
-        style={{
-          ...channelChipSx,
-          fontStyle: isSpecial ? 'italic' : 'normal',
-        }}
-      />
-    );
+    return <SubFolderChip subFolder={channel.sub_folder} />;
   };
 
   const renderAutoDownloadChips = () => {
     if (!channel) return null;
-    const enabledTabs = channel.auto_download_enabled_tabs
-      ? channel.auto_download_enabled_tabs.split(',').map((tab) => tab.trim())
-      : [];
-
     return (
-      <Box className="flex gap-1 items-center">
-        <Chip
-          label="Videos"
-          size="small"
-          variant={enabledTabs.includes('video') ? 'filled' : 'outlined'}
-          color={enabledTabs.includes('video') ? 'success' : 'default'}
-          style={{ ...channelChipSx }}
-        />
-        <Chip
-          label="Shorts"
-          size="small"
-          variant={enabledTabs.includes('short') ? 'filled' : 'outlined'}
-          color={enabledTabs.includes('short') ? 'success' : 'default'}
-          style={{ ...channelChipSx }}
-        />
-      </Box>
+      <AutoDownloadChips
+        availableTabs={channel.available_tabs || 'videos,shorts,streams'}
+        autoDownloadTabs={channel.auto_download_enabled_tabs || undefined}
+        isMobile={isMobile}
+      />
     );
   };
 
@@ -185,14 +155,12 @@ function ChannelPage({ token }: ChannelPageProps) {
       <Box className="flex gap-1 flex-wrap items-center">
         {hasQualityOverride && (
           <Tooltip title={`Auto-download quality override: ${channel.video_quality}p`}>
-            <Chip
-              icon={<VideocamIcon size={14} />}
-              label={`${channel.video_quality}p`}
-              size="small"
-              variant="outlined"
-              color="primary"
-              style={{ ...channelChipSx }}
-            />
+            <div>
+              <QualityChip
+                videoQuality={channel.video_quality}
+                globalPreferredResolution={globalPreferredResolution}
+              />
+            </div>
           </Tooltip>
         )}
 
@@ -295,7 +263,7 @@ function ChannelPage({ token }: ChannelPageProps) {
 
   return (
     <>
-      <Card elevation={8} className="mb-4">
+      <Card elevation={8} className="mb-4" style={{ borderRadius: 'var(--radius-ui)', overflow: 'hidden' }}>
         <CardContent style={{ paddingLeft: isMobile ? 16 : 24, paddingRight: isMobile ? 16 : 24, paddingTop: isMobile ? 16 : 20, paddingBottom: isMobile ? 16 : 20 }}>
           <Grid container spacing={2} alignItems="stretch">
             <Grid item xs={12} sm={4}>

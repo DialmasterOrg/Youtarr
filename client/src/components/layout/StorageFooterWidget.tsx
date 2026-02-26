@@ -21,14 +21,17 @@ export function StorageFooterWidget({ token, collapsed, compact = false, inline 
 
   const percentFree = storageData?.percentFree ?? 0;
   const percentUsed = Math.max(0, Math.min(100, 100 - percentFree));
-  const availableGB = storageData?.availableGB ?? 0;
-  const totalGB = storageData?.totalGB ?? 0;
+  const availableGB = Number(storageData?.availableGB ?? 0);
+  const totalGB = Number(storageData?.totalGB ?? 0);
   const usedGB = Math.max(0, Number(totalGB) - Number(availableGB));
 
   // Show used-space percentage as the bar fill.
   const progressValue = Math.max(0, Math.min(100, percentUsed));
   const percentFreeLabel = Number.isFinite(percentFree) ? percentFree.toFixed(1) : '0.0';
-  const inlineLabel = `${usedGB.toFixed(1)}/${Number(totalGB).toFixed(1)} GB ${progressValue.toFixed(0)}%`;
+  const safeUsed = Number.isFinite(usedGB) ? usedGB.toFixed(1) : '0.0';
+  const safeTotal = Number.isFinite(totalGB) ? totalGB.toFixed(1) : '0.0';
+  const safeAvailable = Number.isFinite(availableGB) ? availableGB.toFixed(1) : '0.0';
+  const inlineLabel = `${safeUsed} GB / ${safeTotal} GB • ${percentFreeLabel}% free`;
 
   const showDetails = !collapsed && !compact;
 
@@ -62,7 +65,7 @@ export function StorageFooterWidget({ token, collapsed, compact = false, inline 
 
       {showDetails && !inline && (
         <Typography variant="caption" color="text.secondary" className="block mt-1.5">
-          {loading ? 'Loading…' : `${availableGB} GB free of ${totalGB} GB (${percentFreeLabel}% free)`}
+          {loading ? 'Loading…' : `${safeUsed} GB / ${safeTotal} GB used (${percentFreeLabel}% free)`}
         </Typography>
       )}
     </Box>
@@ -70,7 +73,7 @@ export function StorageFooterWidget({ token, collapsed, compact = false, inline 
 
   const tooltipTitle = loading
     ? 'Loading storage…'
-    : `${availableGB} GB free of ${totalGB} GB (${percentFreeLabel}% free)`;
+    : `${safeAvailable} GB free • ${safeUsed} GB / ${safeTotal} GB used (${percentFreeLabel}% free)`;
 
   return (
     <Tooltip title={tooltipTitle} placement="right" arrow disableHoverListener={!collapsed}>

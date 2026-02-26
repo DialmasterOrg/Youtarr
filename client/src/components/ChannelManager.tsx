@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Alert,
   Button,
@@ -50,6 +50,7 @@ import {
 } from '../utils/channelHelpers';
 import HelpDialog from './ChannelManager/HelpDialog';
 import PendingSaveBanner from './ChannelManager/components/PendingSaveBanner';
+import PageControls from './shared/PageControls';
 
 type ViewMode = 'list' | 'grid';
 type SortOrder = 'asc' | 'desc';
@@ -67,7 +68,9 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const navigate = useNavigate();
   const isMobile = useMediaQuery('(max-width: 599px)');
   const { config } = useConfig(token);
+  const useInfiniteScroll = config.channelVideosHotLoad ?? true;
   const globalPreferredResolution = config.preferredResolution || '1080';
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const [newChannelUrl, setNewChannelUrl] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -99,7 +102,8 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
     searchTerm: filterValue,
     sortOrder,
     subFolder: selectedSubFolder || undefined,
-  }), [token, page, pageSize, filterValue, sortOrder, selectedSubFolder]);
+    append: useInfiniteScroll,
+  }), [token, page, pageSize, filterValue, sortOrder, selectedSubFolder, useInfiniteScroll]);
 
   const {
     channels: serverChannels,
@@ -165,6 +169,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const hasPendingAdditions = pendingAdditions.length > 0;
 
   const pageCount = Math.max(totalPages, 1);
+  const hasNextPage = page < pageCount;
 
   const showDesktopListColumns = !isMobile && viewMode === 'list';
   const listColumnLabels = ['Channel', 'Quality / Folder', 'Auto downloads', 'Filters'];
@@ -193,6 +198,39 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
       setPage(pageCount);
     }
   }, [page, pageCount]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [useInfiniteScroll]);
+
+  useEffect(() => {
+    if (!useInfiniteScroll) {
+      return;
+    }
+    if (!loadMoreRef.current || loading || !hasNextPage) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting) {
+          setPage((prev) => prev + 1);
+        }
+      },
+      {
+        root: null,
+        rootMargin: '0px 0px 240px 0px',
+        threshold: 0,
+      }
+    );
+
+    observer.observe(loadMoreRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [loading, hasNextPage, useInfiniteScroll]);
 
   const handleMessage = useCallback(() => {
     if (!hasPendingChanges) {
@@ -504,43 +542,41 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
               </div>
             )}
 
-            <div
-              style={{
-                position: 'sticky',
-                bottom: 0,
-                borderTop: '1px solid var(--border)',
-                paddingTop: isMobile ? 8 : 12,
-                paddingBottom: isMobile ? 8 : 12,
-                backgroundColor: 'var(--card)',
-                display: 'flex',
-                justifyContent: 'center',
-                zIndex: 1,
-              }}
-            >
-              <nav role="navigation" aria-label="pagination" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <button aria-label="go to first page" type="button" onClick={() => setPage(1)} disabled={page === 1} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}>{'\u00AB'}</button>
-                <button aria-label="go to previous page" type="button" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}>{'\u2039'}</button>
-                {Array.from({ length: Math.min(pageCount, 7) }, (_, idx) => {
-                  const startPage = Math.max(1, Math.min(page - 3, pageCount - 6));
-                  const pageNumber = startPage + idx;
-                  if (pageNumber > pageCount) return null;
-                  return (
-                    <button
-                      key={pageNumber}
-                      aria-label={`go to page ${pageNumber}`}
-                      type="button"
-                      onClick={() => setPage(pageNumber)}
-                      style={{ background: pageNumber === page ? 'var(--primary)' : 'none', color: pageNumber === page ? 'white' : 'inherit', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}
-                    >
-                      {pageNumber}
-                    </button>
-                  );
-                })}
-                <span style={{ padding: '2px 8px', fontSize: '0.875rem' }}>{page} / {pageCount}</span>
-                <button aria-label="go to next page" type="button" onClick={() => setPage(p => Math.min(pageCount, p + 1))} disabled={page === pageCount} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}>{'\u203A'}</button>
-                <button aria-label="go to last page" type="button" onClick={() => setPage(pageCount)} disabled={page === pageCount} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', padding: '2px 6px' }}>{'\u00BB'}</button>
-              </nav>
-            </div>
+            {useInfiniteScroll ? (
+              <>
+                <div
+                  ref={loadMoreRef}
+                  style={{
+                    height: 24,
+                    width: '100%',
+                  }}
+                />
+                {loading && hasNextPage && (
+                  <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 12 }}>
+                    <CircularProgress size={20} />
+                  </div>
+                )}
+              </>
+            ) : (
+              <div
+                style={{
+                  position: 'sticky',
+                  bottom: 0,
+                  borderTop: '1px solid var(--border)',
+                  paddingTop: isMobile ? 8 : 12,
+                  paddingBottom: isMobile ? 8 : 12,
+                  backgroundColor: 'var(--card)',
+                  zIndex: 1,
+                }}
+              >
+                <PageControls
+                  page={page}
+                  totalPages={pageCount}
+                  onPageChange={setPage}
+                  compact={isMobile}
+                />
+              </div>
+            )}
           </div>
         </div>
       </Card>

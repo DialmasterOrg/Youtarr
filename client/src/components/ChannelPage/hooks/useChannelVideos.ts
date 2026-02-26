@@ -61,7 +61,6 @@ export function useChannelVideos({
   const resetKeyRef = useRef<string | undefined>(resetKey);
 
   useEffect(() => {
-    if (!resetKey) return;
     if (resetKeyRef.current !== resetKey) {
       resetKeyRef.current = resetKey;
       setVideos([]);

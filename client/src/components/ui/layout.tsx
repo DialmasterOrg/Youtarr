@@ -1,5 +1,6 @@
 import React from 'react';
 import { cn } from '../../lib/cn';
+import { ChevronLeft, ChevronRight } from '../../lib/icons';
 
 /* ─── Container ─────────────────────────────────────────────
    Replicates MUI Container: centers content with max-width.
@@ -552,10 +553,10 @@ const Pagination: React.FC<PaginationProps> = ({ count, page, onChange, size = '
       <button
         onClick={(e) => onChange?.(e, Math.max(1, page - 1))}
         disabled={page === 1}
-        className={cn(btnSize, 'rounded border border-border disabled:opacity-40 hover:bg-muted transition-colors')}
+        className={cn(btnSize, 'rounded-[var(--radius-ui)] border border-border disabled:opacity-40 hover:bg-muted transition-colors inline-flex items-center justify-center')}
         aria-label="go to previous page"
       >
-        ‹
+        <ChevronLeft className="h-4 w-4" />
       </button>
       {pages.map((p) => (
         <button
@@ -563,7 +564,7 @@ const Pagination: React.FC<PaginationProps> = ({ count, page, onChange, size = '
           onClick={(e) => onChange?.(e, p)}
           className={cn(
             btnSize,
-            'rounded border transition-colors',
+            'rounded-[var(--radius-ui)] border transition-colors inline-flex items-center justify-center',
             p === page
               ? 'bg-primary text-primary-foreground border-primary'
               : 'border-border hover:bg-muted'
@@ -577,10 +578,10 @@ const Pagination: React.FC<PaginationProps> = ({ count, page, onChange, size = '
       <button
         onClick={(e) => onChange?.(e, Math.min(count, page + 1))}
         disabled={page === count}
-        className={cn(btnSize, 'rounded border border-border disabled:opacity-40 hover:bg-muted transition-colors')}
+        className={cn(btnSize, 'rounded-[var(--radius-ui)] border border-border disabled:opacity-40 hover:bg-muted transition-colors inline-flex items-center justify-center')}
         aria-label="go to next page"
       >
-        ›
+        <ChevronRight className="h-4 w-4" />
       </button>
     </nav>
   );

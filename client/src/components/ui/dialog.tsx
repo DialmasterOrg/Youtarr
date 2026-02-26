@@ -93,7 +93,7 @@ const Dialog: React.FC<DialogProps> = ({
           'rounded-[var(--radius-ui)]',
           'border-[length:var(--border-weight)] border-[var(--border-strong)]',
           'shadow-2xl',
-          'flex flex-col max-h-[90vh] overflow-hidden',
+          'flex flex-col max-h-[calc(100vh-120px)] overflow-hidden',
           'focus-visible:outline-none',
           'data-[state=open]:animate-slide-up',
           !fullScreen && maxWidth && maxWidthMap[maxWidth],

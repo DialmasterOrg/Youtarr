@@ -77,6 +77,8 @@ function VideoCard({
             opacity: status === 'members_only' || isIgnored ? 0.7 : 1,
             transform: hoveredVideo === video.youtube_id ? 'var(--sticker-hover-transform)' : baseTransform,
             boxShadow: hoveredVideo === video.youtube_id ? 'var(--card-hover-shadow)' : 'var(--shadow-soft)',
+            overflow: 'hidden',
+            borderRadius: 'var(--radius-ui)',
           }}
           onMouseEnter={() => onHoverChange(video.youtube_id)}
           onMouseLeave={() => onHoverChange(null)}

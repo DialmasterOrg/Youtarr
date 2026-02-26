@@ -174,6 +174,8 @@ function ChannelSettingsDialog({
       return;
     }
 
+    setActiveSection('general');
+
     // Load all data when dialog opens
     const loadAllData = async () => {
       setLoading(true);
@@ -438,7 +440,7 @@ function ChannelSettingsDialog({
               <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
                 Resolution Override
               </Typography>
-              <FormControl fullWidth size="small">
+              <FormControl fullWidth>
                 <InputLabel id="video-quality-label" shrink>Channel Video Quality Override</InputLabel>
                 <Select
                   labelId="video-quality-label"
@@ -738,7 +740,7 @@ function ChannelSettingsDialog({
                 Set a default rating for videos from this channel when no rating metadata is available.
               </Typography>
             </Alert>
-            <FormControl fullWidth size="small">
+            <FormControl fullWidth>
               <InputLabel>Default Rating</InputLabel>
               <Select
                 value={settings.default_rating || ''}
@@ -777,9 +779,9 @@ function ChannelSettingsDialog({
     <Dialog 
       open={open} 
       onClose={handleCancel} 
-      maxWidth="md" 
+      maxWidth="xl" 
       fullWidth
-      style={{ minHeight: isMobile ? '80vh' : '500px', maxHeight: '90vh' }}
+      className="max-h-[calc(100vh-120px)]"
     >
       <DialogTitle style={{ paddingBottom: 8 }}>
         Channel Settings: {channelName}
@@ -789,7 +791,7 @@ function ChannelSettingsDialog({
         <div style={{ borderBottom: '1px solid var(--border)', padding: '0 16px' }}>
           <Tabs
             value={activeSection}
-            onChange={(_, newValue) => setActiveSection(newValue)}
+            onChange={(_, newValue) => setActiveSection(String(newValue))}
             variant="scrollable"
             scrollButtons="auto"
           >
@@ -807,7 +809,7 @@ function ChannelSettingsDialog({
         </div>
       ) : null}
 
-      <DialogContent style={{ padding: 0, display: 'flex' }}>
+      <DialogContent style={{ padding: 0, display: 'flex', minHeight: 0 }}>
         {!isMobile && (
           <div style={{ 
             width: 200, 
@@ -847,7 +849,7 @@ function ChannelSettingsDialog({
           </div>
         )}
 
-        <div style={{ flex: 1, padding: isMobile ? 16 : 24, overflowY: 'auto' }}>
+        <div style={{ flex: 1, padding: isMobile ? 16 : 24, overflowY: 'auto', minHeight: 0 }}>
           {loading ? (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', paddingTop: 80, paddingBottom: 80 }}>
               <CircularProgress />
@@ -869,15 +871,7 @@ function ChannelSettingsDialog({
               {isMobile ? (
                 renderSectionContent(activeSection)
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-                  {renderSectionContent('general')}
-                  <Divider />
-                  {renderSectionContent('auto-download')}
-                  <Divider />
-                  {renderSectionContent('filters')}
-                  <Divider />
-                  {renderSectionContent('ratings')}
-                </div>
+                renderSectionContent(activeSection)
               )}
             </>
           )}

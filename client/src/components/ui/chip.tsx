@@ -37,7 +37,7 @@ const chipVariants = cva(
     },
     compoundVariants: [
       // filled
-      { variant: 'filled', color: 'default',   class: 'bg-muted text-foreground hover:bg-muted/80' },
+      { variant: 'filled', color: 'default',   class: 'bg-muted text-muted-foreground hover:bg-muted/80' },
       { variant: 'filled', color: 'primary',   class: 'bg-primary text-primary-foreground hover:opacity-90' },
       { variant: 'filled', color: 'secondary', class: 'bg-secondary text-secondary-foreground hover:opacity-90' },
       { variant: 'filled', color: 'error',     class: 'bg-destructive text-destructive-foreground hover:opacity-90' },
@@ -45,7 +45,7 @@ const chipVariants = cva(
       { variant: 'filled', color: 'success',   class: 'bg-success text-success-foreground hover:opacity-90' },
       { variant: 'filled', color: 'info',      class: 'bg-info text-info-foreground hover:opacity-90' },
       // outlined
-      { variant: 'outlined', color: 'default',   class: 'border-[var(--border-strong)] text-foreground hover:bg-muted/50' },
+      { variant: 'outlined', color: 'default',   class: 'border-muted-foreground/45 text-muted-foreground bg-muted/35 hover:bg-muted/60' },
       { variant: 'outlined', color: 'primary',   class: 'border-primary text-primary hover:bg-primary/10' },
       { variant: 'outlined', color: 'secondary', class: 'border-secondary text-secondary hover:bg-secondary/10' },
       { variant: 'outlined', color: 'error',     class: 'border-destructive text-destructive hover:bg-destructive/10' },

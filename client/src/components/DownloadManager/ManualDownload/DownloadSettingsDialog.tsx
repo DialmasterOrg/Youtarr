@@ -201,7 +201,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
     <Dialog
       open={open}
       onClose={handleCancel}
-      maxWidth="sm"
+      maxWidth="lg"
       fullWidth
       BackdropProps={{ 'data-testid': 'dialog-backdrop' } as any}
     >

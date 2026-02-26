@@ -11,10 +11,12 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem,
   Badge,
+  Menu,
+  MenuItem,
+  ListItemText,
 } from '../ui';
-import { Search as SearchIcon, LayoutGrid as ViewModuleIcon, LayoutGrid as TableChartIcon, List as ViewListIcon, Download as DownloadIcon, RefreshCw as RefreshIcon, Trash2 as DeleteIcon, Ban as BlockIcon, Info as InfoIcon, ListChecks as ChecklistIcon, X as ClearIcon, ListFilter as FilterListIcon } from '../../lib/icons';
+import { Search as SearchIcon, LayoutGrid as ViewModuleIcon, LayoutGrid as TableChartIcon, List as ViewListIcon, Download as DownloadIcon, RefreshCw as RefreshIcon, Trash2 as DeleteIcon, Ban as BlockIcon, Info as InfoIcon, X as ClearIcon, ListFilter as FilterListIcon, MoreVertical as MoreVertIcon } from '../../lib/icons';
 import { LayoutList } from 'lucide-react';
 import { getVideoStatus } from '../../utils/videoStatus';
 import { ChannelVideo } from '../../types/ChannelVideo';
@@ -46,7 +48,8 @@ interface ChannelVideosHeaderProps {
   onHideDownloadedChange: (hide: boolean) => void;
   onRefreshClick: () => void;
   onDownloadClick: () => void;
-  onSelectAll: () => void;
+  onSelectAllDownloaded: () => void;
+  onSelectAllNotDownloaded: () => void;
   onClearSelection: () => void;
   onDeleteClick: () => void;
   onBulkIgnoreClick: () => void;
@@ -79,7 +82,8 @@ function ChannelVideosHeader({
   onHideDownloadedChange,
   onRefreshClick,
   onDownloadClick,
-  onSelectAll,
+  onSelectAllDownloaded,
+  onSelectAllNotDownloaded,
   onClearSelection,
   onDeleteClick,
   onBulkIgnoreClick,
@@ -90,6 +94,8 @@ function ChannelVideosHeader({
   onFiltersExpandedChange,
 }: ChannelVideosHeaderProps) {
   const { themeMode } = useThemeEngine();
+  const [actionsAnchorEl, setActionsAnchorEl] = React.useState<null | HTMLElement>(null);
+  const actionsOpen = Boolean(actionsAnchorEl);
   const renderInfoIcon = (message: string) => {
     const handleClick = (e: React.MouseEvent) => {
       e.preventDefault();
@@ -131,6 +137,12 @@ function ChannelVideosHeader({
     return status === 'never_downloaded' || status === 'missing' || status === 'ignored';
   }).length;
   const selectableDeleteCount = paginatedVideos.filter((video) => video.added && !video.removed).length;
+  const hasDownloadSelection = checkedBoxes.length > 0;
+  const hasDeleteSelection = selectedForDeletion.length > 0;
+  const hasAnySelection = hasDownloadSelection || hasDeleteSelection;
+  const hasMixedSelection = hasDownloadSelection && hasDeleteSelection;
+
+  const closeActionsMenu = () => setActionsAnchorEl(null);
 
   return (
     <div
@@ -181,9 +193,10 @@ function ChannelVideosHeader({
             style={{ flexGrow: 1, minWidth: 200, width: isMobile ? '50%' : 'auto' }}
           />
 
-          <FormControl size="small" style={{ minWidth: 200 }}>
+          <FormControl style={{ minWidth: 200 }}>
             <InputLabel>Max Rating</InputLabel>
             <Select
+              size="small"
               value={maxRating}
               label="Max Rating"
               onChange={(event) => onMaxRatingChange(event.target.value)}
@@ -260,7 +273,7 @@ function ChannelVideosHeader({
 
         {/* Action buttons for desktop */}
         {!isMobile && (
-          <ActionBar variant={themeMode} style={{ marginTop: 16 }}>
+          <ActionBar variant={themeMode} style={{ marginTop: 10 }}>
             {onFiltersExpandedChange && (
               <Button
                 variant={filtersExpanded ? 'contained' : 'outlined'}
@@ -280,59 +293,92 @@ function ChannelVideosHeader({
               variant="outlined"
               size="small"
               color="inherit"
-              startIcon={<DownloadIcon size={16} />}
-              onClick={onDownloadClick}
-              disabled={checkedBoxes.length === 0}
-              className={intentStyles.success}
-            >
-              Download {checkedBoxes.length > 0 ? `${checkedBoxes.length} ${checkedBoxes.length === 1 ? 'Video' : 'Videos'}` : 'Selected'}
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              color="inherit"
-              onClick={onSelectAll}
-              disabled={
-                selectionMode === 'delete'
-                  ? selectableDeleteCount === 0
-                  : checkedBoxes.length === 0 && selectableDownloadCount === 0
-              }
-              startIcon={<ChecklistIcon size={16} />}
+              endIcon={<MoreVertIcon size={16} />}
+              onClick={(event) => setActionsAnchorEl(event.currentTarget)}
               className={intentStyles.base}
             >
-              Select All This Page
+              Actions
             </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={onClearSelection}
-              disabled={checkedBoxes.length === 0}
-              startIcon={<ClearIcon size={16} />}
+
+            <Menu
+              anchorEl={actionsAnchorEl}
+              open={actionsOpen}
+              onClose={closeActionsMenu}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
             >
-              Clear
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              color="inherit"
-              startIcon={<BlockIcon size={16} />}
-              onClick={onBulkIgnoreClick}
-              disabled={checkedBoxes.length === 0}
-              className={`${intentStyles.warning} MuiButton-outlinedWarning`}
-            >
-              Ignore Selected
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              color="inherit"
-              startIcon={<DeleteIcon size={16} />}
-              onClick={onDeleteClick}
-              disabled={selectedForDeletion.length === 0 || deleteLoading}
-              className={intentStyles.danger}
-            >
-              Delete {selectedForDeletion.length > 0 ? `${selectedForDeletion.length}` : 'Selected'}
-            </Button>
+              <MenuItem
+                onClick={() => {
+                  onSelectAllDownloaded();
+                  closeActionsMenu();
+                }}
+                disabled={selectableDeleteCount === 0}
+              >
+                <ListItemText>Select All (Downloaded)</ListItemText>
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  onSelectAllNotDownloaded();
+                  closeActionsMenu();
+                }}
+                disabled={selectableDownloadCount === 0}
+              >
+                <ListItemText>Select All (Not Downloaded)</ListItemText>
+              </MenuItem>
+
+              {hasAnySelection && (
+                <>
+                  <MenuItem
+                    onClick={() => {
+                      onClearSelection();
+                      closeActionsMenu();
+                    }}
+                  >
+                    <ClearIcon size={14} style={{ marginRight: 8 }} />
+                    <ListItemText>Clear Selection</ListItemText>
+                  </MenuItem>
+                </>
+              )}
+
+              {(hasDownloadSelection || hasMixedSelection) && (
+                <MenuItem
+                  onClick={() => {
+                    onDownloadClick();
+                    closeActionsMenu();
+                  }}
+                  disabled={!hasDownloadSelection}
+                >
+                  <DownloadIcon size={14} style={{ marginRight: 8 }} />
+                  <ListItemText>Download Selected ({checkedBoxes.length})</ListItemText>
+                </MenuItem>
+              )}
+
+              {(hasDeleteSelection || hasMixedSelection) && (
+                <MenuItem
+                  onClick={() => {
+                    onDeleteClick();
+                    closeActionsMenu();
+                  }}
+                  disabled={!hasDeleteSelection || deleteLoading}
+                  style={{ color: 'var(--destructive)' }}
+                >
+                  <DeleteIcon size={14} style={{ marginRight: 8 }} />
+                  <ListItemText>Delete Selected ({selectedForDeletion.length})</ListItemText>
+                </MenuItem>
+              )}
+
+              {hasDownloadSelection && (
+                <MenuItem
+                  onClick={() => {
+                    onBulkIgnoreClick();
+                    closeActionsMenu();
+                  }}
+                >
+                  <BlockIcon size={14} style={{ marginRight: 8 }} />
+                  <ListItemText>Ignore Selected ({checkedBoxes.length})</ListItemText>
+                </MenuItem>
+              )}
+            </Menu>
           </ActionBar>
         )}
 

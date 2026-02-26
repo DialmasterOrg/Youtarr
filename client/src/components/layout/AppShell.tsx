@@ -95,7 +95,7 @@ export function AppShell({
         {
           key: 'downloads' as const,
           label: 'Downloads',
-          oldLabel: 'Manage Video Downloads',
+          oldLabel: 'Manage Downloads',
           icon: <DownloadIcon />,
           to: '/downloads',
           subItems: downloadsSubItems,

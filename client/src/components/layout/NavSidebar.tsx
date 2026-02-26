@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Divider,
@@ -12,7 +12,7 @@ import {
   Paper,
 } from '../ui';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronUp as ExpandLess, ChevronDown as ExpandMore, Download as DownloadIcon } from '../../lib/icons';
+import { Download as DownloadIcon } from '../../lib/icons';
 import { StorageFooterWidget } from './StorageFooterWidget';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 
@@ -38,7 +38,7 @@ const NAV_SUB_FONT_SIZE = '0.8rem';
 const NAV_SUB_LINE_HEIGHT = 1.2;
 const NAV_DRAWER_BORDER_RADIUS = 'var(--nav-radius)';
 const NAV_DRAWER_DESKTOP_TOP_OFFSET = 'calc(80px + var(--shell-gap))';
-const NAV_DRAWER_DESKTOP_MAX_HEIGHT = 'calc(100vh - (80px + var(--shell-gap)) - var(--shell-gap))';
+const NAV_DRAWER_DESKTOP_MAX_HEIGHT = 'calc(100vh - (80px + var(--shell-gap)) - (var(--shell-gap) * 2))';
 const NAV_DRAWER_MOBILE_TOP_OFFSET = 'calc(60px + var(--shell-gap))';
 const NAV_DRAWER_MOBILE_BOTTOM_GAP = 'var(--shell-gap)';
 const NAV_DRAWER_MOBILE_MAX_HEIGHT = 'calc(100vh - (60px + (var(--shell-gap) * 2)))';
@@ -81,9 +81,20 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
   const drawerWidth = isMobile ? EXPANDED_WIDTH : collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
   const isNavCollapsed = !isMobile && collapsed;
   const iconBoxSize = NAV_ICON_SIZE;
+  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
   // Track expanded menu items on mobile
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const activeItem = navItems.find((item) =>
+      item.subItems?.some((subItem: any) => location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/'))
+    );
+
+    if (activeItem?.key) {
+      setExpandedItems((prev) => ({ ...prev, [activeItem.key]: true }));
+    }
+  }, [location.pathname, navItems]);
 
   const toggleExpand = (key: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -127,7 +138,8 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
             const selected = location.pathname === item.to || location.pathname.startsWith(item.to + '/') || Boolean(hasSubMatch);
             const isExpanded = isMobile
               ? expandedItems[item.key] || selected
-              : !isNavCollapsed && Boolean(item.subItems);
+              : !isNavCollapsed && Boolean(item.subItems) && selected;
+            const isHovered = hoveredItem === item.key;
 
             const button = (
               <div key={item.key} style={{ paddingLeft: 4, paddingRight: 4, paddingTop: 0, paddingBottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
@@ -142,9 +154,11 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                       onCloseMobile();
                     }
                   }}
+                  onMouseEnter={() => setHoveredItem(item.key)}
+                  onMouseLeave={() => setHoveredItem(null)}
                   style={{
                     borderRadius: 'var(--radius-ui)',
-                    justifyContent: 'flex-start',
+                    justifyContent: isNavCollapsed ? 'center' : 'flex-start',
                     alignItems: 'center',
                     paddingLeft: isNavCollapsed ? NAV_COLLAPSED_HORIZONTAL_PADDING * 8 : NAV_EXPANDED_HORIZONTAL_PADDING * 8,
                     paddingRight: isNavCollapsed ? NAV_COLLAPSED_HORIZONTAL_PADDING * 8 : NAV_EXPANDED_HORIZONTAL_PADDING * 8,
@@ -153,10 +167,10 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                     minHeight: NAV_MAIN_MIN_HEIGHT,
                     height: NAV_MAIN_MIN_HEIGHT,
                     width: '100%',
-                    border: selected ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)',
-                    backgroundColor: selected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
+                    border: selected ? 'var(--nav-item-border-selected)' : (isPlayful && isHovered ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)'),
+                    backgroundColor: selected ? 'var(--nav-item-bg-selected)' : (isPlayful && isHovered ? 'var(--nav-item-bg-hover)' : 'var(--nav-item-bg)'),
                     color: selected ? 'var(--nav-item-text-selected)' : 'inherit',
-                    boxShadow: selected ? 'var(--nav-item-shadow-selected)' : 'var(--nav-item-shadow)',
+                    boxShadow: selected ? 'var(--nav-item-shadow-selected)' : (isPlayful && isHovered ? 'var(--shadow-soft)' : 'var(--nav-item-shadow)'),
                     transition: 'all 300ms var(--transition-bouncy)',
                     cursor: 'pointer',
                   }}
@@ -172,7 +186,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                       alignItems: 'center',
                       color: selected ? 'var(--nav-item-text-selected)' : 'inherit',
                       flexShrink: 0,
-                      marginRight: NAV_ICON_MARGIN * 8,
+                      marginRight: isNavCollapsed ? 0 : NAV_ICON_MARGIN * 8,
                     }}
                   >
                     {item.icon}
@@ -200,7 +214,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                     secondaryTypographyProps={{
                       variant: 'caption',
                       style: {
-                        fontWeight: 400,
+                        fontWeight: 300,
                         fontSize: NAV_SECONDARY_FONT_SIZE,
                         lineHeight: NAV_SECONDARY_LINE_HEIGHT,
                         marginTop: '1px',
@@ -209,9 +223,6 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                       noWrap: true,
                     }}
                   />
-                  {isMobile && item.subItems && (
-                    isExpanded ? <ExpandLess /> : <ExpandMore />
-                  )}
                 </ListItemButton>
                 
                 <Collapse in={isExpanded} timeout="auto" unmountOnExit>
@@ -236,8 +247,9 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                               paddingBottom: 0,
                               minHeight: NAV_SUB_MIN_HEIGHT,
                               height: NAV_SUB_MIN_HEIGHT,
-                              width: `calc(100% - ${sp(NAV_SUB_TEXT_INDENT)})`,
+                              width: '100%',
                               marginLeft: sp(NAV_SUB_TEXT_INDENT),
+                              marginRight: 2,
                               border: subSelected ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)',
                               backgroundColor: subSelected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
                               boxShadow: subSelected ? 'var(--nav-item-shadow-selected)' : 'var(--nav-item-shadow)',
@@ -552,9 +564,12 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
     boxShadow: 'var(--nav-shadow)',
     backgroundColor: 'var(--card)',
     marginTop: isMobile && isLinearFlat ? 'auto' : isMobile ? NAV_DRAWER_MOBILE_TOP_OFFSET : NAV_DRAWER_DESKTOP_TOP_OFFSET,
-  marginBottom: isMobile && isLinearFlat ? 0 : isMobile ? NAV_DRAWER_MOBILE_BOTTOM_GAP : 0,
+    marginBottom: isMobile && isLinearFlat ? 0 : isMobile ? NAV_DRAWER_MOBILE_BOTTOM_GAP : 'var(--shell-gap)',
   marginLeft: isMobile ? 0 : 'var(--shell-gap)',
-  maxHeight: isMobile && isLinearFlat ? '65vh' : isMobile ? NAV_DRAWER_MOBILE_MAX_HEIGHT : 'none',
+    marginRight: isMobile ? 0 : 'var(--shell-gap)',
+    paddingLeft: isMobile ? 0 : 4,
+    paddingRight: isMobile ? 0 : 4,
+    maxHeight: isMobile && isLinearFlat ? '65vh' : isMobile ? NAV_DRAWER_MOBILE_MAX_HEIGHT : NAV_DRAWER_DESKTOP_MAX_HEIGHT,
     overflow: 'hidden',
     overflowX: 'hidden',
     width: isMobile && isLinearFlat ? '100%' : drawerWidth,
@@ -563,7 +578,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
     top: isMobile && isLinearFlat ? 'auto' : 0,
     left: isMobile && isLinearFlat ? 0 : undefined,
     right: isMobile && isLinearFlat ? 0 : undefined,
-    bottom: isMobile && isLinearFlat ? 0 : isMobile ? undefined : 0,
+    bottom: isMobile && isLinearFlat ? 0 : isMobile ? undefined : 'var(--shell-gap)',
     zIndex: 1200,
   };
 

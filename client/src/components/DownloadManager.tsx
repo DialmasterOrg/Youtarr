@@ -135,6 +135,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
               handleExpandCell={handleExpandCell}
               currentTime={currentTime}
               isMobile={isMobile}
+              token={token}
             />
           </Grid>
         }

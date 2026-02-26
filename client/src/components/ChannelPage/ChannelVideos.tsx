@@ -33,6 +33,7 @@ import ChannelVideosFilters from './components/ChannelVideosFilters';
 import { useConfig } from '../../hooks/useConfig';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
+import PageControls from '../shared/PageControls';
 
 interface ChannelVideosProps {
   token: string | null;
@@ -227,6 +228,36 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const defaultResolution = channelVideoQuality || config.preferredResolution || '1080';
   const defaultResolutionSource: 'channel' | 'global' = hasChannelOverride ? 'channel' : 'global';
   const useInfiniteScroll = config.channelVideosHotLoad ?? true;
+  const resetKey = useMemo(
+    () => [
+      channelId || '',
+      selectedTab || '',
+      hideDownloaded,
+      searchQuery,
+      sortBy,
+      sortOrder,
+      maxRating,
+      filters.minDuration,
+      filters.maxDuration,
+      filters.dateFrom ? filters.dateFrom.toISOString() : '',
+      filters.dateTo ? filters.dateTo.toISOString() : '',
+      useInfiniteScroll,
+    ].join('|'),
+    [
+      channelId,
+      selectedTab,
+      hideDownloaded,
+      searchQuery,
+      sortBy,
+      sortOrder,
+      maxRating,
+      filters.minDuration,
+      filters.maxDuration,
+      filters.dateFrom,
+      filters.dateTo,
+      useInfiniteScroll,
+    ]
+  );
 
   // Use custom hooks for data fetching
   const {
@@ -246,12 +277,15 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     searchQuery,
     sortBy,
     sortOrder,
+    maxRating,
     tabType: selectedTab,
     token,
     minDuration: filters.minDuration,
     maxDuration: filters.maxDuration,
     dateFrom: filters.dateFrom,
     dateTo: filters.dateTo,
+    append: useInfiniteScroll,
+    resetKey,
   });
 
   // Update available tabs from video fetch response if available
@@ -366,10 +400,6 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
   // Event handlers
   const handleCheckChange = useCallback((videoId: string, isChecked: boolean) => {
-    if (selectedForDeletion.length > 0 && isChecked) {
-      setErrorMessage('Clear delete selections before choosing videos to download.');
-      return;
-    }
     setCheckedBoxes((prevState) => {
       if (isChecked) {
         return [...prevState, videoId];
@@ -377,20 +407,16 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         return prevState.filter((id) => id !== videoId);
       }
     });
-  }, [selectedForDeletion.length]);
+  }, []);
 
   const handleDeletionChange = useCallback((videoId: string, isChecked: boolean) => {
-    if (checkedBoxes.length > 0 && isChecked) {
-      setErrorMessage('Clear download selections before choosing videos to delete.');
-      return;
-    }
     setSelectedForDeletion((prevState) => {
       if (isChecked) {
         return [...prevState, videoId];
       }
       return prevState.filter((id) => id !== videoId);
     });
-  }, [checkedBoxes.length]);
+  }, []);
 
   const handleSelectAll = useCallback(() => {
     if (!canSelectDownload && !canSelectDeletion) {
@@ -417,6 +443,31 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
       return [...prevState, ...newIds];
     });
   }, [canSelectDeletion, canSelectDownload, paginatedVideos, selectionMode]);
+
+  const handleSelectAllDownloaded = useCallback(() => {
+    const downloadedVideoIds = paginatedVideos
+      .filter((video) => video.added && !video.removed)
+      .map((video) => video.youtube_id);
+
+    setSelectedForDeletion((prevState) => {
+      const newIds = downloadedVideoIds.filter((id) => !prevState.includes(id));
+      return [...prevState, ...newIds];
+    });
+  }, [paginatedVideos]);
+
+  const handleSelectAllNotDownloaded = useCallback(() => {
+    const downloadableVideoIds = paginatedVideos
+      .filter((video) => {
+        const status = getVideoStatus(video);
+        return status === 'never_downloaded' || status === 'missing' || status === 'ignored';
+      })
+      .map((video) => video.youtube_id);
+
+    setCheckedBoxes((prevState) => {
+      const newIds = downloadableVideoIds.filter((id) => !prevState.includes(id));
+      return [...prevState, ...newIds];
+    });
+  }, [paginatedVideos]);
 
   const handleClearSelection = useCallback(() => {
     setCheckedBoxes([]);
@@ -605,13 +656,13 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     }
   };
 
-  const handleTabChange = (event: React.SyntheticEvent, newTab: string) => {
+  const handleTabChange = (event: React.SyntheticEvent, newTab: string | number) => {
     // Prevent tab changes while videos are still loading
     if (videosLoading) {
       return;
     }
 
-    setSelectedTab(newTab);
+    setSelectedTab(String(newTab));
     setPage(1); // Reset to first page when changing tabs
     setCheckedBoxes([]); // Clear selections when changing tabs
     setSelectedForDeletion([]); // Clear deletion selections when changing tabs
@@ -795,7 +846,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
   return (
     <>
-      <Card elevation={3} style={{ marginBottom: 16 }}>
+      <Card elevation={3} style={{ marginBottom: 16, borderRadius: 'var(--radius-ui)', overflow: 'hidden' }}>
         <ChannelVideosHeader
           isMobile={isMobile}
           viewMode={viewMode}
@@ -823,7 +874,8 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           }}
           onRefreshClick={handleRefreshClick}
           onDownloadClick={handleDownloadClick}
-          onSelectAll={handleSelectAll}
+          onSelectAllDownloaded={handleSelectAllDownloaded}
+          onSelectAllNotDownloaded={handleSelectAllNotDownloaded}
           onClearSelection={handleClearSelection}
           onDeleteClick={handleDeleteClick}
           onBulkIgnoreClick={handleBulkIgnore}
@@ -994,25 +1046,22 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
             </>
           )}
 
-          {totalPages > 1 && (
-            <nav role="navigation" aria-label="pagination" style={{ display: 'flex', justifyContent: 'center', padding: '16px 0', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-              <button aria-label="go to first page" onClick={() => { setPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={page <= 1} style={{ padding: '4px 8px', cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.4 : 1, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'inherit' }}>«</button>
-              <button aria-label="go to previous page" onClick={() => { setPage(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={page <= 1} style={{ padding: '4px 8px', cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.4 : 1, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'inherit' }}>‹</button>
-              {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
-                const start = Math.max(1, Math.min(page - 3, totalPages - 6));
-                const p = start + i;
-                if (p > totalPages) return null;
-                return (
-                  <button aria-label={`go to page ${p}`} key={p} onClick={() => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ padding: '4px 10px', cursor: 'pointer', border: '1px solid var(--border)', borderRadius: 4, background: p === page ? 'var(--primary)' : 'transparent', color: p === page ? 'white' : 'inherit' }}>{p}</button>
-                );
-              })}
-              <button aria-label="go to next page" onClick={() => { setPage(p => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={page >= totalPages} style={{ padding: '4px 8px', cursor: page >= totalPages ? 'not-allowed' : 'pointer', opacity: page >= totalPages ? 0.4 : 1, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'inherit' }}>›</button>
-              <button aria-label="go to last page" onClick={() => { setPage(totalPages); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={page >= totalPages} style={{ padding: '4px 8px', cursor: page >= totalPages ? 'not-allowed' : 'pointer', opacity: page >= totalPages ? 0.4 : 1, border: '1px solid var(--border)', borderRadius: 4, background: 'transparent', color: 'inherit' }}>»</button>
-            </nav>
+          {!useInfiniteScroll && totalPages > 1 && (
+            <div style={{ padding: '16px 0' }}>
+              <PageControls
+                page={page}
+                totalPages={totalPages}
+                onPageChange={(newPage) => {
+                  setPage(newPage);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+              />
+            </div>
           )}
         </div>
       </Card>
       <ChannelVideosDialogs
+        token={token}
           downloadDialogOpen={downloadDialogOpen}
         refreshConfirmOpen={refreshConfirmOpen}
         deleteDialogOpen={deleteDialogOpen}

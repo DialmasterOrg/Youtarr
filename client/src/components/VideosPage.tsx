@@ -446,8 +446,7 @@ function VideosPage({ token }: VideosPageProps) {
         <Grid
           container
           spacing={2}
-          justifyContent='center'
-          style={{ marginTop: '8px', marginBottom: '8px' }}
+          style={{ marginTop: '8px', marginBottom: '8px', display: 'flex', justifyContent: 'center' }}
         >
           <Pagination
             count={totalPages}

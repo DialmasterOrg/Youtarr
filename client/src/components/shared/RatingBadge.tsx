@@ -8,6 +8,8 @@ interface RatingBadgeProps {
   size?: 'small' | 'medium';
   showNA?: boolean;
   variant?: 'pill' | 'text';
+  className?: string;
+  style?: React.CSSProperties;
   sx?: Record<string, unknown>;
 }
 
@@ -22,6 +24,8 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
   size = 'small',
   showNA = false,
   variant = 'pill',
+  className,
+  style,
   sx,
 }) => {
   if (!rating && !showNA) {
@@ -46,7 +50,9 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
   }
 
   const getRatingColor = (rate: string): 'default' | 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success' => {
-    const lower = rate.toLowerCase();
+    const normalized = typeof rate === 'string' ? rate.trim() : '';
+    if (!normalized) return 'default';
+    const lower = normalized.toLowerCase();
 
     // Kids / G - Green (Success)
     if (lower.includes('tv-y') || lower.includes('tv-g') || lower === 'g') {
@@ -63,7 +69,7 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
       return 'error';
     }
 
-    return 'default';
+    return 'secondary';
   };
 
   const tooltipText = ratingSource
@@ -100,9 +106,11 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
       <Chip
         label={rating}
         size={size}
+        variant="filled"
         color={chipColor}
         icon={<EighteenUpRatingIcon size={size === 'small' ? 12 : 16} data-testid="EighteenUpRatingIcon" />}
-        style={{ fontSize: size === 'small' ? '0.7rem' : '0.875rem' }}
+        className={className}
+        style={{ fontSize: size === 'small' ? '0.7rem' : '0.875rem', ...style }}
       />
     </Tooltip>
   );
