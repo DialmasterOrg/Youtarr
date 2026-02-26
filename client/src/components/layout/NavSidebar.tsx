@@ -15,14 +15,13 @@ import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { Download as DownloadIcon } from '../../lib/icons';
 import { StorageFooterWidget } from './StorageFooterWidget';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
+import { NAV_BUTTON_OUTER_PADDING_X, NAV_MAIN_BUTTON_SIDE_PADDING } from './navLayoutConstants';
 
 const EXPANDED_WIDTH = 200;
 const COLLAPSED_WIDTH = 65;
 
 const NAV_MAIN_MIN_HEIGHT = 40;
 const NAV_SUB_MIN_HEIGHT = 20;
-const NAV_EXPANDED_HORIZONTAL_PADDING = 1.55;
-const NAV_COLLAPSED_HORIZONTAL_PADDING = 1.55;
 const NAV_ICON_SIZE = 25;
 const NAV_ICON_MARGIN = 0.35;
 const NAV_PRIMARY_FONT_SIZE = '0.85rem';
@@ -36,6 +35,7 @@ const NAV_SUB_TEXT_INDENT = 3.5;
 const NAV_SUB_HIGHLIGHT_LEFT_PADDING = 1.25;
 const NAV_SUB_FONT_SIZE = '0.8rem';
 const NAV_SUB_LINE_HEIGHT = 1.2;
+const NAV_PLAYFUL_COLLAPSED_BUTTON_WIDTH = 57;
 const NAV_DRAWER_BORDER_RADIUS = 'var(--nav-radius)';
 const NAV_DRAWER_DESKTOP_TOP_OFFSET = 'calc(80px + var(--shell-gap))';
 const NAV_DRAWER_DESKTOP_MAX_HEIGHT = 'calc(100vh - (80px + var(--shell-gap)) - (var(--shell-gap) * 2))';
@@ -75,7 +75,6 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
   const navigate = useNavigate();
   const { themeMode } = useThemeEngine();
   const isPlayful = themeMode === 'playful';
-  const isNeumorphic = themeMode === 'neumorphic';
   const isLinearFlat = themeMode === 'linear' || themeMode === 'flat';
   const isCompactStorage = isMobile && isLinearFlat;
   const drawerWidth = isMobile ? EXPANDED_WIDTH : collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
@@ -102,16 +101,23 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
     setExpandedItems(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const toggleExclusiveExpand = (key: string) => {
-    setExpandedItems(prev => ({ [key]: !prev[key] }));
-  };
-
   const collapsedVersionLabel = React.useMemo(() => {
     if (!versionLabel) return '';
     return versionLabel.split('•')[0].trim();
   }, [versionLabel]);
 
   const displayVersionLabel = isNavCollapsed ? collapsedVersionLabel : (versionLabel || '');
+
+  const activeSidebarSectionKey = React.useMemo(() => {
+    const activeItem = navItems.find((item) => {
+      const hasSubMatch = item.subItems?.some((subItem: any) => (
+        location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/')
+      ));
+      const parentMatch = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
+      return Boolean(parentMatch || hasSubMatch);
+    });
+    return activeItem?.key || null;
+  }, [location.pathname, navItems]);
 
   if (isTopNav && !isMobile) {
     return null;
@@ -135,14 +141,26 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
             const hasSubMatch = item.subItems?.some((subItem: any) => (
               location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/')
             ));
-            const selected = location.pathname === item.to || location.pathname.startsWith(item.to + '/') || Boolean(hasSubMatch);
+            const parentMatch = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
+            const selected = Boolean(parentMatch || hasSubMatch);
             const isExpanded = isMobile
               ? expandedItems[item.key] || selected
-              : !isNavCollapsed && Boolean(item.subItems) && selected;
+              : !isNavCollapsed && Boolean(item.subItems) && activeSidebarSectionKey === item.key;
             const isHovered = hoveredItem === item.key;
 
             const button = (
-              <div key={item.key} style={{ paddingLeft: 4, paddingRight: 0, paddingTop: 0, paddingBottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
+              <div
+                key={item.key}
+                style={{
+                  paddingLeft: NAV_BUTTON_OUTER_PADDING_X,
+                  paddingRight: NAV_BUTTON_OUTER_PADDING_X,
+                  paddingTop: 0,
+                  paddingBottom: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'stretch',
+                }}
+              >
                 <ListItemButton
                   component={RouterLink}
                   to={item.to}
@@ -158,15 +176,15 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                   onMouseLeave={() => setHoveredItem(null)}
                   style={{
                     borderRadius: 'var(--radius-ui)',
-                    justifyContent: isNavCollapsed ? 'center' : 'flex-start',
+                    justifyContent: 'flex-start',
                     alignItems: 'center',
-                    paddingLeft: isNavCollapsed ? NAV_COLLAPSED_HORIZONTAL_PADDING * 8 : NAV_EXPANDED_HORIZONTAL_PADDING * 8,
-                    paddingRight: isNavCollapsed ? NAV_COLLAPSED_HORIZONTAL_PADDING * 8 : NAV_EXPANDED_HORIZONTAL_PADDING * 8,
+                    paddingLeft: NAV_MAIN_BUTTON_SIDE_PADDING * 8,
+                    paddingRight: NAV_MAIN_BUTTON_SIDE_PADDING * 8,
                     paddingTop: 0,
                     paddingBottom: 0,
                     minHeight: NAV_MAIN_MIN_HEIGHT,
                     height: NAV_MAIN_MIN_HEIGHT,
-                    width: '100%',
+                    width: isPlayful && isNavCollapsed ? NAV_PLAYFUL_COLLAPSED_BUTTON_WIDTH : '100%',
                     border: selected ? 'var(--nav-item-border-selected)' : (isPlayful && isHovered ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)'),
                     backgroundColor: selected ? 'var(--nav-item-bg-selected)' : (isPlayful && isHovered ? 'var(--nav-item-bg-hover)' : 'var(--nav-item-bg)'),
                     color: selected ? 'var(--nav-item-text-selected)' : 'inherit',
@@ -474,146 +492,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
     );
   }
 
-  // 2. Neumorphic Floating Pod
-  if (isMobile && isNeumorphic) {
-    const activePodItem = navItems.find((item) => {
-      // Respect explicit collapse (false), fall back to selected state when not explicitly set
-      if (expandedItems[item.key] === false) return false;
-      if (expandedItems[item.key] === true) return true;
-      const isSelected =
-        location.pathname === item.to ||
-        location.pathname.startsWith(item.to + '/') ||
-        item.subItems?.some((sub: any) => location.pathname === sub.to || location.pathname.startsWith(sub.to + '/'));
-      return Boolean(item.subItems) && isSelected;
-    });
-    return (
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 'calc(8px + env(safe-area-inset-bottom))',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 1300,
-          width: '88%',
-          maxWidth: 360,
-        }}
-      >
-        {activePodItem?.subItems && (
-          <Paper
-            className="neumo-breathe"
-            style={{
-              position: 'fixed',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              bottom: 'calc(72px + env(safe-area-inset-bottom))',
-              width: '88%',
-              maxWidth: 360,
-              borderRadius: 'var(--radius-ui)',
-              padding: 6,
-              backgroundColor: 'var(--card)',
-              border: 'var(--nav-border)',
-              boxShadow: 'var(--nav-shadow)',
-              zIndex: 1301,
-              maxHeight: '45vh',
-              overflowY: 'auto',
-            }}
-          >
-            <List
-              disablePadding
-              style={{ paddingLeft: 2, paddingRight: 2, display: 'flex', flexDirection: 'column', gap: 4 }}
-            >
-              {activePodItem.subItems.map((subItem: any) => {
-                const subSelected = location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/');
-                return (
-                  <ListItemButton
-                    key={subItem.key}
-                    component={RouterLink}
-                    to={subItem.to}
-                    selected={subSelected}
-                    onClick={() => {
-                      setExpandedItems({});
-                    }}
-                    style={{
-                      borderRadius: 'var(--radius-ui)',
-                      minHeight: 32,
-                      paddingLeft: 8,
-                      paddingRight: 8,
-                      border: subSelected ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)',
-                      backgroundColor: subSelected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
-                      boxShadow: subSelected ? 'var(--nav-item-shadow-selected)' : 'var(--nav-item-shadow)',
-                      color: subSelected ? 'var(--nav-item-text-selected)' : 'inherit',
-                    }}
-                  >
-                    <ListItemText
-                      primary={subItem.label}
-                      primaryTypographyProps={{
-                        variant: 'body2',
-                        style: {
-                          fontWeight: subSelected ? 700 : 500,
-                          fontSize: NAV_SUB_FONT_SIZE,
-                          lineHeight: NAV_SUB_LINE_HEIGHT,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        },
-                        noWrap: true,
-                      }}
-                    />
-                  </ListItemButton>
-                );
-              })}
-            </List>
-          </Paper>
-        )}
-        <Paper
-          className="neumo-breathe"
-          style={{
-            borderRadius: 'var(--radius-ui)',
-            padding: 4,
-            display: 'flex',
-            justifyContent: 'space-around',
-            alignItems: 'center',
-            backgroundColor: 'var(--card)',
-            border: 'var(--nav-border)',
-            boxShadow: 'var(--nav-shadow)',
-          }}
-        >
-          {navItems.map((item) => {
-            const selected = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
-            return (
-              <div
-                key={item.key}
-                onClick={() => {
-                  if (item.subItems) {
-                    toggleExclusiveExpand(item.key);
-                  } else {
-                    setExpandedItems({});
-                    navigate(item.to);
-                  }
-                }}
-                style={{
-                  padding: 8,
-                  borderRadius: 'var(--radius-ui)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  border: selected ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)',
-                  backgroundColor: selected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
-                  boxShadow: selected ? 'var(--nav-item-shadow-selected)' : 'var(--nav-item-shadow)',
-                  color: selected ? 'var(--nav-item-text-selected)' : 'inherit',
-                }}
-              >
-                {React.cloneElement(item.icon as React.ReactElement, { size: 24 })}
-              </div>
-            );
-          })}
-        </Paper>
-      </div>
-    );
-  }
-
-  // 3. Desktop or Industrial Mobile Drawer
+  // 2. Desktop or Industrial Mobile Drawer
   const drawerBorderRadius = isMobile && isLinearFlat
     ? 'var(--radius-ui) var(--radius-ui) 0 0'
     : NAV_DRAWER_BORDER_RADIUS;
@@ -659,7 +538,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
           />
         )}
         {drawerOpenMobile && (
-          <div className="app-nav-paper neumo-breathe" style={panelStyle}>
+          <div className="app-nav-paper" style={panelStyle}>
             {drawerContent}
           </div>
         )}
@@ -669,7 +548,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
 
   // Desktop permanent drawer
   return (
-    <div className="app-nav-paper neumo-breathe" style={panelStyle}>
+    <div className="app-nav-paper" style={panelStyle}>
       {drawerContent}
     </div>
   );

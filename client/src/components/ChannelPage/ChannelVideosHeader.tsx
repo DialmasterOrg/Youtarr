@@ -145,6 +145,9 @@ function ChannelVideosHeader({
   const hasMixedSelection = hasDownloadSelection && hasDeleteSelection;
 
   const closeActionsMenu = () => setActionsAnchorEl(null);
+  const toggleActionsMenu = (event: React.MouseEvent<HTMLElement>) => {
+    setActionsAnchorEl((prev) => (prev ? null : event.currentTarget));
+  };
 
   return (
     <div
@@ -296,13 +299,17 @@ function ChannelVideosHeader({
               size="small"
               color="inherit"
               endIcon={<MoreVertIcon size={16} />}
-              onClick={(event) => setActionsAnchorEl(event.currentTarget)}
+              onClick={toggleActionsMenu}
+              aria-haspopup="menu"
+              aria-expanded={actionsOpen ? 'true' : 'false'}
+              aria-controls={actionsOpen ? 'channel-actions-menu' : undefined}
               className={intentStyles.base}
             >
               Actions
             </Button>
 
             <Menu
+              id="channel-actions-menu"
               anchorEl={actionsAnchorEl}
               open={actionsOpen}
               onClose={closeActionsMenu}

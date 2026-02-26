@@ -23,7 +23,6 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
   const [loading, setLoading] = useState(false);
 
   const isPlayful = themeMode === 'playful';
-  const isNeumorphic = themeMode === 'neumorphic';
   const isLinear = themeMode === 'linear';
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -75,16 +74,14 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
         justifyContent: 'center',
         background: isLinear
           ? 'linear-gradient(135deg, #09090b 0%, #1a1a1f 100%)'
-          : isNeumorphic
-            ? '#E0E5EC'
-            : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       }}
     >
       <div style={{ width: '100%', maxWidth: 600, padding: '0 16px', boxSizing: 'border-box' }}>
         <Paper
-          elevation={isLinear ? 0 : isNeumorphic ? 0 : 8}
+          elevation={isLinear ? 0 : 8}
           style={{
             padding: isPlayful ? 40 : 32,
             borderRadius: 'var(--radius-ui)',
@@ -95,14 +92,10 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
                 : 'none',
             boxShadow: isLinear
               ? '0 8px 32px rgba(0, 0, 0, 0.5)'
-              : isNeumorphic
-                ? '20px 20px 40px rgba(163, 177, 198, 0.6), -20px -20px 40px rgba(255, 255, 255, 0.6)'
-                : '0 20px 60px rgba(0, 0, 0, 0.3)',
+              : '0 20px 60px rgba(0, 0, 0, 0.3)',
             backgroundColor: isLinear
               ? 'rgba(18, 18, 20, 0.95)'
-              : isNeumorphic
-                ? '#E0E5EC'
-                : 'var(--card)',
+              : 'var(--card)',
             backdropFilter: isLinear ? 'blur(20px)' : 'none',
             transform: isPlayful ? 'rotate(-0.5deg)' : 'none',
           }}
@@ -118,9 +111,7 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
                 fontSize: isPlayful ? '3rem' : '2.5rem',
                 marginBottom: 8,
                 letterSpacing: isLinear ? '0.02em' : 'normal',
-                textShadow: isNeumorphic
-                  ? '2px 2px 4px rgba(163, 177, 198, 0.4), -2px -2px 4px rgba(255, 255, 255, 0.4)'
-                  : isLinear
+                textShadow: isLinear
                     ? '0 2px 10px rgba(102, 126, 234, 0.5)'
                     : 'none',
               }}
@@ -189,9 +180,6 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
                 borderRadius: 'var(--radius-ui)',
                 textTransform: isLinear ? 'uppercase' : 'none',
                 letterSpacing: isLinear ? '0.1em' : 'normal',
-                boxShadow: isNeumorphic
-                  ? '10px 10px 20px rgba(163, 177, 198, 0.6), -10px -10px 20px rgba(255, 255, 255, 0.6)'
-                  : undefined,
               }}
             >
               {loading ? 'Signing in...' : 'Login'}

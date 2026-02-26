@@ -43,6 +43,7 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
         style={{
           fontSize: size === 'small' ? '0.65rem' : '0.8rem',
           height: size === 'small' ? 20 : 24,
+          borderRadius: 'var(--video-chip-radius, var(--radius-ui))',
         }}
         className="text-muted-foreground/50 border-muted-foreground/50"
       />
@@ -140,7 +141,7 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
         style={{
           fontSize: size === 'small' ? '0.7rem' : '0.875rem',
           height: size === 'small' ? 24 : 30,
-          borderRadius: 'var(--radius-ui)',
+          borderRadius: 'var(--video-chip-radius, var(--radius-ui))',
           ...(chipStyleByColor[chipColor] || chipStyleByColor.default),
           ...style,
         }}

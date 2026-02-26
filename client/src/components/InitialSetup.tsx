@@ -26,7 +26,6 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
   const [loading, setLoading] = useState(false);
 
   const isPlayful = themeMode === 'playful';
-  const isNeumorphic = themeMode === 'neumorphic';
   const isLinear = themeMode === 'linear';
 
   useEffect(() => {
@@ -85,9 +84,7 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
     justifyContent: 'center',
     background: isLinear
       ? 'linear-gradient(135deg, #09090b 0%, #1a1a1f 100%)'
-      : isNeumorphic
-        ? '#E0E5EC'
-        : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
   };
 
   if (isLocalhost === false) {
@@ -95,11 +92,11 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
       <div style={bgStyle}>
         <div style={{ width: '100%', maxWidth: 600, padding: '0 16px', boxSizing: 'border-box' }}>
           <Paper
-            elevation={isLinear ? 0 : isNeumorphic ? 0 : 8}
+            elevation={isLinear ? 0 : 8}
             style={{
               padding: 32,
               borderRadius: 'var(--radius-ui)',
-              backgroundColor: isLinear ? 'rgba(18, 18, 20, 0.95)' : isNeumorphic ? '#E0E5EC' : 'var(--card)',
+              backgroundColor: isLinear ? 'rgba(18, 18, 20, 0.95)' : 'var(--card)',
               border: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : isPlayful ? '4px solid var(--border-strong)' : 'none',
             }}
           >
@@ -125,7 +122,7 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
     <div style={bgStyle}>
       <div style={{ width: '100%', maxWidth: 600, padding: '0 16px', boxSizing: 'border-box' }}>
         <Paper
-          elevation={isLinear ? 0 : isNeumorphic ? 0 : 8}
+          elevation={isLinear ? 0 : 8}
           style={{
             padding: isPlayful ? 40 : 32,
             borderRadius: 'var(--radius-ui)',
@@ -136,14 +133,10 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
                 : 'none',
             boxShadow: isLinear
               ? '0 8px 32px rgba(0, 0, 0, 0.5)'
-              : isNeumorphic
-                ? '20px 20px 40px rgba(163, 177, 198, 0.6), -20px -20px 40px rgba(255, 255, 255, 0.6)'
-                : '0 20px 60px rgba(0, 0, 0, 0.3)',
+              : '0 20px 60px rgba(0, 0, 0, 0.3)',
             backgroundColor: isLinear
               ? 'rgba(18, 18, 20, 0.95)'
-              : isNeumorphic
-                ? '#E0E5EC'
-                : 'var(--card)',
+              : 'var(--card)',
             backdropFilter: isLinear ? 'blur(20px)' : 'none',
             transform: isPlayful ? 'rotate(-0.5deg)' : 'none',
           }}

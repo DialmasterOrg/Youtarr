@@ -4,7 +4,7 @@ import { Link as RouterLink } from 'react-router-dom';
 
 export const SETTINGS_PAGES = [
   { key: 'core', title: 'Core', description: 'Downloads folder, quality, defaults, and core behavior.' },
-  { key: 'downloading', title: 'Downloading', description: 'yt-dlp backend settings for downloads and reliability.' },
+  { key: 'downloading', title: 'YT-DLP', description: 'yt-dlp backend settings for downloads and reliability.' },
   { key: 'api-keys', title: 'API Keys', description: 'API key settings and rate limits.' },
   { key: 'appearance', title: 'Appearance', description: 'Theme, animations, and visual preferences.' },
   { key: 'autoremove', title: 'Auto Removal', description: 'Automated cleanup and retention policies.' },

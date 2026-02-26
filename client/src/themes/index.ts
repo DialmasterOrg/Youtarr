@@ -3,13 +3,11 @@
 import { ThemeMode, ThemeDefinition } from './types';
 import { playfulTheme } from './playful';
 import { linearTheme } from './linear';
-import { neumorphicTheme } from './neumorphic';
 import { flatTheme } from './flat';
 
 export const ALL_THEMES: Record<ThemeMode, ThemeDefinition> = {
   playful: playfulTheme,
   linear: linearTheme,
-  neumorphic: neumorphicTheme,
   flat: flatTheme,
 };
 

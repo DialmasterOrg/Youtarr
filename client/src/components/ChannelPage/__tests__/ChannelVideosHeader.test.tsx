@@ -81,10 +81,14 @@ describe('ChannelVideosHeader actions menu', () => {
 
     renderWithProviders(<ChannelVideosHeader {...props} />);
 
-    await user.click(screen.getByRole('button', { name: /Actions/i }));
+    const actionsButton = screen.getByRole('button', { name: /Actions/i });
+    expect(actionsButton).toHaveAttribute('aria-haspopup', 'menu');
+    await user.click(actionsButton);
+    expect(actionsButton).toHaveAttribute('aria-expanded', 'true');
     await user.click(screen.getByRole('menuitem', { name: /Select All \(Downloaded\)/i }));
 
     expect(props.onSelectAllDownloaded).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 
   test('triggers select-all not downloaded action from menu', async () => {
@@ -97,6 +101,32 @@ describe('ChannelVideosHeader actions menu', () => {
     await user.click(screen.getByRole('menuitem', { name: /Select All \(Not Downloaded\)/i }));
 
     expect(props.onSelectAllNotDownloaded).toHaveBeenCalledTimes(1);
+  });
+
+  test('shows only base actions when there is no selection', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} />);
+
+    await user.click(screen.getByRole('button', { name: /Actions/i }));
+
+    expect(screen.getByRole('menuitem', { name: /Select All \(Downloaded\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Select All \(Not Downloaded\)/i })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /Clear Selection/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /Download Selected/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /Delete Selected/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /Ignore Selected/i })).not.toBeInTheDocument();
+  });
+
+  test('toggles actions menu closed when Actions button is clicked again', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} />);
+
+    const actionsButton = screen.getByRole('button', { name: /Actions/i });
+    await user.click(actionsButton);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+
+    await user.click(actionsButton);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 
   test('shows and triggers download/ignore menu actions when download selection exists', async () => {

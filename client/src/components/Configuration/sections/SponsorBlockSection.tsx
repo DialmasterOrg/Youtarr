@@ -50,8 +50,13 @@ export const SponsorBlockSection: React.FC<SponsorBlockSectionProps> = ({
   return (
     <ConfigurationAccordion
       title="SponsorBlock Integration"
-      chipLabel={config.sponsorblockEnabled ? "Enabled" : "Disabled"}
-      chipColor={config.sponsorblockEnabled ? "success" : "default"}
+      statusBanner={{
+        enabled: config.sponsorblockEnabled,
+        label: 'Enable SponsorBlock',
+        onToggle: (enabled) => onConfigChange({ sponsorblockEnabled: enabled }),
+        onText: 'Enabled',
+        offText: 'Disabled',
+      }}
       defaultExpanded={false}
     >
       <Alert severity="info" style={{ marginBottom: 16 }}>
@@ -63,27 +68,6 @@ export const SponsorBlockSection: React.FC<SponsorBlockSectionProps> = ({
       </Alert>
 
       <Grid container spacing={2}>
-        <Grid item xs={12}>
-          <FormControlLabel
-            control={
-              <Checkbox
-                name="sponsorblockEnabled"
-                checked={config.sponsorblockEnabled}
-                onChange={(e) => onConfigChange({ sponsorblockEnabled: e.target.checked })}
-              />
-            }
-            label={
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                Enable SponsorBlock
-                <InfoTooltip
-                  text="Automatically handle sponsored segments and other marked content in downloaded videos."
-                  onMobileClick={onMobileTooltipClick}
-                />
-              </div>
-            }
-          />
-        </Grid>
-
         {config.sponsorblockEnabled && (
           <>
             <Grid item xs={12} md={6}>

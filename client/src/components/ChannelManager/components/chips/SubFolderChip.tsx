@@ -8,6 +8,12 @@ interface SubFolderChipProps {
 }
 
 const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
+  const chipStyle = {
+    fontSize: '0.7rem',
+    height: 24,
+    borderRadius: 'var(--video-chip-radius, var(--radius-ui))',
+  };
+
   // NULL or empty = "root" (backwards compatible, download to root)
   if (isExplicitlyNoSubfolder(subFolder)) {
     return (
@@ -19,7 +25,7 @@ const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
         icon={<FolderIcon size={14} style={{ color: 'var(--muted-foreground)' }} data-testid="FolderIcon" />}
         label="root"
         sx={{
-          fontSize: '0.7rem',
+          ...chipStyle,
           '& .MuiChip-label': { fontStyle: 'italic', color: 'text.secondary' },
         }}
       />
@@ -36,7 +42,7 @@ const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
         icon={<FolderIcon size={14} style={{ color: 'var(--muted-foreground)' }} data-testid="FolderIcon" />}
         label="global default"
         sx={{
-          fontSize: '0.7rem',
+          ...chipStyle,
           '& .MuiChip-label': { fontStyle: 'italic', color: 'text.secondary' },
         }}
       />
@@ -51,9 +57,7 @@ const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
       size="small"
       icon={<FolderIcon size={14} style={{ color: 'var(--primary)' }} data-testid="FolderIcon" />}
       label={`__${subFolder}/`}
-      style={{
-        fontSize: '0.7rem',
-      }}
+      style={chipStyle}
     />
   );
 };

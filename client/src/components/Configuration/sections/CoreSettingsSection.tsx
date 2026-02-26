@@ -130,8 +130,8 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
     onConfigChange({ [event.target.name]: event.target.checked });
   };
 
-  const handleChannelFilesChange = (event: SelectChangeEvent<number>) => {
-    onConfigChange({ channelFilesToDownload: event.target.value as number });
+  const handleChannelFilesChange = (event: SelectChangeEvent<string>) => {
+    onConfigChange({ channelFilesToDownload: Number(event.target.value) });
   };
 
   const handleSelectChange = (
@@ -150,18 +150,25 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
     >
       <Grid container spacing={2} className="mt-2">
         <Grid item xs={12}>
+          <Typography variant="subtitle2" style={{ fontWeight: 700 }}>
+            File Structure Settings
+          </Typography>
+        </Grid>
+
+        <Grid item xs={12}>
+          <Box className="mb-1 flex items-center">
+            <Typography variant="body2" style={{ fontWeight: 600 }}>
+              YouTube Output Directory
+            </Typography>
+            <Chip
+              label="Docker Volume"
+              size="small"
+              className="ml-2"
+            />
+          </Box>
           <TextField
             fullWidth
-            label={
-              <Box className="flex items-center">
-                YouTube Output Directory
-                <Chip
-                  label="Docker Volume"
-                  size="small"
-                  className="ml-2"
-                />
-              </Box>
-            }
+            label="YouTube Output Directory"
             name="youtubeOutputDirectory"
             value={config.youtubeOutputDirectory}
             onChange={handleInputChange}
@@ -176,9 +183,109 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
 
         <Grid item xs={12} md={6}>
           <Box className="flex items-center">
+            <SubfolderAutocomplete
+              mode="global"
+              value={config.defaultSubfolder || null}
+              onChange={handleDefaultSubfolderChange}
+              subfolders={subfolders}
+              loading={subfoldersLoading}
+              label="Default Subfolder"
+              helperText="Default download location for channels using 'Default Subfolder'"
+            />
+            <InfoTooltip
+              text="Set the default download location for untracked channels and channels using 'Default Subfolder'. Leave empty to download to the root directory by default."
+              onMobileClick={onMobileTooltipClick}
+            />
+          </Box>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Box className="flex items-center">
             <FormControlLabel
               control={
                 <Checkbox
+                  name="useTmpForDownloads"
+                  checked={config.useTmpForDownloads}
+                  onChange={handleCheckboxChange}
+                  disabled={isPlatformManaged.useTmpForDownloads}
+                />
+              }
+              label={
+                <Box className="flex items-center gap-2">
+                  Use external temp directory
+                  {isPlatformManaged.useTmpForDownloads && (
+                    <Chip
+                      label={deploymentEnvironment.platform?.toLowerCase() === "elfhosted" ? "Managed by Elfhosted" : "Platform Managed"}
+                      size="small"
+                    />
+                  )}
+                </Box>
+              }
+            />
+            <InfoTooltip
+              text={
+                isPlatformManaged.useTmpForDownloads
+                  ? 'This setting is managed by your platform deployment and cannot be changed.'
+                  : 'Controls where downloads are staged before moving to final location. When enabled, uses external /tmp path (useful for slow network storage). When disabled, uses a hidden .youtarr_tmp/ folder in your output directory (faster for local/SSD storage). Both options hide in-progress files from media servers.'
+              }
+              onMobileClick={onMobileTooltipClick}
+            />
+          </Box>
+        </Grid>
+
+        <Grid item xs={12}>
+          <Divider />
+        </Grid>
+
+        <Grid item xs={12}>
+          <Typography variant="subtitle2" style={{ fontWeight: 700 }}>
+            General Settings
+          </Typography>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Box className="flex items-center">
+            <FormControlLabel
+              control={
+                <Switch
+                  name="channelVideosHotLoad"
+                  checked={config.channelVideosHotLoad}
+                  onChange={handleCheckboxChange}
+                />
+              }
+              label="Enable Hot Loading"
+            />
+            <InfoTooltip
+              text="When enabled, channel lists, channel videos, and download history use infinite hot loading. When disabled, they use page-by-page controls."
+              onMobileClick={onMobileTooltipClick}
+            />
+          </Box>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Box className="flex items-center">
+            <FormControlLabel
+              control={
+                <Switch
+                  name="subtitlesEnabled"
+                  checked={config.subtitlesEnabled}
+                  onChange={handleCheckboxChange}
+                />
+              }
+              label="Enable Subtitle Downloads"
+            />
+            <InfoTooltip
+              text="Download subtitles in SRT format when available. Manual subtitles are preferred, with auto-generated subtitles as fallback."
+              onMobileClick={onMobileTooltipClick}
+            />
+          </Box>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Box className="flex items-center">
+            <FormControlLabel
+              control={
+                <Switch
                   name="channelAutoDownload"
                   checked={config.channelAutoDownload}
                   onChange={handleCheckboxChange}
@@ -191,6 +298,31 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
               onMobileClick={onMobileTooltipClick}
             />
           </Box>
+        </Grid>
+
+        {config.subtitlesEnabled && (
+          <Grid item xs={12} md={6}>
+            <Box className="flex items-center">
+              <SubtitleLanguageSelector
+                value={config.subtitleLanguage}
+                onChange={(value) => onConfigChange({ subtitleLanguage: value })}
+              />
+              <InfoTooltip
+                text="Select one or more subtitle languages. Subtitles will be downloaded when available; videos without subtitles will still download successfully."
+                onMobileClick={onMobileTooltipClick}
+              />
+            </Box>
+          </Grid>
+        )}
+
+        <Grid item xs={12}>
+          <Divider />
+        </Grid>
+
+        <Grid item xs={12}>
+          <Typography variant="subtitle2" style={{ fontWeight: 700 }}>
+            Download Settings
+          </Typography>
         </Grid>
 
         <Grid item xs={12} md={6}>
@@ -237,25 +369,6 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
             </FormControl>
             <InfoTooltip
               text="How many videos (starting from most recently uploaded) Youtarr will attempt to download per tab when channel downloads run. Already downloaded videos will be skipped."
-              onMobileClick={onMobileTooltipClick}
-            />
-          </Box>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Box className="flex items-center">
-            <FormControlLabel
-              control={
-                <Switch
-                  name="channelVideosHotLoad"
-                  checked={config.channelVideosHotLoad}
-                  onChange={handleCheckboxChange}
-                />
-              }
-              label="Enable Hot Loading"
-            />
-            <InfoTooltip
-              text="When enabled, channel lists, channel videos, and download history use infinite hot loading. When disabled, they use page-by-page controls."
               onMobileClick={onMobileTooltipClick}
             />
           </Box>
@@ -312,107 +425,6 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
             <Box component="span" className="mt-1 text-xs text-muted-foreground">
               Note: H.264 produces larger file sizes but offers maximum compatibility for Apple TV. This is a preference and will fall back to available codecs.
             </Box>
-          </Box>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Box className="flex items-center">
-            <SubfolderAutocomplete
-              mode="global"
-              value={config.defaultSubfolder || null}
-              onChange={handleDefaultSubfolderChange}
-              subfolders={subfolders}
-              loading={subfoldersLoading}
-              label="Default Subfolder"
-              helperText="Default download location for channels using 'Default Subfolder'"
-            />
-            <InfoTooltip
-              text="Set the default download location for untracked channels and channels using 'Default Subfolder'. Leave empty to download to the root directory by default."
-              onMobileClick={onMobileTooltipClick}
-            />
-          </Box>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Box className="flex items-center">
-            <FormControlLabel
-              control={
-                <Checkbox
-                  name="useTmpForDownloads"
-                  checked={config.useTmpForDownloads}
-                  onChange={handleCheckboxChange}
-                  disabled={isPlatformManaged.useTmpForDownloads}
-                />
-              }
-              label={
-                <Box className="flex items-center gap-2">
-                  Use external temp directory
-                  {isPlatformManaged.useTmpForDownloads && (
-                    <Chip
-                      label={deploymentEnvironment.platform?.toLowerCase() === "elfhosted" ? "Managed by Elfhosted" : "Platform Managed"}
-                      size="small"
-                    />
-                  )}
-                </Box>
-              }
-            />
-            <InfoTooltip
-              text={
-                isPlatformManaged.useTmpForDownloads
-                  ? 'This setting is managed by your platform deployment and cannot be changed.'
-                  : 'Controls where downloads are staged before moving to final location. When enabled, uses external /tmp path (useful for slow network storage). When disabled, uses a hidden .youtarr_tmp/ folder in your output directory (faster for local/SSD storage). Both options hide in-progress files from media servers.'
-              }
-              onMobileClick={onMobileTooltipClick}
-            />
-          </Box>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Box className="flex items-center">
-            <FormControlLabel
-              control={
-                <Checkbox
-                  name="subtitlesEnabled"
-                  checked={config.subtitlesEnabled}
-                  onChange={handleCheckboxChange}
-                />
-              }
-              label="Enable Subtitle Downloads"
-            />
-            <InfoTooltip
-              text="Download subtitles in SRT format when available. Manual subtitles are preferred, with auto-generated subtitles as fallback."
-              onMobileClick={onMobileTooltipClick}
-            />
-          </Box>
-        </Grid>
-
-        {config.subtitlesEnabled && (
-          <Grid item xs={12} md={6}>
-            <Box className="flex items-center">
-              <SubtitleLanguageSelector
-                value={config.subtitleLanguage}
-                onChange={(value) => onConfigChange({ subtitleLanguage: value })}
-              />
-              <InfoTooltip
-                text="Select one or more subtitle languages. Subtitles will be downloaded when available; videos without subtitles will still download successfully."
-                onMobileClick={onMobileTooltipClick}
-              />
-            </Box>
-          </Grid>
-        )}
-
-        <Grid item xs={12} md={6}>
-          <Box className="flex items-center">
-            <FormControlLabel
-              control={
-                <Switch
-                  name="darkModeEnabled"
-                  checked={config.darkModeEnabled}
-                  onChange={handleCheckboxChange}
-                />
-              }
-              label="Dark Mode"
-            />
           </Box>
         </Grid>
       </Grid>
@@ -519,9 +531,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
             {loadingAffectedChannels ? (
               <Box className="flex items-center gap-2">
                 <CircularProgress size={16} />
-                <DialogContentText component="span">
-                  Checking affected channels...
-                </DialogContentText>
+                  <span>Checking affected channels...</span>
               </Box>
             ) : affectedChannels.count === 0 ? (
               <DialogContentText>

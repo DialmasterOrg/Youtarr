@@ -27,7 +27,7 @@ import { useConfig } from '../../hooks/useConfig';
 import { TRACKABLE_CONFIG_KEYS } from '../../config/configSchema';
 import { ConfigState, SnackbarState } from '../Configuration/types';
 import { validateConfig } from '../Configuration/utils/configValidation';
-import { SettingsIndex } from './SettingsIndex';
+import { SETTINGS_PAGES, SettingsIndex } from './SettingsIndex';
 
 interface SettingsProps {
   token: string | null;
@@ -170,7 +170,8 @@ export function Settings({ token }: SettingsProps) {
   const pageTitle = useMemo(() => {
     if (location.pathname === '/settings') return 'Settings';
     const suffix = location.pathname.replace('/settings/', '');
-    return `Settings / ${suffix}`;
+    const page = SETTINGS_PAGES.find((entry) => entry.key === suffix);
+    return `Settings / ${page?.title || suffix}`;
   }, [location.pathname]);
 
   if (isLoading) {

@@ -37,7 +37,6 @@
   --appbar-shadow: var(--shadow-hard);
   --appbar-pattern: radial-gradient(var(--dot-grid) 1px, transparent 1px);
   --appbar-gradient: linear-gradient(135deg, rgba(139, 92, 246, 0.45), rgba(251, 113, 133, 0.45));
-  --neumo-breathe: none;
   --avatar-hover-scale: 1.05;
   /* Navigation width variables */
   --nav-width-expanded: 260px;
@@ -150,46 +149,6 @@ h6 {
   }
   50% {
     transform: translateY(-10px);
-  }
-}
-
-/* Neumorphic Theme: Breathe/Shadow Animation */
-@keyframes neumo-breathe {
-  0%, 100% {
-    box-shadow: 10px 10px 20px rgba(163, 177, 198, 0.6), -10px -10px 20px rgba(255, 255, 255, 0.6);
-  }
-  50% {
-    box-shadow: 5px 5px 10px rgba(163, 177, 198, 0.4), -5px -5px 10px rgba(255, 255, 255, 0.4);
-  }
-}
-
-@keyframes neumo-breathe-dark {
-  0%, 100% {
-    box-shadow: 10px 10px 20px rgba(0, 0, 0, 0.5), -10px -10px 20px rgba(255, 255, 255, 0.05);
-  }
-  50% {
-    box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.3), -5px -5px 10px rgba(255, 255, 255, 0.03);
-  }
-}
-
-@keyframes neumo-float {
-  0% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-6px);
-  }
-  100% {
-    transform: translateY(0px);
-  }
-}
-
-@keyframes neumo-rotate {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(180deg);
   }
 }
 
@@ -353,23 +312,6 @@ body[data-theme='playful'] .sticker:hover {
   box-shadow: none !important;
 }
 
-body[data-theme='neumorphic'] .playful-shape {
-  display: none !important;
-}
-
-/* Animation classes - only apply when motion is enabled */
-body[data-motion='on'] .neumo-breathe {
-  animation: var(--neumo-breathe);
-}
-
-body[data-motion='on'] .neumo-float {
-  animation: neumo-float 3s ease-in-out infinite;
-}
-
-body[data-motion='on'] .neumo-rotate {
-  animation: neumo-rotate 500ms ease-out;
-}
-
 .pop-toggle {
   transition: all var(--transition-base) var(--transition-bouncy) !important;
   border: 2px solid var(--border-strong) !important;
@@ -397,7 +339,6 @@ body[data-motion='off'] {
   --sticker-hover-transform: none;
   --avatar-hover-scale: 1;
   --nav-item-transform-hover: none;
-  --neumo-breathe: none;
   --transition-bouncy: ease;
   --transition-base: 0ms;
   --transition-fast: 0ms;
@@ -438,14 +379,6 @@ body[data-theme='playful'] .settings-splash-card:hover .MuiCardActionArea-root {
 
 body[data-motion='on'][data-theme='playful'] .animate-bounce {
   animation: bounce 600ms cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
-}
-
-body[data-motion='on'][data-theme='neumorphic'] .animate-on-mount {
-  animation: neumo-float 3s ease-in-out infinite;
-}
-
-body[data-motion='on'][data-theme='neumorphic'] .animate-breathe {
-  animation: neumo-breathe 3s ease-in-out infinite;
 }
 
 body[data-motion='on'][data-theme='linear'] .animate-on-mount {

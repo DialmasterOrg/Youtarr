@@ -11,6 +11,7 @@ import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { LogOut as LogoutIcon, Download as DownloadIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from '../../lib/icons';
 import { ThemeMode } from '../../themes';
 import { StorageHeaderWidget } from './StorageHeaderWidget';
+import { NAV_BUTTON_OUTER_PADDING_X, NAV_DRAWER_SECTION_BUTTON_GUTTER } from './navLayoutConstants';
 
 interface NavHeaderProps {
   appName: string;
@@ -58,8 +59,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   // --- Theme Computed Values ---
   const isLinear = themeMode === 'linear';
   const isFlat = themeMode === 'flat';
-  const isNeumorphic = themeMode === 'neumorphic';
-  const isTopNav = isLinear || isFlat || isNeumorphic;
+  const isTopNav = isLinear || isFlat;
   const showTopNavItems = isTopNav && !isMobile;
 
   const versionParts = useMemo(() => {
@@ -110,21 +110,17 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
     overflow: 'visible',
     width: 'max-content',
     minWidth: 180,
-    borderRadius: isLinear ? '12px' : isFlat ? '8px' : isNeumorphic ? '16px' : 'var(--radius-ui)',
+    borderRadius: isLinear ? '12px' : isFlat ? '8px' : 'var(--radius-ui)',
     border: isLinear
       ? '1px solid rgba(255, 255, 255, 0.1)'
       : isFlat
         ? '2px solid var(--border)'
-        : isNeumorphic
-          ? 'none'
-          : '2px solid var(--border-strong)',
+        : '2px solid var(--border-strong)',
     backgroundColor: isLinear
       ? '#09090b'
       : isFlat
         ? 'var(--card)'
-        : isNeumorphic
-          ? '#E0E5EC'
-          : 'var(--card)',
+        : 'var(--card)',
     boxShadow: isLinear ? '0 10px 40px rgba(0,0,0,0.5)' : isFlat ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none',
     padding: '4px',
   };
@@ -133,10 +129,10 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
     position: 'fixed',
     backgroundColor: isLinear ? 'rgba(5, 5, 6, 0.8)' : 'var(--card)',
     backdropFilter: isLinear ? 'blur(12px)' : 'none',
-    border: isLinear ? 'none' : isFlat ? '2px solid var(--border)' : isNeumorphic ? 'none' : 'var(--appbar-border)',
+    border: isLinear ? 'none' : isFlat ? '2px solid var(--border)' : 'var(--appbar-border)',
     borderBottom: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : isFlat ? '2px solid var(--border)' : 'var(--appbar-border)',
     boxShadow: 'none',
-    backgroundImage: isLinear || isFlat || isNeumorphic ? 'none' : 'var(--appbar-pattern)',
+    backgroundImage: isLinear || isFlat ? 'none' : 'var(--appbar-pattern)',
     backgroundSize: '24px 24px',
     color: 'var(--foreground)',
     zIndex: 1300,
@@ -148,6 +144,11 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
     overflow: 'visible',
   };
 
+  // Match the drawer button inset so the toggle sits flush with the sidebar edges.
+  const headerHorizontalGutter = isPlayful && !isMobile
+    ? NAV_BUTTON_OUTER_PADDING_X
+    : NAV_DRAWER_SECTION_BUTTON_GUTTER;
+
   return (
     <header
       data-nav-container
@@ -157,15 +158,15 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
         style={{
           display: 'flex',
           gap: 16,
-          paddingLeft: (isPlayful && !isMobile) ? 4 : 16,
-          paddingRight: (isPlayful && !isMobile) ? 4 : 16,
+          paddingLeft: headerHorizontalGutter,
+          paddingRight: headerHorizontalGutter,
           minHeight: 64,
           alignItems: 'center',
           position: 'relative',
         }}
       >
         {/* Toggle (Mobile/Side) */}
-        {(!isTopNav || isMobile) && !(isNeumorphic && isMobile) && (
+        {(!isTopNav || isMobile) && (
           <IconButton
             className="pop-toggle"
             aria-label="toggle navigation"

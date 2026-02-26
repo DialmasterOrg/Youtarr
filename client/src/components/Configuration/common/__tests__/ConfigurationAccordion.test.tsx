@@ -124,6 +124,46 @@ describe('ConfigurationAccordion Component', () => {
     });
   });
 
+  describe('Status Banner', () => {
+    test('renders status banner text when provided', () => {
+      renderWithProviders(
+        <ConfigurationAccordion
+          {...defaultProps}
+          statusBanner={{
+            enabled: true,
+            label: 'Feature Toggle',
+            onToggle: jest.fn(),
+            onText: 'On',
+            offText: 'Off',
+          }}
+        />
+      );
+
+      expect(screen.getByText('On')).toBeInTheDocument();
+    });
+
+    test('calls status banner toggle callback', async () => {
+      const user = userEvent.setup();
+      const onToggle = jest.fn();
+
+      renderWithProviders(
+        <ConfigurationAccordion
+          {...defaultProps}
+          statusBanner={{
+            enabled: false,
+            label: 'Feature Toggle',
+            onToggle,
+          }}
+        />
+      );
+
+      const toggle = screen.getByRole('checkbox', { name: /Feature Toggle/i });
+      await user.click(toggle);
+
+      expect(onToggle).toHaveBeenCalledWith(true);
+    });
+  });
+
   describe('Expansion Behavior', () => {
     test('is collapsed by default when defaultExpanded is not provided', () => {
       const { container } = renderWithProviders(<ConfigurationAccordion {...defaultProps} />);

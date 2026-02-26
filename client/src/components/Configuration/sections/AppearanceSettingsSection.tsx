@@ -71,7 +71,7 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
               Visual Style
             </Typography>
             <InfoTooltip
-              text="Choose between the Playful Geometric, Neumorphic Soft UI, and Linear Modern visual systems."
+              text="Choose between the Playful Geometric, Linear Modern, and Flat visual systems."
               onMobileClick={onMobileTooltipClick}
             />
           </div>

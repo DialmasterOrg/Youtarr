@@ -293,32 +293,19 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
   return (
     <ConfigurationAccordion
       title="Notifications"
-      chipLabel={config.notificationsEnabled ? "Enabled" : "Disabled"}
-      chipColor={config.notificationsEnabled ? "success" : "default"}
+      statusBanner={{
+        enabled: config.notificationsEnabled,
+        label: 'Enable Notifications',
+        onToggle: (enabled) => onConfigChange({ notificationsEnabled: enabled }),
+        onText: 'Enabled',
+        offText: 'Disabled',
+        toggleTestId: 'notifications-enabled-switch',
+      }}
       defaultExpanded={false}
     >
       <Grid container spacing={2}>
-        {/* Enable switch - always visible */}
         <Grid item xs={12}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={config.notificationsEnabled}
-                onChange={(e) => onConfigChange({ notificationsEnabled: e.target.checked })}
-                inputProps={{ 'data-testid': 'notifications-enabled-switch' } as any}
-              />
-            }
-            label={
-              <Box className="flex items-center">
-                Enable Notifications
-                <InfoTooltip
-                  text="Receive notifications when new videos are downloaded successfully."
-                  onMobileClick={onMobileTooltipClick}
-                />
-              </Box>
-            }
-          />
-          <Typography variant="body2" color="secondary" style={{ marginLeft: '36px', marginTop: '-4px' }}>
+          <Typography variant="body2" color="secondary" style={{ marginTop: '-4px' }}>
             Powered by{' '}
             <Link
               href="https://github.com/caronc/apprise"
@@ -328,6 +315,10 @@ export const NotificationsSection: React.FC<NotificationsSectionProps> = ({
               Apprise
             </Link>
             {' '}— supports 100+ services including Discord, Telegram, Slack, and email.
+            <InfoTooltip
+              text="Receive notifications when new videos are downloaded successfully."
+              onMobileClick={onMobileTooltipClick}
+            />
           </Typography>
         </Grid>
 

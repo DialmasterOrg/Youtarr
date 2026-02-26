@@ -32,8 +32,13 @@ export const DownloadPerformanceSection: React.FC<DownloadPerformanceSectionProp
   return (
     <ConfigurationAccordion
       title="Download Performance Settings"
-      chipLabel={config.enableStallDetection ? "Stall Detection On" : "Stall Detection Off"}
-      chipColor={config.enableStallDetection ? "success" : "default"}
+      statusBanner={{
+        enabled: config.enableStallDetection !== false,
+        label: 'Enable Stall Detection',
+        onToggle: (enabled) => onConfigChange({ enableStallDetection: enabled }),
+        onText: 'Stall Detection On',
+        offText: 'Stall Detection Off',
+      }}
       defaultExpanded={false}
     >
       <Alert severity="info" className="mb-4">
@@ -102,26 +107,6 @@ export const DownloadPerformanceSection: React.FC<DownloadPerformanceSectionProp
               Number of retry attempts for failed downloads
             </FormHelperText>
           </FormControl>
-        </Grid>
-
-        <Grid item xs={12}>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={config.enableStallDetection !== false}
-                onChange={(e) => onConfigChange({ enableStallDetection: e.target.checked })}
-              />
-            }
-            label={
-              <Box className="flex items-center">
-                Enable Stall Detection
-                <InfoTooltip
-                  text="Automatically detect and retry downloads that stall at slow speeds"
-                  onMobileClick={onMobileTooltipClick}
-                />
-              </Box>
-            }
-          />
         </Grid>
 
         {config.enableStallDetection && (

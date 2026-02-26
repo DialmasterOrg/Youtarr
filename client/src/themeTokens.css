@@ -80,10 +80,6 @@
   --action-bar-gap: 10px;
 }
 
-.action-bar--neumorphic {
-  --action-bar-gap: 8px;
-}
-
 .action-bar--linear,
 .action-bar--flat {
   --action-bar-gap: 6px;

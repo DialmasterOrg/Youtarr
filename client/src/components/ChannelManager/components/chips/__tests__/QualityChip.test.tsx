@@ -15,6 +15,7 @@ describe('QualityChip', () => {
     expect(chip).toHaveTextContent('1080p');
     expect(chip).toHaveAttribute('data-override', 'false');
     expect(within(chip).queryByTestId('SettingsIcon')).not.toBeInTheDocument();
+    expect(within(chip).getByTestId('VideoIcon')).toBeInTheDocument();
   });
 
   test('shows override indicator when channel quality is set', () => {
@@ -28,6 +29,7 @@ describe('QualityChip', () => {
     expect(chip).toHaveTextContent('720p');
     expect(chip).toHaveAttribute('data-override', 'true');
     expect(icon).toBeInTheDocument();
+    expect(within(chip).queryByTestId('VideoIcon')).not.toBeInTheDocument();
   });
 
   test('falls back to the global preferred resolution when channel quality is empty', () => {
@@ -40,5 +42,6 @@ describe('QualityChip', () => {
     expect(chip).toHaveTextContent('1440p');
     expect(chip).toHaveAttribute('data-override', 'false');
     expect(within(chip).queryByTestId('SettingsIcon')).not.toBeInTheDocument();
+    expect(within(chip).getByTestId('VideoIcon')).toBeInTheDocument();
   });
 });
