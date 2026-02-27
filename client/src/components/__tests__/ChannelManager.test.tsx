@@ -737,6 +737,24 @@ describe('ChannelManager Component', () => {
       });
     });
 
+    test('closes filter popover when filter button is clicked again', async () => {
+      const user = userEvent.setup();
+      renderChannelManager();
+
+      const filterButton = screen.getByRole('button', { name: /filter by channel name/i });
+      await user.click(filterButton);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Filter channels')).toBeInTheDocument();
+      });
+
+      await user.click(filterButton);
+
+      await waitFor(() => {
+        expect(screen.queryByLabelText('Filter channels')).not.toBeInTheDocument();
+      });
+    });
+
     test('applies filter when text entered', async () => {
       const user = userEvent.setup();
       renderChannelManager();

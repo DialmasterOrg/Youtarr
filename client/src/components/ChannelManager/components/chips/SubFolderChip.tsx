@@ -19,12 +19,11 @@ const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
         data-default="false"
         data-root="true"
         size="small"
+        variant="outlined"
+        color="default"
         icon={<FolderIcon size={14} style={{ color: 'var(--muted-foreground)' }} data-testid="FolderIcon" />}
         label="root"
-        sx={{
-          ...chipStyle,
-          '& .MuiChip-label': { fontStyle: 'italic', color: 'text.secondary' },
-        }}
+        style={chipStyle}
       />
     );
   }
@@ -36,12 +35,11 @@ const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
         data-testid="subfolder-chip"
         data-default="true"
         size="small"
+        variant="outlined"
+        color="default"
         icon={<FolderIcon size={14} style={{ color: 'var(--muted-foreground)' }} data-testid="FolderIcon" />}
         label="global default"
-        sx={{
-          ...chipStyle,
-          '& .MuiChip-label': { fontStyle: 'italic', color: 'text.secondary' },
-        }}
+        style={chipStyle}
       />
     );
   }
@@ -52,6 +50,8 @@ const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
       data-testid="subfolder-chip"
       data-default="false"
       size="small"
+      variant="outlined"
+      color="primary"
       icon={<FolderIcon size={14} style={{ color: 'var(--primary)' }} data-testid="FolderIcon" />}
       label={`__${subFolder}/`}
       style={chipStyle}

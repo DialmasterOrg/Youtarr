@@ -27,6 +27,7 @@ export const SaveBar: React.FC<SaveBarProps> = ({
 }) => {
   const isVisible = hasUnsavedChanges || isLoading;
   const hasError = Boolean(validationError);
+  const accentBorderColor = hasError ? 'var(--destructive)' : 'var(--warning)';
   const tooltipText = hasUnsavedChanges
     ? 'You have unsaved changes'
     : 'Save configuration settings';
@@ -41,8 +42,9 @@ export const SaveBar: React.FC<SaveBarProps> = ({
           right: placement === 'inline' ? undefined : 0,
           zIndex: placement === 'inline' ? 15 : 1302,
           backgroundColor: 'var(--card)',
-          borderBottom: `2px solid ${hasError ? 'var(--destructive)' : 'var(--warning)'}`,
-          borderTop: '1px solid transparent',
+          border: placement === 'inline' ? `2px solid ${accentBorderColor}` : undefined,
+          borderBottom: placement === 'inline' ? undefined : `2px solid ${accentBorderColor}`,
+          borderTop: placement === 'inline' ? undefined : '1px solid transparent',
           boxShadow: placement === 'inline' ? 'var(--shadow-soft)' : '0 4px 24px rgba(0,0,0,0.15)',
           padding: '8px 16px',
           display: 'flex',

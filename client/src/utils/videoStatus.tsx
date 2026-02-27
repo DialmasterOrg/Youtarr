@@ -25,6 +25,8 @@ export const getStatusColor = (status: VideoStatus) => {
     case 'downloaded':
       return 'success';
     case 'missing':
+      return 'error';
+    case 'never_downloaded':
       return 'warning';
     case 'members_only':
       return 'default';

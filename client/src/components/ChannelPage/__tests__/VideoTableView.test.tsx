@@ -139,7 +139,7 @@ describe('VideoTableView Component', () => {
       renderWithProviders(<VideoTableView {...defaultProps} videos={[videoWithFile]} />);
       // File size shown in format indicator chip
       expect(screen.getByText(/50/)).toBeInTheDocument();
-      expect(screen.getByTestId('MovieOutlinedIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
     });
 
     test('renders dash when no file path exists', () => {
@@ -153,18 +153,24 @@ describe('VideoTableView Component', () => {
     test('renders "Not Downloaded" status for never downloaded video', () => {
       renderWithProviders(<VideoTableView {...defaultProps} />);
       expect(screen.getByText('Not Downloaded')).toBeInTheDocument();
+      const chip = screen.getByText('Not Downloaded').closest('.MuiChip-filled');
+      expect(chip).toBeInTheDocument();
     });
 
     test('renders "Downloaded" status for downloaded video', () => {
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
       renderWithProviders(<VideoTableView {...defaultProps} videos={[downloadedVideo]} />);
       expect(screen.getByText('Downloaded')).toBeInTheDocument();
+      const chip = screen.getByText('Downloaded').closest('.MuiChip-filled');
+      expect(chip).toBeInTheDocument();
     });
 
     test('renders "Missing" status for removed video', () => {
       const removedVideo = { ...mockVideo, added: true, removed: true };
       renderWithProviders(<VideoTableView {...defaultProps} videos={[removedVideo]} />);
       expect(screen.getByText('Missing')).toBeInTheDocument();
+      const chip = screen.getByText('Missing').closest('.MuiChip-filled');
+      expect(chip).toBeInTheDocument();
     });
 
     test('renders "Members Only" status for subscriber-only video', () => {
@@ -805,7 +811,7 @@ describe('VideoTableView Component', () => {
       renderWithProviders(<VideoTableView {...defaultProps} videos={[largeVideo]} />);
       // File size shown in format indicator chip
       expect(screen.getByText(/GB/)).toBeInTheDocument();
-      expect(screen.getByTestId('MovieOutlinedIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
     });
 
     test('handles video in both selectedForDeletion and checkedBoxes', () => {

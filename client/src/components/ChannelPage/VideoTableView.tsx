@@ -12,6 +12,7 @@ import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMedia
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
+import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
@@ -116,7 +117,6 @@ function VideoTableView({
         <tbody>
           {videos.map((video) => {
             const status = getVideoStatus(video);
-            const statusVariant = status === 'downloaded' || status === 'missing' ? 'filled' : 'outlined';
             const isStillLive = video.live_status && video.live_status !== 'was_live';
             const isDownloadSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !video.youtube_removed && !isStillLive;
             const isDeleteSelectable = video.added && !video.removed && !isStillLive;
@@ -261,7 +261,7 @@ function VideoTableView({
                     ratingSource={video.rating_source}
                     showNA={true}
                     size="small"
-                    style={{ flexWrap: 'nowrap', justifyContent: 'center' }}
+                    style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE, flexWrap: 'nowrap', justifyContent: 'center' }}
                   />
                 </td>
                 <td style={{ whiteSpace: 'nowrap', padding: '8px 4px' }}>
@@ -283,6 +283,7 @@ function VideoTableView({
                         label={mediaTypeInfo.label}
                         color={mediaTypeInfo.color}
                         variant="outlined"
+                        style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE }}
                       />
                     )}
                     <Chip
@@ -290,7 +291,8 @@ function VideoTableView({
                       label={getStatusLabel(status)}
                       size="small"
                       color={getStatusColor(status)}
-                      variant={statusVariant}
+                      variant="filled"
+                      style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE }}
                     />
                   </div>
                 </td>

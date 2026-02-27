@@ -165,6 +165,83 @@ describe('ChannelVideosHeader actions menu', () => {
     expect(props.onDeleteClick).toHaveBeenCalledTimes(1);
   });
 
+  test('triggers clear selection when any selection exists', async () => {
+    const user = userEvent.setup();
+    const props = {
+      ...getDefaultProps(),
+      checkedBoxes: ['video-1'],
+      selectionMode: 'download' as const,
+    };
+
+    renderWithProviders(<ChannelVideosHeader {...props} />);
+
+    await user.click(screen.getByRole('button', { name: /Actions/i }));
+    await user.click(screen.getByRole('menuitem', { name: /Clear Selection/i }));
+
+    expect(props.onClearSelection).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  test('disables select-all downloaded when there are no downloaded videos', async () => {
+    const user = userEvent.setup();
+    const props = {
+      ...getDefaultProps(),
+      paginatedVideos: [
+        {
+          ...mockVideos[0],
+          youtube_id: 'video-3',
+          added: false,
+          removed: false,
+        },
+      ],
+    };
+
+    renderWithProviders(<ChannelVideosHeader {...props} />);
+
+    await user.click(screen.getByRole('button', { name: /Actions/i }));
+
+    expect(screen.getByRole('menuitem', { name: /Select All \(Downloaded\)/i })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('menuitem', { name: /Select All \(Not Downloaded\)/i })).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
+  test('disables select-all not downloaded when there are no selectable undownloaded videos', async () => {
+    const user = userEvent.setup();
+    const props = {
+      ...getDefaultProps(),
+      paginatedVideos: [
+        {
+          ...mockVideos[1],
+          youtube_id: 'video-4',
+          added: true,
+          removed: false,
+        },
+      ],
+    };
+
+    renderWithProviders(<ChannelVideosHeader {...props} />);
+
+    await user.click(screen.getByRole('button', { name: /Actions/i }));
+
+    expect(screen.getByRole('menuitem', { name: /Select All \(Downloaded\)/i })).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('menuitem', { name: /Select All \(Not Downloaded\)/i })).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  test('disables delete action when deleteLoading is true', async () => {
+    const user = userEvent.setup();
+    const props = {
+      ...getDefaultProps(),
+      selectedForDeletion: ['video-2'],
+      selectionMode: 'delete' as const,
+      deleteLoading: true,
+    };
+
+    renderWithProviders(<ChannelVideosHeader {...props} />);
+
+    await user.click(screen.getByRole('button', { name: /Actions/i }));
+
+    expect(screen.getByRole('menuitem', { name: /Delete Selected/i })).toHaveAttribute('aria-disabled', 'true');
+  });
+
   test('hides desktop actions bar on mobile', () => {
     renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} isMobile />);
     expect(screen.queryByRole('button', { name: /Actions/i })).not.toBeInTheDocument();

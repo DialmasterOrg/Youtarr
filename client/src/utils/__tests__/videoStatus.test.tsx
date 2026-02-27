@@ -149,8 +149,8 @@ describe('videoStatus Utility', () => {
       expect(getStatusColor('downloaded')).toBe('success');
     });
 
-    test('returns "warning" for missing status', () => {
-      expect(getStatusColor('missing')).toBe('warning');
+    test('returns "error" for missing status', () => {
+      expect(getStatusColor('missing')).toBe('error');
     });
 
     test('returns "default" for members_only status', () => {
@@ -161,8 +161,8 @@ describe('videoStatus Utility', () => {
       expect(getStatusColor('ignored')).toBe('default');
     });
 
-    test('returns "info" for never_downloaded status', () => {
-      expect(getStatusColor('never_downloaded')).toBe('info');
+    test('returns "warning" for never_downloaded status', () => {
+      expect(getStatusColor('never_downloaded')).toBe('warning');
     });
 
     test('returns "info" for unknown status', () => {
@@ -320,7 +320,7 @@ describe('videoStatus Utility', () => {
       const status = getVideoStatus(missingVideo);
 
       expect(status).toBe('missing');
-      expect(getStatusColor(status)).toBe('warning');
+      expect(getStatusColor(status)).toBe('error');
       expect(getStatusLabel(status)).toBe('Missing');
       expect(getStatusIcon(status).type).toBe(CloudOffIcon);
       expect(getStatusIcon(status).props.size).toBe(16);
@@ -342,7 +342,7 @@ describe('videoStatus Utility', () => {
       const status = getVideoStatus(neverDownloadedVideo);
 
       expect(status).toBe('never_downloaded');
-      expect(getStatusColor(status)).toBe('info');
+      expect(getStatusColor(status)).toBe('warning');
       expect(getStatusLabel(status)).toBe('Not Downloaded');
       expect(getStatusIcon(status).type).toBe(NewReleasesIcon);
       expect(getStatusIcon(status).props.size).toBe(16);

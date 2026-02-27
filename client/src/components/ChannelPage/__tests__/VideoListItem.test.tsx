@@ -143,12 +143,12 @@ describe('VideoListItem Component', () => {
       renderWithProviders(<VideoListItem {...defaultProps} video={videoWithFile} />);
       // File size shown in format indicator chip
       expect(screen.getByText(/50/)).toBeInTheDocument();
-      expect(screen.getByTestId('MovieOutlinedIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
     });
 
     test('does not render format indicator when no file path exists', () => {
       renderWithProviders(<VideoListItem {...defaultProps} />);
-      const movieIcons = screen.queryAllByTestId('MovieOutlinedIcon');
+      const movieIcons = screen.queryAllByTestId('StorageIcon');
       expect(movieIcons.length).toBe(0);
     });
   });
@@ -611,7 +611,7 @@ describe('VideoListItem Component', () => {
       renderWithProviders(<VideoListItem {...defaultProps} video={largeVideo} />);
       // File size shown in format indicator chip
       expect(screen.getByText(/GB/)).toBeInTheDocument();
-      expect(screen.getByTestId('MovieOutlinedIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
     });
 
     test('handles video in both selectedForDeletion and checkedBoxes', () => {

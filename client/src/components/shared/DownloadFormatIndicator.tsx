@@ -1,7 +1,8 @@
 import React from 'react';
 import { Box, Chip, Tooltip } from '../ui';
-import { MovieOutlined as VideoIcon, AudiotrackOutlined as AudioIcon } from '../../lib/icons';
+import { Storage as StorageIcon } from '../../lib/icons';
 import { formatFileSize } from '../../utils/formatters';
+import { SHARED_STATUS_CHIP_SMALL_STYLE } from './chipStyles';
 
 interface DownloadFormatIndicatorProps {
   filePath?: string | null;
@@ -53,10 +54,10 @@ const DownloadFormatIndicator: React.FC<DownloadFormatIndicatorProps> = ({
         <Tooltip title={displayVideoPath} arrow placement="top" enterTouchDelay={0}>
           <Chip
             size="small"
-            icon={<VideoIcon size={14} className="text-primary" data-testid="MovieOutlinedIcon" />}
+            icon={<StorageIcon size={14} className="text-primary" data-testid="StorageIcon" />}
             label={videoSizeLabel}
             variant="outlined"
-            style={{ height: 20, fontSize: '0.7rem' }}
+            style={SHARED_STATUS_CHIP_SMALL_STYLE}
           />
         </Tooltip>
       )}
@@ -64,10 +65,10 @@ const DownloadFormatIndicator: React.FC<DownloadFormatIndicatorProps> = ({
         <Tooltip title={displayAudioPath} arrow placement="top" enterTouchDelay={0}>
           <Chip
             size="small"
-            icon={<AudioIcon size={14} className="text-secondary" data-testid="AudiotrackOutlinedIcon" />}
+            icon={<StorageIcon size={14} className="text-secondary" data-testid="StorageIcon" />}
             label={audioSizeLabel}
             variant="outlined"
-            style={{ height: 20, fontSize: '0.7rem' }}
+            style={SHARED_STATUS_CHIP_SMALL_STYLE}
           />
         </Tooltip>
       )}

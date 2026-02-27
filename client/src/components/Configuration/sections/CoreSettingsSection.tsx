@@ -236,7 +236,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
         </Grid>
 
         <Grid item xs={12}>
-          <Accordion style={{ border: 'var(--border-weight) solid var(--border)', borderRadius: 'var(--radius-ui)' }}>
+          <Accordion defaultExpanded style={{ border: 'var(--border-weight) solid var(--border)', borderRadius: 'var(--radius-ui)' }}>
             <AccordionSummary>
               <Typography variant="subtitle2" style={{ fontWeight: 700 }}>
                 Download Settings
@@ -351,12 +351,22 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                   <Accordion style={{ border: 'var(--border-weight) solid var(--border)', borderRadius: 'var(--radius-ui)' }}>
                     <AccordionSummary>
                       <Typography variant="body2" style={{ fontWeight: 600 }}>
-                        Media Server Compatibility Note
+                        Jellyfin / Kodi / Emby Setting Information
                       </Typography>
                     </AccordionSummary>
                     <AccordionDetails>
-                      <Typography variant="body2">
+                      <Typography variant="body2" style={{ marginBottom: 8 }}>
                         Control generation of metadata and artwork files that help Kodi, Emby and Jellyfin index your downloads cleanly.
+                      </Typography>
+                      <Typography variant="body2" style={{ fontWeight: 500, marginBottom: 8 }}>
+                        For best results:
+                      </Typography>
+                      <Typography variant="body2">
+                        • Add your download library as Content Type: <strong>Movies</strong>
+                        <br />
+                        • Under Metadata Readers/Savers, select <strong>Nfo</strong> to read the .nfo files
+                        <br />
+                        • Uncheck all metadata downloaders since we provide metadata via .nfo files
                       </Typography>
                     </AccordionDetails>
                   </Accordion>
@@ -413,7 +423,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
         </Grid>
 
         <Grid item xs={12}>
-          <Accordion style={{ border: 'var(--border-weight) solid var(--border)', borderRadius: 'var(--radius-ui)' }}>
+          <Accordion defaultExpanded style={{ border: 'var(--border-weight) solid var(--border)', borderRadius: 'var(--radius-ui)' }}>
             <AccordionSummary>
               <Typography variant="subtitle2" style={{ fontWeight: 700 }}>
                 File Structure Settings

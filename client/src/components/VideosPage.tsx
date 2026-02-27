@@ -48,6 +48,7 @@ import { RATING_OPTIONS } from '../utils/ratings';
 import DownloadFormatIndicator from './shared/DownloadFormatIndicator';
 import { useConfig } from '../hooks/useConfig';
 import PageControls from './shared/PageControls';
+import { SHARED_STATUS_CHIP_SMALL_STYLE } from './shared/chipStyles';
 
 interface VideosPageProps {
   token: string | null;
@@ -781,7 +782,7 @@ function VideosPage({ token }: VideosPageProps) {
                                       label={mediaTypeInfo.label}
                                       color={mediaTypeInfo.color}
                                       variant="outlined"
-                                      style={{ height: 20, fontSize: '0.65rem' }}
+                                      style={SHARED_STATUS_CHIP_SMALL_STYLE}
                                     />
                                   ) : null;
                                 })()}
@@ -798,8 +799,8 @@ function VideosPage({ token }: VideosPageProps) {
                                       icon={<ErrorOutlineIcon size={12} />}
                                       label="Missing"
                                       color="error"
-                                      variant="outlined"
-                                      style={{ height: 20, fontSize: '0.65rem' }}
+                                      variant="filled"
+                                      style={SHARED_STATUS_CHIP_SMALL_STYLE}
                                     />
                                   </Tooltip>
                                 ) : video.fileSize ? (
@@ -810,7 +811,7 @@ function VideosPage({ token }: VideosPageProps) {
                                       label="Available"
                                       color="success"
                                       variant="filled"
-                                      style={{ height: 20, fontSize: '0.65rem' }}
+                                      style={SHARED_STATUS_CHIP_SMALL_STYLE}
                                     />
                                   </Tooltip>
                                 ) : null}
@@ -961,7 +962,7 @@ function VideosPage({ token }: VideosPageProps) {
                                       label={mediaTypeInfo.label}
                                       color={mediaTypeInfo.color}
                                       variant="outlined"
-                                      style={{ height: 20, fontSize: '0.7rem' }}
+                                      style={SHARED_STATUS_CHIP_SMALL_STYLE}
                                     />
                                   ) : null;
                                 })()}
@@ -986,8 +987,8 @@ function VideosPage({ token }: VideosPageProps) {
                                       icon={<ErrorOutlineIcon size={12} />}
                                       label="Missing"
                                       color="error"
-                                      variant="outlined"
-                                      style={{ height: 20, fontSize: '0.7rem' }}
+                                      variant="filled"
+                                      style={SHARED_STATUS_CHIP_SMALL_STYLE}
                                     />
                                   </Tooltip>
                                 ) : video.fileSize ? (
@@ -998,7 +999,7 @@ function VideosPage({ token }: VideosPageProps) {
                                       label="Available"
                                       color="success"
                                       variant="filled"
-                                      style={{ height: 20, fontSize: '0.7rem' }}
+                                      style={SHARED_STATUS_CHIP_SMALL_STYLE}
                                     />
                                   </Tooltip>
                                 ) : null}

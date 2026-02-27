@@ -183,7 +183,7 @@ export interface MenuItemProps extends React.ButtonHTMLAttributes<HTMLDivElement
 }
 
 const MenuItem = React.forwardRef<HTMLDivElement, MenuItemProps>(
-  ({ value, selected, dense, disableGutters, divider, className, children, onClick, ...props }, ref) => {
+  ({ value, selected, dense, disableGutters, divider, className, children, onClick, disabled, ...props }, ref) => {
     if (value !== undefined) {
       // Render as Radix SelectItem when inside a Select
       const normalizedValue = toPrimitiveValue(value);
@@ -216,14 +216,33 @@ const MenuItem = React.forwardRef<HTMLDivElement, MenuItemProps>(
         ref={ref}
         role="menuitem"
         tabIndex={0}
-        onClick={onClick}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(e as any); } }}
+        aria-disabled={disabled ? 'true' : undefined}
+        onClick={(e) => {
+          if (disabled) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          onClick?.(e);
+        }}
+        onKeyDown={(e) => {
+          if (disabled) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onClick?.(e as any);
+          }
+        }}
         className={cn(
           'flex items-center gap-2 rounded-md cursor-pointer select-none outline-none',
           'text-sm font-sans text-foreground',
           !disableGutters && 'px-3 py-1.5',
           'hover:bg-muted focus:bg-muted',
           'transition-colors',
+          disabled && 'pointer-events-none opacity-50',
           selected && 'bg-muted font-medium',
           dense && 'py-1',
           divider && 'border-b border-border mb-1',

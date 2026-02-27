@@ -1,7 +1,7 @@
 import React from 'react';
 import { Chip, Tooltip, Box, Typography } from '../ui';
 import { EighteenUpRating as EighteenUpRatingIcon } from '../../lib/icons';
-import { SHARED_CHANNEL_META_CHIP_STYLE, SHARED_STATUS_CHIP_STYLE } from './chipStyles';
+import { SHARED_STATUS_CHIP_STYLE, SHARED_STATUS_CHIP_SMALL_STYLE } from './chipStyles';
 
 interface RatingBadgeProps {
   rating: string | null | undefined;
@@ -42,11 +42,16 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
         color="default"
         variant="outlined"
         style={{
-          ...SHARED_CHANNEL_META_CHIP_STYLE,
-          fontSize: size === 'small' ? '0.65rem' : '0.8rem',
-          height: size === 'small' ? 20 : 24,
+          ...(size === 'small'
+            ? SHARED_STATUS_CHIP_SMALL_STYLE
+            : {
+              ...SHARED_STATUS_CHIP_STYLE,
+              height: 24,
+              fontSize: '0.8rem',
+            }),
+          ...style,
         }}
-        className="text-muted-foreground/50 border-muted-foreground/50"
+        className={`text-muted-foreground/50 border-muted-foreground/50 ${className || ''}`.trim()}
       />
     );
   }
@@ -140,9 +145,9 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
         icon={<EighteenUpRatingIcon size={size === 'small' ? 12 : 16} data-testid="EighteenUpRatingIcon" />}
         className={className}
         style={{
+          ...(size === 'small' ? SHARED_STATUS_CHIP_SMALL_STYLE : SHARED_STATUS_CHIP_STYLE),
           fontSize: size === 'small' ? '0.7rem' : '0.875rem',
-          height: size === 'small' ? 24 : 30,
-          ...SHARED_STATUS_CHIP_STYLE,
+          height: size === 'small' ? 20 : 30,
           ...(chipStyleByColor[chipColor] || chipStyleByColor.default),
           ...style,
         }}

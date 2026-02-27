@@ -15,7 +15,7 @@ import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { Download as DownloadIcon } from '../../lib/icons';
 import { StorageFooterWidget } from './StorageFooterWidget';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
-import { NAV_BUTTON_OUTER_PADDING_X, NAV_DRAWER_PANEL_PADDING_X, NAV_MAIN_BUTTON_SIDE_PADDING } from './navLayoutConstants';
+import { NAV_BUTTON_OUTER_PADDING_X, NAV_DRAWER_PANEL_PADDING_X, NAV_DRAWER_PANEL_PADDING_X_COLLAPSED, NAV_MAIN_BUTTON_SIDE_PADDING } from './navLayoutConstants';
 
 const EXPANDED_WIDTH = 200;
 const COLLAPSED_WIDTH = 65;
@@ -35,7 +35,6 @@ const NAV_SUB_TEXT_INDENT = 3.5;
 const NAV_SUB_HIGHLIGHT_LEFT_PADDING = 1.25;
 const NAV_SUB_FONT_SIZE = '0.8rem';
 const NAV_SUB_LINE_HEIGHT = 1.2;
-const NAV_PLAYFUL_COLLAPSED_BUTTON_WIDTH = 57;
 const NAV_DRAWER_BORDER_RADIUS = 'var(--nav-radius)';
 const NAV_DRAWER_DESKTOP_TOP_OFFSET = 'calc(80px + var(--shell-gap))';
 const NAV_DRAWER_DESKTOP_MAX_HEIGHT = 'calc(100vh - (80px + var(--shell-gap)) - (var(--shell-gap) * 2))';
@@ -79,6 +78,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
   const isCompactStorage = isMobile && isLinearFlat;
   const drawerWidth = isMobile ? EXPANDED_WIDTH : collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
   const isNavCollapsed = !isMobile && collapsed;
+  const drawerPanelPaddingX = isNavCollapsed ? NAV_DRAWER_PANEL_PADDING_X_COLLAPSED : NAV_DRAWER_PANEL_PADDING_X;
   const iconBoxSize = NAV_ICON_SIZE;
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
@@ -176,7 +176,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                   onMouseLeave={() => setHoveredItem(null)}
                   style={{
                     borderRadius: 'var(--radius-ui)',
-                    justifyContent: 'flex-start',
+                    justifyContent: isNavCollapsed ? 'center' : 'flex-start',
                     alignItems: 'center',
                     paddingLeft: NAV_MAIN_BUTTON_SIDE_PADDING * 8,
                     paddingRight: NAV_MAIN_BUTTON_SIDE_PADDING * 8,
@@ -184,7 +184,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                     paddingBottom: 0,
                     minHeight: NAV_MAIN_MIN_HEIGHT,
                     height: NAV_MAIN_MIN_HEIGHT,
-                    width: isPlayful && isNavCollapsed ? NAV_PLAYFUL_COLLAPSED_BUTTON_WIDTH : '100%',
+                    width: '100%',
                     border: selected ? 'var(--nav-item-border-selected)' : (isPlayful && isHovered ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)'),
                     backgroundColor: selected ? 'var(--nav-item-bg-selected)' : (isPlayful && isHovered ? 'var(--nav-item-bg-hover)' : 'var(--nav-item-bg)'),
                     color: selected ? 'var(--nav-item-text-selected)' : 'inherit',
@@ -213,6 +213,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                     primary={item.label}
                     secondary={item.oldLabel}
                     style={{
+                      display: isNavCollapsed ? 'none' : undefined,
                       opacity: isNavCollapsed ? 0 : 1,
                       maxWidth: isNavCollapsed ? 0 : '100%',
                       flex: 1,
@@ -507,8 +508,8 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
     marginBottom: isMobile && isLinearFlat ? 0 : isMobile ? NAV_DRAWER_MOBILE_BOTTOM_GAP : 'var(--shell-gap)',
   marginLeft: isMobile ? 0 : 'var(--shell-gap)',
     marginRight: isMobile ? 0 : 'var(--shell-gap)',
-    paddingLeft: isMobile ? 0 : NAV_DRAWER_PANEL_PADDING_X,
-    paddingRight: isMobile ? 0 : NAV_DRAWER_PANEL_PADDING_X,
+    paddingLeft: isMobile ? 0 : drawerPanelPaddingX,
+    paddingRight: isMobile ? 0 : drawerPanelPaddingX,
     maxHeight: isMobile && isLinearFlat ? '65vh' : isMobile ? NAV_DRAWER_MOBILE_MAX_HEIGHT : NAV_DRAWER_DESKTOP_MAX_HEIGHT,
     overflow: 'hidden',
     overflowX: 'visible',

@@ -26,13 +26,6 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
   return (
     <ConfigurationAccordion
       title="Appearance"
-      statusBanner={{
-        enabled: motionEnabled,
-        label: 'Enable Theme Animations & Motion',
-        onToggle: (enabled) => setMotionEnabled(enabled),
-        onText: 'Motion Enabled',
-        offText: 'Motion Disabled',
-      }}
       defaultExpanded={false}
     >
       <Grid container spacing={2} className="mt-1">
@@ -56,6 +49,24 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
         </Grid>
 
         {/* Theme Animation Toggle */}
+        <Grid item xs={12}>
+          <div className="flex items-center">
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={motionEnabled}
+                  onChange={(event) => setMotionEnabled(event.target.checked)}
+                />
+              }
+              label="Enable Theme Animations & Motion"
+            />
+            <InfoTooltip
+              text="Motion affects transitions, floating animations, and motion accents throughout the interface."
+              onMobileClick={onMobileTooltipClick}
+            />
+          </div>
+        </Grid>
+
         <Grid item xs={12}>
           <Typography variant="body2" color="secondary">
             Motion affects transitions, floating animations, and motion accents throughout the interface.

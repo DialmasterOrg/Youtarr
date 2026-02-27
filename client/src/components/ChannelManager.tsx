@@ -300,7 +300,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   };
 
   const handleFilterIconClick = (event: React.MouseEvent<HTMLElement>) => {
-      setFilterAnchorEl(event.currentTarget);
+    setFilterAnchorEl((prev) => (prev ? null : event.currentTarget));
   };
 
   const handleFilterChange = (value: string) => {

@@ -16,7 +16,7 @@ import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMedia
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
-import { SHARED_STATUS_CHIP_STYLE } from '../shared/chipStyles';
+import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 
 interface VideoCardProps {
   video: ChannelVideo;
@@ -58,7 +58,6 @@ function VideoCard({
   const isDeleteChecked = selectedForDeletion.includes(video.youtube_id);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
   const isIgnored = status === 'ignored';
-  const statusVariant = status === 'downloaded' || status === 'missing' ? 'filled' : 'outlined';
   const baseTransform = isInteractive ? 'var(--sticker-rest-transform)' : 'translate(0, 0)';
   const isClickable = (isDownloadSelectable && isDownloadAllowed) || (isDeleteSelectable && isDeleteAllowed);
 
@@ -72,7 +71,6 @@ function VideoCard({
             height: '100%',
             display: 'flex',
             flexDirection: 'column',
-                    ...SHARED_STATUS_CHIP_STYLE,
             cursor: isClickable ? 'pointer' : 'default',
             opacity: status === 'members_only' || isIgnored ? 0.7 : 1,
             transform: hoveredVideo === video.youtube_id ? 'var(--sticker-hover-transform)' : baseTransform,
@@ -80,7 +78,7 @@ function VideoCard({
             overflow: 'hidden',
             borderRadius: 'var(--radius-ui)',
           }}
-                  style={{ ...SHARED_STATUS_CHIP_STYLE, height: 24, flexShrink: 0 }}
+          onMouseEnter={() => onHoverChange(video.youtube_id)}
           onMouseLeave={() => onHoverChange(null)}
           onClick={() => {
             if (isDownloadSelectable && isDownloadAllowed) {
@@ -320,11 +318,8 @@ function VideoCard({
                     color={mediaTypeInfo.color}
                     variant="outlined"
                     style={{
-                      height: 24,
-                      fontSize: '0.7rem',
                       minWidth: 'fit-content',
-                      boxShadow: 'var(--chip-shadow)',
-                      transition: 'box-shadow 200ms var(--transition-bouncy)',
+                      ...SHARED_STATUS_CHIP_SMALL_STYLE,
                     }}
                   />
                 )}
@@ -333,20 +328,18 @@ function VideoCard({
                   ratingSource={video.rating_source}
                   showNA={true}
                   size="small"
-                  style={{ height: 24, flexShrink: 0 }}
+                  style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE, flexShrink: 0 }}
                 />
                 <Chip
                   icon={getStatusIcon(status)}
                   label={getStatusLabel(status)}
                   size="small"
                   color={getStatusColor(status)}
-                  variant={statusVariant}
+                  variant="filled"
                   style={{
-                    height: 24,
-                    fontSize: '0.7rem',
                     flex: '0 0 auto',
                     minWidth: 'fit-content',
-                    ...SHARED_STATUS_CHIP_STYLE,
+                    ...SHARED_STATUS_CHIP_SMALL_STYLE,
                   }}
                 />
               </div>

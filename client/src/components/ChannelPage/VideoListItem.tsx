@@ -17,7 +17,7 @@ import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 
 import RatingBadge from '../shared/RatingBadge';
-import { SHARED_STATUS_CHIP_STYLE } from '../shared/chipStyles';
+import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 interface VideoListItemProps {
   video: ChannelVideo;
   checkedBoxes: string[];
@@ -50,7 +50,6 @@ function VideoListItem({
   const isDeleteChecked = selectedForDeletion.includes(video.youtube_id);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
   const isIgnored = status === 'ignored';
-  const statusVariant = status === 'downloaded' || status === 'missing' ? 'filled' : 'outlined';
   const isClickable = (isDownloadSelectable && isDownloadAllowed) || (isDeleteSelectable && isDeleteAllowed);
 
   return (
@@ -284,9 +283,7 @@ function VideoListItem({
                 color={mediaTypeInfo.color}
                 variant="outlined"
                 style={{
-                  height: 18,
-                  fontSize: '0.7rem',
-                  ...SHARED_STATUS_CHIP_STYLE,
+                  ...SHARED_STATUS_CHIP_SMALL_STYLE,
                 }}
               />
             )}
@@ -296,19 +293,17 @@ function VideoListItem({
               size="small"
               variant="pill"
               showNA
-              style={{ ...SHARED_STATUS_CHIP_STYLE, height: 20 }}
+              style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE }}
             />
             <Chip
               icon={getStatusIcon(status)}
               label={getStatusLabel(status)}
               size="small"
               color={getStatusColor(status)}
-              variant={statusVariant}
+              variant="filled"
               style={{
-                height: 20,
-                fontSize: '0.7rem',
                 flex: '0 0 auto',
-                ...SHARED_STATUS_CHIP_STYLE,
+                ...SHARED_STATUS_CHIP_SMALL_STYLE,
               }}
             />
           </div>
