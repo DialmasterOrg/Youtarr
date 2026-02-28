@@ -190,10 +190,14 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
           className="flex items-center min-w-0"
           style={{ height: APP_BAR_TOGGLE_SIZE, marginRight: showTopNavItems ? 32 : 0 }}
         >
+          <RouterLink
+            to="/"
+            style={{
+              textDecoration: 'none',
+            }}
+          >
           <Typography
             variant="h6"
-            component={RouterLink as any}
-            to="/channels"
             style={{
               fontWeight: 700,
               fontFamily: 'var(--font-display)',
@@ -210,6 +214,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
           >
             {appName}
           </Typography>
+          </RouterLink>
         </Box>
 
         {/* Desktop Navigation */}

@@ -521,7 +521,7 @@ describe('VideosPage Component', () => {
 
       // Check file size display in format indicator chip (1GB formatted)
       expect(screen.getByText('1.0GB')).toBeInTheDocument();
-      expect(screen.getByTestId('MovieOutlinedIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
     });
 
     test('displays missing file status for removed videos', async () => {

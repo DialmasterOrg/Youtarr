@@ -105,10 +105,10 @@ describe('VideoCard Component', () => {
       expect(screen.getByText('Not Downloaded')).toBeInTheDocument();
     });
 
-    test('renders "Downloaded" status for downloaded video', () => {
+    test('renders "Available" status for downloaded video', () => {
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
       renderWithProviders(<VideoCard {...defaultProps} video={downloadedVideo} />);
-      expect(screen.getByText('Downloaded')).toBeInTheDocument();
+      expect(screen.getByText('Available')).toBeInTheDocument();
     });
 
     test('renders "Missing" status for removed video', () => {
@@ -234,9 +234,24 @@ describe('VideoCard Component', () => {
       expect(screen.getByRole('checkbox')).toBeInTheDocument();
     });
 
-    test('does not render checkbox for downloaded videos', () => {
+    test('renders delete checkbox for downloaded videos when no active selection mode', () => {
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
       renderWithProviders(<VideoCard {...defaultProps} video={downloadedVideo} />);
+      // Downloaded videos now show a delete checkbox when no download selection is active
+      expect(screen.getByRole('checkbox')).toBeInTheDocument();
+    });
+
+    test('does not render delete checkbox for downloaded videos when download mode is active', () => {
+      const downloadedVideo = { ...mockVideo, added: true, removed: false };
+      renderWithProviders(
+        <VideoCard
+          {...defaultProps}
+          video={downloadedVideo}
+          selectionMode="download"
+          checkedBoxes={['other-video-id']}
+        />
+      );
+      // When download mode is active, hide delete checkbox to avoid confusion
       expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     });
 
@@ -647,10 +662,12 @@ describe('VideoCard Component', () => {
           checkedBoxes={['test123']}
         />
       );
-      // Should show delete button since it's downloaded
-      expect(screen.getByTestId('DeleteIcon')).toBeInTheDocument();
-      // Should not show checkbox since it's downloaded
-      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+      // selectionMode=null (from defaultProps): downloaded video shows a delete checkbox (checked)
+      const checkbox = screen.getByRole('checkbox');
+      expect(checkbox).toBeInTheDocument();
+      expect(checkbox).toBeChecked();
+      // DeleteIcon (visual indicator for pending deletion) does NOT show in null mode
+      expect(screen.queryByTestId('DeleteIcon')).not.toBeInTheDocument();
     });
 
     test('renders ignored video with reduced opacity', () => {

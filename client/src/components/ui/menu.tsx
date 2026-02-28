@@ -24,15 +24,64 @@ export interface MenuProps {
  * For backwards-compat with MUI's anchorEl pattern we use a fixed-pos
  * div portal positioned at anchorEl's bounding box.
  */
-const Menu: React.FC<MenuProps> = ({ open, anchorEl, onClose, children, className, PaperProps, keepMounted = false }) => {
+const Menu: React.FC<MenuProps> = ({
+  open,
+  anchorEl,
+  onClose,
+  children,
+  className,
+  PaperProps,
+  keepMounted = false,
+  anchorOrigin = { vertical: 'bottom', horizontal: 'left' },
+  transformOrigin = { vertical: 'top', horizontal: 'left' },
+}) => {
   const [pos, setPos] = React.useState<{ top: number; left: number } | null>(null);
 
+  const getAnchorOffset = React.useCallback((rect: DOMRect) => {
+    const vertical =
+      anchorOrigin.vertical === 'top'
+        ? rect.top
+        : anchorOrigin.vertical === 'center'
+          ? rect.top + rect.height / 2
+          : rect.bottom;
+    const horizontal =
+      anchorOrigin.horizontal === 'left'
+        ? rect.left
+        : anchorOrigin.horizontal === 'center'
+          ? rect.left + rect.width / 2
+          : rect.right;
+    return { top: vertical + 4, left: horizontal };
+  }, []);
+
+  const updatePosition = React.useCallback(() => {
+    if (!open || !anchorEl) return;
+    const rect = anchorEl.getBoundingClientRect();
+    setPos(getAnchorOffset(rect));
+  }, [open, anchorEl, getAnchorOffset]);
+
   React.useEffect(() => {
-    if (open && anchorEl) {
-      const rect = anchorEl.getBoundingClientRect();
-      setPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX });
-    }
-  }, [open, anchorEl]);
+    updatePosition();
+    if (!open) return;
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [open, updatePosition]);
+
+  const transformX =
+    transformOrigin.horizontal === 'left'
+      ? '0%'
+      : transformOrigin.horizontal === 'center'
+        ? '-50%'
+        : '-100%';
+  const transformY =
+    transformOrigin.vertical === 'top'
+      ? '0%'
+      : transformOrigin.vertical === 'center'
+        ? '-50%'
+        : '-100%';
 
   if (!open && !keepMounted) return null;
 
@@ -46,7 +95,15 @@ const Menu: React.FC<MenuProps> = ({ open, anchorEl, onClose, children, classNam
         onKeyDown={(e) => {
           if (e.key === 'Escape') onClose?.();
         }}
-        style={pos ? { position: 'absolute', top: pos.top + 4, left: pos.left, zIndex: 1300 } : { position: 'absolute', top: 0, left: 0, zIndex: 1300 }}
+        style={pos
+          ? {
+              position: 'fixed',
+              top: pos.top,
+              left: pos.left,
+              transform: `translate(${transformX}, ${transformY})`,
+              zIndex: 1300,
+            }
+          : { position: 'fixed', top: 0, left: 0, zIndex: 1300 }}
         hidden={!open}
         aria-hidden={!open}
         className={cn(
@@ -84,12 +141,22 @@ export interface PopoverProps {
 const Popover: React.FC<PopoverProps> = ({ open, anchorEl, onClose, children, className, PaperProps }) => {
   const [pos, setPos] = React.useState<{ top: number; left: number } | null>(null);
 
-  React.useEffect(() => {
-    if (open && anchorEl) {
-      const rect = anchorEl.getBoundingClientRect();
-      setPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX });
-    }
+  const updatePosition = React.useCallback(() => {
+    if (!open || !anchorEl) return;
+    const rect = anchorEl.getBoundingClientRect();
+    setPos({ top: rect.bottom + 4, left: rect.left });
   }, [open, anchorEl]);
+
+  React.useEffect(() => {
+    updatePosition();
+    if (!open) return;
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [open, updatePosition]);
 
   if (!open) return null;
 
@@ -98,7 +165,7 @@ const Popover: React.FC<PopoverProps> = ({ open, anchorEl, onClose, children, cl
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
         onKeyDown={(e) => { if (e.key === 'Escape') onClose?.(); }}
-        style={pos ? { position: 'absolute', top: pos.top + 4, left: pos.left, zIndex: 1300 } : undefined}
+        style={pos ? { position: 'fixed', top: pos.top, left: pos.left, zIndex: 1300 } : undefined}
         className={cn(
           'rounded-[var(--radius-ui)]',
           'border-[length:var(--border-weight)] border-[var(--border-strong)]',

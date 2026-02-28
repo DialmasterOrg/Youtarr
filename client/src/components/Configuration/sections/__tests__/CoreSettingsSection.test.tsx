@@ -115,15 +115,13 @@ describe('CoreSettingsSection Component', () => {
       renderWithProviders(<CoreSettingsSection {...props} />);
 
       const downloadSettingsTrigger = screen.getByRole('button', { name: /Download Settings/i });
-      const accordionItem = downloadSettingsTrigger.closest('[data-state]');
-
-      expect(accordionItem).toHaveAttribute('data-state', 'open');
+      expect(downloadSettingsTrigger).toHaveAttribute('data-state', 'open');
 
       await user.click(downloadSettingsTrigger);
-      expect(accordionItem).toHaveAttribute('data-state', 'closed');
+      expect(downloadSettingsTrigger).toHaveAttribute('data-state', 'closed');
 
       await user.click(downloadSettingsTrigger);
-      expect(accordionItem).toHaveAttribute('data-state', 'open');
+      expect(downloadSettingsTrigger).toHaveAttribute('data-state', 'open');
     });
 
     test('renders media server information accordion collapsed by default', async () => {
@@ -132,8 +130,7 @@ describe('CoreSettingsSection Component', () => {
       renderWithProviders(<CoreSettingsSection {...props} />);
 
       const infoTrigger = await screen.findByRole('button', { name: /Jellyfin \/ Kodi \/ Emby Setting Information/i });
-      const infoAccordionItem = infoTrigger.closest('[data-state]');
-      expect(infoAccordionItem).toHaveAttribute('data-state', 'closed');
+      expect(infoTrigger).toHaveAttribute('data-state', 'closed');
     });
   });
 

@@ -242,6 +242,30 @@ describe('ChannelVideosHeader actions menu', () => {
     expect(screen.getByRole('menuitem', { name: /Delete Selected/i })).toHaveAttribute('aria-disabled', 'true');
   });
 
+  test('does not fire callback when clicking disabled action', async () => {
+    const user = userEvent.setup();
+    const props = {
+      ...getDefaultProps(),
+      paginatedVideos: [
+        {
+          ...mockVideos[0],
+          youtube_id: 'video-5',
+          added: false,
+          removed: false,
+        },
+      ],
+    };
+
+    renderWithProviders(<ChannelVideosHeader {...props} />);
+
+    await user.click(screen.getByRole('button', { name: /Actions/i }));
+    const disabledItem = screen.getByRole('menuitem', { name: /Select All \(Downloaded\)/i });
+    expect(disabledItem).toHaveAttribute('aria-disabled', 'true');
+
+    await user.click(disabledItem);
+    expect(props.onSelectAllDownloaded).not.toHaveBeenCalled();
+  });
+
   test('hides desktop actions bar on mobile', () => {
     renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} isMobile />);
     expect(screen.queryByRole('button', { name: /Actions/i })).not.toBeInTheDocument();

@@ -66,7 +66,7 @@ const VideoActionsDropdown: React.FC<VideoActionsDropdownProps> = ({
         }}
       >
         <MenuItem onClick={() => handleMenuItemClick(onContentRating)}>
-          <ListItemIcon>
+          <ListItemIcon style={{ color: 'var(--info)' }}>
           <EighteenUpRatingIcon size={16} data-testid="EighteenUpRatingIcon" />
           </ListItemIcon>
           <ListItemText>Update Content Rating</ListItemText>

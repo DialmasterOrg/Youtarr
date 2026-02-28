@@ -390,6 +390,23 @@ describe('Collapse', () => {
     jest.useRealTimers();
   });
 
+  it('re-shows content when in transitions false→true after unmountOnExit removal', async () => {
+    jest.useFakeTimers();
+    const { rerender } = render(
+      <Collapse in timeout={0} unmountOnExit><div>ReappearContent</div></Collapse>
+    );
+    // Collapse it — contents unmount after timeout
+    rerender(<Collapse in={false} timeout={0} unmountOnExit><div>ReappearContent</div></Collapse>);
+    act(() => { jest.runAllTimers(); });
+    expect(screen.queryByText('ReappearContent')).not.toBeInTheDocument();
+
+    // Expand again — contents should be visible
+    rerender(<Collapse in timeout={0} unmountOnExit><div>ReappearContent</div></Collapse>);
+    act(() => { jest.runAllTimers(); });
+    expect(screen.getByText('ReappearContent')).toBeInTheDocument();
+    jest.useRealTimers();
+  });
+
   it('accepts auto timeout', () => {
     render(<Collapse in timeout="auto"><div>AutoCollapse</div></Collapse>);
     expect(screen.getByText('AutoCollapse')).toBeInTheDocument();

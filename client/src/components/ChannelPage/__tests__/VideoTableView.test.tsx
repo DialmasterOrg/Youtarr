@@ -153,24 +153,21 @@ describe('VideoTableView Component', () => {
     test('renders "Not Downloaded" status for never downloaded video', () => {
       renderWithProviders(<VideoTableView {...defaultProps} />);
       expect(screen.getByText('Not Downloaded')).toBeInTheDocument();
-      const chip = screen.getByText('Not Downloaded').closest('.MuiChip-filled');
-      expect(chip).toBeInTheDocument();
+      expect(screen.getByText('Not Downloaded')).toBeVisible();
     });
 
-    test('renders "Downloaded" status for downloaded video', () => {
+    test('renders "Available" status for downloaded video', () => {
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
       renderWithProviders(<VideoTableView {...defaultProps} videos={[downloadedVideo]} />);
-      expect(screen.getByText('Downloaded')).toBeInTheDocument();
-      const chip = screen.getByText('Downloaded').closest('.MuiChip-filled');
-      expect(chip).toBeInTheDocument();
+      expect(screen.getByText('Available')).toBeInTheDocument();
+      expect(screen.getByText('Available')).toBeVisible();
     });
 
     test('renders "Missing" status for removed video', () => {
       const removedVideo = { ...mockVideo, added: true, removed: true };
       renderWithProviders(<VideoTableView {...defaultProps} videos={[removedVideo]} />);
       expect(screen.getByText('Missing')).toBeInTheDocument();
-      const chip = screen.getByText('Missing').closest('.MuiChip-filled');
-      expect(chip).toBeInTheDocument();
+      expect(screen.getByText('Missing')).toBeVisible();
     });
 
     test('renders "Members Only" status for subscriber-only video', () => {

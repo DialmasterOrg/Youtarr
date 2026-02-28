@@ -12,7 +12,7 @@ import { CalendarToday as CalendarTodayIcon, Block as BlockIcon, CheckCircleOutl
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml } from '../../utils/formatters';
-import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
+import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
@@ -53,11 +53,12 @@ function VideoCard({
   const isDownloadSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !isStillLive;
   const isDeleteSelectable = video.added && !video.removed && !isStillLive;
   const isDownloadAllowed = selectionMode !== 'delete';
-  const isDeleteAllowed = selectionMode === 'delete';
+  const isDeleteAllowed = selectionMode !== 'download';
   const isChecked = checkedBoxes.includes(video.youtube_id);
   const isDeleteChecked = selectedForDeletion.includes(video.youtube_id);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
   const isIgnored = status === 'ignored';
+  const statusLabel = status === 'downloaded' ? 'Available' : getStatusLabel(status);
   const baseTransform = isInteractive ? 'var(--sticker-rest-transform)' : 'translate(0, 0)';
   const isClickable = (isDownloadSelectable && isDownloadAllowed) || (isDeleteSelectable && isDeleteAllowed);
 
@@ -332,14 +333,15 @@ function VideoCard({
                 />
                 <Chip
                   icon={getStatusIcon(status)}
-                  label={getStatusLabel(status)}
+                  label={statusLabel}
                   size="small"
                   color={getStatusColor(status)}
-                  variant="filled"
+                  variant={getStatusChipVariant(status)}
                   style={{
                     flex: '0 0 auto',
                     minWidth: 'fit-content',
                     ...SHARED_STATUS_CHIP_SMALL_STYLE,
+                    ...getStatusChipStyle(status),
                   }}
                 />
               </div>

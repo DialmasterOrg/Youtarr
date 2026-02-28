@@ -15,6 +15,7 @@ import {
   Menu,
   MenuItem,
   ListItemText,
+  Divider,
 } from '../ui';
 import { Search as SearchIcon, LayoutGrid as ViewModuleIcon, LayoutGrid as TableChartIcon, List as ViewListIcon, Download as DownloadIcon, RefreshCw as RefreshIcon, Trash2 as DeleteIcon, Ban as BlockIcon, Info as InfoIcon, X as ClearIcon, ListFilter as FilterListIcon, MoreVert as MoreVertIcon } from '../../lib/icons';
 import { LayoutList } from 'lucide-react';
@@ -305,7 +306,7 @@ function ChannelVideosHeader({
               aria-controls={actionsOpen ? 'channel-actions-menu' : undefined}
               className={intentStyles.base}
             >
-              Actions
+              Actions{hasAnySelection && ` (${hasDownloadSelection ? checkedBoxes.length : selectedForDeletion.length})`}
             </Button>
 
             <Menu
@@ -322,6 +323,7 @@ function ChannelVideosHeader({
                   closeActionsMenu();
                 }}
                 disabled={selectableDeleteCount === 0}
+                style={{ color: 'var(--info)' }}
               >
                 <ListItemText>Select All (Downloaded)</ListItemText>
               </MenuItem>
@@ -331,21 +333,25 @@ function ChannelVideosHeader({
                   closeActionsMenu();
                 }}
                 disabled={selectableDownloadCount === 0}
+                style={{ color: 'var(--warning)' }}
               >
                 <ListItemText>Select All (Not Downloaded)</ListItemText>
               </MenuItem>
 
               {hasAnySelection && (
                 <>
+                  <Divider />
                   <MenuItem
                     onClick={() => {
                       onClearSelection();
                       closeActionsMenu();
                     }}
+                    style={{ color: 'var(--muted-foreground)' }}
                   >
                     <ClearIcon size={14} style={{ marginRight: 8 }} />
                     <ListItemText>Clear Selection</ListItemText>
                   </MenuItem>
+                  <Divider />
                 </>
               )}
 
@@ -356,11 +362,14 @@ function ChannelVideosHeader({
                     closeActionsMenu();
                   }}
                   disabled={!hasDownloadSelection}
+                  style={{ color: 'var(--success)' }}
                 >
-                  <DownloadIcon size={14} style={{ marginRight: 8 }} />
+                  <DownloadIcon size={14} style={{ marginRight: 8, color: 'var(--success)' }} />
                   <ListItemText>Download Selected ({checkedBoxes.length})</ListItemText>
                 </MenuItem>
               )}
+
+              {(hasDeleteSelection || hasMixedSelection) && hasDownloadSelection && <Divider />}
 
               {(hasDeleteSelection || hasMixedSelection) && (
                 <MenuItem
@@ -382,8 +391,9 @@ function ChannelVideosHeader({
                     onBulkIgnoreClick();
                     closeActionsMenu();
                   }}
+                  style={{ color: 'var(--warning)' }}
                 >
-                  <BlockIcon size={14} style={{ marginRight: 8 }} />
+                  <BlockIcon size={14} style={{ marginRight: 8, color: 'var(--warning)' }} />
                   <ListItemText>Ignore Selected ({checkedBoxes.length})</ListItemText>
                 </MenuItem>
               )}

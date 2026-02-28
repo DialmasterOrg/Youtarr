@@ -7,7 +7,7 @@ describe('DownloadFormatConfigIndicator', () => {
   test('renders nothing when audioFormat is null (video-only, default)', () => {
     const { container } = renderWithProviders(<DownloadFormatConfigIndicator audioFormat={null} />);
 
-    expect(container.firstChild).toBeNull();
+    expect(container).toBeEmptyDOMElement();
     expect(screen.queryByTestId('video-format-icon')).not.toBeInTheDocument();
     expect(screen.queryByTestId('audio-format-icon')).not.toBeInTheDocument();
   });
@@ -15,7 +15,7 @@ describe('DownloadFormatConfigIndicator', () => {
   test('renders nothing when audioFormat is undefined', () => {
     const { container } = renderWithProviders(<DownloadFormatConfigIndicator audioFormat={undefined} />);
 
-    expect(container.firstChild).toBeNull();
+    expect(container).toBeEmptyDOMElement();
     expect(screen.queryByTestId('video-format-icon')).not.toBeInTheDocument();
     expect(screen.queryByTestId('audio-format-icon')).not.toBeInTheDocument();
   });

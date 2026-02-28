@@ -8,7 +8,7 @@ import { ArrowUpward as ArrowUpwardIcon, ArrowDownward as ArrowDownwardIcon, Blo
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml } from '../../utils/formatters';
-import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
+import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
@@ -117,6 +117,7 @@ function VideoTableView({
         <tbody>
           {videos.map((video) => {
             const status = getVideoStatus(video);
+            const statusLabel = status === 'downloaded' ? 'Available' : getStatusLabel(status);
             const isStillLive = video.live_status && video.live_status !== 'was_live';
             const isDownloadSelectable = (status === 'never_downloaded' || status === 'missing' || status === 'ignored') && !video.youtube_removed && !isStillLive;
             const isDeleteSelectable = video.added && !video.removed && !isStillLive;
@@ -288,11 +289,11 @@ function VideoTableView({
                     )}
                     <Chip
                       icon={getStatusIcon(status)}
-                      label={getStatusLabel(status)}
+                      label={statusLabel}
                       size="small"
                       color={getStatusColor(status)}
-                      variant="filled"
-                      style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE }}
+                      variant={getStatusChipVariant(status)}
+                      style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE, ...getStatusChipStyle(status) }}
                     />
                   </div>
                 </td>

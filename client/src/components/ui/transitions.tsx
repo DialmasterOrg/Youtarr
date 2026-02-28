@@ -178,10 +178,13 @@ const Collapse: React.FC<CollapseProps> = ({
       setMounted(true);
       const el = containerRef.current;
       if (el) {
+        // Already mounted in DOM — animate height immediately
         setHeight(el.scrollHeight);
         const id = setTimeout(() => setHeight('auto'), duration);
         return () => clearTimeout(id);
       }
+      // If el is null the component was previously unmounted (unmountOnExit=true).
+      // The layout effect below will set the height once the DOM node exists.
     } else {
       if (containerRef.current) {
         setHeight(containerRef.current.scrollHeight);
@@ -196,6 +199,22 @@ const Collapse: React.FC<CollapseProps> = ({
       }
     }
   }, [inProp, unmountOnExit, duration]);
+
+  // After re-mounting from an unmounted state (unmountOnExit=true), the DOM node
+  // becomes available but the useEffect above already ran with containerRef=null.
+  // This layout effect fires synchronously after the DOM is painted and sets the
+  // height so the expansion animation plays correctly.
+  React.useLayoutEffect(() => {
+    if (inProp && mounted && height === 0 && containerRef.current) {
+      const h = containerRef.current.scrollHeight;
+      setHeight(h);
+      const id = setTimeout(() => setHeight('auto'), duration);
+      return () => clearTimeout(id);
+    }
+  // Only fire when `mounted` flips to true — other deps are intentionally omitted
+  // because they are stable within this transition window.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted]);
 
   if (!mounted) return null;
 

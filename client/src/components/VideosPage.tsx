@@ -89,6 +89,21 @@ function VideosPage({ token }: VideosPageProps) {
 
   const videosPerPage = isMobile ? 6 : 12;
 
+  const videoAvailabilityChipStyle = {
+    available: {
+      ...SHARED_STATUS_CHIP_SMALL_STYLE,
+      backgroundColor: 'var(--success)',
+      color: 'var(--success-foreground)',
+      border: '1px solid var(--success)',
+    } as React.CSSProperties,
+    missing: {
+      ...SHARED_STATUS_CHIP_SMALL_STYLE,
+      backgroundColor: 'var(--destructive)',
+      color: 'var(--destructive-foreground)',
+      border: '1px solid var(--destructive)',
+    } as React.CSSProperties,
+  };
+
   const handleImageError = (youtubeId: string) => {
     setImageErrors((prevState) => ({ ...prevState, [youtubeId]: true }));
   };
@@ -424,11 +439,12 @@ function VideosPage({ token }: VideosPageProps) {
             </Stack>
           )}
 
-          <FormControl fullWidth size="small">
+          <FormControl fullWidth>
             <InputLabel>Max Rating</InputLabel>
             <Select
               value={maxRatingFilter}
               label="Max Rating"
+              size="small"
               onChange={(event) => {
                 setMaxRatingFilter(event.target.value);
                 setPage(1);
@@ -443,7 +459,7 @@ function VideosPage({ token }: VideosPageProps) {
           </FormControl>
 
           {selectedVideos.length > 0 && (
-            <Box display="flex" gap={2} alignItems="center">
+            <Box className="flex gap-2 items-center">
               <Typography variant="body2" color="text.secondary">
                 {selectedVideos.length} video{selectedVideos.length !== 1 ? 's' : ''} selected
               </Typography>
@@ -465,7 +481,7 @@ function VideosPage({ token }: VideosPageProps) {
         </Stack>
 
         {isMobile && (
-          <Box display='flex' justifyContent='center' mb={2}>
+          <Box className="flex justify-center mb-2">
             <Button
               variant='outlined'
               startIcon={<FilterListIcon data-testid="FilterListIcon" />}
@@ -498,9 +514,10 @@ function VideosPage({ token }: VideosPageProps) {
           </Grid>
         )}
 
-        <TableContainer component={Paper}>
-          <div {...handlers}>
-            <Table>
+        <Paper>
+          <TableContainer>
+            <div {...handlers}>
+              <Table>
               {isMobile ? null : (
                 <TableHead>
                   <TableRow>
@@ -515,7 +532,7 @@ function VideosPage({ token }: VideosPageProps) {
                           <Typography variant="subtitle2" className="font-bold">
                             Downloaded Videos
                           </Typography>
-                          <IconButton onClick={handleFilterClick} size="small">
+                          <IconButton onClick={handleFilterClick} size="small" aria-label="Filter videos">
                             <FilterListIcon size={16} data-testid="FilterListIcon" />
                           </IconButton>
                           <FilterMenu
@@ -574,13 +591,8 @@ function VideosPage({ token }: VideosPageProps) {
                     <TableRow key={video.id}>
                       {isMobile ? (
                         <TableCell>
-                          <Box
-                            display='flex'
-                            flexDirection='column'
-                            alignItems='stretch'
-                            justifyContent='flex-start'
-                            className="gap-4"
-                          >
+                          <Box className="flex flex-col items-stretch justify-start gap-4">
+
                             {/* Title at the top */}
                             <Box className="flex-grow">
                               <Typography 
@@ -714,6 +726,7 @@ function VideosPage({ token }: VideosPageProps) {
                                     toggleDeletionSelection(video.id);
                                   }}
                                   data-testid="DeleteIcon"
+                                  aria-label="Delete video"
                                   style={{
                                     position: 'absolute',
                                     top: 4,
@@ -800,7 +813,7 @@ function VideosPage({ token }: VideosPageProps) {
                                       label="Missing"
                                       color="error"
                                       variant="filled"
-                                      style={SHARED_STATUS_CHIP_SMALL_STYLE}
+                                      style={videoAvailabilityChipStyle.missing}
                                     />
                                   </Tooltip>
                                 ) : video.fileSize ? (
@@ -811,7 +824,7 @@ function VideosPage({ token }: VideosPageProps) {
                                       label="Available"
                                       color="success"
                                       variant="filled"
-                                      style={SHARED_STATUS_CHIP_SMALL_STYLE}
+                                      style={videoAvailabilityChipStyle.available}
                                     />
                                   </Tooltip>
                                 ) : null}
@@ -988,7 +1001,7 @@ function VideosPage({ token }: VideosPageProps) {
                                       label="Missing"
                                       color="error"
                                       variant="filled"
-                                      style={SHARED_STATUS_CHIP_SMALL_STYLE}
+                                      style={videoAvailabilityChipStyle.missing}
                                     />
                                   </Tooltip>
                                 ) : video.fileSize ? (
@@ -999,7 +1012,7 @@ function VideosPage({ token }: VideosPageProps) {
                                       label="Available"
                                       color="success"
                                       variant="filled"
-                                      style={SHARED_STATUS_CHIP_SMALL_STYLE}
+                                      style={videoAvailabilityChipStyle.available}
                                     />
                                   </Tooltip>
                                 ) : null}
@@ -1026,6 +1039,7 @@ function VideosPage({ token }: VideosPageProps) {
                                       color="error"
                                       size="small"
                                       data-testid="DeleteIcon"
+                                      aria-label="Delete video from disk"
                                       onClick={() => handleDeleteSingleVideo(video.id)}
                                       disabled={Boolean(video.removed) || deleteLoading}
                                     >
@@ -1068,6 +1082,7 @@ function VideosPage({ token }: VideosPageProps) {
             )}
           </div>
         </TableContainer>
+        </Paper>
       </Box>
 
       {/* Delete Confirmation Dialog */}

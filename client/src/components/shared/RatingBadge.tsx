@@ -146,8 +146,6 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
         className={className}
         style={{
           ...(size === 'small' ? SHARED_STATUS_CHIP_SMALL_STYLE : SHARED_STATUS_CHIP_STYLE),
-          fontSize: size === 'small' ? '0.7rem' : '0.875rem',
-          height: size === 'small' ? 20 : 30,
           ...(chipStyleByColor[chipColor] || chipStyleByColor.default),
           ...style,
         }}

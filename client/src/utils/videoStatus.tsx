@@ -67,6 +67,52 @@ export const getStatusLabel = (status: VideoStatus) => {
   }
 };
 
+export const getStatusChipVariant = (status: VideoStatus): 'filled' | 'outlined' => {
+  switch (status) {
+    case 'downloaded':
+    case 'missing':
+      return 'filled';
+    default:
+      return 'outlined';
+  }
+};
+
+export const getStatusChipStyle = (status: VideoStatus): React.CSSProperties => {
+  switch (status) {
+    case 'downloaded':
+      return {
+        backgroundColor: 'var(--success)',
+        color: 'var(--success-foreground)',
+        border: '1px solid var(--success)',
+      };
+    case 'missing':
+      return {
+        backgroundColor: 'var(--destructive)',
+        color: 'var(--destructive-foreground)',
+        border: '1px solid var(--destructive)',
+      };
+    case 'never_downloaded':
+      return {
+        backgroundColor: 'transparent',
+        color: 'var(--warning)',
+        border: '1px solid var(--warning)',
+      };
+    case 'ignored':
+      return {
+        backgroundColor: 'transparent',
+        color: 'var(--muted-foreground)',
+        border: '1px solid var(--border)',
+      };
+    case 'members_only':
+    default:
+      return {
+        backgroundColor: 'transparent',
+        color: 'var(--muted-foreground)',
+        border: '1px solid var(--border)',
+      };
+  }
+};
+
 export const getMediaTypeInfo = (mediaType?: string | null) => {
   switch (mediaType) {
     case 'short':
