@@ -114,12 +114,19 @@ The Vite dev server will proxy API and WebSocket requests to the backend at port
 
 Use Storybook to develop and document components in isolation.
 
+**Prerequisites:** Complete Step 2 (Build Development Environment) first, or at minimum install client dependencies:
+```bash
+cd client && npm install
+```
+
+This automatically generates the MSW (Mock Service Worker) file needed for API mocking in stories.
+
 ```bash
 # Start Storybook Server
 npm run storybook
 ```
 
-Storybook runs on http://localhost:6006. Story validation is done via Jest tests (see `client/src/tests/storybook_coverage.test.js`).
+Storybook will open automatically in your browser. Story validation is done via Jest tests (see `client/src/tests/storybook_coverage.test.js`).
 
 ### 6. Access the Application
 

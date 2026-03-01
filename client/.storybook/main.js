@@ -6,6 +6,7 @@ const config = {
     '../src/**/__tests__/**/*.story.@(js|jsx|mjs|ts|tsx|mdx)',
   ],
   addons: ['@storybook/addon-a11y', '@storybook/addon-links'],
+  staticDirs: ['../public'],
   framework: {
     name: '@storybook/react-vite',
     options: {},
