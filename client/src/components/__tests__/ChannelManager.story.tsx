@@ -16,6 +16,13 @@ const meta: Meta<typeof ChannelManager> = {
   parameters: {
     layout: 'fullscreen',
   },
+  decorators: [
+    (Story) => (
+      <MemoryRouter>
+        <Story />
+      </MemoryRouter>
+    ),
+  ],
 };
 
 export default meta;

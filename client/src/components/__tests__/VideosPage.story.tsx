@@ -2,6 +2,7 @@ import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, userEvent, within, waitFor } from 'storybook/test';
 import { http, HttpResponse } from 'msw';
+import { MemoryRouter } from 'react-router-dom';
 import VideosPage from '../VideosPage';
 
 const meta: Meta<typeof VideosPage> = {
@@ -13,6 +14,13 @@ const meta: Meta<typeof VideosPage> = {
   parameters: {
     layout: 'fullscreen',
   },
+  decorators: [
+    (Story) => (
+      <MemoryRouter>
+        <Story />
+      </MemoryRouter>
+    ),
+  ],
 };
 
 export default meta;
