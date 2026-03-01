@@ -28,6 +28,7 @@
     "typescript": "5.9.3"
   },
   "scripts": {
+    "postinstall": "npx msw init public/ --save",
     "dev": "vite",
     "start": "vite",
     "build": "vite build",
