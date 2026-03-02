@@ -487,6 +487,7 @@ describe('DownloadSettingsDialog', () => {
         allowRedownload: false,
         subfolder: null,
         audioFormat: null,
+        skipVideoFolder: false,
         rating: 'NR',
       });
     });
@@ -615,6 +616,7 @@ describe('DownloadSettingsDialog', () => {
         allowRedownload: true,
         subfolder: null,
         audioFormat: null,
+        skipVideoFolder: false,
         rating: 'NR',
       });
     });
@@ -639,6 +641,7 @@ describe('DownloadSettingsDialog', () => {
         allowRedownload: true,
         subfolder: null,
         audioFormat: null,
+        skipVideoFolder: false,
         rating: 'NR',
       });
     });
@@ -777,6 +780,106 @@ describe('DownloadSettingsDialog', () => {
       // Should be auto-checked again (hasUserInteracted was reset)
       redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
       expect(redownloadToggle).toBeChecked();
+    });
+  });
+
+  describe('Skip Video Folder Toggle', () => {
+    test('renders skipVideoFolder toggle when custom settings enabled in manual mode', () => {
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+
+      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(toggle);
+
+      expect(screen.getByLabelText('Flat file structure (no video subfolders)')).toBeInTheDocument();
+    });
+
+    test('skipVideoFolder defaults to false', () => {
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+
+      const toggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(toggle);
+
+      const skipToggle = screen.getByRole('checkbox', { name: /Flat file structure/i });
+      expect(skipToggle).not.toBeChecked();
+    });
+
+    test('calls onConfirm with skipVideoFolder true when toggled on', () => {
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+
+      // Enable custom settings
+      const customToggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(customToggle);
+
+      // Toggle skipVideoFolder
+      const skipToggle = screen.getByRole('checkbox', { name: /Flat file structure/i });
+      fireEvent.click(skipToggle);
+      expect(skipToggle).toBeChecked();
+
+      // Confirm
+      const confirmButton = screen.getByRole('button', { name: /Start Download/i });
+      fireEvent.click(confirmButton);
+
+      expect(mockOnConfirm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          skipVideoFolder: true,
+        })
+      );
+    });
+
+    test('sends skipVideoFolder false when custom settings are disabled', () => {
+      render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+
+      // Enable custom settings to access toggle
+      const customToggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(customToggle);
+
+      // Toggle skipVideoFolder on
+      const skipToggle = screen.getByRole('checkbox', { name: /Flat file structure/i });
+      fireEvent.click(skipToggle);
+      expect(skipToggle).toBeChecked();
+
+      // Also enable re-download so hasOverride is true even with custom off
+      const redownloadToggle = screen.getByRole('checkbox', { name: /Allow re-downloading/i });
+      fireEvent.click(redownloadToggle);
+
+      // Disable custom settings
+      fireEvent.click(customToggle);
+
+      const confirmButton = screen.getByRole('button', { name: /Start Download/i });
+      fireEvent.click(confirmButton);
+
+      // Payload should have skipVideoFolder: false when custom settings are off
+      expect(mockOnConfirm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          skipVideoFolder: false,
+        })
+      );
+    });
+
+    test('resets skipVideoFolder when dialog is closed and reopened', () => {
+      const { rerender } = render(<DownloadSettingsDialog {...defaultProps} mode="manual" />);
+
+      // Enable custom settings and toggle skipVideoFolder
+      const customToggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(customToggle);
+
+      const skipToggle = screen.getByRole('checkbox', { name: /Flat file structure/i });
+      fireEvent.click(skipToggle);
+      expect(skipToggle).toBeChecked();
+
+      // Close dialog
+      rerender(<DownloadSettingsDialog {...defaultProps} open={false} mode="manual" />);
+
+      // Reopen dialog
+      rerender(<DownloadSettingsDialog {...defaultProps} open={true} mode="manual" />);
+
+      // Enable custom settings again
+      const newCustomToggle = screen.getByRole('checkbox', { name: /Use custom settings/i });
+      fireEvent.click(newCustomToggle);
+
+      // skipVideoFolder should be reset to false
+      const newSkipToggle = screen.getByRole('checkbox', { name: /Flat file structure/i });
+      expect(newSkipToggle).not.toBeChecked();
     });
   });
 

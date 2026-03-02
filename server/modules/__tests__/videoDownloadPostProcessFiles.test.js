@@ -87,7 +87,16 @@ jest.mock('../../logger');
 
 jest.mock('../filesystem', () => ({
   ...jest.requireActual('../filesystem'),
-  cleanupEmptyParents: jest.fn(() => Promise.resolve())
+  cleanupEmptyParents: jest.fn(() => Promise.resolve()),
+  // Mock retry wrappers to delegate directly to fs mocks (avoids retry delays in tests)
+  moveWithRetries: jest.fn(async (src, dest) => {
+    const fs = require('fs-extra');
+    await fs.move(src, dest);
+  }),
+  ensureDirWithRetries: jest.fn(async (dirPath) => {
+    const fs = require('fs-extra');
+    await fs.ensureDir(dirPath);
+  }),
 }));
 
 const fs = require('fs-extra');
@@ -443,10 +452,10 @@ describe('videoDownloadPostProcessFiles', () => {
       await loadModule();
       await settleAsync();
 
-      // Verify error was logged
+      // Verify error was logged with diagnostic info
       expect(logger.error).toHaveBeenCalledWith(
-        expect.objectContaining({ videoDirectory: tempVideoDir }),
-        '[Post-Process] ERROR during move operation'
+        expect.objectContaining({ src: tempVideoDir }),
+        '[Post-Process] ERROR during move operation (all retries exhausted)'
       );
 
       // Verify process.exit was called with error code
@@ -491,10 +500,10 @@ describe('videoDownloadPostProcessFiles', () => {
       await loadModule();
       await settleAsync();
 
-      // Verify error was logged
+      // Verify error was logged with diagnostic info
       expect(logger.error).toHaveBeenCalledWith(
-        expect.objectContaining({ videoDirectory: tempVideoDir }),
-        '[Post-Process] ERROR during move operation'
+        expect.objectContaining({ src: tempVideoDir }),
+        '[Post-Process] ERROR during move operation (all retries exhausted)'
       );
 
       // Verify process.exit was called with error code
@@ -702,8 +711,8 @@ describe('videoDownloadPostProcessFiles', () => {
 
       // Verify no errors logged (ensureDir should succeed)
       expect(logger.error).not.toHaveBeenCalledWith(
-        expect.objectContaining({ error: expect.anything() }),
-        '[Post-Process] ERROR during move operation'
+        expect.objectContaining({ src: expect.anything() }),
+        '[Post-Process] ERROR during move operation (all retries exhausted)'
       );
     });
 

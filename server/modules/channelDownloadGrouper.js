@@ -7,11 +7,12 @@ const { buildOutputTemplate, buildThumbnailTemplate } = require('./filesystem');
  * Encapsulates channel filter settings for download filtering
  */
 class ChannelFilterConfig {
-  constructor(minDuration = null, maxDuration = null, titleFilterRegex = null, audioFormat = null) {
+  constructor(minDuration = null, maxDuration = null, titleFilterRegex = null, audioFormat = null, skipVideoFolder = false) {
     this.minDuration = minDuration;
     this.maxDuration = maxDuration;
     this.titleFilterRegex = titleFilterRegex;
     this.audioFormat = audioFormat;
+    this.skipVideoFolder = !!skipVideoFolder;
   }
 
   /**
@@ -25,19 +26,25 @@ class ChannelFilterConfig {
       min: this.minDuration,
       max: this.maxDuration,
       regex: this.titleFilterRegex,
-      audio: this.audioFormat
+      audio: this.audioFormat,
+      skipVF: this.skipVideoFolder
     });
   }
 
   /**
-   * Check if any filters are set
-   * @returns {boolean} - True if at least one filter is configured
+   * Check if any grouping criteria (filters or structural settings) are set.
+   * Includes duration/title filters and structural options like skipVideoFolder
+   * that affect how downloads are organized on disk.
+   * @returns {boolean} - True if at least one criterion is configured
    */
-  hasFilters() {
+  hasGroupingCriteria() {
     return this.minDuration !== null ||
            this.maxDuration !== null ||
            this.titleFilterRegex !== null ||
-           this.audioFormat !== null;
+           this.audioFormat !== null ||
+           // skipVideoFolder affects download path structure, so channels with
+           // different settings must be in separate download groups
+           this.skipVideoFolder;
   }
 
   /**
@@ -50,7 +57,8 @@ class ChannelFilterConfig {
       channel.min_duration,
       channel.max_duration,
       channel.title_filter_regex,
-      channel.audio_format
+      channel.audio_format,
+      channel.skip_video_folder
     );
   }
 }
@@ -76,7 +84,8 @@ class ChannelDownloadGrouper {
         'min_duration',
         'max_duration',
         'title_filter_regex',
-        'audio_format'
+        'audio_format',
+        'skip_video_folder'
       ]
     });
 

@@ -55,3 +55,16 @@ downloads/*
 
 # Backup archive location
 backups/
+
+# Storybook outputs and caches
+storybook-static/
+build-storybook/
+client/build-storybook/
+.cache/storybook/
+
+# Storybook test artifacts
+.out_storybook_
+.storyshots
+
+# MSW service worker - regenerate with: cd client && npx msw init public/ --save
+client/public/mockServiceWorker.js

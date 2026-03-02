@@ -149,7 +149,28 @@ class DownloadExecutor {
             foundExistingPath = true;
 
             if (!filesystem.isVideoDirectory(dirPath)) {
-              logger.info({ dirPath }, 'Skipping non-video directory');
+              // Flat mode (no video subfolder) - only delete files matching the youtube ID
+              const youtubeId = videoDownload.youtube_id;
+              logger.info({ youtubeId, dirPath }, 'Flat structure detected, cleaning up individual files');
+
+              const dirFiles = await fsPromises.readdir(dirPath);
+              for (const fileName of dirFiles) {
+                // Match files by YouTube ID: bracketed form [ID] is the yt-dlp default;
+                // dash form " - ID" is a fallback for non-standard naming patterns
+                if (fileName.includes(`[${youtubeId}]`) || fileName.includes(` - ${youtubeId}`)) {
+                  const fullPath = path.join(dirPath, fileName);
+                  try {
+                    const stats = await fsPromises.stat(fullPath);
+                    if (stats.isFile()) {
+                      await fsPromises.unlink(fullPath);
+                      logger.info({ fileName }, 'Removed file (flat mode)');
+                    }
+                  } catch (fileError) {
+                    logger.error({ err: fileError, fileName }, 'Error removing file (flat mode)');
+                  }
+                }
+              }
+              cleanedAny = true;
               continue;
             }
 
@@ -235,6 +256,52 @@ class DownloadExecutor {
         }
       } catch (error) {
         logger.error({ err: error, file }, 'Error cleaning up partial files');
+      }
+    }
+  }
+
+  /**
+   * Verify the output directory is writable before starting a download.
+   * Catches stale NFS mounts and permission issues early, before yt-dlp
+   * downloads to temp and contaminates the archive with un-movable entries.
+   *
+   * @param {string} outputDir - The output directory path to check
+   * @param {number} timeoutMs - Maximum time to wait (default: 10s, for hung NFS)
+   * @returns {Promise<void>}
+   * @throws {Error} If the directory is not writable or the check times out
+   */
+  async checkOutputDirectoryHealth(outputDir, timeoutMs = 10000) {
+    if (!outputDir) {
+      throw new Error('Output directory path is not configured (directoryPath is undefined)');
+    }
+
+    const fsPromises = require('fs').promises;
+    const crypto = require('crypto');
+    const testFile = path.join(outputDir, `.youtarr_healthcheck_${crypto.randomUUID()}`);
+
+    let timer;
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(
+        `Output directory health check timed out after ${timeoutMs / 1000}s — the filesystem may be unresponsive (stale NFS mount?)`
+      )), timeoutMs);
+    });
+
+    let fileWritten = false;
+    try {
+      await Promise.race([
+        (async () => {
+          await fsPromises.writeFile(testFile, 'healthcheck');
+          fileWritten = true;
+          await fsPromises.unlink(testFile);
+        })(),
+        timeoutPromise
+      ]);
+    } finally {
+      clearTimeout(timer);
+      // Best-effort cleanup if the file was written but unlink didn't complete
+      // (e.g. timeout fired between writeFile and unlink)
+      if (fileWritten) {
+        fsPromises.unlink(testFile).catch(() => {});
       }
     }
   }
@@ -385,7 +452,7 @@ class DownloadExecutor {
     this.pendingProgressMessage = null;
   }
 
-  async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false, subfolderOverride = null, ratingOverride = undefined) {
+  async doDownload(args, jobId, jobType, urlCount = 0, originalUrls = null, allowRedownload = false, skipJobTransition = false, subfolderOverride = null, ratingOverride = undefined, skipVideoFolder = false) {
     const initialCount = this.getCountOfDownloadedVideos();
     const config = configModule.getConfig();
     const monitor = new DownloadProgressMonitor(jobId, jobType);
@@ -406,6 +473,42 @@ class DownloadExecutor {
       // Continue anyway - don't fail the job just because cleanup failed
     }
 
+    // Pre-flight health check: verify output directory is writable before downloading.
+    // Catches stale NFS mounts early, before yt-dlp downloads to temp and adds to archive.
+    try {
+      await this.checkOutputDirectoryHealth(configModule.directoryPath);
+    } catch (error) {
+      const errorMsg = `Output directory is not accessible: ${error.message}`;
+      logger.error({ err: error, outputDir: configModule.directoryPath }, errorMsg);
+
+      await jobModule.updateJob(jobId, {
+        status: 'Error',
+        endDate: Date.now(),
+        output: errorMsg,
+        notes: 'The output directory could not be written to. If using NFS, check that the mount is healthy (not stale). See Youtarr docs for NFS mount recommendations.',
+      });
+
+      MessageEmitter.emitMessage(
+        'broadcast',
+        null,
+        'download',
+        'downloadProgress',
+        {
+          text: errorMsg,
+          progress: monitor.snapshot('error'),
+          error: true
+        }
+      );
+
+      if (!skipJobTransition) {
+        jobModule.startNextJob().catch(err => {
+          logger.error({ err }, 'Failed to start next job');
+        });
+      }
+
+      return;
+    }
+
     return new Promise((resolve, reject) => {
       logger.info({ jobType, args, subfolderOverride }, 'Running yt-dlp');
       const procEnv = {
@@ -417,6 +520,11 @@ class DownloadExecutor {
       // Pass subfolder override to post-processor (empty string means no override)
       if (subfolderOverride !== null && subfolderOverride !== undefined) {
         procEnv.YOUTARR_SUBFOLDER_OVERRIDE = subfolderOverride;
+      }
+
+      // Pass skip video folder flag to post-processor
+      if (skipVideoFolder) {
+        procEnv.YOUTARR_SKIP_VIDEO_FOLDER = 'true';
       }
 
       // Pass explicit rating override if provided
@@ -867,6 +975,31 @@ class DownloadExecutor {
 
         // Use successful videos for further processing (archive, database, etc.)
         videoData = successfulVideos;
+
+        // Remove failed videos from the yt-dlp archive so they can be retried on the next run.
+        // yt-dlp writes to the archive BEFORE calling --exec (the post-processor), so when
+        // the post-processor fails (e.g. EACCES on NFS move), the video is stuck as archived
+        // but never actually made it to the final location. Without this cleanup, the video
+        // would be permanently skipped with "already been recorded in the archive".
+        if (!allowRedownload && failedVideosList.length > 0) {
+          const archiveModule = require('../archiveModule');
+          for (const failedVideo of failedVideosList) {
+            if (failedVideo.youtubeId) {
+              // Only remove from archive if the video was explicitly marked as failed during download.
+              // Videos classified as "failed" solely because stat/waitForFile couldn't confirm the file
+              // (e.g. NFS lag) may actually exist on disk — removing them would cause spurious re-downloads.
+              const wasExplicitlyFailed = failedVideos.has(failedVideo.youtubeId);
+              if (!wasExplicitlyFailed) {
+                logger.info({ youtubeId: failedVideo.youtubeId }, 'Skipping archive removal — video was not explicitly failed (file may exist but stat failed)');
+                continue;
+              }
+              const removed = await archiveModule.removeVideoFromArchive(failedVideo.youtubeId);
+              if (removed) {
+                logger.info({ youtubeId: failedVideo.youtubeId }, 'Removed failed video from archive for retry on next run');
+              }
+            }
+          }
+        }
 
         // If allowRedownload is true, we need to manually update the archive since yt-dlp won't
         if (allowRedownload && videoData.length > 0) {

@@ -80,6 +80,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [subfolderOverride, setSubfolderOverride] = useState<string | null>(null);
   const [audioFormat, setAudioFormat] = useState<string | null>(defaultAudioFormat);
+  const [skipVideoFolder, setSkipVideoFolder] = useState(false);
 
   // Fetch available subfolders
   const { subfolders, loading: subfoldersLoading } = useSubfolders(token);
@@ -123,6 +124,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       setSubfolderOverride(null);
       setAudioFormat(defaultAudioFormat);
       setRating(defaultRating ?? null);
+      setSkipVideoFolder(false);
     }
   }, [open, defaultAudioFormat]);
 
@@ -130,12 +132,14 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
     const checked = event.target.checked;
     setUseCustomSettings(checked);
     setHasUserInteracted(true);
-    // When enabling custom settings, if rating is not set, initialize to channel/defaultRating
-    if (checked && (rating === null || rating === undefined)) {
-      // defaultRating prop may be undefined in some usages
-      // prefer to leave null if no defaultRating available
-      if (typeof defaultRating !== 'undefined' && defaultRating !== null) {
-        setRating(defaultRating);
+    if (checked) {
+      // When enabling custom settings, if rating is not set, initialize to channel/defaultRating
+      if (rating === null || rating === undefined) {
+        // defaultRating prop may be undefined in some usages
+        // prefer to leave null if no defaultRating available
+        if (typeof defaultRating !== 'undefined' && defaultRating !== null) {
+          setRating(defaultRating);
+        }
       }
     }
   };
@@ -207,7 +211,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
         audioFormat: mode === 'manual' ? audioFormat : undefined,
         // Include rating only if custom settings are enabled (user explicitly selected it)
         // Use an explicit sentinel 'NR' when the user selected "No Rating" (null)
-        rating: useCustomSettings ? (rating === null ? 'NR' : (rating ?? undefined)) : undefined
+        rating: useCustomSettings ? (rating === null ? 'NR' : (rating ?? undefined)) : undefined,
+        skipVideoFolder: mode === 'manual' ? (useCustomSettings ? skipVideoFolder : false) : undefined
       });
     } else {
       onConfirm(null); // Use defaults - post-processor will apply channel default rating
@@ -507,6 +512,24 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                       <MenuItem value="TV-MA"><RatingBadge rating="TV-MA" size="small" sx={{ mr: 1 }} /> TV-MA</MenuItem>
                     </Select>
                   </FormControl>
+
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={skipVideoFolder}
+                        onChange={(e) => {
+                          setSkipVideoFolder(e.target.checked);
+                          setHasUserInteracted(true);
+                        }}
+                        color="primary"
+                      />
+                    }
+                    label="Flat file structure (no video subfolders)"
+                    sx={{ mb: 1 }}
+                  />
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+                    Save files directly in the channel folder instead of individual video subfolders.
+                  </Typography>
                 </>
               )}
             </Box>
