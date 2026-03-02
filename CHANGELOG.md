@@ -1,5 +1,41 @@
 # Changelog
 
+## [v1.60.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.60.0) - 2026-03-02
+
+## [1.60.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.59.0...v1.60.0) (2026-03-02)
+
+
+### Features
+
+* **client:** migrate Storybook config and parity play coverage ([6bb59e6](https://github.com/DialmasterOrg/Youtarr/commit/6bb59e698a65a8ea5fa7316a518b2b1c63217883))
+* add Storybook test job to CI workflow ([a22959e](https://github.com/DialmasterOrg/Youtarr/commit/a22959e3f3b38626d5a68d02538514c4508d362f))
+* channel flat file structure option ([#258](https://github.com/DialmasterOrg/Youtarr/issues/258)) ([86dd6c6](https://github.com/DialmasterOrg/Youtarr/commit/86dd6c63180b6c9ee862b2425219868c33f83273))
+* enhance Storybook integration with caching, add MSW handlers, and improve test accessibility ([4a9b020](https://github.com/DialmasterOrg/Youtarr/commit/4a9b02078b2ffe3a8d4e22be745964135c5d6c18))
+* enhance Storybook integration with CI and update documentation ([2bf81e3](https://github.com/DialmasterOrg/Youtarr/commit/2bf81e35b91b468899d2e59250dfa8478ec0dde2))
+* update CI workflow for Storybook validation and simplify related scripts ([50d7f9a](https://github.com/DialmasterOrg/Youtarr/commit/50d7f9a7c7405859b608768bc4bee138baf1d8e8))
+
+
+### Bug Fixes
+
+* add 15s timeout to HTTP thumbnail download to prevent long hangs ([#405](https://github.com/DialmasterOrg/Youtarr/issues/405)) ([80eb2f1](https://github.com/DialmasterOrg/Youtarr/commit/80eb2f13ef873cc3ead863c81f7b1436f2547cde))
+* address code review for flat file feat ([#442](https://github.com/DialmasterOrg/Youtarr/issues/442)) ([426334c](https://github.com/DialmasterOrg/Youtarr/commit/426334cfb38c68749a64c7258ed090f3c0caee9b))
+* address issues raised during review/testing ([c2408fc](https://github.com/DialmasterOrg/Youtarr/commit/c2408fc476b3188de11c2b9c0014e1211a8fd90c))
+* Addressed nested router issue and filled gap in storybook testing ([43f1220](https://github.com/DialmasterOrg/Youtarr/commit/43f1220f25ba8a0ff665e3e3792bc380a87a3d0f))
+* correct import path for DEFAULT_CONFIG in MSW handlers ([0120489](https://github.com/DialmasterOrg/Youtarr/commit/012048918ec9fe9b2aca1d88489252dfc0ed5e4a))
+* resolve CI lint failure ([0cc17ba](https://github.com/DialmasterOrg/Youtarr/commit/0cc17ba665d9878206f430c4eda46c2d69e23dd3))
+* stale NFS mounts ([#434](https://github.com/DialmasterOrg/Youtarr/issues/434)) ([cd9a334](https://github.com/DialmasterOrg/Youtarr/commit/cd9a334884f3cbe06b4872faacbce38c5fd54b04))
+* Storybook failing to load/update docs ([8f28929](https://github.com/DialmasterOrg/Youtarr/commit/8f28929d91b0dbd690aa7c69417c80e432f7655e))
+* Storybook MemoryRouter story issues ([7014f8e](https://github.com/DialmasterOrg/Youtarr/commit/7014f8e5e063494bd26cd8f2e8003ebcd9ddd40e))
+
+
+### Documentation
+
+* update CHANGELOG for v1.59.0 [skip ci] ([4752a38](https://github.com/DialmasterOrg/Youtarr/commit/4752a3888fd3f7d70c9e64042a57bef0d46390e4))
+
+
+
+
+
 ## [v1.59.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.59.0) - 2026-02-16
 
 ## [1.59.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.58.0...v1.59.0) (2026-02-16)
