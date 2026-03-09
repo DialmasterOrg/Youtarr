@@ -1152,8 +1152,9 @@ describe('SponsorBlockSection Component', () => {
 
     test('accordion has proper aria attributes', () => {
       const props = createSectionProps();
-      const { container } = renderWithProviders(<SponsorBlockSection {...props} />);
-      const accordionButton = within(container).getByRole('button', { name: /SponsorBlock Integration/i });
+      renderWithProviders(<SponsorBlockSection {...props} />);
+
+      expect(screen.getByRole('heading', { name: /SponsorBlock Integration/i })).toBeInTheDocument();
     });
   });
 });

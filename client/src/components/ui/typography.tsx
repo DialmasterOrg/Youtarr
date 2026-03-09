@@ -48,12 +48,20 @@ export interface TypographyProps extends React.HTMLAttributes<HTMLElement> {
   fontWeight?: string | number;
   to?: string;
   display?: string;
+  sx?: React.CSSProperties & { mb?: number | string };
 }
 
 const Typography = React.forwardRef<HTMLElement, TypographyProps>(
-  ({ variant = 'body1', component, color, gutterBottom, paragraph, noWrap, align, fontWeight, display: displayProp, to: _to, className, children, style, ...props }, ref) => {
+  ({ variant = 'body1', component, color, gutterBottom, paragraph, noWrap, align, fontWeight, display: displayProp, to: _to, className, children, style, sx, ...props }, ref) => {
     const mapping = variantMap[variant];
     const Tag = (component || (paragraph ? 'p' : mapping.tag)) as keyof React.JSX.IntrinsicElements;
+    const mergedStyle = {
+      ...(sx?.mb !== undefined ? { marginBottom: typeof sx.mb === 'number' ? `${sx.mb * 8}px` : sx.mb } : {}),
+      ...sx,
+      fontWeight,
+      display: displayProp,
+      ...style,
+    };
 
     return React.createElement(
       Tag,
@@ -73,9 +81,7 @@ const Typography = React.forwardRef<HTMLElement, TypographyProps>(
           align && align !== 'inherit' && `text-${align}`,
           className
         ),
-        style: (fontWeight !== undefined || displayProp !== undefined)
-          ? { fontWeight, display: displayProp, ...style }
-          : style,
+        style: mergedStyle,
         ...props,
       },
       children

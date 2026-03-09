@@ -511,7 +511,7 @@ describe('ChannelVideos Component', () => {
       renderChannelVideos();
 
       // Initially called with null tabType until tabs are loaded
-      expect(useChannelVideos).toHaveBeenCalledWith({
+      expect(useChannelVideos).toHaveBeenCalledWith(expect.objectContaining({
         channelId: 'UC123456',
         page: 1,
         pageSize: 16, // Desktop default
@@ -525,7 +525,10 @@ describe('ChannelVideos Component', () => {
         maxDuration: null,
         dateFrom: null,
         dateTo: null,
-      });
+        maxRating: '',
+        append: false,
+        resetKey: expect.any(String),
+      }));
     });
 
     test('calls useRefreshChannelVideos hook with correct parameters', () => {

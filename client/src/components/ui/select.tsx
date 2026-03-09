@@ -14,6 +14,8 @@ const fromPrimitiveValue = (value: string) => (value === EMPTY_SELECT_VALUE ? ''
 
 /* ─── Radix-based Select ──────────────────────────────── */
 export interface SelectProps {
+  id?: string;
+  style?: React.CSSProperties;
   value?: string | number;
   defaultValue?: string | number;
   onChange?: (event: SelectChangeEvent) => void;
@@ -39,6 +41,7 @@ export interface SelectProps {
   native?: boolean;
   labelId?: string;
   notched?: boolean;
+  inputProps?: React.ButtonHTMLAttributes<HTMLButtonElement> & Record<`data-${string}`, string | number | boolean | undefined>;
   /** Override the ARIA role on the trigger. Defaults to "button" for MUI compat.
    * Use "combobox" for autocomplete-style selects (e.g. SubfolderAutocomplete). */
   triggerRole?: 'button' | 'combobox';
@@ -46,6 +49,7 @@ export interface SelectProps {
 
 const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
   ({
+    id,
     value,
     defaultValue,
     onChange,
@@ -66,10 +70,12 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
     native: _native,
     labelId,
     notched: _notched,
+    inputProps,
     triggerRole = 'button',
     open,
     onOpen,
     onClose,
+    style,
   }, ref) => {
     // Manage open state internally so that onMouseDown (used by some tests)
     // can open the dropdown directly without relying on PointerEvent.
@@ -114,6 +120,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
       >
         <SelectPrimitive.Trigger
           ref={ref}
+          id={id}
           role={triggerRole}
           aria-disabled={disabled ? 'true' : undefined}
           aria-labelledby={labelId}
@@ -125,6 +132,8 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
               handleOpenChange(true);
             }
           }}
+          {...inputProps}
+          style={style}
           className={cn(
             'flex items-center justify-between gap-2',
             'rounded-[var(--radius-input)]',

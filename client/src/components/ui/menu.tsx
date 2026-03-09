@@ -11,7 +11,7 @@ export interface MenuProps {
   onClose?: () => void;
   children?: React.ReactNode;
   className?: string;
-  PaperProps?: { sx?: Record<string, unknown>; className?: string; elevation?: number };
+  PaperProps?: { sx?: Record<string, unknown>; className?: string; elevation?: number; style?: React.CSSProperties };
   anchorOrigin?: { vertical: 'top' | 'bottom' | 'center'; horizontal: 'left' | 'right' | 'center' };
   transformOrigin?: { vertical: 'top' | 'bottom' | 'center'; horizontal: 'left' | 'right' | 'center' };
   keepMounted?: boolean;
@@ -102,8 +102,9 @@ const Menu: React.FC<MenuProps> = ({
               left: pos.left,
               transform: `translate(${transformX}, ${transformY})`,
               zIndex: 1300,
+              ...PaperProps?.style,
             }
-          : { position: 'fixed', top: 0, left: 0, zIndex: 1300 }}
+          : { position: 'fixed', top: 0, left: 0, zIndex: 1300, ...PaperProps?.style }}
         hidden={!open}
         aria-hidden={!open}
         className={cn(

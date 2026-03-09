@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import DownloadHistory from '../DownloadHistory';
+import { useConfig } from '../../../hooks/useConfig';
 import { Job } from '../../../types/Job';
 import { VideoData } from '../../../types/VideoData';
 
@@ -19,6 +20,12 @@ jest.mock('../../../utils', () => ({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   }),
 }));
+
+jest.mock('../../../hooks/useConfig', () => ({
+  useConfig: jest.fn(),
+}));
+
+const mockUseConfig = useConfig as jest.MockedFunction<typeof useConfig>;
 
 describe('DownloadHistory', () => {
   const mockHandleExpandCell = jest.fn();
@@ -93,6 +100,9 @@ describe('DownloadHistory', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseConfig.mockReturnValue({
+      config: { channelVideosHotLoad: false },
+    } as ReturnType<typeof useConfig>);
   });
 
   test('renders with title and no jobs message when jobs array is empty', () => {
@@ -241,7 +251,7 @@ describe('DownloadHistory', () => {
     expect(pagination).toBeInTheDocument();
 
     // Find and click page 2 button
-    const page2Button = screen.getByLabelText(/page 2/i);
+    const page2Button = screen.getByLabelText(/go to page 2/i);
     await user.click(page2Button);
 
     // Should now show remaining 3 jobs
@@ -328,7 +338,7 @@ describe('DownloadHistory', () => {
     render(<DownloadHistory {...defaultProps} jobs={manyJobs} />);
 
     // Navigate to page 2
-    const page2Button = screen.getByLabelText(/page 2/i);
+    const page2Button = screen.getByLabelText(/go to page 2/i);
     await user.click(page2Button);
 
     // Wait for page change

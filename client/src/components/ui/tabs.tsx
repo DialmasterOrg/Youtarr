@@ -61,16 +61,17 @@ TabsContent.displayName = 'TabsContent';
 /* ─── MUI-compat Tabs/Tab ─────────────────────────────── */
 export interface TabsProps {
   value?: string | number;
-  onChange?: (event: React.SyntheticEvent, value: string | number) => void;
+  onChange?: (event: React.SyntheticEvent, value: any) => void;
   children?: React.ReactNode;
   className?: string;
   textColor?: string;
   indicatorColor?: string;
   variant?: string;
   scrollButtons?: string | boolean;
+  centered?: boolean;
 }
 
-const Tabs: React.FC<TabsProps> = ({ value, onChange, children, className }) => {
+const Tabs: React.FC<TabsProps> = ({ value, onChange, children, className, centered = false }) => {
   // MUI auto-assigns integer indices to Tab children that have no explicit value.
   const indexedChildren = React.Children.map(children, (child, index) => {
     if (!React.isValidElement(child)) return child;
@@ -93,7 +94,7 @@ const Tabs: React.FC<TabsProps> = ({ value, onChange, children, className }) => 
     >
       {/* MUI Tabs renders Tab children directly; Radix requires them inside a
           TabsList for the RovingFocusGroup context. We wrap automatically. */}
-      <TabsList>{indexedChildren}</TabsList>
+      <TabsList className={cn(centered && 'justify-center')}>{indexedChildren}</TabsList>
     </TabsRoot>
   );
 };

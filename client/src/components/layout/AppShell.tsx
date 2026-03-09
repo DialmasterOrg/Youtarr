@@ -163,8 +163,6 @@ export function AppShell({
         collapsed={collapsed}
         navItems={navItems}
         versionLabel={versionLabel}
-        ytDlpUpdateAvailable={ytDlpUpdateAvailable}
-        ytDlpUpdateTooltip={ytDlpUpdateTooltip}
         onCloseMobile={() => setDrawerOpenMobile(false)}
       />
 

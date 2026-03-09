@@ -13,7 +13,7 @@ interface FilterMenuProps {
   anchorEl: null | HTMLElement;
   handleClose: () => void;
   handleMenuItemClick: (
-    event: React.MouseEvent<HTMLLIElement, MouseEvent>,
+    event: React.MouseEvent<HTMLElement, MouseEvent>,
     channel: string
   ) => void;
   filter: string;

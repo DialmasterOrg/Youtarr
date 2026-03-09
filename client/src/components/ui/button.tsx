@@ -80,10 +80,11 @@ export interface ButtonProps
   loading?: boolean;
   component?: React.ElementType;
   to?: string;
+  sx?: React.CSSProperties;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, fullWidth, color = 'primary', asChild = false, startIcon, endIcon, loading, children, disabled, component: _component, to: _to, ...props }, ref) => {
+  ({ className, variant, size, fullWidth, color = 'primary', asChild = false, startIcon, endIcon, loading, children, disabled, component: _component, to: _to, sx, style, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button';
     const normalizedSize = size === 'small' ? 'sm' : size === 'medium' ? 'md' : size === 'large' ? 'lg' : size;
     
@@ -111,6 +112,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             normalizedSize === 'md' && 'MuiButton-sizeMedium',
             normalizedSize === 'lg' && 'MuiButton-sizeLarge'
           )}
+          style={{ ...sx, ...style }}
           {...props}
         >
           {children}
@@ -139,6 +141,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           normalizedSize === 'md' && 'MuiButton-sizeMedium',
           normalizedSize === 'lg' && 'MuiButton-sizeLarge'
         )}
+        style={{ ...sx, ...style }}
         {...props}
       >
         {loading ? (
@@ -183,6 +186,10 @@ const iconButtonVariants = cva(
         default: 'text-foreground/80 hover:bg-muted',
         primary: 'text-primary hover:bg-primary/10',
         secondary: 'text-secondary hover:bg-secondary/10',
+        success: 'text-success hover:bg-success/10',
+        warning: 'text-warning hover:bg-warning/10',
+        info: 'text-info hover:bg-info/10',
+        inherit: 'text-inherit hover:bg-muted',
         error: 'text-destructive hover:bg-destructive/10',
       },
     },
@@ -197,7 +204,7 @@ export interface IconButtonProps
   extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'color' | 'size'>,
     Omit<VariantProps<typeof iconButtonVariants>, 'size'> {
   size?: 'sm' | 'md' | 'lg' | 'small' | 'medium' | 'large' | null;
-  'aria-label': string;
+  'aria-label'?: string;
   asChild?: boolean;
   edge?: 'start' | 'end' | false;
   component?: React.ElementType;

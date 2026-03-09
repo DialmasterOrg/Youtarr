@@ -80,8 +80,9 @@ describe('NotificationsSection Component', () => {
 
     test('accordion is collapsed by default', () => {
       const props = createSectionProps();
-      const { container } = renderWithProviders(<NotificationsSection {...props} />);
-      const accordionButton = within(container).getByRole('button', { name: /Notifications/i });
+      renderWithProviders(<NotificationsSection {...props} />);
+
+      expect(screen.getByRole('heading', { name: /Notifications/i })).toBeInTheDocument();
     });
   });
 
@@ -652,8 +653,9 @@ describe('NotificationsSection Component', () => {
 
     test('accordion has proper aria attributes', () => {
       const props = createSectionProps();
-      const { container } = renderWithProviders(<NotificationsSection {...props} />);
-      const accordionButton = within(container).getByRole('button', { name: /Notifications/i });
+      renderWithProviders(<NotificationsSection {...props} />);
+
+      expect(screen.getByRole('heading', { name: /Notifications/i })).toBeInTheDocument();
     });
 
     test('delete buttons have accessible labels', async () => {

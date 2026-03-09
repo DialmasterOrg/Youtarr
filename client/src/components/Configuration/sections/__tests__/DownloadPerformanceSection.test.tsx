@@ -37,9 +37,9 @@ describe('DownloadPerformanceSection Component', () => {
     test('renders accordion with correct default state', () => {
       const props = createSectionProps();
       renderWithProviders(<DownloadPerformanceSection {...props} />);
+
       expect(screen.getByText('Download Performance Settings')).toBeInTheDocument();
-      // The accordion button should have aria-expanded="false" when collapsed
-      const accordionButton = screen.getByRole('button', { name: /download performance settings/i });
+      expect(screen.getByRole('heading', { name: /download performance settings/i })).toBeInTheDocument();
     });
 
     test('renders info alert when expanded', async () => {

@@ -78,8 +78,9 @@ describe('ApiKeysSection Component', () => {
 
     test('accordion is collapsed by default', () => {
       const props = createSectionProps();
-      const { container } = renderWithProviders(<ApiKeysSection {...props} />);
-      const accordionButton = within(container).getByRole('button', { name: /API Keys/i });
+      renderWithProviders(<ApiKeysSection {...props} />);
+
+      expect(screen.getByRole('heading', { name: /API Keys & External Access/i })).toBeInTheDocument();
     });
 
     test('shows loading skeleton initially', () => {
@@ -633,8 +634,9 @@ describe('ApiKeysSection Component', () => {
   describe('Accessibility', () => {
     test('accordion has proper aria attributes', () => {
       const props = createSectionProps();
-      const { container } = renderWithProviders(<ApiKeysSection {...props} />);
-      const accordionButton = within(container).getByRole('button', { name: /API Keys/i });
+      renderWithProviders(<ApiKeysSection {...props} />);
+
+      expect(screen.getByRole('heading', { name: /API Keys & External Access/i })).toBeInTheDocument();
     });
 
     test('Create Key button is accessible', async () => {

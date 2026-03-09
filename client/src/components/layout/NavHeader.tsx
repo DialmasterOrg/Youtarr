@@ -54,13 +54,70 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
 
   // --- State ---
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
   // --- Theme Computed Values ---
   const isLinear = themeMode === 'linear';
   const isFlat = themeMode === 'flat';
   const isTopNav = isLinear || isFlat;
   const showTopNavItems = isTopNav && !isMobile;
+  const topNavTitleInset = isTopNav && !isMobile ? 12 : 0;
+  const hasAppUpdate = token && !isPlatformManaged && updateAvailable && Boolean(updateTooltip);
+  const hasYtDlpUpdate = token && ytDlpUpdateAvailable && Boolean(ytDlpUpdateTooltip);
+  const hasAnyUpdate = Boolean(hasAppUpdate || hasYtDlpUpdate);
+
+  const sharedUpdateTooltip = useMemo(() => {
+    const sections: string[] = [];
+
+    if (hasAppUpdate && updateTooltip) {
+      sections.push(`Youtarr: ${updateTooltip}`);
+    }
+
+    if (hasYtDlpUpdate && ytDlpUpdateTooltip) {
+      sections.push(`yt-dlp: ${ytDlpUpdateTooltip}`);
+    }
+
+    return sections.join(' ');
+  }, [hasAppUpdate, hasYtDlpUpdate, updateTooltip, ytDlpUpdateTooltip]);
+
+  const sharedUpdateAriaLabel = hasAppUpdate && hasYtDlpUpdate
+    ? 'Youtarr and yt-dlp updates available'
+    : hasAppUpdate
+      ? 'Youtarr update available'
+      : 'yt-dlp update available';
+
+  const sharedUpdateIndicatorStyle: React.CSSProperties = useMemo(() => {
+    if (isPlayful) {
+      return {
+        width: 40,
+        height: 40,
+        borderRadius: 'var(--radius-ui)',
+        color: 'var(--warning-foreground)',
+        backgroundColor: 'var(--warning)',
+        border: '2px solid var(--border-strong)',
+        boxShadow: 'var(--shadow-hard)',
+      };
+    }
+
+    if (isFlat) {
+      return {
+        width: 34,
+        height: 34,
+        borderRadius: 'var(--radius-ui)',
+        color: 'var(--warning-foreground)',
+        backgroundColor: 'var(--warning)',
+        border: '2px solid var(--foreground)',
+      };
+    }
+
+    return {
+      width: 32,
+      height: 32,
+      borderRadius: '6px',
+      color: 'var(--warning)',
+      backgroundColor: 'transparent',
+      border: '1px solid rgba(255, 255, 255, 0.2)',
+    };
+  }, [isFlat, isPlayful]);
 
   const versionParts = useMemo(() => {
     if (!versionLabel) return [] as string[];
@@ -72,21 +129,16 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   // Close dropdown on route change
   useEffect(() => {
     setActiveKey(null);
-    setAnchorEl(null);
   }, [location.pathname]);
 
   // --- Event Handlers (Single Unit Hover) ---
 
   const handleUnitEnter = (event: React.MouseEvent<HTMLElement>, key: string) => {
-    // Only capture the 'wrapper' or 'button' as anchor.
-    // We use the currentTarget (the wrapper Box) to ensure alignment is predictable
-    setAnchorEl(event.currentTarget);
     setActiveKey(key);
   };
 
   const handleUnitLeave = () => {
     setActiveKey(null);
-    setAnchorEl(null);
   };
 
   // --- Styles Helper ---
@@ -127,10 +179,13 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
 
   const headerStyle: React.CSSProperties = {
     position: 'fixed',
-    backgroundColor: isLinear ? 'rgba(5, 5, 6, 0.8)' : 'var(--card)',
-    backdropFilter: isLinear ? 'blur(12px)' : 'none',
+    backgroundColor: isLinear ? 'rgba(5, 5, 6, 0.72)' : 'var(--card)',
+    backdropFilter: isLinear ? 'none' : 'none',
     border: isLinear ? 'none' : isFlat ? '2px solid var(--border)' : 'var(--appbar-border)',
     borderBottom: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : isFlat ? '2px solid var(--border)' : 'var(--appbar-border)',
+    borderTop: 'none',
+    borderLeft: 'none',
+    borderRight: 'none',
     boxShadow: 'none',
     backgroundImage: isLinear || isFlat ? 'none' : 'var(--appbar-pattern)',
     backgroundSize: '24px 24px',
@@ -188,11 +243,16 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
         {/* Title */}
         <Box
           className="flex items-center min-w-0"
-          style={{ height: APP_BAR_TOGGLE_SIZE, marginRight: showTopNavItems ? 32 : 0 }}
+          style={{
+            height: APP_BAR_TOGGLE_SIZE,
+            marginRight: showTopNavItems ? 32 : 0,
+          }}
         >
           <RouterLink
             to="/"
             style={{
+              display: 'inline-flex',
+              marginLeft: topNavTitleInset,
               textDecoration: 'none',
             }}
           >
@@ -317,23 +377,17 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                   <Typography variant="caption" style={{ color: 'var(--muted-foreground)', fontSize: '0.6rem' }}>
                     {versionParts[1]}
                   </Typography>
-                  {ytDlpUpdateAvailable && ytDlpUpdateTooltip && (
-                    <Tooltip title={ytDlpUpdateTooltip} placement="bottom" arrow>
-                      <span className="inline-flex text-warning">
-                        <DownloadIcon size={10} />
-                      </span>
-                    </Tooltip>
-                  )}
                 </Box>
               )}
             </Box>
           )}
 
-          {token && !isPlatformManaged && updateAvailable && updateTooltip && (
-            <Tooltip title={updateTooltip} placement="bottom" arrow>
+          {hasAnyUpdate && sharedUpdateTooltip && (
+            <Tooltip title={sharedUpdateTooltip} placement="bottom" arrow>
               <IconButton
-                aria-label="new version available"
-                className="text-white bg-warning hover:bg-warning/90 rounded-full mr-1"
+                aria-label={sharedUpdateAriaLabel}
+                className="mr-1"
+                style={sharedUpdateIndicatorStyle}
               >
                 <DownloadIcon />
               </IconButton>

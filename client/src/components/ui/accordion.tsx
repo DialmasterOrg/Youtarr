@@ -81,6 +81,7 @@ export interface AccordionProps {
   square?: boolean;
   children?: React.ReactNode;
   className?: string;
+  style?: React.CSSProperties;
   TransitionProps?: Record<string, unknown>;
 }
 
@@ -92,6 +93,7 @@ const Accordion: React.FC<AccordionProps> = ({
   disabled,
   children,
   className,
+  style,
   disableGutters: _dg,
 }) => {
   const id = React.useRef(`acc-${++_accordionId}`).current;
@@ -111,6 +113,7 @@ const Accordion: React.FC<AccordionProps> = ({
       }}
       disabled={disabled}
       className={cn('bg-card rounded-[var(--radius-ui)] border border-[var(--border-strong)]', className)}
+      style={style}
     >
       <AccordionItem value={id} className="border-0">
         {children}

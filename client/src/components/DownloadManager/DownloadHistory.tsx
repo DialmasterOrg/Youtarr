@@ -34,7 +34,7 @@ import PageControls from '../shared/PageControls';
     anchorEl?: Record<string, null | HTMLButtonElement>;
     setAnchorEl?: React.Dispatch<React.SetStateAction<Record<string, null | HTMLButtonElement>>>;
     isMobile: boolean;
-    token: string | null;
+    token?: string | null;
   }
 
   const DownloadHistory: React.FC<DownloadHistoryProps> = ({
@@ -45,7 +45,7 @@ import PageControls from '../shared/PageControls';
     anchorEl,
     setAnchorEl,
     isMobile,
-    token,
+    token = null,
   }) => {
     const [showNoVideoJobs, setShowNoVideoJobs] = useState(false);
     const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});

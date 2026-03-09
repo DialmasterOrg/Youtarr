@@ -62,7 +62,7 @@ const chipVariants = cva(
   }
 );
 
-export interface ChipProps extends VariantProps<typeof chipVariants> {
+export interface ChipProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'color'>, VariantProps<typeof chipVariants> {
   label?: React.ReactNode;
   onDelete?: () => void;
   onClick?: React.MouseEventHandler<HTMLElement>;

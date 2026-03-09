@@ -12,7 +12,6 @@ import {
   Paper,
 } from '../ui';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
-import { Download as DownloadIcon } from '../../lib/icons';
 import { StorageFooterWidget } from './StorageFooterWidget';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { NAV_BUTTON_OUTER_PADDING_X, NAV_DRAWER_PANEL_PADDING_X, NAV_DRAWER_PANEL_PADDING_X_COLLAPSED, NAV_MAIN_BUTTON_SIDE_PADDING } from './navLayoutConstants';
@@ -52,8 +51,6 @@ interface NavSidebarProps {
   collapsed: boolean;
   navItems: any[];
   versionLabel?: string;
-  ytDlpUpdateAvailable?: boolean;
-  ytDlpUpdateTooltip?: string;
   token: string | null;
   onCloseMobile: () => void;
 }
@@ -65,8 +62,6 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
   collapsed,
   navItems,
   versionLabel,
-  ytDlpUpdateAvailable = false,
-  ytDlpUpdateTooltip,
   token,
   onCloseMobile,
 }) => {
@@ -337,11 +332,6 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
             >
               {displayVersionLabel}
             </Typography>
-            {ytDlpUpdateAvailable && ytDlpUpdateTooltip && (
-              <Tooltip title={ytDlpUpdateTooltip} placement="right" arrow>
-                <DownloadIcon size={11} style={{ color: 'var(--warning, orange)' }} />
-              </Tooltip>
-            )}
           </div>
         </div>
       )}
@@ -361,13 +351,8 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <Typography variant="caption" color="text.secondary" style={{ fontWeight: 600 }}>
-              {versionLabel || 'yt-dlp'}
+              {versionLabel || 'Youtarr'}
             </Typography>
-            {ytDlpUpdateAvailable && ytDlpUpdateTooltip && (
-              <Tooltip title={ytDlpUpdateTooltip} placement="top" arrow>
-                <DownloadIcon size={11} style={{ color: 'var(--warning, orange)' }} />
-              </Tooltip>
-            )}
           </div>
           <StorageFooterWidget
             token={token}

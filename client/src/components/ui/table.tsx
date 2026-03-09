@@ -3,12 +3,20 @@ import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 
 // Simple HTML table shims replacing MUI Table components
 
-export const TableContainer: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ children, className = '', ...props }) => (
-  <div className={`w-full overflow-x-auto ${className}`} {...props}>{children}</div>
+interface TableContainerProps extends React.HTMLAttributes<HTMLDivElement> {
+  component?: React.ElementType;
+}
+
+export const TableContainer: React.FC<TableContainerProps> = ({ children, className = '', component: Component = 'div', ...props }) => (
+  <Component className={`w-full overflow-x-auto ${className}`} {...props}>{children}</Component>
 );
 
-export const Table: React.FC<React.TableHTMLAttributes<HTMLTableElement>> = ({ children, className = '', ...props }) => (
-  <table className={`w-full text-sm border-collapse ${className}`} {...props}>{children}</table>
+interface TableProps extends React.TableHTMLAttributes<HTMLTableElement> {
+  size?: 'small' | 'medium';
+}
+
+export const Table: React.FC<TableProps> = ({ children, className = '', size = 'medium', ...props }) => (
+  <table className={`w-full border-collapse ${size === 'small' ? 'text-xs' : 'text-sm'} ${className}`} {...props}>{children}</table>
 );
 
 export const TableHead: React.FC<React.HTMLAttributes<HTMLTableSectionElement>> = ({ children, className = '', ...props }) => (
@@ -19,11 +27,15 @@ export const TableBody: React.FC<React.HTMLAttributes<HTMLTableSectionElement>> 
   <tbody className={`divide-y divide-border ${className}`} {...props}>{children}</tbody>
 );
 
-export const TableRow: React.FC<React.HTMLAttributes<HTMLTableRowElement>> = ({ children, className = '', ...props }) => (
-  <tr className={`hover:bg-muted/30 transition-colors ${className}`} {...props}>{children}</tr>
+interface TableRowProps extends React.HTMLAttributes<HTMLTableRowElement> {
+  hover?: boolean;
+}
+
+export const TableRow: React.FC<TableRowProps> = ({ children, className = '', hover = false, ...props }) => (
+  <tr className={`${hover ? 'hover:bg-muted/30 ' : ''}transition-colors ${className}`} {...props}>{children}</tr>
 );
 
-interface TableCellProps extends React.TdHTMLAttributes<HTMLTableCellElement> {
+interface TableCellProps extends Omit<React.TdHTMLAttributes<HTMLTableCellElement>, 'align'> {
   component?: 'th' | 'td';
   align?: 'left' | 'center' | 'right' | 'inherit' | 'justify';
 }

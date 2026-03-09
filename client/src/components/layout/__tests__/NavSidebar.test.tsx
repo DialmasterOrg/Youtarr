@@ -219,4 +219,14 @@ describe('NavSidebar – collapsed state', () => {
     expect(screen.queryByText('Core')).not.toBeInTheDocument();
     expect(screen.queryByText('Appearance')).not.toBeInTheDocument();
   });
+
+  it('does not render a yt-dlp update badge in the sidebar footer', () => {
+    renderSidebar('/channels', {
+      versionLabel: 'v1.59.0 • yt-dlp: 2025.09.23',
+      ytDlpUpdateAvailable: true,
+      ytDlpUpdateTooltip: 'yt-dlp update available (2025.10.01). Go to Settings to update.',
+    });
+
+    expect(screen.queryByLabelText(/yt-dlp update available/i)).not.toBeInTheDocument();
+  });
 });

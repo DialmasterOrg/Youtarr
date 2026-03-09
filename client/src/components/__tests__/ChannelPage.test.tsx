@@ -3,6 +3,7 @@ import '@testing-library/jest-dom';
 import ChannelPage from '../ChannelPage';
 import { BrowserRouter } from 'react-router-dom';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { useConfig } from '../../hooks/useConfig';
 
 const dialogPropsStore: { current: any } = { current: null };
 
@@ -34,6 +35,7 @@ jest.mock('../ChannelPage/ChannelSettingsDialog', () => ({
 
 // Mock custom hooks
 jest.mock('../../hooks/useMediaQuery');
+jest.mock('../../hooks/useConfig');
 
 // Mock react-router-dom
 const mockParams = { channel_id: 'UC123456' };
@@ -58,7 +60,29 @@ describe('ChannelPage Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockFetch.mockReset();
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue(mockChannel),
+    });
     (useMediaQuery as jest.Mock).mockReturnValue(false); // Default to desktop
+    (useConfig as jest.Mock).mockReturnValue({
+      config: { preferredResolution: '1080' },
+      initialConfig: null,
+      isPlatformManaged: {
+        plexUrl: false,
+        authEnabled: true,
+        useTmpForDownloads: false,
+      },
+      deploymentEnvironment: {
+        platform: null,
+        isWsl: false,
+      },
+      loading: false,
+      error: null,
+      refetch: jest.fn(),
+      setConfig: jest.fn(),
+      setInitialConfig: jest.fn(),
+    });
     dialogPropsStore.current = null;
   });
 

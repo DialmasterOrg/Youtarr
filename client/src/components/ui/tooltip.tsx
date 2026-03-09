@@ -54,7 +54,7 @@ const Tooltip: React.FC<TooltipProps> = ({
           <div
             role="tooltip"
             className={cn(
-              'z-50 max-w-xs rounded-md bg-foreground px-2.5 py-1.5',
+              'z-[1700] max-w-xs rounded-md bg-foreground px-2.5 py-1.5',
               'text-xs font-medium text-background leading-snug',
               'shadow-lg select-none break-words',
               'absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5',
@@ -80,7 +80,7 @@ const Tooltip: React.FC<TooltipProps> = ({
             align={align}
             sideOffset={arrow ? 4 : 6}
             className={cn(
-              'z-50 max-w-xs rounded-md bg-foreground px-2.5 py-1.5',
+              'z-[1700] max-w-xs rounded-md bg-foreground px-2.5 py-1.5',
               'text-xs font-medium text-background leading-snug',
               'shadow-lg animate-fade-in',
               'select-none break-words',

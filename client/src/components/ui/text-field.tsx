@@ -2,8 +2,8 @@ import React, { useId } from 'react';
 import { cn } from '../../lib/cn';
 
 export interface TextFieldProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
-  label?: string;
-  helperText?: string;
+  label?: React.ReactNode;
+  helperText?: React.ReactNode;
   error?: boolean;
   fullWidth?: boolean;
   size?: 'small' | 'medium';
@@ -17,7 +17,7 @@ export interface TextFieldProps extends Omit<React.InputHTMLAttributes<HTMLInput
     endAdornment?: React.ReactNode;
     readOnly?: boolean;
   };
-  inputProps?: React.InputHTMLAttributes<HTMLInputElement>;
+  inputProps?: React.InputHTMLAttributes<HTMLInputElement> & Record<`data-${string}`, string | number | boolean | undefined>;
   select?: boolean;
   SelectProps?: Record<string, unknown>;
   type?: string;

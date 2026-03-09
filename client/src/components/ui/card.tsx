@@ -35,26 +35,29 @@ export interface CardActionAreaProps extends React.HTMLAttributes<HTMLElement> {
   component?: React.ElementType;
   to?: string;
   href?: string;
+  disabled?: boolean;
 }
 const CardActionArea = React.forwardRef<HTMLElement, CardActionAreaProps>(
-  ({ className, children, onClick, component: Component = 'div', to, href, ...props }, ref) => {
+  ({ className, children, onClick, component: Component = 'div', to, href, disabled = false, ...props }, ref) => {
     const isDiv = Component === 'div';
     return React.createElement(
       Component,
       {
         ref,
         ...(isDiv && { role: 'button', tabIndex: 0 }),
-        onClick,
+        onClick: disabled ? undefined : onClick,
         ...(isDiv && {
           onKeyDown: (e: React.KeyboardEvent) => {
-            if (e.key === 'Enter' || e.key === ' ') onClick?.(e as any);
+            if (!disabled && (e.key === 'Enter' || e.key === ' ')) onClick?.(e as any);
           },
         }),
         className: cn(
           'w-full cursor-pointer rounded-[var(--radius-ui)] outline-none',
           'focus-visible:ring-2 focus-visible:ring-ring',
+          disabled && 'pointer-events-none opacity-50',
           className
         ),
+        ...(disabled && { 'aria-disabled': true }),
         ...(to !== undefined && { to }),
         ...(href !== undefined && { href }),
         ...props,
@@ -83,11 +86,12 @@ export interface CardHeaderProps extends Omit<React.HTMLAttributes<HTMLDivElemen
   action?: React.ReactNode;
   titleTypographyProps?: Record<string, unknown>;
   subheaderTypographyProps?: Record<string, unknown>;
+  align?: 'left' | 'center' | 'right';
 }
 
 const CardHeader = React.forwardRef<HTMLDivElement, CardHeaderProps>(
-  ({ className, title, subheader, avatar, action, children, ...props }, ref) => (
-    <div ref={ref} className={cn('flex items-start gap-3 px-4 py-3', className)} {...props}>
+  ({ className, title, subheader, avatar, action, children, align = 'left', ...props }, ref) => (
+    <div ref={ref} className={cn('flex items-start gap-3 px-4 py-3', align === 'center' && 'text-center justify-center', align === 'right' && 'text-right justify-end', className)} {...props}>
       {avatar && <div className="shrink-0">{avatar}</div>}
       <div className="flex-1 min-w-0">
         {title && <div className="font-display font-bold text-base text-foreground leading-snug">{title}</div>}

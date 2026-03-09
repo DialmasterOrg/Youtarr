@@ -7,7 +7,7 @@ type BoxOwnProps<C extends React.ElementType = 'div'> = AsProp<C> & {
   children?: React.ReactNode;
   /** sx is accepted but ignored – convert to className when migrating */
   sx?: Record<string, unknown>;
-  component?: React.ElementType;
+  component?: C;
   display?: string;
   width?: string | number;
   fontWeight?: string | number;
