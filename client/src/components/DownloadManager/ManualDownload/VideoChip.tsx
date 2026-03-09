@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Chip, Tooltip, Grow, Popover, Typography } from '../../ui';
+import { Chip, Tooltip, Grow, Popover, Typography, IconButton } from '../../ui';
 import { Close as CloseIcon, Lock } from '../../../lib/icons';
 import { History as HistoryIcon } from 'lucide-react';
 import { VideoInfo } from './types';
@@ -78,13 +78,14 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
         <div style={{ fontWeight: 'bold', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 3 }}>
           {truncateText(video.channelName, 20)}
           {video.isAlreadyDownloaded && (
-            <button
-              type="button"
+            <IconButton
+              size="small"
+              aria-label="Download history"
               onClick={handlePopoverOpen}
               style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 0, marginLeft: 4 }}
             >
               <HistoryIcon size={14} data-testid="HistoryIcon" style={{ color: 'var(--muted-foreground)' }} />
-            </button>
+            </IconButton>
           )}
         </div>
         <div style={{ fontSize: '0.7rem' }}>

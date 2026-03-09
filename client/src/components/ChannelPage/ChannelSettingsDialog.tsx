@@ -6,9 +6,11 @@ import {
   DialogActions,
   Button,
   FormControl,
+  FormControlLabel,
   InputLabel,
   Select,
   MenuItem,
+  Switch,
   TextField,
   CircularProgress,
   Alert,
@@ -20,8 +22,6 @@ import {
   ListItemIcon,
   Link,
   Collapse,
-  Switch,
-  FormControlLabel,
   ListItemButton,
   Tab,
   Tabs,
@@ -43,6 +43,7 @@ interface ChannelSettings {
   default_rating: string | null;
   auto_download_enabled_tabs: string | null;
   audio_format: string | null;
+  skip_video_folder: boolean | null;
 }
 
 interface FilterPreviewVideo {
@@ -104,7 +105,8 @@ function ChannelSettingsDialog({
     title_filter_regex: null,
     default_rating: null,
     audio_format: null,
-    auto_download_enabled_tabs: null
+    auto_download_enabled_tabs: null,
+    skip_video_folder: null
   });
   const [originalSettings, setOriginalSettings] = useState<ChannelSettings>({
     sub_folder: null,
@@ -114,7 +116,8 @@ function ChannelSettingsDialog({
     title_filter_regex: null,
     default_rating: null,
     audio_format: null,
-    auto_download_enabled_tabs: null
+    auto_download_enabled_tabs: null,
+    skip_video_folder: null
   });
   const [subfolders, setSubfolders] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -194,15 +197,20 @@ function ChannelSettingsDialog({
         }
 
         const settingsData = await settingsResponse.json();
-        const loadedSettings = {
-          sub_folder: settingsData.sub_folder ?? null,
-          video_quality: settingsData.video_quality ?? null,
-          min_duration: settingsData.min_duration ?? null,
-          max_duration: settingsData.max_duration ?? null,
-          title_filter_regex: settingsData.title_filter_regex ?? null,
-          default_rating: settingsData.default_rating ?? null,
-          audio_format: settingsData.audio_format ?? null,
-          auto_download_enabled_tabs: settingsData.auto_download_enabled_tabs ?? 'video'
+        const loadedSettings: ChannelSettings = {
+          sub_folder: settingsData.sub_folder || null,
+          video_quality: settingsData.video_quality || null,
+          min_duration: settingsData.min_duration || null,
+          max_duration: settingsData.max_duration || null,
+          title_filter_regex: settingsData.title_filter_regex || null,
+          auto_download_enabled_tabs: settingsData.auto_download_enabled_tabs ?? 'video',
+          audio_format: settingsData.audio_format || null,
+          default_rating: Object.prototype.hasOwnProperty.call(settingsData, 'default_rating')
+            ? settingsData.default_rating
+            : null,
+          skip_video_folder: Object.prototype.hasOwnProperty.call(settingsData, 'skip_video_folder')
+            ? settingsData.skip_video_folder
+            : null,
         };
         setSettings(loadedSettings);
         setOriginalSettings(loadedSettings);
@@ -260,7 +268,8 @@ function ChannelSettingsDialog({
           title_filter_regex: settings.title_filter_regex || null,
           default_rating: settings.default_rating || null,
           audio_format: settings.audio_format || null,
-          auto_download_enabled_tabs: settings.auto_download_enabled_tabs
+          auto_download_enabled_tabs: settings.auto_download_enabled_tabs,
+          skip_video_folder: settings.skip_video_folder
         })
       });
 
@@ -288,9 +297,14 @@ function ChannelSettingsDialog({
         min_duration: result?.settings?.min_duration ?? settings.min_duration ?? null,
         max_duration: result?.settings?.max_duration ?? settings.max_duration ?? null,
         title_filter_regex: result?.settings?.title_filter_regex ?? settings.title_filter_regex ?? null,
-        default_rating: result?.settings?.default_rating ?? settings.default_rating ?? null,
         audio_format: result?.settings?.audio_format ?? settings.audio_format ?? null,
-        auto_download_enabled_tabs: result?.settings?.auto_download_enabled_tabs ?? settings.auto_download_enabled_tabs ?? null
+        default_rating: result?.settings && Object.prototype.hasOwnProperty.call(result.settings, 'default_rating')
+          ? result.settings.default_rating
+          : settings.default_rating ?? null,
+        auto_download_enabled_tabs: result?.settings?.auto_download_enabled_tabs ?? settings.auto_download_enabled_tabs ?? null,
+        skip_video_folder: result?.settings && Object.prototype.hasOwnProperty.call(result.settings, 'skip_video_folder')
+          ? result.settings.skip_video_folder
+          : settings.skip_video_folder ?? null,
       };
 
       setSettings(updatedSettings);
@@ -337,9 +351,10 @@ function ChannelSettingsDialog({
            settings.min_duration !== originalSettings.min_duration ||
            settings.max_duration !== originalSettings.max_duration ||
            settings.title_filter_regex !== originalSettings.title_filter_regex ||
-           settings.default_rating !== originalSettings.default_rating ||
            settings.audio_format !== originalSettings.audio_format ||
-           settings.auto_download_enabled_tabs !== originalSettings.auto_download_enabled_tabs;
+           settings.default_rating !== originalSettings.default_rating ||
+          settings.auto_download_enabled_tabs !== originalSettings.auto_download_enabled_tabs ||
+          settings.skip_video_folder !== originalSettings.skip_video_folder;
   };
 
   const handlePreviewFilter = async () => {
@@ -494,6 +509,24 @@ function ChannelSettingsDialog({
                 MP3 files are saved at 192kbps in the same folder as videos.
               </Typography>
             )}
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={!!settings.skip_video_folder}
+                  onChange={(e) => setSettings({
+                    ...settings,
+                    skip_video_folder: e.target.checked ? true : null
+                  })}
+                  color="primary"
+                />
+              }
+              label="Flat file structure (no video subfolders)"
+              style={{ marginTop: 8 }}
+            />
+            <Typography variant="caption" color="text.secondary" style={{ marginTop: -4, marginBottom: 8, display: 'block' }}>
+              When enabled, video files are saved directly in the channel folder instead of individual video subfolders. Only affects new downloads.
+            </Typography>
 
             <Alert severity="info" style={{ marginBottom: 16 }}>
               <Typography variant="body2" style={{ fontWeight: 'bold', marginBottom: 8 }}>

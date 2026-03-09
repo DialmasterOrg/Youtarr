@@ -27,9 +27,9 @@ Download specific YouTube videos manually without subscribing to channels.
    - Repeat for each video you want to queue
    - Every URL is validated and previewed with video metadata before it is added
 
-3. **Customize resolution settings** (optional)
-   - Choose a specific resolution for this download
-   - Or leave it at the default to use your global quality setting
+3. **Customize download settings** (optional)
+   - Choose a specific resolution for this download, or leave it at the default to use your global quality setting
+   - Enable **Flat file structure (no video subfolders)** to download files directly into the channel folder without creating individual video subfolders
 
 4. **Click "Start Download"**
    - The download will begin immediately
@@ -61,6 +61,7 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
    - Click the settings icon (gear) to access channel settings:
      - **Custom subfolder**: Organize channels into separate media libraries (e.g., `__kids`, `__music`)
      - **Quality override**: Set a channel-specific resolution preference that overrides the global setting
+     - **Flat file structure**: Download videos directly into the channel folder without individual video subfolders (see [Folder Structure](YOUTARR_DOWNLOADS_FOLDER_STRUCTURE.md))
      - **Auto-download controls**: Enable/disable automatic downloads separately for:
        - `Videos`
        - `Shorts`

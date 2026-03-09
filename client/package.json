@@ -1,6 +1,6 @@
 {
   "name": "client",
-  "version": "1.59.0",
+  "version": "1.60.0",
   "private": true,
   "type": "module",
   "proxy": "http://localhost:3011",
@@ -45,6 +45,7 @@
     "typescript": "5.9.3"
   },
   "scripts": {
+    "postinstall": "npx msw init public/ --save",
     "dev": "vite",
     "start": "vite",
     "build": "vite build",
@@ -71,6 +72,9 @@
     ]
   },
   "devDependencies": {
+    "@storybook/addon-a11y": "^10.2.10",
+    "@storybook/addon-links": "^10.2.10",
+    "@storybook/react": "^10.2.10",
     "@storybook/react-vite": "^10.2.10",
     "@swc/core": "^1.13.5",
     "@swc/jest": "^0.2.37",
@@ -85,9 +89,16 @@
     "postcss": "^8.5.6",
     "storybook": "^10.2.10",
     "tailwindcss": "^3.4.17",
+    "msw": "^2.12.7",
+    "msw-storybook-addon": "^2.0.6",
     "ts-node": "^10.9.2",
     "vite": "^7.3.1",
     "vite-tsconfig-paths": "^6.0.5"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   },
   "overrides": {
     "jsdom": {

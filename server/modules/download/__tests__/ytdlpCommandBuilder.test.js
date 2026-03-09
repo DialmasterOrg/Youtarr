@@ -383,21 +383,21 @@ describe('YtdlpCommandBuilder', () => {
       expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');
     });
 
-    it('should return base filters when filterConfig.hasFilters is false', () => {
-      const filterConfig = { hasFilters: false };
+    it('should return base filters when filterConfig.hasGroupingCriteria is false', () => {
+      const filterConfig = { hasGroupingCriteria: false };
       const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
       expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');
     });
 
-    it('should return base filters when filterConfig.hasFilters() returns false', () => {
-      const filterConfig = { hasFilters: () => false };
+    it('should return base filters when filterConfig.hasGroupingCriteria() returns false', () => {
+      const filterConfig = { hasGroupingCriteria: () => false };
       const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
       expect(result).toBe('availability!=subscriber_only & !is_live & live_status!=is_upcoming');
     });
 
     it('should add minimum duration filter when specified', () => {
       const filterConfig = {
-        hasFilters: true,
+        hasGroupingCriteria: true,
         minDuration: 300 // 5 minutes
       };
       const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
@@ -406,7 +406,7 @@ describe('YtdlpCommandBuilder', () => {
 
     it('should add maximum duration filter when specified', () => {
       const filterConfig = {
-        hasFilters: true,
+        hasGroupingCriteria: true,
         maxDuration: 600 // 10 minutes
       };
       const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
@@ -416,7 +416,7 @@ describe('YtdlpCommandBuilder', () => {
 
     it('should add both min and max duration filters when specified', () => {
       const filterConfig = {
-        hasFilters: true,
+        hasGroupingCriteria: true,
         minDuration: 60, // 1 minute
         maxDuration: 1800 // 30 minutes
       };
@@ -426,7 +426,7 @@ describe('YtdlpCommandBuilder', () => {
 
     it('should add title regex filter when specified', () => {
       const filterConfig = {
-        hasFilters: true,
+        hasGroupingCriteria: true,
         titleFilterRegex: 'tutorial'
       };
       const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
@@ -435,7 +435,7 @@ describe('YtdlpCommandBuilder', () => {
 
     it('should escape backslashes in title regex', () => {
       const filterConfig = {
-        hasFilters: true,
+        hasGroupingCriteria: true,
         titleFilterRegex: '\\d+' // Match one or more digits
       };
       const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
@@ -444,7 +444,7 @@ describe('YtdlpCommandBuilder', () => {
 
     it('should escape single quotes in title regex', () => {
       const filterConfig = {
-        hasFilters: true,
+        hasGroupingCriteria: true,
         titleFilterRegex: 'Let\'s Go'
       };
       const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
@@ -453,7 +453,7 @@ describe('YtdlpCommandBuilder', () => {
 
     it('should escape both backslashes and quotes in complex regex', () => {
       const filterConfig = {
-        hasFilters: true,
+        hasGroupingCriteria: true,
         titleFilterRegex: 'Part \\d+: It\'s Here'
       };
       const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
@@ -462,7 +462,7 @@ describe('YtdlpCommandBuilder', () => {
 
     it('should combine all filters when specified', () => {
       const filterConfig = {
-        hasFilters: true,
+        hasGroupingCriteria: true,
         minDuration: 120,
         maxDuration: 900,
         titleFilterRegex: 'review'
@@ -473,7 +473,7 @@ describe('YtdlpCommandBuilder', () => {
 
     it('should handle zero as minimum duration', () => {
       const filterConfig = {
-        hasFilters: true,
+        hasGroupingCriteria: true,
         minDuration: 0
       };
       const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
@@ -482,7 +482,7 @@ describe('YtdlpCommandBuilder', () => {
 
     it('should handle zero as maximum duration', () => {
       const filterConfig = {
-        hasFilters: true,
+        hasGroupingCriteria: true,
         maxDuration: 0
       };
       const result = YtdlpCommandBuilder.buildMatchFilters(filterConfig);
@@ -491,7 +491,7 @@ describe('YtdlpCommandBuilder', () => {
 
     it('should ignore null minimum duration', () => {
       const filterConfig = {
-        hasFilters: true,
+        hasGroupingCriteria: true,
         minDuration: null,
         maxDuration: 600
       };
@@ -501,7 +501,7 @@ describe('YtdlpCommandBuilder', () => {
 
     it('should ignore undefined maximum duration', () => {
       const filterConfig = {
-        hasFilters: true,
+        hasGroupingCriteria: true,
         minDuration: 180,
         maxDuration: undefined
       };
@@ -511,7 +511,7 @@ describe('YtdlpCommandBuilder', () => {
 
     it('should handle empty string title regex as no filter', () => {
       const filterConfig = {
-        hasFilters: true,
+        hasGroupingCriteria: true,
         titleFilterRegex: '',
         minDuration: 60
       };
@@ -712,7 +712,7 @@ describe('YtdlpCommandBuilder', () => {
 
     it('should apply filterConfig with minimum duration', () => {
       const filterConfig = {
-        hasFilters: true,
+        hasGroupingCriteria: true,
         minDuration: 300
       };
       const result = YtdlpCommandBuilder.getBaseCommandArgs('1080', false, null, filterConfig);
@@ -722,7 +722,7 @@ describe('YtdlpCommandBuilder', () => {
 
     it('should apply filterConfig with maximum duration', () => {
       const filterConfig = {
-        hasFilters: true,
+        hasGroupingCriteria: true,
         maxDuration: 900
       };
       const result = YtdlpCommandBuilder.getBaseCommandArgs('1080', false, null, filterConfig);
@@ -732,7 +732,7 @@ describe('YtdlpCommandBuilder', () => {
 
     it('should apply filterConfig with title regex', () => {
       const filterConfig = {
-        hasFilters: true,
+        hasGroupingCriteria: true,
         titleFilterRegex: 'gameplay'
       };
       const result = YtdlpCommandBuilder.getBaseCommandArgs('1080', false, null, filterConfig);
@@ -742,7 +742,7 @@ describe('YtdlpCommandBuilder', () => {
 
     it('should apply filterConfig with all filters combined', () => {
       const filterConfig = {
-        hasFilters: true,
+        hasGroupingCriteria: true,
         minDuration: 60,
         maxDuration: 600,
         titleFilterRegex: 'tutorial'
@@ -754,7 +754,7 @@ describe('YtdlpCommandBuilder', () => {
 
     it('should work with subfolder and filterConfig together', () => {
       const filterConfig = {
-        hasFilters: true,
+        hasGroupingCriteria: true,
         minDuration: 120
       };
       const result = YtdlpCommandBuilder.getBaseCommandArgs('1080', false, 'MyChannel', filterConfig);

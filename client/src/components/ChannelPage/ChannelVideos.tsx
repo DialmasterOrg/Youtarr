@@ -530,6 +530,8 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           allowRedownload: settings.allowRedownload,
           subfolder: settings.subfolder,
           audioFormat: settings.audioFormat,
+          rating: settings.rating,
+          skipVideoFolder: settings.skipVideoFolder,
         }
       : undefined;
 

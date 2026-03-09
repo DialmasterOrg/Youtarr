@@ -28,6 +28,7 @@ import {
 } from '../../../lib/icons';
 import { DownloadSettings } from './types';
 import { SubfolderAutocomplete } from '../../shared/SubfolderAutocomplete';
+import RatingBadge from '../../shared/RatingBadge';
 import { useSubfolders } from '../../../hooks/useSubfolders';
 
 interface DownloadSettingsDialogProps {
@@ -42,6 +43,7 @@ interface DownloadSettingsDialogProps {
   defaultResolutionSource?: 'channel' | 'global';
   defaultAudioFormat?: string | null; // For channel audio format default
   defaultAudioFormatSource?: 'channel' | 'global';
+  defaultRating?: string | null;
   token?: string | null; // For fetching subfolders
 }
 
@@ -66,6 +68,7 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   defaultResolutionSource = 'global',
   defaultAudioFormat = null,
   defaultAudioFormatSource = 'global',
+  defaultRating = null,
   token = null
 }) => {
   const [useCustomSettings, setUseCustomSettings] = useState(false);
@@ -75,6 +78,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [subfolderOverride, setSubfolderOverride] = useState<string | null>(null);
   const [audioFormat, setAudioFormat] = useState<string | null>(defaultAudioFormat);
+  const [rating, setRating] = useState<string | null>(defaultRating);
+  const [skipVideoFolder, setSkipVideoFolder] = useState(false);
 
   // Fetch available subfolders
   const { subfolders, loading: subfoldersLoading } = useSubfolders(token);
@@ -115,12 +120,22 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       setAllowRedownload(false);
       setSubfolderOverride(null);
       setAudioFormat(defaultAudioFormat);
+      setRating(defaultRating ?? null);
+      setSkipVideoFolder(false);
     }
-  }, [open, defaultAudioFormat]);
+  }, [open, defaultAudioFormat, defaultRating]);
 
   const handleUseCustomToggle = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setUseCustomSettings(event.target.checked);
+    const checked = event.target.checked;
+    setUseCustomSettings(checked);
     setHasUserInteracted(true);
+    if (checked) {
+      if (rating === null || rating === undefined) {
+        if (defaultRating !== null) {
+          setRating(defaultRating);
+        }
+      }
+    }
   };
 
   const handleResolutionChange = (event: SelectChangeEvent<string>) => {
@@ -175,7 +190,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
     // Include subfolder override if set (only for manual mode)
     const hasOverride = useCustomSettings || allowRedownload ||
       (mode === 'manual' && subfolderOverride !== null) ||
-      (mode === 'manual' && audioFormat !== null);
+      (mode === 'manual' && audioFormat !== null) ||
+      (mode === 'manual' && skipVideoFolder);
 
     if (hasOverride) {
       onConfirm({
@@ -184,7 +200,8 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
         allowRedownload,
         subfolder: mode === 'manual' ? subfolderOverride : undefined,
         audioFormat: mode === 'manual' ? audioFormat : undefined,
-        rating: 'NR',
+        rating: useCustomSettings ? (rating === null ? 'NR' : (rating ?? undefined)) : undefined,
+        skipVideoFolder: mode === 'manual' ? (useCustomSettings ? skipVideoFolder : false) : undefined
       });
     } else {
       onConfirm(null); // Use defaults
@@ -432,6 +449,58 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                       </FormHelperText>
                     )}
                   </FormControl>
+                    <Typography variant="subtitle2" color="text.secondary" className="mb-2 mt-4">
+                    Content Rating Override
+                  </Typography>
+
+                    <FormControl fullWidth className="mb-4">
+                    <InputLabel id="rating-select-label" shrink>Content Rating</InputLabel>
+                    <Select
+                      labelId="rating-select-label"
+                      id="rating-select"
+                      value={rating || ''}
+                      label="Content Rating"
+                      displayEmpty
+                      onChange={(e) => {
+                        const val = e.target.value as string;
+                        setRating(val === '' ? null : val);
+                        setHasUserInteracted(true);
+                      }}
+                    >
+                      <MenuItem value="">
+                        <em>No Rating</em>
+                      </MenuItem>
+                      <MenuItem value="G"><RatingBadge rating="G" size="small" style={{ marginRight: 8 }} /> G</MenuItem>
+                      <MenuItem value="PG"><RatingBadge rating="PG" size="small" style={{ marginRight: 8 }} /> PG</MenuItem>
+                      <MenuItem value="PG-13"><RatingBadge rating="PG-13" size="small" style={{ marginRight: 8 }} /> PG-13</MenuItem>
+                      <MenuItem value="R"><RatingBadge rating="R" size="small" style={{ marginRight: 8 }} /> R</MenuItem>
+                      <MenuItem value="NC-17"><RatingBadge rating="NC-17" size="small" style={{ marginRight: 8 }} /> NC-17</MenuItem>
+                      <MenuItem value="TV-Y"><RatingBadge rating="TV-Y" size="small" style={{ marginRight: 8 }} /> TV-Y</MenuItem>
+                      <MenuItem value="TV-Y7"><RatingBadge rating="TV-Y7" size="small" style={{ marginRight: 8 }} /> TV-Y7</MenuItem>
+                      <MenuItem value="TV-G"><RatingBadge rating="TV-G" size="small" style={{ marginRight: 8 }} /> TV-G</MenuItem>
+                      <MenuItem value="TV-PG"><RatingBadge rating="TV-PG" size="small" style={{ marginRight: 8 }} /> TV-PG</MenuItem>
+                      <MenuItem value="TV-14"><RatingBadge rating="TV-14" size="small" style={{ marginRight: 8 }} /> TV-14</MenuItem>
+                      <MenuItem value="TV-MA"><RatingBadge rating="TV-MA" size="small" style={{ marginRight: 8 }} /> TV-MA</MenuItem>
+                    </Select>
+                  </FormControl>
+
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={skipVideoFolder}
+                        onChange={(e) => {
+                          setSkipVideoFolder(e.target.checked);
+                          setHasUserInteracted(true);
+                        }}
+                        color="primary"
+                      />
+                    }
+                    label="Flat file structure (no video subfolders)"
+                    className="mb-1"
+                  />
+                  <Typography variant="caption" color="text.secondary" className="mb-4 block">
+                    Save files directly in the channel folder instead of individual video subfolders.
+                  </Typography>
                 </>
               )}
             </Box>

@@ -15,6 +15,39 @@ if (typeof globalThis.Request === 'undefined') {
   } as any;
 }
 
+// Minimal Response polyfill for MSW and other libraries
+if (typeof globalThis.Response === 'undefined') {
+  globalThis.Response = class Response {
+    body: any;
+    status: number;
+    statusText: string;
+    headers: Map<string, string>;
+    
+    constructor(body?: any, init?: { status?: number; statusText?: string; headers?: Record<string, string> }) {
+      this.body = body;
+      this.status = init?.status ?? 200;
+      this.statusText = init?.statusText ?? 'OK';
+      this.headers = new Map(Object.entries(init?.headers ?? {}));
+    }
+    
+    async json() {
+      return JSON.parse(this.body);
+    }
+    
+    async text() {
+      return this.body;
+    }
+    
+    clone() {
+      return new Response(this.body, {
+        status: this.status,
+        statusText: this.statusText,
+        headers: Object.fromEntries(this.headers),
+      });
+    }
+  } as any;
+}
+
 // Some libs (and JSDOM) expect these to exist
 import { TextDecoder, TextEncoder } from 'util';
 import { _testLocationHelpers } from './src/utils/location';
