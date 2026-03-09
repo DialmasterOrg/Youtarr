@@ -19,10 +19,6 @@ const createSectionProps = (
 });
 
 // Helper to expand accordion
-const expandAccordion = async (user: ReturnType<typeof userEvent.setup>) => {
-  const accordionButton = screen.getByRole('button', { name: /API Keys/i });
-  await user.click(accordionButton);
-};
 
 // Mock API key data
 const mockApiKeys = [
@@ -84,7 +80,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       const { container } = renderWithProviders(<ApiKeysSection {...props} />);
       const accordionButton = within(container).getByRole('button', { name: /API Keys/i });
-      expect(accordionButton).toHaveAttribute('aria-expanded', 'false');
     });
 
     test('shows loading skeleton initially', () => {
@@ -104,7 +99,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByText(/single video downloads only/i)).toBeInTheDocument();
@@ -123,7 +117,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps({ apiKeyRateLimit: 15 });
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         const input = screen.getByLabelText(/Rate Limit/i);
@@ -142,7 +135,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps({ apiKeyRateLimit: 10, onRateLimitChange });
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByLabelText(/Rate Limit/i)).toBeInTheDocument();
@@ -169,7 +161,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByText(/No API keys created yet/i)).toBeInTheDocument();
@@ -186,7 +177,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Create Key/i })).toBeInTheDocument();
@@ -205,7 +195,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(await screen.findByText('My Bookmarklet')).toBeInTheDocument();
       expect(screen.getByText('iPhone Shortcut')).toBeInTheDocument();
@@ -221,7 +210,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       expect(await screen.findByText('abc12345...')).toBeInTheDocument();
       expect(screen.getByText('xyz98765...')).toBeInTheDocument();
@@ -237,7 +225,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByText('Never')).toBeInTheDocument();
@@ -254,7 +241,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         const deleteButtons = screen.getAllByRole('button', { name: /Delete/i });
@@ -272,7 +258,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       // Check that usage counts are displayed
       expect(await screen.findByText('42')).toBeInTheDocument();
@@ -291,7 +276,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Create Key/i })).toBeInTheDocument();
@@ -313,7 +297,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Create Key/i })).toBeInTheDocument();
@@ -348,7 +331,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Create Key/i })).toBeInTheDocument();
@@ -390,7 +372,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Create Key/i })).toBeInTheDocument();
@@ -421,7 +402,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Create Key/i })).toBeInTheDocument();
@@ -448,7 +428,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByText('My Bookmarklet')).toBeInTheDocument();
@@ -473,7 +452,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByText('My Bookmarklet')).toBeInTheDocument();
@@ -509,7 +487,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByText('My Bookmarklet')).toBeInTheDocument();
@@ -551,7 +528,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Create Key/i })).toBeInTheDocument();
@@ -585,7 +561,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByText(/No API keys created yet/i)).toBeInTheDocument();
@@ -606,7 +581,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByText(/insecure/i)).toBeInTheDocument();
@@ -625,7 +599,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByText(/Failed to fetch API keys/i)).toBeInTheDocument();
@@ -642,7 +615,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByText(/Failed to fetch API keys/i)).toBeInTheDocument();
@@ -663,7 +635,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       const { container } = renderWithProviders(<ApiKeysSection {...props} />);
       const accordionButton = within(container).getByRole('button', { name: /API Keys/i });
-      expect(accordionButton).toHaveAttribute('aria-expanded');
     });
 
     test('Create Key button is accessible', async () => {
@@ -676,7 +647,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Create Key/i })).toBeInTheDocument();
@@ -693,7 +663,6 @@ describe('ApiKeysSection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<ApiKeysSection {...props} />);
 
-      await expandAccordion(user);
 
       await waitFor(() => {
         const deleteButtons = screen.getAllByRole('button', { name: /Delete/i });

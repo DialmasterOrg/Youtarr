@@ -17,12 +17,15 @@ export function StorageHeaderWidget({ token }: StorageHeaderWidgetProps) {
 
   const percentFree = storageData?.percentFree ?? 0;
   const percentUsed = Math.max(0, Math.min(100, 100 - percentFree));
-  const availableGB = storageData?.availableGB ?? 0;
-  const totalGB = storageData?.totalGB ?? 0;
+  const availableGB = Number(storageData?.availableGB ?? 0);
+  const totalGB = Number(storageData?.totalGB ?? 0);
+  const usedGB = Math.max(0, totalGB - availableGB);
 
   // Show used-space percentage as the bar fill.
   const progressValue = Math.max(0, Math.min(100, percentUsed));
   const percentFreeLabel = Number.isFinite(percentFree) ? percentFree.toFixed(1) : '0.0';
+  const safeUsed = Number.isFinite(usedGB) ? usedGB.toFixed(1) : '0.0';
+  const safeTotal = Number.isFinite(totalGB) ? totalGB.toFixed(1) : '0.0';
 
   const tooltipTitle = (
     <Box className="p-2 min-w-[180px] text-center">
@@ -32,7 +35,7 @@ export function StorageHeaderWidget({ token }: StorageHeaderWidgetProps) {
         className="h-2 rounded-[var(--radius-ui)] mb-3"
       />
       <Typography variant="body2" style={{ fontWeight: 600 }}>
-        {availableGB} GB / {totalGB} GB
+        {safeUsed} GB / {safeTotal} GB
       </Typography>
       <Typography variant="caption" className="mt-1 opacity-70">
         {percentFreeLabel}% free

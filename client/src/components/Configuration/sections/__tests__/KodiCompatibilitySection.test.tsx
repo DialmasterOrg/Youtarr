@@ -22,10 +22,6 @@ const createSectionProps = (
 });
 
 // Helper function to expand the accordion
-const expandAccordion = async (user: ReturnType<typeof userEvent.setup>) => {
-  const accordionButton = screen.getByRole('button', { name: /Kodi, Emby and Jellyfin compatibility/i });
-  await user.click(accordionButton);
-};
 
 describe('KodiCompatibilitySection Component', () => {
   beforeEach(() => {
@@ -50,7 +46,6 @@ describe('KodiCompatibilitySection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText(/Control generation of metadata and artwork files/i)).toBeInTheDocument();
     });
@@ -60,7 +55,6 @@ describe('KodiCompatibilitySection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('For best results:')).toBeInTheDocument();
     });
@@ -70,7 +64,6 @@ describe('KodiCompatibilitySection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText(/Add your download library as Content Type:/i)).toBeInTheDocument();
       expect(screen.getByText('Movies')).toBeInTheDocument();
@@ -81,7 +74,6 @@ describe('KodiCompatibilitySection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText(/Under Metadata Readers\/Savers, select/i)).toBeInTheDocument();
       expect(screen.getByText('Nfo')).toBeInTheDocument();
@@ -92,7 +84,6 @@ describe('KodiCompatibilitySection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText(/Uncheck all metadata downloaders/i)).toBeInTheDocument();
     });
@@ -104,7 +95,6 @@ describe('KodiCompatibilitySection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByRole('checkbox', { name: /Generate video \.nfo files/i })).toBeInTheDocument();
     });
@@ -116,7 +106,6 @@ describe('KodiCompatibilitySection Component', () => {
       });
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       const checkbox = screen.getByRole('checkbox', { name: /Generate video \.nfo files/i });
       expect(checkbox).not.toBeChecked();
@@ -129,7 +118,6 @@ describe('KodiCompatibilitySection Component', () => {
       });
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       const checkbox = screen.getByRole('checkbox', { name: /Generate video \.nfo files/i });
       expect(checkbox).toBeChecked();
@@ -144,7 +132,6 @@ describe('KodiCompatibilitySection Component', () => {
       });
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       const checkbox = screen.getByRole('checkbox', { name: /Generate video \.nfo files/i });
       await user.click(checkbox);
@@ -162,7 +149,6 @@ describe('KodiCompatibilitySection Component', () => {
       });
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       const checkbox = screen.getByRole('checkbox', { name: /Generate video \.nfo files/i });
       await user.click(checkbox);
@@ -176,7 +162,6 @@ describe('KodiCompatibilitySection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('Recommended when another media server scans your downloads.')).toBeInTheDocument();
     });
@@ -188,7 +173,6 @@ describe('KodiCompatibilitySection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByRole('checkbox', { name: /Copy channel poster\.jpg files/i })).toBeInTheDocument();
     });
@@ -200,7 +184,6 @@ describe('KodiCompatibilitySection Component', () => {
       });
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       const checkbox = screen.getByRole('checkbox', { name: /Copy channel poster\.jpg files/i });
       expect(checkbox).not.toBeChecked();
@@ -213,7 +196,6 @@ describe('KodiCompatibilitySection Component', () => {
       });
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       const checkbox = screen.getByRole('checkbox', { name: /Copy channel poster\.jpg files/i });
       expect(checkbox).toBeChecked();
@@ -228,7 +210,6 @@ describe('KodiCompatibilitySection Component', () => {
       });
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       const checkbox = screen.getByRole('checkbox', { name: /Copy channel poster\.jpg files/i });
       await user.click(checkbox);
@@ -246,7 +227,6 @@ describe('KodiCompatibilitySection Component', () => {
       });
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       const checkbox = screen.getByRole('checkbox', { name: /Copy channel poster\.jpg files/i });
       await user.click(checkbox);
@@ -260,7 +240,6 @@ describe('KodiCompatibilitySection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByText('Helps Kodi, Emby and Jellyfin display artwork for channel folders.')).toBeInTheDocument();
     });
@@ -272,7 +251,6 @@ describe('KodiCompatibilitySection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       // InfoTooltip is rendered alongside the checkbox label
       expect(screen.getByRole('checkbox', { name: /Generate video \.nfo files/i })).toBeInTheDocument();
@@ -283,7 +261,6 @@ describe('KodiCompatibilitySection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       // InfoTooltip is rendered alongside the checkbox label
       expect(screen.getByRole('checkbox', { name: /Copy channel poster\.jpg files/i })).toBeInTheDocument();
@@ -295,7 +272,6 @@ describe('KodiCompatibilitySection Component', () => {
       const props = createSectionProps({ onMobileTooltipClick });
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       // InfoTooltip components are present with onMobileTooltipClick prop
       expect(screen.getByRole('checkbox', { name: /Generate video \.nfo files/i })).toBeInTheDocument();
@@ -322,7 +298,6 @@ describe('KodiCompatibilitySection Component', () => {
       });
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       // Toggle .nfo files checkbox
       const nfoCheckbox = screen.getByRole('checkbox', { name: /Generate video \.nfo files/i });
@@ -349,7 +324,6 @@ describe('KodiCompatibilitySection Component', () => {
       });
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       // Toggle both checkboxes off
       const nfoCheckbox = screen.getByRole('checkbox', { name: /Generate video \.nfo files/i });
@@ -370,7 +344,6 @@ describe('KodiCompatibilitySection Component', () => {
       });
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       // Default values from schema: both true
       const nfoCheckbox = screen.getByRole('checkbox', { name: /Generate video \.nfo files/i });
@@ -392,7 +365,6 @@ describe('KodiCompatibilitySection Component', () => {
       });
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       const nfoCheckbox = screen.getByRole('checkbox', { name: /Generate video \.nfo files/i });
       const posterCheckbox = screen.getByRole('checkbox', { name: /Copy channel poster\.jpg files/i });
@@ -411,7 +383,6 @@ describe('KodiCompatibilitySection Component', () => {
       });
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       const nfoCheckbox = screen.getByRole('checkbox', { name: /Generate video \.nfo files/i });
       const posterCheckbox = screen.getByRole('checkbox', { name: /Copy channel poster\.jpg files/i });
@@ -430,7 +401,6 @@ describe('KodiCompatibilitySection Component', () => {
       });
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       const nfoCheckbox = screen.getByRole('checkbox', { name: /Generate video \.nfo files/i });
       const posterCheckbox = screen.getByRole('checkbox', { name: /Copy channel poster\.jpg files/i });
@@ -448,7 +418,6 @@ describe('KodiCompatibilitySection Component', () => {
       });
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       const nfoCheckbox = screen.getByRole('checkbox', { name: /Generate video \.nfo files/i });
 
@@ -472,7 +441,6 @@ describe('KodiCompatibilitySection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByRole('checkbox', { name: /Generate video \.nfo files/i })).toBeInTheDocument();
       expect(screen.getByRole('checkbox', { name: /Copy channel poster\.jpg files/i })).toBeInTheDocument();
@@ -487,7 +455,6 @@ describe('KodiCompatibilitySection Component', () => {
       });
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       const nfoCheckbox = screen.getByRole('checkbox', { name: /Generate video \.nfo files/i });
 
@@ -505,7 +472,6 @@ describe('KodiCompatibilitySection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       const alert = screen.getByRole('alert');
       expect(alert).toBeInTheDocument();
@@ -516,7 +482,6 @@ describe('KodiCompatibilitySection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       // Helper texts should be present and visible
       expect(screen.getByText('Recommended when another media server scans your downloads.')).toBeInTheDocument();
@@ -532,14 +497,12 @@ describe('KodiCompatibilitySection Component', () => {
       });
       const { rerender } = renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByRole('checkbox', { name: /Generate video \.nfo files/i })).toBeChecked();
       expect(screen.getByRole('checkbox', { name: /Copy channel poster\.jpg files/i })).not.toBeChecked();
 
       // Re-render with same props - accordion closes on rerender, so we need to expand again
       rerender(<KodiCompatibilitySection {...props} />);
-      await expandAccordion(user);
 
       expect(screen.getByRole('checkbox', { name: /Generate video \.nfo files/i })).toBeChecked();
       expect(screen.getByRole('checkbox', { name: /Copy channel poster\.jpg files/i })).not.toBeChecked();
@@ -552,7 +515,6 @@ describe('KodiCompatibilitySection Component', () => {
       });
       const { rerender } = renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       expect(screen.getByRole('checkbox', { name: /Generate video \.nfo files/i })).not.toBeChecked();
 
@@ -563,7 +525,6 @@ describe('KodiCompatibilitySection Component', () => {
           config={createConfig({ writeVideoNfoFiles: true })}
         />
       );
-      await expandAccordion(user);
 
       expect(screen.getByRole('checkbox', { name: /Generate video \.nfo files/i })).toBeChecked();
     });
@@ -603,7 +564,6 @@ describe('KodiCompatibilitySection Component', () => {
       const props = createSectionProps();
       renderWithProviders(<KodiCompatibilitySection {...props} />);
 
-      await expandAccordion(user);
 
       // All main content should be accessible after expanding
       expect(screen.getByRole('checkbox', { name: /Generate video \.nfo files/i })).toBeInTheDocument();

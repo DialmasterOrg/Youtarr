@@ -27,15 +27,9 @@ const setup = (
   return { user, props };
 };
 
-const expandAccordion = async (user: ReturnType<typeof userEvent.setup>) => {
-  const toggle = screen.getByRole('button', { name: /advanced settings/i });
-  await user.click(toggle);
-};
-
 describe('AdvancedSettingsSection', () => {
   test('renders informational alert content when expanded', async () => {
     const { user } = setup();
-    await expandAccordion(user);
 
     expect(screen.getByText('Advanced Configuration')).toBeInTheDocument();
     expect(screen.getByText(/Fine-tune yt-dlp behavior/i)).toBeInTheDocument();
@@ -63,7 +57,6 @@ describe('AdvancedSettingsSection', () => {
     };
 
     renderWithProviders(<ControlledSection />);
-    await expandAccordion(user);
 
     const sleepInput = screen.getByLabelText(/sleep between requests/i);
     await user.type(sleepInput, '{selectall}{backspace}5');
@@ -74,7 +67,6 @@ describe('AdvancedSettingsSection', () => {
   test('ignores sleep values outside of the allowed range', async () => {
     const onConfigChange = jest.fn();
     const { user } = setup({ onConfigChange });
-    await expandAccordion(user);
 
     const sleepInput = screen.getByLabelText(/sleep between requests/i);
     await user.type(sleepInput, '{selectall}-1');
@@ -86,7 +78,6 @@ describe('AdvancedSettingsSection', () => {
     const { user } = setup({
       config: createConfig({ proxy: 'invalid-proxy' }),
     });
-    await expandAccordion(user);
 
     const proxyInput = screen.getByLabelText(/proxy url/i);
     await user.click(proxyInput);
@@ -103,7 +94,6 @@ describe('AdvancedSettingsSection', () => {
       config: createConfig({ proxy: 'invalid-proxy' }),
       onConfigChange,
     });
-    await expandAccordion(user);
 
     const proxyInput = screen.getByLabelText(/proxy url/i);
     await user.click(proxyInput);
