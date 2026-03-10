@@ -2,7 +2,6 @@ import React, { useContext, useState, useEffect, useCallback, useMemo, useRef } 
 import {
   Alert,
   Button,
-  Card,
   CardHeader,
   CircularProgress,
   Dialog,
@@ -342,7 +341,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
 
   return (
     <>
-      <Card style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <CardHeader
           title="Channels"
           action={
@@ -352,11 +351,12 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
               </button>
             </Tooltip>
           }
+          className="px-0 pt-0"
         />
         <Divider />
         <div
           style={{
-            padding: '16px',
+            padding: '16px 0 0',
             display: 'flex',
             flexDirection: 'column',
             flexGrow: 1,
@@ -579,7 +579,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
             )}
           </div>
         </div>
-      </Card>
+      </div>
 
       <Menu anchorEl={folderMenuAnchor} open={Boolean(folderMenuAnchor)} onClose={handleFolderMenuClose}>
         <MenuItem selected={!selectedSubFolder} onClick={() => handleSubFolderSelect(null)}>

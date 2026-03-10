@@ -1,8 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
   Button,
-  Card,
-  CardContent,
   CardHeader,
   Grid,
   Tabs,
@@ -97,51 +95,50 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
 
   return (
     <Grid item xs={12} md={12}>
-      <Card elevation={8}>
+      <div>
         <CardHeader
           title='Start Downloads'
           align='center'
+          className="px-0 pt-0"
           style={{ marginBottom: '-16px' }}
         />
-        <CardContent>
-          <div style={{ borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
-            <Tabs value={tabValue} onChange={handleTabChange} centered>
-              <Tab label="Manual Download" />
-              <Tab label="Channel Download" />
-            </Tabs>
-          </div>
+        <div style={{ borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
+          <Tabs value={tabValue} onChange={handleTabChange} centered>
+            <Tab label="Manual Download" />
+            <Tab label="Channel Download" />
+          </Tabs>
+        </div>
 
-          {tabValue === 0 ? (
-            <ErrorBoundary
-              fallbackMessage="An error occurred in the download manager. Please refresh the page and try again."
-              onReset={() => setTabValue(0)}
+        {tabValue === 0 ? (
+          <ErrorBoundary
+            fallbackMessage="An error occurred in the download manager. Please refresh the page and try again."
+            onReset={() => setTabValue(0)}
+          >
+            <ManualDownload
+              onStartDownload={handleManualDownload}
+              token={token}
+              defaultResolution={defaultResolution}
+            />
+          </ErrorBoundary>
+        ) : (
+          <ErrorBoundary
+            fallbackMessage="An error occurred with channel downloads. Please refresh the page and try again."
+            onReset={() => setTabValue(1)}
+          >
+            <div
+              style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 24 }}
             >
-              <ManualDownload
-                onStartDownload={handleManualDownload}
-                token={token}
-                defaultResolution={defaultResolution}
-              />
-            </ErrorBoundary>
-          ) : (
-            <ErrorBoundary
-              fallbackMessage="An error occurred with channel downloads. Please refresh the page and try again."
-              onReset={() => setTabValue(1)}
-            >
-              <div
-                style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 24 }}
+              <Button
+                variant='contained'
+                onClick={handleOpenChannelSettings}
+                size='large'
               >
-                <Button
-                  variant='contained'
-                  onClick={handleOpenChannelSettings}
-                  size='large'
-                >
-                  Download new from all channels
-                </Button>
-              </div>
-            </ErrorBoundary>
-          )}
-        </CardContent>
-      </Card>
+                Download new from all channels
+              </Button>
+            </div>
+          </ErrorBoundary>
+        )}
+      </div>
 
       <DownloadSettingsDialog
         open={showChannelSettingsDialog}

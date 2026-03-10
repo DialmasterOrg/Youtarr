@@ -44,7 +44,9 @@ export function AppShell({
   children,
 }: AppShellProps) {
   const isMobile = useMediaQuery('(max-width: 767px)');
+  const isLandscape = useMediaQuery('(orientation: landscape)');
   const { themeMode } = useThemeEngine();
+  const isLandscapeMobile = isMobile && isLandscape;
   
   const currentTheme = getThemeById(themeMode);
   const layoutPolicy = resolveThemeLayoutPolicy(currentTheme, isMobile ? 'mobile' : 'desktop');
@@ -130,6 +132,15 @@ export function AppShell({
       data-nav-placement={layoutPolicy.navPlacement}
       style={{
         ...(layoutCssVars as React.CSSProperties),
+        ...(isLandscapeMobile
+          ? {
+              '--shell-gap': '0px',
+              '--layout-main-padding': '104px 0 calc(20px + env(safe-area-inset-bottom))',
+              '--layout-content-padding': '0px',
+              '--layout-content-frame-radius': '0px',
+              '--layout-header-border-radius': '0px',
+            }
+          : {}),
         display: 'flex',
         gap: isTopNav ? 0 : 'var(--shell-gap)',
         minHeight: '100vh',
@@ -179,7 +190,7 @@ export function AppShell({
           isTopNav
             ? {
                 flexGrow: 1,
-                width: '100vw',
+              width: '100%',
                 marginTop: 'var(--layout-main-margin-top)',
                 marginBottom: 0,
                 marginRight: 0,
@@ -220,7 +231,7 @@ export function AppShell({
             width: '100%',
             minWidth: 0,
             boxSizing: 'border-box',
-            overflowX: 'hidden',
+            overflow: 'visible',
             padding: 'var(--layout-content-padding)',
             backgroundColor: 'var(--layout-content-frame-background)',
             border: 'var(--layout-content-frame-border)',

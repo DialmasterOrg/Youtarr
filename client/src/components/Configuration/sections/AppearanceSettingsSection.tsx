@@ -90,10 +90,11 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
           <RadioGroup value={themeMode} onValueChange={(v) => setThemeMode(v as any)}>
             <Grid container spacing={2}>
         {Object.values(ALL_THEMES).map((theme) => (
-          <Grid item xs={12} md={3} key={theme.id}>
+          <Grid item xs={12} sm={4} key={theme.id}>
             <Card
               className="h-full flex flex-col"
               style={{
+                width: '100%',
                 borderRadius: theme.tokens.light['radius-ui'] || 'var(--radius-ui)',
                 border: themeMode === theme.id ? '2px solid var(--primary)' : '2px solid var(--border-strong)',
                 boxShadow: themeMode === theme.id ? 'var(--shadow-hard)' : 'var(--shadow-soft)',
@@ -104,6 +105,7 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
                 onClick={() => setThemeMode(theme.id)}
                 aria-label={`Select ${theme.name} theme`}
                 className="h-full flex flex-col"
+                style={{ width: '100%' }}
               >
                 <CardContent className="flex flex-col gap-3 flex-1 w-full">
                   <div className="flex items-center justify-between">

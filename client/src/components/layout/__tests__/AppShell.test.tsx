@@ -32,11 +32,16 @@ jest.mock('../NavSidebar', () => ({
   ),
 }));
 
-function setViewportMatch(isMobile: boolean) {
+function setViewportMatch(isMobile: boolean, isLandscape = false) {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: (query: string) => ({
-      matches: query === '(max-width: 767px)' ? isMobile : false,
+      matches:
+        query === '(max-width: 767px)'
+          ? isMobile
+          : query === '(orientation: landscape)'
+            ? isLandscape
+            : false,
       media: query,
       onchange: null,
       addListener: () => {},
@@ -48,8 +53,8 @@ function setViewportMatch(isMobile: boolean) {
   });
 }
 
-function renderShell(themeMode: 'playful' | 'linear' | 'flat', isMobile = false) {
-  setViewportMatch(isMobile);
+function renderShell(themeMode: 'playful' | 'linear' | 'flat', isMobile = false, isLandscape = false) {
+  setViewportMatch(isMobile, isLandscape);
   localStorage.setItem('uiThemeMode', themeMode);
 
   return render(
@@ -105,17 +110,15 @@ describe('AppShell', () => {
     expect(screen.queryByRole('button', { name: /toggle:flat:true/i })).not.toBeInTheDocument();
   });
 
-  it('renders the top header on mobile and allows opening mobile drawer state', async () => {
-    const user = userEvent.setup();
+  it('does not render a mobile header toggle button', async () => {
     renderShell('playful', true);
 
     await waitFor(() => {
       expect(document.documentElement.style.getPropertyValue('--nav-width')).toBe('0px');
     });
 
-    await user.click(screen.getByRole('button', { name: /toggle:sidebar:mobile:true/i }));
-
-    expect(screen.getByTestId('nav-sidebar')).toHaveTextContent('collapsed:false|topnav:false|mobileopen:true');
+    expect(screen.queryByRole('button', { name: /toggle:sidebar:mobile/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('nav-sidebar')).toHaveTextContent('collapsed:false|topnav:false|mobileopen:false');
   });
 
   it('uses tighter mobile frame padding for playful theme content', () => {
@@ -131,5 +134,14 @@ describe('AppShell', () => {
     expect(container.querySelector('main')).toHaveAttribute('data-nav-placement', 'top');
     expect(getLayoutRoot().style.getPropertyValue('--layout-main-padding')).toBe('8px 8px calc(20px + env(safe-area-inset-bottom))');
     expect(getLayoutRoot().style.getPropertyValue('--layout-content-padding')).toBe('12px 8px');
+  });
+
+  it('removes landscape mobile side gutters so the content fills the window', () => {
+    renderShell('playful', true, true);
+
+    expect(getLayoutRoot().style.getPropertyValue('--shell-gap')).toBe('0px');
+    expect(getLayoutRoot().style.getPropertyValue('--layout-main-padding')).toBe('104px 0 calc(20px + env(safe-area-inset-bottom))');
+    expect(getLayoutRoot().style.getPropertyValue('--layout-content-padding')).toBe('0px');
+    expect(getLayoutRoot().style.getPropertyValue('--layout-content-frame-radius')).toBe('0px');
   });
 });

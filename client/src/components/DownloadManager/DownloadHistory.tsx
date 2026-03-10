@@ -279,171 +279,168 @@ import PageControls from '../shared/PageControls';
 
     return (
       <Grid item xs={12}>
-        <Card>
-          <CardHeader title="Download History" />
-          <CardContent>
-            <Toolbar disableGutters className="justify-between mb-2">
-              <FormControlLabel
-                control={<Checkbox checked={showNoVideoJobs} onChange={(e) => { setShowNoVideoJobs(e.target.checked); setCurrentPage(1); }} />}
-                label="Show jobs with no videos"
-              />
-            </Toolbar>
+        <Box>
+          <CardHeader title="Download History" className="px-0 pt-0" />
+          <Toolbar disableGutters className="justify-between mb-2">
+            <FormControlLabel
+              control={<Checkbox checked={showNoVideoJobs} onChange={(e) => { setShowNoVideoJobs(e.target.checked); setCurrentPage(1); }} />}
+              label="Show jobs with no videos"
+            />
+          </Toolbar>
 
-            <TableContainer>
-              <div {...handlers}>
-                <Table>
-                  <TableHead>
+          <TableContainer>
+            <div {...handlers}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Date / Time</TableCell>
+                    <TableCell>Title</TableCell>
+                    <TableCell>Source</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell align="right" />
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {currentJobs.length === 0 && (
                     <TableRow>
-                      <TableCell>Date / Time</TableCell>
-                      <TableCell>Title</TableCell>
-                      <TableCell>Source</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell align="right" />
+                      <TableCell colSpan={5}>No jobs currently running</TableCell>
                     </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {currentJobs.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={5}>No jobs currently running</TableCell>
-                      </TableRow>
-                    )}
+                  )}
 
-                    {currentJobs.map((job) => {
-                      const isExpanded = !!expanded[job.id];
+                  {currentJobs.map((job) => {
+                    const isExpanded = !!expanded[job.id];
 
-                      let durationString = '';
-                      if (job.status !== 'In Progress') {
-                        durationString = job.status;
-                      } else {
-                        const jobStartTime = new Date(job.timeInitiated).getTime();
-                        const duration = new Date(currentTime.getTime() - jobStartTime);
-                        const mm = String(duration.getUTCMinutes()).padStart(2, '0');
-                        const ss = String(duration.getUTCSeconds()).padStart(2, '0');
-                        durationString = `${mm}m${ss}s`;
-                      }
+                    let durationString = '';
+                    if (job.status !== 'In Progress') {
+                      durationString = job.status;
+                    } else {
+                      const jobStartTime = new Date(job.timeInitiated).getTime();
+                      const duration = new Date(currentTime.getTime() - jobStartTime);
+                      const mm = String(duration.getUTCMinutes()).padStart(2, '0');
+                      const ss = String(duration.getUTCSeconds()).padStart(2, '0');
+                      durationString = `${mm}m${ss}s`;
+                    }
 
-                      const timeCreated = new Date(job.timeCreated);
-                      const month = String(timeCreated.getMonth() + 1).padStart(2, '0');
-                      const day = String(timeCreated.getDate()).padStart(2, '0');
-                      const minutes = String(timeCreated.getMinutes()).padStart(2, '0');
-                      let hours = timeCreated.getHours();
-                      const period = hours >= 12 ? 'PM' : 'AM';
+                    const timeCreated = new Date(job.timeCreated);
+                    const month = String(timeCreated.getMonth() + 1).padStart(2, '0');
+                    const day = String(timeCreated.getDate()).padStart(2, '0');
+                    const minutes = String(timeCreated.getMinutes()).padStart(2, '0');
+                    let hours = timeCreated.getHours();
+                    const period = hours >= 12 ? 'PM' : 'AM';
 
-                      let formattedJobType = '';
-                      if (job.jobType.includes('Channel Downloads')) formattedJobType = 'Channels';
-                      else if (job.jobType.includes('Manually Added Urls')) {
-                        const apiKeyMatch = job.jobType.match(/\(via API: (.+)\)/);
-                        formattedJobType = apiKeyMatch ? `API: ${apiKeyMatch[1]}` : 'Manual Videos';
-                      }
+                    let formattedJobType = '';
+                    if (job.jobType.includes('Channel Downloads')) formattedJobType = 'Channels';
+                    else if (job.jobType.includes('Manually Added Urls')) {
+                      const apiKeyMatch = job.jobType.match(/\(via API: (.+)\)/);
+                      formattedJobType = apiKeyMatch ? `API: ${apiKeyMatch[1]}` : 'Manual Videos';
+                    }
 
-                      hours = hours % 12;
-                      hours = hours ? hours : 12;
-                      const formattedTimeCreated = `${month}-${day} ${hours}:${minutes} ${period}`;
+                    hours = hours % 12;
+                    hours = hours ? hours : 12;
+                    const formattedTimeCreated = `${month}-${day} ${hours}:${minutes} ${period}`;
 
-                      const videos = job.data?.videos || [];
+                    const videos = job.data?.videos || [];
 
-                      if (videos.length > 1) {
-                        return (
-                          <React.Fragment key={job.id}>
-                            <TableRow hover onClick={() => handleExpandCell(job.id)}>
-                              <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{formattedTimeCreated}</TableCell>
-                              <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>Multiple ({videos.length})</TableCell>
-                              <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{formattedJobType}</TableCell>
-                              <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{job.status}</TableCell>
-                              <TableCell align="right">
-                                <div style={{ display: 'inline-flex', gap: 4 }}>
-                                  {setAnchorEl && (
-                                    <IconButton
-                                      size="small"
-                                      onClick={(e) => setAnchorEl((prev: any) => ({ ...(prev || {}), [job.id]: e.currentTarget as HTMLButtonElement }))}
-                                    >
-                                      <InfoIcon size={16} data-testid="InfoIcon" />
-                                    </IconButton>
-                                  )}
-                                  <IconButton size="small" onClick={() => handleExpandCell(job.id)}>
-                                    {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                                  </IconButton>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-
-                            <TableRow>
-                              <TableCell colSpan={5} style={{ padding: 0, border: 'none' }}>
-                                <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                                  <Box className="p-2">
-                                    <Table size="small">
-                                      <TableBody>
-                                        {videos.map((video: any) => (
-                                          <TableRow key={video.youtubeId}>
-                                            <TableCell style={{ width: 180 }}>{formattedTimeCreated}</TableCell>
-                                            <TableCell>
-                                              <Link href={`https://www.youtube.com/watch?v=${video.youtubeId}`} target="_blank" rel="noopener noreferrer">{video.youTubeVideoName}</Link>
-                                              <Typography variant="caption" color="secondary" className="block">{video.youTubeChannelName}</Typography>
-                                            </TableCell>
-                                            <TableCell>{formattedJobType}</TableCell>
-                                            <TableCell>{job.status}</TableCell>
-                                            <TableCell />
-                                          </TableRow>
-                                        ))}
-                                      </TableBody>
-                                    </Table>
-                                  </Box>
-                                </Collapse>
-                              </TableCell>
-                            </TableRow>
-                          </React.Fragment>
-                        );
-                      }
-
-                      const singleVideo = videos[0];
+                    if (videos.length > 1) {
                       return (
-                        <TableRow key={job.id} hover>
-                          <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{formattedTimeCreated}</TableCell>
-                          <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>
-                            {singleVideo ? (
-                              <>
-                                {/* Hidden count indicator so tests can assert video count */}
-                                <span aria-hidden="true" style={{ display: 'none' }}>1</span>
-                                <Link href={`https://www.youtube.com/watch?v=${singleVideo.youtubeId}`} target="_blank" rel="noopener noreferrer">{singleVideo.youTubeVideoName}</Link>
-                                <Typography variant="caption" color="secondary" className="block">{singleVideo.youTubeChannelName}</Typography>
-                              </>
-                            ) : job.status === 'In Progress' ? (
-                              <span>---</span>
-                            ) : (
-                              <span>None</span>
-                            )}
-                          </TableCell>
-                          <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{formattedJobType || '---'}</TableCell>
-                          <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{durationString}</TableCell>
-                          <TableCell align="right">
-                            {setAnchorEl && videos.length > 0 && (
-                              <IconButton
-                                size="small"
-                                onClick={(e) => setAnchorEl((prev: any) => ({ ...(prev || {}), [job.id]: e.currentTarget as HTMLButtonElement }))}
-                              >
-                                <InfoIcon size={16} data-testid="InfoIcon" />
-                              </IconButton>
-                            )}
-                          </TableCell>
-                        </TableRow>
+                        <React.Fragment key={job.id}>
+                          <TableRow hover onClick={() => handleExpandCell(job.id)}>
+                            <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{formattedTimeCreated}</TableCell>
+                            <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>Multiple ({videos.length})</TableCell>
+                            <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{formattedJobType}</TableCell>
+                            <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{job.status}</TableCell>
+                            <TableCell align="right">
+                              <div style={{ display: 'inline-flex', gap: 4 }}>
+                                {setAnchorEl && (
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => setAnchorEl((prev: any) => ({ ...(prev || {}), [job.id]: e.currentTarget as HTMLButtonElement }))}
+                                  >
+                                    <InfoIcon size={16} data-testid="InfoIcon" />
+                                  </IconButton>
+                                )}
+                                <IconButton size="small" onClick={() => handleExpandCell(job.id)}>
+                                  {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                                </IconButton>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+
+                          <TableRow>
+                            <TableCell colSpan={5} style={{ padding: 0, border: 'none' }}>
+                              <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                                <Box className="p-2">
+                                  <Table size="small">
+                                    <TableBody>
+                                      {videos.map((video: any) => (
+                                        <TableRow key={video.youtubeId}>
+                                          <TableCell style={{ width: 180 }}>{formattedTimeCreated}</TableCell>
+                                          <TableCell>
+                                            <Link href={`https://www.youtube.com/watch?v=${video.youtubeId}`} target="_blank" rel="noopener noreferrer">{video.youTubeVideoName}</Link>
+                                            <Typography variant="caption" color="secondary" className="block">{video.youTubeChannelName}</Typography>
+                                          </TableCell>
+                                          <TableCell>{formattedJobType}</TableCell>
+                                          <TableCell>{job.status}</TableCell>
+                                          <TableCell />
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </Box>
+                              </Collapse>
+                            </TableCell>
+                          </TableRow>
+                        </React.Fragment>
                       );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </TableContainer>
+                    }
 
-            {!useInfiniteScroll && (
-              <Box className="flex justify-center mt-4">
-                <PageControls page={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
-              </Box>
-            )}
+                    const singleVideo = videos[0];
+                    return (
+                      <TableRow key={job.id} hover>
+                        <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{formattedTimeCreated}</TableCell>
+                        <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>
+                          {singleVideo ? (
+                            <>
+                              <span aria-hidden="true" style={{ display: 'none' }}>1</span>
+                              <Link href={`https://www.youtube.com/watch?v=${singleVideo.youtubeId}`} target="_blank" rel="noopener noreferrer">{singleVideo.youTubeVideoName}</Link>
+                              <Typography variant="caption" color="secondary" className="block">{singleVideo.youTubeChannelName}</Typography>
+                            </>
+                          ) : job.status === 'In Progress' ? (
+                            <span>---</span>
+                          ) : (
+                            <span>None</span>
+                          )}
+                        </TableCell>
+                        <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{formattedJobType || '---'}</TableCell>
+                        <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{durationString}</TableCell>
+                        <TableCell align="right">
+                          {setAnchorEl && videos.length > 0 && (
+                            <IconButton
+                              size="small"
+                              onClick={(e) => setAnchorEl((prev: any) => ({ ...(prev || {}), [job.id]: e.currentTarget as HTMLButtonElement }))}
+                            >
+                              <InfoIcon size={16} data-testid="InfoIcon" />
+                            </IconButton>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </TableContainer>
 
-            {useInfiniteScroll && hasMoreHotLoadItems && (
-              <div ref={loadMoreRef} style={{ height: 24, width: '100%', marginTop: 8 }} />
-            )}
-          </CardContent>
-        </Card>
+          {!useInfiniteScroll && (
+            <Box className="flex justify-center mt-4">
+              <PageControls page={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+            </Box>
+          )}
+
+          {useInfiniteScroll && hasMoreHotLoadItems && (
+            <div ref={loadMoreRef} style={{ height: 24, width: '100%', marginTop: 8 }} />
+          )}
+        </Box>
       </Grid>
     );
   };

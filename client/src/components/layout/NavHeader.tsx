@@ -8,8 +8,15 @@ import {
   Paper,
 } from '../ui';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
-import { LogOut as LogoutIcon, Download as DownloadIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from '../../lib/icons';
+import {
+  LogOut as LogoutIcon,
+  Download as DownloadIcon,
+  Menu as MenuIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+} from '../../lib/icons';
 import { getThemeLayoutCssVars, ThemeLayoutPolicy } from '../../themes';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { StorageHeaderWidget } from './StorageHeaderWidget';
 import { NAV_DRAWER_SECTION_BUTTON_GUTTER } from './navLayoutConstants';
 import './layoutFallback.css';
@@ -52,17 +59,17 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   const layoutCssVars = getThemeLayoutCssVars(layoutPolicy);
 
   const isMobile = layoutPolicy.breakpoint === 'mobile';
+  const isLandscape = useMediaQuery('(orientation: landscape)');
   const isTopNav = layoutPolicy.navPlacement === 'top';
   const isInsetFrame = layoutPolicy.headerFrameMode === 'inset';
-  const isPlayful = layoutPolicy.headerUpdateIndicatorMode === 'playful';
   const isLinear = layoutPolicy.headerUpdateIndicatorMode === 'linear';
   const isFlat = layoutPolicy.headerUpdateIndicatorMode === 'flat';
+  const showLandscapeNavItems = isMobile && isLandscape;
+  const usesInsetFrame = isInsetFrame && !showLandscapeNavItems;
 
-  // --- State ---
   const [activeKey, setActiveKey] = useState<string | null>(null);
 
-  // --- Policy Computed Values ---
-  const showTopNavItems = layoutPolicy.showDesktopNavItems && !isMobile;
+  const showTopNavItems = (layoutPolicy.showDesktopNavItems && !isMobile) || showLandscapeNavItems;
   const hasAppUpdate = token && !isPlatformManaged && updateAvailable && Boolean(updateTooltip);
   const hasYtDlpUpdate = token && ytDlpUpdateAvailable && Boolean(ytDlpUpdateTooltip);
   const hasAnyUpdate = Boolean(hasAppUpdate || hasYtDlpUpdate);
@@ -126,24 +133,17 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
     return versionLabel.split('•').map((part) => part.trim()).filter(Boolean);
   }, [versionLabel]);
 
-  // --- Effects ---
-  
-  // Close dropdown on route change
   useEffect(() => {
     setActiveKey(null);
   }, [location.pathname]);
 
-  // --- Event Handlers (Single Unit Hover) ---
-
-  const handleUnitEnter = (event: React.MouseEvent<HTMLElement>, key: string) => {
+  const handleUnitEnter = (_event: React.MouseEvent<HTMLElement>, key: string) => {
     setActiveKey(key);
   };
 
   const handleUnitLeave = () => {
     setActiveKey(null);
   };
-
-  // --- Styles Helper ---
 
   const getButtonStyle = (isParentActive: boolean): React.CSSProperties => {
     const activeColor = (isLinear || isFlat) ? 'hsl(var(--primary))' : 'var(--foreground)';
@@ -177,24 +177,184 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
     backdropFilter: 'var(--layout-header-backdrop-filter)',
     border: 'var(--layout-header-border)',
     borderBottom: 'var(--layout-header-border-bottom)',
-    borderTop: isInsetFrame ? undefined : 'none',
-    borderLeft: isInsetFrame ? undefined : 'none',
-    borderRight: isInsetFrame ? undefined : 'none',
+    borderTop: usesInsetFrame ? undefined : 'none',
+    borderLeft: usesInsetFrame ? undefined : 'none',
+    borderRight: usesInsetFrame ? undefined : 'none',
     boxShadow: 'none',
     backgroundImage: 'var(--layout-header-pattern)',
     backgroundSize: '24px 24px',
     color: 'var(--foreground)',
     zIndex: 1300,
-    top: isInsetFrame ? 'var(--shell-gap)' : 0,
-    left: isInsetFrame ? 'var(--shell-gap)' : 0,
-    right: isInsetFrame ? 'var(--shell-gap)' : 0,
-    width: isInsetFrame ? 'calc(100vw - (var(--shell-gap) * 2))' : '100vw',
-    borderRadius: 'var(--layout-header-border-radius)',
+    top: usesInsetFrame ? 'var(--shell-gap)' : 0,
+    left: usesInsetFrame ? 'var(--shell-gap)' : 0,
+    right: usesInsetFrame ? 'var(--shell-gap)' : 0,
+    borderRadius: showLandscapeNavItems ? '0px' : 'var(--layout-header-border-radius)',
     overflow: 'visible',
+    boxSizing: 'border-box',
   };
 
-  // Match the drawer button inset so the toggle sits flush with the sidebar edges.
   const headerHorizontalGutter = NAV_DRAWER_SECTION_BUTTON_GUTTER;
+  const topRowGap = showLandscapeNavItems ? 10 : 16;
+
+  const navRow = showTopNavItems ? (
+    <Box
+      className="flex items-center gap-2"
+      style={{
+        position: showLandscapeNavItems ? 'relative' : 'absolute',
+        left: showLandscapeNavItems ? undefined : '50%',
+        transform: showLandscapeNavItems ? undefined : 'translateX(-50%)',
+        height: showLandscapeNavItems ? 'auto' : '100%',
+        width: showLandscapeNavItems ? '100%' : undefined,
+        flex: showLandscapeNavItems ? '0 0 auto' : undefined,
+        flexWrap: showLandscapeNavItems ? 'wrap' : 'nowrap',
+        minWidth: 0,
+        overflow: 'visible',
+        rowGap: showLandscapeNavItems ? 6 : 0,
+        paddingBottom: showLandscapeNavItems ? 4 : 0,
+      }}
+    >
+      {navItems.map((item) => {
+        const isOpen = activeKey === item.key;
+        const hasSubItems = item.subItems && item.subItems.length > 0;
+        const isParentActive = location.pathname === item.to
+          || location.pathname.startsWith(item.to + '/')
+          || item.subItems?.some((subItem: any) => (
+            location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/')
+          ));
+
+        return (
+          <Box
+            key={item.key}
+            onMouseEnter={(event) => !showLandscapeNavItems && hasSubItems && handleUnitEnter(event, item.key)}
+            onMouseLeave={() => {
+              if (!showLandscapeNavItems) {
+                handleUnitLeave();
+              }
+            }}
+            style={{ position: 'relative', height: 'auto', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+          >
+            <Button
+              asChild
+              variant="text"
+              startIcon={showLandscapeNavItems ? undefined : item.icon}
+              style={{
+                ...getButtonStyle(isParentActive),
+                padding: showLandscapeNavItems ? '5px 10px' : '8px 12px',
+                fontSize: showLandscapeNavItems ? '0.76rem' : '0.85rem',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <RouterLink to={item.to}>{item.label}</RouterLink>
+            </Button>
+
+            {hasSubItems && isOpen && !showLandscapeNavItems && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  zIndex: 1500,
+                  paddingTop: 8,
+                }}
+              >
+                <Paper style={menuPaperStyle}>
+                  {item.subItems.map((subItem: any) => {
+                    const isSubActive = location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/');
+                    return (
+                      <RouterLink
+                        key={subItem.key}
+                        to={subItem.to}
+                        onClick={handleUnitLeave}
+                        style={{
+                          display: 'block',
+                          textDecoration: 'none',
+                          width: '100%',
+                          borderRadius: 'var(--layout-header-menu-radius)',
+                          fontSize: '0.85rem',
+                          fontWeight: 500,
+                          color: isSubActive
+                            ? ((isLinear || isFlat) ? 'hsl(var(--primary))' : 'var(--foreground)')
+                            : 'var(--muted-foreground)',
+                          padding: '8px 12px',
+                          boxSizing: 'border-box',
+                        }}
+                      >
+                        {subItem.label}
+                      </RouterLink>
+                    );
+                  })}
+                </Paper>
+              </div>
+            )}
+          </Box>
+        );
+      })}
+    </Box>
+  ) : null;
+
+  const rightActions = (
+    <Box
+      className="flex items-center"
+      style={{ marginLeft: showTopNavItems && !showLandscapeNavItems ? 'auto' : 0, flexShrink: 0, minWidth: 0 }}
+    >
+      {layoutPolicy.headerVersionPlacement === 'desktop' && !isMobile && versionParts.length > 0 && (
+        <Tooltip title="Click to view changelog" arrow placement="bottom">
+          <Box
+            className="flex flex-col items-end mr-3"
+            style={{ lineHeight: 1.1, cursor: 'pointer' }}
+            onClick={() => navigate('/changelog')}
+          >
+            <Typography variant="caption" style={{ color: 'var(--muted-foreground)', fontWeight: 600, fontSize: '0.6rem' }}>
+              {versionParts[0]}
+            </Typography>
+            {versionParts[1] && (
+              <Box className="flex items-center gap-1">
+                <Typography variant="caption" style={{ color: 'var(--muted-foreground)', fontSize: '0.6rem' }}>
+                  {versionParts[1]}
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        </Tooltip>
+      )}
+
+      {layoutPolicy.headerVersionPlacement === 'mobile' && isMobile && !showLandscapeNavItems && versionParts.length > 0 && (
+        <Tooltip title="Tap to view changelog" arrow placement="bottom">
+          <Typography
+            variant="caption"
+            onClick={() => navigate('/changelog')}
+            style={{
+              color: 'var(--muted-foreground)',
+              fontWeight: 600,
+              fontSize: '0.6rem',
+              cursor: 'pointer',
+              marginRight: 4,
+              userSelect: 'none',
+              lineHeight: 1,
+            }}
+          >
+            {versionParts[0]}
+          </Typography>
+        </Tooltip>
+      )}
+
+      {hasAnyUpdate && sharedUpdateTooltip && (
+        <Tooltip title={sharedUpdateTooltip} placement="bottom" arrow>
+          <IconButton aria-label={sharedUpdateAriaLabel} className="mr-1" style={sharedUpdateIndicatorStyle}>
+            <DownloadIcon />
+          </IconButton>
+        </Tooltip>
+      )}
+
+      {token && layoutPolicy.showStorageHeaderWidget && <StorageHeaderWidget token={token} />}
+
+      {token && !isPlatformManaged && onLogout && (
+        <IconButton aria-label="logout" onClick={onLogout} style={{ color: 'var(--foreground)' }}>
+          <LogoutIcon />
+        </IconButton>
+      )}
+    </Box>
+  );
 
   return (
     <header
@@ -211,224 +371,94 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
       <div
         style={{
           display: 'flex',
-          gap: 16,
+          flexDirection: showLandscapeNavItems ? 'column' : 'row',
+          gap: showLandscapeNavItems ? 6 : 16,
           paddingLeft: headerHorizontalGutter,
           paddingRight: headerHorizontalGutter,
-          minHeight: 64,
-          alignItems: 'center',
+          paddingTop: showLandscapeNavItems ? 8 : 0,
+          paddingBottom: showLandscapeNavItems ? 6 : 0,
+          minHeight: showLandscapeNavItems ? 96 : 64,
+          alignItems: showLandscapeNavItems ? 'stretch' : 'center',
           position: 'relative',
         }}
       >
-        {/* Toggle (Mobile/Side) */}
-        {((!isMobile && !isTopNav) || (isMobile && layoutPolicy.showHeaderToggleOnMobile)) && (
-          <IconButton
-            className="pop-toggle"
-            aria-label="toggle navigation"
-            onClick={toggleDrawer}
-            style={{
-              width: 'var(--layout-header-toggle-width)',
-              height: 'var(--layout-header-toggle-height)',
-              borderRadius: 'var(--layout-header-toggle-radius)',
-              color: 'var(--layout-header-toggle-color)',
-              marginRight: isTopNav ? 8 : 0,
-            }}
-          >
-            {layoutPolicy.headerToggleMode === 'collapse' ? (
-              isCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />
-            ) : (
-              <MenuIcon />
-            )}
-          </IconButton>
-        )}
-
-        {/* Title */}
         <Box
           className="flex items-center min-w-0"
           style={{
-            height: APP_BAR_TOGGLE_SIZE,
-            marginRight: showTopNavItems ? 32 : 0,
+            width: '100%',
+            gap: topRowGap,
+            justifyContent: 'space-between',
+            alignItems: 'center',
           }}
         >
-          <RouterLink
-            to="/"
-            style={{
-              display: 'inline-flex',
-              marginLeft: 'var(--layout-header-title-inset)',
-              textDecoration: 'none',
-            }}
-          >
-          <Typography
-            variant="h6"
-            style={{
-              fontWeight: 700,
-              fontFamily: 'var(--font-display)',
-              whiteSpace: 'nowrap',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              lineHeight: `${APP_BAR_TOGGLE_SIZE}px`,
-              fontSize: '1.35rem',
-              color: 'var(--foreground)',
-              textDecoration: 'none',
-              cursor: 'pointer',
-            } as React.CSSProperties}
-          >
-            {appName}
-          </Typography>
-          </RouterLink>
-        </Box>
-
-        {/* Desktop Navigation */}
-        {showTopNavItems && (
-          <Box
-            className="flex items-center gap-2"
-            style={{
-              position: 'absolute',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              height: '100%',
-            }}
-          >
-            {navItems.map((item) => {
-              const isOpen = activeKey === item.key;
-              const hasSubItems = item.subItems && item.subItems.length > 0;
-
-              const isParentActive = location.pathname === item.to
-                || location.pathname.startsWith(item.to + '/')
-                || item.subItems?.some((subItem: any) => (
-                  location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/')
-                ));
-
-              return (
-                <Box
-                  key={item.key}
-                  onMouseEnter={(e) => hasSubItems && handleUnitEnter(e, item.key)}
-                  onMouseLeave={handleUnitLeave}
-                  style={{ position: 'relative', height: 'auto', display: 'flex', alignItems: 'center' }}
-                >
-                  <Button
-                    asChild
-                    variant="text"
-                    startIcon={item.icon}
-                    style={getButtonStyle(isParentActive)}
-                  >
-                    <RouterLink to={item.to}>{item.label}</RouterLink>
-                  </Button>
-
-                  {hasSubItems && isOpen && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        zIndex: 1500,
-                        paddingTop: 8,
-                      }}
-                    >
-                      <Paper style={menuPaperStyle}>
-                        {item.subItems.map((subItem: any) => {
-                          const isSubActive = location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/');
-                          return (
-                            <RouterLink
-                              key={subItem.key}
-                              to={subItem.to}
-                              onClick={handleUnitLeave}
-                              style={{
-                                display: 'block',
-                                textDecoration: 'none',
-                                width: '100%',
-                                borderRadius: 'var(--layout-header-menu-radius)',
-                                fontSize: '0.85rem',
-                                fontWeight: 500,
-                                color: isSubActive
-                                  ? ((isLinear || isFlat) ? 'hsl(var(--primary))' : 'var(--foreground)')
-                                  : 'var(--muted-foreground)',
-                                padding: '8px 12px',
-                                boxSizing: 'border-box',
-                              }}
-                            >
-                              {subItem.label}
-                            </RouterLink>
-                          );
-                        })}
-                      </Paper>
-                    </div>
-                  )}
-                </Box>
-              );
-            })}
-          </Box>
-        )}
-
-        {/* Spacer */}
-        {!showTopNavItems && <Box className="flex-1" />}
-
-        {/* Right Actions */}
-        <Box
-          className="flex items-center"
-          style={{ marginLeft: showTopNavItems ? 'auto' : 0 }}
-        >
-          {layoutPolicy.headerVersionPlacement === 'desktop' && !isMobile && versionParts.length > 0 && (
-            <Tooltip title="Click to view changelog" arrow placement="bottom">
-              <Box
-                className="flex flex-col items-end mr-3"
-                style={{ lineHeight: 1.1, cursor: 'pointer' }}
-                onClick={() => navigate('/changelog')}
-              >
-                <Typography variant="caption" style={{ color: 'var(--muted-foreground)', fontWeight: 600, fontSize: '0.6rem' }}>
-                  {versionParts[0]}
-                </Typography>
-                {versionParts[1] && (
-                  <Box className="flex items-center gap-1">
-                    <Typography variant="caption" style={{ color: 'var(--muted-foreground)', fontSize: '0.6rem' }}>
-                      {versionParts[1]}
-                    </Typography>
-                  </Box>
-                )}
-              </Box>
-            </Tooltip>
-          )}
-
-          {layoutPolicy.headerVersionPlacement === 'mobile' && isMobile && versionParts.length > 0 && (
-            <Tooltip title="Tap to view changelog" arrow placement="bottom">
-              <Typography
-                variant="caption"
-                onClick={() => navigate('/changelog')}
-                style={{
-                  color: 'var(--muted-foreground)',
-                  fontWeight: 600,
-                  fontSize: '0.6rem',
-                  cursor: 'pointer',
-                  marginRight: 4,
-                  userSelect: 'none',
-                  lineHeight: 1,
-                }}
-              >
-                {versionParts[0]}
-              </Typography>
-            </Tooltip>
-          )}
-
-          {hasAnyUpdate && sharedUpdateTooltip && (
-            <Tooltip title={sharedUpdateTooltip} placement="bottom" arrow>
-              <IconButton
-                aria-label={sharedUpdateAriaLabel}
-                className="mr-1"
-                style={sharedUpdateIndicatorStyle}
-              >
-                <DownloadIcon />
-              </IconButton>
-            </Tooltip>
-          )}
-
-          {token && layoutPolicy.showStorageHeaderWidget && <StorageHeaderWidget token={token} />}
-
-          {token && !isPlatformManaged && onLogout && (
-            <IconButton aria-label="logout" onClick={onLogout} style={{ color: 'var(--foreground)' }}>
-              <LogoutIcon />
+          {((!isMobile && !isTopNav) || (isMobile && layoutPolicy.showHeaderToggleOnMobile)) && (
+            <IconButton
+              className="pop-toggle"
+              aria-label="toggle navigation"
+              onClick={toggleDrawer}
+              style={{
+                width: 'var(--layout-header-toggle-width)',
+                height: 'var(--layout-header-toggle-height)',
+                borderRadius: 'var(--layout-header-toggle-radius)',
+                color: 'var(--layout-header-toggle-color)',
+                marginRight: isTopNav ? 8 : 0,
+              }}
+            >
+              {layoutPolicy.headerToggleMode === 'collapse' ? (
+                isCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />
+              ) : (
+                <MenuIcon />
+              )}
             </IconButton>
           )}
+
+          <Box
+            className="flex items-center min-w-0"
+            style={{
+              height: APP_BAR_TOGGLE_SIZE,
+              flex: '1 1 auto',
+              minWidth: 0,
+              marginRight: showTopNavItems && !showLandscapeNavItems ? 32 : 0,
+            }}
+          >
+            <RouterLink
+              to="/"
+              style={{
+                display: 'inline-flex',
+                marginLeft: 'var(--layout-header-title-inset)',
+                textDecoration: 'none',
+                minWidth: 0,
+              }}
+            >
+              <Typography
+                variant="h6"
+                style={{
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-display)',
+                  whiteSpace: 'nowrap',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  lineHeight: `${APP_BAR_TOGGLE_SIZE}px`,
+                  fontSize: showLandscapeNavItems ? '1.1rem' : '1.35rem',
+                  color: 'var(--foreground)',
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                } as React.CSSProperties}
+              >
+                {appName}
+              </Typography>
+            </RouterLink>
+          </Box>
+
+          {!showTopNavItems && <Box className="flex-1" />}
+
+          {rightActions}
         </Box>
+
+        {navRow}
       </div>
     </header>
   );

@@ -9,7 +9,7 @@ import { TooltipProvider } from '../../ui/tooltip';
 import { getThemeById, resolveThemeLayoutPolicy } from '../../../themes';
 
 jest.mock('../StorageHeaderWidget', () => ({
-  StorageHeaderWidget: () => null,
+  StorageHeaderWidget: () => <div data-testid="storage-header-widget" />,
 }));
 
 const NAV_ITEMS = [
@@ -52,9 +52,26 @@ function renderHeader(overrides: Partial<NavHeaderProps> = {}) {
   );
 }
 
+function setMatchMedia({ isLandscape = false }: { isLandscape?: boolean } = {}) {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: query === '(orientation: landscape)' ? isLandscape : false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
 describe('NavHeader shared update indicator', () => {
   beforeEach(() => {
     localStorage.clear();
+    setMatchMedia();
   });
 
   it('renders a single shared update indicator when both Youtarr and yt-dlp need updates', async () => {
@@ -115,5 +132,22 @@ describe('NavHeader shared update indicator', () => {
     expect(header.style.borderTop).toBe('');
     expect(header.style.borderLeft).toBe('');
     expect(header.style.borderRight).toBe('');
+  });
+
+  it('shows direct section navigation in mobile landscape without rendering a menu toggle', () => {
+    setMatchMedia({ isLandscape: true });
+
+    renderHeader({ layoutPolicy: resolveThemeLayoutPolicy(getThemeById('playful'), 'mobile') });
+
+    expect(screen.getByRole('link', { name: 'Channels' })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/toggle navigation/i)).not.toBeInTheDocument();
+  });
+
+  it('renders the storage widget in the playful mobile header', () => {
+    localStorage.setItem('uiThemeMode', 'playful');
+
+    renderHeader({ layoutPolicy: resolveThemeLayoutPolicy(getThemeById('playful'), 'mobile') });
+
+    expect(screen.getByTestId('storage-header-widget')).toBeInTheDocument();
   });
 });

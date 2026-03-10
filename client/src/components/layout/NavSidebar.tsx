@@ -14,6 +14,7 @@ import {
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { StorageFooterWidget } from './StorageFooterWidget';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import {
   MOBILE_NAV_PRIMARY_HEIGHT,
   MOBILE_NAV_SAFE_GAP,
@@ -78,7 +79,9 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
   const { themeMode } = useThemeEngine();
   const isPlayful = themeMode === 'playful';
   const isLinearFlat = themeMode === 'linear' || themeMode === 'flat';
-  const isCompactStorage = isMobile && isLinearFlat;
+  const isCompactHeight = useMediaQuery('(max-height: 500px)');
+  const isCompactStorage = false;
+  const footerShouldScroll = isPlayful && isCompactHeight;
   const drawerWidth = isMobile ? EXPANDED_WIDTH : collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
   const isNavCollapsed = !isMobile && collapsed;
   const drawerPanelPaddingX = isNavCollapsed ? NAV_DRAWER_PANEL_PADDING_X_COLLAPSED : NAV_DRAWER_PANEL_PADDING_X;
@@ -167,13 +170,30 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
 
   // Common Drawer Content (used for Industrial mobile and all Desktop)
   const drawerContent = (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', paddingRight: 0 }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        minHeight: 0,
+        overflowY: footerShouldScroll ? 'auto' : 'hidden',
+      }}
+    >
+      <div
+        style={{
+          flex: footerShouldScroll ? '0 0 auto' : '1 1 auto',
+          minHeight: 0,
+          overflowY: footerShouldScroll ? 'visible' : 'auto',
+          paddingRight: isPlayful ? 4 : 0,
+          paddingBottom: isPlayful ? 6 : 0,
+        }}
+      >
         <List
           style={{
             paddingLeft: isCompactStorage ? 10 : 0,
-            paddingRight: isCompactStorage ? 10 : 0,
+            paddingRight: isCompactStorage ? 10 : isPlayful ? 4 : 0,
             paddingTop: isCompactStorage ? 8 : 4,
+            paddingBottom: isPlayful ? 4 : 0,
             gap: `${NAV_MAIN_GAP * 8}px`,
             display: 'flex',
             flexDirection: 'column',
@@ -197,7 +217,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                   paddingLeft: NAV_BUTTON_OUTER_PADDING_X,
                   paddingRight: NAV_BUTTON_OUTER_PADDING_X,
                   paddingTop: 0,
-                  paddingBottom: 0,
+                  paddingBottom: isPlayful ? 2 : 0,
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'stretch',
@@ -358,10 +378,19 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
         </List>
       </div>
 
-      {!isNavCollapsed && !isCompactStorage && <Divider style={{ marginTop: 8, marginBottom: 8 }} />}
+      {!isNavCollapsed && !isCompactStorage && <Divider style={{ marginTop: footerShouldScroll ? 12 : 8, marginBottom: 8, flexShrink: 0 }} />}
 
       {!isCompactStorage && (
-        <div style={{ paddingLeft: collapsed ? 8 : 16, paddingRight: collapsed ? 8 : 16, paddingBottom: 4, textAlign: 'left' }}>
+        <div
+          style={{
+            paddingLeft: collapsed ? 8 : 16,
+            paddingRight: collapsed ? 8 : 16,
+            paddingBottom: 4,
+            textAlign: 'left',
+            marginTop: footerShouldScroll ? 0 : 'auto',
+            flexShrink: 0,
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: isNavCollapsed ? 'center' : 'flex-start', gap: 4 }}>
             <Tooltip title="Click to view changelog" arrow placement="top">
               <Typography
@@ -413,19 +442,21 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
               </Typography>
             </Tooltip>
           </div>
-          <StorageFooterWidget
-            token={token}
-            collapsed={collapsed}
-            compact
-            inline
-            justify="flex-end"
-          />
+          {!(isMobile && isPlayful) && (
+            <StorageFooterWidget
+              token={token}
+              collapsed={collapsed}
+              compact
+              inline
+              justify="flex-end"
+            />
+          )}
         </div>
       ) : (
-        <StorageFooterWidget token={token} collapsed={collapsed} />
+        !(isMobile && isPlayful) && <StorageFooterWidget token={token} collapsed={collapsed} />
       )}
 
-      <div style={{ height: 8 }} />
+      <div style={{ height: 8, flexShrink: 0 }} />
     </div>
   );
 
@@ -499,7 +530,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
             borderRadius: isPlayful ? 'var(--radius-ui) var(--radius-ui) 0 0' : '0',
             borderTop: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : isFlat ? '2px solid var(--border)' : 'var(--nav-border)',
             backgroundColor: isLinear ? 'rgba(5, 5, 6, 0.97)' : 'var(--card)',
-            overflow: 'hidden',
+            overflow: 'visible',
             boxShadow: isLinear ? '0 -12px 30px rgba(0, 0, 0, 0.45)' : 'var(--nav-shadow)',
           }}
         >
