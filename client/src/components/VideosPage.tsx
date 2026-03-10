@@ -622,8 +622,21 @@ function VideosPage({ token }: VideosPageProps) {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  videos.map((video) => (
-                    <TableRow key={video.id}>
+                  videos.map((video) => {
+                    const isSelectable = isMobile && !video.removed && Boolean(video.fileSize);
+                    const isRowSelected = selectedVideos.includes(video.id);
+                    return (
+                    <TableRow
+                      key={video.id}
+                      onClick={() => {
+                        if (isSelectable) handleSelectVideo(video.id);
+                      }}
+                      style={{
+                        cursor: isSelectable ? 'pointer' : 'default',
+                        backgroundColor: isRowSelected ? 'var(--muted)' : undefined,
+                        transition: 'background-color 0.15s ease',
+                      }}
+                    >
                       {isMobile ? (
                         <TableCell style={{ paddingLeft: 12, paddingRight: 12, paddingTop: 12, paddingBottom: 12 }}>
                           <Box className="flex flex-col items-stretch justify-start gap-4">
@@ -645,6 +658,7 @@ function VideosPage({ token }: VideosPageProps) {
                                     to={`/channel/${channelId}`}
                                     variant='caption'
                                     className="text-primary no-underline hover:underline block"
+                                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
                                   >
                                     {video.youTubeChannelName}
                                   </Typography>
@@ -1085,7 +1099,8 @@ function VideosPage({ token }: VideosPageProps) {
                           </TableCell>
                       )}
                     </TableRow>
-                  ))
+                  );
+                  })
                 )}
               </TableBody>
             </Table>

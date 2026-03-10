@@ -7,7 +7,7 @@ import {
   Tooltip,
   Paper,
 } from '../ui';
-import { Link as RouterLink, useLocation } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { LogOut as LogoutIcon, Download as DownloadIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from '../../lib/icons';
 import { ThemeMode } from '../../themes';
 import { StorageHeaderWidget } from './StorageHeaderWidget';
@@ -49,6 +49,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   isCollapsed,
 }) => {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const isPlayful = themeMode === 'playful';
 
@@ -59,7 +60,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   const isLinear = themeMode === 'linear';
   const isFlat = themeMode === 'flat';
   const isTopNav = isLinear || isFlat;
-  const showNavToggle = !isMobile && !isTopNav;
+  const hasInsetFrame = isMobile || !isTopNav;
   const showTopNavItems = isTopNav && !isMobile;
   const topNavTitleInset = isTopNav && !isMobile ? 12 : 0;
   const hasAppUpdate = token && !isPlatformManaged && updateAvailable && Boolean(updateTooltip);
@@ -180,22 +181,22 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
 
   const headerStyle: React.CSSProperties = {
     position: 'fixed',
-    backgroundColor: isLinear ? 'rgba(5, 5, 6, 0.72)' : 'var(--card)',
+    backgroundColor: isLinear ? 'rgba(5, 5, 6, 0.72)' : 'var(--card, #fffdf5)',
     backdropFilter: isLinear ? 'none' : 'none',
     border: isLinear ? 'none' : isFlat ? '2px solid var(--border)' : 'var(--appbar-border)',
-    borderBottom: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : isFlat ? '2px solid var(--border)' : 'var(--appbar-border)',
-    borderTop: 'none',
-    borderLeft: 'none',
-    borderRight: 'none',
+    borderBottom: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : isFlat ? '2px solid var(--border)' : undefined,
+    borderTop: isTopNav ? 'none' : undefined,
+    borderLeft: isTopNav ? 'none' : undefined,
+    borderRight: isTopNav ? 'none' : undefined,
     boxShadow: 'none',
     backgroundImage: isLinear || isFlat ? 'none' : 'var(--appbar-pattern)',
     backgroundSize: '24px 24px',
     color: 'var(--foreground)',
     zIndex: 1300,
-    top: isMobile || isTopNav ? 0 : 'var(--shell-gap)',
-    left: isMobile || isTopNav ? 0 : 'var(--shell-gap)',
-    right: isMobile || isTopNav ? 0 : 'var(--shell-gap)',
-    width: isMobile || isTopNav ? '100%' : 'calc(100vw - (var(--shell-gap) * 2))',
+    top: hasInsetFrame ? 'var(--shell-gap)' : 0,
+    left: hasInsetFrame ? 'var(--shell-gap)' : 0,
+    right: hasInsetFrame ? 'var(--shell-gap)' : 0,
+    width: hasInsetFrame ? 'calc(100vw - (var(--shell-gap) * 2))' : '100vw',
     borderRadius: isTopNav ? 0 : 'var(--radius-ui)',
     overflow: 'visible',
   };
@@ -220,7 +221,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
         }}
       >
         {/* Toggle (Mobile/Side) */}
-        {showNavToggle && (
+        {!isMobile && !isTopNav && (
           <IconButton
             className="pop-toggle"
             aria-label="toggle navigation"
@@ -369,18 +370,44 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
           style={{ marginLeft: showTopNavItems ? 'auto' : 0 }}
         >
           {(isLinear || isFlat) && !isMobile && versionParts.length > 0 && (
-            <Box className="flex flex-col items-end mr-3" style={{ lineHeight: 1.1 }}>
-              <Typography variant="caption" style={{ color: 'var(--muted-foreground)', fontWeight: 600, fontSize: '0.6rem' }}>
+            <Tooltip title="Click to view changelog" arrow placement="bottom">
+              <Box
+                className="flex flex-col items-end mr-3"
+                style={{ lineHeight: 1.1, cursor: 'pointer' }}
+                onClick={() => navigate('/changelog')}
+              >
+                <Typography variant="caption" style={{ color: 'var(--muted-foreground)', fontWeight: 600, fontSize: '0.6rem' }}>
+                  {versionParts[0]}
+                </Typography>
+                {versionParts[1] && (
+                  <Box className="flex items-center gap-1">
+                    <Typography variant="caption" style={{ color: 'var(--muted-foreground)', fontSize: '0.6rem' }}>
+                      {versionParts[1]}
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            </Tooltip>
+          )}
+
+          {isMobile && versionParts.length > 0 && (
+            <Tooltip title="Tap to view changelog" arrow placement="bottom">
+              <Typography
+                variant="caption"
+                onClick={() => navigate('/changelog')}
+                style={{
+                  color: 'var(--muted-foreground)',
+                  fontWeight: 600,
+                  fontSize: '0.6rem',
+                  cursor: 'pointer',
+                  marginRight: 4,
+                  userSelect: 'none',
+                  lineHeight: 1,
+                }}
+              >
                 {versionParts[0]}
               </Typography>
-              {versionParts[1] && (
-                <Box className="flex items-center gap-1">
-                  <Typography variant="caption" style={{ color: 'var(--muted-foreground)', fontSize: '0.6rem' }}>
-                    {versionParts[1]}
-                  </Typography>
-                </Box>
-              )}
-            </Box>
+            </Tooltip>
           )}
 
           {hasAnyUpdate && sharedUpdateTooltip && (

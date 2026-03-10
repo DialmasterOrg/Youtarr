@@ -99,4 +99,18 @@ describe('NavHeader shared update indicator', () => {
     expect(screen.getByRole('button', { name: /yt-dlp update available/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /new version available/i })).not.toBeInTheDocument();
   });
+
+  it('keeps the playful header fully framed instead of removing the top border', () => {
+    localStorage.setItem('uiThemeMode', 'playful');
+
+    renderHeader({ themeMode: 'playful', isMobile: true });
+
+    const header = screen.getByRole('banner') as HTMLElement;
+
+    expect(header.style.border).toBe('var(--appbar-border)');
+    expect(header.style.boxShadow).toBe('none');
+    expect(header.style.borderTop).toBe('');
+    expect(header.style.borderLeft).toBe('');
+    expect(header.style.borderRight).toBe('');
+  });
 });

@@ -59,6 +59,10 @@ function renderShell(themeMode: 'playful' | 'linear' | 'flat', isMobile = false)
   );
 }
 
+function getContentFrame() {
+  return screen.getByText('Shell content').parentElement as HTMLElement;
+}
+
 describe('AppShell', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -93,7 +97,7 @@ describe('AppShell', () => {
     expect(screen.queryByRole('button', { name: /toggle:flat:true/i })).not.toBeInTheDocument();
   });
 
-  it('toggles the mobile drawer state without assigning desktop nav width', async () => {
+  it('renders the top header on mobile and allows opening mobile drawer state', async () => {
     const user = userEvent.setup();
     renderShell('playful', true);
 
@@ -104,5 +108,18 @@ describe('AppShell', () => {
     await user.click(screen.getByRole('button', { name: /toggle:playful:true/i }));
 
     expect(screen.getByTestId('nav-sidebar')).toHaveTextContent('collapsed:false|topnav:false|mobileopen:true');
+  });
+
+  it('uses tighter mobile frame padding for playful theme content', () => {
+    renderShell('playful', true);
+
+    expect(getContentFrame()).toHaveStyle({ padding: '12px 6px' });
+  });
+
+  it('uses tighter mobile outer and inner padding for top-nav themes', () => {
+    const { container } = renderShell('flat', true);
+
+    expect(container.querySelector('main')).toHaveStyle({ padding: '8px 8px calc(20px + env(safe-area-inset-bottom))' });
+    expect(getContentFrame()).toHaveStyle({ padding: '12px 8px' });
   });
 });

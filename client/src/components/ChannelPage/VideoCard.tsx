@@ -2,7 +2,6 @@ import React from 'react';
 import {
   Card,
   Typography,
-  Checkbox,
   Chip,
   Grid,
   Fade,
@@ -78,6 +77,9 @@ function VideoCard({
             boxShadow: hoveredVideo === video.youtube_id ? 'var(--card-hover-shadow)' : 'var(--shadow-soft)',
             overflow: 'hidden',
             borderRadius: 'var(--radius-ui)',
+            outline: isDeleteChecked ? '2px solid var(--destructive)' : isChecked ? '2px solid var(--primary)' : '2px solid transparent',
+            outlineOffset: '0px',
+            transition: 'transform 0.2s, box-shadow 0.2s, outline-color 0.2s',
           }}
           onMouseEnter={() => onHoverChange(video.youtube_id)}
           onMouseLeave={() => onHoverChange(null)}
@@ -165,7 +167,7 @@ function VideoCard({
               >
                 <StillLiveDot isMobile={isMobile} onMobileClick={onMobileTooltip} />
               </div>
-            ) : isDownloadSelectable && isDownloadAllowed && (
+            ) : isDownloadSelectable && isDownloadAllowed && isChecked && (
               <div
                 style={{
                   position: 'absolute',
@@ -173,44 +175,23 @@ function VideoCard({
                   left: 0,
                   right: 0,
                   bottom: 0,
-                  backgroundColor: isChecked ? 'rgba(25, 118, 210, 0.3)' : 'transparent',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  justifyContent: 'flex-start',
-                  padding: 8,
-                  transition: 'background-color 0.2s',
+                  backgroundColor: 'rgba(25, 118, 210, 0.2)',
+                  pointerEvents: 'none',
                 }}
-              >
-                <Checkbox
-                  checked={isChecked}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    onCheckChange(video.youtube_id, e.target.checked);
-                  }}
-                  style={{
-                    color: 'white',
-                    backgroundColor: 'rgba(0,0,0,0.5)',
-                  }}
-                />
-              </div>
+              />
             )}
 
-            {/* Delete checkbox for downloaded videos (only in explicit delete mode) */}
-            {isDeleteSelectable && isDeleteAllowed && (
-              <Checkbox
-                checked={isDeleteChecked}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => {
-                  e.stopPropagation();
-                  onDeletionChange(video.youtube_id, e.target.checked);
-                }}
+            {/* Delete highlight overlay for selected videos (delete mode) */}
+            {isDeleteSelectable && isDeleteAllowed && isDeleteChecked && (
+              <div
                 style={{
                   position: 'absolute',
-                  top: 8,
-                  left: 8,
-                  color: 'white',
-                  backgroundColor: 'rgba(0,0,0,0.5)',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: 'rgba(220, 38, 38, 0.2)',
+                  pointerEvents: 'none',
                 }}
               />
             )}

@@ -2,7 +2,6 @@ import React from 'react';
 import {
   Card,
   Typography,
-  Checkbox,
   Chip,
   CardContent,
   Fade,
@@ -18,7 +17,6 @@ import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 
 import RatingBadge from '../shared/RatingBadge';
 import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../shared/chipStyles';
-import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 interface VideoListItemProps {
   video: ChannelVideo;
   checkedBoxes: string[];
@@ -40,8 +38,6 @@ function VideoListItem({
   onToggleIgnore,
   onMobileTooltip,
 }: VideoListItemProps) {
-  const { themeMode } = useThemeEngine();
-  const isPlayful = themeMode === 'playful';
   const status = getVideoStatus(video);
   // Check if video is still live (not "was_live" and not null/undefined)
   const isStillLive = video.live_status && video.live_status !== 'was_live';
@@ -62,11 +58,13 @@ function VideoListItem({
         style={{
           marginBottom: 12,
           display: 'flex',
-          alignItems: isPlayful ? 'center' : 'stretch',
+          alignItems: 'center',
           position: 'relative',
           transition: 'all 0.2s ease',
           cursor: isClickable ? 'pointer' : 'default',
           opacity: status === 'members_only' || isIgnored ? 0.7 : 1,
+          outline: isDeleteChecked ? '2px solid var(--destructive)' : isChecked ? '2px solid var(--primary)' : '2px solid transparent',
+          outlineOffset: '0px',
         }}
         onClick={() => {
           if (isDownloadSelectable && isDownloadAllowed) {
@@ -85,7 +83,7 @@ function VideoListItem({
             width: 120,
             minWidth: 120,
             height: 90,
-            alignSelf: isPlayful ? 'center' : 'stretch',
+            alignSelf: 'center',
             backgroundColor: '#111',
             borderRadius: 'var(--radius-thumb)',
             overflow: 'hidden',
@@ -142,8 +140,8 @@ function VideoListItem({
             />
           )}
 
-          {/* Still Live indicator or Checkbox for selectable videos */}
-          {isStillLive ? (
+          {/* Still Live indicator */}
+          {isStillLive && (
             <div
               style={{
                 position: 'absolute',
@@ -154,41 +152,34 @@ function VideoListItem({
             >
               <StillLiveDot isMobile onMobileClick={onMobileTooltip} />
             </div>
-          ) : isDownloadSelectable && isDownloadAllowed && (
-            <Checkbox
-              checked={isChecked}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) => {
-                e.stopPropagation();
-                onCheckChange(video.youtube_id, e.target.checked);
-              }}
+          )}
+
+          {/* Download selection overlay */}
+          {isDownloadSelectable && isDownloadAllowed && isChecked && (
+            <div
               style={{
                 position: 'absolute',
-                top: 2,
-                left: 2,
-                color: 'white',
-                backgroundColor: 'rgba(0,0,0,0.5)',
-                padding: 4,
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(25, 118, 210, 0.2)',
+                pointerEvents: 'none',
               }}
             />
           )}
 
-          {/* Delete checkbox for downloaded videos (only in explicit delete mode) */}
-          {isDeleteSelectable && isDeleteAllowed && (
-            <Checkbox
-              checked={isDeleteChecked}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) => {
-                e.stopPropagation();
-                onDeletionChange(video.youtube_id, e.target.checked);
-              }}
+          {/* Delete highlight overlay */}
+          {isDeleteSelectable && isDeleteAllowed && isDeleteChecked && (
+            <div
               style={{
                 position: 'absolute',
-                top: 2,
-                left: 2,
-                color: 'white',
-                backgroundColor: 'rgba(0,0,0,0.5)',
-                padding: 4,
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(220, 38, 38, 0.2)',
+                pointerEvents: 'none',
               }}
             />
           )}

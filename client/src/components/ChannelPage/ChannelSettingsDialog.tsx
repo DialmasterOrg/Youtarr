@@ -157,7 +157,6 @@ function ChannelSettingsDialog({
 
   const sections = [
     { id: 'general', label: 'General', icon: <SettingsIcon size={18} /> },
-    { id: 'auto-download', label: 'Auto Download', icon: <DownloadIcon size={18} /> },
     { id: 'filters', label: 'Filters', icon: <FilterAltIcon size={18} /> },
     { id: 'ratings', label: 'Ratings', icon: <RatingIcon size={18} /> }
   ];
@@ -453,6 +452,37 @@ function ChannelSettingsDialog({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             <div>
               <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
+                Auto Downloads
+              </Typography>
+              <Alert severity="info" style={{ marginBottom: 12 }}>
+                <Typography variant="body2">
+                  Enable these to automatically download new content from this channel during scheduled tasks.
+                </Typography>
+              </Alert>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={isTabEnabled('video')}
+                    onChange={(e) => toggleAutoDownloadTab('video', e.target.checked)}
+                  />
+                }
+                label="Automatically download new Videos"
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={isTabEnabled('short')}
+                    onChange={(e) => toggleAutoDownloadTab('short', e.target.checked)}
+                  />
+                }
+                label="Automatically download new Shorts"
+              />
+            </div>
+
+            <Divider />
+
+            <div>
+              <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
                 Resolution Override
               </Typography>
               <FormControl fullWidth>
@@ -566,37 +596,6 @@ function ChannelSettingsDialog({
                 Note: Changing the subfolder will move the channel&apos;s existing folder and files!
               </Typography>
             </div>
-          </div>
-        );
-      case 'auto-download':
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
-              Automatic Download
-            </Typography>
-            <Alert severity="info" style={{ marginBottom: 16 }}>
-              <Typography variant="body2">
-                Enable these to automatically download new content from this channel during scheduled tasks.
-              </Typography>
-            </Alert>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={isTabEnabled('video')}
-                  onChange={(e) => toggleAutoDownloadTab('video', e.target.checked)}
-                />
-              }
-              label="Automatically download new Videos"
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={isTabEnabled('short')}
-                  onChange={(e) => toggleAutoDownloadTab('short', e.target.checked)}
-                />
-              }
-              label="Automatically download new Shorts"
-            />
           </div>
         );
       case 'filters':

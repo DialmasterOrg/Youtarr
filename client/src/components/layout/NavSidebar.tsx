@@ -363,22 +363,27 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
       {!isCompactStorage && (
         <div style={{ paddingLeft: collapsed ? 8 : 16, paddingRight: collapsed ? 8 : 16, paddingBottom: 4, textAlign: 'left' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: isNavCollapsed ? 'center' : 'flex-start', gap: 4 }}>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              style={{
-                display: 'block',
-                whiteSpace: 'nowrap',
-                overflow: isNavCollapsed ? 'visible' : 'hidden',
-                textOverflow: isNavCollapsed ? 'clip' : 'ellipsis',
-                textAlign: isNavCollapsed ? 'center' : 'left',
-                fontSize: isNavCollapsed ? 'clamp(0.55rem, 1.6vw, 0.75rem)' : NAV_SECONDARY_FONT_SIZE,
-                letterSpacing: isNavCollapsed ? '-0.01em' : 'normal',
-              }}
-              title={versionLabel}
-            >
-              {displayVersionLabel}
-            </Typography>
+            <Tooltip title="Click to view changelog" arrow placement="top">
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                onClick={() => navigate('/changelog')}
+                style={{
+                  display: 'block',
+                  whiteSpace: 'nowrap',
+                  overflow: isNavCollapsed ? 'visible' : 'hidden',
+                  textOverflow: isNavCollapsed ? 'clip' : 'ellipsis',
+                  textAlign: isNavCollapsed ? 'center' : 'left',
+                  fontSize: isNavCollapsed ? 'clamp(0.55rem, 1.6vw, 0.75rem)' : NAV_SECONDARY_FONT_SIZE,
+                  letterSpacing: isNavCollapsed ? '-0.01em' : 'normal',
+                  cursor: 'pointer',
+                  textDecoration: 'none',
+                }}
+                title={versionLabel}
+              >
+                {displayVersionLabel}
+              </Typography>
+            </Tooltip>
           </div>
         </div>
       )}
@@ -397,9 +402,16 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Typography variant="caption" color="text.secondary" style={{ fontWeight: 600 }}>
-              {versionLabel || 'Youtarr'}
-            </Typography>
+            <Tooltip title="Click to view changelog" arrow placement="top">
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                onClick={() => navigate('/changelog')}
+                style={{ fontWeight: 600, cursor: 'pointer' }}
+              >
+                {versionLabel || 'Youtarr'}
+              </Typography>
+            </Tooltip>
           </div>
           <StorageFooterWidget
             token={token}

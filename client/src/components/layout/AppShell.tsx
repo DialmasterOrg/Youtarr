@@ -7,7 +7,6 @@ import { NavSidebar } from './NavSidebar';
 import { BackgroundDecorations } from './BackgroundDecorations';
 import { getThemeById } from '../../themes';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { MOBILE_NAV_SAFE_GAP } from './navLayoutConstants';
 
 import { Tv as SubscriptionsIcon, Library as VideoLibraryIcon } from 'lucide-react';
 import { Download as DownloadIcon, Settings as SettingsIcon } from '../../lib/icons';
@@ -30,6 +29,8 @@ interface AppShellProps {
 const EXPANDED_WIDTH = 200;
 const COLLAPSED_WIDTH = 65;
 const APP_BAR_TOGGLE_SIZE = 44;
+const TOP_NAV_DESKTOP_PADDING = '32px 32px 48px';
+const TOP_NAV_MOBILE_PADDING = '8px 8px calc(20px + env(safe-area-inset-bottom))';
 
 export function AppShell({
   token,
@@ -48,6 +49,13 @@ export function AppShell({
   
   const currentTheme = getThemeById(themeMode);
   const isTopNav = currentTheme.layoutMode === 'top-nav';
+  const contentFramePadding = isMobile
+    ? themeMode === 'playful'
+      ? '12px 6px'
+      : '12px 8px'
+    : themeMode === 'playful'
+      ? '20px 16px'
+      : '24px 32px';
 
   const [drawerOpenMobile, setDrawerOpenMobile] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -173,14 +181,12 @@ export function AppShell({
           isTopNav
             ? {
                 flexGrow: 1,
-                width: '100%',
+                width: '100vw',
                 marginTop: 64,
                 marginBottom: 0,
                 marginRight: 0,
                 marginLeft: 0,
-                padding: isMobile
-                  ? `20px 6px calc(var(--mobile-nav-total-offset, 0px) + ${MOBILE_NAV_SAFE_GAP}px) 6px`
-                  : '32px 32px 48px 32px',
+                padding: isMobile ? TOP_NAV_MOBILE_PADDING : TOP_NAV_DESKTOP_PADDING,
                 position: 'relative',
                 zIndex: 1,
                 transition: 'all 300ms cubic-bezier(0.4, 0, 0.2, 1)',
@@ -197,12 +203,10 @@ export function AppShell({
                 flexDirection: 'column',
                 minHeight: '100vh',
                 minWidth: 0,
-                paddingTop: isMobile ? 'calc(60px + var(--shell-gap))' : 'calc(80px + var(--shell-gap))',
-                paddingBottom: isMobile
-                  ? `calc(var(--mobile-nav-total-offset, 0px) + ${MOBILE_NAV_SAFE_GAP}px)`
-                  : 'var(--shell-gap)',
-                paddingLeft: isMobile ? '4px' : 'calc(var(--nav-width) + var(--shell-gap) * 2)',
-                paddingRight: isMobile ? '4px' : 'var(--shell-gap)',
+                paddingTop: isMobile ? 'calc(64px + var(--shell-gap) * 2)' : 'calc(80px + var(--shell-gap))',
+                paddingBottom: 'var(--shell-gap)',
+                paddingLeft: isMobile ? 'var(--shell-gap)' : 'calc(var(--nav-width) + var(--shell-gap) * 2)',
+                paddingRight: 'var(--shell-gap)',
                 boxSizing: 'border-box',
                 position: 'relative',
                 zIndex: 1,
@@ -217,9 +221,9 @@ export function AppShell({
             marginRight: themeMode === 'playful' ? 0 : 'auto',
             width: '100%',
             minWidth: 0,
-            padding: themeMode === 'playful'
-              ? (isMobile ? '16px 10px' : '20px 16px')
-              : (isMobile ? '16px 10px' : '24px 32px'),
+            boxSizing: 'border-box',
+            overflowX: 'hidden',
+            padding: contentFramePadding,
             ...(themeMode === 'playful'
               ? {
                   backgroundColor: 'var(--card)',

@@ -9,7 +9,6 @@ import {
   Chip,
   LinearProgress,
   FormControl,
-  InputLabel,
   Select,
   Badge,
   Menu,
@@ -17,7 +16,7 @@ import {
   ListItemText,
   Divider,
 } from '../ui';
-import { Search as SearchIcon, LayoutGrid as ViewModuleIcon, LayoutGrid as TableChartIcon, List as ViewListIcon, Download as DownloadIcon, RefreshCw as RefreshIcon, Trash2 as DeleteIcon, Ban as BlockIcon, Info as InfoIcon, X as ClearIcon, ListFilter as FilterListIcon, MoreVert as MoreVertIcon } from '../../lib/icons';
+import { Search as SearchIcon, LayoutGrid as ViewModuleIcon, Rows as TableChartIcon, Download as DownloadIcon, RefreshCw as RefreshIcon, Trash2 as DeleteIcon, Ban as BlockIcon, Info as InfoIcon, X as ClearIcon, ListFilter as FilterListIcon, MoreVert as MoreVertIcon } from '../../lib/icons';
 import { LayoutList } from 'lucide-react';
 import { getVideoStatus } from '../../utils/videoStatus';
 import { ChannelVideo } from '../../types/ChannelVideo';
@@ -41,7 +40,6 @@ interface ChannelVideosHeaderProps {
   selectionMode: 'download' | 'delete' | null;
   deleteLoading: boolean;
   paginatedVideos: ChannelVideo[];
-  autoDownloadsEnabled: boolean;
   selectedTab: string;
   maxRating: string;
   onViewModeChange: (event: React.MouseEvent<HTMLElement>, newMode: ViewMode | null) => void;
@@ -56,7 +54,6 @@ interface ChannelVideosHeaderProps {
   onBulkIgnoreClick: () => void;
   onInfoIconClick: (tooltip: string) => void;
   onMaxRatingChange: (value: string) => void;
-  onAutoDownloadToggle: (enabled: boolean) => void;
   // Filter-related props (desktop only)
   activeFilterCount?: number;
   filtersExpanded?: boolean;
@@ -76,7 +73,6 @@ function ChannelVideosHeader({
   selectionMode,
   deleteLoading,
   paginatedVideos,
-  autoDownloadsEnabled,
   selectedTab,
   maxRating,
   onViewModeChange,
@@ -91,7 +87,6 @@ function ChannelVideosHeader({
   onBulkIgnoreClick,
   onInfoIconClick,
   onMaxRatingChange,
-  onAutoDownloadToggle,
   activeFilterCount = 0,
   filtersExpanded = false,
   onFiltersExpandedChange,
@@ -187,100 +182,104 @@ function ChannelVideosHeader({
         </div>
 
         {/* Search and filters */}
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-          <TextField
-            placeholder="Search videos..."
-            size="small"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            InputProps={{
-              startAdornment: <SearchIcon size={16} data-testid="SearchIcon" />,
-            }}
-            style={{ flexGrow: 1, minWidth: isMobile ? 0 : 200, width: isMobile ? '100%' : 'auto' }}
-          />
-
-          <FormControl style={{ minWidth: isMobile ? 0 : 200, width: isMobile ? '100%' : undefined }}>
-            <InputLabel>Max Rating</InputLabel>
-            <Select
+        {isMobile ? (
+          <>
+            {/* Mobile: search bar on its own full-width row */}
+            <TextField
+              placeholder="Search videos..."
               size="small"
-              value={maxRating}
-              label="Max Rating"
-              onChange={(event) => onMaxRatingChange(event.target.value)}
-            >
-              {RATING_OPTIONS.map(option => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              InputProps={{
+                startAdornment: <SearchIcon size={16} data-testid="SearchIcon" />,
+              }}
+              style={{ width: '100%', marginBottom: 8 }}
+            />
+            {/* Mobile: rating on next row */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <FormControl style={{ flex: 1, minWidth: 120 }}>
+                <Select
+                  size="small"
+                  value={maxRating}
+                  displayEmpty
+                  onChange={(event) => onMaxRatingChange(event.target.value)}
+                >
+                  {RATING_OPTIONS.map(option => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </div>
+          </>
+        ) : (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <TextField
+              placeholder="Search videos..."
+              size="small"
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              InputProps={{
+                startAdornment: <SearchIcon size={16} data-testid="SearchIcon" />,
+              }}
+              style={{ flex: '1 1 auto', minWidth: 200 }}
+            />
 
-          {/* View mode toggle - mobile shows list/grid, desktop shows table/grid */}
-          <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden', flexShrink: 0 }}>
-            {!isMobile && (
+            <FormControl style={{ minWidth: 150 }}>
+              <Select
+                size="small"
+                value={maxRating}
+                displayEmpty
+                onChange={(event) => onMaxRatingChange(event.target.value)}
+              >
+                {RATING_OPTIONS.map(option => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={hideDownloaded}
+                  onChange={(e) => onHideDownloadedChange(e.target.checked)}
+                  size="small"
+                />
+              }
+              label="Hide Downloaded"
+            />
+
+          </div>
+        )}
+
+        {/* Action buttons for desktop */}
+        {!isMobile && (
+          <ActionBar variant={themeMode} style={{ marginTop: 10 }}>
+            {/* View mode toggle */}
+            <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden', flexShrink: 0, alignSelf: 'center' }}>
               <button
                 value="table"
                 onClick={(e) => onViewModeChange(e, 'table')}
-                className={viewMode === 'table' ? 'Mui-selected' : ''}
                 style={{ padding: '6px 8px', background: viewMode === 'table' ? 'var(--primary)' : 'transparent', color: viewMode === 'table' ? 'white' : 'inherit', border: 'none', borderRight: '1px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                 title="Table View"
                 aria-label="Table View"
               >
                 <TableChartIcon size={16} />
               </button>
-            )}
-            <button
-              value="grid"
-              onClick={(e) => onViewModeChange(e, 'grid')}
-              className={viewMode === 'grid' ? 'Mui-selected' : ''}
-              style={{ padding: '6px 8px', background: viewMode === 'grid' ? 'var(--primary)' : 'transparent', color: viewMode === 'grid' ? 'white' : 'inherit', border: 'none', borderRight: isMobile ? '1px solid var(--border)' : 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-              title="Grid View"
-              aria-label="Grid View"
-            >
-              <ViewModuleIcon size={16} />
-            </button>
-            {isMobile && (
               <button
-                value="list"
-                onClick={(e) => onViewModeChange(e, 'list')}
-                className={viewMode === 'list' ? 'Mui-selected' : ''}
-                style={{ padding: '6px 8px', background: viewMode === 'list' ? 'var(--primary)' : 'transparent', color: viewMode === 'list' ? 'white' : 'inherit', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                title="List View"
-                aria-label="List View"
+                value="grid"
+                onClick={(e) => onViewModeChange(e, 'grid')}
+                style={{ padding: '6px 8px', background: viewMode === 'grid' ? 'var(--primary)' : 'transparent', color: viewMode === 'grid' ? 'white' : 'inherit', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                title="Grid View"
+                aria-label="Grid View"
               >
-                <LayoutList size={16} />
+                <ViewModuleIcon size={16} />
               </button>
-            )}
-          </div>
+            </div>
 
-          {!isMobile && (
-            <FormControlLabel
-            control={
-                <Switch
-                checked={hideDownloaded}
-                onChange={(e) => onHideDownloadedChange(e.target.checked)}
-                size="small"
-                />
-            }
-            label="Hide Downloaded"
-            />
-          )}
-
-          <FormControlLabel
-            style={{ width: isMobile ? '100%' : undefined, marginRight: 0 }}
-            control={<Switch checked={autoDownloadsEnabled} onChange={(e) => onAutoDownloadToggle(e.target.checked)} size="small" />}
-            label={
-              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
-                Enable Channel Downloads for this tab
-                {renderInfoIcon(autoDownloadTooltip)}
-              </div>
-            }
-          />
-        </div>
-
-        {/* Action buttons for desktop */}
-        {!isMobile && (
-          <ActionBar variant={themeMode} style={{ marginTop: 10 }}>
             {onFiltersExpandedChange && (
               <Button
                 variant={filtersExpanded ? 'contained' : 'outlined'}
@@ -402,7 +401,104 @@ function ChannelVideosHeader({
           </ActionBar>
         )}
 
-        {/* Action buttons for mobile intentionally hidden */}
+        {/* Mobile action bar: view toggle + filters + actions */}
+        {isMobile && (
+          <ActionBar variant={themeMode} style={{ marginTop: 8 }}>
+            {/* Grid/List view toggle */}
+            <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden', flexShrink: 0, alignSelf: 'center' }}>
+              <button
+                value="grid"
+                onClick={(e) => onViewModeChange(e, 'grid')}
+                style={{ padding: '6px 10px', background: viewMode === 'grid' ? 'var(--primary)' : 'transparent', color: viewMode === 'grid' ? 'white' : 'inherit', border: 'none', borderRight: '1px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                title="Grid View"
+                aria-label="Grid View"
+              >
+                <ViewModuleIcon size={16} />
+              </button>
+              <button
+                value="list"
+                onClick={(e) => onViewModeChange(e, 'list')}
+                style={{ padding: '6px 10px', background: viewMode === 'list' ? 'var(--primary)' : 'transparent', color: viewMode === 'list' ? 'white' : 'inherit', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                title="List View"
+                aria-label="List View"
+              >
+                <LayoutList size={16} />
+              </button>
+            </div>
+            {onFiltersExpandedChange && (
+              <Button
+                variant={filtersExpanded ? 'contained' : 'outlined'}
+                size="small"
+                startIcon={
+                  <Badge badgeContent={activeFilterCount} color="primary" invisible={activeFilterCount === 0}>
+                    <FilterListIcon size={16} />
+                  </Badge>
+                }
+                onClick={() => onFiltersExpandedChange(!filtersExpanded)}
+                className={intentStyles.base}
+              >
+                Filters
+              </Button>
+            )}
+            <Button
+              variant="outlined"
+              size="small"
+              color="inherit"
+              endIcon={<MoreVertIcon size={16} />}
+              onClick={toggleActionsMenu}
+              aria-haspopup="menu"
+              aria-expanded={actionsOpen ? 'true' : 'false'}
+              aria-controls={actionsOpen ? 'channel-actions-menu-mobile' : undefined}
+              className={intentStyles.base}
+            >
+              Actions{hasAnySelection && ` (${hasDownloadSelection ? checkedBoxes.length : selectedForDeletion.length})`}
+            </Button>
+            <Menu
+              id="channel-actions-menu-mobile"
+              anchorEl={actionsAnchorEl}
+              open={actionsOpen}
+              onClose={closeActionsMenu}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            >
+              <MenuItem onClick={() => { onSelectAllDownloaded(); closeActionsMenu(); }} disabled={selectableDeleteCount === 0} style={{ color: 'var(--info)' }}>
+                <ListItemText>Select All (Downloaded)</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => { onSelectAllNotDownloaded(); closeActionsMenu(); }} disabled={selectableDownloadCount === 0} style={{ color: 'var(--warning)' }}>
+                <ListItemText>Select All (Not Downloaded)</ListItemText>
+              </MenuItem>
+              {hasAnySelection && (
+                <>
+                  <Divider />
+                  <MenuItem onClick={() => { onClearSelection(); closeActionsMenu(); }} style={{ color: 'var(--muted-foreground)' }}>
+                    <ClearIcon size={14} style={{ marginRight: 8 }} />
+                    <ListItemText>Clear Selection</ListItemText>
+                  </MenuItem>
+                  <Divider />
+                </>
+              )}
+              {(hasDownloadSelection || hasMixedSelection) && (
+                <MenuItem onClick={() => { onDownloadClick(); closeActionsMenu(); }} disabled={!hasDownloadSelection} style={{ color: 'var(--success)' }}>
+                  <DownloadIcon size={14} style={{ marginRight: 8, color: 'var(--success)' }} />
+                  <ListItemText>Download Selected ({checkedBoxes.length})</ListItemText>
+                </MenuItem>
+              )}
+              {(hasDeleteSelection || hasMixedSelection) && hasDownloadSelection && <Divider />}
+              {(hasDeleteSelection || hasMixedSelection) && (
+                <MenuItem onClick={() => { onDeleteClick(); closeActionsMenu(); }} disabled={!hasDeleteSelection || deleteLoading} style={{ color: 'var(--destructive)' }}>
+                  <DeleteIcon size={14} style={{ marginRight: 8 }} />
+                  <ListItemText>Delete Selected ({selectedForDeletion.length})</ListItemText>
+                </MenuItem>
+              )}
+              {hasDownloadSelection && (
+                <MenuItem onClick={() => { onBulkIgnoreClick(); closeActionsMenu(); }} style={{ color: 'var(--warning)' }}>
+                  <BlockIcon size={14} style={{ marginRight: 8, color: 'var(--warning)' }} />
+                  <ListItemText>Ignore Selected ({checkedBoxes.length})</ListItemText>
+                </MenuItem>
+              )}
+            </Menu>
+          </ActionBar>
+        )}
       </div>
 
       {/* Progress bar */}

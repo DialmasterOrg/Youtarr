@@ -312,6 +312,14 @@ body[data-theme='playful'] .sticker:hover {
   box-shadow: none !important;
 }
 
+/* Keep playful top bar visibly framed even if runtime token injection drifts. */
+body[data-theme='playful'] header[data-nav-container] {
+  background-color: var(--card, #fffdf5) !important;
+  border: 2px solid var(--foreground) !important;
+  background-image: var(--appbar-pattern, radial-gradient(rgba(30, 41, 59, 0.12) 1px, transparent 1px));
+  background-size: 24px 24px;
+}
+
 .pop-toggle {
   transition: all var(--transition-base) var(--transition-bouncy) !important;
   border: 2px solid var(--border-strong) !important;
@@ -450,4 +458,83 @@ code {
 
 html {
   scroll-behavior: smooth;
+}
+
+/* Changelog markdown styles */
+.changelog-markdown h1,
+.changelog-markdown h2,
+.changelog-markdown h3,
+.changelog-markdown h4,
+.changelog-markdown h5,
+.changelog-markdown h6 {
+  color: var(--primary);
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+}
+
+.changelog-markdown h1 {
+  font-size: 1.75rem;
+}
+
+.changelog-markdown h2 {
+  font-size: 1.5rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.25rem;
+}
+
+.changelog-markdown h3 {
+  font-size: 1.25rem;
+}
+
+.changelog-markdown h4 {
+  font-size: 1.1rem;
+}
+
+.changelog-markdown h5 {
+  font-size: 1rem;
+}
+
+.changelog-markdown h6 {
+  font-size: 0.95rem;
+}
+
+.changelog-markdown a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.changelog-markdown a:hover {
+  text-decoration: underline;
+}
+
+.changelog-markdown ul,
+.changelog-markdown ol {
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.changelog-markdown li {
+  margin-bottom: 0.25rem;
+}
+
+.changelog-markdown code {
+  background-color: var(--muted);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+  font-size: 0.875em;
+}
+
+.changelog-markdown pre {
+  background-color: var(--muted);
+  padding: 1rem;
+  border-radius: 8px;
+  overflow: auto;
+  margin-bottom: 1rem;
+}
+
+.changelog-markdown pre code {
+  background-color: transparent;
+  padding: 0;
 }

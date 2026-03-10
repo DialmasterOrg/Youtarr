@@ -136,6 +136,15 @@ function VideoTableView({
                   cursor: isClickable ? 'pointer' : 'default',
                   borderBottom: '1px solid var(--border)',
                 }}
+                onClick={() => {
+                  if (isDownloadSelectable && isDownloadAllowed) {
+                    onCheckChange(video.youtube_id, !isChecked);
+                    return;
+                  }
+                  if (isDeleteSelectable && isDeleteAllowed) {
+                    onDeletionChange(video.youtube_id, !isDeleteChecked);
+                  }
+                }}
               >
                 <td style={{ width: 48, maxWidth: 48, padding: '8px 4px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
@@ -144,6 +153,7 @@ function VideoTableView({
                     ) : isDownloadSelectable && isDownloadAllowed && (
                       <Checkbox
                         checked={isChecked}
+                        onClick={(e) => e.stopPropagation()}
                         onChange={(e) => onCheckChange(video.youtube_id, e.target.checked)}
                       />
                     )}
@@ -151,6 +161,7 @@ function VideoTableView({
                       isDeleteMode ? (
                         <Checkbox
                           checked={isDeleteChecked}
+                          onClick={(e) => e.stopPropagation()}
                           onChange={(e) => onDeletionChange(video.youtube_id, e.target.checked)}
                         />
                       ) : (

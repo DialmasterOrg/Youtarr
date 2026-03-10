@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Features
+
+* **channels:** replace video selection checkboxes with highlighted border outline for cleaner selected state
+* **channels:** search bar now fills full width on its own row on mobile
+* **channels:** thumbnail vertical alignment fixed for all themes (previously only playful theme was centered)
+* **channels:** removed redundant "Max Rating" label from rating dropdown for cleaner filter row
+* **channels:** moved grid/list view toggle to the action/filters bar row
+* **channels:** fixed list view icon (was incorrectly using the same icon as grid view)
+* **nav:** app version label is now clickable on both mobile and desktop — hover/tap shows a "Click to view changelog" tooltip that navigates to the changelog page
+
+
 ## [v1.60.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.60.0) - 2026-03-02
 
 ## [1.60.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.59.0...v1.60.0) (2026-03-02)

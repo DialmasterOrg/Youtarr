@@ -39,6 +39,7 @@ function ChannelPage({ token }: ChannelPageProps) {
     max_duration: number | null;
     title_filter_regex: string | null;
     default_rating: string | null;
+    auto_download_enabled_tabs: string | null;
   }) => {
     setChannel((prev) => {
       if (!prev) {
@@ -53,6 +54,7 @@ function ChannelPage({ token }: ChannelPageProps) {
         max_duration: updated.max_duration,
         title_filter_regex: updated.title_filter_regex,
         default_rating: updated.default_rating,
+        auto_download_enabled_tabs: updated.auto_download_enabled_tabs,
       };
     });
   };
@@ -257,7 +259,7 @@ function ChannelPage({ token }: ChannelPageProps) {
     ? trimmedDescription || '** No description available **'
     : 'Loading...';
   const descriptionIsLong = Boolean(trimmedDescription && trimmedDescription.length > descriptionLimit);
-  const allowDescriptionCollapse = !(isMobile && isPlayful);
+  const allowDescriptionCollapse = !isPlayful || !isMobile;
   const displayedDescription =
     !allowDescriptionCollapse || descriptionExpanded || !descriptionIsLong
       ? descriptionText

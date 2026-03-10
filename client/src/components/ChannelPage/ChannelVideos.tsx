@@ -916,7 +916,6 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           selectionMode={selectionMode}
           deleteLoading={deleteLoading}
           paginatedVideos={paginatedVideos}
-          autoDownloadsEnabled={selectedTab ? (tabAutoDownloadStatus[selectedTab] ?? autoDownloadsEnabled) : autoDownloadsEnabled}
           selectedTab={selectedTab || 'videos'}
           maxRating={maxRating}
           onViewModeChange={handleViewModeChange}
@@ -940,7 +939,6 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
             setMaxRating(value);
             setPage(1);
           }}
-          onAutoDownloadToggle={handleAutoDownloadChange}
           activeFilterCount={activeFilterCount}
           filtersExpanded={filtersExpanded}
           onFiltersExpandedChange={setFiltersExpanded}
