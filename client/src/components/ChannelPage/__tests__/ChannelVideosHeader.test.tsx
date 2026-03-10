@@ -268,7 +268,7 @@ describe('ChannelVideosHeader actions menu', () => {
 
   test('hides desktop actions bar on mobile', () => {
     renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} isMobile />);
-    expect(screen.queryByRole('button', { name: /Actions/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('desktop-actions-btn')).not.toBeInTheDocument();
   });
 
   test('calls onAutoDownloadToggle when auto-download switch is toggled', async () => {

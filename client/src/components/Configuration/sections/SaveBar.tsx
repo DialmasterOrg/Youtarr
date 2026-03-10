@@ -33,7 +33,7 @@ export const SaveBar: React.FC<SaveBarProps> = ({
     : 'Save configuration settings';
 
   return (
-    <Slide direction="down" in={isVisible} mountOnEnter unmountOnExit={placement === 'inline'}>
+    <Slide direction="down" in={isVisible} unmountOnExit={placement === 'inline'}>
       <div
         style={{
           position: placement === 'inline' ? 'sticky' : 'fixed',

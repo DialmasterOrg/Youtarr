@@ -54,7 +54,7 @@ function ChannelPage({ token }: ChannelPageProps) {
         max_duration: updated.max_duration,
         title_filter_regex: updated.title_filter_regex,
         default_rating: updated.default_rating,
-        auto_download_enabled_tabs: updated.auto_download_enabled_tabs,
+        auto_download_enabled_tabs: updated.auto_download_enabled_tabs || undefined,
       };
     });
   };

@@ -129,9 +129,9 @@ describe('AppShell', () => {
   });
 
   it('uses tighter mobile outer and inner padding for top-nav themes', () => {
-    const { container } = renderShell('flat', true);
+    renderShell('flat', true);
 
-    expect(container.querySelector('main')).toHaveAttribute('data-nav-placement', 'top');
+    expect(screen.getByRole('main')).toHaveAttribute('data-nav-placement', 'top');
     expect(getLayoutRoot().style.getPropertyValue('--layout-main-padding')).toBe('8px 8px calc(20px + env(safe-area-inset-bottom))');
     expect(getLayoutRoot().style.getPropertyValue('--layout-content-padding')).toBe('12px 8px');
   });

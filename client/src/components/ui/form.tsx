@@ -75,6 +75,7 @@ const Checkbox = React.forwardRef<React.ElementRef<typeof CheckboxPrimitive.Root
         name={name}
         data-indeterminate={indeterminate ? 'true' : undefined}
         data-testid={inputProps?.['data-testid']}
+        aria-label={inputProps?.['aria-label'] as string | undefined}
         onCheckedChange={(v) =>
           onChange?.({
             target: { checked: v === true, name: name },

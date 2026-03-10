@@ -54,6 +54,8 @@ interface ChannelVideosHeaderProps {
   onBulkIgnoreClick: () => void;
   onInfoIconClick: (tooltip: string) => void;
   onMaxRatingChange: (value: string) => void;
+  autoDownloadsEnabled?: boolean;
+  onAutoDownloadToggle?: (enabled: boolean) => void;
   // Filter-related props (desktop only)
   activeFilterCount?: number;
   filtersExpanded?: boolean;
@@ -87,6 +89,8 @@ function ChannelVideosHeader({
   onBulkIgnoreClick,
   onInfoIconClick,
   onMaxRatingChange,
+  autoDownloadsEnabled,
+  onAutoDownloadToggle,
   activeFilterCount = 0,
   filtersExpanded = false,
   onFiltersExpandedChange,
@@ -252,6 +256,20 @@ function ChannelVideosHeader({
               label="Hide Downloaded"
             />
 
+            {onAutoDownloadToggle && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={!!autoDownloadsEnabled}
+                    onChange={(e) => onAutoDownloadToggle(e.target.checked)}
+                    size="small"
+                    aria-label="Enable Channel Downloads"
+                  />
+                }
+                label="Enable Channel Downloads"
+              />
+            )}
+
           </div>
         )}
 
@@ -304,6 +322,7 @@ function ChannelVideosHeader({
               aria-haspopup="menu"
               aria-expanded={actionsOpen ? 'true' : 'false'}
               aria-controls={actionsOpen ? 'channel-actions-menu' : undefined}
+              data-testid="desktop-actions-btn"
               className={intentStyles.base}
             >
               Actions{hasAnySelection && ` (${hasDownloadSelection ? checkedBoxes.length : selectedForDeletion.length})`}

@@ -978,8 +978,8 @@ describe('VideosPage Component', () => {
 
         await waitFor(() => {
           expect(screen.getByText(/1 video selected/i)).toBeInTheDocument();
-          expect(screen.getByRole('button', { name: /^Delete$/i })).toBeInTheDocument();
         });
+        expect(screen.getByRole('button', { name: /^Delete$/i })).toBeInTheDocument();
       });
 
       test('shows bottom action bar when videos are selected in mobile', async () => {
@@ -996,10 +996,10 @@ describe('VideosPage Component', () => {
 
         await waitFor(() => {
           expect(screen.getByText(/1 video selected/i)).toBeInTheDocument();
-          expect(screen.getByRole('button', { name: /^Rating$/i })).toBeInTheDocument();
-          expect(screen.getByRole('button', { name: /^Delete$/i })).toBeInTheDocument();
-          expect(screen.getByRole('button', { name: /^Clear$/i })).toBeInTheDocument();
         });
+        expect(screen.getByRole('button', { name: /^Rating$/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Delete$/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Clear$/i })).toBeInTheDocument();
       });
     });
 

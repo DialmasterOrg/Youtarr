@@ -6,6 +6,7 @@ import {
   Grid,
   Fade,
   Tooltip,
+  Checkbox,
 } from '../ui';
 import { CalendarToday as CalendarTodayIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon, Delete as DeleteIcon } from '../../lib/icons';
 import { formatDuration } from '../../utils';
@@ -154,6 +155,39 @@ function VideoCard({
                 }}
               />
             )}
+
+            {/* Selection checkbox - rendered for all selectable videos */}
+            {(isDownloadSelectable && isDownloadAllowed) ? (
+              <Checkbox
+                checked={isChecked}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => onCheckChange(video.youtube_id, e.target.checked)}
+                style={{
+                  position: 'absolute',
+                  top: 4,
+                  left: 4,
+                  backgroundColor: 'rgba(0,0,0,0.6)',
+                  color: 'white',
+                  transition: 'all 0.2s',
+                  zIndex: 3,
+                }}
+              />
+            ) : (isDeleteSelectable && isDeleteAllowed) ? (
+              <Checkbox
+                checked={isDeleteChecked}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => onDeletionChange(video.youtube_id, e.target.checked)}
+                style={{
+                  position: 'absolute',
+                  top: 4,
+                  left: 4,
+                  backgroundColor: 'rgba(0,0,0,0.6)',
+                  color: 'white',
+                  transition: 'all 0.2s',
+                  zIndex: 3,
+                }}
+              />
+            ) : null}
 
             {/* Still Live indicator or Selection overlay for download */}
             {isStillLive ? (

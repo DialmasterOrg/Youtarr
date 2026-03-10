@@ -63,7 +63,10 @@ function makeStory(themeMode: 'playful' | 'linear' | 'flat', breakpoint: 'mobile
       await expect(header.dataset.navPlacement).toBe(policy.navPlacement);
       await expect(header.style.getPropertyValue('--layout-header-title-inset')).toBe(policy.headerTitleInset);
 
-      if (breakpoint === 'mobile' || policy.navPlacement === 'sidebar') {
+      const isTopNav = policy.navPlacement === 'top';
+      const isMobileBreakpoint = breakpoint === 'mobile';
+      const showsToggle = (!isMobileBreakpoint && !isTopNav) || (isMobileBreakpoint && policy.showHeaderToggleOnMobile);
+      if (showsToggle) {
         await expect(canvas.getByRole('button', { name: /toggle navigation/i })).toBeInTheDocument();
       } else {
         await expect(canvas.queryByRole('button', { name: /toggle navigation/i })).not.toBeInTheDocument();

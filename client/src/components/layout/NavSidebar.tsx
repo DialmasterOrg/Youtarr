@@ -43,6 +43,8 @@ const NAV_SUB_TEXT_INDENT = 3.5;
 const NAV_SUB_HIGHLIGHT_LEFT_PADDING = 1.25;
 const NAV_SUB_FONT_SIZE = '0.8rem';
 const NAV_SUB_LINE_HEIGHT = 1.2;
+const PLAYFUL_NAV_BUTTON_GAP_LEFT = 1;
+const PLAYFUL_NAV_BUTTON_GAP_RIGHT = 4;
 const NAV_DRAWER_BORDER_RADIUS = 'var(--nav-radius)';
 const NAV_DRAWER_DESKTOP_TOP_OFFSET = 'calc(80px + var(--shell-gap))';
 const NAV_DRAWER_DESKTOP_MAX_HEIGHT = 'calc(100vh - (80px + var(--shell-gap)) - (var(--shell-gap) * 2))';
@@ -85,6 +87,10 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
   const drawerWidth = isMobile ? EXPANDED_WIDTH : collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
   const isNavCollapsed = !isMobile && collapsed;
   const drawerPanelPaddingX = isNavCollapsed ? NAV_DRAWER_PANEL_PADDING_X_COLLAPSED : NAV_DRAWER_PANEL_PADDING_X;
+  const drawerPanelPaddingLeft = isPlayful ? 0 : drawerPanelPaddingX;
+  const drawerPanelPaddingRight = isPlayful ? 0 : drawerPanelPaddingX;
+  const navButtonGapLeft = isPlayful ? PLAYFUL_NAV_BUTTON_GAP_LEFT : NAV_BUTTON_OUTER_PADDING_X;
+  const navButtonGapRight = isPlayful ? PLAYFUL_NAV_BUTTON_GAP_RIGHT : NAV_BUTTON_OUTER_PADDING_X;
   const iconBoxSize = NAV_ICON_SIZE;
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
@@ -184,14 +190,13 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
           flex: footerShouldScroll ? '0 0 auto' : '1 1 auto',
           minHeight: 0,
           overflowY: footerShouldScroll ? 'visible' : 'auto',
-          paddingRight: isPlayful ? 4 : 0,
           paddingBottom: isPlayful ? 6 : 0,
         }}
       >
         <List
           style={{
             paddingLeft: isCompactStorage ? 10 : 0,
-            paddingRight: isCompactStorage ? 10 : isPlayful ? 4 : 0,
+            paddingRight: isCompactStorage ? 10 : 0,
             paddingTop: isCompactStorage ? 8 : 4,
             paddingBottom: isPlayful ? 4 : 0,
             gap: `${NAV_MAIN_GAP * 8}px`,
@@ -214,8 +219,8 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
               <div
                 key={item.key}
                 style={{
-                  paddingLeft: NAV_BUTTON_OUTER_PADDING_X,
-                  paddingRight: NAV_BUTTON_OUTER_PADDING_X,
+                  paddingLeft: navButtonGapLeft,
+                  paddingRight: navButtonGapRight,
                   paddingTop: 0,
                   paddingBottom: isPlayful ? 2 : 0,
                   display: 'flex',
@@ -250,7 +255,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                     border: selected ? 'var(--nav-item-border-selected)' : (isPlayful && isHovered ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)'),
                     backgroundColor: selected ? 'var(--nav-item-bg-selected)' : (isPlayful && isHovered ? 'var(--nav-item-bg-hover)' : 'var(--nav-item-bg)'),
                     color: selected ? 'var(--nav-item-text-selected)' : 'inherit',
-                    boxShadow: selected ? 'var(--nav-item-shadow-selected)' : (isPlayful && isHovered ? 'var(--shadow-soft)' : 'var(--nav-item-shadow)'),
+                    boxShadow: selected ? 'var(--nav-item-shadow-selected)' : (isPlayful && isHovered ? 'var(--nav-item-shadow-hover)' : 'var(--nav-item-shadow)'),
                     transition: 'all 300ms var(--transition-bouncy)',
                     cursor: 'pointer',
                   }}
@@ -601,8 +606,8 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
     marginBottom: isMobile && isLinearFlat ? 0 : isMobile ? NAV_DRAWER_MOBILE_BOTTOM_GAP : 'var(--shell-gap)',
   marginLeft: isMobile ? 0 : 'var(--shell-gap)',
     marginRight: isMobile ? 0 : 'var(--shell-gap)',
-    paddingLeft: isMobile ? 0 : drawerPanelPaddingX,
-    paddingRight: isMobile ? 0 : drawerPanelPaddingX,
+    paddingLeft: isMobile ? 0 : drawerPanelPaddingLeft,
+    paddingRight: isMobile ? 0 : drawerPanelPaddingRight,
     maxHeight: isMobile && isLinearFlat ? '65vh' : isMobile ? NAV_DRAWER_MOBILE_MAX_HEIGHT : NAV_DRAWER_DESKTOP_MAX_HEIGHT,
     overflow: 'hidden',
     overflowX: 'visible',
