@@ -23,6 +23,7 @@ jest.mock('../../../logger', () => ({
 const {
   ensureDir,
   ensureDirSync,
+  ensureDirWithRetries,
   isDirectoryEmpty,
   removeIfEmpty,
   isVideoDirectory,
@@ -54,6 +55,71 @@ describe('filesystem/directoryManager', () => {
       ensureDirSync('/path/to/dir');
 
       expect(fs.ensureDirSync).toHaveBeenCalledWith('/path/to/dir');
+    });
+  });
+
+  describe('ensureDirWithRetries', () => {
+    it('should succeed on first attempt', async () => {
+      fs.ensureDir.mockResolvedValueOnce();
+
+      await ensureDirWithRetries('/path/to/dir');
+
+      expect(fs.ensureDir).toHaveBeenCalledTimes(1);
+      expect(fs.ensureDir).toHaveBeenCalledWith('/path/to/dir');
+    });
+
+    it('should retry on transient errors and succeed', async () => {
+      const error = new Error('EACCES');
+      error.code = 'EACCES';
+      fs.ensureDir
+        .mockRejectedValueOnce(error)
+        .mockRejectedValueOnce(error)
+        .mockResolvedValueOnce();
+
+      await ensureDirWithRetries('/path/to/dir', { retries: 3, delayMs: 1 });
+
+      expect(fs.ensureDir).toHaveBeenCalledTimes(3);
+    });
+
+    it('should throw after all retries are exhausted', async () => {
+      const error = new Error('EACCES');
+      error.code = 'EACCES';
+      fs.ensureDir.mockRejectedValue(error);
+
+      await expect(
+        ensureDirWithRetries('/path/to/dir', { retries: 2, delayMs: 1 })
+      ).rejects.toThrow('EACCES');
+
+      // initial attempt + 2 retries = 3 calls
+      expect(fs.ensureDir).toHaveBeenCalledTimes(3);
+    });
+
+    it('should use exponential backoff between retries', async () => {
+      const error = new Error('EACCES');
+      error.code = 'EACCES';
+      fs.ensureDir
+        .mockRejectedValueOnce(error)
+        .mockResolvedValueOnce();
+
+      const start = Date.now();
+      await ensureDirWithRetries('/path/to/dir', { retries: 3, delayMs: 50 });
+      const elapsed = Date.now() - start;
+
+      // First retry should wait ~50ms (delayMs * 2^0)
+      expect(elapsed).toBeGreaterThanOrEqual(40);
+      expect(fs.ensureDir).toHaveBeenCalledTimes(2);
+    });
+
+    it('should use default options when none provided', async () => {
+      const error = new Error('EACCES');
+      error.code = 'EACCES';
+      fs.ensureDir
+        .mockRejectedValueOnce(error)
+        .mockResolvedValueOnce();
+
+      await ensureDirWithRetries('/path/to/dir');
+
+      expect(fs.ensureDir).toHaveBeenCalledTimes(2);
     });
   });
 

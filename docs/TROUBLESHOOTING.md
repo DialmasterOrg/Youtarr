@@ -439,6 +439,18 @@ YouTube is blocking your downloads.
 **NOTE**: In some cases YouTube may temporarily blacklist your IP address if too many requests were happening from your IP. You may just need to wait in order to download again. You can manually test downloading a video from YouTube to rule out Youtarr-specific issues by downloading yt-dlp and attempting to manually download a single video.
 
 
+## Slow Channel Operations with Proxy
+
+### Adding or Refreshing Channels Takes ~15 Seconds
+
+**Problem**: Adding a new channel or refreshing channel metadata takes around 15 seconds longer than expected.
+
+**Cause**: Youtarr first attempts direct HTTP requests for thumbnails and RSS feeds. When you're using a SOCKS5 or HTTP proxy, these direct requests cannot reach YouTube and must wait for a 15-second timeout before falling back to yt-dlp, which correctly uses your configured proxy.
+
+**Solution**: This is expected behavior and no action is needed. The operations will complete successfully after the brief timeout. If operations are taking significantly longer than 15-20 seconds, verify your proxy is correctly configured in **Configuration > Advanced Settings**.
+
+---
+
 ## Plex Integration Issues
 
 ### Videos Not Showing in Plex

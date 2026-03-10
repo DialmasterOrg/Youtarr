@@ -92,6 +92,12 @@ Channel.init(
       defaultValue: null,
       comment: 'Default rating to apply to unrated videos in this channel',
     },
+    skip_video_folder: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: null,
+      comment: 'When true, videos are stored directly in the channel folder without per-video subfolders',
+    },
   },
   {
     sequelize,
