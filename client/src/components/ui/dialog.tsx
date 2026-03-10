@@ -7,6 +7,7 @@ const DialogRoot = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
 const DialogPortal = DialogPrimitive.Portal;
 const DialogClose = DialogPrimitive.Close;
+const DialogCompatContext = React.createContext(false);
 
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
@@ -84,54 +85,68 @@ const Dialog: React.FC<DialogProps> = ({
     open={open}
     onOpenChange={(o) => { if (!o) onClose?.({}, 'backdropClick'); }}
   >
-    <DialogPortal>
-      <DialogOverlay onClick={() => onClose?.({}, 'backdropClick')} {...(backdropProps || {})} />
-      <DialogPrimitive.Content
-        className={cn(
-          'fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
-          'bg-card text-foreground',
-          'rounded-[var(--radius-ui)]',
-          'border-[length:var(--border-weight)] border-[var(--border-strong)]',
-          'shadow-2xl',
-          'flex flex-col max-h-[calc(100vh-120px)] overflow-hidden',
-          'focus-visible:outline-none',
-          'data-[state=open]:animate-slide-up',
-          !fullScreen && maxWidth && maxWidthMap[maxWidth],
-          !fullScreen && fullWidth && 'w-[calc(100vw-48px)]',
-          fullScreen && 'inset-0 translate-x-0 translate-y-0 w-screen h-screen max-w-none rounded-none',
-          PaperProps?.className,
-          className
-        )}
-        onEscapeKeyDown={(e) => { if (disableEscapeKeyDown) e.preventDefault(); else onClose?.({}, 'escapeKeyDown'); }}
-        onInteractOutside={(e) => { e.preventDefault(); }}
-        {...contentProps}
-      >
-        {children}
-      </DialogPrimitive.Content>
-    </DialogPortal>
+    <DialogCompatContext.Provider value>
+      <DialogPortal>
+        <DialogOverlay onClick={() => onClose?.({}, 'backdropClick')} {...(backdropProps || {})} />
+        <DialogPrimitive.Content
+          aria-describedby={contentProps['aria-describedby'] ?? undefined}
+          className={cn(
+            'fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
+            'bg-card text-foreground',
+            'rounded-[var(--radius-ui)]',
+            'border-[length:var(--border-weight)] border-[var(--border-strong)]',
+            'shadow-2xl',
+            'flex flex-col max-h-[calc(100vh-120px)] overflow-hidden',
+            'focus-visible:outline-none',
+            'data-[state=open]:animate-slide-up',
+            !fullScreen && maxWidth && maxWidthMap[maxWidth],
+            !fullScreen && fullWidth && 'w-[calc(100vw-48px)]',
+            fullScreen && 'inset-0 translate-x-0 translate-y-0 w-screen h-screen max-w-none rounded-none',
+            PaperProps?.className,
+            className
+          )}
+          onEscapeKeyDown={(e) => { if (disableEscapeKeyDown) e.preventDefault(); else onClose?.({}, 'escapeKeyDown'); }}
+          onInteractOutside={(e) => { e.preventDefault(); }}
+          {...contentProps}
+        >
+          {children}
+        </DialogPrimitive.Content>
+      </DialogPortal>
+    </DialogCompatContext.Provider>
   </DialogRoot>
 );
 
 const DialogTitle = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement> & { onClose?: () => void }>(
-  ({ className, children, onClose, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn('flex items-center gap-2 px-6 py-4 border-b border-border font-display font-bold text-lg text-foreground', className)}
-      {...props}
-    >
+  ({ className, children, onClose, ...props }, ref) => {
+    const isInsideDialog = React.useContext(DialogCompatContext);
+    const titleContent = isInsideDialog ? (
+      <DialogPrimitive.Title asChild>
+        <span className="flex-1">{children}</span>
+      </DialogPrimitive.Title>
+    ) : (
       <span className="flex-1">{children}</span>
-      {onClose && (
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="shrink-0 rounded-full p-1 opacity-60 hover:opacity-100 hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 ring-ring"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      )}
-    </div>
-  )
+    );
+
+    return (
+      <div
+        ref={ref}
+        className={cn('flex items-center gap-2 px-6 py-4 border-b border-border font-display font-bold text-lg text-foreground', className)}
+        {...props}
+      >
+        {titleContent}
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="shrink-0 rounded-full p-1 opacity-60 hover:opacity-100 hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 ring-ring"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
+      </div>
+    );
+  }
 );
 DialogTitle.displayName = 'DialogTitle';
 

@@ -69,16 +69,45 @@ export interface TabsProps {
   variant?: string;
   scrollButtons?: string | boolean;
   centered?: boolean;
+  id?: string;
+  'aria-label'?: string;
+  'aria-labelledby'?: string;
+  'data-testid'?: string;
 }
 
-const Tabs: React.FC<TabsProps> = ({ value, onChange, children, className, centered = false }) => {
+const Tabs: React.FC<TabsProps> = ({
+  value,
+  onChange,
+  children,
+  className,
+  centered = false,
+  variant = 'standard',
+  id,
+  'aria-label': ariaLabel,
+  'aria-labelledby': ariaLabelledBy,
+  'data-testid': dataTestId,
+}) => {
+  const interactionEventRef = React.useRef<React.SyntheticEvent | null>(null);
+  const isScrollable = variant === 'scrollable';
+  const isFullWidth = variant === 'fullWidth';
+
   // MUI auto-assigns integer indices to Tab children that have no explicit value.
   const indexedChildren = React.Children.map(children, (child, index) => {
     if (!React.isValidElement(child)) return child;
+
+    const childProps: Partial<TabProps> = {
+      fullWidth: isFullWidth,
+      scrollable: isScrollable,
+      onInteraction: (event: React.SyntheticEvent) => {
+        interactionEventRef.current = event;
+      },
+    };
+
     if ((child.props as TabProps).value === undefined) {
-      return React.cloneElement(child as React.ReactElement<TabProps>, { value: index });
+      childProps.value = index;
     }
-    return child;
+
+    return React.cloneElement(child as React.ReactElement<TabProps>, childProps);
   });
 
   return (
@@ -88,13 +117,26 @@ const Tabs: React.FC<TabsProps> = ({ value, onChange, children, className, cente
         // Coerce back to number if the value looks like an integer string
         const num = parseInt(v, 10);
         const output: string | number = !isNaN(num) && String(num) === v ? num : v;
-        onChange?.({} as React.SyntheticEvent, output);
+        onChange?.(interactionEventRef.current ?? ({ type: 'change' } as React.SyntheticEvent), output);
+        interactionEventRef.current = null;
       }}
       className={cn('w-full', className)}
     >
       {/* MUI Tabs renders Tab children directly; Radix requires them inside a
           TabsList for the RovingFocusGroup context. We wrap automatically. */}
-      <TabsList className={cn(centered && 'justify-center')}>{indexedChildren}</TabsList>
+      <TabsList
+        id={id}
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledBy}
+        data-testid={dataTestId}
+        className={cn(
+          centered && !isScrollable && !isFullWidth && 'justify-center',
+          isScrollable && 'overflow-x-auto overflow-y-hidden whitespace-nowrap flex-nowrap gap-1',
+          isFullWidth && 'grid grid-flow-col auto-cols-fr',
+        )}
+      >
+        {indexedChildren}
+      </TabsList>
     </TabsRoot>
   );
 };
@@ -108,14 +150,36 @@ export interface TabProps {
   className?: string;
   wrapped?: boolean;
   style?: React.CSSProperties;
+  fullWidth?: boolean;
+  scrollable?: boolean;
+  onInteraction?: (event: React.SyntheticEvent) => void;
 }
 
-const Tab: React.FC<TabProps> = ({ value, label, icon, iconPosition = 'start', disabled, className, style }) => (
+const Tab: React.FC<TabProps> = ({
+  value,
+  label,
+  icon,
+  iconPosition = 'start',
+  disabled,
+  className,
+  style,
+  fullWidth = false,
+  scrollable = false,
+  onInteraction,
+}) => (
   <TabsTrigger
     value={String(value)}
     disabled={disabled}
     style={style}
-    className={cn(iconPosition === 'top' && 'flex-col', className)}
+    onClickCapture={onInteraction}
+    onKeyDownCapture={onInteraction}
+    onPointerDownCapture={onInteraction}
+    className={cn(
+      iconPosition === 'top' && 'flex-col',
+      fullWidth && 'w-full justify-center',
+      scrollable && 'shrink-0',
+      className
+    )}
   >
     {(iconPosition === 'start' || iconPosition === 'top') && icon}
     {label}

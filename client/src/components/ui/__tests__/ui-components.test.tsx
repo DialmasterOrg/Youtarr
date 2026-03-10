@@ -227,6 +227,7 @@ describe('CardHeader', () => {
 
 // ─── accordion.tsx ───────────────────────────────────────────────────────────
 import { AccordionRoot, AccordionItem, AccordionTrigger, AccordionContent } from '../accordion';
+import { Tabs, Tab } from '../tabs';
 
 describe('Accordion', () => {
   it('renders collapsed by default', () => {
@@ -275,6 +276,65 @@ describe('Accordion', () => {
     await user.click(screen.getByText('Section 2'));
     expect(screen.getByText('Content 1')).toBeInTheDocument();
     expect(screen.getByText('Content 2')).toBeInTheDocument();
+  });
+});
+
+describe('Tabs', () => {
+  it('forwards aria-label to the tablist', () => {
+    render(
+      <Tabs value="videos" aria-label="channel video tabs">
+        <Tab value="videos" label="Videos" />
+        <Tab value="shorts" label="Shorts" />
+      </Tabs>
+    );
+
+    expect(screen.getByRole('tablist', { name: 'channel video tabs' })).toBeInTheDocument();
+  });
+
+  it('uses fullWidth layout classes when requested', () => {
+    render(
+      <Tabs value="videos" variant="fullWidth" aria-label="video filters">
+        <Tab value="videos" label="Videos" />
+        <Tab value="shorts" label="Shorts" />
+      </Tabs>
+    );
+
+    const tablist = screen.getByRole('tablist', { name: 'video filters' });
+    expect(tablist).toHaveClass('grid');
+    expect(screen.getByRole('tab', { name: 'Videos' })).toHaveClass('w-full');
+  });
+
+  it('uses scrollable layout classes when requested', () => {
+    render(
+      <Tabs value="videos" variant="scrollable" aria-label="settings sections">
+        <Tab value="videos" label="Videos" />
+        <Tab value="shorts" label="Shorts" />
+        <Tab value="streams" label="Streams" />
+      </Tabs>
+    );
+
+    const tablist = screen.getByRole('tablist', { name: 'settings sections' });
+    expect(tablist).toHaveClass('overflow-x-auto');
+    expect(screen.getByRole('tab', { name: 'Videos' })).toHaveClass('shrink-0');
+  });
+
+  it('auto-assigns numeric values and passes the interaction event to onChange', async () => {
+    const user = userEvent.setup();
+    const onChange = jest.fn();
+
+    render(
+      <Tabs value={0} onChange={onChange} aria-label="download tabs">
+        <Tab label="Manual Download" />
+        <Tab label="Channel Download" />
+      </Tabs>
+    );
+
+    await user.click(screen.getByRole('tab', { name: 'Channel Download' }));
+
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'change' }),
+      1
+    );
   });
 });
 
