@@ -161,7 +161,9 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   };
 
   const menuPaperStyle: React.CSSProperties = {
-    overflow: 'visible',
+    overflowX: 'hidden',
+    overflowY: 'auto',
+    maxHeight: 'calc(100dvh - 80px)',
     width: 'max-content',
     minWidth: 180,
     borderRadius: 'var(--layout-header-menu-radius)',

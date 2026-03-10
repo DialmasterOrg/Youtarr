@@ -85,6 +85,26 @@ const Menu: React.FC<MenuProps> = ({
 
   if (!open && !keepMounted) return null;
 
+  // Compute a viewport-safe maxHeight so the menu never extends off-screen.
+  // For menus that open downward (transformY '0%') we measure from pos.top to the
+  // bottom of the viewport; for upward menus ('-100%') we measure from pos.top to
+  // the top of the viewport.
+  const viewportMax = pos
+    ? transformY === '-100%'
+      ? pos.top - 16
+      : window.innerHeight - pos.top - 16
+    : undefined;
+  const paperPropsMax =
+    typeof PaperProps?.style?.maxHeight === 'number' ? PaperProps.style.maxHeight : undefined;
+  const resolvedMaxHeight =
+    viewportMax !== undefined
+      ? paperPropsMax !== undefined
+        ? Math.min(paperPropsMax, viewportMax)
+        : viewportMax
+      : paperPropsMax;
+  // Strip maxHeight from PaperProps.style so we can apply the clamped value ourselves.
+  const { maxHeight: _pMax, ...paperStyleRest } = PaperProps?.style ?? {};
+
   return (
     <>
       {/* Backdrop */}
@@ -102,13 +122,22 @@ const Menu: React.FC<MenuProps> = ({
               left: pos.left,
               transform: `translate(${transformX}, ${transformY})`,
               zIndex: 1300,
-              ...PaperProps?.style,
+              ...(resolvedMaxHeight !== undefined ? { maxHeight: resolvedMaxHeight } : {}),
+              overflowY: 'auto',
+              ...paperStyleRest,
             }
-          : { position: 'fixed', top: 0, left: 0, zIndex: 1300, ...PaperProps?.style }}
+          : {
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              zIndex: 1300,
+              overflowY: 'auto',
+              ...paperStyleRest,
+            }}
         hidden={!open}
         aria-hidden={!open}
         className={cn(
-          'min-w-[12rem] overflow-hidden',
+          'min-w-[12rem] overflow-x-hidden',
           'rounded-[var(--radius-ui)]',
           'border-[length:var(--border-weight)] border-[var(--border-strong)]',
           'bg-popover text-popover-foreground',
@@ -166,8 +195,16 @@ const Popover: React.FC<PopoverProps> = ({ open, anchorEl, onClose, children, cl
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
         onKeyDown={(e) => { if (e.key === 'Escape') onClose?.(); }}
-        style={pos ? { position: 'fixed', top: pos.top, left: pos.left, zIndex: 1300 } : undefined}
+        style={pos ? {
+          position: 'fixed',
+          top: pos.top,
+          left: pos.left,
+          zIndex: 1300,
+          maxHeight: window.innerHeight - pos.top - 16,
+          overflowY: 'auto',
+        } : undefined}
         className={cn(
+          'overflow-x-hidden',
           'rounded-[var(--radius-ui)]',
           'border-[length:var(--border-weight)] border-[var(--border-strong)]',
           'bg-popover text-popover-foreground',

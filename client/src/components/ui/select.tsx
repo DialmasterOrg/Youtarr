@@ -165,13 +165,14 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
             sideOffset={4}
             className={cn(
               'relative z-50 min-w-[8rem] overflow-hidden',
+              'max-h-[var(--radix-select-content-available-height)]',
               'rounded-[var(--radius-ui)]',
               'border-[length:var(--border-weight)] border-[var(--border-strong)]',
               'bg-popover text-popover-foreground shadow-hard',
               'data-[state=open]:animate-slide-down data-[state=closed]:animate-fade-in',
             )}
           >
-            <SelectPrimitive.Viewport className="p-1">
+            <SelectPrimitive.Viewport className="p-1 overflow-y-auto">
               {children}
             </SelectPrimitive.Viewport>
           </SelectPrimitive.Content>
