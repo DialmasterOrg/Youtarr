@@ -18,6 +18,7 @@ import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 
 import RatingBadge from '../shared/RatingBadge';
 import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../shared/chipStyles';
+import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 interface VideoListItemProps {
   video: ChannelVideo;
   checkedBoxes: string[];
@@ -39,6 +40,8 @@ function VideoListItem({
   onToggleIgnore,
   onMobileTooltip,
 }: VideoListItemProps) {
+  const { themeMode } = useThemeEngine();
+  const isPlayful = themeMode === 'playful';
   const status = getVideoStatus(video);
   // Check if video is still live (not "was_live" and not null/undefined)
   const isStillLive = video.live_status && video.live_status !== 'was_live';
@@ -59,6 +62,7 @@ function VideoListItem({
         style={{
           marginBottom: 12,
           display: 'flex',
+          alignItems: isPlayful ? 'center' : 'stretch',
           position: 'relative',
           transition: 'all 0.2s ease',
           cursor: isClickable ? 'pointer' : 'default',
@@ -81,6 +85,7 @@ function VideoListItem({
             width: 120,
             minWidth: 120,
             height: 90,
+            alignSelf: isPlayful ? 'center' : 'stretch',
             backgroundColor: '#111',
             borderRadius: 'var(--radius-thumb)',
             overflow: 'hidden',

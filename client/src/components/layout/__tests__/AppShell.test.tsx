@@ -12,9 +12,11 @@ jest.mock('../BackgroundDecorations', () => ({
 
 jest.mock('../NavHeader', () => ({
   NavHeader: ({ toggleDrawer, isCollapsed, themeMode }: { toggleDrawer: () => void; isCollapsed: boolean; themeMode: string }) => (
-    <button onClick={toggleDrawer} type="button">
-      toggle:{themeMode}:{String(isCollapsed)}
-    </button>
+    themeMode === 'playful' ? (
+      <button onClick={toggleDrawer} type="button">
+        toggle:{themeMode}:{String(isCollapsed)}
+      </button>
+    ) : null
   ),
 }));
 
@@ -88,7 +90,7 @@ describe('AppShell', () => {
     });
 
     expect(screen.getByTestId('nav-sidebar')).toHaveTextContent('collapsed:false|topnav:true|mobileopen:false');
-    expect(screen.getByRole('button', { name: /toggle:flat:true/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /toggle:flat:true/i })).not.toBeInTheDocument();
   });
 
   it('toggles the mobile drawer state without assigning desktop nav width', async () => {

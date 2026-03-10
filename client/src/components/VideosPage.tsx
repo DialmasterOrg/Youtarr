@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 import {
   Grid,
@@ -21,15 +22,12 @@ import {
   Tooltip,
   Checkbox,
   Snackbar,
-  Fab,
-  Badge,
-  Zoom,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
 } from './ui';
-import { Filter as FilterListIcon, AlertCircle as ErrorOutlineIcon, CheckCircle as CheckCircleIcon, HardDrive as StorageIcon, Trash2 as DeleteIcon, Download as DownloadIcon, Clock as ScheduleIcon, AlarmCheck as AlarmOnIcon, Search as SearchIcon, Video as VideoLibraryIcon } from 'lucide-react';
+import { Filter as FilterListIcon, AlertCircle as ErrorOutlineIcon, CheckCircle as CheckCircleIcon, HardDrive as StorageIcon, Trash2 as DeleteIcon, Download as DownloadIcon, Clock as ScheduleIcon, AlarmCheck as AlarmOnIcon, Search as SearchIcon, Video as VideoLibraryIcon, X as ClearIcon } from 'lucide-react';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { EighteenUpRating as EighteenUpRatingIcon } from '../lib/icons';
 import { formatDuration, formatYTDate } from '../utils';
@@ -49,6 +47,8 @@ import DownloadFormatIndicator from './shared/DownloadFormatIndicator';
 import { useConfig } from '../hooks/useConfig';
 import PageControls from './shared/PageControls';
 import { SHARED_STATUS_CHIP_SMALL_STYLE } from './shared/chipStyles';
+import { ActionBar } from './shared/ActionBar';
+import { useThemeEngine } from '../contexts/ThemeEngineContext';
 
 interface VideosPageProps {
   token: string | null;
@@ -56,6 +56,7 @@ interface VideosPageProps {
 
 function VideosPage({ token }: VideosPageProps) {
   const isMobile = useMediaQuery('(max-width: 599px)');
+  const { themeMode } = useThemeEngine();
   const [videos, setVideos] = useState<VideoData[]>([]);
   const [totalVideos, setTotalVideos] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -75,7 +76,6 @@ function VideosPage({ token }: VideosPageProps) {
   const [uniqueChannels, setUniqueChannels] = useState<string[]>([]);
   const [enabledChannels, setEnabledChannels] = useState<EnabledChannel[]>([]);
   const [selectedVideos, setSelectedVideos] = useState<number[]>([]);
-  const [selectedForDeletion, setSelectedForDeletion] = useState<number[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
   const [maxRatingFilter, setMaxRatingFilter] = useState('');
@@ -274,16 +274,6 @@ function VideosPage({ token }: VideosPageProps) {
     });
   };
 
-  const toggleDeletionSelection = (videoId: number) => {
-    setSelectedForDeletion(prev => {
-      if (prev.includes(videoId)) {
-        return prev.filter(id => id !== videoId);
-      } else {
-        return [...prev, videoId];
-      }
-    });
-  };
-
   const handleDeleteClick = () => {
     setDeleteDialogOpen(true);
   };
@@ -295,7 +285,7 @@ function VideosPage({ token }: VideosPageProps) {
   const handleApplyRating = async (rating: string | null) => {
     if (!token) return;
 
-    const videoIdsToUpdate = isMobile ? selectedForDeletion : selectedVideos;
+    const videoIdsToUpdate = selectedVideos;
 
     try {
       await axios.post('/api/videos/rating', {
@@ -309,7 +299,6 @@ function VideosPage({ token }: VideosPageProps) {
 
       setSuccessMessage(`Successfully updated content rating for ${videoIdsToUpdate.length} video(s)`);
       setSelectedVideos([]);
-      setSelectedForDeletion([]);
       fetchVideos();
     } catch (error: unknown) {
       console.error('Failed to update ratings:', error);
@@ -323,13 +312,12 @@ function VideosPage({ token }: VideosPageProps) {
   const handleDeleteConfirm = async () => {
     setDeleteDialogOpen(false);
 
-    const videosToDelete = isMobile ? selectedForDeletion : selectedVideos;
+    const videosToDelete = selectedVideos;
     const result = await deleteVideos(videosToDelete, token);
 
     if (result.success) {
       setSuccessMessage(`Successfully deleted ${result.deleted.length} video${result.deleted.length !== 1 ? 's' : ''}`);
       setSelectedVideos([]);
-      setSelectedForDeletion([]);
       // Refresh the videos list
       fetchVideos();
     } else {
@@ -339,7 +327,6 @@ function VideosPage({ token }: VideosPageProps) {
       if (deletedCount > 0) {
         setSuccessMessage(`Deleted ${deletedCount} video${deletedCount !== 1 ? 's' : ''}, but ${failedCount} failed`);
         setSelectedVideos([]);
-        setSelectedForDeletion([]);
         fetchVideos();
       } else {
         setErrorMessage(`Failed to delete videos: ${result.failed[0]?.error || 'Unknown error'}`);
@@ -354,6 +341,54 @@ function VideosPage({ token }: VideosPageProps) {
   const handleDeleteSingleVideo = (videoId: number) => {
     setSelectedVideos([videoId]);
     setDeleteDialogOpen(true);
+  };
+
+  const renderMobileActionBar = () => {
+    if (!isMobile || selectedVideos.length === 0 || typeof window === 'undefined') {
+      return null;
+    }
+
+    return createPortal(
+      <div
+        style={{
+          position: 'fixed',
+          left: 8,
+          right: 8,
+          bottom: 'calc(var(--mobile-nav-total-offset, 0px) + 8px)',
+          zIndex: 1399,
+        }}
+      >
+        <ActionBar
+          variant={themeMode}
+          compact
+          style={{
+            justifyContent: 'space-between',
+            gap: 8,
+            padding: '10px 12px',
+            borderRadius: 'var(--radius-ui)',
+            border: 'var(--nav-border)',
+            backgroundColor: 'var(--card)',
+            boxShadow: 'var(--shadow-hard)',
+          }}
+        >
+          <Typography variant="body2" style={{ fontWeight: 700 }}>
+            {selectedVideos.length} video{selectedVideos.length !== 1 ? 's' : ''} selected
+          </Typography>
+          <Box className="flex gap-2 flex-wrap justify-end" style={{ marginLeft: 'auto' }}>
+            <Button size="small" onClick={handleChangeRatingClick} className="intent-warning">
+              Rating
+            </Button>
+            <Button size="small" onClick={handleDeleteClick} className="intent-danger" startIcon={<DeleteIcon size={14} />}>
+              Delete
+            </Button>
+            <Button size="small" onClick={() => setSelectedVideos([])} className="intent-base" startIcon={<ClearIcon size={14} />}>
+              Clear
+            </Button>
+          </Box>
+        </ActionBar>
+      </div>,
+      document.body
+    );
   };
 
   const handlers = useSwipeable({
@@ -458,7 +493,7 @@ function VideosPage({ token }: VideosPageProps) {
             </Select>
           </FormControl>
 
-          {selectedVideos.length > 0 && (
+          {selectedVideos.length > 0 && !isMobile && (
             <Box className="flex gap-2 items-center">
               <Typography variant="body2" color="text.secondary">
                 {selectedVideos.length} video{selectedVideos.length !== 1 ? 's' : ''} selected
@@ -514,10 +549,10 @@ function VideosPage({ token }: VideosPageProps) {
           </Grid>
         )}
 
-        <Paper>
+        <Paper style={{ overflow: 'hidden' }}>
           <TableContainer>
             <div {...handlers}>
-              <Table>
+              <Table style={isMobile ? { tableLayout: 'fixed' } : undefined}>
               {isMobile ? null : (
                 <TableHead>
                   <TableRow>
@@ -590,7 +625,7 @@ function VideosPage({ token }: VideosPageProps) {
                   videos.map((video) => (
                     <TableRow key={video.id}>
                       {isMobile ? (
-                        <TableCell>
+                        <TableCell style={{ paddingLeft: 12, paddingRight: 12, paddingTop: 12, paddingBottom: 12 }}>
                           <Box className="flex flex-col items-stretch justify-start gap-4">
 
                             {/* Title at the top */}
@@ -718,28 +753,26 @@ function VideosPage({ token }: VideosPageProps) {
                                   />
                                 </Box>
                               ) : null}
-                              {/* Delete icon for downloaded videos on mobile */}
+                              {/* Selection checkbox for mobile actions */}
                               {!video.removed && video.fileSize && (
-                                <IconButton
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleDeletionSelection(video.id);
+                                <Checkbox
+                                  checked={selectedVideos.includes(video.id)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(event) => {
+                                    event.stopPropagation();
+                                    handleSelectVideo(video.id);
                                   }}
-                                  data-testid="DeleteIcon"
-                                  aria-label="Delete video"
+                                  inputProps={{ 'aria-label': `Select ${video.youTubeVideoName}` }}
                                   style={{
                                     position: 'absolute',
                                     top: 4,
-                                    right: 4,
-                                    backgroundColor: selectedForDeletion.includes(video.id) ? 'hsl(var(--destructive))' : 'rgba(0,0,0,0.6)',
+                                    left: 4,
+                                    backgroundColor: 'rgba(0,0,0,0.6)',
                                     color: 'white',
                                     transition: 'all 0.2s',
                                     zIndex: 3,
                                   }}
-                                  size="small"
-                                >
-                                  <DeleteIcon size={18} />
-                                </IconButton>
+                                />
                               )}
                             </Box>
 
@@ -1083,6 +1116,7 @@ function VideosPage({ token }: VideosPageProps) {
           </div>
         </TableContainer>
         </Paper>
+        {renderMobileActionBar()}
       </Box>
 
       {/* Delete Confirmation Dialog */}
@@ -1090,7 +1124,7 @@ function VideosPage({ token }: VideosPageProps) {
         open={deleteDialogOpen}
         onClose={handleDeleteCancel}
         onConfirm={handleDeleteConfirm}
-        videoCount={isMobile ? selectedForDeletion.length : selectedVideos.length}
+        videoCount={selectedVideos.length}
       />
 
       {/* Change Rating Dialog */}
@@ -1098,46 +1132,8 @@ function VideosPage({ token }: VideosPageProps) {
         open={ratingDialogOpen}
         onClose={() => setRatingDialogOpen(false)}
         onApply={handleApplyRating}
-        selectedCount={isMobile ? selectedForDeletion.length : selectedVideos.length}
+        selectedCount={selectedVideos.length}
       />
-
-      {/* Mobile Rating FAB */}
-      {isMobile && selectedForDeletion.length > 0 && (
-        <Zoom in={selectedForDeletion.length > 0}>
-          <Fab
-            color="primary"
-            style={{
-              position: 'fixed',
-              bottom: 80,
-              right: 16,
-              zIndex: 1000,
-            }}
-            onClick={handleChangeRatingClick}
-          >
-            <EighteenUpRatingIcon />
-          </Fab>
-        </Zoom>
-      )}
-
-      {/* Mobile Delete FAB */}
-      {isMobile && selectedForDeletion.length > 0 && (
-        <Zoom in={selectedForDeletion.length > 0}>
-          <Fab
-            color="error"
-            style={{
-              position: 'fixed',
-              bottom: 16,
-              right: 16,
-              zIndex: 1000,
-            }}
-            onClick={handleDeleteClick}
-          >
-            <Badge badgeContent={selectedForDeletion.length} color="primary">
-              <DeleteIcon />
-            </Badge>
-          </Fab>
-        </Zoom>
-      )}
 
       {/* Success/Error Snackbars */}
       <Snackbar

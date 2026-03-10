@@ -14,7 +14,15 @@ import {
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { StorageFooterWidget } from './StorageFooterWidget';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
-import { NAV_BUTTON_OUTER_PADDING_X, NAV_DRAWER_PANEL_PADDING_X, NAV_DRAWER_PANEL_PADDING_X_COLLAPSED, NAV_MAIN_BUTTON_SIDE_PADDING } from './navLayoutConstants';
+import {
+  MOBILE_NAV_PRIMARY_HEIGHT,
+  MOBILE_NAV_SAFE_GAP,
+  MOBILE_NAV_SECONDARY_HEIGHT,
+  NAV_BUTTON_OUTER_PADDING_X,
+  NAV_DRAWER_PANEL_PADDING_X,
+  NAV_DRAWER_PANEL_PADDING_X_COLLAPSED,
+  NAV_MAIN_BUTTON_SIDE_PADDING,
+} from './navLayoutConstants';
 
 const EXPANDED_WIDTH = 200;
 const COLLAPSED_WIDTH = 65;
@@ -113,6 +121,45 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
     });
     return activeItem?.key || null;
   }, [location.pathname, navItems]);
+
+  const activeItem = React.useMemo(
+    () =>
+      navItems.find((item) => {
+        const hasSubMatch = item.subItems?.some((subItem: any) => (
+          location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/')
+        ));
+        const parentMatch = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
+        return Boolean(parentMatch || hasSubMatch);
+      }) || null,
+    [location.pathname, navItems]
+  );
+
+  const activeItemWithSubItems = activeItem?.subItems ? activeItem : null;
+
+  useEffect(() => {
+    const root = document.documentElement;
+
+    if (!isMobile) {
+      root.style.setProperty('--mobile-nav-primary-height', '0px');
+      root.style.setProperty('--mobile-nav-secondary-height', '0px');
+      root.style.setProperty('--mobile-nav-total-offset', '0px');
+      return;
+    }
+
+    const secondaryHeight = activeItemWithSubItems ? MOBILE_NAV_SECONDARY_HEIGHT : 0;
+    root.style.setProperty('--mobile-nav-primary-height', `${MOBILE_NAV_PRIMARY_HEIGHT}px`);
+    root.style.setProperty('--mobile-nav-secondary-height', `${secondaryHeight}px`);
+    root.style.setProperty(
+      '--mobile-nav-total-offset',
+      `calc(${MOBILE_NAV_PRIMARY_HEIGHT}px + ${secondaryHeight}px + env(safe-area-inset-bottom))`
+    );
+
+    return () => {
+      root.style.setProperty('--mobile-nav-primary-height', '0px');
+      root.style.setProperty('--mobile-nav-secondary-height', '0px');
+      root.style.setProperty('--mobile-nav-total-offset', '0px');
+    };
+  }, [activeItemWithSubItems, isMobile]);
 
   if (isTopNav && !isMobile) {
     return null;
@@ -372,33 +419,30 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
 
   // --- MOBILE SPECIFIC RENDERING ---
 
-  // 1. Playful Bottom Navigation
-  if (isMobile && isPlayful) {
-    const activeItem = navItems.find(item =>
-      location.pathname === item.to ||
-      location.pathname.startsWith(item.to + '/') ||
-      item.subItems?.some((sub: any) => location.pathname === sub.to || location.pathname.startsWith(sub.to + '/'))
-    );
-    const activeIndex = navItems.findIndex(item => item === activeItem);
-    const activeItemWithSubItems = activeItem?.subItems ? activeItem : null;
+  // 1. Mobile Bottom Navigation
+  if (isMobile) {
+    const activeIndex = navItems.findIndex((item) => item === activeItem);
+    const subNavBottom = `calc(${MOBILE_NAV_PRIMARY_HEIGHT}px + env(safe-area-inset-bottom))`;
+    const isLinear = themeMode === 'linear';
+    const isFlat = themeMode === 'flat';
 
     return (
       <>
-        {/* Sub-items tray: shown above BottomNav when active section has sub-pages */}
         {activeItemWithSubItems && (
           <div
             style={{
               position: 'fixed',
-              bottom: 'calc(64px + env(safe-area-inset-bottom))',
+              bottom: subNavBottom,
               left: 0,
               right: 0,
               zIndex: 1299,
-              backgroundColor: 'var(--card)',
-              borderTop: 'var(--nav-border)',
-              padding: '6px 8px',
+              backgroundColor: isLinear ? 'rgba(5, 5, 6, 0.97)' : 'var(--card)',
+              borderTop: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : isFlat ? '2px solid var(--border)' : 'var(--nav-border)',
+              padding: '8px 10px',
               display: 'flex',
-              gap: 6,
+              gap: 8,
               overflowX: 'auto',
+              scrollbarWidth: 'none',
             }}
           >
             {activeItemWithSubItems.subItems.map((subItem: any) => {
@@ -409,16 +453,20 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                   onClick={() => navigate(subItem.to)}
                   style={{
                     background: subSelected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
-                    border: subSelected ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)',
-                    borderRadius: 'var(--radius-ui)',
+                    border: subSelected
+                      ? (isLinear ? '1px solid rgba(94, 106, 210, 0.7)' : 'var(--nav-item-border-selected)')
+                      : (isLinear ? '1px solid rgba(255, 255, 255, 0.12)' : 'var(--nav-item-border)'),
+                    borderRadius: isLinear ? '999px' : 'var(--radius-ui)',
                     color: subSelected ? 'var(--nav-item-text-selected)' : 'inherit',
                     boxShadow: subSelected ? 'var(--nav-item-shadow-selected)' : 'none',
                     cursor: 'pointer',
                     fontSize: NAV_SUB_FONT_SIZE,
-                    fontWeight: subSelected ? 700 : 400,
-                    padding: '4px 14px',
+                    fontWeight: subSelected ? 700 : 500,
+                    padding: isLinear ? '6px 14px' : '6px 14px',
                     whiteSpace: 'nowrap',
                     transition: 'all 200ms var(--transition-bouncy)',
+                    textTransform: isLinear ? 'uppercase' : 'none',
+                    letterSpacing: isLinear ? '0.08em' : 'normal',
                   }}
                 >
                   {subItem.label}
@@ -436,13 +484,14 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
             right: 0,
             zIndex: 1300,
             paddingBottom: 'env(safe-area-inset-bottom)',
-            borderRadius: 'var(--radius-ui) var(--radius-ui) 0 0',
-            borderTop: 'var(--nav-border)',
-            backgroundColor: 'var(--card)',
+            borderRadius: isPlayful ? 'var(--radius-ui) var(--radius-ui) 0 0' : '0',
+            borderTop: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : isFlat ? '2px solid var(--border)' : 'var(--nav-border)',
+            backgroundColor: isLinear ? 'rgba(5, 5, 6, 0.97)' : 'var(--card)',
             overflow: 'hidden',
+            boxShadow: isLinear ? '0 -12px 30px rgba(0, 0, 0, 0.45)' : 'var(--nav-shadow)',
           }}
         >
-          <nav style={{ display: 'flex', height: 64, backgroundColor: 'transparent' }}>
+          <nav style={{ display: 'flex', height: MOBILE_NAV_PRIMARY_HEIGHT, backgroundColor: 'transparent' }}>
             {navItems.map((item, index) => {
               const isActive = index === activeIndex;
               return (
@@ -455,20 +504,36 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 2,
+                    gap: 4,
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
-                    color: isActive ? 'var(--primary)' : 'var(--muted-foreground)',
-                    padding: '4px 0',
-                    transition: 'color 0.2s',
+                    color: isActive
+                      ? (isLinear ? '#ffffff' : 'var(--primary)')
+                      : 'var(--muted-foreground)',
+                    padding: '6px 0',
+                    transition: 'color 0.2s, background-color 0.2s',
+                    position: 'relative',
+                    backgroundColor: isActive && !isPlayful
+                      ? (isLinear ? 'rgba(94, 106, 210, 0.16)' : 'var(--muted)')
+                      : 'transparent',
                   }}
                 >
                   {React.cloneElement(item.icon as React.ReactElement, {
-                    size: isActive ? 26 : 22,
+                    size: isActive ? 24 : 20,
                     style: { transition: 'all 0.2s' },
                   })}
-                  <span style={{ fontSize: '0.65rem', lineHeight: 1 }}>{item.label}</span>
+                  <span
+                    style={{
+                      fontSize: isLinear ? '0.62rem' : '0.65rem',
+                      lineHeight: 1,
+                      textTransform: isLinear ? 'uppercase' : 'none',
+                      letterSpacing: isLinear ? '0.08em' : 'normal',
+                      fontWeight: isActive ? 700 : 500,
+                    }}
+                  >
+                    {item.label}
+                  </span>
                 </button>
               );
             })}

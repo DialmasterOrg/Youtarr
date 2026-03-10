@@ -59,6 +59,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   const isLinear = themeMode === 'linear';
   const isFlat = themeMode === 'flat';
   const isTopNav = isLinear || isFlat;
+  const showNavToggle = !isMobile && !isTopNav;
   const showTopNavItems = isTopNav && !isMobile;
   const topNavTitleInset = isTopNav && !isMobile ? 12 : 0;
   const hasAppUpdate = token && !isPlatformManaged && updateAvailable && Boolean(updateTooltip);
@@ -194,7 +195,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
     top: isMobile || isTopNav ? 0 : 'var(--shell-gap)',
     left: isMobile || isTopNav ? 0 : 'var(--shell-gap)',
     right: isMobile || isTopNav ? 0 : 'var(--shell-gap)',
-    width: isMobile || isTopNav ? '100vw' : 'calc(100vw - (var(--shell-gap) * 2))',
+    width: isMobile || isTopNav ? '100%' : 'calc(100vw - (var(--shell-gap) * 2))',
     borderRadius: isTopNav ? 0 : 'var(--radius-ui)',
     overflow: 'visible',
   };
@@ -219,7 +220,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
         }}
       >
         {/* Toggle (Mobile/Side) */}
-        {(!isTopNav || isMobile) && (
+        {showNavToggle && (
           <IconButton
             className="pop-toggle"
             aria-label="toggle navigation"

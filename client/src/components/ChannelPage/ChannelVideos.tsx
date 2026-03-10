@@ -7,13 +7,11 @@ import {
   Alert,
   Skeleton,
   Grid,
-  Grow,
-  Badge,
   Tabs,
   Tab,
+  Button,
 } from '../ui';
-
-import { Download as DownloadIcon, Trash2 as DeleteIcon } from '../../lib/icons';
+import { Download as DownloadIcon, Trash2 as DeleteIcon, X as ClearIcon, Ban as BlockIcon } from '../../lib/icons';
 
 import useMediaQuery from '../../hooks/useMediaQuery';
 import { useNavigate } from 'react-router-dom';
@@ -34,6 +32,7 @@ import { useConfig } from '../../hooks/useConfig';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
 import PageControls from '../shared/PageControls';
+import { ActionBar } from '../shared/ActionBar';
 
 interface ChannelVideosProps {
   token: string | null;
@@ -845,45 +844,58 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   }, [videosLoading, hasNextPage, useInfiniteScroll, page, themeMode]);
 
   const renderSelectionAction = () => {
-    if (!selectionMode) return null;
+    if (!isMobile || !selectionMode || typeof window === 'undefined') return null;
 
     const isDownloadAction = selectionMode === 'download';
     const count = isDownloadAction ? checkedBoxes.length : selectedForDeletion.length;
-    const icon = isDownloadAction ? <DownloadIcon size={24} /> : <DeleteIcon size={24} />;
-    const handleActionClick = isDownloadAction ? handleDownloadClick : handleDeleteClick;
-
-    if (typeof window === 'undefined') return null;
 
     return createPortal(
-      <Grow in>
-        <div style={{ position: 'fixed', bottom: isMobile ? 84 : 56, right: isMobile ? 20 : 56, transform: 'translateY(-50%)', zIndex: 1399 }}>
-          <Badge
-            badgeContent={count}
-            color={isDownloadAction ? 'primary' : 'error'}
-            overlap="circular"
-            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-          >
-            <button
-              onClick={handleActionClick}
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: '50%',
-                backgroundColor: isDownloadAction ? 'var(--fab-primary-bg)' : 'var(--fab-error-bg)',
-                color: isDownloadAction ? 'var(--fab-primary-fg)' : 'var(--fab-error-fg)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: 'var(--shadow-hard)',
-              }}
-            >
-              {icon}
-            </button>
-          </Badge>
-        </div>
-      </Grow>,
+      <div
+        style={{
+          position: 'fixed',
+          left: 8,
+          right: 8,
+          bottom: 'calc(var(--mobile-nav-total-offset, 0px) + 8px)',
+          zIndex: 1399,
+        }}
+      >
+        <ActionBar
+          variant={themeMode}
+          compact
+          style={{
+            justifyContent: 'space-between',
+            gap: 8,
+            padding: '10px 12px',
+            borderRadius: 'var(--radius-ui)',
+            border: 'var(--nav-border)',
+            backgroundColor: 'var(--card)',
+            boxShadow: 'var(--shadow-hard)',
+          }}
+        >
+          <Typography variant="body2" style={{ fontWeight: 700 }}>
+            {count} selected
+          </Typography>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', marginLeft: 'auto' }}>
+            {isDownloadAction ? (
+              <>
+                <Button size="small" onClick={handleDownloadClick} className="intent-success">
+                  Download
+                </Button>
+                <Button size="small" onClick={handleBulkIgnore} className="intent-warning" startIcon={<BlockIcon size={14} />}>
+                  Ignore
+                </Button>
+              </>
+            ) : (
+              <Button size="small" onClick={handleDeleteClick} className="intent-danger" startIcon={<DeleteIcon size={14} />}>
+                Delete
+              </Button>
+            )}
+            <Button size="small" onClick={handleClearSelection} className="intent-base" startIcon={<ClearIcon size={14} />}>
+              Clear
+            </Button>
+          </div>
+        </ActionBar>
+      </div>,
       document.body
     );
   };
@@ -969,7 +981,15 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         )}
 
         {/* Content area */}
-        <div style={{ padding: 16, position: 'relative', minHeight: '100vh' }}>
+        <div
+          style={{
+            padding: 16,
+            paddingBottom: isMobile ? 'calc(var(--mobile-nav-total-offset, 0px) + 96px)' : 16,
+            position: 'relative',
+            minHeight: '100vh',
+            overflowX: 'clip',
+          }}
+        >
           {videoFailed && videos.length === 0 && !hasActiveFilters && !searchQuery ? (
             <Alert severity="error">
               Failed to fetch channel videos. Please try again later.

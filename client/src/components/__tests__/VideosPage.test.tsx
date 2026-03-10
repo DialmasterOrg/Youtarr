@@ -943,12 +943,12 @@ describe('VideosPage Component', () => {
       });
     });
 
-    describe('Mobile View - FAB Deletion', () => {
+    describe('Mobile View - Bottom Action Bar', () => {
       beforeEach(() => {
         (useMediaQuery as jest.Mock).mockReturnValue(true);
       });
 
-      test('shows delete icon on video thumbnails in mobile view', async () => {
+      test('shows selection checkboxes on downloaded video thumbnails in mobile view', async () => {
         const videosWithFiles = mockVideos.filter(v => v.fileSize);
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(videosWithFiles) });
 
@@ -958,12 +958,11 @@ describe('VideosPage Component', () => {
           expect(screen.getByText('How to Code')).toBeInTheDocument();
         });
 
-        // Should have delete icons for videos with fileSize
-        const deleteIcons = screen.getAllByTestId('DeleteIcon');
-        expect(deleteIcons.length).toBeGreaterThan(0);
+        expect(screen.getByRole('checkbox', { name: /Select How to Code/i })).toBeInTheDocument();
+        expect(screen.getByRole('checkbox', { name: /Select Game Review/i })).toBeInTheDocument();
       });
 
-      test('toggles video selection when delete icon is clicked in mobile', async () => {
+      test('toggles video selection when thumbnail checkbox is clicked in mobile', async () => {
         const user = setupUser();
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[0]]) });
 
@@ -973,20 +972,17 @@ describe('VideosPage Component', () => {
           expect(screen.getByText('How to Code')).toBeInTheDocument();
         });
 
-        const deleteIcons = screen.getAllByTestId('DeleteIcon');
-        const thumbnailDeleteIcon = deleteIcons[0];
+        const selectionCheckbox = screen.getByRole('checkbox', { name: /Select How to Code/i });
 
-        // Click to select
-        await user.click(thumbnailDeleteIcon);
+        await user.click(selectionCheckbox);
 
-        // FAB should appear with badge - there should now be more delete icons
         await waitFor(() => {
-          const iconsAfterClick = screen.getAllByTestId('DeleteIcon');
-          expect(iconsAfterClick.length).toBeGreaterThanOrEqual(deleteIcons.length);
+          expect(screen.getByText(/1 video selected/i)).toBeInTheDocument();
+          expect(screen.getByRole('button', { name: /^Delete$/i })).toBeInTheDocument();
         });
       });
 
-      test('shows FAB with badge when videos are selected for deletion in mobile', async () => {
+      test('shows bottom action bar when videos are selected in mobile', async () => {
         const user = setupUser();
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos.slice(0, 2)) });
 
@@ -996,13 +992,13 @@ describe('VideosPage Component', () => {
           expect(screen.getByText('How to Code')).toBeInTheDocument();
         });
 
-        // Select first video via delete icon
-        const deleteIcons = screen.getAllByTestId('DeleteIcon');
-        await user.click(deleteIcons[0]);
+        await user.click(screen.getByRole('checkbox', { name: /Select How to Code/i }));
 
-        // Should show FAB (checking for presence in DOM)
         await waitFor(() => {
-          expect(deleteIcons.length).toBeGreaterThan(0);
+          expect(screen.getByText(/1 video selected/i)).toBeInTheDocument();
+          expect(screen.getByRole('button', { name: /^Rating$/i })).toBeInTheDocument();
+          expect(screen.getByRole('button', { name: /^Delete$/i })).toBeInTheDocument();
+          expect(screen.getByRole('button', { name: /^Clear$/i })).toBeInTheDocument();
         });
       });
     });

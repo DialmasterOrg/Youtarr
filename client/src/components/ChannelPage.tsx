@@ -12,6 +12,7 @@ import SubFolderChip from './ChannelManager/components/chips/SubFolderChip';
 import QualityChip from './ChannelManager/components/chips/QualityChip';
 import AutoDownloadChips from './ChannelManager/components/chips/AutoDownloadChips';
 import { SHARED_CHANNEL_META_CHIP_STYLE } from './shared/chipStyles';
+import { useThemeEngine } from '../contexts/ThemeEngineContext';
 
 interface ChannelPageProps {
   token: string | null;
@@ -19,6 +20,8 @@ interface ChannelPageProps {
 
 function ChannelPage({ token }: ChannelPageProps) {
   const isMobile = useMediaQuery('(max-width: 599px)');
+  const { themeMode } = useThemeEngine();
+  const isPlayful = themeMode === 'playful';
   const [channel, setChannel] = useState<Channel | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [regexAnchorEl, setRegexAnchorEl] = useState<HTMLElement | null>(null);
@@ -254,11 +257,12 @@ function ChannelPage({ token }: ChannelPageProps) {
     ? trimmedDescription || '** No description available **'
     : 'Loading...';
   const descriptionIsLong = Boolean(trimmedDescription && trimmedDescription.length > descriptionLimit);
+  const allowDescriptionCollapse = !(isMobile && isPlayful);
   const displayedDescription =
-    descriptionExpanded || !descriptionIsLong
+    !allowDescriptionCollapse || descriptionExpanded || !descriptionIsLong
       ? descriptionText
       : `${descriptionText.slice(0, descriptionLimit)}...`;
-  const shouldShowExpandButton = Boolean(channel && descriptionIsLong);
+  const shouldShowExpandButton = Boolean(channel && descriptionIsLong && allowDescriptionCollapse);
 
   return (
     <>
@@ -308,7 +312,7 @@ function ChannelPage({ token }: ChannelPageProps) {
                     paddingBottom: isMobile ? 12 : 18,
                     flexGrow: 1,
                     minHeight: 0,
-                    maxHeight: descriptionExpanded ? 'none' : descriptionCollapsedHeight,
+                    maxHeight: allowDescriptionCollapse && !descriptionExpanded ? descriptionCollapsedHeight : 'none',
                   }}
                 >
                   <Typography

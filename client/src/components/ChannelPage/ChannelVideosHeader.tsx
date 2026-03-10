@@ -196,10 +196,10 @@ function ChannelVideosHeader({
             InputProps={{
               startAdornment: <SearchIcon size={16} data-testid="SearchIcon" />,
             }}
-            style={{ flexGrow: 1, minWidth: 200, width: isMobile ? '50%' : 'auto' }}
+            style={{ flexGrow: 1, minWidth: isMobile ? 0 : 200, width: isMobile ? '100%' : 'auto' }}
           />
 
-          <FormControl style={{ minWidth: 200 }}>
+          <FormControl style={{ minWidth: isMobile ? 0 : 200, width: isMobile ? '100%' : undefined }}>
             <InputLabel>Max Rating</InputLabel>
             <Select
               size="small"
@@ -216,7 +216,7 @@ function ChannelVideosHeader({
           </FormControl>
 
           {/* View mode toggle - mobile shows list/grid, desktop shows table/grid */}
-          <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden', flexShrink: 0 }}>
             {!isMobile && (
               <button
                 value="table"
@@ -267,9 +267,10 @@ function ChannelVideosHeader({
           )}
 
           <FormControlLabel
+            style={{ width: isMobile ? '100%' : undefined, marginRight: 0 }}
             control={<Switch checked={autoDownloadsEnabled} onChange={(e) => onAutoDownloadToggle(e.target.checked)} size="small" />}
             label={
-              <div style={{ display: 'flex', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
                 Enable Channel Downloads for this tab
                 {renderInfoIcon(autoDownloadTooltip)}
               </div>
