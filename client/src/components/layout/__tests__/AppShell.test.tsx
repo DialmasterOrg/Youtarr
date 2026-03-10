@@ -11,13 +11,17 @@ jest.mock('../BackgroundDecorations', () => ({
 }));
 
 jest.mock('../NavHeader', () => ({
-  NavHeader: ({ toggleDrawer, isCollapsed, themeMode }: { toggleDrawer: () => void; isCollapsed: boolean; themeMode: string }) => (
-    themeMode === 'playful' ? (
+  NavHeader: ({ toggleDrawer, isCollapsed, layoutPolicy }: { toggleDrawer: () => void; isCollapsed: boolean; layoutPolicy: { breakpoint: string; navPlacement: string; showHeaderToggleOnMobile: boolean } }) => {
+    const showToggle = layoutPolicy.breakpoint === 'mobile'
+      ? layoutPolicy.showHeaderToggleOnMobile
+      : layoutPolicy.navPlacement === 'sidebar';
+
+    return showToggle ? (
       <button onClick={toggleDrawer} type="button">
-        toggle:{themeMode}:{String(isCollapsed)}
+        toggle:{layoutPolicy.navPlacement}:{layoutPolicy.breakpoint}:{String(isCollapsed)}
       </button>
-    ) : null
-  ),
+    ) : null;
+  },
 }));
 
 jest.mock('../NavSidebar', () => ({
@@ -59,8 +63,12 @@ function renderShell(themeMode: 'playful' | 'linear' | 'flat', isMobile = false)
   );
 }
 
+function getLayoutRoot() {
+  return document.querySelector('[data-layout-contract-root]') as HTMLElement;
+}
+
 function getContentFrame() {
-  return screen.getByText('Shell content').parentElement as HTMLElement;
+  return screen.getByTestId('app-shell-content-frame');
 }
 
 describe('AppShell', () => {
@@ -76,7 +84,7 @@ describe('AppShell', () => {
       expect(document.documentElement.style.getPropertyValue('--nav-width')).toBe('200px');
     });
 
-    await user.click(screen.getByRole('button', { name: /toggle:playful:false/i }));
+    await user.click(screen.getByRole('button', { name: /toggle:sidebar:desktop:false/i }));
 
     await waitFor(() => {
       expect(document.documentElement.style.getPropertyValue('--nav-width')).toBe('65px');
@@ -105,7 +113,7 @@ describe('AppShell', () => {
       expect(document.documentElement.style.getPropertyValue('--nav-width')).toBe('0px');
     });
 
-    await user.click(screen.getByRole('button', { name: /toggle:playful:true/i }));
+    await user.click(screen.getByRole('button', { name: /toggle:sidebar:mobile:true/i }));
 
     expect(screen.getByTestId('nav-sidebar')).toHaveTextContent('collapsed:false|topnav:false|mobileopen:true');
   });
@@ -113,13 +121,15 @@ describe('AppShell', () => {
   it('uses tighter mobile frame padding for playful theme content', () => {
     renderShell('playful', true);
 
-    expect(getContentFrame()).toHaveStyle({ padding: '12px 6px' });
+    expect(getLayoutRoot().style.getPropertyValue('--layout-content-padding')).toBe('12px 6px');
+    expect(getContentFrame()).toHaveAttribute('data-layout-breakpoint', 'mobile');
   });
 
   it('uses tighter mobile outer and inner padding for top-nav themes', () => {
     const { container } = renderShell('flat', true);
 
-    expect(container.querySelector('main')).toHaveStyle({ padding: '8px 8px calc(20px + env(safe-area-inset-bottom))' });
-    expect(getContentFrame()).toHaveStyle({ padding: '12px 8px' });
+    expect(container.querySelector('main')).toHaveAttribute('data-nav-placement', 'top');
+    expect(getLayoutRoot().style.getPropertyValue('--layout-main-padding')).toBe('8px 8px calc(20px + env(safe-area-inset-bottom))');
+    expect(getLayoutRoot().style.getPropertyValue('--layout-content-padding')).toBe('12px 8px');
   });
 });

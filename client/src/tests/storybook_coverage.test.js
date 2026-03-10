@@ -3,6 +3,8 @@ import { runStoryWithPlay } from '../components/__tests__/storybookPlayAdapter';
 import * as videoListItemStories from '../components/ChannelPage/__tests__/VideoListItem.story';
 import * as downloadProgressStories from '../components/DownloadManager/__tests__/DownloadProgress.story';
 import * as subtitleLanguageStories from '../components/Configuration/__tests__/SubtitleLanguageSelector.story';
+import * as appShellStories from '../components/layout/__tests__/AppShell.story';
+import * as navHeaderStories from '../components/layout/__tests__/NavHeader.story';
 
 describe('storybook parity coverage', () => {
   test('VideoListItem Selectable story preserves selection behavior parity', async () => {
@@ -26,6 +28,34 @@ describe('storybook parity coverage', () => {
     expect(args.onChange).toHaveBeenCalled();
     expect(args.onChange).toHaveBeenCalledWith(expect.stringContaining('es'));
   }, 10000);
+
+  test.each([
+    'PlayfulDesktop',
+    'PlayfulMobile',
+    'LinearDesktop',
+    'LinearMobile',
+    'FlatDesktop',
+    'FlatMobile',
+  ])('AppShell %s story preserves theme layout contract styling', async (storyName) => {
+    const { renderResult } = await runStoryWithPlay(appShellStories, storyName);
+    const root = renderResult.container.querySelector('[data-layout-contract-root]');
+    expect(root).toBeTruthy();
+    expect(root.style.getPropertyValue('--layout-content-padding')).not.toBe('');
+  });
+
+  test.each([
+    'PlayfulDesktop',
+    'PlayfulMobile',
+    'LinearDesktop',
+    'LinearMobile',
+    'FlatDesktop',
+    'FlatMobile',
+  ])('NavHeader %s story preserves theme layout contract styling', async (storyName) => {
+    const { renderResult } = await runStoryWithPlay(navHeaderStories, storyName);
+    const header = renderResult.container.querySelector('[data-nav-container]');
+    expect(header).toBeTruthy();
+    expect(header.style.getPropertyValue('--layout-header-title-inset')).not.toBe('');
+  });
 });
 
 describe('storybook router configuration validation', () => {

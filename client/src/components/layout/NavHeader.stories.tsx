@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { expect, userEvent, within } from 'storybook/test';
 import { MemoryRouter } from 'react-router-dom';
 import { NavHeader } from './NavHeader';
+import { getThemeById, resolveThemeLayoutPolicy } from '../../themes';
 
 const navItems = [
   { key: 'channels', label: 'Channels', oldLabel: 'Your Channels', icon: <span>C</span>, to: '/channels' },
@@ -44,8 +45,7 @@ const meta: Meta<typeof NavHeader> = {
   ],
   args: {
     appName: 'Youtarr',
-    isMobile: false,
-    themeMode: 'linear',
+    layoutPolicy: resolveThemeLayoutPolicy(getThemeById('linear'), 'desktop'),
     navItems,
     token: 'storybook-token',
     isPlatformManaged: false,
@@ -77,13 +77,13 @@ export const Default: Story = {
 
 export const Mobile: Story = {
   args: {
-    isMobile: true,
+    layoutPolicy: resolveThemeLayoutPolicy(getThemeById('linear'), 'mobile'),
   },
 };
 
 export const PlayfulTheme: Story = {
   args: {
-    themeMode: 'playful',
+    layoutPolicy: resolveThemeLayoutPolicy(getThemeById('playful'), 'desktop'),
   },
   globals: {
     themeMode: 'playful',

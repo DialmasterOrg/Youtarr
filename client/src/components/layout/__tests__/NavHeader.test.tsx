@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { NavHeader } from '../NavHeader';
 import { ThemeEngineProvider } from '../../../contexts/ThemeEngineContext';
 import { TooltipProvider } from '../../ui/tooltip';
+import { getThemeById, resolveThemeLayoutPolicy } from '../../../themes';
 
 jest.mock('../StorageHeaderWidget', () => ({
   StorageHeaderWidget: () => null,
@@ -24,8 +25,7 @@ type NavHeaderProps = React.ComponentProps<typeof NavHeader>;
 
 const BASE_PROPS: NavHeaderProps = {
   appName: 'Youtarr',
-  isMobile: false,
-  themeMode: 'linear' as const,
+  layoutPolicy: resolveThemeLayoutPolicy(getThemeById('linear'), 'desktop'),
   navItems: NAV_ITEMS,
   token: 'test-token',
   isPlatformManaged: false,
@@ -80,17 +80,19 @@ describe('NavHeader shared update indicator', () => {
   });
 
   it('adds left spacing before the title in top-nav themes', () => {
-    renderHeader({ themeMode: 'flat' });
+    renderHeader({ layoutPolicy: resolveThemeLayoutPolicy(getThemeById('flat'), 'desktop') });
 
+    const header = screen.getByRole('banner') as HTMLElement;
     const titleLink = screen.getByRole('link', { name: 'Youtarr' });
-    expect(titleLink).toHaveStyle({ marginLeft: '12px' });
+    expect(header.style.getPropertyValue('--layout-header-title-inset')).toBe('12px');
+    expect(titleLink).toHaveStyle({ marginLeft: 'var(--layout-header-title-inset)' });
   });
 
   it('uses the shared indicator for a yt-dlp-only update on the playful theme', () => {
     localStorage.setItem('uiThemeMode', 'playful');
 
     renderHeader({
-      themeMode: 'playful',
+      layoutPolicy: resolveThemeLayoutPolicy(getThemeById('playful'), 'desktop'),
       updateAvailable: false,
       ytDlpUpdateAvailable: true,
       ytDlpUpdateTooltip: 'yt-dlp update available (2025.10.01). Go to Settings to update.',
@@ -103,11 +105,12 @@ describe('NavHeader shared update indicator', () => {
   it('keeps the playful header fully framed instead of removing the top border', () => {
     localStorage.setItem('uiThemeMode', 'playful');
 
-    renderHeader({ themeMode: 'playful', isMobile: true });
+    renderHeader({ layoutPolicy: resolveThemeLayoutPolicy(getThemeById('playful'), 'mobile') });
 
     const header = screen.getByRole('banner') as HTMLElement;
 
-    expect(header.style.border).toBe('var(--appbar-border)');
+    expect(header.dataset.headerFrameMode).toBe('inset');
+    expect(header.style.getPropertyValue('--layout-header-border')).toBe('var(--appbar-border)');
     expect(header.style.boxShadow).toBe('none');
     expect(header.style.borderTop).toBe('');
     expect(header.style.borderLeft).toBe('');

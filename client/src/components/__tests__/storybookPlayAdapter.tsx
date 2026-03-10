@@ -19,6 +19,22 @@ const mockWebSocketContext = {
   unsubscribe: () => {},
 };
 
+function setViewportMatch(isMobile: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: query === '(max-width: 767px)' ? isMobile : false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
 function applyDecorators(storyNode: React.ReactNode, decorators: any[], context: AnyObject) {
   return decorators.reduceRight((currentNode, decorator) => {
     const Story = () => <>{currentNode}</>;
@@ -44,7 +60,10 @@ export async function runStoryWithPlay(storyModule: StoryModule, storyName: stri
       ...(meta.parameters || {}),
       ...(story.parameters || {}),
     },
-    globals: { theme: 'light' },
+    globals: {
+      ...(meta.globals || {}),
+      ...(story.globals || {}),
+    },
     viewMode: 'story',
     hooks: {},
   };
@@ -60,7 +79,13 @@ export async function runStoryWithPlay(storyModule: StoryModule, storyName: stri
   const decoratedNode = applyDecorators(initialNode, decorators, context);
   
   if (typeof window !== 'undefined') {
-    localStorage.setItem('uiColorMode', context.globals.theme === 'dark' ? 'dark' : 'light');
+    const themeMode = context.globals.themeMode || 'playful';
+    const colorMode = context.globals.colorMode || context.globals.theme || 'light';
+    const motionEnabled = context.globals.motionEnabled === 'on' || context.globals.motionEnabled === true;
+    localStorage.setItem('uiThemeMode', themeMode);
+    localStorage.setItem('uiColorMode', colorMode === 'dark' ? 'dark' : 'light');
+    localStorage.setItem('uiMotionEnabled', String(motionEnabled));
+    setViewportMatch(context.parameters.layoutBreakpoint === 'mobile');
   }
 
   const withProviders = (

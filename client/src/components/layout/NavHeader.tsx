@@ -9,14 +9,14 @@ import {
 } from '../ui';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { LogOut as LogoutIcon, Download as DownloadIcon, Menu as MenuIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon } from '../../lib/icons';
-import { ThemeMode } from '../../themes';
+import { getThemeLayoutCssVars, ThemeLayoutPolicy } from '../../themes';
 import { StorageHeaderWidget } from './StorageHeaderWidget';
 import { NAV_DRAWER_SECTION_BUTTON_GUTTER } from './navLayoutConstants';
+import './layoutFallback.css';
 
 interface NavHeaderProps {
   appName: string;
-  isMobile: boolean;
-  themeMode: ThemeMode;
+  layoutPolicy: ThemeLayoutPolicy;
   navItems: any[];
   token: string | null;
   isPlatformManaged: boolean;
@@ -33,8 +33,7 @@ interface NavHeaderProps {
 
 export const NavHeader: React.FC<NavHeaderProps> = ({
   appName,
-  isMobile,
-  themeMode,
+  layoutPolicy,
   navItems,
   token,
   isPlatformManaged,
@@ -50,19 +49,20 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const layoutCssVars = getThemeLayoutCssVars(layoutPolicy);
 
-  const isPlayful = themeMode === 'playful';
+  const isMobile = layoutPolicy.breakpoint === 'mobile';
+  const isTopNav = layoutPolicy.navPlacement === 'top';
+  const isInsetFrame = layoutPolicy.headerFrameMode === 'inset';
+  const isPlayful = layoutPolicy.headerUpdateIndicatorMode === 'playful';
+  const isLinear = layoutPolicy.headerUpdateIndicatorMode === 'linear';
+  const isFlat = layoutPolicy.headerUpdateIndicatorMode === 'flat';
 
   // --- State ---
   const [activeKey, setActiveKey] = useState<string | null>(null);
 
-  // --- Theme Computed Values ---
-  const isLinear = themeMode === 'linear';
-  const isFlat = themeMode === 'flat';
-  const isTopNav = isLinear || isFlat;
-  const hasInsetFrame = isMobile || !isTopNav;
-  const showTopNavItems = isTopNav && !isMobile;
-  const topNavTitleInset = isTopNav && !isMobile ? 12 : 0;
+  // --- Policy Computed Values ---
+  const showTopNavItems = layoutPolicy.showDesktopNavItems && !isMobile;
   const hasAppUpdate = token && !isPlatformManaged && updateAvailable && Boolean(updateTooltip);
   const hasYtDlpUpdate = token && ytDlpUpdateAvailable && Boolean(ytDlpUpdateTooltip);
   const hasAnyUpdate = Boolean(hasAppUpdate || hasYtDlpUpdate);
@@ -88,7 +88,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
       : 'yt-dlp update available';
 
   const sharedUpdateIndicatorStyle: React.CSSProperties = useMemo(() => {
-    if (isPlayful) {
+    if (layoutPolicy.headerUpdateIndicatorMode === 'playful') {
       return {
         width: 40,
         height: 40,
@@ -100,7 +100,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
       };
     }
 
-    if (isFlat) {
+    if (layoutPolicy.headerUpdateIndicatorMode === 'flat') {
       return {
         width: 34,
         height: 34,
@@ -119,7 +119,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
       backgroundColor: 'transparent',
       border: '1px solid rgba(255, 255, 255, 0.2)',
     };
-  }, [isFlat, isPlayful]);
+  }, [layoutPolicy.headerUpdateIndicatorMode]);
 
   const versionParts = useMemo(() => {
     if (!versionLabel) return [] as string[];
@@ -164,40 +164,32 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
     overflow: 'visible',
     width: 'max-content',
     minWidth: 180,
-    borderRadius: isLinear ? '12px' : isFlat ? '8px' : 'var(--radius-ui)',
-    border: isLinear
-      ? '1px solid rgba(255, 255, 255, 0.1)'
-      : isFlat
-        ? '2px solid var(--border)'
-        : '2px solid var(--border-strong)',
-    backgroundColor: isLinear
-      ? '#09090b'
-      : isFlat
-        ? 'var(--card)'
-        : 'var(--card)',
-    boxShadow: isLinear ? '0 10px 40px rgba(0,0,0,0.5)' : isFlat ? '0 4px 6px -1px rgba(0, 0, 0, 0.1)' : 'none',
+    borderRadius: 'var(--layout-header-menu-radius)',
+    border: 'var(--layout-header-menu-border)',
+    backgroundColor: 'var(--layout-header-menu-background)',
+    boxShadow: 'var(--layout-header-menu-shadow)',
     padding: '4px',
   };
 
   const headerStyle: React.CSSProperties = {
     position: 'fixed',
-    backgroundColor: isLinear ? 'rgba(5, 5, 6, 0.72)' : 'var(--card, #fffdf5)',
-    backdropFilter: isLinear ? 'none' : 'none',
-    border: isLinear ? 'none' : isFlat ? '2px solid var(--border)' : 'var(--appbar-border)',
-    borderBottom: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : isFlat ? '2px solid var(--border)' : undefined,
-    borderTop: isTopNav ? 'none' : undefined,
-    borderLeft: isTopNav ? 'none' : undefined,
-    borderRight: isTopNav ? 'none' : undefined,
+    backgroundColor: 'var(--layout-header-background)',
+    backdropFilter: 'var(--layout-header-backdrop-filter)',
+    border: 'var(--layout-header-border)',
+    borderBottom: 'var(--layout-header-border-bottom)',
+    borderTop: isInsetFrame ? undefined : 'none',
+    borderLeft: isInsetFrame ? undefined : 'none',
+    borderRight: isInsetFrame ? undefined : 'none',
     boxShadow: 'none',
-    backgroundImage: isLinear || isFlat ? 'none' : 'var(--appbar-pattern)',
+    backgroundImage: 'var(--layout-header-pattern)',
     backgroundSize: '24px 24px',
     color: 'var(--foreground)',
     zIndex: 1300,
-    top: hasInsetFrame ? 'var(--shell-gap)' : 0,
-    left: hasInsetFrame ? 'var(--shell-gap)' : 0,
-    right: hasInsetFrame ? 'var(--shell-gap)' : 0,
-    width: hasInsetFrame ? 'calc(100vw - (var(--shell-gap) * 2))' : '100vw',
-    borderRadius: isTopNav ? 0 : 'var(--radius-ui)',
+    top: isInsetFrame ? 'var(--shell-gap)' : 0,
+    left: isInsetFrame ? 'var(--shell-gap)' : 0,
+    right: isInsetFrame ? 'var(--shell-gap)' : 0,
+    width: isInsetFrame ? 'calc(100vw - (var(--shell-gap) * 2))' : '100vw',
+    borderRadius: 'var(--layout-header-border-radius)',
     overflow: 'visible',
   };
 
@@ -206,8 +198,15 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
 
   return (
     <header
+      data-layout-contract-header
+      data-layout-breakpoint={layoutPolicy.breakpoint}
+      data-nav-placement={layoutPolicy.navPlacement}
+      data-header-frame-mode={layoutPolicy.headerFrameMode}
       data-nav-container
-      style={headerStyle}
+      style={{
+        ...(layoutCssVars as React.CSSProperties),
+        ...headerStyle,
+      }}
     >
       <div
         style={{
@@ -221,20 +220,20 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
         }}
       >
         {/* Toggle (Mobile/Side) */}
-        {!isMobile && !isTopNav && (
+        {((!isMobile && !isTopNav) || (isMobile && layoutPolicy.showHeaderToggleOnMobile)) && (
           <IconButton
             className="pop-toggle"
             aria-label="toggle navigation"
             onClick={toggleDrawer}
             style={{
-              width: isTopNav ? undefined : (isPlayful && !isMobile ? 57 : APP_BAR_TOGGLE_SIZE),
-              height: isTopNav ? undefined : (isPlayful && !isMobile ? 40 : APP_BAR_TOGGLE_SIZE),
-              borderRadius: (isTopNav || isPlayful) ? 'var(--radius-ui)' : '50%',
-              color: isLinear ? '#FFFFFF' : isFlat ? '#111827' : 'inherit',
+              width: 'var(--layout-header-toggle-width)',
+              height: 'var(--layout-header-toggle-height)',
+              borderRadius: 'var(--layout-header-toggle-radius)',
+              color: 'var(--layout-header-toggle-color)',
               marginRight: isTopNav ? 8 : 0,
             }}
           >
-            {isPlayful ? (
+            {layoutPolicy.headerToggleMode === 'collapse' ? (
               isCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />
             ) : (
               <MenuIcon />
@@ -254,7 +253,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
             to="/"
             style={{
               display: 'inline-flex',
-              marginLeft: topNavTitleInset,
+              marginLeft: 'var(--layout-header-title-inset)',
               textDecoration: 'none',
             }}
           >
@@ -338,7 +337,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                                 display: 'block',
                                 textDecoration: 'none',
                                 width: '100%',
-                                borderRadius: (isLinear || isFlat) ? '6px' : 'var(--radius-ui)',
+                                borderRadius: 'var(--layout-header-menu-radius)',
                                 fontSize: '0.85rem',
                                 fontWeight: 500,
                                 color: isSubActive
@@ -369,7 +368,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
           className="flex items-center"
           style={{ marginLeft: showTopNavItems ? 'auto' : 0 }}
         >
-          {(isLinear || isFlat) && !isMobile && versionParts.length > 0 && (
+          {layoutPolicy.headerVersionPlacement === 'desktop' && !isMobile && versionParts.length > 0 && (
             <Tooltip title="Click to view changelog" arrow placement="bottom">
               <Box
                 className="flex flex-col items-end mr-3"
@@ -390,7 +389,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
             </Tooltip>
           )}
 
-          {isMobile && versionParts.length > 0 && (
+          {layoutPolicy.headerVersionPlacement === 'mobile' && isMobile && versionParts.length > 0 && (
             <Tooltip title="Tap to view changelog" arrow placement="bottom">
               <Typography
                 variant="caption"
@@ -422,7 +421,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
             </Tooltip>
           )}
 
-          {token && !isPlayful && !(isMobile && (isLinear || isFlat)) && <StorageHeaderWidget token={token} />}
+          {token && layoutPolicy.showStorageHeaderWidget && <StorageHeaderWidget token={token} />}
 
           {token && !isPlatformManaged && onLogout && (
             <IconButton aria-label="logout" onClick={onLogout} style={{ color: 'var(--foreground)' }}>

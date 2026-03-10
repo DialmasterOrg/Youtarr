@@ -69,8 +69,7 @@ export const TopNavFlat: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const toggleButton = canvas.getByRole('button', { name: /toggle navigation/i });
-    await userEvent.click(toggleButton);
+    await expect(canvas.queryByRole('button', { name: /toggle navigation/i })).not.toBeInTheDocument();
     await expect(canvas.getByRole('link', { name: /settings/i })).toBeInTheDocument();
   },
 };

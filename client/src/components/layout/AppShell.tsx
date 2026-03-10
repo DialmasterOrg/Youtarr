@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, CssBaseline } from '../ui';
+import { CssBaseline } from '../ui';
 import { SETTINGS_PAGES } from '../Settings/SettingsIndex';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { NavHeader } from './NavHeader';
 import { NavSidebar } from './NavSidebar';
 import { BackgroundDecorations } from './BackgroundDecorations';
-import { getThemeById } from '../../themes';
+import { getThemeById, getThemeLayoutCssVars, resolveThemeLayoutPolicy } from '../../themes';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import './layoutFallback.css';
 
 import { Tv as SubscriptionsIcon, Library as VideoLibraryIcon } from 'lucide-react';
 import { Download as DownloadIcon, Settings as SettingsIcon } from '../../lib/icons';
@@ -29,8 +30,6 @@ interface AppShellProps {
 const EXPANDED_WIDTH = 200;
 const COLLAPSED_WIDTH = 65;
 const APP_BAR_TOGGLE_SIZE = 44;
-const TOP_NAV_DESKTOP_PADDING = '32px 32px 48px';
-const TOP_NAV_MOBILE_PADDING = '8px 8px calc(20px + env(safe-area-inset-bottom))';
 
 export function AppShell({
   token,
@@ -48,14 +47,9 @@ export function AppShell({
   const { themeMode } = useThemeEngine();
   
   const currentTheme = getThemeById(themeMode);
-  const isTopNav = currentTheme.layoutMode === 'top-nav';
-  const contentFramePadding = isMobile
-    ? themeMode === 'playful'
-      ? '12px 6px'
-      : '12px 8px'
-    : themeMode === 'playful'
-      ? '20px 16px'
-      : '24px 32px';
+  const layoutPolicy = resolveThemeLayoutPolicy(currentTheme, isMobile ? 'mobile' : 'desktop');
+  const layoutCssVars = getThemeLayoutCssVars(layoutPolicy);
+  const isTopNav = layoutPolicy.navPlacement === 'top';
 
   const [drawerOpenMobile, setDrawerOpenMobile] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -131,16 +125,18 @@ export function AppShell({
 
   return (
     <div
+      data-layout-contract-root
+      data-layout-breakpoint={layoutPolicy.breakpoint}
+      data-nav-placement={layoutPolicy.navPlacement}
       style={{
+        ...(layoutCssVars as React.CSSProperties),
         display: 'flex',
         gap: isTopNav ? 0 : 'var(--shell-gap)',
         minHeight: '100vh',
         position: 'relative',
         overflowX: 'clip',
         backgroundColor: 'var(--background)',
-        background: themeMode === 'linear'
-          ? '#050506'
-          : 'linear-gradient(180deg, var(--card) 0%, var(--background) 55%, var(--background) 100%)',
+        background: 'var(--layout-shell-background)',
       }}
     >
       <CssBaseline />
@@ -149,8 +145,7 @@ export function AppShell({
 
       <NavHeader
         appName={appName}
-        isMobile={isMobile}
-        themeMode={themeMode}
+        layoutPolicy={layoutPolicy}
         navItems={navItems}
         token={token}
         isPlatformManaged={isPlatformManaged}
@@ -177,16 +172,19 @@ export function AppShell({
       />
 
       <main
+        data-testid="app-shell-main"
+        data-layout-breakpoint={layoutPolicy.breakpoint}
+        data-nav-placement={layoutPolicy.navPlacement}
         style={
           isTopNav
             ? {
                 flexGrow: 1,
                 width: '100vw',
-                marginTop: 64,
+                marginTop: 'var(--layout-main-margin-top)',
                 marginBottom: 0,
                 marginRight: 0,
                 marginLeft: 0,
-                padding: isMobile ? TOP_NAV_MOBILE_PADDING : TOP_NAV_DESKTOP_PADDING,
+                padding: 'var(--layout-main-padding)',
                 position: 'relative',
                 zIndex: 1,
                 transition: 'all 300ms cubic-bezier(0.4, 0, 0.2, 1)',
@@ -203,10 +201,7 @@ export function AppShell({
                 flexDirection: 'column',
                 minHeight: '100vh',
                 minWidth: 0,
-                paddingTop: isMobile ? 'calc(64px + var(--shell-gap) * 2)' : 'calc(80px + var(--shell-gap))',
-                paddingBottom: 'var(--shell-gap)',
-                paddingLeft: isMobile ? 'var(--shell-gap)' : 'calc(var(--nav-width) + var(--shell-gap) * 2)',
-                paddingRight: 'var(--shell-gap)',
+                padding: 'var(--layout-main-padding)',
                 boxSizing: 'border-box',
                 position: 'relative',
                 zIndex: 1,
@@ -215,23 +210,22 @@ export function AppShell({
         }
       >
         <div
+          data-testid="app-shell-content-frame"
+          data-layout-breakpoint={layoutPolicy.breakpoint}
+          data-nav-placement={layoutPolicy.navPlacement}
           style={{
-            maxWidth: themeMode === 'playful' ? 'none' : 1400,
-            marginLeft: themeMode === 'playful' ? 0 : 'auto',
-            marginRight: themeMode === 'playful' ? 0 : 'auto',
+            maxWidth: 'var(--layout-content-max-width)',
+            marginLeft: 'var(--layout-content-margin-inline)',
+            marginRight: 'var(--layout-content-margin-inline)',
             width: '100%',
             minWidth: 0,
             boxSizing: 'border-box',
             overflowX: 'hidden',
-            padding: contentFramePadding,
-            ...(themeMode === 'playful'
-              ? {
-                  backgroundColor: 'var(--card)',
-                  border: '2px solid var(--foreground)',
-                  borderRadius: 'var(--radius-ui)',
-                  boxShadow: 'var(--shadow-soft)',
-                }
-              : {}),
+            padding: 'var(--layout-content-padding)',
+            backgroundColor: 'var(--layout-content-frame-background)',
+            border: 'var(--layout-content-frame-border)',
+            borderRadius: 'var(--layout-content-frame-radius)',
+            boxShadow: 'var(--layout-content-frame-shadow)',
           }}
         >
           {children}

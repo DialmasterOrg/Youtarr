@@ -4,6 +4,7 @@ import { ThemeMode, ThemeDefinition } from './types';
 import { playfulTheme } from './playful';
 import { linearTheme } from './linear';
 import { flatTheme } from './flat';
+export { FALLBACK_LAYOUT_POLICY, getThemeLayoutCssVars, resolveThemeLayoutPolicy } from './layoutPolicy';
 
 export const ALL_THEMES: Record<ThemeMode, ThemeDefinition> = {
   playful: playfulTheme,
@@ -11,7 +12,7 @@ export const ALL_THEMES: Record<ThemeMode, ThemeDefinition> = {
   flat: flatTheme,
 };
 
-export type { ThemeMode } from './types';
+export type { ThemeBreakpoint, ThemeLayoutPolicy, ThemeMode } from './types';
 
 export const getThemeById = (id: ThemeMode): ThemeDefinition => {
   return ALL_THEMES[id] || playfulTheme;
