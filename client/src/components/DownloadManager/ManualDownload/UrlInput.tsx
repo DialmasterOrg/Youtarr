@@ -9,7 +9,7 @@ import { Add as AddIcon, Clear as ClearIcon } from '../../../lib/icons';
 import { ClipboardPaste as PasteIcon } from 'lucide-react';
 
 interface UrlInputProps {
-  onValidate: (url: string) => Promise<boolean>;
+  onValidate: (url: string) => Promise<boolean | void> | boolean | void;
   isValidating: boolean;
   disabled?: boolean;
 }
@@ -17,6 +17,17 @@ interface UrlInputProps {
 const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled = false }) => {
   const [inputValue, setInputValue] = useState('');
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const runValidation = useCallback(async (url: string) => {
+    try {
+      const isValid = await Promise.resolve(onValidate(url));
+      if (isValid) {
+        setInputValue('');
+      }
+    } catch (error) {
+      console.error('URL validation failed:', error);
+    }
+  }, [onValidate]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
     const pastedText = e.clipboardData.getData('text');
@@ -29,22 +40,16 @@ const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled 
       }
 
       debounceTimerRef.current = setTimeout(async () => {
-        const isValid = await onValidate(pastedText);
-        if (isValid) {
-          setInputValue('');
-        }
+        await runValidation(pastedText);
       }, 500);
     }
-  }, [onValidate]);
+  }, [runValidation]);
 
   const handleAddClick = useCallback(async () => {
     if (inputValue.trim() && !isValidating) {
-      const isValid = await onValidate(inputValue.trim());
-      if (isValid) {
-        setInputValue('');
-      }
+      await runValidation(inputValue.trim());
     }
-  }, [inputValue, isValidating, onValidate]);
+  }, [inputValue, isValidating, runValidation]);
 
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !isValidating && inputValue.trim()) {
@@ -70,16 +75,13 @@ const UrlInput: React.FC<UrlInputProps> = ({ onValidate, isValidating, disabled 
         }
 
         debounceTimerRef.current = setTimeout(async () => {
-          const isValid = await onValidate(text);
-          if (isValid) {
-            setInputValue('');
-          }
+          await runValidation(text);
         }, 500);
       }
     } catch (error) {
       console.error('Failed to read clipboard:', error);
     }
-  }, [onValidate]);
+  }, [runValidation]);
 
   useEffect(() => {
     return () => {

@@ -19,8 +19,11 @@ function StillLiveDot({ isMobile = false, onMobileClick }: StillLiveDotProps) {
     if (isMobile && onMobileClick) {
       onMobileClick(message);
     } else {
+      if (tooltipTimeoutRef.current) {
+        clearTimeout(tooltipTimeoutRef.current);
+      }
       setTooltipOpen(!tooltipOpen);
-      // Auto-close tooltip after 2 seconds and store timeout id so we can clear it
+      // Auto-close tooltip after 2 seconds and store timeout id so we can clear it.
       tooltipTimeoutRef.current = window.setTimeout(() => setTooltipOpen(false), 2000);
     }
   };

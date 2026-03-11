@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface SubtitleLanguageSelectorProps {
   value: string;
@@ -45,6 +45,8 @@ function SubtitleLanguageSelector({
 
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(() => parseInitialLanguages(value));
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const ignoreClickRef = useRef(false);
 
   // Convert string value to array when component mounts or value changes
   // Also close dropdown when value prop changes externally (controlled rerender)
@@ -52,6 +54,32 @@ function SubtitleLanguageSelector({
     setSelectedLanguages(parseInitialLanguages(value));
     setOpen(false);
   }, [value, parseInitialLanguages]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
 
   const handleToggleLanguage = (code: string) => {
     if (disabled) return;
@@ -75,7 +103,7 @@ function SubtitleLanguageSelector({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: 4, position: 'relative' }}>
       <label
         htmlFor="subtitle-language-select"
         style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)', fontWeight: 500 }}
@@ -87,13 +115,26 @@ function SubtitleLanguageSelector({
         type="button"
         onMouseDown={(e) => {
           e.preventDefault();
-          if (!disabled) setOpen(true);
+          if (!disabled && !open) {
+            ignoreClickRef.current = true;
+            setOpen(true);
+          }
         }}
-        onClick={() => { if (!disabled) setOpen(true); }}
+        onClick={() => {
+          if (disabled) {
+            return;
+          }
+          if (ignoreClickRef.current) {
+            ignoreClickRef.current = false;
+            return;
+          }
+          setOpen((current) => !current);
+        }}
         disabled={disabled}
         aria-disabled={disabled ? 'true' : undefined}
         aria-expanded={open}
         aria-haspopup="listbox"
+        aria-controls={open ? 'subtitle-language-options' : undefined}
         aria-label="Subtitle Languages"
         style={{
           width: '100%',
@@ -121,7 +162,12 @@ function SubtitleLanguageSelector({
         })}
       </button>
       {open && !disabled && (
-        <div role="listbox" aria-label="Subtitle Languages options" style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-input)', padding: 4, maxHeight: 220, overflowY: 'auto' }}>
+        <div
+          id="subtitle-language-options"
+          role="listbox"
+          aria-label="Subtitle Languages options"
+          style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-input)', padding: 4, maxHeight: 220, overflowY: 'auto' }}
+        >
           {LANGUAGE_OPTIONS.map((option) => {
             const selected = selectedLanguages.includes(option.code);
             return (

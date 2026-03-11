@@ -15,8 +15,10 @@ interface SaveBarProps {
  * Only becomes visible (slides down) when the user has made changes, making
  * it clear that action is required — without always cluttering the UI.
  *
- * Note: always mounted (no mountOnEnter/unmountOnExit) so the save button
- * remains accessible to tests and assistive technology at all times.
+ * For the default 'fixed' placement, the bar stays mounted while hidden so the
+ * save button remains accessible to tests and assistive technology.
+ * For 'inline' placement, the bar unmounts when hidden to avoid leaving an
+ * empty sticky region in the surrounding layout.
  */
 export const SaveBar: React.FC<SaveBarProps> = ({
   hasUnsavedChanges,

@@ -34,12 +34,59 @@ function MobileFilterDrawer({
   hasActiveFilters,
   hideDateFilter = false,
 }: MobileFilterDrawerProps) {
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = React.useRef<HTMLButtonElement | null>(null);
+
+  React.useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    closeButtonRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (event.key !== 'Tab' || !panelRef.current) {
+        return;
+      }
+
+      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+
+      if (focusable.length === 0) {
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
     <>
       {/* Backdrop */}
       <div
+        aria-hidden="true"
         onClick={onClose}
         style={{
           position: 'fixed',
@@ -50,6 +97,10 @@ function MobileFilterDrawer({
       />
       {/* Drawer panel */}
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mobile-filter-drawer-title"
         style={{
           position: 'fixed',
           bottom: 0,
@@ -66,8 +117,10 @@ function MobileFilterDrawer({
         <div style={{ padding: 16 }}>
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <Typography variant="h6">Filters</Typography>
+            <Typography id="mobile-filter-drawer-title" variant="h6">Filters</Typography>
             <button
+              ref={closeButtonRef}
+              type="button"
               onClick={onClose}
               data-testid="drawer-close-button"
               style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', color: 'var(--foreground)', padding: 4 }}

@@ -165,20 +165,24 @@ describe('ConfigurationAccordion Component', () => {
   });
 
   describe('Section Behavior', () => {
-    test('renders content immediately by default', () => {
+    test('renders content collapsed by default', () => {
       renderWithProviders(<ConfigurationAccordion {...defaultProps} />);
-      expect(screen.getByText('Test Content')).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Test Section' })).toHaveAttribute('aria-expanded', 'false');
     });
 
-    test('defaultExpanded prop does not affect visibility', () => {
+    test('defaultExpanded=false keeps content collapsed', () => {
       renderWithProviders(<ConfigurationAccordion {...defaultProps} defaultExpanded={false} />);
+      expect(screen.getByRole('button', { name: 'Test Section' })).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    test('defaultExpanded=true shows content', () => {
+      renderWithProviders(<ConfigurationAccordion {...defaultProps} defaultExpanded={true} />);
       expect(screen.getByText('Test Content')).toBeVisible();
     });
 
-    test('title is rendered as non-interactive heading', () => {
+    test('title is rendered as interactive button', () => {
       renderWithProviders(<ConfigurationAccordion {...defaultProps} />);
-      expect(screen.getByRole('heading', { name: 'Test Section' })).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Test Section' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Test Section' })).toBeInTheDocument();
     });
   });
 
@@ -224,7 +228,7 @@ describe('ConfigurationAccordion Component', () => {
 
       expect(screen.getByText('Chip Test')).toBeInTheDocument();
       expect(screen.getByText('New')).toBeInTheDocument();
-      expect(screen.getByText('Content with chip')).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Chip Test New' })).toHaveAttribute('aria-expanded', 'false');
     });
 
     test('renders with defaultExpanded and no chip', () => {
@@ -304,14 +308,15 @@ describe('ConfigurationAccordion Component', () => {
   });
 
   describe('Accessibility', () => {
-    test('does not expose accordion expansion ARIA attributes', () => {
+    test('exposes accordion expansion ARIA attributes', () => {
       renderWithProviders(<ConfigurationAccordion {...defaultProps} />);
-      expect(screen.queryByRole('button', { name: 'Test Section' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Test Section' })).toHaveAttribute('aria-expanded', 'false');
     });
 
-    test('keeps content accessible without expansion interaction', () => {
+    test('keeps content accessible when expanded interaction is enabled', () => {
       renderWithProviders(<ConfigurationAccordion {...defaultProps} defaultExpanded={true} />);
       expect(screen.getByText('Test Content')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Test Section' })).toHaveAttribute('aria-expanded', 'true');
     });
 
     test('title is accessible', () => {
@@ -362,8 +367,8 @@ describe('ConfigurationAccordion Component', () => {
           </ConfigurationAccordion>
         </>
       );
-      expect(screen.getByText('First content')).toBeVisible();
-      expect(screen.getByText('Second content')).toBeVisible();
+      expect(screen.getByRole('button', { name: 'First' })).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByRole('button', { name: 'Second' })).toHaveAttribute('aria-expanded', 'false');
     });
   });
 });
