@@ -86,7 +86,8 @@ jest.mock('../../filesystem', () => ({
   isMainVideoFile: jest.fn(),
   isVideoDirectory: jest.fn(),
   isChannelDirectory: jest.fn(),
-  isDirectoryEmpty: jest.fn()
+  isDirectoryEmpty: jest.fn(),
+  cleanupEmptyChannelDirectory: jest.fn().mockResolvedValue(false)
 }));
 
 const DownloadExecutor = require('../downloadExecutor');

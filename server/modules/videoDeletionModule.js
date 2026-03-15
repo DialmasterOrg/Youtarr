@@ -2,7 +2,7 @@ const { Video } = require('../models');
 const fs = require('fs').promises;
 const path = require('path');
 const logger = require('../logger');
-const { isVideoDirectory } = require('./filesystem');
+const { isVideoDirectory, cleanupEmptyChannelDirectory, cleanupEmptyParents } = require('./filesystem');
 
 class VideoDeletionModule {
   constructor() {}
@@ -35,6 +35,38 @@ class VideoDeletionModule {
       fileSize: parseInt(video.fileSize) || 0,
       timeCreated: video.timeCreated
     };
+  }
+
+  /**
+   * Attempt to clean up an empty channel directory after video deletion
+   * Best-effort: errors are logged as warnings and do not propagate
+   * @param {string} filePath - The deleted video's file path
+   * @param {boolean} flat - Whether the video used flat directory structure
+   * @private
+   */
+  async _tryCleanupChannelDirectory(filePath, flat) {
+    try {
+      const configModule = require('./configModule');
+      const baseDir = configModule.directoryPath;
+
+      // Derive channel directory:
+      //   Nested: grandparent of filePath (filePath -> videoDir -> channelDir)
+      //   Flat: parent of filePath (filePath -> channelDir)
+      const channelDir = flat
+        ? path.dirname(filePath)
+        : path.dirname(path.dirname(filePath));
+
+      const removed = await cleanupEmptyChannelDirectory(channelDir, baseDir, {
+        includeIgnorableFiles: true
+      });
+
+      if (removed) {
+        // Clean up empty subfolder parent (e.g., /base/__subfolder/ now empty)
+        await cleanupEmptyParents(path.dirname(channelDir), baseDir);
+      }
+    } catch (error) {
+      logger.warn({ err: error, filePath }, 'Error during channel directory cleanup (non-fatal)');
+    }
   }
 
   /**
@@ -136,6 +168,9 @@ class VideoDeletionModule {
 
       // Mark video as removed in database
       await video.update({ removed: true });
+
+      // Best-effort cleanup of empty channel directory
+      await this._tryCleanupChannelDirectory(video.filePath, flat);
 
       return {
         success: true,
