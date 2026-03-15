@@ -35,9 +35,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Download the latest yt-dlp release directly from GitHub
-RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
-    chmod +x /usr/local/bin/yt-dlp
+# Download the latest yt-dlp release to a dedicated writable directory
+# so non-root users (YOUTARR_UID/YOUTARR_GID) can self-update at runtime
+RUN mkdir -p /opt/yt-dlp && \
+    curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /opt/yt-dlp/yt-dlp && \
+    chmod 0777 /opt/yt-dlp /opt/yt-dlp/yt-dlp
+ENV PATH="/opt/yt-dlp:${PATH}"
 
 # Install Deno
 ENV DENO_INSTALL="/usr/local"
