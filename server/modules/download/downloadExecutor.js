@@ -69,38 +69,9 @@ class DownloadExecutor {
   }
 
   // Helper function to remove a channel directory if it's empty
-  // This is called after removing a video directory to clean up empty channel folders
+  // Delegates to the shared directoryManager implementation
   async cleanupEmptyChannelDirectory(channelDir) {
-    const fsPromises = require('fs').promises;
-
-    try {
-      // Verify this is actually a channel directory (not root or subfolder)
-      if (!filesystem.isChannelDirectory(channelDir, configModule.directoryPath)) {
-        logger.debug({ channelDir }, 'Not a channel directory, skipping cleanup');
-        return;
-      }
-
-      // Check if directory exists
-      const exists = await fsPromises.access(channelDir).then(() => true).catch(() => false);
-      if (!exists) {
-        logger.debug({ channelDir }, 'Channel directory does not exist');
-        return;
-      }
-
-      // Check if directory is empty
-      const isEmpty = await filesystem.isDirectoryEmpty(channelDir);
-      if (!isEmpty) {
-        logger.debug({ channelDir }, 'Channel directory not empty, keeping it');
-        return;
-      }
-
-      // Remove empty channel directory
-      await fsPromises.rmdir(channelDir);
-      logger.info({ channelDir }, 'Removed empty channel directory');
-    } catch (error) {
-      logger.error({ err: error, channelDir }, 'Error cleaning up empty channel directory');
-      // Don't throw - this is a best-effort cleanup
-    }
+    await filesystem.cleanupEmptyChannelDirectory(channelDir, configModule.directoryPath);
   }
 
   // Cleanup function for in-progress videos based on database tracking

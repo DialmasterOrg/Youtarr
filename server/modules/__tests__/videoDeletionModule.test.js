@@ -39,10 +39,17 @@ describe('VideoDeletionModule', () => {
       promises: mockFs
     }));
 
-    // Mock the filesystem module (isVideoDirectory)
+    // Mock the filesystem module (isVideoDirectory, cleanupEmptyChannelDirectory, cleanupEmptyParents)
     // Default to true (nested structure) for backwards compatibility with existing tests
     jest.doMock('../filesystem', () => ({
-      isVideoDirectory: jest.fn(() => true)
+      isVideoDirectory: jest.fn(() => true),
+      cleanupEmptyChannelDirectory: jest.fn().mockResolvedValue(false),
+      cleanupEmptyParents: jest.fn().mockResolvedValue()
+    }));
+
+    // Mock configModule for _tryCleanupChannelDirectory
+    jest.doMock('../configModule', () => ({
+      directoryPath: '/test/output'
     }));
 
     // Require the module after mocks are in place
@@ -267,6 +274,158 @@ describe('VideoDeletionModule', () => {
         videoId: 1,
         error: 'Unknown error occurred'
       });
+    });
+  });
+
+  describe('_tryCleanupChannelDirectory', () => {
+    let mockFilesystem;
+
+    beforeEach(() => {
+      mockFilesystem = require('../filesystem');
+    });
+
+    test('should call cleanupEmptyChannelDirectory with grandparent path for nested deletion', async () => {
+      const mockVideoRecord = {
+        id: 1,
+        youtubeId: 'abc123',
+        filePath: '/test/output/Channel Name/Channel Name - Video Title - abc123/video.mp4',
+        removed: false,
+        update: jest.fn().mockResolvedValue()
+      };
+
+      mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
+      mockFs.rm.mockResolvedValue();
+
+      await VideoDeletionModule.deleteVideoById(1);
+
+      expect(mockFilesystem.cleanupEmptyChannelDirectory).toHaveBeenCalledWith(
+        '/test/output/Channel Name',
+        '/test/output',
+        { includeIgnorableFiles: true }
+      );
+    });
+
+    test('should call cleanupEmptyChannelDirectory with parent path for flat deletion', async () => {
+      // Override isVideoDirectory to return false for flat mode
+      mockFilesystem.isVideoDirectory.mockReturnValue(false);
+
+      const mockVideoRecord = {
+        id: 1,
+        youtubeId: 'abc123',
+        filePath: '/test/output/Channel Name/Channel Name - Video Title [abc123].mp4',
+        removed: false,
+        update: jest.fn().mockResolvedValue()
+      };
+
+      mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
+      mockFs.readdir.mockResolvedValue([]);
+
+      await VideoDeletionModule.deleteVideoById(1);
+
+      expect(mockFilesystem.cleanupEmptyChannelDirectory).toHaveBeenCalledWith(
+        '/test/output/Channel Name',
+        '/test/output',
+        { includeIgnorableFiles: true }
+      );
+    });
+
+    test('should NOT call cleanup when video has no filePath', async () => {
+      const mockVideoRecord = {
+        id: 1,
+        youtubeId: 'abc123',
+        filePath: null,
+        removed: false,
+        update: jest.fn().mockResolvedValue()
+      };
+
+      mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
+
+      await VideoDeletionModule.deleteVideoById(1);
+
+      expect(mockFilesystem.cleanupEmptyChannelDirectory).not.toHaveBeenCalled();
+    });
+
+    test('should NOT call cleanup when file deletion fails', async () => {
+      const mockVideoRecord = {
+        id: 1,
+        youtubeId: 'abc123',
+        filePath: '/test/output/Channel/Channel - Video - abc123/video.mp4',
+        removed: false
+      };
+
+      mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
+
+      const permissionError = new Error('EACCES');
+      permissionError.code = 'EACCES';
+      mockFs.rm.mockRejectedValue(permissionError);
+
+      await VideoDeletionModule.deleteVideoById(1);
+
+      expect(mockFilesystem.cleanupEmptyChannelDirectory).not.toHaveBeenCalled();
+    });
+
+    test('should not affect success response when cleanup throws', async () => {
+      mockFilesystem.cleanupEmptyChannelDirectory.mockRejectedValueOnce(new Error('cleanup failed'));
+
+      const mockVideoRecord = {
+        id: 1,
+        youtubeId: 'abc123',
+        filePath: '/test/output/Channel Name/Channel Name - Video Title - abc123/video.mp4',
+        removed: false,
+        update: jest.fn().mockResolvedValue()
+      };
+
+      mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
+      mockFs.rm.mockResolvedValue();
+
+      const result = await VideoDeletionModule.deleteVideoById(1);
+
+      expect(result.success).toBe(true);
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ err: expect.any(Error) }),
+        expect.stringContaining('non-fatal')
+      );
+    });
+
+    test('should call cleanupEmptyParents when channel dir was removed', async () => {
+      mockFilesystem.cleanupEmptyChannelDirectory.mockResolvedValueOnce(true);
+
+      const mockVideoRecord = {
+        id: 1,
+        youtubeId: 'abc123',
+        filePath: '/test/output/__subfolder/Channel Name/Channel Name - Video Title - abc123/video.mp4',
+        removed: false,
+        update: jest.fn().mockResolvedValue()
+      };
+
+      mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
+      mockFs.rm.mockResolvedValue();
+
+      await VideoDeletionModule.deleteVideoById(1);
+
+      expect(mockFilesystem.cleanupEmptyParents).toHaveBeenCalledWith(
+        '/test/output/__subfolder',
+        '/test/output'
+      );
+    });
+
+    test('should NOT call cleanupEmptyParents when channel dir was not removed', async () => {
+      mockFilesystem.cleanupEmptyChannelDirectory.mockResolvedValueOnce(false);
+
+      const mockVideoRecord = {
+        id: 1,
+        youtubeId: 'abc123',
+        filePath: '/test/output/Channel Name/Channel Name - Video Title - abc123/video.mp4',
+        removed: false,
+        update: jest.fn().mockResolvedValue()
+      };
+
+      mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
+      mockFs.rm.mockResolvedValue();
+
+      await VideoDeletionModule.deleteVideoById(1);
+
+      expect(mockFilesystem.cleanupEmptyParents).not.toHaveBeenCalled();
     });
   });
 
