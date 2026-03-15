@@ -48,6 +48,50 @@ jest.mock('../VideoChip', () => {
   };
 });
 
+jest.mock('../BulkImportDialog', () => {
+  return function MockBulkImportDialog({ open, onClose, onImport, existingVideoIds }: any) {
+    if (!open) return null;
+    return (
+      <div data-testid="bulk-import-dialog">
+        <button
+          onClick={() =>
+            onImport([
+              {
+                youtubeId: 'bulk1',
+                url: 'https://www.youtube.com/watch?v=bulk1aaaaaa',
+                channelName: '',
+                videoTitle: '',
+                duration: 0,
+                publishedAt: 0,
+                isAlreadyDownloaded: false,
+                isMembersOnly: false,
+                isBulkImport: true,
+              },
+              {
+                youtubeId: 'bulk2',
+                url: 'https://www.youtube.com/watch?v=bulk2aaaaaa',
+                channelName: '',
+                videoTitle: '',
+                duration: 0,
+                publishedAt: 0,
+                isAlreadyDownloaded: false,
+                isMembersOnly: false,
+                isBulkImport: true,
+              },
+            ])
+          }
+          data-testid="bulk-import-confirm"
+        >
+          Add to Queue
+        </button>
+        <button onClick={onClose} data-testid="bulk-import-cancel">
+          Cancel
+        </button>
+      </div>
+    );
+  };
+});
+
 jest.mock('../DownloadSettingsDialog', () => {
   return function MockDownloadSettingsDialog({ open, onClose, onConfirm }: any) {
     if (!open) return null;
@@ -510,6 +554,70 @@ describe('ManualDownload', () => {
         '/api/checkYoutubeVideoURL',
         { url: 'https://youtube.com/watch?v=test123' },
         { headers: { 'x-access-token': '' } }
+      );
+    });
+  });
+
+  test('renders Bulk Import button', () => {
+    render(<ManualDownload onStartDownload={mockOnStartDownload} token={mockToken} />);
+
+    expect(screen.getByRole('button', { name: /bulk import/i })).toBeInTheDocument();
+  });
+
+  test('opens bulk import dialog when button is clicked', () => {
+    render(<ManualDownload onStartDownload={mockOnStartDownload} token={mockToken} />);
+
+    const bulkButton = screen.getByRole('button', { name: /bulk import/i });
+    fireEvent.click(bulkButton);
+
+    expect(screen.getByTestId('bulk-import-dialog')).toBeInTheDocument();
+  });
+
+  test('adds bulk-imported videos to queue', async () => {
+    render(<ManualDownload onStartDownload={mockOnStartDownload} token={mockToken} />);
+
+    const bulkButton = screen.getByRole('button', { name: /bulk import/i });
+    fireEvent.click(bulkButton);
+
+    const confirmButton = screen.getByTestId('bulk-import-confirm');
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('video-chip-bulk1')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('video-chip-bulk2')).toBeInTheDocument();
+    expect(screen.getByText('Added 2 URLs to download queue.')).toBeInTheDocument();
+    expect(screen.getByText('2 videos to download')).toBeInTheDocument();
+  });
+
+  test('downloads bulk-imported videos', async () => {
+    mockOnStartDownload.mockResolvedValueOnce(undefined);
+
+    render(<ManualDownload onStartDownload={mockOnStartDownload} token={mockToken} />);
+
+    // Open bulk import and add videos
+    const bulkButton = screen.getByRole('button', { name: /bulk import/i });
+    fireEvent.click(bulkButton);
+    fireEvent.click(screen.getByTestId('bulk-import-confirm'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('video-chip-bulk1')).toBeInTheDocument();
+    });
+
+    // Start download
+    const downloadButton = screen.getByRole('button', { name: /download videos/i });
+    fireEvent.click(downloadButton);
+
+    await screen.findByTestId('download-settings-dialog');
+    fireEvent.click(screen.getByTestId('confirm-download'));
+
+    await waitFor(() => {
+      expect(mockOnStartDownload).toHaveBeenCalledWith(
+        [
+          'https://www.youtube.com/watch?v=bulk1aaaaaa',
+          'https://www.youtube.com/watch?v=bulk2aaaaaa',
+        ],
+        null
       );
     });
   });

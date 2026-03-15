@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Chip, Tooltip, Box, Grow, Popover, Typography, IconButton } from '@mui/material';
-import { Close as CloseIcon, History as HistoryIcon, Lock } from '@mui/icons-material';
+import { Close as CloseIcon, History as HistoryIcon, Lock, Link as LinkIcon } from '@mui/icons-material';
 import { VideoInfo } from './types';
 
 interface VideoChipProps {
@@ -33,6 +33,50 @@ const getMediaTypeInfo = (mediaType?: string) => {
 
 const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+
+  if (video.isBulkImport) {
+    const bulkLabel = (
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <LinkIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', flexShrink: 0 }} />
+        <Box>
+          <Box sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+            {video.youtubeId}
+          </Box>
+          <Box sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
+            URL-only import
+          </Box>
+        </Box>
+      </Box>
+    );
+
+    return (
+      <Grow in timeout={300}>
+        <Tooltip title={video.url}>
+          <Chip
+            label={bulkLabel}
+            onDelete={() => onDelete(video.youtubeId)}
+            deleteIcon={<CloseIcon />}
+            color="info"
+            variant="filled"
+            sx={{
+              height: 'auto',
+              py: 1,
+              '& .MuiChip-label': {
+                display: 'block',
+                whiteSpace: 'normal'
+              },
+              width: '100%',
+              transition: 'all 0.2s ease',
+              '&:hover': {
+                transform: 'scale(1.02)',
+                boxShadow: 2
+              }
+            }}
+          />
+        </Tooltip>
+      </Grow>
+    );
+  }
 
   const handlePopoverOpen = (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();
