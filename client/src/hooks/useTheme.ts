@@ -1,15 +1,8 @@
 import { useThemeEngine } from '../contexts/ThemeEngineContext';
 
 /**
- * Drop-in shim for MUI's useTheme / @mui/material/styles useTheme.
- *
- * Returns a strongly-typed theme-like object whose members are readable
- * from the current CSS variables injected by ThemeEngineContext. This lets
- * migrated components that previously called `theme.palette.primary.main`
- * or `alpha(theme.palette.xxx, 0.5)` continue to work without MUI.
- *
- * For new code, prefer reading CSS variables directly via Tailwind classes
- * or getComputedStyle(document.documentElement).getPropertyValue('--primary').
+ * Theme hook that exposes palette-style accessors backed by CSS variables.
+ * For new code, prefer Tailwind classes or direct CSS variable reads.
  */
 
 function cssVar(name: string): string {
@@ -113,12 +106,12 @@ export function useTheme() {
       htmlFontSize: 14,
     },
     shadows: Array(25).fill('none') as string[],
-    // MUI alpha utility shim
+    // Alpha helper for palette-style consumers
     alpha,
   };
 }
 
-// Re-export alpha as a standalone helper matching MUI signature
+// Re-export alpha as a standalone helper
 export { alpha };
 
 // Type alias for components that use Theme as a type parameter

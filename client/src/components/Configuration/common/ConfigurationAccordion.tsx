@@ -92,26 +92,17 @@ export const ConfigurationAccordion: React.FC<ConfigurationAccordionProps> = ({
             {statusText}
           </Typography>
           {showStatusToggle && statusBanner.onToggle && (
-            <Box
-              style={{
-                border: `var(--border-weight) solid ${statusBanner.enabled ? 'var(--success)' : 'var(--border-strong)'}`,
-                borderRadius: 'var(--radius-ui)',
-                padding: '2px 8px',
-                backgroundColor: 'var(--card)',
-              }}
-            >
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={statusBanner.enabled}
-                    onChange={(event) => statusBanner.onToggle?.(event.target.checked)}
-                    inputProps={statusBanner.toggleTestId ? ({ 'data-testid': statusBanner.toggleTestId } as any) : undefined}
-                  />
-                }
-                label={statusBanner.label || 'Enabled'}
-                style={{ marginRight: 0 }}
-              />
-            </Box>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={statusBanner.enabled}
+                  onChange={(event) => statusBanner.onToggle?.(event.target.checked)}
+                  inputProps={statusBanner.toggleTestId ? ({ 'data-testid': statusBanner.toggleTestId } as any) : undefined}
+                />
+              }
+              label={statusBanner.label || 'Enabled'}
+              style={{ marginRight: 0 }}
+            />
           )}
         </Box>
       )}

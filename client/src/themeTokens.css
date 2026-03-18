@@ -82,6 +82,7 @@
 .action-bar [data-btn]:hover,
 .action-bar [data-icon-btn]:hover {
   border: var(--border-weight) solid var(--action-bar-hover-border);
+  color: var(--foreground);
 }
 
 /* Disabled state for action bar buttons - theme-controlled */

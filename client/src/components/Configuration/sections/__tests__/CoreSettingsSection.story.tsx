@@ -59,7 +59,7 @@ export const ToggleAutoDownloads: Story = {
       frequencyLabels.find((label: HTMLElement) => label.tagName === 'LABEL') ||
       frequencyLabels[0];
     const frequencySelect = frequencyLabel
-      .closest('[class*="MuiFormControl"]')
+      .closest('[class*="FormControl"]')
       ?.querySelector('[role="button"]');
     await expect(frequencySelect as HTMLElement).toBeInTheDocument();
     await expect(frequencySelect as HTMLElement).toBeEnabled();

@@ -3,7 +3,7 @@ import { cn } from '../../lib/cn';
 import { ChevronLeft, ChevronRight } from '../../lib/icons';
 
 /* ─── Container ─────────────────────────────────────────────
-   Replicates MUI Container: centers content with max-width.
+  Centers content with an optional max width.
 ──────────────────────────────────────────────────────────── */
 const maxWidthMap: Record<string, string> = {
   xs: 'max-w-sm',
@@ -53,7 +53,7 @@ const Container = React.forwardRef<HTMLDivElement, ContainerProps>(
 Container.displayName = 'Container';
 
 /* ─── Divider ───────────────────────────────────────────────
-   MUI Divider equivalent.
+  Horizontal or vertical rule.
 ──────────────────────────────────────────────────────────── */
 export interface DividerProps extends React.HTMLAttributes<HTMLHRElement> {
   orientation?: 'horizontal' | 'vertical';
@@ -116,7 +116,7 @@ const Divider = React.forwardRef<HTMLHRElement, DividerProps>(
 Divider.displayName = 'Divider';
 
 /* ─── Stack ─────────────────────────────────────────────────
-   MUI Stack: shorthand flex layout.
+  Shorthand flex layout wrapper.
 ──────────────────────────────────────────────────────────── */
 const spacingClassMap: Record<number, string> = {
   0: 'gap-0', 0.5: 'gap-0.5', 1: 'gap-1', 1.5: 'gap-1.5',
@@ -509,7 +509,7 @@ Link.displayName = 'Link';
 const CssBaseline: React.FC = () => null;
 
 /* ─── Toolbar ─────────────────────────────────────────────── */
-// Replicates MUI Toolbar: a horizontal flex container with padding
+// Toolbar: a horizontal flex container with padding
 export interface ToolbarProps extends React.HTMLAttributes<HTMLDivElement> {
   disableGutters?: boolean;
   dense?: boolean;

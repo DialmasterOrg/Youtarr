@@ -3,6 +3,23 @@ import * as SelectPrimitive from '@radix-ui/react-select';
 import { ChevronDown, Check } from 'lucide-react';
 import { cn } from '../../lib/cn';
 
+function getOverlayInsets() {
+  if (typeof window === 'undefined') {
+    return { top: 12, right: 12, bottom: 16, left: 12 };
+  }
+
+  const styles = window.getComputedStyle(document.documentElement);
+  const topInset = Number.parseFloat(styles.getPropertyValue('--app-shell-overlay-top-offset-px')) || 0;
+  const bottomInset = Number.parseFloat(styles.getPropertyValue('--mobile-nav-total-offset-px')) || 0;
+
+  return {
+    top: topInset + 12,
+    right: 12,
+    bottom: bottomInset + 16,
+    left: 12,
+  };
+}
+
 export type SelectChangeEvent<T = string> = { target: { value: T; name?: string } };
 const EMPTY_SELECT_VALUE = '__EMPTY_SELECT_VALUE__';
 const toPrimitiveValue = (value?: string | number) => {
@@ -42,8 +59,7 @@ export interface SelectProps {
   labelId?: string;
   notched?: boolean;
   inputProps?: React.ButtonHTMLAttributes<HTMLButtonElement> & Record<`data-${string}`, string | number | boolean | undefined>;
-  /** Override the ARIA role on the trigger. Defaults to "button" for MUI compat.
-   * Use "combobox" for autocomplete-style selects (e.g. SubfolderAutocomplete). */
+  /** Override the ARIA role on the trigger. Use "combobox" for autocomplete-style selects. */
   triggerRole?: 'button' | 'combobox';
 }
 
@@ -96,6 +112,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
     );
     const primitiveValue = value !== undefined ? toPrimitiveValue(value) : undefined;
     const primitiveDefaultValue = defaultValue !== undefined ? toPrimitiveValue(defaultValue) : undefined;
+    const overlayInsets = getOverlayInsets();
 
     const handleValueChange = (val: string) => {
       const normalizedValue = fromPrimitiveValue(val);
@@ -149,11 +166,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
             className
           )}
         >
-          {/* When controlled-open (isOpen=true), hide the trigger value to avoid
-              duplicate text in the DOM (trigger + portal option both show the
-              same label). This only applies to externally-controlled selects. */}
-          {!isOpen && <SelectPrimitive.Value placeholder={placeholder} />}
-          {isOpen && <span aria-hidden="true" />}
+          <SelectPrimitive.Value placeholder={placeholder} />
           <SelectPrimitive.Icon asChild>
             <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
           </SelectPrimitive.Icon>
@@ -163,16 +176,23 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
           <SelectPrimitive.Content
             position="popper"
             sideOffset={4}
+            avoidCollisions
+            collisionPadding={overlayInsets}
+            style={{
+              zIndex: 1470,
+              minWidth: 'var(--radix-select-trigger-width)',
+              maxWidth: 'min(28rem, calc(100vw - 24px))',
+              maxHeight: 'min(var(--radix-select-content-available-height), calc(100dvh - var(--app-shell-overlay-top-offset, 0px) - var(--mobile-nav-total-offset, 0px) - 16px))',
+            }}
             className={cn(
-              'relative z-50 min-w-[8rem] overflow-hidden',
-              'max-h-[var(--radix-select-content-available-height)]',
+              'relative min-w-[8rem] overflow-hidden',
               'rounded-[var(--radius-ui)]',
               'border-[length:var(--border-weight)] border-[var(--border-strong)]',
               'bg-popover text-popover-foreground shadow-hard',
               'data-[state=open]:animate-slide-down data-[state=closed]:animate-fade-in',
             )}
           >
-            <SelectPrimitive.Viewport className="p-1 overflow-y-auto">
+            <SelectPrimitive.Viewport className="max-h-[inherit] p-1 overflow-y-auto">
               {children}
             </SelectPrimitive.Viewport>
           </SelectPrimitive.Content>
@@ -202,7 +222,7 @@ const MenuItem = React.forwardRef<HTMLDivElement, MenuItemProps>(
           value={normalizedValue}
           className={cn(
             'relative flex items-center gap-2 rounded-md cursor-default select-none outline-none',
-            'text-sm font-sans text-foreground',
+            'text-sm font-sans text-foreground whitespace-nowrap',
             'px-3 py-1.5',
             'data-[highlighted]:bg-muted data-[highlighted]:text-foreground',
             'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
@@ -248,7 +268,7 @@ const MenuItem = React.forwardRef<HTMLDivElement, MenuItemProps>(
         }}
         className={cn(
           'flex items-center gap-2 rounded-md cursor-pointer select-none outline-none',
-          'text-sm font-sans text-foreground',
+          'text-sm font-sans text-foreground whitespace-nowrap',
           !disableGutters && 'px-3 py-1.5',
           'hover:bg-muted focus:bg-muted',
           'transition-colors',

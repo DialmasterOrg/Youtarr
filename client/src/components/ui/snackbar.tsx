@@ -20,7 +20,7 @@ const ToastViewport = React.forwardRef<
 ));
 ToastViewport.displayName = 'ToastViewport';
 
-/* ─── Snackbar (MUI-compat) ───────────────────────────── */
+/* ─── Snackbar ───────────────────────────── */
 export interface SnackbarProps {
   open?: boolean;
   message?: React.ReactNode;

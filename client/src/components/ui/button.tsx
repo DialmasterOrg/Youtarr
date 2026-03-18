@@ -166,7 +166,6 @@ Button.displayName = 'Button';
 
 /**
  * IconButton - circular/square button for icon-only actions.
- * Matches MUI's IconButton visually.
  */
 const iconButtonVariants = cva(
   [
@@ -236,9 +235,7 @@ const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
   }
 );
 IconButton.displayName = 'IconButton';
-/* ─── Fab ───────────────────────────────────────────────
-   Floating Action Button shim
-──────────────────────────────────────────────────────── */
+/* ─── Fab ─────────────────────────────────────────────── */
 export interface FabProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   color?: 'primary' | 'secondary' | 'error' | 'default';
   size?: 'small' | 'medium' | 'large';

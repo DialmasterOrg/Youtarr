@@ -70,7 +70,7 @@ const AccordionContent = React.forwardRef<
 ));
 AccordionContent.displayName = 'AccordionContent';
 
-/* ─── MUI-compat Accordion/AccordionSummary/AccordionDetails ─ */
+/* ─── Accordion wrappers ─ */
 export interface AccordionProps {
   expanded?: boolean;
   onChange?: (event: React.SyntheticEvent, expanded: boolean) => void;

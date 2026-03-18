@@ -58,7 +58,7 @@ const TabsContent = React.forwardRef<
 ));
 TabsContent.displayName = 'TabsContent';
 
-/* ─── MUI-compat Tabs/Tab ─────────────────────────────── */
+/* ─── Tabs/Tab ────────────────────────────────────────── */
 export interface TabsProps {
   value?: string | number;
   onChange?: (event: React.SyntheticEvent, value: any) => void;
@@ -91,7 +91,7 @@ const Tabs: React.FC<TabsProps> = ({
   const isScrollable = variant === 'scrollable';
   const isFullWidth = variant === 'fullWidth';
 
-  // MUI auto-assigns integer indices to Tab children that have no explicit value.
+  // Auto-assign integer indices to Tab children that have no explicit value.
   const indexedChildren = React.Children.map(children, (child, index) => {
     if (!React.isValidElement(child)) return child;
 
@@ -122,8 +122,7 @@ const Tabs: React.FC<TabsProps> = ({
       }}
       className={cn('w-full', className)}
     >
-      {/* MUI Tabs renders Tab children directly; Radix requires them inside a
-          TabsList for the RovingFocusGroup context. We wrap automatically. */}
+        {/* Radix requires Tab children inside TabsList, so we wrap automatically. */}
       <TabsList
         id={id}
         aria-label={ariaLabel}

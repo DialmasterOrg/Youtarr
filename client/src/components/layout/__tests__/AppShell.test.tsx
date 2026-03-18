@@ -124,7 +124,7 @@ describe('AppShell', () => {
   it('uses tighter mobile frame padding for playful theme content', () => {
     renderShell('playful', true);
 
-    expect(getLayoutRoot().style.getPropertyValue('--layout-content-padding')).toBe('12px 6px');
+    expect(getLayoutRoot().style.getPropertyValue('--layout-content-padding')).toBe('8px 3px');
     expect(getContentFrame()).toHaveAttribute('data-layout-breakpoint', 'mobile');
   });
 
@@ -132,8 +132,8 @@ describe('AppShell', () => {
     renderShell('flat', true);
 
     expect(screen.getByRole('main')).toHaveAttribute('data-nav-placement', 'top');
-    expect(getLayoutRoot().style.getPropertyValue('--layout-main-padding')).toBe('8px 8px calc(20px + env(safe-area-inset-bottom))');
-    expect(getLayoutRoot().style.getPropertyValue('--layout-content-padding')).toBe('12px 8px');
+    expect(getLayoutRoot().style.getPropertyValue('--layout-main-padding')).toBe('8px 4px calc(20px + env(safe-area-inset-bottom))');
+    expect(getLayoutRoot().style.getPropertyValue('--layout-content-padding')).toBe('8px 4px');
   });
 
   it('removes landscape mobile side gutters so the content fills the window', () => {

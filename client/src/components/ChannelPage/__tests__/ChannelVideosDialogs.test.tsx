@@ -237,12 +237,11 @@ describe('ChannelVideosDialogs Component', () => {
         />
       );
 
-      // MUI Dialog calls onClose when clicking backdrop
+      // Dialog should be rendered
       const dialog = screen.getByRole('dialog');
       expect(dialog).toBeInTheDocument();
 
-      // onClose is called by MUI when backdrop is clicked
-      // We can't simulate this directly, but we verify the prop is passed
+      // Verify the callback is passed
       expect(onRefreshCancel).toBeDefined();
     });
 

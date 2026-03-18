@@ -259,7 +259,7 @@ describe('CoreSettingsSection Component', () => {
         config: createConfig({ channelAutoDownload: false })
       });
       renderWithProviders(<CoreSettingsSection {...props} />);
-      // When disabled, MUI Select has role="button" with aria-disabled
+      // Select should be disabled
       const selectButton = screen.getByRole('button', { name: /Every 6 hours/i });
       expect(selectButton).toHaveAttribute('aria-disabled', 'true');
     });
@@ -269,7 +269,7 @@ describe('CoreSettingsSection Component', () => {
         config: createConfig({ channelAutoDownload: true })
       });
       renderWithProviders(<CoreSettingsSection {...props} />);
-      // When enabled, MUI Select has role="button" without aria-disabled
+      // Select should be enabled
       const selectButton = screen.getByRole('button', { name: /Every 6 hours/i });
       expect(selectButton).not.toHaveAttribute('aria-disabled', 'true');
     });
@@ -746,7 +746,7 @@ describe('CoreSettingsSection Component', () => {
     });
 
     test('handles unknown cron expression in frequency', () => {
-      // Suppress console warnings for this test since MUI warns about out-of-range values
+      // Suppress console warnings for this test to avoid noise
       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       const props = createSectionProps({

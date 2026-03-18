@@ -116,7 +116,7 @@ describe('DeleteVideosDialog', () => {
     test('calls onClose when dialog backdrop is clicked', () => {
       render(<DeleteVideosDialog {...defaultProps} />);
 
-      // MUI Dialog calls onClose when clicking outside
+      // Dialog should respond to Escape key
       const dialog = screen.getByRole('dialog');
       fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape' });
 

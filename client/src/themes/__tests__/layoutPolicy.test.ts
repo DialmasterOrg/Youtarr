@@ -32,7 +32,7 @@ describe('theme layout policy contracts', () => {
     expect(resolveThemeLayoutPolicy(getThemeById('playful'), 'mobile')).toMatchObject({
       navPlacement: 'sidebar',
       showHeaderToggleOnMobile: false,
-      contentPadding: '12px 6px',
+      contentPadding: '8px 3px',
     });
   });
 

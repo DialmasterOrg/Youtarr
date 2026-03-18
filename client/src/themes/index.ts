@@ -1,5 +1,5 @@
-// MUI removed — this module now only wires our theme definitions together.
-// All actual styling is driven by CSS variables via ThemeEngineContext.
+// This module wires our theme definitions together.
+// All styling is driven by CSS variables via ThemeEngineContext.
 import { ThemeMode, ThemeDefinition } from './types';
 import { playfulTheme } from './playful';
 import { linearTheme } from './linear';

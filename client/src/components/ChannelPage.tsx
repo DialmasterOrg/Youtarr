@@ -19,7 +19,7 @@ interface ChannelPageProps {
 }
 
 function ChannelPage({ token }: ChannelPageProps) {
-  const isMobile = useMediaQuery('(max-width: 599px)');
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const { themeMode } = useThemeEngine();
   const isPlayful = themeMode === 'playful';
   const [channel, setChannel] = useState<Channel | null>(null);
@@ -259,7 +259,7 @@ function ChannelPage({ token }: ChannelPageProps) {
     ? trimmedDescription || '** No description available **'
     : 'Loading...';
   const descriptionIsLong = Boolean(trimmedDescription && trimmedDescription.length > descriptionLimit);
-  const allowDescriptionCollapse = !isPlayful || !isMobile;
+  const allowDescriptionCollapse = true;
   const displayedDescription =
     !allowDescriptionCollapse || descriptionExpanded || !descriptionIsLong
       ? descriptionText
@@ -269,7 +269,7 @@ function ChannelPage({ token }: ChannelPageProps) {
   return (
     <>
       <Card elevation={8} className="mb-4" style={{ borderRadius: 'var(--radius-ui)', overflow: 'hidden' }}>
-        <CardContent style={{ paddingLeft: isMobile ? 16 : 24, paddingRight: isMobile ? 16 : 24, paddingTop: isMobile ? 16 : 20, paddingBottom: isMobile ? 16 : 20 }}>
+        <CardContent style={{ paddingLeft: isMobile ? 10 : 16, paddingRight: isMobile ? 10 : 16, paddingTop: isMobile ? 12 : 16, paddingBottom: isMobile ? 12 : 16 }}>
           <Grid container spacing={2} alignItems="stretch">
             <Grid item xs={12} sm={4}>
               <Box
@@ -345,8 +345,8 @@ function ChannelPage({ token }: ChannelPageProps) {
         <Card elevation={3} className="mb-4 flex flex-col justify-center">
           <CardContent
             style={{
-              paddingLeft: isMobile ? 16 : 24,
-              paddingRight: isMobile ? 16 : 24,
+              paddingLeft: isMobile ? 10 : 16,
+              paddingRight: isMobile ? 10 : 16,
               paddingTop: isMobile ? 10 : 10,
               paddingBottom: '10px'
             }}
@@ -402,7 +402,7 @@ function ChannelPage({ token }: ChannelPageProps) {
                       size="small"
                       onClick={() => setSettingsOpen(true)}
                       aria-label="Edit settings"
-                      className="text-foreground border-border hover:bg-muted hover:border-foreground"
+                      className="text-foreground border-border hover:bg-muted hover:border-foreground hover:text-foreground"
                       style={{ textTransform: 'none', minWidth: 0, paddingLeft: 12, paddingRight: 12, fontSize: '0.8rem', height: 28 }}
                     >
                       Edit
@@ -464,7 +464,7 @@ function ChannelPage({ token }: ChannelPageProps) {
                   onClick={() => setSettingsOpen(true)}
                   size="small"
                   aria-label="Edit settings"
-                  className="text-foreground border-border hover:bg-muted hover:border-foreground ml-auto"
+                  className="text-foreground border-border hover:bg-muted hover:border-foreground hover:text-foreground ml-auto"
                   style={{ textTransform: 'none', minWidth: 0, padding: '6px 16px' }}
                 >
                   Edit

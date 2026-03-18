@@ -1,7 +1,7 @@
 import React from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 
-// Simple HTML table shims replacing MUI Table components
+// Simple HTML table wrappers
 
 interface TableContainerProps extends React.HTMLAttributes<HTMLDivElement> {
   component?: React.ElementType;

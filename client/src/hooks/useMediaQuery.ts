@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
 
 /**
- * Drop-in replacement for MUI's useMediaQuery.
- * Accepts a media query string like '(min-width:600px)' or MUI theme breakpoint
- * short-hands like '@media (min-width:600px)'.
+ * Media query hook.
+ * Accepts a raw media query string or an '@media ...' shorthand.
  */
 export function useMediaQuery(query: string): boolean {
-  // Normalise MUI-style '@media ...' prefix
+  // Normalise optional '@media ...' prefix
   const normalised = query.startsWith('@media ')
     ? query.slice('@media '.length).trim()
     : query;
@@ -30,7 +29,7 @@ export function useMediaQuery(query: string): boolean {
 
 export default useMediaQuery;
 
-// Common breakpoint helpers matching MUI defaults
+// Common breakpoint helpers
 export const breakpoints = {
   up: (bp: 'xs' | 'sm' | 'md' | 'lg' | 'xl') => {
     const map = { xs: '0px', sm: '600px', md: '900px', lg: '1200px', xl: '1536px' };

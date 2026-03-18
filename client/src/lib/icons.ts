@@ -1,6 +1,5 @@
 /**
- * Lucide icon aliases matching the MUI icon names used throughout the app.
- * Import from here instead of @mui/icons-material.
+ * App-wide Lucide icon aliases.
  */
 export {
   Download,

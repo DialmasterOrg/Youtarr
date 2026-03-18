@@ -18,7 +18,7 @@ type BoxProps<C extends React.ElementType = 'div'> = BoxOwnProps<C> &
   Omit<React.ComponentPropsWithRef<C>, keyof BoxOwnProps<C>>;
 
 /**
- * Box – polymorphic layout primitive replacing MUI Box.
+ * Box – polymorphic layout primitive.
  * `sx` prop is accepted but intentionally dropped; use `className` with Tailwind instead.
  */
 function Box<C extends React.ElementType = 'div'>(

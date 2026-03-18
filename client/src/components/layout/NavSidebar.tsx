@@ -52,7 +52,7 @@ const NAV_DRAWER_MOBILE_TOP_OFFSET = 'calc(60px + var(--shell-gap))';
 const NAV_DRAWER_MOBILE_BOTTOM_GAP = 'var(--shell-gap)';
 const NAV_DRAWER_MOBILE_MAX_HEIGHT = 'calc(100vh - (60px + (var(--shell-gap) * 2)))';
 
-// MUI spacing helper: 1 unit = 8px
+// Spacing helper: 1 unit = 8px
 const sp = (n: number) => `${n * 8}px`;
 
 interface NavSidebarProps {
@@ -160,12 +160,14 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
       root.style.setProperty('--mobile-nav-primary-height', '0px');
       root.style.setProperty('--mobile-nav-secondary-height', '0px');
       root.style.setProperty('--mobile-nav-total-offset', '0px');
+      root.style.setProperty('--mobile-nav-total-offset-px', '0');
       return;
     }
 
     const secondaryHeight = activeItemWithSubItems ? MOBILE_NAV_SECONDARY_HEIGHT : 0;
     root.style.setProperty('--mobile-nav-primary-height', `${MOBILE_NAV_PRIMARY_HEIGHT}px`);
     root.style.setProperty('--mobile-nav-secondary-height', `${secondaryHeight}px`);
+    root.style.setProperty('--mobile-nav-total-offset-px', String(MOBILE_NAV_PRIMARY_HEIGHT + secondaryHeight));
     root.style.setProperty(
       '--mobile-nav-total-offset',
       `calc(${MOBILE_NAV_PRIMARY_HEIGHT}px + ${secondaryHeight}px + env(safe-area-inset-bottom))`
@@ -175,6 +177,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
       root.style.setProperty('--mobile-nav-primary-height', '0px');
       root.style.setProperty('--mobile-nav-secondary-height', '0px');
       root.style.setProperty('--mobile-nav-total-offset', '0px');
+      root.style.setProperty('--mobile-nav-total-offset-px', '0');
     };
   }, [activeItemWithSubItems, isMobile]);
 
@@ -492,7 +495,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
               left: 0,
               right: 0,
               zIndex: 1299,
-              backgroundColor: isLinear ? 'rgba(5, 5, 6, 0.97)' : 'var(--card)',
+              backgroundColor: isLinear ? '#050506' : 'var(--card)',
               borderTop: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : isFlat ? '2px solid var(--border)' : 'var(--nav-border)',
               padding: '8px 10px',
               display: 'flex',
@@ -542,7 +545,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
             paddingBottom: 'env(safe-area-inset-bottom)',
             borderRadius: isPlayful ? 'var(--radius-ui) var(--radius-ui) 0 0' : '0',
             borderTop: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : isFlat ? '2px solid var(--border)' : 'var(--nav-border)',
-            backgroundColor: isLinear ? 'rgba(5, 5, 6, 0.97)' : 'var(--card)',
+            backgroundColor: isLinear ? '#050506' : 'var(--card)',
             overflow: 'visible',
             boxShadow: isLinear ? '0 -12px 30px rgba(0, 0, 0, 0.45)' : 'var(--nav-shadow)',
           }}

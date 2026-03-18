@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '../../lib/cn';
 
 /* ─── Grow ─────────────────────────────────────────────
-   MUI Grow: a scale + fade transition. We implement with CSS transitions.
+  Scale + fade transition implemented with CSS transitions.
 ──────────────────────────────────────────────────────── */
 export interface GrowProps {
   in?: boolean;
@@ -54,7 +54,7 @@ const Grow: React.FC<GrowProps> = ({
 };
 
 /* ─── Slide ─────────────────────────────────────────────
-   MUI Slide: translates in from a direction.
+  Directional translate transition.
 ──────────────────────────────────────────────────────── */
 export interface SlideProps {
   in?: boolean;
@@ -264,7 +264,7 @@ const Backdrop: React.FC<BackdropProps> = ({
 };
 
 /* ─── Zoom ─────────────────────────────────────────────
-   MUI Zoom: a scale transition. Simple passthrough for our usage.
+   Scale transition. Simple passthrough for our usage.
 ──────────────────────────────────────────────────────── */
 export interface ZoomProps {
   in?: boolean;

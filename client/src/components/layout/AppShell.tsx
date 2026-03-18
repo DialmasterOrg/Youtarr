@@ -61,6 +61,18 @@ export function AppShell({
     document.documentElement.style.setProperty('--nav-width', `${navWidth}px`);
   }, [collapsed, isMobile, isTopNav]);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    const overlayTopOffset = isMobile ? 60 : 80;
+    root.style.setProperty('--app-shell-overlay-top-offset', `${overlayTopOffset}px`);
+    root.style.setProperty('--app-shell-overlay-top-offset-px', String(overlayTopOffset));
+
+    return () => {
+      root.style.setProperty('--app-shell-overlay-top-offset', '0px');
+      root.style.setProperty('--app-shell-overlay-top-offset-px', '0');
+    };
+  }, [isMobile]);
+
   const downloadsSubItems = useMemo(
     () => [
       { key: 'download-manual', label: 'Manual Download', to: '/downloads/manual' },

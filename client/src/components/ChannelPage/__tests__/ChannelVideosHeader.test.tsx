@@ -75,6 +75,41 @@ describe('ChannelVideosHeader actions menu', () => {
     expect(screen.getByRole('button', { name: /Actions/i })).toBeInTheDocument();
   });
 
+  test('uses desktop filters callback on desktop', async () => {
+    const user = userEvent.setup();
+    const props = {
+      ...getDefaultProps(),
+      activeFilterCount: 2,
+      filtersExpanded: false,
+      onFiltersExpandedChange: jest.fn(),
+    };
+
+    renderWithProviders(<ChannelVideosHeader {...props} />);
+
+    await user.click(screen.getByRole('button', { name: /filters/i }));
+
+    expect(props.onFiltersExpandedChange).toHaveBeenCalledWith(true);
+  });
+
+  test('uses mobile filters callback on mobile', async () => {
+    const user = userEvent.setup();
+    const props = {
+      ...getDefaultProps(),
+      isMobile: true,
+      activeFilterCount: 1,
+      mobileFiltersOpen: false,
+      onMobileFiltersOpenChange: jest.fn(),
+      onMobileActionsOpenChange: jest.fn(),
+    };
+
+    renderWithProviders(<ChannelVideosHeader {...props} />);
+
+    await user.click(screen.getByRole('button', { name: /filters/i }));
+
+    expect(props.onMobileActionsOpenChange).toHaveBeenCalledWith(false);
+    expect(props.onMobileFiltersOpenChange).toHaveBeenCalledWith(true);
+  });
+
   test('triggers select-all downloaded action from menu', async () => {
     const user = userEvent.setup();
     const props = getDefaultProps();

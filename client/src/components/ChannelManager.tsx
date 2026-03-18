@@ -87,6 +87,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const [regexPopoverAnchor, setRegexPopoverAnchor] = useState<{ el: HTMLElement; regex: string } | null>(null);
   const [folderMenuAnchor, setFolderMenuAnchor] = useState<null | HTMLElement>(null);
   const [mobileActionsAnchorEl, setMobileActionsAnchorEl] = useState<null | HTMLElement>(null);
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
   const pageSize = useMemo(() => {
     if (isMobile) {
@@ -301,6 +302,12 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   };
 
   const handleFilterIconClick = (event: React.MouseEvent<HTMLElement>) => {
+    if (isMobile) {
+      setMobileActionsAnchorEl(null);
+      setMobileFilterOpen((prev) => !prev);
+      return;
+    }
+
     setFilterAnchorEl((prev) => (prev ? null : event.currentTarget));
   };
 
@@ -311,6 +318,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const clearFilter = () => {
     setFilterValue('');
     setFilterAnchorEl(null);
+    setMobileFilterOpen(false);
   };
 
   const handleViewChange = (_: React.MouseEvent<HTMLElement>, next: ViewMode | null) => {
@@ -337,6 +345,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   };
 
   const handleMobileActionsOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setMobileFilterOpen(false);
     setMobileActionsAnchorEl(event.currentTarget);
   };
   const handleMobileActionsClose = () => setMobileActionsAnchorEl(null);
@@ -363,11 +372,10 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
         <Divider />
         <div
           style={{
-            padding: '16px 0 0',
+            padding: '8px 0 0',
             display: 'flex',
             flexDirection: 'column',
-            flexGrow: 1,
-            overflow: 'hidden',
+            gap: 8,
           }}
         >
           {error && (
@@ -557,19 +565,19 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
           </div>
           )}
 
-          <Divider style={{ marginBottom: 16 }} />
+          <Divider style={{ marginBottom: 8 }} />
 
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {loading ? (
-              <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', paddingTop: 24, paddingBottom: 24 }}>
                 <CircularProgress />
               </div>
             ) : displayChannels.length === 0 ? (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 24, paddingBottom: 24 }}>
                 <Typography color="text.secondary">No channels found. Try adjusting your filter.</Typography>
               </div>
             ) : (
-              <div style={{ flex: 1, overflowY: 'auto', paddingBottom: useInfiniteScroll ? 16 : 0 }}>
+              <div style={{ paddingBottom: useInfiniteScroll ? 8 : 0 }}>
                 {viewMode === 'list' ? (
                   <List disablePadding>
                     {showDesktopListColumns && (
@@ -649,13 +657,8 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
             ) : (
               <div
                 style={{
-                  position: 'sticky',
-                  bottom: 0,
-                  borderTop: '1px solid var(--border)',
-                  paddingTop: isMobile ? 8 : 12,
-                  paddingBottom: isMobile ? 8 : 12,
-                  backgroundColor: 'var(--card)',
-                  zIndex: 1,
+                  paddingTop: isMobile ? 4 : 8,
+                  paddingBottom: 0,
                 }}
               >
                 <PageControls
@@ -693,7 +696,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
       </Menu>
 
       <Popover
-        open={Boolean(filterAnchorEl)}
+        open={!isMobile && Boolean(filterAnchorEl)}
         anchorEl={filterAnchorEl}
         onClose={() => setFilterAnchorEl(null)}
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
@@ -714,6 +717,57 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
           )}
         </div>
       </Popover>
+
+      {isMobile && mobileFilterOpen && (
+        <>
+          <div
+            aria-hidden="true"
+            onClick={() => setMobileFilterOpen(false)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 1299,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="channel-filter-sheet-title"
+            style={{
+              position: 'fixed',
+              left: 8,
+              right: 8,
+              bottom: 'calc(var(--mobile-nav-total-offset, 0px) + 8px)',
+              zIndex: 1300,
+              backgroundColor: 'var(--card)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-ui)',
+              boxShadow: 'var(--shadow-hard)',
+              padding: 12,
+            }}
+          >
+            <Typography id="channel-filter-sheet-title" variant="subtitle2" style={{ fontWeight: 700, marginBottom: 8 }}>
+              Filter channels
+            </Typography>
+            <TextField
+              label="Filter channels"
+              value={filterValue}
+              onChange={(e) => handleFilterChange(e.target.value)}
+              fullWidth
+              autoFocus
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 8 }}>
+              <Button size="small" variant="outlined" onClick={clearFilter} disabled={!filterValue}>
+                Clear filter
+              </Button>
+              <Button size="small" onClick={() => setMobileFilterOpen(false)}>
+                Done
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
 
       <Dialog open={dialogOpen} onClose={() => { setDialogOpen(false); setDialogMessage(null); }}>
         <DialogContent>

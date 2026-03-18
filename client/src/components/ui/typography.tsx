@@ -71,7 +71,7 @@ const Typography = React.forwardRef<HTMLElement, TypographyProps>(
           mapping.className,
           `typo-${variant}`,
           color && colorMap[color],
-          // If color string looks like 'text.primary' from MUI
+          // Support palette-style color aliases
           color === 'text.primary' && 'text-foreground',
           color === 'text.secondary' && 'text-muted-foreground',
           color === 'text.disabled' && 'text-muted-foreground/50',

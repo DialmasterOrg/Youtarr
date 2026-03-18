@@ -60,6 +60,10 @@ interface ChannelVideosHeaderProps {
   activeFilterCount?: number;
   filtersExpanded?: boolean;
   onFiltersExpandedChange?: (expanded: boolean) => void;
+  mobileFiltersOpen?: boolean;
+  onMobileFiltersOpenChange?: (open: boolean) => void;
+  mobileActionsOpen?: boolean;
+  onMobileActionsOpenChange?: (open: boolean) => void;
 }
 
 function ChannelVideosHeader({
@@ -94,6 +98,10 @@ function ChannelVideosHeader({
   activeFilterCount = 0,
   filtersExpanded = false,
   onFiltersExpandedChange,
+  mobileFiltersOpen = false,
+  onMobileFiltersOpenChange,
+  mobileActionsOpen = false,
+  onMobileActionsOpenChange,
 }: ChannelVideosHeaderProps) {
   const { themeMode } = useThemeEngine();
   const [actionsAnchorEl, setActionsAnchorEl] = React.useState<null | HTMLElement>(null);
@@ -307,7 +315,9 @@ function ChannelVideosHeader({
                     <FilterListIcon size={16} />
                   </Badge>
                 }
-                onClick={() => onFiltersExpandedChange(!filtersExpanded)}
+                onClick={() => {
+                  onFiltersExpandedChange(!filtersExpanded);
+                }}
                 className={intentStyles.base}
               >
                 Filters
@@ -444,16 +454,19 @@ function ChannelVideosHeader({
                 <LayoutList size={16} />
               </button>
             </div>
-            {onFiltersExpandedChange && (
+            {onMobileFiltersOpenChange && (
               <Button
-                variant={filtersExpanded ? 'contained' : 'outlined'}
+                variant={mobileFiltersOpen ? 'contained' : 'outlined'}
                 size="small"
                 startIcon={
                   <Badge badgeContent={activeFilterCount} color="primary" invisible={activeFilterCount === 0}>
                     <FilterListIcon size={16} />
                   </Badge>
                 }
-                onClick={() => onFiltersExpandedChange(!filtersExpanded)}
+                onClick={() => {
+                  onMobileActionsOpenChange?.(false);
+                  onMobileFiltersOpenChange(!mobileFiltersOpen);
+                }}
                 className={intentStyles.base}
               >
                 Filters
@@ -464,58 +477,15 @@ function ChannelVideosHeader({
               size="small"
               color="inherit"
               endIcon={<MoreVertIcon size={16} />}
-              onClick={toggleActionsMenu}
-              aria-haspopup="menu"
-              aria-expanded={actionsOpen ? 'true' : 'false'}
-              aria-controls={actionsOpen ? 'channel-actions-menu-mobile' : undefined}
+              onClick={() => {
+                onMobileFiltersOpenChange?.(false);
+                onMobileActionsOpenChange?.(!mobileActionsOpen);
+              }}
+              aria-expanded={mobileActionsOpen ? 'true' : 'false'}
               className={intentStyles.base}
             >
               Actions{hasAnySelection && ` (${hasDownloadSelection ? checkedBoxes.length : selectedForDeletion.length})`}
             </Button>
-            <Menu
-              id="channel-actions-menu-mobile"
-              anchorEl={actionsAnchorEl}
-              open={actionsOpen}
-              onClose={closeActionsMenu}
-              anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-              transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            >
-              <MenuItem onClick={() => { onSelectAllDownloaded(); closeActionsMenu(); }} disabled={selectableDeleteCount === 0} style={{ color: 'var(--info)' }}>
-                <ListItemText>Select All (Downloaded)</ListItemText>
-              </MenuItem>
-              <MenuItem onClick={() => { onSelectAllNotDownloaded(); closeActionsMenu(); }} disabled={selectableDownloadCount === 0} style={{ color: 'var(--warning)' }}>
-                <ListItemText>Select All (Not Downloaded)</ListItemText>
-              </MenuItem>
-              {hasAnySelection && (
-                <>
-                  <Divider />
-                  <MenuItem onClick={() => { onClearSelection(); closeActionsMenu(); }} style={{ color: 'var(--muted-foreground)' }}>
-                    <ClearIcon size={14} style={{ marginRight: 8 }} />
-                    <ListItemText>Clear Selection</ListItemText>
-                  </MenuItem>
-                  <Divider />
-                </>
-              )}
-              {(hasDownloadSelection || hasMixedSelection) && (
-                <MenuItem onClick={() => { onDownloadClick(); closeActionsMenu(); }} disabled={!hasDownloadSelection} style={{ color: 'var(--success)' }}>
-                  <DownloadIcon size={14} style={{ marginRight: 8, color: 'var(--success)' }} />
-                  <ListItemText>Download Selected ({checkedBoxes.length})</ListItemText>
-                </MenuItem>
-              )}
-              {(hasDeleteSelection || hasMixedSelection) && hasDownloadSelection && <Divider />}
-              {(hasDeleteSelection || hasMixedSelection) && (
-                <MenuItem onClick={() => { onDeleteClick(); closeActionsMenu(); }} disabled={!hasDeleteSelection || deleteLoading} style={{ color: 'var(--destructive)' }}>
-                  <DeleteIcon size={14} style={{ marginRight: 8 }} />
-                  <ListItemText>Delete Selected ({selectedForDeletion.length})</ListItemText>
-                </MenuItem>
-              )}
-              {hasDownloadSelection && (
-                <MenuItem onClick={() => { onBulkIgnoreClick(); closeActionsMenu(); }} style={{ color: 'var(--warning)' }}>
-                  <BlockIcon size={14} style={{ marginRight: 8, color: 'var(--warning)' }} />
-                  <ListItemText>Ignore Selected ({checkedBoxes.length})</ListItemText>
-                </MenuItem>
-              )}
-            </Menu>
           </ActionBar>
         )}
       </div>

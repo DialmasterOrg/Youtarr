@@ -27,7 +27,7 @@ export interface TextFieldProps extends Omit<React.InputHTMLAttributes<HTMLInput
 }
 
 /**
- * TextField - visually matches MUI TextField (outlined variant).
+ * TextField - outlined variant with floating label.
  * Floating label: uses peer/:placeholder-shown CSS trick.
  * Label sits on border when floated, using bg-card to cut through.
  */

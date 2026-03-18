@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import useMediaQuery from '../../hooks/useMediaQuery';
@@ -269,11 +269,11 @@ describe('ChannelManager Component', () => {
       expect(screen.getByLabelText('Grid view')).toBeInTheDocument();
     });
 
-    test('does not render view mode toggle on mobile', () => {
+    test('renders the mobile view mode toggle on mobile', () => {
       (useMediaQuery as jest.Mock).mockReturnValue(true);
       renderChannelManager();
-      expect(screen.queryByLabelText('List view')).not.toBeInTheDocument();
-      expect(screen.queryByLabelText('Grid view')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('List view')).toBeInTheDocument();
+      expect(screen.getByLabelText('Grid view')).toBeInTheDocument();
     });
 
     test('switches to grid view when grid button clicked', async () => {
@@ -808,7 +808,7 @@ describe('ChannelManager Component', () => {
 
       // The filter button should now have primary color
       await waitFor(() => {
-        expect(filterButton).toHaveAttribute('class', expect.stringContaining('MuiIconButton'));
+        expect(filterButton).toHaveClass('icon-btn-primary');
       });
     });
 
@@ -824,6 +824,25 @@ describe('ChannelManager Component', () => {
         expect(useChannelList).toHaveBeenCalledWith(
           expect.objectContaining({ page: 1 })
         );
+      });
+    });
+
+    test('opens the mobile filter sheet from the toolbar button', async () => {
+      const user = userEvent.setup();
+      (useMediaQuery as jest.Mock).mockReturnValue(true);
+
+      renderChannelManager();
+
+      await user.click(screen.getByRole('button', { name: /filters/i }));
+
+      const dialog = await screen.findByRole('dialog');
+      expect(dialog).toHaveAttribute('aria-labelledby', 'channel-filter-sheet-title');
+      expect(within(dialog).getByLabelText('Filter channels')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /done/i }));
+
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       });
     });
   });

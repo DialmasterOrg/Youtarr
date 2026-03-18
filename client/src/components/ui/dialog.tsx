@@ -53,7 +53,7 @@ const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.C
 );
 DialogContent.displayName = 'DialogContent';
 
-/* ─── MUI-compat shim: <Dialog open onClose>…</Dialog> ─── */
+/* ─── Dialog wrapper ──────────────────────────────────── */
 export interface DialogProps {
   open: boolean;
   onClose?: (event: {}, reason?: 'backdropClick' | 'escapeKeyDown') => void;
@@ -106,8 +106,6 @@ const Dialog: React.FC<DialogProps> = ({
             className
           )}
           style={{
-            // Cap height to viewport minus top chrome (80px) and bottom nav bar offset
-            // --mobile-nav-total-offset is set dynamically by NavSidebar (0 on desktop, 64px+ on mobile)
             maxHeight: 'calc(100dvh - var(--mobile-nav-total-offset, 0px) - 80px)',
           }}
           onEscapeKeyDown={(e) => { if (disableEscapeKeyDown) e.preventDefault(); else onClose?.({}, 'escapeKeyDown'); }}

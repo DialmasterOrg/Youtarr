@@ -201,43 +201,46 @@ import PageControls from '../shared/PageControls';
                           )}
                         </Box>
 
-                        {thumbnailSrc && (
-                          <Box
-                            style={{
-                              marginTop: '6px',
-                              width: 96,
-                              height: 72,
-                              borderRadius: 'var(--radius-thumb)',
-                              overflow: 'hidden',
-                              backgroundColor: 'rgb(17 24 39)',
-                            }}
-                          >
-                            <img
-                              src={thumbnailSrc}
-                              alt={titleText}
-                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                              loading="lazy"
-                            />
-                          </Box>
+                        {channelText && (
+                          <Typography variant="caption" color="secondary" className="mt-0.5 block">
+                            {channelText}
+                          </Typography>
                         )}
 
-                        <Box className="mt-1.5 flex flex-col gap-0.5">
-                          {channelText && (
-                            <Typography variant="caption" color="secondary">
-                              {channelText}
-                            </Typography>
+                        <Box className="mt-2 flex items-start gap-3">
+                          {thumbnailSrc && (
+                            <Box
+                              style={{
+                                width: 96,
+                                height: 72,
+                                borderRadius: 'var(--radius-thumb)',
+                                overflow: 'hidden',
+                                backgroundColor: 'rgb(17 24 39)',
+                                flexShrink: 0,
+                              }}
+                            >
+                              <img
+                                src={thumbnailSrc}
+                                alt={titleText}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                loading="lazy"
+                              />
+                            </Box>
                           )}
-                          <Typography variant="caption" color="secondary">
-                            Date: {formattedTimeCreated}
-                          </Typography>
-                          {formattedJobType && (
+
+                          <Box className="min-w-0 flex flex-1 flex-col gap-0.5">
                             <Typography variant="caption" color="secondary">
-                              Source: {formattedJobType}
+                              Date: {formattedTimeCreated}
                             </Typography>
-                          )}
-                          <Typography variant="caption" color="secondary">
-                            Status: {durationString}
-                          </Typography>
+                            {formattedJobType && (
+                              <Typography variant="caption" color="secondary">
+                                Source: {formattedJobType}
+                              </Typography>
+                            )}
+                            <Typography variant="caption" color="secondary">
+                              Status: {durationString}
+                            </Typography>
+                          </Box>
                         </Box>
 
                         {hasMultiple && (

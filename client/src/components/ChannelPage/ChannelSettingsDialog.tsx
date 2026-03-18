@@ -90,11 +90,10 @@ function ChannelSettingsDialog({
   open,
   onClose,
   channelId,
-  channelName,
   token,
   onSettingsSaved
 }: ChannelSettingsDialogProps) {
-  const isMobile = useMediaQuery('(max-width: 599px)');
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const [activeSection, setActiveSection] = useState('general');
 
   const [settings, setSettings] = useState<ChannelSettings>({
@@ -146,7 +145,6 @@ function ChannelSettingsDialog({
     : `${globalQuality}p (global)`;
 
   const qualityOptions = [
-    { value: null, label: `Use Global Setting (${globalQuality}p)` },
     { value: '360', label: '360p' },
     { value: '480', label: '480p' },
     { value: '720', label: '720p (HD)' },
@@ -449,7 +447,7 @@ function ChannelSettingsDialog({
     switch (sectionId) {
       case 'general':
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 16 : 24 }}>
             <div>
               <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
                 Auto Downloads
@@ -600,12 +598,12 @@ function ChannelSettingsDialog({
         );
       case 'filters':
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 16 : 24 }}>
             <div>
               <Typography variant="subtitle2" gutterBottom style={{ fontWeight: 600 }}>
                 Duration Filters
               </Typography>
-              <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
+              <div style={{ display: 'flex', gap: 16, marginTop: 8, flexDirection: isMobile ? 'column' : 'row' }}>
                 <TextField
                   label="Min Duration (mins)"
                   type="number"
@@ -813,19 +811,18 @@ function ChannelSettingsDialog({
       onClose={handleCancel} 
       maxWidth="xl" 
       fullWidth
-      className="max-h-[calc(100vh-120px)]"
+      className={isMobile ? 'w-[calc(100vw-24px)] max-w-none max-h-[calc(100dvh-24px)]' : 'max-h-[calc(100vh-120px)]'}
     >
       <DialogTitle style={{ paddingBottom: 8 }}>
-        Channel Settings: {channelName}
+        Channel Settings
       </DialogTitle>
       
       {isMobile ? (
-        <div style={{ borderBottom: '1px solid var(--border)', padding: '0 16px' }}>
+        <div style={{ borderBottom: '1px solid var(--border)', padding: '0 8px' }}>
           <Tabs
             value={activeSection}
             onChange={(_, newValue) => setActiveSection(String(newValue))}
-            variant="scrollable"
-            scrollButtons="auto"
+            variant="fullWidth"
           >
             {sections.map(section => (
               <Tab 
@@ -834,7 +831,7 @@ function ChannelSettingsDialog({
                 label={section.label} 
                 icon={section.icon}
                 iconPosition="start"
-                style={{ minHeight: 48, textTransform: 'none' }}
+                style={{ minHeight: 40, textTransform: 'none', fontSize: '0.72rem', paddingLeft: 8, paddingRight: 8 }}
               />
             ))}
           </Tabs>
@@ -881,7 +878,7 @@ function ChannelSettingsDialog({
           </div>
         )}
 
-        <div style={{ flex: 1, padding: isMobile ? 16 : 24, overflowY: 'auto', minHeight: 0 }}>
+        <div style={{ flex: 1, padding: isMobile ? 12 : 24, overflowY: 'auto', minHeight: 0 }}>
           {loading ? (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', paddingTop: 80, paddingBottom: 80 }}>
               <CircularProgress />
@@ -909,7 +906,7 @@ function ChannelSettingsDialog({
           )}
         </div>
       </DialogContent>
-      <DialogActions style={{ padding: '16px 24px', borderTop: '1px solid var(--border)' }}>
+      <DialogActions style={{ padding: isMobile ? '12px' : '16px 24px', borderTop: '1px solid var(--border)' }}>
         <Button onClick={handleCancel} disabled={saving} variant="outlined">
           Cancel
         </Button>

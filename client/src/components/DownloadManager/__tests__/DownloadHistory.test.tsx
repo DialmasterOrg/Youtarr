@@ -264,9 +264,12 @@ describe('DownloadHistory', () => {
   test('handles mobile view', () => {
     render(<DownloadHistory {...defaultProps} jobs={sampleJobs} isMobile={true} />);
 
-    // Check that table cells are rendered (mobile affects styling, not structure)
-    const tableCells = screen.getAllByRole('cell');
-    expect(tableCells.length).toBeGreaterThan(0);
+    expect(screen.getByText('Download History')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Test Video 1' })).toBeInTheDocument();
+    expect(screen.getByText('Test Channel')).toBeInTheDocument();
+    expect(screen.getByText(/Date:/)).toBeInTheDocument();
+    expect(screen.getByText(/Source:/)).toBeInTheDocument();
+    expect(screen.getByText(/Status:/)).toBeInTheDocument();
   });
 
   test('formats time with AM/PM', () => {

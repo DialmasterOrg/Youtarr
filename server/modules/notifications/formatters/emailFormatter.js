@@ -9,7 +9,7 @@ const { escapeHtml, formatDuration, buildTitle, getSubtitle } = require('../util
  * @returns {string} CSS styles
  */
 function getStyles() {
-  // Using MUI primary blue (#1976d2) for consistency with the app UI
+  // Primary blue color (#1976d2) for visual consistency with the app UI
   return `
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
     .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }

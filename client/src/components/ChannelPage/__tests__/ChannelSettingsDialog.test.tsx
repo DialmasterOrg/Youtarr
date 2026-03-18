@@ -92,7 +92,7 @@ describe('ChannelSettingsDialog', () => {
 
       render(<ChannelSettingsDialog {...defaultProps} />);
 
-      expect(screen.getByText('Channel Settings: Test Channel')).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Channel Settings' })).toBeInTheDocument();
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith('/api/channels/channel123/settings', {
@@ -104,7 +104,7 @@ describe('ChannelSettingsDialog', () => {
     test('does not render dialog when open is false', () => {
       render(<ChannelSettingsDialog {...defaultProps} open={false} />);
 
-      expect(screen.queryByText('Channel Settings: Test Channel')).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog', { name: 'Channel Settings' })).not.toBeInTheDocument();
     });
 
     test('shows loading spinner while fetching data', () => {

@@ -1,10 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Button,
-  Badge,
   Typography,
 } from '../../ui';
-import { ListFilter as FilterListIcon } from '../../../lib/icons';
 import DurationFilterInput from './DurationFilterInput';
 import DateRangeFilterInput from './DateRangeFilterInput';
 import FilterChips from './FilterChips';
@@ -25,6 +23,8 @@ interface ChannelVideosFiltersProps {
   activeFilterCount: number;
   hideDateFilter?: boolean;
   filtersExpanded?: boolean; // For desktop, controlled by parent
+  mobileDrawerOpen?: boolean;
+  onMobileDrawerClose?: () => void;
 }
 
 function ChannelVideosFilters({
@@ -38,12 +38,11 @@ function ChannelVideosFilters({
   onDateToChange,
   onClearAll,
   hasActiveFilters,
-  activeFilterCount,
   hideDateFilter = false,
   filtersExpanded = false,
+  mobileDrawerOpen = false,
+  onMobileDrawerClose,
 }: ChannelVideosFiltersProps) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
-
   const handleClearDuration = () => {
     onMinDurationChange(null);
     onMaxDurationChange(null);
@@ -54,38 +53,20 @@ function ChannelVideosFilters({
     onDateToChange(null);
   };
 
-  // Mobile: Show filter button that opens drawer
   if (isMobile) {
     return (
       <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={
-              <Badge badgeContent={activeFilterCount} color="primary" invisible={activeFilterCount === 0}>
-                <FilterListIcon size={16} />
-              </Badge>
-            }
-            onClick={() => setDrawerOpen(true)}
-            style={{ alignSelf: 'flex-start' }}
-          >
-            Filters
-          </Button>
-
-          {/* Show active filter chips on mobile too */}
-          {hasActiveFilters && (
-            <FilterChips
-              filters={filters}
-              onClearDuration={handleClearDuration}
-              onClearDateRange={handleClearDateRange}
-            />
-          )}
-        </div>
+        {hasActiveFilters && (
+          <FilterChips
+            filters={filters}
+            onClearDuration={handleClearDuration}
+            onClearDateRange={handleClearDateRange}
+          />
+        )}
 
         <MobileFilterDrawer
-          open={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
+          open={mobileDrawerOpen}
+          onClose={onMobileDrawerClose || (() => undefined)}
           filters={filters}
           inputMinDuration={inputMinDuration}
           inputMaxDuration={inputMaxDuration}

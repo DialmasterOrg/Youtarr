@@ -438,7 +438,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: showHeaderLogo ? 10 : 0,
+                gap: showHeaderLogo && showHeaderWordmark ? 5 : 0,
                 marginLeft: 'var(--layout-header-title-inset)',
                 textDecoration: 'none',
                 minWidth: 0,

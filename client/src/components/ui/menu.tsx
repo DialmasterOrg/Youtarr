@@ -4,7 +4,19 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { cn } from '../../lib/cn';
 import { MenuItem } from './select';
 
-/* ─── Menu (MUI-compat) ───────────────────────────────── */
+function getOverlayInsets() {
+  if (typeof window === 'undefined') {
+    return { top: 12, bottom: 16 };
+  }
+
+  const styles = window.getComputedStyle(document.documentElement);
+  const topInset = Number.parseFloat(styles.getPropertyValue('--app-shell-overlay-top-offset-px')) || 0;
+  const bottomInset = Number.parseFloat(styles.getPropertyValue('--mobile-nav-total-offset-px')) || 0;
+
+  return { top: topInset + 12, bottom: bottomInset + 16 };
+}
+
+/* ─── Menu ────────────────────────────────────────────── */
 export interface MenuProps {
   open: boolean;
   anchorEl?: HTMLElement | null;
@@ -20,9 +32,7 @@ export interface MenuProps {
 }
 
 /**
- * Menu – uses a Popover internally anchored to the trigger button.
- * For backwards-compat with MUI's anchorEl pattern we use a fixed-pos
- * div portal positioned at anchorEl's bounding box.
+ * Menu anchored to a trigger element using fixed positioning.
  */
 const Menu: React.FC<MenuProps> = ({
   open,
@@ -36,6 +46,7 @@ const Menu: React.FC<MenuProps> = ({
   transformOrigin = { vertical: 'top', horizontal: 'left' },
 }) => {
   const [pos, setPos] = React.useState<{ top: number; left: number } | null>(null);
+  const overlayInsets = getOverlayInsets();
 
   const getAnchorOffset = React.useCallback((rect: DOMRect) => {
     const vertical =
@@ -91,8 +102,8 @@ const Menu: React.FC<MenuProps> = ({
   // the top of the viewport.
   const viewportMax = pos
     ? transformY === '-100%'
-      ? pos.top - 16
-      : window.innerHeight - pos.top - 16
+      ? pos.top - overlayInsets.top
+      : window.innerHeight - pos.top - overlayInsets.bottom
     : undefined;
   const paperPropsMax =
     typeof PaperProps?.style?.maxHeight === 'number' ? PaperProps.style.maxHeight : undefined;
@@ -122,6 +133,7 @@ const Menu: React.FC<MenuProps> = ({
               left: pos.left,
               transform: `translate(${transformX}, ${transformY})`,
               zIndex: 1300,
+              maxWidth: 'min(28rem, calc(100vw - 24px))',
               ...(resolvedMaxHeight !== undefined ? { maxHeight: resolvedMaxHeight } : {}),
               overflowY: 'auto',
               ...paperStyleRest,
@@ -154,7 +166,7 @@ const Menu: React.FC<MenuProps> = ({
   );
 };
 
-/* ─── Popover (MUI-compat) ────────────────────────────── */
+/* ─── Popover ─────────────────────────────────────────── */
 export interface PopoverProps {
   open: boolean;
   anchorEl?: HTMLElement | null;
@@ -170,6 +182,7 @@ export interface PopoverProps {
 
 const Popover: React.FC<PopoverProps> = ({ open, anchorEl, onClose, children, className, PaperProps }) => {
   const [pos, setPos] = React.useState<{ top: number; left: number } | null>(null);
+  const overlayInsets = getOverlayInsets();
 
   const updatePosition = React.useCallback(() => {
     if (!open || !anchorEl) return;
@@ -200,7 +213,8 @@ const Popover: React.FC<PopoverProps> = ({ open, anchorEl, onClose, children, cl
           top: pos.top,
           left: pos.left,
           zIndex: 1300,
-          maxHeight: window.innerHeight - pos.top - 16,
+          maxHeight: window.innerHeight - pos.top - overlayInsets.bottom,
+          maxWidth: 'min(28rem, calc(100vw - 24px))',
           overflowY: 'auto',
         } : undefined}
         className={cn(

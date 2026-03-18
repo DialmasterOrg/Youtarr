@@ -47,7 +47,6 @@ describe('ChangeRatingDialog', () => {
 
     test('renders rating select', () => {
       render(<ChangeRatingDialog {...defaultProps} />);
-      // MUI Select is rendered; verify the form control label exists
       const labels = screen.getAllByText('Content Rating');
       expect(labels.length).toBeGreaterThanOrEqual(2); // Dialog title + select label
     });

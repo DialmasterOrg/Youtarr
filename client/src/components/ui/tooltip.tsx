@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { cn } from '../../lib/cn';
 
@@ -35,10 +36,12 @@ const Tooltip: React.FC<TooltipProps> = ({
   open,
   onClose,
 }) => {
-  // Touch-open state for mobile tap support
   const [touchOpen, setTouchOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLElement | null>(null);
   const [coarsePointer, setCoarsePointer] = React.useState(false);
+  const [touchPosition, setTouchPosition] = React.useState<{ top: number; left: number } | null>(null);
+  const tooltipRef = React.useRef<HTMLDivElement | null>(null);
+  const [touchTooltipStyle, setTouchTooltipStyle] = React.useState<React.CSSProperties | null>(null);
 
   React.useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
@@ -64,7 +67,7 @@ const Tooltip: React.FC<TooltipProps> = ({
     }
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (!triggerRef.current?.contains(event.target as Node)) {
+      if (!triggerRef.current?.contains(event.target as Node) && !tooltipRef.current?.contains(event.target as Node)) {
         setTouchOpen(false);
         onClose?.();
       }
@@ -73,6 +76,80 @@ const Tooltip: React.FC<TooltipProps> = ({
     document.addEventListener('pointerdown', handlePointerDown, true);
     return () => document.removeEventListener('pointerdown', handlePointerDown, true);
   }, [touchOpen, onClose]);
+
+  React.useEffect(() => {
+    if (!touchOpen || typeof window === 'undefined') {
+      return;
+    }
+
+    const updatePosition = () => {
+      if (!triggerRef.current) {
+        return;
+      }
+
+      const rect = triggerRef.current.getBoundingClientRect();
+      const top = placement.startsWith('bottom') ? rect.bottom + 8 : rect.top - 8;
+      setTouchPosition({
+        top,
+        left: rect.left + rect.width / 2,
+      });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [touchOpen, placement]);
+
+  React.useLayoutEffect(() => {
+    if (!touchOpen || !touchPosition || typeof window === 'undefined') {
+      return;
+    }
+
+    const insets = getOverlayInsets();
+    const triggerRect = triggerRef.current?.getBoundingClientRect();
+
+    if (!triggerRect) {
+      return;
+    }
+
+    const estimatedMaxWidth = Math.min(320, Math.max(160, window.innerWidth - insets.left - insets.right));
+    const tooltipRect = tooltipRef.current?.getBoundingClientRect();
+    const tooltipWidth = tooltipRect?.width || estimatedMaxWidth;
+    const tooltipHeight = tooltipRect?.height || 56;
+    const left = clamp(
+      touchPosition.left - tooltipWidth / 2,
+      insets.left,
+      window.innerWidth - insets.right - tooltipWidth,
+    );
+    const preferredBottom = triggerRect.bottom + 8;
+    const preferredTop = triggerRect.top - tooltipHeight - 8;
+    const fitsBelow = preferredBottom + tooltipHeight <= window.innerHeight - insets.bottom;
+    const fitsAbove = preferredTop >= insets.top;
+    const prefersBottom = placement.startsWith('bottom');
+
+    let top = prefersBottom ? preferredBottom : preferredTop;
+
+    if (prefersBottom && !fitsBelow && fitsAbove) {
+      top = preferredTop;
+    } else if (!prefersBottom && !fitsAbove && fitsBelow) {
+      top = preferredBottom;
+    }
+
+    top = clamp(top, insets.top, window.innerHeight - insets.bottom - tooltipHeight);
+
+    setTouchTooltipStyle({
+      position: 'fixed',
+      top,
+      left,
+      maxWidth: `min(20rem, calc(100vw - ${insets.left + insets.right}px))`,
+      zIndex: 1700,
+    });
+  }, [touchOpen, touchPosition, placement]);
 
   // No title → just render children
   if (!title) return children;
@@ -122,9 +199,16 @@ const Tooltip: React.FC<TooltipProps> = ({
             childRef.current = node;
           }
         },
-        onTouchStart: (e: React.TouchEvent) => {
-          setTouchOpen(true);
-          (children.props as any).onTouchStart?.(e);
+        onPointerUp: (e: React.PointerEvent) => {
+          if (e.pointerType !== 'mouse') {
+            if (triggerRef.current) {
+              const rect = triggerRef.current.getBoundingClientRect();
+              const top = placement.startsWith('bottom') ? rect.bottom + 8 : rect.top - 8;
+              setTouchPosition({ top, left: rect.left + rect.width / 2 });
+            }
+            setTouchOpen(true);
+          }
+          (children.props as any).onPointerUp?.(e);
         },
         onClick: (e: React.MouseEvent) => {
           setTouchOpen(true);
@@ -133,10 +217,33 @@ const Tooltip: React.FC<TooltipProps> = ({
       })
     : children;
 
+  if (coarsePointer) {
+    return (
+      <>
+        <span style={{ position: 'relative', display: 'inline-flex' }}>
+          {childWithTouch}
+        </span>
+        {touchOpen && touchPosition && typeof document !== 'undefined'
+          ? createPortal(
+            <div
+              ref={tooltipRef}
+              role="tooltip"
+              className={cn(tooltipClasses, 'animate-fade-in')}
+              style={touchTooltipStyle ?? undefined}
+            >
+              {title}
+            </div>,
+            document.body
+          )
+          : null}
+      </>
+    );
+  }
+
   return (
     <TooltipProvider>
       <TooltipPrimitive.Root
-        open={coarsePointer ? touchOpen : undefined}
+        open={undefined}
         onOpenChange={(o) => {
           if (!o) {
             setTouchOpen(false);
@@ -150,6 +257,7 @@ const Tooltip: React.FC<TooltipProps> = ({
             side={side}
             align={align}
             sideOffset={arrow ? 4 : 6}
+            collisionPadding={getOverlayInsets()}
             className={cn(tooltipClasses, 'animate-fade-in')}
           >
             {title}
@@ -160,5 +268,26 @@ const Tooltip: React.FC<TooltipProps> = ({
     </TooltipProvider>
   );
 };
+
+function getOverlayInsets() {
+  if (typeof window === 'undefined') {
+    return { top: 12, bottom: 16, left: 12, right: 12 };
+  }
+
+  const styles = window.getComputedStyle(document.documentElement);
+  const topInset = Number.parseFloat(styles.getPropertyValue('--app-shell-overlay-top-offset-px')) || 0;
+  const bottomInset = Number.parseFloat(styles.getPropertyValue('--mobile-nav-total-offset-px')) || 0;
+
+  return {
+    top: topInset + 12,
+    bottom: bottomInset + 16,
+    left: 12,
+    right: 12,
+  };
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
 
 export { Tooltip, TooltipProvider };

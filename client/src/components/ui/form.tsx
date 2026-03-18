@@ -12,7 +12,7 @@ export interface SwitchProps extends Omit<React.ComponentPropsWithoutRef<typeof 
   disabled?: boolean;
   size?: 'small' | 'medium';
   color?: string;
-  /** MUI-compatible: data-testid and other input-level attributes forwarded to the root element */
+  /** data-testid and other input-level attributes forwarded to the root element */
   inputProps?: React.HTMLAttributes<HTMLElement> & { 'data-testid'?: string };
 }
 
@@ -24,7 +24,7 @@ const Switch = React.forwardRef<React.ElementRef<typeof SwitchPrimitive.Root>, S
         ref={ref}
         checked={checked}
         name={name}
-        // Tests (and MUI compat) expect role="checkbox", not role="switch"
+        // Tests expect role="checkbox", not role="switch"
         role="checkbox"
         data-testid={inputProps?.['data-testid']}
         onCheckedChange={(v) =>
@@ -60,7 +60,7 @@ export interface CheckboxProps extends Omit<React.ComponentPropsWithoutRef<typeo
   size?: 'small' | 'medium';
   color?: string;
   indeterminate?: boolean;
-  /** MUI-compatible: data-testid and other input-level attributes forwarded to the root element */
+  /** data-testid and other input-level attributes forwarded to the root element */
   inputProps?: React.HTMLAttributes<HTMLElement> & { 'data-testid'?: string };
 }
 

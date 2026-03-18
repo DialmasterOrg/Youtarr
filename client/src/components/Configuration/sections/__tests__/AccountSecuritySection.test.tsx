@@ -297,7 +297,7 @@ describe('AccountSecuritySection Component', () => {
       renderWithProviders(<AccountSecuritySection {...defaultProps} />);
 
       const confirmInput = screen.getByLabelText(/Confirm New Password/i, { selector: 'input' });
-      // MUI TextField uses aria-invalid when error prop is true
+      // Input should show error state
       expect(confirmInput).toHaveAttribute('aria-invalid', 'true');
     });
 

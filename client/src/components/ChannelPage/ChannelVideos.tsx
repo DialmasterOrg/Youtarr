@@ -47,7 +47,7 @@ type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
 
 function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelId, channelVideoQuality, channelAudioFormat }: ChannelVideosProps) {
-  const isMobile = useMediaQuery('(max-width: 599px)');
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const { themeMode } = useThemeEngine();
 
   // View and display states
@@ -57,6 +57,8 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [maxRating, setMaxRating] = useState('');
   const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
 
   // Tab states
   const [selectedTab, setSelectedTab] = useState<string | null>(null);
@@ -396,6 +398,18 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const selectionMode = checkedBoxes.length > 0 ? 'download' : selectedForDeletion.length > 0 ? 'delete' : null;
   const canSelectDownload = selectionMode !== 'delete';
   const canSelectDeletion = selectionMode !== 'download';
+
+  useEffect(() => {
+    if (!isMobile) {
+      setMobileFiltersOpen(false);
+      setMobileActionsOpen(false);
+      return;
+    }
+
+    if (selectionMode) {
+      setMobileActionsOpen(false);
+    }
+  }, [isMobile, selectionMode]);
 
   // Event handlers
   const handleCheckChange = useCallback((videoId: string, isChecked: boolean) => {
@@ -900,6 +914,71 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     );
   };
 
+  const renderMobileActionsTray = () => {
+    if (!isMobile || selectionMode || !mobileActionsOpen || typeof window === 'undefined') return null;
+
+    return createPortal(
+      <div
+        style={{
+          position: 'fixed',
+          left: 8,
+          right: 8,
+          bottom: 'calc(var(--mobile-nav-total-offset, 0px) + 8px)',
+          zIndex: 1399,
+        }}
+      >
+        <ActionBar
+          variant={themeMode}
+          compact
+          style={{
+            justifyContent: 'space-between',
+            gap: 8,
+            padding: '10px 12px',
+            borderRadius: 'var(--radius-ui)',
+            border: 'var(--nav-border)',
+            backgroundColor: 'var(--card)',
+            boxShadow: 'var(--shadow-hard)',
+          }}
+        >
+          <Typography variant="body2" style={{ fontWeight: 700 }}>
+            Channel actions
+          </Typography>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', marginLeft: 'auto' }}>
+            <Button
+              size="small"
+              className="intent-base"
+              onClick={() => {
+                handleSelectAllDownloaded();
+                setMobileActionsOpen(false);
+              }}
+              disabled={paginatedVideos.filter((video) => video.added && !video.removed).length === 0}
+            >
+              Select downloaded
+            </Button>
+            <Button
+              size="small"
+              className="intent-warning"
+              onClick={() => {
+                handleSelectAllNotDownloaded();
+                setMobileActionsOpen(false);
+              }}
+              disabled={paginatedVideos.filter((video) => {
+                const status = getVideoStatus(video);
+                return status === 'never_downloaded' || status === 'missing' || status === 'ignored';
+              }).length === 0}
+            >
+              Select pending
+            </Button>
+            <Button size="small" onClick={() => setMobileActionsOpen(false)} className="intent-base" startIcon={<ClearIcon size={14} />}>
+              Close
+            </Button>
+          </div>
+        </ActionBar>
+      </div>,
+      document.body
+    );
+  };
+
   return (
     <>
       <Card elevation={3} style={{ marginBottom: 16, borderRadius: 'var(--radius-ui)', overflow: 'hidden' }}>
@@ -942,6 +1021,10 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           activeFilterCount={activeFilterCount}
           filtersExpanded={filtersExpanded}
           onFiltersExpandedChange={setFiltersExpanded}
+          mobileFiltersOpen={mobileFiltersOpen}
+          onMobileFiltersOpenChange={setMobileFiltersOpen}
+          mobileActionsOpen={mobileActionsOpen}
+          onMobileActionsOpenChange={setMobileActionsOpen}
         />
 
         {/* Filters */}
@@ -959,11 +1042,13 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           activeFilterCount={activeFilterCount}
           hideDateFilter={selectedTab === 'shorts'}
           filtersExpanded={filtersExpanded}
+          mobileDrawerOpen={mobileFiltersOpen}
+          onMobileDrawerClose={() => setMobileFiltersOpen(false)}
         />
 
         {/* Tabs */}
           { availableTabs.length > 0 && (
-          <div style={{ borderBottom: '1px solid var(--border)', padding: '0 16px' }}>
+          <div style={{ borderBottom: '1px solid var(--border)', padding: isMobile ? '0 10px' : '0 16px' }}>
             <Tabs
               value={selectedTab || 'videos'}
               onChange={handleTabChange}
@@ -981,7 +1066,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         {/* Content area */}
         <div
           style={{
-            padding: 16,
+            padding: isMobile ? 10 : 12,
             paddingBottom: isMobile ? 'calc(var(--mobile-nav-total-offset, 0px) + 96px)' : 16,
             position: 'relative',
             minHeight: '100vh',
@@ -1079,6 +1164,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           )}
 
           {renderSelectionAction()}
+          {renderMobileActionsTray()}
 
           {useInfiniteScroll && (
             <>
@@ -1110,7 +1196,11 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           )}
 
           {!useInfiniteScroll && totalPages > 1 && (
-            <div style={{ padding: '16px 0' }}>
+            <Grid
+              container
+              spacing={2}
+              style={{ marginTop: '8px', marginBottom: isMobile ? '0px' : '8px', display: 'flex', justifyContent: 'center' }}
+            >
               <PageControls
                 page={page}
                 totalPages={totalPages}
@@ -1118,8 +1208,9 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                   setPage(newPage);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
+                compact={isMobile}
               />
-            </div>
+            </Grid>
           )}
         </div>
       </Card>
