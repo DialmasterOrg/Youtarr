@@ -346,7 +346,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
           title="Channels"
           action={
             <Tooltip title="Learn how channel downloads work">
-              <button aria-label="Learn how channel downloads work" className="MuiIconButton-root" type="button" onClick={() => setHelpDialogOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 8 }}>
+              <button aria-label="Learn how channel downloads work" className="icon-btn" type="button" onClick={() => setHelpDialogOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 8 }}>
                 <HelpOutlineIcon size={20} />
               </button>
             </Tooltip>
@@ -428,7 +428,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
               )}
 
               <Tooltip title={`Sort alphabetically (${sortOrder === 'asc' ? 'A → Z' : 'Z → A'})`}>
-                <button aria-label={`Sort alphabetically (${sortOrder === 'asc' ? 'A → Z' : 'Z → A'})`} className="MuiIconButton-root" type="button" onClick={handleSortToggle} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', padding: 4, borderRadius: 4 }}>
+                <button aria-label={`Sort alphabetically (${sortOrder === 'asc' ? 'A → Z' : 'Z → A'})`} className="icon-btn" type="button" onClick={handleSortToggle} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', padding: 4, borderRadius: 4 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <SortByAlphaIcon size={18} />
                     {sortOrder === 'asc' ?
@@ -441,7 +441,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
               <Tooltip title="Filter by channel name">
                 <button
                   aria-label="Filter by channel name"
-                  className={`MuiIconButton-root ${filterValue ? 'MuiIconButton-colorPrimary' : ''}`.trim()}
+                  className={`icon-btn${filterValue ? ' icon-btn-primary' : ''}`}
                   type="button"
                   onClick={handleFilterIconClick}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: filterValue ? 'var(--primary)' : 'inherit', display: 'inline-flex', alignItems: 'center', padding: 4, borderRadius: 4 }}
@@ -453,7 +453,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
               <Tooltip title={folderTooltip}>
                 <button
                   aria-label={folderTooltip}
-                  className={`MuiIconButton-root ${folderControlActive ? 'MuiIconButton-colorPrimary' : ''}`.trim()}
+                  className={`icon-btn${folderControlActive ? ' icon-btn-primary' : ''}`}
                   type="button"
                   onClick={handleFolderMenuOpen}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: folderControlActive ? 'var(--primary)' : 'inherit', display: 'inline-flex', alignItems: 'center', padding: 4, borderRadius: 4 }}

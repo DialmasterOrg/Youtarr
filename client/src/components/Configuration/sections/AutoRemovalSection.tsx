@@ -142,7 +142,7 @@ export const AutoRemovalSection: React.FC<AutoRemovalSectionProps> = ({
                     Storage reporting is not available on your system, so the Free Space Threshold option is disabled.
                     This can happen with certain mount types like network shares, cloud storage, or virtual filesystems.
                   </Typography>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
+                  <Typography variant="body2" className="mb-2">
                     Check the storage indicator at the top of this page - if it shows an error or is not present,
                     storage-based auto-removal will not work.
                   </Typography>

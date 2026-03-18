@@ -119,7 +119,7 @@ describe('VideoChip', () => {
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
-      expect(chip).toHaveClass('MuiChip-colorWarning');
+      expect(chip).toHaveClass('chip-warning');
     });
 
     test('applies error color for members-only videos', () => {
@@ -127,14 +127,14 @@ describe('VideoChip', () => {
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
-      expect(chip).toHaveClass('MuiChip-colorError');
+      expect(chip).toHaveClass('chip-error');
     });
 
     test('applies default color for regular videos', () => {
       render(<VideoChip video={baseVideo} onDelete={mockOnDelete} />);
 
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
-      expect(chip).toHaveClass('MuiChip-colorDefault');
+      expect(chip).toHaveClass('chip-default');
     });
 
     test('applies filled variant for downloaded videos', () => {
@@ -142,7 +142,7 @@ describe('VideoChip', () => {
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
-      expect(chip).toHaveClass('MuiChip-filled');
+      expect(chip).toHaveClass('chip-filled');
     });
 
     test('applies filled variant for members-only videos', () => {
@@ -150,14 +150,14 @@ describe('VideoChip', () => {
       render(<VideoChip video={video} onDelete={mockOnDelete} />);
 
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
-      expect(chip).toHaveClass('MuiChip-filled');
+      expect(chip).toHaveClass('chip-filled');
     });
 
     test('applies filled variant for regular videos', () => {
       render(<VideoChip video={baseVideo} onDelete={mockOnDelete} />);
 
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
-      expect(chip).toHaveClass('MuiChip-filled');
+      expect(chip).toHaveClass('chip-filled');
     });
   });
 
@@ -299,7 +299,7 @@ describe('VideoChip', () => {
       expect(screen.getByTestId('HistoryIcon')).toBeInTheDocument();
       expect(screen.getByTestId('LockIcon')).toBeInTheDocument();
       const chip = screen.getByRole('button', { name: /Test Video Title/i });
-      expect(chip).toHaveClass('MuiChip-colorWarning');
+      expect(chip).toHaveClass('chip-warning');
     });
 
     test('renders chip with full width', () => {

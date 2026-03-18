@@ -21,12 +21,16 @@ export interface TooltipProps {
   onClose?: () => void;
 }
 
+/** Duration in ms the tap-triggered tooltip stays visible before auto-hiding */
+const TAP_TOOLTIP_DURATION = 2500;
+
 const Tooltip: React.FC<TooltipProps> = ({
   title,
   children,
   placement = 'top',
   arrow = false,
   disableHoverListener = false,
+  disableTouchListener = false,
   enterDelay = 200,
   enterTouchDelay: _enterTouchDelay,
   leaveTouchDelay: _leaveTouchDelay,
@@ -34,6 +38,10 @@ const Tooltip: React.FC<TooltipProps> = ({
   open,
   onClose,
 }) => {
+  // Touch-open state for mobile tap support
+  const [touchOpen, setTouchOpen] = React.useState(false);
+  const touchTimerRef = React.useRef<ReturnType<typeof setTimeout>>();
+
   // No title → just render children
   if (!title) return children;
 
@@ -44,8 +52,14 @@ const Tooltip: React.FC<TooltipProps> = ({
   const align = placement.includes('-start') ? 'start' : placement.includes('-end') ? 'end' : 'center';
   const isControlled = open !== undefined;
 
-  // Controlled mode: use a simple custom approach to avoid Radix duplicating text
-  // in both the visible element and the SR-only aria live region.
+  const tooltipClasses = cn(
+    'z-[1700] max-w-xs rounded-md bg-foreground px-2.5 py-1.5',
+    'text-xs font-medium text-background leading-snug',
+    'shadow-lg select-none break-words',
+    className
+  );
+
+  // Controlled mode: simple inline overlay
   if (isControlled) {
     return (
       <span style={{ position: 'relative', display: 'inline-flex' }}>
@@ -54,11 +68,8 @@ const Tooltip: React.FC<TooltipProps> = ({
           <div
             role="tooltip"
             className={cn(
-              'z-[1700] max-w-xs rounded-md bg-foreground px-2.5 py-1.5',
-              'text-xs font-medium text-background leading-snug',
-              'shadow-lg select-none break-words',
+              tooltipClasses,
               'absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5',
-              className
             )}
           >
             {title}
@@ -68,24 +79,58 @@ const Tooltip: React.FC<TooltipProps> = ({
     );
   }
 
+  // Touch handler: open on tap, auto-close after TAP_TOOLTIP_DURATION ms
+  const handleTouchStart = disableTouchListener
+    ? undefined
+    : (e: React.TouchEvent) => {
+        e.stopPropagation();
+        clearTimeout(touchTimerRef.current);
+        setTouchOpen(true);
+        touchTimerRef.current = setTimeout(() => {
+          setTouchOpen(false);
+          onClose?.();
+        }, TAP_TOOLTIP_DURATION);
+      };
+
+  const handleTouchEnd = disableTouchListener
+    ? undefined
+    : (e: React.TouchEvent) => {
+        // Don't close immediately — let the timer handle it so the user sees the tooltip
+        e.stopPropagation();
+      };
+
+  const childWithTouch = handleTouchStart
+    ? React.cloneElement(children, {
+        onTouchStart: (e: React.TouchEvent) => {
+          handleTouchStart(e);
+          (children.props as any).onTouchStart?.(e);
+        },
+        onTouchEnd: (e: React.TouchEvent) => {
+          handleTouchEnd?.(e);
+          (children.props as any).onTouchEnd?.(e);
+        },
+      })
+    : children;
+
   return (
     <TooltipProvider>
       <TooltipPrimitive.Root
+        open={touchOpen || undefined}
+        onOpenChange={(o) => {
+          if (!o) {
+            setTouchOpen(false);
+            clearTimeout(touchTimerRef.current);
+          }
+        }}
         delayDuration={disableHoverListener ? 999999 : enterDelay}
       >
-        <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
+        <TooltipPrimitive.Trigger asChild>{childWithTouch}</TooltipPrimitive.Trigger>
         <TooltipPrimitive.Portal>
           <TooltipPrimitive.Content
             side={side}
             align={align}
             sideOffset={arrow ? 4 : 6}
-            className={cn(
-              'z-[1700] max-w-xs rounded-md bg-foreground px-2.5 py-1.5',
-              'text-xs font-medium text-background leading-snug',
-              'shadow-lg animate-fade-in',
-              'select-none break-words',
-              className
-            )}
+            className={cn(tooltipClasses, 'animate-fade-in')}
           >
             {title}
             {arrow && <TooltipPrimitive.Arrow className="fill-foreground" />}

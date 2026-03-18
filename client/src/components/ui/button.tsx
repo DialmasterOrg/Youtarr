@@ -95,22 +95,23 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         <Comp
           ref={ref}
           disabled={disabled || loading}
+          data-btn
           className={cn(
             buttonVariants({ variant, size: normalizedSize, fullWidth, className }),
-            variant === 'contained' && 'MuiButton-contained',
-            variant === 'outlined' && 'MuiButton-outlined',
-            variant === 'text' && 'MuiButton-text',
-            variant === 'contained' && color === 'primary' && 'MuiButton-containedPrimary',
-            variant === 'contained' && color === 'secondary' && 'MuiButton-containedSecondary',
-            variant === 'contained' && color === 'error' && 'MuiButton-containedError',
-            variant === 'contained' && color === 'warning' && 'MuiButton-containedWarning',
-            variant === 'outlined' && color === 'primary' && 'MuiButton-outlinedPrimary',
-            variant === 'outlined' && color === 'secondary' && 'MuiButton-outlinedSecondary',
-            variant === 'outlined' && color === 'error' && 'MuiButton-outlinedError',
-            variant === 'outlined' && color === 'warning' && 'MuiButton-outlinedWarning',
-            normalizedSize === 'sm' && 'MuiButton-sizeSmall',
-            normalizedSize === 'md' && 'MuiButton-sizeMedium',
-            normalizedSize === 'lg' && 'MuiButton-sizeLarge'
+            variant === 'contained' && 'btn-contained',
+            variant === 'outlined' && 'btn-outlined',
+            variant === 'text' && 'btn-text',
+            variant === 'contained' && color === 'primary' && 'btn-contained-primary',
+            variant === 'contained' && color === 'secondary' && 'btn-contained-secondary',
+            variant === 'contained' && color === 'error' && 'btn-contained-error',
+            variant === 'contained' && color === 'warning' && 'btn-contained-warning',
+            variant === 'outlined' && color === 'primary' && 'btn-outlined-primary',
+            variant === 'outlined' && color === 'secondary' && 'btn-outlined-secondary',
+            variant === 'outlined' && color === 'error' && 'btn-outlined-error',
+            variant === 'outlined' && color === 'warning' && 'btn-outlined-warning',
+            normalizedSize === 'sm' && 'btn-sm',
+            normalizedSize === 'md' && 'btn-md',
+            normalizedSize === 'lg' && 'btn-lg'
           )}
           style={{ ...sx, ...style }}
           {...props}
@@ -124,22 +125,23 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <Comp
         ref={ref}
         disabled={disabled || loading}
+        data-btn
         className={cn(
           buttonVariants({ variant, size: normalizedSize, fullWidth, className }),
-          variant === 'contained' && 'MuiButton-contained',
-          variant === 'outlined' && 'MuiButton-outlined',
-          variant === 'text' && 'MuiButton-text',
-          variant === 'contained' && color === 'primary' && 'MuiButton-containedPrimary',
-          variant === 'contained' && color === 'secondary' && 'MuiButton-containedSecondary',
-          variant === 'contained' && color === 'error' && 'MuiButton-containedError',
-          variant === 'contained' && color === 'warning' && 'MuiButton-containedWarning',
-          variant === 'outlined' && color === 'primary' && 'MuiButton-outlinedPrimary',
-          variant === 'outlined' && color === 'secondary' && 'MuiButton-outlinedSecondary',
-          variant === 'outlined' && color === 'error' && 'MuiButton-outlinedError',
-          variant === 'outlined' && color === 'warning' && 'MuiButton-outlinedWarning',
-          normalizedSize === 'sm' && 'MuiButton-sizeSmall',
-          normalizedSize === 'md' && 'MuiButton-sizeMedium',
-          normalizedSize === 'lg' && 'MuiButton-sizeLarge'
+          variant === 'contained' && 'btn-contained',
+          variant === 'outlined' && 'btn-outlined',
+          variant === 'text' && 'btn-text',
+          variant === 'contained' && color === 'primary' && 'btn-contained-primary',
+          variant === 'contained' && color === 'secondary' && 'btn-contained-secondary',
+          variant === 'contained' && color === 'error' && 'btn-contained-error',
+          variant === 'contained' && color === 'warning' && 'btn-contained-warning',
+          variant === 'outlined' && color === 'primary' && 'btn-outlined-primary',
+          variant === 'outlined' && color === 'secondary' && 'btn-outlined-secondary',
+          variant === 'outlined' && color === 'error' && 'btn-outlined-error',
+          variant === 'outlined' && color === 'warning' && 'btn-outlined-warning',
+          normalizedSize === 'sm' && 'btn-sm',
+          normalizedSize === 'md' && 'btn-md',
+          normalizedSize === 'lg' && 'btn-lg'
         )}
         style={{ ...sx, ...style }}
         {...props}
@@ -219,6 +221,7 @@ const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
       <Comp
         ref={ref}
         type="button"
+        data-icon-btn
         className={cn(
           iconButtonVariants({ size: normalizedSize, color }),
           edge === 'start' && '-ml-2',

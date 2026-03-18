@@ -13,6 +13,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
   ({ className, variant, disabled, children, ...props }, ref) => (
     <div
       ref={ref}
+      data-card
       className={cn(
         'bg-card text-foreground rounded-[var(--radius-ui)]',
         'border-[length:var(--border-weight)] border-[var(--border-strong)]',
@@ -44,6 +45,7 @@ const CardActionArea = React.forwardRef<HTMLElement, CardActionAreaProps>(
       Component,
       {
         ref,
+        'data-card-action': '',
         ...(isDiv && { role: 'button', tabIndex: 0 }),
         onClick: disabled ? undefined : onClick,
         ...(isDiv && {

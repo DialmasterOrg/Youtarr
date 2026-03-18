@@ -72,35 +72,7 @@ body::before {
   transform: translateZ(0);
 }
 
-/* Outlined input notch should only appear when label is floated */
-.MuiOutlinedInput-notchedOutline legend {
-  padding: 0;
-  display: block;
-  width: auto;
-  height: 11px;
-  visibility: hidden;
-  max-width: 0.01px;
-  transition: max-width 50ms cubic-bezier(0, 0, 0.2, 1) 0ms;
-  white-space: nowrap;
-}
 
-.MuiInputLabel-shrink + .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline legend {
-  max-width: 1000px;
-  padding: 0 10px;
-}
-
-.MuiInputLabel-shrink + .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline legend > span {
-  padding: 0 10px;
-  display: inline-block;
-  visibility: hidden;
-}
-
-.MuiInputLabel-root.MuiInputLabel-shrink.MuiInputLabel-outlined {
-  background-color: var(--card);
-  padding: 0 6px;
-  border-radius: 4px;
-  font-size: 0.72rem;
-}
 
 h1,
 h2,
@@ -279,13 +251,13 @@ body[data-motion='on'] .linear-top-rail::after {
 
 @media (prefers-reduced-motion: reduce) {
   .wiggle-card:hover,
-  .MuiChip-root:hover,
+  [data-chip]:hover,
   .sticker:hover {
     animation: none;
   }
 }
 
-body[data-theme='playful'] .MuiChip-root,
+body[data-theme='playful'] [data-chip],
 body[data-theme='playful'] .sticker {
   transform: var(--sticker-rest-transform);
   transition: transform 200ms var(--transition-bouncy), box-shadow 250ms var(--transition-bouncy);
@@ -295,8 +267,8 @@ body[data-theme='playful'] {
   overflow-anchor: none;
 }
 
-body[data-theme='playful'] .MuiChip-root:hover,
-body[data-theme='playful'] .MuiChip-root:focus-visible,
+body[data-theme='playful'] [data-chip]:hover,
+body[data-theme='playful'] [data-chip]:focus-visible,
 body[data-theme='playful'] .sticker:hover,
 body[data-theme='playful'] .sticker:focus-visible,
 body[data-theme='playful'] .sticker:focus-within {
@@ -305,8 +277,8 @@ body[data-theme='playful'] .sticker:focus-within {
 }
 
 /* Enforce no chip shadows in playful theme to avoid leftover shadows from other overrides */
-body[data-theme='playful'] .MuiChip-root,
-body[data-theme='playful'] .MuiChip-root:hover,
+body[data-theme='playful'] [data-chip],
+body[data-theme='playful'] [data-chip]:hover,
 body[data-theme='playful'] .sticker,
 body[data-theme='playful'] .sticker:hover {
   box-shadow: none !important;
@@ -361,9 +333,9 @@ body[data-motion='off'] *::after {
   transition: none !important;
 }
 
-/* Force disable specific hover transforms (like Linear Theme MuiCard/MuiButton) */
-body[data-motion='off'] .MuiCard-root:hover,
-body[data-motion='off'] .MuiButton-root:hover {
+/* Force disable specific hover transforms */
+body[data-motion='off'] [data-card]:hover,
+body[data-motion='off'] [data-btn]:hover {
   transform: none !important;
 }
 
@@ -379,8 +351,8 @@ body[data-theme='playful'] .settings-splash-card:hover {
 }
 
 /* Ensure CardActionArea inside the splash card also gets the gold hover and background */
-body[data-theme='playful'] .settings-splash-card .MuiCardActionArea-root:hover,
-body[data-theme='playful'] .settings-splash-card:hover .MuiCardActionArea-root {
+body[data-theme='playful'] .settings-splash-card [data-card-action]:hover,
+body[data-theme='playful'] .settings-splash-card:hover [data-card-action] {
   box-shadow: var(--settings-splash-shadow-hover) !important;
   background-color: var(--nav-item-bg-hover) !important;
 }
@@ -429,15 +401,8 @@ body[data-motion='on'][data-theme='linear'] .animate-slide-right {
 }
 
 /* Loading Spinner - Always Animated (Even with Motion Off) */
-.loading-spinner,
-.MuiCircularProgress-root {
+.loading-spinner {
   animation: spin 1s linear infinite !important;
-}
-
-.MuiCircularProgress-circle {
-  stroke-dasharray: 80px, 200px;
-  stroke-dashoffset: 0;
-  animation: spin 1.4s ease-in-out infinite !important;
 }
 
 /* Structural Layout Anchors */

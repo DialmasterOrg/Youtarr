@@ -213,6 +213,10 @@ export function AppShell({
                 minHeight: '100vh',
                 minWidth: 0,
                 padding: 'var(--layout-main-padding)',
+                // On mobile, override bottom padding to clear the fixed bottom nav bar
+                paddingBottom: isMobile
+                  ? 'calc(var(--mobile-nav-total-offset, 64px) + 16px)'
+                  : undefined,
                 boxSizing: 'border-box',
                 position: 'relative',
                 zIndex: 1,

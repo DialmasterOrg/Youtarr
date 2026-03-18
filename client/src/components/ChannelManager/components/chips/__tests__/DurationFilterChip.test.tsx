@@ -140,7 +140,7 @@ describe('DurationFilterChip', () => {
     );
 
     const chipContainer = screen.getByLabelText('Channel download duration filter: ≥5m');
-    expect(chipContainer).toHaveClass('MuiChip-sizeSmall');
+    expect(chipContainer).toHaveClass('chip-sm');
   });
 
   test('renders chip with outlined variant', () => {
@@ -149,7 +149,7 @@ describe('DurationFilterChip', () => {
     );
 
     const chipContainer = screen.getByLabelText('Channel download duration filter: ≥5m');
-    expect(chipContainer).toHaveClass('MuiChip-outlined');
+    expect(chipContainer).toHaveClass('chip-outlined');
   });
 
   test('renders chip with primary color', () => {
@@ -158,6 +158,6 @@ describe('DurationFilterChip', () => {
     );
 
     const chipContainer = screen.getByLabelText('Channel download duration filter: ≥5m');
-    expect(chipContainer).toHaveClass('MuiChip-colorPrimary');
+    expect(chipContainer).toHaveClass('chip-primary');
   });
 });

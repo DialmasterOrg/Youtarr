@@ -234,7 +234,7 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
                 variant="contained"
                 color="secondary"
                 onClick={onOpenPlexAuthDialog}
-                sx={{
+                style={{
                   minWidth: '120px',
                   height: '56px',
                   fontWeight: 'bold'

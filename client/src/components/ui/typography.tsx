@@ -69,7 +69,7 @@ const Typography = React.forwardRef<HTMLElement, TypographyProps>(
         ref,
         className: cn(
           mapping.className,
-          `MuiTypography-${variant}`,
+          `typo-${variant}`,
           color && colorMap[color],
           // If color string looks like 'text.primary' from MUI
           color === 'text.primary' && 'text-foreground',

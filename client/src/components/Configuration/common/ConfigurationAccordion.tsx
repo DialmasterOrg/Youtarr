@@ -5,11 +5,7 @@ import {
   FormControlLabel,
   Switch,
   Chip,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
 } from '../../ui';
-import { ExpandMore as ExpandMoreIcon } from '../../../lib/icons';
 
 interface StatusBannerConfig {
   enabled: boolean;
@@ -26,19 +22,19 @@ interface ConfigurationAccordionProps {
   title: string;
   chipLabel?: string;
   chipColor?: 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning';
+  /** @deprecated No longer has effect — sections are always expanded */
   defaultExpanded?: boolean;
   statusBanner?: StatusBannerConfig;
   children: React.ReactNode;
 }
 
 /**
- * Reusable accordion wrapper with consistent styling for configuration sections
+ * Configuration section container — always fully visible (no collapse).
  */
 export const ConfigurationAccordion: React.FC<ConfigurationAccordionProps> = ({
   title,
   chipLabel,
   chipColor = 'default',
-  defaultExpanded = false,
   statusBanner,
   children,
 }) => {
@@ -49,70 +45,78 @@ export const ConfigurationAccordion: React.FC<ConfigurationAccordionProps> = ({
   const showStatusToggle = Boolean(statusBanner?.showToggle ?? statusBanner?.onToggle);
 
   return (
-    <Accordion defaultExpanded={defaultExpanded} style={{ marginBottom: 24 }}>
-      <AccordionSummary
-        expandIcon={<ExpandMoreIcon size={18} />}
-        hideChevron
-        aria-label={title}
+    <div style={{ marginBottom: 24 }}>
+      {/* Section header */}
+      <Box
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          flexWrap: 'wrap',
+          width: '100%',
+          paddingBottom: 12,
+          borderBottom: '1px solid var(--border)',
+          marginBottom: 16,
+        }}
       >
-        <Box style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', width: '100%' }}>
-          <Typography component="span" variant="h6" style={{ flexGrow: 1 }}>
-            {title}
-          </Typography>
-          {chipLabel && <Chip label={chipLabel} color={chipColor} size="small" />}
-        </Box>
-      </AccordionSummary>
-      <AccordionDetails>
-        {statusBanner && (
-          <Box
-            className="mb-4"
+        <Typography component="h3" variant="h6" style={{ flexGrow: 1 }}>
+          {title}
+        </Typography>
+        {chipLabel && <Chip label={chipLabel} color={chipColor} size="small" />}
+      </Box>
+
+      {/* Optional status banner */}
+      {statusBanner && (
+        <Box
+          className="mb-4"
+          style={{
+            border: `var(--border-weight) solid ${bannerUsesSuccessVisual ? 'var(--success)' : 'var(--border)'}`,
+            borderRadius: 'var(--radius-ui)',
+            backgroundColor: bannerUsesSuccessVisual ? 'color-mix(in srgb, var(--success) 12%, var(--card))' : 'var(--muted)',
+            padding: '10px 12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+        >
+          <Typography
+            variant="body2"
             style={{
-              border: `var(--border-weight) solid ${bannerUsesSuccessVisual ? 'var(--success)' : 'var(--border)'}`,
-              borderRadius: 'var(--radius-ui)',
-              backgroundColor: bannerUsesSuccessVisual ? 'color-mix(in srgb, var(--success) 12%, var(--card))' : 'var(--muted)',
-              padding: '10px 12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-              flexWrap: 'wrap',
+              fontWeight: 600,
+              color: bannerUsesSuccessVisual ? 'var(--success)' : 'inherit',
             }}
           >
-            <Typography
-              variant="body2"
+            {statusText}
+          </Typography>
+          {showStatusToggle && statusBanner.onToggle && (
+            <Box
               style={{
-                fontWeight: 600,
-                color: bannerUsesSuccessVisual ? 'var(--success)' : 'inherit',
+                border: `var(--border-weight) solid ${statusBanner.enabled ? 'var(--success)' : 'var(--border-strong)'}`,
+                borderRadius: 'var(--radius-ui)',
+                padding: '2px 8px',
+                backgroundColor: 'var(--card)',
               }}
             >
-              {statusText}
-            </Typography>
-            {showStatusToggle && statusBanner.onToggle && (
-              <Box
-                style={{
-                  border: `var(--border-weight) solid ${statusBanner.enabled ? 'var(--success)' : 'var(--border-strong)'}`,
-                  borderRadius: 'var(--radius-ui)',
-                  padding: '2px 8px',
-                  backgroundColor: 'var(--card)',
-                }}
-              >
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={statusBanner.enabled}
-                      onChange={(event) => statusBanner.onToggle?.(event.target.checked)}
-                      inputProps={statusBanner.toggleTestId ? ({ 'data-testid': statusBanner.toggleTestId } as any) : undefined}
-                    />
-                  }
-                  label={statusBanner.label || 'Enabled'}
-                  style={{ marginRight: 0 }}
-                />
-              </Box>
-            )}
-          </Box>
-        )}
-        {children}
-      </AccordionDetails>
-    </Accordion>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={statusBanner.enabled}
+                    onChange={(event) => statusBanner.onToggle?.(event.target.checked)}
+                    inputProps={statusBanner.toggleTestId ? ({ 'data-testid': statusBanner.toggleTestId } as any) : undefined}
+                  />
+                }
+                label={statusBanner.label || 'Enabled'}
+                style={{ marginRight: 0 }}
+              />
+            </Box>
+          )}
+        </Box>
+      )}
+
+      {children}
+    </div>
   );
 };

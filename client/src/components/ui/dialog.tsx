@@ -96,7 +96,7 @@ const Dialog: React.FC<DialogProps> = ({
             'rounded-[var(--radius-ui)]',
             'border-[length:var(--border-weight)] border-[var(--border-strong)]',
             'shadow-2xl',
-            'flex flex-col max-h-[calc(100vh-120px)] overflow-hidden',
+            'flex flex-col overflow-hidden',
             'focus-visible:outline-none',
             'data-[state=open]:animate-slide-up',
             !fullScreen && maxWidth && maxWidthMap[maxWidth],
@@ -105,6 +105,11 @@ const Dialog: React.FC<DialogProps> = ({
             PaperProps?.className,
             className
           )}
+          style={{
+            // Cap height to viewport minus top chrome (80px) and bottom nav bar offset
+            // --mobile-nav-total-offset is set dynamically by NavSidebar (0 on desktop, 64px+ on mobile)
+            maxHeight: 'calc(100dvh - var(--mobile-nav-total-offset, 0px) - 80px)',
+          }}
           onEscapeKeyDown={(e) => { if (disableEscapeKeyDown) e.preventDefault(); else onClose?.({}, 'escapeKeyDown'); }}
           onInteractOutside={(e) => { e.preventDefault(); }}
           {...contentProps}

@@ -1013,7 +1013,7 @@ describe('ChannelPage Component', () => {
 
       // Check that the title is rendered
       const title = screen.getByRole('heading', { name: 'Tech Channel' });
-      expect(title).toHaveClass('MuiTypography-h5');
+      expect(title).toHaveClass('typo-h5');
     });
 
     test('description box has mobile-specific height', async () => {
@@ -1058,7 +1058,7 @@ describe('ChannelPage Component', () => {
       await screen.findByText('Tech Channel');
 
       const title = screen.getByRole('heading', { name: 'Tech Channel' });
-      expect(title).toHaveClass('MuiTypography-h4');
+      expect(title).toHaveClass('typo-h4');
     });
   });
 

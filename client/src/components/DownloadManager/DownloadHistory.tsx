@@ -115,7 +115,7 @@ import PageControls from '../shared/PageControls';
       trackMouse: true,
     });
 
-    if (false && isMobile) {
+    if (isMobile) {
       return (
         <Grid item xs={12}>
           <Card>

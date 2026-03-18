@@ -418,7 +418,7 @@ describe('ChannelVideosDialogs Component', () => {
       );
 
       const alert = screen.getByRole('alert');
-      expect(alert).toHaveClass('MuiAlert-standardError');
+      expect(alert).toHaveClass('alert-standard-error');
     });
 
     test('mobile tooltip shows info severity', () => {
@@ -430,7 +430,7 @@ describe('ChannelVideosDialogs Component', () => {
       );
 
       const alert = screen.getByRole('alert');
-      expect(alert).toHaveClass('MuiAlert-standardInfo');
+      expect(alert).toHaveClass('alert-standard-info');
     });
 
     test('success message shows success severity', () => {
@@ -442,7 +442,7 @@ describe('ChannelVideosDialogs Component', () => {
       );
 
       const alert = screen.getByRole('alert');
-      expect(alert).toHaveClass('MuiAlert-standardSuccess');
+      expect(alert).toHaveClass('alert-standard-success');
     });
 
     test('error message shows error severity', () => {
@@ -454,7 +454,7 @@ describe('ChannelVideosDialogs Component', () => {
       );
 
       const alert = screen.getByRole('alert');
-      expect(alert).toHaveClass('MuiAlert-standardError');
+      expect(alert).toHaveClass('alert-standard-error');
     });
   });
 

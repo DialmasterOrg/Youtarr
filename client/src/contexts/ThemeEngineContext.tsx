@@ -106,7 +106,7 @@ export function ThemeEngineProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const selector = '.MuiChip-root, .sticker, .wiggle-card';
+    const selector = '[data-chip], .sticker, .wiggle-card';
     const tiltOptions = [-2, 2];
 
     const applyTilt = (element: HTMLElement) => {
