@@ -61,6 +61,7 @@ const LocalLogin: React.FC<LocalLoginProps> = ({ setToken }) => {
           name="username"
           type="text"
           autoComplete="username"
+          autoCapitalize="off"
           aria-label="Username"
         value={username}
         onChange={(e) => setUsername(e.target.value)}

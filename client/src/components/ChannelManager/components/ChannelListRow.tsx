@@ -49,6 +49,8 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
         alignItems: 'center',
         gap: 16,
         cursor: isPendingAddition ? 'not-allowed' : 'pointer',
+        minWidth: 0,
+        flex: 1,
       }}
       onClick={isPendingAddition ? undefined : onNavigate}
       data-testid={`channel-list-row-${channel.channel_id || channel.url}`}
@@ -57,11 +59,11 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
         <Avatar
           src={thumbnailSrc}
           alt={`${channel.uploader} thumbnail`}
-          style={{ width: 56, height: 56 }}
+          style={{ width: 56, height: 56, flexShrink: 0 }}
           imgProps={{ onError: () => setThumbnailVisible(false) }}
         />
       )}
-      <div style={{ minWidth: 0 }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, gap: 0 }}>
           <Typography variant={isMobile ? 'h6' : 'h5'} noWrap style={{ minWidth: 0 }}>
             {channel.uploader || 'Unknown Channel'}
@@ -95,11 +97,11 @@ const ChannelListRow: React.FC<ChannelListRowProps> = ({
           paddingRight: 8,
         }}
       >
-        <div style={{ display: 'flex', width: '100%', gap: 8 }}>
-          <div style={{ flex: 1 }}>{renderChannelHeader()}</div>
+        <div style={{ display: 'flex', width: '100%', gap: 8, alignItems: 'flex-start', minWidth: 0 }}>
+          {renderChannelHeader()}
           <Tooltip title="Remove channel">
             <button
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--destructive)', display: 'inline-flex', alignItems: 'center', padding: 4 }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--destructive)', display: 'inline-flex', alignItems: 'center', padding: 4, flexShrink: 0 }}
               onClick={onDelete}
               aria-label="Remove channel"
             >

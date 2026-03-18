@@ -88,6 +88,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const [folderMenuAnchor, setFolderMenuAnchor] = useState<null | HTMLElement>(null);
   const [mobileActionsAnchorEl, setMobileActionsAnchorEl] = useState<null | HTMLElement>(null);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const channelsContainerRef = useRef<HTMLDivElement | null>(null);
 
   const pageSize = useMemo(() => {
     if (isMobile) {
@@ -204,6 +205,13 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   useEffect(() => {
     setPage(1);
   }, [useInfiniteScroll]);
+
+  // Scroll to channels container when page changes (from pagination controls)
+  useEffect(() => {
+    if (page > 1 && channelsContainerRef.current && !useInfiniteScroll) {
+      channelsContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [page, useInfiniteScroll]);
 
   useEffect(() => {
     if (!useInfiniteScroll) {
@@ -567,7 +575,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
 
           <Divider style={{ marginBottom: 8 }} />
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} ref={channelsContainerRef}>
             {loading ? (
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', paddingTop: 24, paddingBottom: 24 }}>
                 <CircularProgress />

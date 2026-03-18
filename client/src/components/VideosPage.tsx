@@ -82,6 +82,7 @@ function VideosPage({ token }: VideosPageProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const videosContainerRef = useRef<HTMLDivElement | null>(null);
 
   const { deleteVideos, loading: deleteLoading } = useVideoDeletion();
   const configState = useConfig(token);
@@ -179,6 +180,13 @@ function VideosPage({ token }: VideosPageProps) {
     setVideos([]);
     setPage(1);
   }, [useInfiniteScroll]);
+
+  // Scroll to videos container when page changes (from pagination controls)
+  useEffect(() => {
+    if (page > 1 && videosContainerRef.current && !useInfiniteScroll) {
+      videosContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [page, useInfiniteScroll]);
 
   useEffect(() => {
     if (!useInfiniteScroll) return;
@@ -550,9 +558,10 @@ function VideosPage({ token }: VideosPageProps) {
         )}
 
         <Paper style={{ overflow: 'hidden' }}>
-          <TableContainer>
-            <div {...handlers}>
-              <Table style={isMobile ? { tableLayout: 'fixed' } : undefined}>
+          <div ref={videosContainerRef}>
+            <TableContainer>
+              <div {...handlers}>
+                <Table style={isMobile ? { tableLayout: 'fixed' } : undefined}>
               {isMobile ? null : (
                 <TableHead>
                   <TableRow>
@@ -1104,6 +1113,7 @@ function VideosPage({ token }: VideosPageProps) {
                 )}
               </TableBody>
             </Table>
+              </div>
 
             {useInfiniteScroll && (
               <>
@@ -1128,8 +1138,8 @@ function VideosPage({ token }: VideosPageProps) {
                 )}
               </>
             )}
+            </TableContainer>
           </div>
-        </TableContainer>
         </Paper>
         {renderMobileActionBar()}
       </Box>

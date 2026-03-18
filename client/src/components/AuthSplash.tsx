@@ -141,6 +141,8 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
               margin="normal"
               required
               autoFocus
+              inputProps={{ autoCapitalize: 'off' }}
+              style={{ marginBottom: '16px' }}
             />
             <TextField
               fullWidth

@@ -185,6 +185,8 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
               margin="normal"
               required
               helperText="Choose a username for login"
+              inputProps={{ autoCapitalize: 'off' }}
+              style={{ marginBottom: '16px' }}
             />
 
             <TextField
@@ -196,6 +198,7 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
               margin="normal"
               required
               helperText={`Password strength: ${password ? passwordStrength(password) : 'Enter password'}`}
+              style={{ marginBottom: '16px' }}
             />
 
             <TextField
