@@ -17,8 +17,10 @@ import {
 } from '../../lib/icons';
 import { getThemeLayoutCssVars, ThemeLayoutPolicy } from '../../themes';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { StorageHeaderWidget } from './StorageHeaderWidget';
 import { NAV_DRAWER_SECTION_BUTTON_GUTTER } from './navLayoutConstants';
+import youtarrWordmark from '../../Youtarr_text.png';
 import './layoutFallback.css';
 
 interface NavHeaderProps {
@@ -57,6 +59,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   const location = useLocation();
   const navigate = useNavigate();
   const layoutCssVars = getThemeLayoutCssVars(layoutPolicy);
+  const { showHeaderLogo, showHeaderWordmark } = useThemeEngine();
 
   const isMobile = layoutPolicy.breakpoint === 'mobile';
   const isLandscape = useMediaQuery('(orientation: landscape)');
@@ -68,6 +71,14 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   const usesInsetFrame = isInsetFrame && !showLandscapeNavItems;
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
+
+  const isChannelsSectionActive = (path: string, basePath: string, key: string) => {
+    if (path === basePath || path.startsWith(basePath + '/')) {
+      return true;
+    }
+
+    return key === 'channels' && path.startsWith('/channel/');
+  };
 
   const showTopNavItems = (layoutPolicy.showDesktopNavItems && !isMobile) || showLandscapeNavItems;
   const hasAppUpdate = token && !isPlatformManaged && updateAvailable && Boolean(updateTooltip);
@@ -218,8 +229,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
       {navItems.map((item) => {
         const isOpen = activeKey === item.key;
         const hasSubItems = item.subItems && item.subItems.length > 0;
-        const isParentActive = location.pathname === item.to
-          || location.pathname.startsWith(item.to + '/')
+        const isParentActive = isChannelsSectionActive(location.pathname, item.to, item.key)
           || item.subItems?.some((subItem: any) => (
             location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/')
           ));
@@ -427,31 +437,59 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
               to="/"
               style={{
                 display: 'inline-flex',
+                alignItems: 'center',
+                gap: showHeaderLogo ? 10 : 0,
                 marginLeft: 'var(--layout-header-title-inset)',
                 textDecoration: 'none',
                 minWidth: 0,
               }}
             >
-              <Typography
-                variant="h6"
-                style={{
-                  fontWeight: 700,
-                  fontFamily: 'var(--font-display)',
-                  whiteSpace: 'nowrap',
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  lineHeight: `${APP_BAR_TOGGLE_SIZE}px`,
-                  fontSize: showLandscapeNavItems ? '1.1rem' : '1.35rem',
-                  color: 'var(--foreground)',
-                  textDecoration: 'none',
-                  cursor: 'pointer',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                } as React.CSSProperties}
-              >
-                {appName}
-              </Typography>
+              {showHeaderLogo && (
+                <img
+                  src="/logo192.png"
+                  alt="Youtarr logo"
+                  style={{
+                    width: showLandscapeNavItems ? 28 : 32,
+                    height: showLandscapeNavItems ? 28 : 32,
+                    flexShrink: 0,
+                    objectFit: 'contain',
+                  }}
+                />
+              )}
+              {showHeaderWordmark ? (
+                <img
+                  src={youtarrWordmark}
+                  alt={appName}
+                  style={{
+                    height: showLandscapeNavItems ? 20 : 24,
+                    maxWidth: 'min(180px, 45vw)',
+                    width: 'auto',
+                    objectFit: 'contain',
+                    display: 'block',
+                  }}
+                />
+              ) : (
+                <Typography
+                  variant="h6"
+                  style={{
+                    fontWeight: 700,
+                    fontFamily: 'var(--font-display)',
+                    whiteSpace: 'nowrap',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    lineHeight: `${APP_BAR_TOGGLE_SIZE}px`,
+                    fontSize: showLandscapeNavItems ? '1.1rem' : '1.35rem',
+                    color: 'var(--foreground)',
+                    textDecoration: 'none',
+                    cursor: 'pointer',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  } as React.CSSProperties}
+                >
+                  {appName}
+                </Typography>
+              )}
             </RouterLink>
           </Box>
 

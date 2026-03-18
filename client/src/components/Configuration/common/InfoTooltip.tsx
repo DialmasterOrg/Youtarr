@@ -14,7 +14,7 @@ interface InfoTooltipProps {
  * - Mobile: Triggers callback to show snackbar
  */
 export const InfoTooltip: React.FC<InfoTooltipProps> = ({ text, onMobileClick }) => {
-  const isMobile = useMediaQuery('(max-width: 599px)');
+  const isMobile = useMediaQuery('(max-width: 767px)');
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();

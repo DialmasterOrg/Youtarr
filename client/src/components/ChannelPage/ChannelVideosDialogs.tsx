@@ -136,7 +136,6 @@ function ChannelVideosDialogs({
       {/* Mobile Tooltip Snackbar */}
       <Snackbar
         open={mobileTooltip !== null}
-        autoHideDuration={8000}
         onClose={onMobileTooltipClose}
       >
         <Alert onClose={onMobileTooltipClose} severity="info">

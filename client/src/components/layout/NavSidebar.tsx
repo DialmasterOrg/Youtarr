@@ -94,6 +94,14 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
   const iconBoxSize = NAV_ICON_SIZE;
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
+  const isChannelsSectionActive = (path: string, basePath: string, key: string) => {
+    if (path === basePath || path.startsWith(basePath + '/')) {
+      return true;
+    }
+
+    return key === 'channels' && path.startsWith('/channel/');
+  };
+
   // Track expanded menu items on mobile
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
 
@@ -125,7 +133,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
       const hasSubMatch = item.subItems?.some((subItem: any) => (
         location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/')
       ));
-      const parentMatch = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
+      const parentMatch = isChannelsSectionActive(location.pathname, item.to, item.key);
       return Boolean(parentMatch || hasSubMatch);
     });
     return activeItem?.key || null;
@@ -137,7 +145,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
         const hasSubMatch = item.subItems?.some((subItem: any) => (
           location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/')
         ));
-        const parentMatch = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
+        const parentMatch = isChannelsSectionActive(location.pathname, item.to, item.key);
         return Boolean(parentMatch || hasSubMatch);
       }) || null,
     [location.pathname, navItems]
@@ -208,7 +216,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
             const hasSubMatch = item.subItems?.some((subItem: any) => (
               location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/')
             ));
-            const parentMatch = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
+            const parentMatch = isChannelsSectionActive(location.pathname, item.to, item.key);
             const selected = Boolean(parentMatch || hasSubMatch);
             const isExpanded = isMobile
               ? expandedItems[item.key] || selected

@@ -541,7 +541,7 @@ function AppContent() {
             </div>
           </Alert>
         </Snackbar>
-    </>
+      </>
   );
 }
 

@@ -30,6 +30,7 @@ import {
   TableChart as TableChartIcon,
   ViewList as ViewListIcon,
   Save as SaveIcon,
+  MoreVert as MoreVertIcon,
 } from '../lib/icons';
 import { Undo2 as UndoIcon, FolderOpen as FolderSpecialIcon } from 'lucide-react';
 import useMediaQuery from '../hooks/useMediaQuery';
@@ -65,7 +66,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   }
 
   const navigate = useNavigate();
-  const isMobile = useMediaQuery('(max-width: 599px)');
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const { config } = useConfig(token);
   const useInfiniteScroll = config.channelVideosHotLoad ?? false;
   const globalPreferredResolution = config.preferredResolution || '1080';
@@ -85,6 +86,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
   const [regexPopoverAnchor, setRegexPopoverAnchor] = useState<{ el: HTMLElement; regex: string } | null>(null);
   const [folderMenuAnchor, setFolderMenuAnchor] = useState<null | HTMLElement>(null);
+  const [mobileActionsAnchorEl, setMobileActionsAnchorEl] = useState<null | HTMLElement>(null);
 
   const pageSize = useMemo(() => {
     if (isMobile) {
@@ -312,7 +314,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   };
 
   const handleViewChange = (_: React.MouseEvent<HTMLElement>, next: ViewMode | null) => {
-    if (next && (!isMobile || next === 'list')) {
+    if (next) {
       setViewMode(next);
     }
   };
@@ -333,6 +335,11 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
     setSelectedSubFolder(value);
     setFolderMenuAnchor(null);
   };
+
+  const handleMobileActionsOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setMobileActionsAnchorEl(event.currentTarget);
+  };
+  const handleMobileActionsClose = () => setMobileActionsAnchorEl(null);
 
   const handleNavigate = (channel: Channel) => {
     if (!channel.channel_id) return;
@@ -402,30 +409,111 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
             </Grid>
           </Grid>
 
+          {/* ── Mobile toolbar: view toggle + filter + actions ── */}
+          {isMobile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              {/* Grid / List view toggle */}
+              <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 'var(--radius-ui)', overflow: 'hidden', flexShrink: 0 }}>
+                <Button
+                  variant={viewMode === 'list' ? 'contained' : 'ghost'}
+                  size="sm"
+                  aria-label="List view"
+                  style={{ borderRadius: 0, borderRight: '1px solid var(--border)', padding: '5px 10px' }}
+                  onClick={() => handleViewChange(null as any, 'list')}
+                >
+                  <ViewListIcon size={18} />
+                </Button>
+                <Button
+                  variant={viewMode === 'grid' ? 'contained' : 'ghost'}
+                  size="sm"
+                  aria-label="Grid view"
+                  style={{ borderRadius: 0, padding: '5px 10px' }}
+                  onClick={() => handleViewChange(null as any, 'grid')}
+                >
+                  <TableChartIcon size={18} />
+                </Button>
+              </div>
+
+              {/* Filter button */}
+              <Button
+                variant={filterValue ? 'contained' : 'outlined'}
+                size="sm"
+                startIcon={<FilterAltIcon size={16} />}
+                onClick={handleFilterIconClick}
+                className="intent-base"
+              >
+                Filters{filterValue ? ' •' : ''}
+              </Button>
+
+              {/* Actions button */}
+              <Button
+                variant="outlined"
+                size="sm"
+                endIcon={<MoreVertIcon size={16} />}
+                onClick={handleMobileActionsOpen}
+                className="intent-base"
+                style={{ marginLeft: 'auto' }}
+              >
+                Actions
+              </Button>
+
+              {/* Mobile actions menu — opens upward above nav bar */}
+              <Menu
+                anchorEl={mobileActionsAnchorEl}
+                open={Boolean(mobileActionsAnchorEl)}
+                onClose={handleMobileActionsClose}
+                anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              >
+                <MenuItem onClick={() => { handleSortToggle(); handleMobileActionsClose(); }}>
+                  <ListItemText
+                    primary={sortOrder === 'asc' ? 'Sort Z → A' : 'Sort A → Z'}
+                    secondary={sortOrder === 'asc' ? 'Currently A → Z' : 'Currently Z → A'}
+                  />
+                </MenuItem>
+                {availableFolderOptions.length > 1 && [
+                  <Divider key="folder-divider" style={{ margin: '4px 0' }} />,
+                  <MenuItem key="folder-all" selected={!selectedSubFolder} onClick={() => { handleSubFolderSelect(null); handleMobileActionsClose(); }}>
+                    <ListItemText primary="All folders" secondary="Show every channel" />
+                  </MenuItem>,
+                  ...availableFolderOptions.map((folder) => (
+                    <MenuItem
+                      key={folder}
+                      selected={selectedSubFolder === folder}
+                      onClick={() => { handleSubFolderSelect(folder); handleMobileActionsClose(); }}
+                    >
+                      <ListItemText primary={formatSubFolderLabel(folder)} />
+                    </MenuItem>
+                  )),
+                ]}
+              </Menu>
+            </div>
+          )}
+
+          {/* ── Desktop toolbar ── */}
+          {!isMobile && (
           <div
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {!isMobile && (
-                <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden' }}>
-                  <button
-                    type="button"
-                    onClick={() => handleViewChange(null as any, 'list')}
-                    aria-label="List view"
-                    style={{ background: viewMode === 'list' ? 'var(--primary)' : 'transparent', color: viewMode === 'list' ? 'white' : 'inherit', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: '4px 8px' }}
-                  >
-                    <ViewListIcon size={18} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleViewChange(null as any, 'grid')}
-                    aria-label="Grid view"
-                    style={{ background: viewMode === 'grid' ? 'var(--primary)' : 'transparent', color: viewMode === 'grid' ? 'white' : 'inherit', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: '4px 8px' }}
-                  >
-                    <TableChartIcon size={18} />
-                  </button>
-                </div>
-              )}
+              <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+                <button
+                  type="button"
+                  onClick={() => handleViewChange(null as any, 'list')}
+                  aria-label="List view"
+                  style={{ background: viewMode === 'list' ? 'var(--primary)' : 'transparent', color: viewMode === 'list' ? 'var(--primary-foreground)' : 'inherit', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: '4px 8px' }}
+                >
+                  <ViewListIcon size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleViewChange(null as any, 'grid')}
+                  aria-label="Grid view"
+                  style={{ background: viewMode === 'grid' ? 'var(--primary)' : 'transparent', color: viewMode === 'grid' ? 'var(--primary-foreground)' : 'inherit', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: '4px 8px' }}
+                >
+                  <TableChartIcon size={18} />
+                </button>
+              </div>
 
               <Tooltip title={`Sort alphabetically (${sortOrder === 'asc' ? 'A → Z' : 'Z → A'})`}>
                 <button aria-label={`Sort alphabetically (${sortOrder === 'asc' ? 'A → Z' : 'Z → A'})`} className="icon-btn" type="button" onClick={handleSortToggle} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', padding: 4, borderRadius: 4 }}>
@@ -467,6 +555,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
               {(folderControlActive && filterValue) ? `Total matching channels: ${total}` : `Total channels: ${total}`}
             </Typography>
           </div>
+          )}
 
           <Divider style={{ marginBottom: 16 }} />
 
@@ -480,7 +569,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
                 <Typography color="text.secondary">No channels found. Try adjusting your filter.</Typography>
               </div>
             ) : (
-              <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 16 }}>
+              <div style={{ flex: 1, overflowY: 'auto', paddingBottom: useInfiniteScroll ? 16 : 0 }}>
                 {viewMode === 'list' ? (
                   <List disablePadding>
                     {showDesktopListColumns && (

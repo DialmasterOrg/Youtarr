@@ -208,7 +208,7 @@ export function Settings({ token }: SettingsProps) {
             />
           }
         />
-        <Route path="appearance" element={<AppearanceSettingsSection />} />
+        <Route path="appearance" element={<AppearanceSettingsSection onMobileTooltipClick={setMobileTooltip} />} />
         <Route
           path="plex"
           element={
@@ -334,7 +334,6 @@ export function Settings({ token }: SettingsProps) {
 
       <Snackbar
         open={mobileTooltip !== null}
-        autoHideDuration={8000}
         onClose={() => setMobileTooltip(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >

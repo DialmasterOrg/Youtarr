@@ -378,7 +378,6 @@ function Configuration({ token, sectionGroup }: ConfigurationProps) {
 
       <Snackbar
         open={mobileTooltip !== null}
-        autoHideDuration={8000}
         onClose={() => setMobileTooltip(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >

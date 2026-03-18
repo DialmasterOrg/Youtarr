@@ -21,9 +21,6 @@ export interface TooltipProps {
   onClose?: () => void;
 }
 
-/** Duration in ms the tap-triggered tooltip stays visible before auto-hiding */
-const TAP_TOOLTIP_DURATION = 2500;
-
 const Tooltip: React.FC<TooltipProps> = ({
   title,
   children,
@@ -40,7 +37,42 @@ const Tooltip: React.FC<TooltipProps> = ({
 }) => {
   // Touch-open state for mobile tap support
   const [touchOpen, setTouchOpen] = React.useState(false);
-  const touchTimerRef = React.useRef<ReturnType<typeof setTimeout>>();
+  const triggerRef = React.useRef<HTMLElement | null>(null);
+  const [coarsePointer, setCoarsePointer] = React.useState(false);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia('(pointer: coarse)');
+    const update = () => setCoarsePointer(mediaQuery.matches);
+    update();
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', update);
+      return () => mediaQuery.removeEventListener('change', update);
+    }
+
+    mediaQuery.addListener(update);
+    return () => mediaQuery.removeListener(update);
+  }, []);
+
+  React.useEffect(() => {
+    if (!touchOpen || typeof document === 'undefined') {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!triggerRef.current?.contains(event.target as Node)) {
+        setTouchOpen(false);
+        onClose?.();
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    return () => document.removeEventListener('pointerdown', handlePointerDown, true);
+  }, [touchOpen, onClose]);
 
   // No title → just render children
   if (!title) return children;
@@ -79,35 +111,24 @@ const Tooltip: React.FC<TooltipProps> = ({
     );
   }
 
-  // Touch handler: open on tap, auto-close after TAP_TOOLTIP_DURATION ms
-  const handleTouchStart = disableTouchListener
-    ? undefined
-    : (e: React.TouchEvent) => {
-        e.stopPropagation();
-        clearTimeout(touchTimerRef.current);
-        setTouchOpen(true);
-        touchTimerRef.current = setTimeout(() => {
-          setTouchOpen(false);
-          onClose?.();
-        }, TAP_TOOLTIP_DURATION);
-      };
-
-  const handleTouchEnd = disableTouchListener
-    ? undefined
-    : (e: React.TouchEvent) => {
-        // Don't close immediately — let the timer handle it so the user sees the tooltip
-        e.stopPropagation();
-      };
-
-  const childWithTouch = handleTouchStart
+  const childWithTouch = !disableTouchListener && coarsePointer
     ? React.cloneElement(children, {
+        ref: (node: HTMLElement | null) => {
+          triggerRef.current = node;
+          const childRef = (children as any).ref;
+          if (typeof childRef === 'function') {
+            childRef(node);
+          } else if (childRef && typeof childRef === 'object') {
+            childRef.current = node;
+          }
+        },
         onTouchStart: (e: React.TouchEvent) => {
-          handleTouchStart(e);
+          setTouchOpen(true);
           (children.props as any).onTouchStart?.(e);
         },
-        onTouchEnd: (e: React.TouchEvent) => {
-          handleTouchEnd?.(e);
-          (children.props as any).onTouchEnd?.(e);
+        onClick: (e: React.MouseEvent) => {
+          setTouchOpen(true);
+          (children.props as any).onClick?.(e);
         },
       })
     : children;
@@ -115,11 +136,10 @@ const Tooltip: React.FC<TooltipProps> = ({
   return (
     <TooltipProvider>
       <TooltipPrimitive.Root
-        open={touchOpen || undefined}
+        open={coarsePointer ? touchOpen : undefined}
         onOpenChange={(o) => {
           if (!o) {
             setTouchOpen(false);
-            clearTimeout(touchTimerRef.current);
           }
         }}
         delayDuration={disableHoverListener ? 999999 : enterDelay}

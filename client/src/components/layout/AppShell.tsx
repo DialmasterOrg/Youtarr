@@ -196,6 +196,10 @@ export function AppShell({
                 marginRight: 0,
                 marginLeft: 0,
                 padding: 'var(--layout-main-padding)',
+                // On mobile, override bottom padding to clear the fixed bottom nav bar
+                paddingBottom: isMobile
+                  ? 'calc(var(--mobile-nav-total-offset, 0px) + 16px)'
+                  : undefined,
                 position: 'relative',
                 zIndex: 1,
                 transition: 'all 300ms cubic-bezier(0.4, 0, 0.2, 1)',

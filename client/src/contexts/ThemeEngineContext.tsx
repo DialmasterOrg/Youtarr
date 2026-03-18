@@ -5,14 +5,20 @@ interface ThemeEngineState {
   themeMode: ThemeMode;
   colorMode: 'light' | 'dark';
   motionEnabled: boolean;
+  showHeaderLogo: boolean;
+  showHeaderWordmark: boolean;
   setThemeMode: (mode: ThemeMode) => void;
   setColorMode: (mode: 'light' | 'dark') => void;
   setMotionEnabled: (enabled: boolean) => void;
+  setShowHeaderLogo: (enabled: boolean) => void;
+  setShowHeaderWordmark: (enabled: boolean) => void;
 }
 
 const THEME_STORAGE_KEY = 'uiThemeMode';
 const COLOR_MODE_STORAGE_KEY = 'uiColorMode';
 const MOTION_STORAGE_KEY = 'uiMotionEnabled';
+const HEADER_LOGO_STORAGE_KEY = 'uiHeaderLogoVisible';
+const HEADER_WORDMARK_STORAGE_KEY = 'uiHeaderWordmarkVisible';
 
 const ThemeEngineContext = createContext<ThemeEngineState | undefined>(undefined);
 
@@ -20,9 +26,13 @@ const FALLBACK_THEME_ENGINE: ThemeEngineState = {
   themeMode: 'playful',
   colorMode: 'light',
   motionEnabled: false,
+  showHeaderLogo: false,
+  showHeaderWordmark: true,
   setThemeMode: () => {},
   setColorMode: () => {},
   setMotionEnabled: () => {},
+  setShowHeaderLogo: () => {},
+  setShowHeaderWordmark: () => {},
 };
 
 export function ThemeEngineProvider({ children }: { children: React.ReactNode }) {
@@ -45,6 +55,17 @@ export function ThemeEngineProvider({ children }: { children: React.ReactNode })
     if (typeof window === 'undefined') return 'light';
     const stored = localStorage.getItem(COLOR_MODE_STORAGE_KEY);
     return stored === 'dark' ? 'dark' : 'light';
+  });
+
+  const [showHeaderLogo, setShowHeaderLogo] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(HEADER_LOGO_STORAGE_KEY) === 'true';
+  });
+
+  const [showHeaderWordmark, setShowHeaderWordmark] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const stored = localStorage.getItem(HEADER_WORDMARK_STORAGE_KEY);
+    return stored === null ? true : stored === 'true';
   });
 
   useEffect(() => {
@@ -105,6 +126,16 @@ export function ThemeEngineProvider({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    localStorage.setItem(HEADER_LOGO_STORAGE_KEY, String(showHeaderLogo));
+  }, [showHeaderLogo]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(HEADER_WORDMARK_STORAGE_KEY, String(showHeaderWordmark));
+  }, [showHeaderWordmark]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
 
     const selector = '[data-chip], .sticker, .wiggle-card';
     const tiltOptions = [-2, 2];
@@ -147,11 +178,15 @@ export function ThemeEngineProvider({ children }: { children: React.ReactNode })
       themeMode,
       colorMode,
       motionEnabled,
+      showHeaderLogo,
+      showHeaderWordmark,
       setThemeMode,
       setColorMode,
       setMotionEnabled,
+      setShowHeaderLogo,
+      setShowHeaderWordmark,
     }),
-    [themeMode, colorMode, motionEnabled]
+    [themeMode, colorMode, motionEnabled, showHeaderLogo, showHeaderWordmark]
   );
 
   return <ThemeEngineContext.Provider value={value}>{children}</ThemeEngineContext.Provider>;

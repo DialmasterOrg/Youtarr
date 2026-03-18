@@ -29,7 +29,7 @@ const buttonVariants = cva(
         ],
         text: [
           'bg-transparent text-primary border-0',
-          'hover:bg-muted active:opacity-80',
+          'hover:bg-muted hover:text-foreground active:opacity-80',
         ],
         secondary: [
           'bg-secondary text-secondary-foreground border-0',
@@ -37,7 +37,7 @@ const buttonVariants = cva(
         ],
         ghost: [
           'bg-transparent text-foreground border-0',
-          'hover:bg-muted active:opacity-80',
+          'hover:bg-muted hover:text-foreground active:opacity-80',
         ],
         destructive: [
           'bg-destructive text-destructive-foreground border-0',

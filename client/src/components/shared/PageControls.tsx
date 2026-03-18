@@ -1,4 +1,5 @@
 import React from 'react';
+import { cn } from '../../lib/cn';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from '../../lib/icons';
 
 interface PageControlsProps {
@@ -23,39 +24,20 @@ function PageControls({
   const start = Math.max(1, Math.min(page - 3, totalPages - 6));
   const visiblePages = Array.from({ length: Math.min(7, totalPages) }, (_, i) => start + i).filter((p) => p <= totalPages);
 
-  const navButtonStyle: React.CSSProperties = {
-    width: compact ? 30 : 34,
-    height: compact ? 30 : 34,
-    cursor: 'pointer',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--radius-ui)',
-    background: 'var(--card)',
-    color: 'inherit',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'all 160ms ease',
-  };
+  const navBtnClass = cn(
+    'inline-flex items-center justify-center border border-border rounded-[var(--radius-ui)] bg-card text-foreground',
+    'transition-all duration-[160ms] hover:bg-muted hover:text-foreground',
+    'disabled:opacity-45 disabled:cursor-not-allowed',
+    compact ? 'w-[30px] h-[30px]' : 'w-[34px] h-[34px]'
+  );
 
   return (
-    <nav role="navigation" aria-label="pagination" className={className} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-      <button
-        aria-label="go to first page"
-        type="button"
-        onClick={() => onPageChange(1)}
-        disabled={page <= 1}
-        style={{ ...navButtonStyle, opacity: page <= 1 ? 0.45 : 1, cursor: page <= 1 ? 'not-allowed' : 'pointer' }}
-      >
+    <nav role="navigation" aria-label="pagination" className={cn('flex justify-center items-center gap-2 flex-wrap', className)}>
+      <button aria-label="go to first page" type="button" onClick={() => onPageChange(1)} disabled={page <= 1} className={navBtnClass}>
         <ChevronsLeft size={16} />
       </button>
 
-      <button
-        aria-label="go to previous page"
-        type="button"
-        onClick={() => onPageChange(Math.max(1, page - 1))}
-        disabled={page <= 1}
-        style={{ ...navButtonStyle, opacity: page <= 1 ? 0.45 : 1, cursor: page <= 1 ? 'not-allowed' : 'pointer' }}
-      >
+      <button aria-label="go to previous page" type="button" onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page <= 1} className={navBtnClass}>
         <ChevronLeft size={16} />
       </button>
 
@@ -65,43 +47,24 @@ function PageControls({
           type="button"
           key={p}
           onClick={() => onPageChange(p)}
-          style={{
-            minWidth: compact ? 30 : 34,
-            height: compact ? 30 : 34,
-            padding: compact ? '0 8px' : '0 10px',
-            cursor: 'pointer',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-ui)',
-            background: p === page ? 'var(--primary)' : 'var(--card)',
-            color: p === page ? 'var(--primary-foreground)' : 'inherit',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: p === page ? 700 : 500,
-            transition: 'all 160ms ease',
-          }}
+          className={cn(
+            'inline-flex items-center justify-center border border-border rounded-[var(--radius-ui)]',
+            'transition-all duration-[160ms] font-medium',
+            compact ? 'min-w-[30px] h-[30px] px-2' : 'min-w-[34px] h-[34px] px-2.5',
+            p === page
+              ? 'bg-primary text-primary-foreground border-primary font-bold hover:opacity-90'
+              : 'bg-card text-foreground hover:bg-muted hover:text-foreground'
+          )}
         >
           {p}
         </button>
       ))}
 
-      <button
-        aria-label="go to next page"
-        type="button"
-        onClick={() => onPageChange(Math.min(totalPages, page + 1))}
-        disabled={page >= totalPages}
-        style={{ ...navButtonStyle, opacity: page >= totalPages ? 0.45 : 1, cursor: page >= totalPages ? 'not-allowed' : 'pointer' }}
-      >
+      <button aria-label="go to next page" type="button" onClick={() => onPageChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className={navBtnClass}>
         <ChevronRight size={16} />
       </button>
 
-      <button
-        aria-label="go to last page"
-        type="button"
-        onClick={() => onPageChange(totalPages)}
-        disabled={page >= totalPages}
-        style={{ ...navButtonStyle, opacity: page >= totalPages ? 0.45 : 1, cursor: page >= totalPages ? 'not-allowed' : 'pointer' }}
-      >
+      <button aria-label="go to last page" type="button" onClick={() => onPageChange(totalPages)} disabled={page >= totalPages} className={navBtnClass}>
         <ChevronsRight size={16} />
       </button>
     </nav>

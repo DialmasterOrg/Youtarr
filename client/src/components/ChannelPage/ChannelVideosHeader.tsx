@@ -477,8 +477,8 @@ function ChannelVideosHeader({
               anchorEl={actionsAnchorEl}
               open={actionsOpen}
               onClose={closeActionsMenu}
-              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
             >
               <MenuItem onClick={() => { onSelectAllDownloaded(); closeActionsMenu(); }} disabled={selectableDeleteCount === 0} style={{ color: 'var(--info)' }}>
                 <ListItemText>Select All (Downloaded)</ListItemText>

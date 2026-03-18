@@ -21,7 +21,18 @@ interface AppearanceSettingsSectionProps {
 export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps> = ({
   onMobileTooltipClick,
 }) => {
-  const { themeMode, setThemeMode, motionEnabled, setMotionEnabled, colorMode, setColorMode } = useThemeEngine();
+  const {
+    themeMode,
+    setThemeMode,
+    motionEnabled,
+    setMotionEnabled,
+    colorMode,
+    setColorMode,
+    showHeaderLogo,
+    setShowHeaderLogo,
+    showHeaderWordmark,
+    setShowHeaderWordmark,
+  } = useThemeEngine();
 
   return (
     <ConfigurationAccordion
@@ -71,6 +82,42 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
           <Typography variant="body2" color="secondary">
             Motion affects transitions, floating animations, and motion accents throughout the interface.
           </Typography>
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <div className="flex items-center">
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={showHeaderWordmark}
+                  onChange={(event) => setShowHeaderWordmark(event.target.checked)}
+                />
+              }
+              label="Show Header Text Image"
+            />
+            <InfoTooltip
+              text="Shows the Youtarr wordmark image in the top bar. This is enabled by default and stored locally for this browser."
+              onMobileClick={onMobileTooltipClick}
+            />
+          </div>
+        </Grid>
+
+        <Grid item xs={12} sm={6}>
+          <div className="flex items-center">
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={showHeaderLogo}
+                  onChange={(event) => setShowHeaderLogo(event.target.checked)}
+                />
+              }
+              label="Show Header Logo"
+            />
+            <InfoTooltip
+              text="Shows the circular Youtarr logo in the top bar next to the wordmark or app title. This is disabled by default and stored locally for this browser."
+              onMobileClick={onMobileTooltipClick}
+            />
+          </div>
         </Grid>
 
         {/* Visual Style Selection */}

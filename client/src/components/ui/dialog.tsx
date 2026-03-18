@@ -16,7 +16,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      'fixed inset-0 z-50 bg-black/50 backdrop-blur-sm',
+      'fixed inset-0 z-[1450] bg-black/50 backdrop-blur-sm',
       'data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-in',
       className
     )}
@@ -91,7 +91,7 @@ const Dialog: React.FC<DialogProps> = ({
         <DialogPrimitive.Content
           aria-describedby={contentProps['aria-describedby'] ?? undefined}
           className={cn(
-            'fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
+            'fixed z-[1460] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
             'bg-card text-foreground',
             'rounded-[var(--radius-ui)]',
             'border-[length:var(--border-weight)] border-[var(--border-strong)]',

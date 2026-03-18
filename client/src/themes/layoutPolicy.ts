@@ -80,8 +80,8 @@ const MOBILE_FALLBACK_LAYOUT_POLICY: ThemeLayoutPolicy = {
   headerVersionPlacement: 'mobile',
   headerToggleMode: 'menu',
   headerToggleRadius: 'var(--radius-ui)',
-  mainPadding: 'calc(64px + var(--shell-gap) * 2) var(--shell-gap) var(--shell-gap)',
-  contentPadding: '12px 8px',
+  mainPadding: 'calc(64px + var(--shell-gap) * 2) 4px var(--shell-gap)',
+  contentPadding: '8px 4px',
 };
 
 const FALLBACK_LAYOUT_POLICIES: Record<ThemeBreakpoint, ThemeLayoutPolicy> = {
