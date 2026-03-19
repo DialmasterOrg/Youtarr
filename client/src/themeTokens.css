@@ -63,17 +63,6 @@
   --action-bar-gap: 10px;
 }
 
-/* Playful theme mobile action bar: extend background behind footer nav and round top corners */
-@media (max-width: 767px) {
-  .action-bar--playful {
-    margin-bottom: -24px;
-    padding-bottom: calc(var(--action-bar-padding-y) + 24px);
-    border-radius: 12px 12px 0 0;
-    position: relative;
-    z-index: 1;
-  }
-}
-
 .action-bar--linear,
 .action-bar--flat {
   --action-bar-gap: 6px;
