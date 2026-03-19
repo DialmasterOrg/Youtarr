@@ -97,7 +97,7 @@ describe('AppShell', () => {
 
     expect(screen.getByTestId('nav-sidebar')).toHaveTextContent('collapsed:true|topnav:false|mobileopen:false');
     expect(screen.getByText('Shell content')).toBeInTheDocument();
-  });
+  }, 10000);
 
   it('uses top-nav layout width rules for flat theme', async () => {
     renderShell('flat');

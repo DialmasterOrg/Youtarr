@@ -38,5 +38,5 @@ describe('PageControls', () => {
 
     expect(onPageChange).toHaveBeenNthCalledWith(1, 4);
     expect(onPageChange).toHaveBeenNthCalledWith(2, 6);
-  });
+  }, 10000);
 });

@@ -497,11 +497,14 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
               zIndex: 1299,
               backgroundColor: isLinear ? '#050506' : 'var(--card)',
               borderTop: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : isFlat ? '2px solid var(--border)' : 'var(--nav-border)',
+              borderRadius: isPlayful ? 'var(--radius-ui) var(--radius-ui) 0 0' : 'none',
               padding: '8px 10px',
               display: 'flex',
               gap: 8,
               overflowX: 'auto',
               scrollbarWidth: 'none',
+              marginBottom: isPlayful ? '-32px' : '0',
+              paddingBottom: isPlayful ? 'calc(8px + 32px)' : '8px',
             }}
           >
             {activeItemWithSubItems.subItems.map((subItem: any) => {

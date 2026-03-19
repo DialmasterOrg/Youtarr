@@ -467,7 +467,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                   src={youtarrWordmark}
                   alt={appName}
                   style={{
-                    height: showLandscapeNavItems ? 26 : 31,
+                    height: showLandscapeNavItems ? 35 : 40,
                     maxWidth: 'min(234px, 58.5vw)',
                     width: 'auto',
                     objectFit: 'contain',

@@ -157,7 +157,7 @@ describe('NavHeader shared update indicator', () => {
     const wordmark = screen.getByRole('img', { name: 'Youtarr' });
 
     expect(wordmark).toHaveStyle({
-      height: '31px',
+      height: '40px',
       maxWidth: 'min(234px, 58.5vw)',
     });
   });
