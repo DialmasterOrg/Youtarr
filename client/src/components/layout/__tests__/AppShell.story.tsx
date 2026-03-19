@@ -33,7 +33,7 @@ type Story = StoryObj<typeof AppShell>;
 function makeStory(themeMode: 'playful' | 'linear' | 'flat', layoutBreakpoint: 'mobile' | 'desktop'): Story {
   const expectedNavPlacement = themeMode === 'playful' ? 'sidebar' : 'top';
   const expectedContentPadding = themeMode === 'playful'
-    ? layoutBreakpoint === 'mobile' ? '8px 3px' : '10px 8px'
+    ? layoutBreakpoint === 'mobile' ? '8px 3px' : '5px 4px'
     : layoutBreakpoint === 'mobile' ? '8px 4px' : '12px 16px';
 
   return {

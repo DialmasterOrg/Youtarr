@@ -46,7 +46,7 @@ import { RATING_OPTIONS } from '../utils/ratings';
 import DownloadFormatIndicator from './shared/DownloadFormatIndicator';
 import { useConfig } from '../hooks/useConfig';
 import PageControls from './shared/PageControls';
-import { SHARED_STATUS_CHIP_SMALL_STYLE } from './shared/chipStyles';
+import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from './shared/chipStyles';
 import { ActionBar } from './shared/ActionBar';
 import { useThemeEngine } from '../contexts/ThemeEngineContext';
 
@@ -92,16 +92,14 @@ function VideosPage({ token }: VideosPageProps) {
 
   const videoAvailabilityChipStyle = {
     available: {
-      ...SHARED_STATUS_CHIP_SMALL_STYLE,
+      ...SHARED_THEMED_CHIP_SMALL_STYLE,
       backgroundColor: 'var(--success)',
       color: 'var(--success-foreground)',
-      border: '1px solid var(--success)',
     } as React.CSSProperties,
     missing: {
-      ...SHARED_STATUS_CHIP_SMALL_STYLE,
+      ...SHARED_THEMED_CHIP_SMALL_STYLE,
       backgroundColor: 'var(--destructive)',
       color: 'var(--destructive-foreground)',
-      border: '1px solid var(--destructive)',
     } as React.CSSProperties,
   };
 

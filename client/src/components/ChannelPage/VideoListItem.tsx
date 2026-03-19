@@ -17,7 +17,7 @@ import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 
 import RatingBadge from '../shared/RatingBadge';
-import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../shared/chipStyles';
+import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 interface VideoListItemProps {
   video: ChannelVideo;
   checkedBoxes: string[];
@@ -334,7 +334,7 @@ function VideoListItem({
               variant={getStatusChipVariant(status)}
               style={{
                 flex: '0 0 auto',
-                ...SHARED_STATUS_CHIP_SMALL_STYLE,
+                ...SHARED_THEMED_CHIP_SMALL_STYLE,
                 ...getStatusChipStyle(status),
               }}
             />

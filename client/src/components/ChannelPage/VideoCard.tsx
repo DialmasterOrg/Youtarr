@@ -16,7 +16,7 @@ import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMedia
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
-import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../shared/chipStyles';
+import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 
 interface VideoCardProps {
   video: ChannelVideo;
@@ -355,7 +355,7 @@ function VideoCard({
                   style={{
                     flex: '0 0 auto',
                     minWidth: 'fit-content',
-                    ...SHARED_STATUS_CHIP_SMALL_STYLE,
+                    ...SHARED_THEMED_CHIP_SMALL_STYLE,
                     ...getStatusChipStyle(status),
                   }}
                 />

@@ -12,7 +12,7 @@ import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMedia
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
-import { SHARED_STATUS_CHIP_SMALL_STYLE } from '../shared/chipStyles';
+import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
@@ -304,7 +304,7 @@ function VideoTableView({
                       size="small"
                       color={getStatusColor(status)}
                       variant={getStatusChipVariant(status)}
-                      style={{ ...SHARED_STATUS_CHIP_SMALL_STYLE, ...getStatusChipStyle(status) }}
+                      style={{ ...SHARED_THEMED_CHIP_SMALL_STYLE, ...getStatusChipStyle(status) }}
                     />
                   </div>
                 </td>

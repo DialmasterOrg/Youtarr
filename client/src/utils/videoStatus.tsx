@@ -83,32 +83,27 @@ export const getStatusChipStyle = (status: VideoStatus): React.CSSProperties => 
       return {
         backgroundColor: 'var(--success)',
         color: 'var(--success-foreground)',
-        border: '1px solid var(--success)',
       };
     case 'missing':
       return {
         backgroundColor: 'var(--destructive)',
         color: 'var(--destructive-foreground)',
-        border: '1px solid var(--destructive)',
       };
     case 'never_downloaded':
       return {
         backgroundColor: 'transparent',
         color: 'var(--warning)',
-        border: '1px solid var(--warning)',
       };
     case 'ignored':
       return {
         backgroundColor: 'transparent',
         color: 'var(--muted-foreground)',
-        border: '1px solid var(--border)',
       };
     case 'members_only':
     default:
       return {
         backgroundColor: 'transparent',
         color: 'var(--muted-foreground)',
-        border: '1px solid var(--border)',
       };
   }
 };

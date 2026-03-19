@@ -127,7 +127,7 @@ describe('AppShell', () => {
     expect(getLayoutRoot().style.getPropertyValue('--layout-main-padding')).toBe(
       'calc(80px + var(--shell-gap)) var(--shell-gap) var(--shell-gap) calc(var(--nav-width) + var(--shell-gap) * 2)'
     );
-    expect(getLayoutRoot().style.getPropertyValue('--layout-content-padding')).toBe('10px 8px');
+    expect(getLayoutRoot().style.getPropertyValue('--layout-content-padding')).toBe('5px 4px');
   });
 
   it('uses tighter mobile frame padding for playful theme content', () => {

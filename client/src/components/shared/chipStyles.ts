@@ -26,3 +26,23 @@ export const SHARED_STATUS_CHIP_SMALL_STYLE: React.CSSProperties = {
   height: 24,
   fontSize: '0.75rem',
 };
+
+export const SHARED_THEMED_CHIP_STYLE: React.CSSProperties = {
+  ...SHARED_STATUS_CHIP_STYLE,
+  border: 'var(--rating-chip-border)',
+  boxShadow: 'var(--rating-chip-shadow)',
+};
+
+export const SHARED_THEMED_CHIP_SMALL_STYLE: React.CSSProperties = {
+  ...SHARED_THEMED_CHIP_STYLE,
+  height: 24,
+  fontSize: '0.75rem',
+};
+
+export const SHARED_RATING_CHIP_STYLE: React.CSSProperties = {
+  ...SHARED_THEMED_CHIP_STYLE,
+};
+
+export const SHARED_RATING_CHIP_SMALL_STYLE: React.CSSProperties = {
+  ...SHARED_THEMED_CHIP_SMALL_STYLE,
+};

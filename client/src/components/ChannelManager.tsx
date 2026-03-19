@@ -365,7 +365,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
 
   return (
     <>
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: 'auto', minHeight: 0 }}>
         <CardHeader
           title="Channels"
           action={

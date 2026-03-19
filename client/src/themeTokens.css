@@ -7,8 +7,11 @@
   /* Chip & rating shadows (tokenizable per-theme) */
   --chip-shadow: none;
   --chip-shadow-hover: var(--chip-shadow-hover, var(--shadow-hard-hover));
-  --rating-chip-shadow: none;
+  --rating-chip-border: var(--channel-meta-chip-border);
+  --rating-chip-shadow: var(--channel-meta-chip-shadow);
   --rating-chip-shadow-hover: var(--rating-chip-shadow-hover, var(--shadow-hard-hover));
+  --rating-chip-unrated-background: var(--channel-meta-chip-background);
+  --rating-chip-unrated-foreground: var(--channel-meta-chip-foreground);
 
   /* Max widths for status/rating chips to prevent overflow; per-theme overrides encouraged */
   --status-chip-max-width: 140px;

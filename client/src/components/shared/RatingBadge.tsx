@@ -1,7 +1,7 @@
 import React from 'react';
 import { Chip, Tooltip, Box, Typography } from '../ui';
 import { EighteenUpRating as EighteenUpRatingIcon } from '../../lib/icons';
-import { SHARED_STATUS_CHIP_STYLE, SHARED_STATUS_CHIP_SMALL_STYLE } from './chipStyles';
+import { SHARED_RATING_CHIP_SMALL_STYLE, SHARED_RATING_CHIP_STYLE } from './chipStyles';
 
 interface RatingBadgeProps {
   rating: string | null | undefined;
@@ -43,12 +43,14 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
         variant="outlined"
         style={{
           ...(size === 'small'
-            ? SHARED_STATUS_CHIP_SMALL_STYLE
+            ? SHARED_RATING_CHIP_SMALL_STYLE
             : {
-              ...SHARED_STATUS_CHIP_STYLE,
+              ...SHARED_RATING_CHIP_STYLE,
               height: 24,
               fontSize: '0.8rem',
             }),
+          backgroundColor: 'var(--rating-chip-unrated-background)',
+          color: 'var(--rating-chip-unrated-foreground)',
           ...style,
         }}
         className={`text-muted-foreground/50 border-muted-foreground/50 ${className || ''}`.trim()}
@@ -111,27 +113,22 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
     success: {
       backgroundColor: 'var(--success)',
       color: 'var(--success-foreground)',
-      borderColor: 'var(--success)',
     },
     warning: {
       backgroundColor: 'var(--warning)',
       color: 'var(--warning-foreground)',
-      borderColor: 'var(--warning)',
     },
     error: {
       backgroundColor: 'var(--destructive)',
       color: 'var(--destructive-foreground)',
-      borderColor: 'var(--destructive)',
     },
     secondary: {
       backgroundColor: 'var(--secondary)',
       color: 'var(--secondary-foreground)',
-      borderColor: 'var(--secondary)',
     },
     default: {
       backgroundColor: 'var(--muted)',
       color: 'var(--muted-foreground)',
-      borderColor: 'var(--border)',
     },
   };
 
@@ -145,7 +142,7 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
         icon={<EighteenUpRatingIcon size={size === 'small' ? 12 : 16} data-testid="EighteenUpRatingIcon" />}
         className={className}
         style={{
-          ...(size === 'small' ? SHARED_STATUS_CHIP_SMALL_STYLE : SHARED_STATUS_CHIP_STYLE),
+          ...(size === 'small' ? SHARED_RATING_CHIP_SMALL_STYLE : SHARED_RATING_CHIP_STYLE),
           ...(chipStyleByColor[chipColor] || chipStyleByColor.default),
           ...style,
         }}
