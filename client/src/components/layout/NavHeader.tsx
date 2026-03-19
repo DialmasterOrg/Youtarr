@@ -15,7 +15,7 @@ import {
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
 } from '../../lib/icons';
-import { getThemeLayoutCssVars, ThemeLayoutPolicy } from '../../themes';
+import { getThemeById, getThemeLayoutCssVars, ThemeLayoutPolicy } from '../../themes';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { StorageHeaderWidget } from './StorageHeaderWidget';
@@ -59,7 +59,8 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   const location = useLocation();
   const navigate = useNavigate();
   const layoutCssVars = getThemeLayoutCssVars(layoutPolicy);
-  const { showHeaderLogo, showHeaderWordmark } = useThemeEngine();
+  const { themeMode, showHeaderLogo, showHeaderWordmark } = useThemeEngine();
+  const currentTheme = getThemeById(themeMode);
 
   const isMobile = layoutPolicy.breakpoint === 'mobile';
   const isLandscape = useMediaQuery('(orientation: landscape)');
@@ -145,12 +146,13 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
     };
   };
 
-  const isPlayful = layoutPolicy.headerUpdateIndicatorMode === 'playful';
   const headerHorizontalGutter = NAV_DRAWER_SECTION_BUTTON_GUTTER;
-  // On mobile playful theme, match the content window padding (3px left/right)
-  const headerHorizontalPadding = isMobile && isPlayful ? 3 : headerHorizontalGutter;
-  // On mobile playful, position outer edge at 4px to align with main's padding (mainPadding: '... 4px ...')
-  const headerInsetOffset = isMobile && isPlayful ? '4px' : 'var(--shell-gap)';
+  const headerHorizontalPadding = isMobile
+    ? currentTheme.headerBehavior.mobileHorizontalPadding
+    : `${headerHorizontalGutter}px`;
+  const headerInsetOffset = isMobile
+    ? currentTheme.headerBehavior.mobileInsetOffset
+    : 'var(--shell-gap)';
 
   const menuPaperStyle: React.CSSProperties = {
     overflowX: 'hidden',

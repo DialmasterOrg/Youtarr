@@ -53,6 +53,45 @@ export interface ThemeLayoutContract {
   desktop: ThemeLayoutPolicyInput;
 }
 
+export interface ThemeHeaderPreferences {
+  showLogoDefault: boolean;
+  showWordmarkDefault: boolean;
+}
+
+export interface ThemeHeaderBehavior {
+  mobileHorizontalPadding: string;
+  mobileInsetOffset: string;
+}
+
+export interface ThemeSidebarBehavior {
+  compactHeightScrollFooter: boolean;
+  zeroDesktopPanelPadding: boolean;
+  navButtonGap: string;
+  scrollerPaddingBottom: string;
+  listPaddingBottom: string;
+  itemPaddingBottom: string;
+  hideStorageFooterOnMobile: boolean;
+  mobileDrawerDocked: boolean;
+  mobileDrawerBorderRadius: string;
+  mobileDrawerMarginTop: string;
+  mobileDrawerMarginBottom: string;
+  mobileDrawerMaxHeight: string;
+  mobileDrawerWidth: string;
+  mobileDrawerTop: string;
+  mobileDrawerLeft?: string;
+  mobileDrawerRight?: string;
+  mobileDrawerBottom: string;
+}
+
+export interface ThemeBackgroundDecorationElement {
+  className?: string;
+  style?: React.CSSProperties;
+}
+
+export interface ThemeBackgroundDecorations {
+  elements: ThemeBackgroundDecorationElement[];
+}
+
 export const REQUIRED_THEME_TOKEN_KEYS = [
   'overlay-backdrop-background',
   'overlay-backdrop-background-strong',
@@ -115,6 +154,11 @@ export const REQUIRED_THEME_TOKEN_KEYS = [
   'mobile-primary-nav-label-font-size',
   'mobile-primary-nav-label-text-transform',
   'mobile-primary-nav-label-letter-spacing',
+  'channel-meta-chip-background',
+  'channel-meta-chip-foreground',
+  'channel-meta-chip-border',
+  'channel-meta-chip-shadow',
+  'channel-meta-chip-icon',
 ] as const;
 
 export type RequiredThemeTokenKey = (typeof REQUIRED_THEME_TOKEN_KEYS)[number];
@@ -133,6 +177,10 @@ export interface ThemeDefinition {
   description: string;
   layoutMode: 'sidebar' | 'top-nav';
   layout: ThemeLayoutContract;
+  headerPreferences: ThemeHeaderPreferences;
+  headerBehavior: ThemeHeaderBehavior;
+  sidebarBehavior: ThemeSidebarBehavior;
+  backgroundDecorations: ThemeBackgroundDecorations;
   tokens: {
     light: ThemeTokens;
     dark: ThemeTokens;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Chip } from '../../../../components/ui';
 import { Settings as SettingsIcon, Video as VideoIcon } from '../../../../lib/icons';
-import { SHARED_CHANNEL_META_CHIP_STYLE } from '../../../shared/chipStyles';
+import { SHARED_CHANNEL_META_CHIP_STYLE, SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE } from '../../../shared/chipStyles';
 
 interface QualityChipProps {
   videoQuality: string | null | undefined;
@@ -23,7 +23,10 @@ const QualityChip: React.FC<QualityChipProps> = ({ videoQuality, globalPreferred
       icon={icon}
       data-testid="quality-chip"
       data-override={isOverride ? 'true' : 'false'}
-      style={SHARED_CHANNEL_META_CHIP_STYLE}
+      style={{
+        ...SHARED_CHANNEL_META_CHIP_STYLE,
+        ...(isOverride ? undefined : SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE),
+      }}
     />
   );
 };

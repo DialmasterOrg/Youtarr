@@ -1,6 +1,6 @@
 import React from 'react';
 import { Chip } from '../../../../components/ui';
-import { SHARED_CHIP_RADIUS } from '../../../shared/chipStyles';
+import { SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE, SHARED_CHIP_RADIUS } from '../../../shared/chipStyles';
 
 interface AutoDownloadChipsProps {
   availableTabs: string | null | undefined;
@@ -59,7 +59,8 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
             lineHeight: '14px',
             minWidth: isMobile ? 56 : 64,
             borderRadius: SHARED_CHIP_RADIUS,
-            opacity: isAutoDownloadEnabled ? 1 : 0.55,
+            ...(isAutoDownloadEnabled ? undefined : SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE),
+            opacity: isAutoDownloadEnabled ? 1 : 0.8,
           }}
         />
       );

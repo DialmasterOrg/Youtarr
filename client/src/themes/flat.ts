@@ -1,11 +1,43 @@
 import React from 'react';
-import { ThemeDefinition } from './types';
+import { ThemeBackgroundDecorations, ThemeDefinition } from './types';
+
+const flatBackgroundDecorations: ThemeBackgroundDecorations = {
+  elements: [],
+};
 
 export const flatTheme: ThemeDefinition = {
   id: 'flat',
   name: 'Bold Flat',
   description: 'Zero depth, bold colors, and geometric precision. No shadows, pure flat design with color as structure.',
   layoutMode: 'top-nav',
+  headerPreferences: {
+    showLogoDefault: false,
+    showWordmarkDefault: true,
+  },
+  headerBehavior: {
+    mobileHorizontalPadding: '4px',
+    mobileInsetOffset: 'var(--shell-gap)',
+  },
+  sidebarBehavior: {
+    compactHeightScrollFooter: false,
+    zeroDesktopPanelPadding: false,
+    navButtonGap: '2px',
+    scrollerPaddingBottom: '0px',
+    listPaddingBottom: '0px',
+    itemPaddingBottom: '0px',
+    hideStorageFooterOnMobile: false,
+    mobileDrawerDocked: true,
+    mobileDrawerBorderRadius: 'var(--radius-ui) var(--radius-ui) 0 0',
+    mobileDrawerMarginTop: 'auto',
+    mobileDrawerMarginBottom: '0px',
+    mobileDrawerMaxHeight: '65vh',
+    mobileDrawerWidth: '100%',
+    mobileDrawerTop: 'auto',
+    mobileDrawerLeft: '0',
+    mobileDrawerRight: '0',
+    mobileDrawerBottom: '0',
+  },
+  backgroundDecorations: flatBackgroundDecorations,
   layout: {
     desktop: {
       navPlacement: 'top',
@@ -259,6 +291,11 @@ export const flatTheme: ThemeDefinition = {
       'mobile-primary-nav-label-font-size': '0.65rem',
       'mobile-primary-nav-label-text-transform': 'none',
       'mobile-primary-nav-label-letter-spacing': 'normal',
+      'channel-meta-chip-background': '#eff6ff',
+      'channel-meta-chip-foreground': '#111827',
+      'channel-meta-chip-border': '2px solid var(--border-strong)',
+      'channel-meta-chip-shadow': 'none',
+      'channel-meta-chip-icon': 'var(--foreground)',
       'nav-item-transform': 'translate(0, 0)',
       'nav-item-transform-hover': 'translate(0, 0)',
       'transition-bouncy': 'ease',
@@ -412,6 +449,11 @@ export const flatTheme: ThemeDefinition = {
       'mobile-primary-nav-label-font-size': '0.65rem',
       'mobile-primary-nav-label-text-transform': 'none',
       'mobile-primary-nav-label-letter-spacing': 'normal',
+      'channel-meta-chip-background': 'rgba(59, 130, 246, 0.16)',
+      'channel-meta-chip-foreground': '#ffffff',
+      'channel-meta-chip-border': '1px solid rgba(255, 255, 255, 0.24)',
+      'channel-meta-chip-shadow': 'none',
+      'channel-meta-chip-icon': 'var(--foreground)',
       'nav-item-transform': 'translate(0, 0)',
       'nav-item-transform-hover': 'translate(0, 0)',
       'transition-bouncy': 'ease',

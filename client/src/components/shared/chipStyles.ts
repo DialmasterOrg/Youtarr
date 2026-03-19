@@ -8,6 +8,13 @@ export const SHARED_CHANNEL_META_CHIP_STYLE: React.CSSProperties = {
   borderRadius: SHARED_CHIP_RADIUS,
 };
 
+export const SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE: React.CSSProperties = {
+  backgroundColor: 'var(--channel-meta-chip-background)',
+  color: 'var(--channel-meta-chip-foreground)',
+  border: 'var(--channel-meta-chip-border)',
+  boxShadow: 'var(--channel-meta-chip-shadow)',
+};
+
 export const SHARED_STATUS_CHIP_STYLE: React.CSSProperties = {
   borderRadius: SHARED_CHIP_RADIUS,
   boxShadow: 'var(--chip-shadow)',

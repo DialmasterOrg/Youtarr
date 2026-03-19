@@ -112,6 +112,13 @@
   --mobile-primary-nav-label-font-size: 0.65rem;
   --mobile-primary-nav-label-text-transform: none;
   --mobile-primary-nav-label-letter-spacing: normal;
+
+  /* Channel meta chip tokens */
+  --channel-meta-chip-background: var(--card);
+  --channel-meta-chip-foreground: var(--foreground);
+  --channel-meta-chip-border: 1px solid var(--border);
+  --channel-meta-chip-shadow: none;
+  --channel-meta-chip-icon: var(--muted-foreground);
 } 
 
 

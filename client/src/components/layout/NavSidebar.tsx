@@ -13,6 +13,7 @@ import {
 } from '../ui';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { StorageFooterWidget } from './StorageFooterWidget';
+import { getThemeById } from '../../themes';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import {
@@ -43,8 +44,6 @@ const NAV_SUB_TEXT_INDENT = 3.5;
 const NAV_SUB_HIGHLIGHT_LEFT_PADDING = 1.25;
 const NAV_SUB_FONT_SIZE = '0.8rem';
 const NAV_SUB_LINE_HEIGHT = 1.2;
-const PLAYFUL_NAV_BUTTON_GAP_LEFT = 4;
-const PLAYFUL_NAV_BUTTON_GAP_RIGHT = 4;
 const NAV_DRAWER_BORDER_RADIUS = 'var(--nav-radius)';
 const NAV_DRAWER_DESKTOP_TOP_OFFSET = 'calc(80px + var(--shell-gap))';
 const NAV_DRAWER_DESKTOP_MAX_HEIGHT = 'calc(100vh - (80px + var(--shell-gap)) - (var(--shell-gap) * 2))';
@@ -79,18 +78,17 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
   const location = useLocation();
   const navigate = useNavigate();
   const { themeMode } = useThemeEngine();
-  const isPlayful = themeMode === 'playful';
-  const isLinearFlat = themeMode === 'linear' || themeMode === 'flat';
+  const sidebarBehavior = getThemeById(themeMode).sidebarBehavior;
   const isCompactHeight = useMediaQuery('(max-height: 500px)');
   const isCompactStorage = false;
-  const footerShouldScroll = isPlayful && isCompactHeight;
+  const footerShouldScroll = sidebarBehavior.compactHeightScrollFooter && isCompactHeight;
   const drawerWidth = isMobile ? EXPANDED_WIDTH : collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
   const isNavCollapsed = !isMobile && collapsed;
   const drawerPanelPaddingX = isNavCollapsed ? NAV_DRAWER_PANEL_PADDING_X_COLLAPSED : NAV_DRAWER_PANEL_PADDING_X;
-  const drawerPanelPaddingLeft = isPlayful ? 0 : drawerPanelPaddingX;
-  const drawerPanelPaddingRight = isPlayful ? 0 : drawerPanelPaddingX;
-  const navButtonGapLeft = isPlayful ? PLAYFUL_NAV_BUTTON_GAP_LEFT : NAV_BUTTON_OUTER_PADDING_X;
-  const navButtonGapRight = isPlayful ? PLAYFUL_NAV_BUTTON_GAP_RIGHT : NAV_BUTTON_OUTER_PADDING_X;
+  const drawerPanelPaddingLeft = sidebarBehavior.zeroDesktopPanelPadding ? 0 : drawerPanelPaddingX;
+  const drawerPanelPaddingRight = sidebarBehavior.zeroDesktopPanelPadding ? 0 : drawerPanelPaddingX;
+  const navButtonGapLeft = sidebarBehavior.navButtonGap;
+  const navButtonGapRight = sidebarBehavior.navButtonGap;
   const iconBoxSize = NAV_ICON_SIZE;
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
@@ -201,7 +199,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
           flex: footerShouldScroll ? '0 0 auto' : '1 1 auto',
           minHeight: 0,
           overflowY: footerShouldScroll ? 'visible' : 'auto',
-          paddingBottom: isPlayful ? 6 : 0,
+          paddingBottom: sidebarBehavior.scrollerPaddingBottom,
         }}
       >
         <List
@@ -209,7 +207,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
             paddingLeft: isCompactStorage ? 10 : 0,
             paddingRight: isCompactStorage ? 10 : 0,
             paddingTop: isCompactStorage ? 8 : 4,
-            paddingBottom: isPlayful ? 4 : 0,
+            paddingBottom: sidebarBehavior.listPaddingBottom,
             gap: `${NAV_MAIN_GAP * 8}px`,
             display: 'flex',
             flexDirection: 'column',
@@ -233,7 +231,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                   paddingLeft: navButtonGapLeft,
                   paddingRight: navButtonGapRight,
                   paddingTop: 0,
-                  paddingBottom: isPlayful ? 2 : 0,
+                  paddingBottom: sidebarBehavior.itemPaddingBottom,
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'stretch',
@@ -458,7 +456,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
               </Typography>
             </Tooltip>
           </div>
-          {!(isMobile && isPlayful) && (
+          {!((isMobile && sidebarBehavior.hideStorageFooterOnMobile)) && (
             <StorageFooterWidget
               token={token}
               collapsed={collapsed}
@@ -469,7 +467,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
           )}
         </div>
       ) : (
-        !(isMobile && isPlayful) && <StorageFooterWidget token={token} collapsed={collapsed} />
+        !(isMobile && sidebarBehavior.hideStorageFooterOnMobile) && <StorageFooterWidget token={token} collapsed={collapsed} />
       )}
 
       <div style={{ height: 8, flexShrink: 0 }} />
@@ -604,8 +602,8 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
   }
 
   // 2. Desktop or Industrial Mobile Drawer
-  const drawerBorderRadius = isMobile && isLinearFlat
-    ? 'var(--radius-ui) var(--radius-ui) 0 0'
+  const drawerBorderRadius = isMobile
+    ? sidebarBehavior.mobileDrawerBorderRadius
     : NAV_DRAWER_BORDER_RADIUS;
 
   const panelStyle: React.CSSProperties = {
@@ -614,22 +612,22 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
     border: 'var(--nav-border)',
     boxShadow: 'var(--nav-shadow)',
     backgroundColor: 'var(--card)',
-    marginTop: isMobile && isLinearFlat ? 'auto' : isMobile ? NAV_DRAWER_MOBILE_TOP_OFFSET : NAV_DRAWER_DESKTOP_TOP_OFFSET,
-    marginBottom: isMobile && isLinearFlat ? 0 : isMobile ? NAV_DRAWER_MOBILE_BOTTOM_GAP : 'var(--shell-gap)',
-  marginLeft: isMobile ? 0 : 'var(--shell-gap)',
+    marginTop: isMobile ? sidebarBehavior.mobileDrawerMarginTop : NAV_DRAWER_DESKTOP_TOP_OFFSET,
+    marginBottom: isMobile ? sidebarBehavior.mobileDrawerMarginBottom : 'var(--shell-gap)',
+    marginLeft: isMobile ? 0 : 'var(--shell-gap)',
     marginRight: isMobile ? 0 : 'var(--shell-gap)',
     paddingLeft: isMobile ? 0 : drawerPanelPaddingLeft,
     paddingRight: isMobile ? 0 : drawerPanelPaddingRight,
-    maxHeight: isMobile && isLinearFlat ? '65vh' : isMobile ? NAV_DRAWER_MOBILE_MAX_HEIGHT : NAV_DRAWER_DESKTOP_MAX_HEIGHT,
+    maxHeight: isMobile ? sidebarBehavior.mobileDrawerMaxHeight : NAV_DRAWER_DESKTOP_MAX_HEIGHT,
     overflow: 'hidden',
     overflowX: 'visible',
-    width: isMobile && isLinearFlat ? '100%' : drawerWidth,
+    width: isMobile ? sidebarBehavior.mobileDrawerWidth : drawerWidth,
     boxSizing: 'border-box',
     transition: 'width 300ms var(--transition-bouncy), padding 300ms var(--transition-bouncy)',
-    top: isMobile && isLinearFlat ? 'auto' : 0,
-    left: isMobile && isLinearFlat ? 0 : undefined,
-    right: isMobile && isLinearFlat ? 0 : undefined,
-    bottom: isMobile && isLinearFlat ? 0 : isMobile ? undefined : 'var(--shell-gap)',
+    top: isMobile ? sidebarBehavior.mobileDrawerTop : 0,
+    left: isMobile ? sidebarBehavior.mobileDrawerLeft : undefined,
+    right: isMobile ? sidebarBehavior.mobileDrawerRight : undefined,
+    bottom: isMobile ? sidebarBehavior.mobileDrawerBottom : 'var(--shell-gap)',
     zIndex: 1200,
   };
 

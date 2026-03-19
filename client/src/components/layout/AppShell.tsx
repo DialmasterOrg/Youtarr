@@ -164,7 +164,7 @@ export function AppShell({
     >
       <CssBaseline />
 
-      <BackgroundDecorations themeMode={themeMode} />
+      <BackgroundDecorations decorations={currentTheme.backgroundDecorations} />
 
       <NavHeader
         appName={appName}

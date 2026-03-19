@@ -96,7 +96,7 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
               label="Show Header Text Image"
             />
             <InfoTooltip
-              text="Shows the Youtarr wordmark image in the top bar. This is enabled by default and stored locally for this browser."
+              text="Shows the Youtarr wordmark image in the top bar. This preference is stored separately for each visual style on this browser."
               onMobileClick={onMobileTooltipClick}
             />
           </div>
@@ -114,7 +114,7 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
               label="Show Header Logo"
             />
             <InfoTooltip
-              text="Shows the circular Youtarr logo in the top bar next to the wordmark or app title. This is disabled by default and stored locally for this browser."
+              text="Shows the circular Youtarr logo in the top bar next to the wordmark or app title. This preference is stored separately for each visual style on this browser."
               onMobileClick={onMobileTooltipClick}
             />
           </div>

@@ -35,6 +35,30 @@ const FALLBACK_THEME_ENGINE: ThemeEngineState = {
   setShowHeaderWordmark: () => {},
 };
 
+const getScopedPreferenceStorageKey = (baseKey: string, mode: ThemeMode) => `${baseKey}:${mode}`;
+
+const readThemeScopedPreference = (
+  mode: ThemeMode,
+  baseKey: string,
+  fallbackValue: boolean
+) => {
+  if (typeof window === 'undefined') {
+    return fallbackValue;
+  }
+
+  const scopedValue = localStorage.getItem(getScopedPreferenceStorageKey(baseKey, mode));
+  if (scopedValue !== null) {
+    return scopedValue === 'true';
+  }
+
+  const legacyValue = localStorage.getItem(baseKey);
+  if (legacyValue !== null) {
+    return legacyValue === 'true';
+  }
+
+  return fallbackValue;
+};
+
 export function ThemeEngineProvider({ children }: { children: React.ReactNode }) {
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     if (typeof window === 'undefined') return 'playful';
@@ -58,15 +82,40 @@ export function ThemeEngineProvider({ children }: { children: React.ReactNode })
   });
 
   const [showHeaderLogo, setShowHeaderLogo] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem(HEADER_LOGO_STORAGE_KEY) === 'true';
+    const initialTheme = getThemeById(themeMode);
+    return readThemeScopedPreference(
+      themeMode,
+      HEADER_LOGO_STORAGE_KEY,
+      initialTheme.headerPreferences.showLogoDefault
+    );
   });
 
   const [showHeaderWordmark, setShowHeaderWordmark] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    const stored = localStorage.getItem(HEADER_WORDMARK_STORAGE_KEY);
-    return stored === null ? true : stored === 'true';
+    const initialTheme = getThemeById(themeMode);
+    return readThemeScopedPreference(
+      themeMode,
+      HEADER_WORDMARK_STORAGE_KEY,
+      initialTheme.headerPreferences.showWordmarkDefault
+    );
   });
+
+  useEffect(() => {
+    const theme = getThemeById(themeMode);
+    setShowHeaderLogo(
+      readThemeScopedPreference(
+        themeMode,
+        HEADER_LOGO_STORAGE_KEY,
+        theme.headerPreferences.showLogoDefault
+      )
+    );
+    setShowHeaderWordmark(
+      readThemeScopedPreference(
+        themeMode,
+        HEADER_WORDMARK_STORAGE_KEY,
+        theme.headerPreferences.showWordmarkDefault
+      )
+    );
+  }, [themeMode]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -126,13 +175,16 @@ export function ThemeEngineProvider({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(HEADER_LOGO_STORAGE_KEY, String(showHeaderLogo));
-  }, [showHeaderLogo]);
+    localStorage.setItem(getScopedPreferenceStorageKey(HEADER_LOGO_STORAGE_KEY, themeMode), String(showHeaderLogo));
+  }, [showHeaderLogo, themeMode]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(HEADER_WORDMARK_STORAGE_KEY, String(showHeaderWordmark));
-  }, [showHeaderWordmark]);
+    localStorage.setItem(
+      getScopedPreferenceStorageKey(HEADER_WORDMARK_STORAGE_KEY, themeMode),
+      String(showHeaderWordmark)
+    );
+  }, [showHeaderWordmark, themeMode]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

@@ -1,11 +1,69 @@
 import React from 'react';
-import { ThemeDefinition } from './types';
+import { ThemeBackgroundDecorations, ThemeDefinition } from './types';
+
+const linearBackgroundDecorations: ThemeBackgroundDecorations = {
+  elements: [
+    { className: 'linear-top-rail' },
+    { className: 'linear-grid' },
+    {
+      className: 'linear-blob',
+      style: {
+        top: '10%',
+        right: '5%',
+        width: '40vw',
+        height: '40vw',
+        background: 'var(--linear-decor-blob-primary)',
+        animationDelay: '0s',
+      },
+    },
+    {
+      className: 'linear-blob',
+      style: {
+        bottom: '10%',
+        left: '5%',
+        width: '35vw',
+        height: '35vw',
+        background: 'var(--linear-decor-blob-secondary)',
+        animationDelay: '-5s',
+        opacity: 0.1,
+      },
+    },
+  ],
+};
 
 export const linearTheme: ThemeDefinition = {
   id: 'linear',
   name: 'Dark Modern',
   description: 'Deep atmosphere, precision depth, and ambient lighting pools.',
   layoutMode: 'top-nav',
+  headerPreferences: {
+    showLogoDefault: false,
+    showWordmarkDefault: true,
+  },
+  headerBehavior: {
+    mobileHorizontalPadding: '4px',
+    mobileInsetOffset: 'var(--shell-gap)',
+  },
+  sidebarBehavior: {
+    compactHeightScrollFooter: false,
+    zeroDesktopPanelPadding: false,
+    navButtonGap: '2px',
+    scrollerPaddingBottom: '0px',
+    listPaddingBottom: '0px',
+    itemPaddingBottom: '0px',
+    hideStorageFooterOnMobile: false,
+    mobileDrawerDocked: true,
+    mobileDrawerBorderRadius: 'var(--radius-ui) var(--radius-ui) 0 0',
+    mobileDrawerMarginTop: 'auto',
+    mobileDrawerMarginBottom: '0px',
+    mobileDrawerMaxHeight: '65vh',
+    mobileDrawerWidth: '100%',
+    mobileDrawerTop: 'auto',
+    mobileDrawerLeft: '0',
+    mobileDrawerRight: '0',
+    mobileDrawerBottom: '0',
+  },
+  backgroundDecorations: linearBackgroundDecorations,
   layout: {
     desktop: {
       navPlacement: 'top',
@@ -280,6 +338,11 @@ export const linearTheme: ThemeDefinition = {
       'mobile-primary-nav-label-font-size': '0.62rem',
       'mobile-primary-nav-label-text-transform': 'uppercase',
       'mobile-primary-nav-label-letter-spacing': '0.08em',
+      'channel-meta-chip-background': 'rgba(255, 255, 255, 0.06)',
+      'channel-meta-chip-foreground': '#f3f4ff',
+      'channel-meta-chip-border': '1px solid rgba(255, 255, 255, 0.16)',
+      'channel-meta-chip-shadow': 'none',
+      'channel-meta-chip-icon': 'var(--muted-foreground)',
       'nav-item-transform': 'translate(0, 0)',
       'nav-item-transform-hover': 'translate(0, 0)',
       'transition-bouncy': 'cubic-bezier(0.4, 0, 0.2, 1)',
@@ -446,6 +509,11 @@ export const linearTheme: ThemeDefinition = {
       'mobile-primary-nav-label-font-size': '0.62rem',
       'mobile-primary-nav-label-text-transform': 'uppercase',
       'mobile-primary-nav-label-letter-spacing': '0.08em',
+      'channel-meta-chip-background': 'rgba(255, 255, 255, 0.06)',
+      'channel-meta-chip-foreground': '#f3f4ff',
+      'channel-meta-chip-border': '1px solid rgba(255, 255, 255, 0.16)',
+      'channel-meta-chip-shadow': 'none',
+      'channel-meta-chip-icon': 'var(--muted-foreground)',
       'nav-item-transform': 'translate(0, 0)',
       'nav-item-transform-hover': 'translate(0, 0)',
       'transition-bouncy': 'cubic-bezier(0.4, 0, 0.2, 1)',

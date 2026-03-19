@@ -11,8 +11,7 @@ import { useConfig } from '../hooks/useConfig';
 import SubFolderChip from './ChannelManager/components/chips/SubFolderChip';
 import QualityChip from './ChannelManager/components/chips/QualityChip';
 import AutoDownloadChips from './ChannelManager/components/chips/AutoDownloadChips';
-import { SHARED_CHANNEL_META_CHIP_STYLE } from './shared/chipStyles';
-import { useThemeEngine } from '../contexts/ThemeEngineContext';
+import { SHARED_CHANNEL_META_CHIP_STYLE, SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE } from './shared/chipStyles';
 
 interface ChannelPageProps {
   token: string | null;
@@ -20,8 +19,6 @@ interface ChannelPageProps {
 
 function ChannelPage({ token }: ChannelPageProps) {
   const isMobile = useMediaQuery('(max-width: 767px)');
-  const { themeMode } = useThemeEngine();
-  const isPlayful = themeMode === 'playful';
   const [channel, setChannel] = useState<Channel | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [regexAnchorEl, setRegexAnchorEl] = useState<HTMLElement | null>(null);
@@ -90,9 +87,9 @@ function ChannelPage({ token }: ChannelPageProps) {
   const chipFontSize = isMobile ? '0.65rem' : '0.75rem';
   const channelChipSx: React.CSSProperties = {
     ...SHARED_CHANNEL_META_CHIP_STYLE,
+    ...SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE,
     height: chipHeight,
     fontSize: chipFontSize,
-    boxShadow: 'none',
     textTransform: 'none',
     paddingLeft: '10px',
     paddingRight: '10px',

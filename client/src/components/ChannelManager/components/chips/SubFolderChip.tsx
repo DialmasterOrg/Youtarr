@@ -2,14 +2,17 @@ import React from 'react';
 import { Chip } from '../../../../components/ui';
 import { Folder as FolderIcon } from '../../../../lib/icons';
 import { isUsingDefaultSubfolder, isExplicitlyNoSubfolder } from '../../../../utils/channelHelpers';
-import { SHARED_CHANNEL_META_CHIP_STYLE } from '../../../shared/chipStyles';
+import { SHARED_CHANNEL_META_CHIP_STYLE, SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE } from '../../../shared/chipStyles';
 
 interface SubFolderChipProps {
   subFolder: string | null | undefined;
 }
 
 const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
-  const chipStyle = SHARED_CHANNEL_META_CHIP_STYLE;
+  const chipStyle = {
+    ...SHARED_CHANNEL_META_CHIP_STYLE,
+    ...SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE,
+  };
 
   // NULL or empty = "root" (backwards compatible, download to root)
   if (isExplicitlyNoSubfolder(subFolder)) {
@@ -20,7 +23,7 @@ const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
         data-root="true"
         size="small"
         color="default"
-        icon={<FolderIcon size={14} style={{ color: 'var(--muted-foreground)' }} data-testid="FolderIcon" />}
+        icon={<FolderIcon size={14} style={{ color: 'var(--channel-meta-chip-icon)' }} data-testid="FolderIcon" />}
         label="root"
         style={chipStyle}
       />
@@ -35,7 +38,7 @@ const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
         data-default="true"
         size="small"
         color="default"
-        icon={<FolderIcon size={14} style={{ color: 'var(--muted-foreground)' }} data-testid="FolderIcon" />}
+        icon={<FolderIcon size={14} style={{ color: 'var(--channel-meta-chip-icon)' }} data-testid="FolderIcon" />}
         label="global default"
         style={chipStyle}
       />
@@ -49,7 +52,7 @@ const SubFolderChip: React.FC<SubFolderChipProps> = ({ subFolder }) => {
       data-default="false"
       size="small"
       color="default"
-      icon={<FolderIcon size={14} style={{ color: 'var(--muted-foreground)' }} data-testid="FolderIcon" />}
+      icon={<FolderIcon size={14} style={{ color: 'var(--channel-meta-chip-icon)' }} data-testid="FolderIcon" />}
       label={`__${subFolder}/`}
       style={chipStyle}
     />
