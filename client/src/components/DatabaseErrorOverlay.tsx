@@ -43,7 +43,7 @@ const DatabaseErrorOverlay: React.FC<DatabaseErrorOverlayProps> = ({
   return (
     <Box
       className="fixed inset-0 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 9999, position: 'fixed', top: 0, left: 0 }}
+      style={{ backgroundColor: 'var(--overlay-backdrop-background-strong)', backdropFilter: 'var(--overlay-backdrop-filter)', zIndex: 9999, position: 'fixed', top: 0, left: 0 }}
       data-testid="database-error-overlay"
     >
       <Paper

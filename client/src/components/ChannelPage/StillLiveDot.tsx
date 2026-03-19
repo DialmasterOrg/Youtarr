@@ -44,7 +44,7 @@ function StillLiveDot({ isMobile = false, onMobileClick }: StillLiveDotProps) {
       onClick={handleClick}
       style={{
         backgroundColor: 'var(--destructive)',
-        color: 'white',
+        color: 'var(--destructive-foreground)',
         fontWeight: 'bold',
         cursor: 'pointer',
       }}

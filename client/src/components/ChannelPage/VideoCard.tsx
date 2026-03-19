@@ -98,7 +98,7 @@ function VideoCard({
           <div style={{
             position: 'relative',
             paddingTop: isMobile ? '52%' : '56.25%',
-            backgroundColor: '#111',
+            backgroundColor: 'var(--media-placeholder-background)',
             borderRadius: 'var(--radius-ui)',
             overflow: 'hidden',
           }}>
@@ -126,8 +126,8 @@ function VideoCard({
                   top: 0,
                   left: 0,
                   right: 0,
-                  backgroundColor: 'rgba(211, 47, 47, 0.95)',
-                  color: 'white',
+                  backgroundColor: 'var(--media-overlay-danger-background)',
+                  color: 'var(--media-overlay-foreground)',
                   padding: '4px 8px',
                   fontSize: '0.75rem',
                   fontWeight: 'bold',
@@ -148,8 +148,8 @@ function VideoCard({
                   position: 'absolute',
                   bottom: 8,
                   right: 8,
-                  backgroundColor: 'rgba(0,0,0,0.8)',
-                  color: 'white',
+                  backgroundColor: 'var(--media-overlay-background-strong)',
+                  color: 'var(--media-overlay-foreground)',
                   fontSize: '0.75rem',
                   height: 22,
                 }}
@@ -166,8 +166,8 @@ function VideoCard({
                   position: 'absolute',
                   top: 4,
                   left: 4,
-                  backgroundColor: 'rgba(0,0,0,0.6)',
-                  color: 'white',
+                  backgroundColor: 'var(--media-overlay-background)',
+                  color: 'var(--media-overlay-foreground)',
                   transition: 'all 0.2s',
                   zIndex: 3,
                 }}
@@ -181,8 +181,8 @@ function VideoCard({
                   position: 'absolute',
                   top: 4,
                   left: 4,
-                  backgroundColor: 'rgba(0,0,0,0.6)',
-                  color: 'white',
+                  backgroundColor: 'var(--media-overlay-background)',
+                  color: 'var(--media-overlay-foreground)',
                   transition: 'all 0.2s',
                   zIndex: 3,
                 }}
@@ -209,7 +209,7 @@ function VideoCard({
                   left: 0,
                   right: 0,
                   bottom: 0,
-                  backgroundColor: 'rgba(25, 118, 210, 0.2)',
+                  backgroundColor: 'var(--media-overlay-selection-background)',
                   pointerEvents: 'none',
                 }}
               />
@@ -224,7 +224,7 @@ function VideoCard({
                   left: 0,
                   right: 0,
                   bottom: 0,
-                  backgroundColor: 'rgba(220, 38, 38, 0.2)',
+                  backgroundColor: 'var(--media-overlay-delete-selection-background)',
                   pointerEvents: 'none',
                 }}
               />
@@ -237,8 +237,8 @@ function VideoCard({
                   position: 'absolute',
                   top: 8,
                   left: 8,
-                  color: 'white',
-                  backgroundColor: 'rgba(220,38,38,0.8)',
+                  color: 'var(--media-overlay-foreground)',
+                  backgroundColor: 'var(--media-overlay-delete-indicator-background)',
                   padding: 4,
                   borderRadius: 4,
                   display: 'inline-flex',
@@ -265,8 +265,8 @@ function VideoCard({
                     position: 'absolute',
                     top: 8,
                     right: 8,
-                    background: isIgnored ? 'var(--warning)' : 'rgba(0,0,0,0.6)',
-                    color: 'white',
+                    background: isIgnored ? 'var(--warning)' : 'var(--media-overlay-ignore-button-background)',
+                    color: 'var(--media-overlay-foreground)',
                     border: 'none',
                     cursor: 'pointer',
                     padding: 4,

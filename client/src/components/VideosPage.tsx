@@ -691,8 +691,8 @@ function VideosPage({ token }: VideosPageProps) {
                                 height: 0,
                                 paddingTop: '56.25%',
                                 overflow: 'hidden',
-                                backgroundColor: '#111827',
-                                border: '1px solid rgba(107, 114, 128, 0.4)',
+                                backgroundColor: 'var(--media-placeholder-background)',
+                                border: 'var(--media-placeholder-border)',
                               }}
                             >
                               {imageErrors[video.youtubeId] ? (
@@ -740,8 +740,8 @@ function VideosPage({ token }: VideosPageProps) {
                                     top: 0,
                                     left: 0,
                                     right: 0,
-                                    backgroundColor: 'rgba(211, 47, 47, 0.95)',
-                                    color: 'white',
+                                    backgroundColor: 'var(--media-overlay-danger-background)',
+                                    color: 'var(--media-overlay-foreground)',
                                     padding: '4px 8px',
                                     fontSize: '0.65rem',
                                     fontWeight: 'bold',
@@ -790,8 +790,8 @@ function VideosPage({ token }: VideosPageProps) {
                                     position: 'absolute',
                                     top: 4,
                                     left: 4,
-                                    backgroundColor: 'rgba(0,0,0,0.6)',
-                                    color: 'white',
+                                    backgroundColor: 'var(--media-overlay-background)',
+                                    color: 'var(--media-overlay-foreground)',
                                     transition: 'all 0.2s',
                                     zIndex: 3,
                                   }}
@@ -901,13 +901,13 @@ function VideosPage({ token }: VideosPageProps) {
                               style={{
                                 width: 256,
                                 height: 144,
-                                border: '1px solid rgba(107, 114, 128, 0.4)',
+                                border: 'var(--media-placeholder-border)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 position: 'relative',
                                 overflow: 'hidden',
-                                backgroundColor: '#111827',
+                                backgroundColor: 'var(--media-placeholder-background)',
                               }}
                             >
                               {imageErrors[video.youtubeId] ? (
@@ -941,8 +941,8 @@ function VideosPage({ token }: VideosPageProps) {
                                     top: 0,
                                     left: 0,
                                     right: 0,
-                                    backgroundColor: 'rgba(211, 47, 47, 0.95)',
-                                    color: 'white',
+                                    backgroundColor: 'var(--media-overlay-danger-background)',
+                                    color: 'var(--media-overlay-foreground)',
                                     padding: '4px 8px',
                                     fontSize: '0.875rem',
                                     fontWeight: 'bold',
@@ -983,8 +983,8 @@ function VideosPage({ token }: VideosPageProps) {
                                   left: 0,
                                   right: 0,
                                   bottom: 0,
-                                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
-                                  color: 'white',
+                                  backgroundColor: 'var(--media-overlay-background)',
+                                  color: 'var(--media-overlay-foreground)',
                                   padding: '4px 8px',
                                   fontSize: '0.75rem',
                                   fontWeight: 600,

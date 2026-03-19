@@ -735,7 +735,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
               position: 'fixed',
               inset: 0,
               zIndex: 1299,
-              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              backgroundColor: 'var(--overlay-backdrop-background)',
             }}
           />
           <div
@@ -821,7 +821,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
               onClick={handleSaveChanges}
               disabled={isSaving}
               aria-label="Save changes"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: isMobile ? '6px 16px' : '8px 20px', borderRadius: 28, background: 'var(--primary)', border: 'none', cursor: 'pointer', fontWeight: 600, color: 'white', boxShadow: 'var(--shadow-hard, 0 4px 12px rgba(0,0,0,0.2))' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: isMobile ? '6px 16px' : '8px 20px', borderRadius: 28, background: 'var(--primary)', border: 'none', cursor: 'pointer', fontWeight: 600, color: 'var(--primary-foreground)', boxShadow: 'var(--shadow-hard, 0 4px 12px rgba(0,0,0,0.2))' }}
             >
               {isSaving ? <CircularProgress size={18} color="inherit" style={{ marginRight: 4 }} /> : <SaveIcon size={18} style={{ marginRight: 4 }} />}
               {isSaving ? 'Saving…' : 'Save'}

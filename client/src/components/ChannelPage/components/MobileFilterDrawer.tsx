@@ -92,7 +92,7 @@ function MobileFilterDrawer({
           position: 'fixed',
           inset: 0,
           zIndex: 1299,
-          backgroundColor: 'rgba(0,0,0,0.5)',
+          backgroundColor: 'var(--overlay-backdrop-background)',
         }}
       />
       {/* Drawer panel */}
@@ -108,8 +108,8 @@ function MobileFilterDrawer({
           right: 0,
           zIndex: 1300,
           backgroundColor: 'var(--card)',
-          borderTopLeftRadius: 16,
-          borderTopRightRadius: 16,
+          borderTopLeftRadius: 'var(--radius-ui)',
+          borderTopRightRadius: 'var(--radius-ui)',
           maxHeight: '80vh',
           overflowY: 'auto',
         }}

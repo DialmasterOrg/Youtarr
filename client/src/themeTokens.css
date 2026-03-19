@@ -43,6 +43,75 @@
   --audio-control-foreground: var(--foreground);
   --audio-control-shadow: var(--shadow-input-rest);
   --audio-control-shadow-focus: var(--shadow-input-focus);
+
+  /* Overlay and text-on-media tokens */
+  --overlay-backdrop-background: rgba(0, 0, 0, 0.5);
+  --overlay-backdrop-background-strong: rgba(0, 0, 0, 0.6);
+  --overlay-backdrop-filter: blur(4px);
+  --media-placeholder-background: #111827;
+  --media-placeholder-border: 1px solid rgba(107, 114, 128, 0.4);
+  --media-overlay-foreground: #ffffff;
+  --media-overlay-background: rgba(0, 0, 0, 0.6);
+  --media-overlay-background-strong: rgba(0, 0, 0, 0.8);
+  --media-overlay-danger-background: rgba(211, 47, 47, 0.95);
+  --media-overlay-selection-background: rgba(25, 118, 210, 0.2);
+  --media-overlay-delete-selection-background: rgba(220, 38, 38, 0.2);
+  --media-overlay-delete-indicator-background: rgba(220, 38, 38, 0.8);
+  --media-overlay-ignore-button-background: rgba(0, 0, 0, 0.6);
+  --media-overlay-text-shadow: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5));
+
+  /* Auth and setup surface tokens */
+  --auth-splash-background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --auth-surface-background: var(--card);
+  --auth-surface-border: 1px solid var(--border);
+  --auth-surface-shadow: var(--shadow-soft);
+  --auth-surface-backdrop-filter: none;
+  --auth-surface-transform: none;
+  --auth-surface-padding: 32px;
+  --auth-title-font-weight: 700;
+  --auth-title-font-size: 2.5rem;
+  --auth-title-letter-spacing: normal;
+  --auth-title-text-shadow: none;
+  --auth-subtitle-font-size: 1rem;
+  --auth-button-text-transform: none;
+  --auth-button-letter-spacing: normal;
+
+  /* Decorative background tokens */
+  --linear-decor-blob-primary: radial-gradient(circle, rgba(94, 106, 210, 0.55) 0%, transparent 70%);
+  --linear-decor-blob-secondary: radial-gradient(circle, rgba(244, 114, 182, 0.4) 0%, transparent 70%);
+  --linear-decor-top-rail: linear-gradient(90deg, transparent, rgba(94, 106, 210, 0.5), transparent);
+
+  /* Header and navigation tokens */
+  --nav-item-border-hover: var(--nav-item-border);
+  --header-nav-active-color: var(--foreground);
+  --header-nav-default-color: var(--muted-foreground);
+  --header-subnav-active-color: var(--header-nav-active-color);
+  --header-update-indicator-width: 32px;
+  --header-update-indicator-height: 32px;
+  --header-update-indicator-radius: 6px;
+  --header-update-indicator-foreground: var(--warning);
+  --header-update-indicator-background: transparent;
+  --header-update-indicator-border: 1px solid rgba(255, 255, 255, 0.2);
+  --header-update-indicator-shadow: none;
+  --mobile-subnav-surface-background: var(--card);
+  --mobile-subnav-surface-border-top: var(--nav-border);
+  --mobile-subnav-surface-radius: 0;
+  --mobile-subnav-surface-margin-bottom: 0;
+  --mobile-subnav-surface-padding-bottom: 8px;
+  --mobile-subnav-item-border: var(--nav-item-border);
+  --mobile-subnav-item-border-selected: var(--nav-item-border-selected);
+  --mobile-subnav-item-radius: var(--radius-ui);
+  --mobile-subnav-item-text-transform: none;
+  --mobile-subnav-item-letter-spacing: normal;
+  --mobile-primary-nav-surface-background: var(--card);
+  --mobile-primary-nav-surface-border-top: var(--nav-border);
+  --mobile-primary-nav-surface-radius: 0;
+  --mobile-primary-nav-surface-shadow: var(--nav-shadow);
+  --mobile-primary-nav-active-color: var(--primary);
+  --mobile-primary-nav-active-background: transparent;
+  --mobile-primary-nav-label-font-size: 0.65rem;
+  --mobile-primary-nav-label-text-transform: none;
+  --mobile-primary-nav-label-letter-spacing: normal;
 } 
 
 

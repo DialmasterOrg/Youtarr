@@ -209,7 +209,7 @@ function VideoTableView({
                   </div>
                 </td>
                 <td style={{ width: 140, padding: '8px 4px' }}>
-                  <div style={{ position: 'relative', display: 'inline-block', backgroundColor: '#111', borderRadius: 'var(--radius-thumb)', overflow: 'hidden' }}>
+                  <div style={{ position: 'relative', display: 'inline-block', backgroundColor: 'var(--media-placeholder-background)', borderRadius: 'var(--radius-thumb)', overflow: 'hidden' }}>
                     <img
                       src={video.thumbnail}
                       alt={decodeHtml(video.title)}
@@ -229,8 +229,8 @@ function VideoTableView({
                           top: 0,
                           left: 0,
                           right: 0,
-                          backgroundColor: 'rgba(211, 47, 47, 0.95)',
-                          color: 'white',
+                          backgroundColor: 'var(--media-overlay-danger-background)',
+                          color: 'var(--media-overlay-foreground)',
                           padding: '2px 4px',
                           fontSize: '0.65rem',
                           fontWeight: 'bold',

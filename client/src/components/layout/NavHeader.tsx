@@ -65,8 +65,6 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   const isLandscape = useMediaQuery('(orientation: landscape)');
   const isTopNav = layoutPolicy.navPlacement === 'top';
   const isInsetFrame = layoutPolicy.headerFrameMode === 'inset';
-  const isLinear = layoutPolicy.headerUpdateIndicatorMode === 'linear';
-  const isFlat = layoutPolicy.headerUpdateIndicatorMode === 'flat';
   const showLandscapeNavItems = isMobile && isLandscape;
   const usesInsetFrame = isInsetFrame && !showLandscapeNavItems;
 
@@ -106,38 +104,16 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
       : 'yt-dlp update available';
 
   const sharedUpdateIndicatorStyle: React.CSSProperties = useMemo(() => {
-    if (layoutPolicy.headerUpdateIndicatorMode === 'playful') {
-      return {
-        width: 40,
-        height: 40,
-        borderRadius: 'var(--radius-ui)',
-        color: 'var(--warning-foreground)',
-        backgroundColor: 'var(--warning)',
-        border: '2px solid var(--border-strong)',
-        boxShadow: 'var(--shadow-hard)',
-      };
-    }
-
-    if (layoutPolicy.headerUpdateIndicatorMode === 'flat') {
-      return {
-        width: 34,
-        height: 34,
-        borderRadius: 'var(--radius-ui)',
-        color: 'var(--warning-foreground)',
-        backgroundColor: 'var(--warning)',
-        border: '2px solid var(--foreground)',
-      };
-    }
-
     return {
-      width: 32,
-      height: 32,
-      borderRadius: '6px',
-      color: 'var(--warning)',
-      backgroundColor: 'transparent',
-      border: '1px solid rgba(255, 255, 255, 0.2)',
+      width: 'var(--header-update-indicator-width)',
+      height: 'var(--header-update-indicator-height)',
+      borderRadius: 'var(--header-update-indicator-radius)',
+      color: 'var(--header-update-indicator-foreground)',
+      backgroundColor: 'var(--header-update-indicator-background)',
+      border: 'var(--header-update-indicator-border)',
+      boxShadow: 'var(--header-update-indicator-shadow)',
     };
-  }, [layoutPolicy.headerUpdateIndicatorMode]);
+  }, []);
 
   const versionParts = useMemo(() => {
     if (!versionLabel) return [] as string[];
@@ -157,10 +133,8 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   };
 
   const getButtonStyle = (isParentActive: boolean): React.CSSProperties => {
-    const activeColor = (isLinear || isFlat) ? 'hsl(var(--primary))' : 'var(--foreground)';
-    const defaultColor = 'var(--muted-foreground)';
     return {
-      color: isParentActive ? activeColor : defaultColor,
+      color: isParentActive ? 'var(--header-nav-active-color)' : 'var(--header-nav-default-color)',
       fontWeight: 600,
       fontSize: '0.85rem',
       textTransform: 'none' as const,
@@ -291,7 +265,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                           fontSize: '0.85rem',
                           fontWeight: 500,
                           color: isSubActive
-                            ? ((isLinear || isFlat) ? 'hsl(var(--primary))' : 'var(--foreground)')
+                            ? 'var(--header-subnav-active-color)'
                             : 'var(--muted-foreground)',
                           padding: '8px 12px',
                           boxSizing: 'border-box',

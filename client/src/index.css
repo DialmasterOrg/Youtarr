@@ -229,7 +229,7 @@ body[data-motion='on'] .linear-blob {
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(94, 106, 210, 0.5), transparent);
+  background: var(--linear-decor-top-rail);
   overflow: hidden;
   z-index: 1;
 }

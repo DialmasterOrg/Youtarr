@@ -9,24 +9,28 @@ import {
   LinearProgress,
 } from './ui';
 import axios from 'axios';
-import { useThemeEngine } from '../contexts/ThemeEngineContext';
 import packageJson from '../../package.json';
+import {
+  AUTH_CONTAINER_STYLE,
+  AUTH_FOOTER_STYLE,
+  AUTH_PRIMARY_BUTTON_STYLE,
+  AUTH_SUBTITLE_STYLE,
+  AUTH_SURFACE_STYLE,
+  AUTH_TITLE_STYLE,
+  AUTH_VIEWPORT_STYLE,
+} from './authSurfaceStyles';
 
 interface InitialSetupProps {
   onSetupComplete: (token: string) => void;
 }
 
 const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
-  const { themeMode } = useThemeEngine();
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLocalhost, setIsLocalhost] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const isPlayful = themeMode === 'playful';
-  const isLinear = themeMode === 'linear';
 
   useEffect(() => {
     axios.get('/setup/status')
@@ -76,30 +80,11 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
     }
   };
 
-  const bgStyle = {
-    position: 'fixed' as const,
-    top: 0, left: 0, right: 0, bottom: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: isLinear
-      ? 'linear-gradient(135deg, #09090b 0%, #1a1a1f 100%)'
-      : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-  };
-
   if (isLocalhost === false) {
     return (
-      <div style={bgStyle}>
-        <div style={{ width: '100%', maxWidth: 600, padding: '0 16px', boxSizing: 'border-box' }}>
-          <Paper
-            elevation={isLinear ? 0 : 8}
-            style={{
-              padding: 32,
-              borderRadius: 'var(--radius-ui)',
-              backgroundColor: isLinear ? 'rgba(18, 18, 20, 0.95)' : 'var(--card)',
-              border: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : isPlayful ? '4px solid var(--border-strong)' : 'none',
-            }}
-          >
+      <div style={AUTH_VIEWPORT_STYLE}>
+        <div style={AUTH_CONTAINER_STYLE}>
+          <Paper elevation={0} style={AUTH_SURFACE_STYLE}>
             <Typography variant="h5" color="error" gutterBottom>
               🔒 Security Protection Active
             </Typography>
@@ -119,49 +104,22 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
   }
 
   return (
-    <div style={bgStyle}>
-      <div style={{ width: '100%', maxWidth: 600, padding: '0 16px', boxSizing: 'border-box' }}>
-        <Paper
-          elevation={isLinear ? 0 : 8}
-          style={{
-            padding: isPlayful ? 40 : 32,
-            borderRadius: 'var(--radius-ui)',
-            border: isPlayful
-              ? '4px solid var(--border-strong)'
-              : isLinear
-                ? '1px solid rgba(255, 255, 255, 0.1)'
-                : 'none',
-            boxShadow: isLinear
-              ? '0 8px 32px rgba(0, 0, 0, 0.5)'
-              : '0 20px 60px rgba(0, 0, 0, 0.3)',
-            backgroundColor: isLinear
-              ? 'rgba(18, 18, 20, 0.95)'
-              : 'var(--card)',
-            backdropFilter: isLinear ? 'blur(20px)' : 'none',
-            transform: isPlayful ? 'rotate(-0.5deg)' : 'none',
-          }}
-        >
+    <div style={AUTH_VIEWPORT_STYLE}>
+      <div style={AUTH_CONTAINER_STYLE}>
+        <Paper elevation={0} style={AUTH_SURFACE_STYLE}>
           {/* Branding */}
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
             <Typography
               variant="h3"
               component="h1"
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontWeight: isPlayful ? 800 : 700,
-                fontSize: isPlayful ? '3rem' : '2.5rem',
-                marginBottom: 8,
-              }}
+              style={AUTH_TITLE_STYLE}
             >
               Welcome to Youtarr Setup
             </Typography>
             <Typography
               variant="subtitle1"
               color="text.secondary"
-              style={{
-                fontWeight: 500,
-                fontFamily: 'var(--font-body)',
-              }}
+              style={AUTH_SUBTITLE_STYLE}
             >
               First-time Setup
             </Typography>
@@ -226,16 +184,7 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
               variant="contained"
               size="large"
               disabled={loading || isLocalhost === null}
-              style={{
-                marginTop: 24,
-                paddingTop: 12,
-                paddingBottom: 12,
-                fontWeight: 700,
-                fontSize: '1.1rem',
-                borderRadius: 'var(--radius-ui)',
-                textTransform: isLinear ? 'uppercase' : 'none',
-                letterSpacing: isLinear ? '0.1em' : 'normal',
-              }}
+              style={AUTH_PRIMARY_BUTTON_STYLE}
             >
               {loading ? 'Setting up...' : 'Complete Setup'}
             </Button>
@@ -247,24 +196,14 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
           <Typography
             variant="caption"
             color="text.secondary"
-            style={{
-              display: 'block',
-              textAlign: 'center',
-              marginTop: 24,
-              fontFamily: 'var(--font-body)',
-            }}
+            style={AUTH_FOOTER_STYLE}
           >
             After setup, you can access Youtarr from anywhere.
           </Typography>
           <Typography
             variant="caption"
             color="text.secondary"
-            style={{
-              display: 'block',
-              textAlign: 'center',
-              marginTop: 4,
-              fontFamily: 'var(--font-body)',
-            }}
+            style={{ ...AUTH_FOOTER_STYLE, marginTop: 4 }}
           >
             Youtarr v{packageJson.version}
           </Typography>

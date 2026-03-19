@@ -140,7 +140,7 @@ export const BackgroundDecorations: React.FC<BackgroundDecorationsProps> = ({ th
           className="linear-blob"
           style={{
             top: '10%', right: '5%', width: '40vw', height: '40vw',
-            background: 'radial-gradient(circle, #5E6AD2 0%, transparent 70%)',
+            background: 'var(--linear-decor-blob-primary)',
             animationDelay: '0s',
           }}
         />
@@ -148,7 +148,7 @@ export const BackgroundDecorations: React.FC<BackgroundDecorationsProps> = ({ th
           className="linear-blob"
           style={{
             bottom: '10%', left: '5%', width: '35vw', height: '35vw',
-            background: 'radial-gradient(circle, #f472b6 0%, transparent 70%)',
+            background: 'var(--linear-decor-blob-secondary)',
             animationDelay: '-5s', opacity: 0.1,
           }}
         />

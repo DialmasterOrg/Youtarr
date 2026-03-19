@@ -263,10 +263,10 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                     minHeight: NAV_MAIN_MIN_HEIGHT,
                     height: NAV_MAIN_MIN_HEIGHT,
                     width: '100%',
-                    border: selected ? 'var(--nav-item-border-selected)' : (isPlayful && isHovered ? 'var(--nav-item-border-selected)' : 'var(--nav-item-border)'),
-                    backgroundColor: selected ? 'var(--nav-item-bg-selected)' : (isPlayful && isHovered ? 'var(--nav-item-bg-hover)' : 'var(--nav-item-bg)'),
+                    border: selected ? 'var(--nav-item-border-selected)' : (isHovered ? 'var(--nav-item-border-hover)' : 'var(--nav-item-border)'),
+                    backgroundColor: selected ? 'var(--nav-item-bg-selected)' : (isHovered ? 'var(--nav-item-bg-hover)' : 'var(--nav-item-bg)'),
                     color: selected ? 'var(--nav-item-text-selected)' : 'inherit',
-                    boxShadow: selected ? 'var(--nav-item-shadow-selected)' : (isPlayful && isHovered ? 'var(--nav-item-shadow-hover)' : 'var(--nav-item-shadow)'),
+                    boxShadow: selected ? 'var(--nav-item-shadow-selected)' : (isHovered ? 'var(--nav-item-shadow-hover)' : 'var(--nav-item-shadow)'),
                     transition: 'all 300ms var(--transition-bouncy)',
                     cursor: 'pointer',
                   }}
@@ -482,8 +482,6 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
   if (isMobile) {
     const activeIndex = navItems.findIndex((item) => item === activeItem);
     const subNavBottom = `calc(${MOBILE_NAV_PRIMARY_HEIGHT}px + env(safe-area-inset-bottom))`;
-    const isLinear = themeMode === 'linear';
-    const isFlat = themeMode === 'flat';
 
     return (
       <>
@@ -495,16 +493,16 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
               left: 0,
               right: 0,
               zIndex: 1299,
-              backgroundColor: isLinear ? '#050506' : 'var(--card)',
-              borderTop: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : isFlat ? '2px solid var(--border)' : 'var(--nav-border)',
-              borderRadius: isPlayful ? 'var(--radius-ui) var(--radius-ui) 0 0' : 'none',
+              backgroundColor: 'var(--mobile-subnav-surface-background)',
+              borderTop: 'var(--mobile-subnav-surface-border-top)',
+              borderRadius: 'var(--mobile-subnav-surface-radius)',
               padding: '8px 10px',
               display: 'flex',
               gap: 8,
               overflowX: 'auto',
               scrollbarWidth: 'none',
-              marginBottom: isPlayful ? '-32px' : '0',
-              paddingBottom: isPlayful ? 'calc(8px + 32px)' : '8px',
+              marginBottom: 'var(--mobile-subnav-surface-margin-bottom)',
+              paddingBottom: 'var(--mobile-subnav-surface-padding-bottom)',
             }}
           >
             {activeItemWithSubItems.subItems.map((subItem: any) => {
@@ -516,19 +514,19 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                   style={{
                     background: subSelected ? 'var(--nav-item-bg-selected)' : 'var(--nav-item-bg)',
                     border: subSelected
-                      ? (isLinear ? '1px solid rgba(94, 106, 210, 0.7)' : 'var(--nav-item-border-selected)')
-                      : (isLinear ? '1px solid rgba(255, 255, 255, 0.12)' : 'var(--nav-item-border)'),
-                    borderRadius: isLinear ? '999px' : 'var(--radius-ui)',
+                      ? 'var(--mobile-subnav-item-border-selected)'
+                      : 'var(--mobile-subnav-item-border)',
+                    borderRadius: 'var(--mobile-subnav-item-radius)',
                     color: subSelected ? 'var(--nav-item-text-selected)' : 'inherit',
                     boxShadow: subSelected ? 'var(--nav-item-shadow-selected)' : 'none',
                     cursor: 'pointer',
                     fontSize: NAV_SUB_FONT_SIZE,
                     fontWeight: subSelected ? 700 : 500,
-                    padding: isLinear ? '6px 14px' : '6px 14px',
+                    padding: '6px 14px',
                     whiteSpace: 'nowrap',
                     transition: 'all 200ms var(--transition-bouncy)',
-                    textTransform: isLinear ? 'uppercase' : 'none',
-                    letterSpacing: isLinear ? '0.08em' : 'normal',
+                    textTransform: 'var(--mobile-subnav-item-text-transform)' as React.CSSProperties['textTransform'],
+                    letterSpacing: 'var(--mobile-subnav-item-letter-spacing)',
                   }}
                 >
                   {subItem.label}
@@ -546,11 +544,11 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
             right: 0,
             zIndex: 1300,
             paddingBottom: 'env(safe-area-inset-bottom)',
-            borderRadius: isPlayful ? 'var(--radius-ui) var(--radius-ui) 0 0' : '0',
-            borderTop: isLinear ? '1px solid rgba(255, 255, 255, 0.1)' : isFlat ? '2px solid var(--border)' : 'var(--nav-border)',
-            backgroundColor: isLinear ? '#050506' : 'var(--card)',
+            borderRadius: 'var(--mobile-primary-nav-surface-radius)',
+            borderTop: 'var(--mobile-primary-nav-surface-border-top)',
+            backgroundColor: 'var(--mobile-primary-nav-surface-background)',
             overflow: 'visible',
-            boxShadow: isLinear ? '0 -12px 30px rgba(0, 0, 0, 0.45)' : 'var(--nav-shadow)',
+            boxShadow: 'var(--mobile-primary-nav-surface-shadow)',
           }}
         >
           <nav style={{ display: 'flex', height: MOBILE_NAV_PRIMARY_HEIGHT, backgroundColor: 'transparent' }}>
@@ -571,13 +569,13 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                     border: 'none',
                     cursor: 'pointer',
                     color: isActive
-                      ? (isLinear ? '#ffffff' : 'var(--primary)')
+                      ? 'var(--mobile-primary-nav-active-color)'
                       : 'var(--muted-foreground)',
                     padding: '6px 0',
                     transition: 'color 0.2s, background-color 0.2s',
                     position: 'relative',
-                    backgroundColor: isActive && !isPlayful
-                      ? (isLinear ? 'rgba(94, 106, 210, 0.16)' : 'var(--muted)')
+                    backgroundColor: isActive
+                      ? 'var(--mobile-primary-nav-active-background)'
                       : 'transparent',
                   }}
                 >
@@ -587,10 +585,10 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                   })}
                   <span
                     style={{
-                      fontSize: isLinear ? '0.62rem' : '0.65rem',
+                      fontSize: 'var(--mobile-primary-nav-label-font-size)',
                       lineHeight: 1,
-                      textTransform: isLinear ? 'uppercase' : 'none',
-                      letterSpacing: isLinear ? '0.08em' : 'normal',
+                      textTransform: 'var(--mobile-primary-nav-label-text-transform)' as React.CSSProperties['textTransform'],
+                      letterSpacing: 'var(--mobile-primary-nav-label-letter-spacing)',
                       fontWeight: isActive ? 700 : 500,
                     }}
                   >
@@ -645,7 +643,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
               position: 'fixed',
               inset: 0,
               zIndex: 1199,
-              backgroundColor: 'rgba(0,0,0,0.5)',
+              backgroundColor: 'var(--overlay-backdrop-background)',
             }}
             onClick={onCloseMobile}
           />

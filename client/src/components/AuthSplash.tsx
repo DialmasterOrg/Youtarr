@@ -7,23 +7,27 @@ import {
   Alert,
   LinearProgress,
 } from './ui';
-import { useThemeEngine } from '../contexts/ThemeEngineContext';
 import axios from 'axios';
 import packageJson from '../../package.json';
+import {
+  AUTH_CONTAINER_STYLE,
+  AUTH_FOOTER_STYLE,
+  AUTH_PRIMARY_BUTTON_STYLE,
+  AUTH_SUBTITLE_STYLE,
+  AUTH_SURFACE_STYLE,
+  AUTH_TITLE_STYLE,
+  AUTH_VIEWPORT_STYLE,
+} from './authSurfaceStyles';
 
 interface AuthSplashProps {
   setToken: (token: string) => void;
 }
 
 export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
-  const { themeMode } = useThemeEngine();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const isPlayful = themeMode === 'playful';
-  const isLinear = themeMode === 'linear';
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,69 +66,21 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
   };
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: isLinear
-          ? 'linear-gradient(135deg, #09090b 0%, #1a1a1f 100%)'
-          : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }}
-    >
-      <div style={{ width: '100%', maxWidth: 600, padding: '0 16px', boxSizing: 'border-box' }}>
-        <Paper
-          elevation={isLinear ? 0 : 8}
-          style={{
-            padding: isPlayful ? 40 : 32,
-            borderRadius: 'var(--radius-ui)',
-            border: isPlayful
-              ? '4px solid var(--border-strong)'
-              : isLinear
-                ? '1px solid rgba(255, 255, 255, 0.1)'
-                : 'none',
-            boxShadow: isLinear
-              ? '0 8px 32px rgba(0, 0, 0, 0.5)'
-              : '0 20px 60px rgba(0, 0, 0, 0.3)',
-            backgroundColor: isLinear
-              ? 'rgba(18, 18, 20, 0.95)'
-              : 'var(--card)',
-            backdropFilter: isLinear ? 'blur(20px)' : 'none',
-            transform: isPlayful ? 'rotate(-0.5deg)' : 'none',
-          }}
-        >
+    <div style={AUTH_VIEWPORT_STYLE}>
+      <div style={AUTH_CONTAINER_STYLE}>
+        <Paper elevation={0} style={AUTH_SURFACE_STYLE}>
           {/* Logo/Branding */}
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
             <Typography
               variant="h3"
               component="h1"
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontWeight: isPlayful ? 800 : 700,
-                fontSize: isPlayful ? '3rem' : '2.5rem',
-                marginBottom: 8,
-                letterSpacing: isLinear ? '0.02em' : 'normal',
-                textShadow: isLinear
-                    ? '0 2px 10px rgba(102, 126, 234, 0.5)'
-                    : 'none',
-              }}
+              style={AUTH_TITLE_STYLE}
             >
               Youtarr
             </Typography>
             <Typography
               variant="subtitle1"
-              style={{
-                fontWeight: 500,
-                fontSize: isLinear ? '0.9rem' : '1rem',
-                fontFamily: 'var(--font-body)',
-              }}
+              style={AUTH_SUBTITLE_STYLE}
               color="text.secondary"
             >
               Login below
@@ -173,16 +129,7 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
               variant="contained"
               size="large"
               disabled={loading}
-              style={{
-                marginTop: 24,
-                paddingTop: 12,
-                paddingBottom: 12,
-                fontWeight: 700,
-                fontSize: '1.1rem',
-                borderRadius: 'var(--radius-ui)',
-                textTransform: isLinear ? 'uppercase' : 'none',
-                letterSpacing: isLinear ? '0.1em' : 'normal',
-              }}
+              style={AUTH_PRIMARY_BUTTON_STYLE}
             >
               {loading ? 'Signing in...' : 'Login'}
             </Button>
@@ -200,12 +147,7 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
           {/* Footer */}
           <Typography
             variant="caption"
-            style={{
-              display: 'block',
-              textAlign: 'center',
-              marginTop: 24,
-              fontFamily: 'var(--font-body)',
-            }}
+            style={AUTH_FOOTER_STYLE}
             color="text.secondary"
           >
             Youtarr v{packageJson.version}
