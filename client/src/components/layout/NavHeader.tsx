@@ -171,6 +171,13 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
     };
   };
 
+  const isPlayful = layoutPolicy.headerUpdateIndicatorMode === 'playful';
+  const headerHorizontalGutter = NAV_DRAWER_SECTION_BUTTON_GUTTER;
+  // On mobile playful theme, match the content window padding (3px left/right)
+  const headerHorizontalPadding = isMobile && isPlayful ? 3 : headerHorizontalGutter;
+  // On mobile playful, position outer edge at 4px to align with main's padding (mainPadding: '... 4px ...')
+  const headerInsetOffset = isMobile && isPlayful ? '4px' : 'var(--shell-gap)';
+
   const menuPaperStyle: React.CSSProperties = {
     overflowX: 'hidden',
     overflowY: 'auto',
@@ -199,14 +206,13 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
     color: 'var(--foreground)',
     zIndex: 1300,
     top: usesInsetFrame ? 'var(--shell-gap)' : 0,
-    left: usesInsetFrame ? 'var(--shell-gap)' : 0,
-    right: usesInsetFrame ? 'var(--shell-gap)' : 0,
+    left: usesInsetFrame ? headerInsetOffset : 0,
+    right: usesInsetFrame ? headerInsetOffset : 0,
     borderRadius: showLandscapeNavItems ? '0px' : 'var(--layout-header-border-radius)',
     overflow: 'visible',
     boxSizing: 'border-box',
   };
 
-  const headerHorizontalGutter = NAV_DRAWER_SECTION_BUTTON_GUTTER;
   const topRowGap = showLandscapeNavItems ? 10 : 16;
 
   const navRow = showTopNavItems ? (
@@ -385,8 +391,8 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
           display: 'flex',
           flexDirection: showLandscapeNavItems ? 'column' : 'row',
           gap: showLandscapeNavItems ? 6 : 16,
-          paddingLeft: headerHorizontalGutter,
-          paddingRight: headerHorizontalGutter,
+          paddingLeft: headerHorizontalPadding,
+          paddingRight: headerHorizontalPadding,
           paddingTop: showLandscapeNavItems ? 8 : 0,
           paddingBottom: showLandscapeNavItems ? 6 : 0,
           minHeight: showLandscapeNavItems ? 96 : 64,
@@ -461,8 +467,8 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                   src={youtarrWordmark}
                   alt={appName}
                   style={{
-                    height: showLandscapeNavItems ? 20 : 24,
-                    maxWidth: 'min(180px, 45vw)',
+                    height: showLandscapeNavItems ? 26 : 31,
+                    maxWidth: 'min(234px, 58.5vw)',
                     width: 'auto',
                     objectFit: 'contain',
                     display: 'block',

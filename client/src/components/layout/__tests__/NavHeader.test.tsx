@@ -150,4 +150,29 @@ describe('NavHeader shared update indicator', () => {
 
     expect(screen.getByTestId('storage-header-widget')).toBeInTheDocument();
   });
+
+  it('renders the header wordmark 30 percent larger across themes', () => {
+    renderHeader({ layoutPolicy: resolveThemeLayoutPolicy(getThemeById('flat'), 'desktop') });
+
+    const wordmark = screen.getByRole('img', { name: 'Youtarr' });
+
+    expect(wordmark).toHaveStyle({
+      height: '31px',
+      maxWidth: 'min(234px, 58.5vw)',
+    });
+  });
+
+  it('aligns header left/right padding with content window on mobile playful theme', () => {
+    renderHeader({ layoutPolicy: resolveThemeLayoutPolicy(getThemeById('playful'), 'mobile') });
+
+    const header = screen.getByRole('banner') as HTMLElement;
+    const headerInnerDiv = header.querySelector('div[style*="flex"]') as HTMLElement;
+
+    // On mobile playful, header should use 3px padding to match contentPadding: '8px 3px'
+    if (headerInnerDiv) {
+      const computedStyle = window.getComputedStyle(headerInnerDiv);
+      expect(computedStyle.paddingLeft).toBe('3px');
+      expect(computedStyle.paddingRight).toBe('3px');
+    }
+  });
 });

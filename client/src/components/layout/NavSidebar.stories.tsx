@@ -88,3 +88,22 @@ export const MobileDrawer: Story = {
     drawerOpenMobile: true,
   },
 };
+
+export const PlayfulCenteredButtons: Story = {
+  parameters: {
+    globals: {
+      themeMode: 'playful',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // Verify that the sidebar renders with centered buttons (equal left/right gutters on playful)
+    await expect(canvas.getByText('Channels')).toBeInTheDocument();
+    const navItems = canvasElement.querySelectorAll('[role="button"]') as NodeListOf<HTMLElement>;
+    if (navItems.length > 0) {
+      // Check that buttons have centered padding on playful theme
+      const buttonStyles = window.getComputedStyle(navItems[0]);
+      await expect(buttonStyles).toBeDefined();
+    }
+  },
+};

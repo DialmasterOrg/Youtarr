@@ -33,7 +33,7 @@ export const playfulTheme: ThemeDefinition = {
       headerMenuBackground: 'var(--card)',
       headerMenuShadow: 'none',
       shellBackground: 'linear-gradient(180deg, var(--card) 0%, var(--background) 55%, var(--background) 100%)',
-      mainPadding: 'calc(80px + var(--shell-gap)) calc(var(--shell-gap) / 2) calc(var(--shell-gap) / 2) calc(var(--nav-width) + var(--shell-gap))',
+      mainPadding: 'calc(80px + var(--shell-gap)) var(--shell-gap) var(--shell-gap) calc(var(--nav-width) + var(--shell-gap) * 2)',
       mainMarginTop: '0px',
       contentPadding: '10px 8px',
       contentMaxWidth: 'none',

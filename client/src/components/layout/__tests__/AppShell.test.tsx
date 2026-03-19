@@ -121,6 +121,15 @@ describe('AppShell', () => {
     expect(screen.getByTestId('nav-sidebar')).toHaveTextContent('collapsed:false|topnav:false|mobileopen:false');
   });
 
+  it('keeps the playful desktop outer frame gutter while using tighter inner frame padding', () => {
+    renderShell('playful');
+
+    expect(getLayoutRoot().style.getPropertyValue('--layout-main-padding')).toBe(
+      'calc(80px + var(--shell-gap)) var(--shell-gap) var(--shell-gap) calc(var(--nav-width) + var(--shell-gap) * 2)'
+    );
+    expect(getLayoutRoot().style.getPropertyValue('--layout-content-padding')).toBe('10px 8px');
+  });
+
   it('uses tighter mobile frame padding for playful theme content', () => {
     renderShell('playful', true);
 
