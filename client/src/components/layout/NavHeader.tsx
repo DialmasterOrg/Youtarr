@@ -387,6 +387,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
       }}
     >
       <div
+        data-testid="nav-header-inner"
         style={{
           display: 'flex',
           flexDirection: showLandscapeNavItems ? 'column' : 'row',

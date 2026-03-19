@@ -178,6 +178,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
             sideOffset={4}
             avoidCollisions
             collisionPadding={overlayInsets}
+            data-testid="select-content"
             style={{
               zIndex: 1470,
               minWidth: 'var(--radix-select-trigger-width)',

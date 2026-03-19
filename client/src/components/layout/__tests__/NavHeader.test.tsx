@@ -165,14 +165,11 @@ describe('NavHeader shared update indicator', () => {
   it('aligns header left/right padding with content window on mobile playful theme', () => {
     renderHeader({ layoutPolicy: resolveThemeLayoutPolicy(getThemeById('playful'), 'mobile') });
 
-    const header = screen.getByRole('banner') as HTMLElement;
-    const headerInnerDiv = header.querySelector('div[style*="flex"]') as HTMLElement;
+    const headerInner = screen.getByTestId('nav-header-inner');
 
     // On mobile playful, header should use 3px padding to match contentPadding: '8px 3px'
-    if (headerInnerDiv) {
-      const computedStyle = window.getComputedStyle(headerInnerDiv);
-      expect(computedStyle.paddingLeft).toBe('3px');
-      expect(computedStyle.paddingRight).toBe('3px');
-    }
+    const computedStyle = window.getComputedStyle(headerInner);
+    expect(computedStyle.paddingLeft).toBe('3px');
+    expect(computedStyle.paddingRight).toBe('3px');
   });
 });

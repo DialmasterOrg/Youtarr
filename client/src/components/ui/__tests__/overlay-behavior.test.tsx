@@ -78,11 +78,11 @@ describe('overlay positioning guards', () => {
 
     expect(await screen.findByRole('option', { name: /Parental Guidance Suggested/i })).toBeInTheDocument();
 
-    const content = document.body.querySelector('[data-radix-popper-content-wrapper] > div') as HTMLElement | null;
+    const content = screen.getByTestId('select-content');
     expect(content).not.toBeNull();
-    expect(content?.style.minWidth).toBe('var(--radix-select-trigger-width)');
-    expect(content?.style.maxWidth).toBe('min(28rem, calc(100vw - 24px))');
-    expect(content?.style.maxHeight).toBe('min(var(--radix-select-content-available-height), calc(100dvh - var(--app-shell-overlay-top-offset, 0px) - var(--mobile-nav-total-offset, 0px) - 16px))');
+    expect(content).toHaveStyle({ minWidth: 'var(--radix-select-trigger-width)' });
+    expect(content).toHaveStyle({ maxWidth: 'min(28rem, calc(100vw - 24px))' });
+    expect(content).toHaveStyle({ maxHeight: 'min(var(--radix-select-content-available-height), calc(100dvh - var(--app-shell-overlay-top-offset, 0px) - var(--mobile-nav-total-offset, 0px) - 16px))' });
   });
 
   test('select content renders above dialog content when opened inside a modal', async () => {
@@ -102,8 +102,8 @@ describe('overlay positioning guards', () => {
 
     expect(await screen.findByRole('option', { name: 'PG' })).toBeInTheDocument();
 
-    const content = document.body.querySelector('[data-radix-popper-content-wrapper] > div') as HTMLElement | null;
-    expect(content?.style.zIndex).toBe('1470');
+    const content = screen.getByTestId('select-content');
+    expect(content).toHaveStyle({ zIndex: '1470' });
   });
 });
 

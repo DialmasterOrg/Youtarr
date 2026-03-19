@@ -197,8 +197,8 @@ describe('DownloadSettingsDialog', () => {
       });
 
       expect(screen.getByRole('option', { name: 'MP3 Only' })).toBeInTheDocument();
-      const content = document.body.querySelector('[data-radix-popper-content-wrapper] > div') as HTMLElement | null;
-      expect(content?.style.zIndex).toBe('1470');
+      const content = screen.getByTestId('select-content');
+      expect(content).toHaveStyle({ zIndex: '1470' });
     });
 
     test('renders rating options above the dialog when custom settings are enabled', async () => {
@@ -213,8 +213,8 @@ describe('DownloadSettingsDialog', () => {
       });
 
       expect(screen.getByRole('option', { name: /TV-MA/ })).toBeInTheDocument();
-      const content = document.body.querySelector('[data-radix-popper-content-wrapper] > div') as HTMLElement | null;
-      expect(content?.style.zIndex).toBe('1470');
+      const content = screen.getByTestId('select-content');
+      expect(content).toHaveStyle({ zIndex: '1470' });
     });
   });
 
