@@ -309,4 +309,70 @@ describe('VideoChip', () => {
       expect(chip).toHaveStyle({ width: '100%' });
     });
   });
+
+  describe('Bulk Import Rendering', () => {
+    const bulkVideo: VideoInfo = {
+      youtubeId: 'dQw4w9WgXcQ',
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      channelName: '',
+      videoTitle: '',
+      duration: 0,
+      publishedAt: 0,
+      isAlreadyDownloaded: false,
+      isMembersOnly: false,
+      isBulkImport: true,
+    };
+
+    test('renders video ID for bulk import chip', () => {
+      render(<VideoChip video={bulkVideo} onDelete={mockOnDelete} />);
+
+      expect(screen.getByText('dQw4w9WgXcQ')).toBeInTheDocument();
+    });
+
+    test('renders URL-only import label', () => {
+      render(<VideoChip video={bulkVideo} onDelete={mockOnDelete} />);
+
+      expect(screen.getByText('URL-only import')).toBeInTheDocument();
+    });
+
+    test('applies info color for bulk import chip', () => {
+      render(<VideoChip video={bulkVideo} onDelete={mockOnDelete} />);
+
+      const chip = screen.getByRole('button');
+      expect(chip).toHaveClass('chip-info');
+    });
+
+    test('shows full URL in tooltip for bulk import', async () => {
+      render(<VideoChip video={bulkVideo} onDelete={mockOnDelete} />);
+
+      const chip = screen.getByRole('button');
+      fireEvent.mouseOver(chip);
+
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(
+        'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+      );
+    });
+
+    test('calls onDelete with youtubeId for bulk import chip', () => {
+      render(<VideoChip video={bulkVideo} onDelete={mockOnDelete} />);
+
+      const deleteIcon = screen.getByTestId('CloseIcon');
+      fireEvent.click(deleteIcon);
+
+      expect(mockOnDelete).toHaveBeenCalledWith('dQw4w9WgXcQ');
+    });
+
+    test('does not show duration, media type, or history icon for bulk import', () => {
+      render(<VideoChip video={bulkVideo} onDelete={mockOnDelete} />);
+
+      expect(screen.queryByText('0:00')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('HistoryIcon')).not.toBeInTheDocument();
+    });
+
+    test('renders link icon for bulk import chip', () => {
+      render(<VideoChip video={bulkVideo} onDelete={mockOnDelete} />);
+
+      expect(screen.getByTestId('LinkIcon')).toBeInTheDocument();
+    });
+  });
 });

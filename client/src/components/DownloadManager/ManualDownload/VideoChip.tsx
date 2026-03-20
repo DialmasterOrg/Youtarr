@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Chip, Tooltip, Grow, Popover, Typography, IconButton } from '../../ui';
-import { Close as CloseIcon, Lock } from '../../../lib/icons';
+import { Chip, Tooltip, Box, Grow, Popover, Typography, IconButton } from '../../ui';
+import { Close as CloseIcon, Lock, Link as LinkIcon } from '../../../lib/icons';
 import { History as HistoryIcon } from 'lucide-react';
 import { VideoInfo } from './types';
 import { useThemeEngine } from '../../../contexts/ThemeEngineContext';
@@ -36,6 +36,48 @@ const getMediaTypeInfo = (mediaType?: string) => {
 const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [tooltipOpen, setTooltipOpen] = useState(false);
+
+  if (video.isBulkImport) {
+    const bulkLabel = (
+      <Box className="flex items-center gap-2">
+        <LinkIcon size={14} data-testid="LinkIcon" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
+        <Box>
+          <Box className="text-xs font-bold">
+            {video.youtubeId}
+          </Box>
+          <Box className="text-[0.7rem] text-muted-foreground">
+            URL-only import
+          </Box>
+        </Box>
+      </Box>
+    );
+
+    return (
+      <Grow in={true} timeout={300}>
+        <Tooltip title={video.url} open={tooltipOpen}>
+          <Chip
+            onMouseOver={() => setTooltipOpen(true)}
+            onMouseOut={() => setTooltipOpen(false)}
+            onClick={() => {}}
+            aria-label={video.url}
+            label={bulkLabel}
+            onDelete={() => onDelete(video.youtubeId)}
+            deleteIcon={<CloseIcon size={14} data-testid="CloseIcon" />}
+            color="info"
+            variant="filled"
+            style={{
+              height: 'auto',
+              paddingTop: 8,
+              paddingBottom: 8,
+              width: '100%',
+              transition: 'all 0.2s ease',
+              boxShadow: 'var(--chip-shadow)',
+            }}
+          />
+        </Tooltip>
+      </Grow>
+    );
+  }
 
   const handlePopoverOpen = (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();

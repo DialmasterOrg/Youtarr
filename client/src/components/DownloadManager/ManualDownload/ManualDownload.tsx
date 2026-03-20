@@ -21,6 +21,7 @@ import axios from 'axios';
 import UrlInput from './UrlInput';
 import VideoChip from './VideoChip';
 import DownloadSettingsDialog from './DownloadSettingsDialog';
+import BulkImportDialog from './BulkImportDialog';
 import { VideoInfo, ValidationResponse, DownloadSettings } from './types';
 
 interface ManualDownloadProps {
@@ -37,6 +38,13 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
   const [isDownloading, setIsDownloading] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [previouslyDownloadedCount, setPreviouslyDownloadedCount] = useState(0);
+  const [showBulkImport, setShowBulkImport] = useState(false);
+
+  const handleBulkImport = useCallback((videos: VideoInfo[]) => {
+    setValidatedVideos(prev => [...prev, ...videos]);
+    setShowBulkImport(false);
+    setSuccessMessage(`Added ${videos.length} URL${videos.length !== 1 ? 's' : ''} to download queue.`);
+  }, []);
 
   const validateUrl = useCallback(async (url: string): Promise<boolean> => {
     setIsValidating(true);
@@ -163,11 +171,24 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
         <Typography variant="body2" color="text.secondary" className="mb-4">
           Paste YouTube video URLs to add to queue
         </Typography>
-        <UrlInput
-          onValidate={validateUrl}
-          isValidating={isValidating}
-          disabled={isDownloading}
-        />
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+          <Box sx={{ flex: 1 }}>
+            <UrlInput
+              onValidate={validateUrl}
+              isValidating={isValidating}
+              disabled={isDownloading}
+            />
+          </Box>
+          <Button
+            variant="outlined"
+            onClick={() => setShowBulkImport(true)}
+            startIcon={<PlaylistAddIcon />}
+            disabled={isDownloading}
+            sx={{ whiteSpace: 'nowrap', minHeight: 56 }}
+          >
+            Bulk Import
+          </Button>
+        </Box>
       </Paper>
 
       {validatedVideos.length > 0 && (
@@ -271,6 +292,13 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
         mode="manual"
         defaultResolutionSource="global"
         token={token}
+      />
+
+      <BulkImportDialog
+        open={showBulkImport}
+        onClose={() => setShowBulkImport(false)}
+        onImport={handleBulkImport}
+        existingVideoIds={new Set(validatedVideos.map(v => v.youtubeId))}
       />
     </Box>
   );
