@@ -171,23 +171,26 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
         <Typography variant="body2" color="text.secondary" className="mb-4">
           Paste YouTube video URLs to add to queue
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-          <Box sx={{ flex: 1 }}>
+        <Box className="flex flex-col gap-4">
+          <Box className="w-full">
             <UrlInput
               onValidate={validateUrl}
               isValidating={isValidating}
               disabled={isDownloading}
             />
           </Box>
-          <Button
-            variant="outlined"
-            onClick={() => setShowBulkImport(true)}
-            startIcon={<PlaylistAddIcon />}
-            disabled={isDownloading}
-            sx={{ whiteSpace: 'nowrap', minHeight: 56 }}
-          >
-            Bulk Import
-          </Button>
+          <Box className="flex justify-center">
+            <Button
+              variant="outlined"
+              onClick={() => setShowBulkImport(true)}
+              startIcon={<PlaylistAddIcon />}
+              disabled={isDownloading}
+              className="w-full md:w-[20vw]"
+              sx={{ whiteSpace: 'nowrap', minHeight: 56 }}
+            >
+              Bulk Import
+            </Button>
+          </Box>
         </Box>
       </Paper>
 
