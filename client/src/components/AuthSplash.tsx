@@ -19,6 +19,33 @@ import {
   AUTH_VIEWPORT_STYLE,
 } from './authSurfaceStyles';
 
+const getAxiosErrorMessage = (error: unknown) => {
+  if (!axios.isAxiosError(error)) {
+    return 'Login failed. Please try again.';
+  }
+
+  if (error.response?.data?.requiresSetup) {
+    window.location.href = '/setup';
+    return null;
+  }
+
+  if (error.response?.status === 429) {
+    return error.response?.data?.error
+      || error.response?.data?.message
+      || 'Too many login attempts. Please try again later.';
+  }
+
+  if (error.response?.status === 401) {
+    return 'Invalid username or password';
+  }
+
+  if (error.response?.data?.error) {
+    return error.response.data.error;
+  }
+
+  return 'Login failed. Please try again.';
+};
+
 interface AuthSplashProps {
   setToken: (token: string) => void;
 }
@@ -44,21 +71,10 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
       localStorage.setItem('authToken', token);
       setToken(token);
       window.location.href = '/channels';
-    } catch (err: any) {
-      if (err.response?.data?.requiresSetup) {
-        window.location.href = '/setup';
-      } else if (err.response?.status === 429) {
-        setError(
-          err.response?.data?.error ||
-            err.response?.data?.message ||
-            'Too many login attempts. Please try again later.'
-        );
-      } else if (err.response?.status === 401) {
-        setError('Invalid username or password');
-      } else if (err.response?.data?.error) {
-        setError(err.response.data.error);
-      } else {
-        setError('Login failed. Please try again.');
+    } catch (err: unknown) {
+      const nextError = getAxiosErrorMessage(err);
+      if (nextError) {
+        setError(nextError);
       }
     } finally {
       setLoading(false);

@@ -1,5 +1,6 @@
 import { screen } from '@testing-library/react';
 import { runStoryWithPlay } from '../components/__tests__/storybookPlayAdapter';
+import * as themeTypographyStories from '../components/__tests__/ThemeTypography.story';
 import * as videoListItemStories from '../components/ChannelPage/__tests__/VideoListItem.story';
 import * as downloadProgressStories from '../components/DownloadManager/__tests__/DownloadProgress.story';
 import * as subtitleLanguageStories from '../components/Configuration/__tests__/SubtitleLanguageSelector.story';
@@ -55,6 +56,20 @@ describe('storybook parity coverage', () => {
     const header = renderResult.container.querySelector('[data-nav-container]');
     expect(header).toBeTruthy();
     expect(header.style.getPropertyValue('--layout-header-title-inset')).not.toBe('');
+  });
+
+  test.each([
+    ['Playful', 'Outfit', 'Outfit'],
+    ['Linear', 'IBM Plex Sans', 'Space Grotesk'],
+    ['Flat', 'Archivo', 'Archivo'],
+  ])('ThemeTypography %s story preserves theme font tokens', async (storyName, expectedBodyFont, expectedDisplayFont) => {
+    const { renderResult } = await runStoryWithPlay(themeTypographyStories, storyName);
+    const preview = renderResult.getByTestId('theme-typography-preview');
+    expect(preview).toBeInTheDocument();
+
+    const rootStyles = getComputedStyle(document.documentElement);
+    expect(rootStyles.getPropertyValue('--font-body')).toContain(expectedBodyFont);
+    expect(rootStyles.getPropertyValue('--font-display')).toContain(expectedDisplayFont);
   });
 });
 

@@ -145,8 +145,8 @@ export const flatTheme: ThemeDefinition = {
   ]),
   tokens: {
     light: {
-      'font-body': "'Plus Jakarta Sans'",
-      'font-display': "'Plus Jakarta Sans'",
+      'font-body': "'Archivo'",
+      'font-display': "'Archivo'",
       background: '0 0% 100%', // Pure White
       foreground: '217 32% 10%', // Dark Gray 900 (#111827)
       card: '0 0% 100%',
@@ -304,8 +304,8 @@ export const flatTheme: ThemeDefinition = {
       'nav-item-text-selected': '#FFFFFF',
     },
     dark: {
-      'font-body': "'Plus Jakarta Sans'",
-      'font-display': "'Plus Jakarta Sans'",
+      'font-body': "'Archivo'",
+      'font-display': "'Archivo'",
       background: '222 47% 11%',
       foreground: '0 0% 100%',
       card: '222 47% 12%',

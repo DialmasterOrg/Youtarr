@@ -214,14 +214,71 @@ export function ThemeEngineProvider({ children }: { children: React.ReactNode })
 
     applyAllTilts();
 
-    const observer = new MutationObserver(() => {
-      applyAllTilts();
+    if (themeMode !== 'playful' || !motionEnabled) {
+      return;
+    }
+
+    const pendingElements = new Set<HTMLElement>();
+    let frameId: number | null = null;
+
+    const queueElement = (element: Element) => {
+      if (!(element instanceof HTMLElement)) {
+        return;
+      }
+
+      if (element.matches(selector)) {
+        pendingElements.add(element);
+      }
+
+      element.querySelectorAll(selector).forEach((node) => {
+        pendingElements.add(node as HTMLElement);
+      });
+    };
+
+    const flushPending = () => {
+      frameId = null;
+      pendingElements.forEach((element) => applyTilt(element));
+      pendingElements.clear();
+    };
+
+    const scheduleFlush = () => {
+      if (frameId !== null) {
+        return;
+      }
+
+      frameId = window.requestAnimationFrame(flushPending);
+    };
+
+    const observer = new MutationObserver((records) => {
+      records.forEach((record) => {
+        if (record.type === 'attributes') {
+          queueElement(record.target as Element);
+          return;
+        }
+
+        record.addedNodes.forEach((node) => {
+          if (node instanceof Element) {
+            queueElement(node);
+          }
+        });
+      });
+
+      scheduleFlush();
     });
 
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'data-chip'],
+    });
 
     return () => {
       observer.disconnect();
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      pendingElements.clear();
     };
   }, [themeMode, motionEnabled]);
 

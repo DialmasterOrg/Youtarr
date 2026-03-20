@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import isEqual from 'lodash/isEqual';
 import {
   Dialog,
   DialogTitle,
@@ -38,40 +39,6 @@ import {
   SnackbarState,
 } from './Configuration/types';
 import { validateConfig } from './Configuration/utils/configValidation';
-
-const isDeepEqual = (a: any, b: any): boolean => {
-  if (a === b) {
-    return true;
-  }
-
-  if (a === null || b === null) {
-    return false;
-  }
-
-  if (typeof a !== typeof b) {
-    return false;
-  }
-
-  if (typeof a !== 'object') {
-    return false;
-  }
-
-  if (Array.isArray(a)) {
-    if (!Array.isArray(b) || a.length !== b.length) {
-      return false;
-    }
-    return a.every((value, index) => isDeepEqual(value, b[index]));
-  }
-
-  const keysA = Object.keys(a);
-  const keysB = Object.keys(b);
-
-  if (keysA.length !== keysB.length) {
-    return false;
-  }
-
-  return keysA.every((key) => Object.prototype.hasOwnProperty.call(b, key) && isDeepEqual(a[key], b[key]));
-};
 
 function Configuration({ token, sectionGroup }: ConfigurationProps) {
   // Use the useConfig hook to fetch and manage configuration
@@ -212,7 +179,7 @@ function Configuration({ token, sectionGroup }: ConfigurationProps) {
       return;
     }
     const changed = TRACKABLE_CONFIG_KEYS.some((k) => {
-      return !isDeepEqual((config as any)[k], (initialConfig as any)[k]);
+      return !isEqual((config as any)[k], (initialConfig as any)[k]);
     });
     setHasUnsavedChanges(changed);
   }, [config, initialConfig]);

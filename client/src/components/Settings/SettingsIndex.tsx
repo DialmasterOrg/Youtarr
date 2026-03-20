@@ -49,7 +49,7 @@ export function SettingsIndex() {
                     padding: '12px 12px',
                   }}
                 >
-                  <div style={{ marginLeft: '25px', minWidth: 0 }}>
+                  <div style={{ minWidth: 0 }}>
                     <Typography variant="h6" style={{ fontWeight: 700, marginBottom: 2, lineHeight: 1 }}>
                       {page.title}
                     </Typography>

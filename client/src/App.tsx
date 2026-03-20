@@ -37,12 +37,32 @@ import { YTDLP_UPDATED_EVENT } from './components/Configuration/hooks/useYtDlpUp
 // Event name for database error detection
 const DB_ERROR_EVENT = 'db-error-detected';
 
+async function readJsonResponse<T>(input: RequestInfo | URL, init?: RequestInit): Promise<{
+  data: T | null;
+  ok: boolean;
+  status: number;
+}> {
+  const response = init === undefined ? await fetch(input) : await fetch(input, init);
+  let data: T | null = null;
+
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  return {
+    data,
+    ok: response.ok,
+    status: response.status,
+  };
+}
+
 function AppContent() {
   const { themeMode, colorMode, setColorMode } = useThemeEngine();
   const [token, setToken] = useState<string | null>(
     localStorage.getItem('authToken') // Only use the new authToken, no fallback to plexAuthToken
   );
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [serverVersion, setServerVersion] = useState('');
   const [ytDlpVersion, setYtDlpVersion] = useState('');
   const [ytDlpUpdateAvailable, setYtDlpUpdateAvailable] = useState(false);
@@ -88,16 +108,15 @@ function AppContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appConfig.darkModeEnabled]);
 
-  const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
-  };
-
   const handleLogout = () => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('plexAuthToken');
-    // Redirect to login splash screen
-    window.location.href = '/login';
     setToken(null);
+
+    // Redirect to login splash screen outside of test environments.
+    if (import.meta.env.MODE !== 'test') {
+      window.location.href = '/login';
+    }
   };
 
   const handleDatabaseRetry = () => {
@@ -157,15 +176,24 @@ function AppContent() {
 
   // Check database status on initial load
   useEffect(() => {
-    fetch('/api/db-status')
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.status === 'healthy') {
+    readJsonResponse<{ status?: string; database?: { errors?: string[] }; details?: string[]; message?: string }>('/api/db-status')
+      .then(({ data, ok, status }) => {
+        if (data?.status === 'healthy') {
           setDbStatus('healthy');
-        } else {
-          setDbStatus('error');
-          setDbErrors(data.database?.errors || ['Unknown database error']);
+          return;
         }
+
+        if (data) {
+          setDbStatus('error');
+          setDbErrors(data?.database?.errors || data?.details || [data?.message || 'Unknown database error']);
+          return;
+        }
+
+        if (!ok) {
+          throw new Error(`Database status request failed with ${status}`);
+        }
+
+        throw new Error('Database status response was not valid JSON');
       })
       .catch((error) => {
         console.error('Failed to check database status:', error);
@@ -231,16 +259,19 @@ function AppContent() {
     // Check database status every 15 seconds
     const checkInterval = setInterval(async () => {
       try {
-        const response = await fetch('/api/db-status');
-        const data = await response.json();
+        const { data, ok, status } = await readJsonResponse<{ status?: string; database?: { errors?: string[] }; details?: string[]; message?: string }>('/api/db-status');
 
-        if (data.status === 'healthy') {
+        if (data?.status === 'healthy') {
           setDbStatus('healthy');
           setDbRecovered(true); // Show recovery message
           setDbErrors([]);
-        } else {
+        } else if (data) {
           // Still unhealthy, update errors
-          setDbErrors(data.database?.errors || ['Unknown database error']);
+          setDbErrors(data?.database?.errors || data?.details || [data?.message || 'Unknown database error']);
+        } else if (!ok) {
+          throw new Error(`Database status poll failed with ${status}`);
+        } else {
+          throw new Error('Database status poll response was not valid JSON');
         }
       } catch (error) {
         console.error('Error polling database status:', error);
@@ -297,9 +328,12 @@ function AppContent() {
     }
 
     // First check if setup is required
-    fetch('/setup/status')
-      .then(response => response.json())
-      .then(data => {
+    readJsonResponse<{ requiresSetup: boolean; platformManaged?: boolean }>('/setup/status')
+      .then(({ data, ok, status }) => {
+        if (!ok || !data) {
+          throw new Error(`Setup status request failed with ${status}`);
+        }
+
         setRequiresSetup(data.requiresSetup);
         setCheckingSetup(false);
 

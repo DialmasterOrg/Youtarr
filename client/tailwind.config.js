@@ -1,5 +1,7 @@
 const tokens = require('./src/theme/tokens.json');
 
+const semanticColor = (tokenName) => `hsl(var(--${tokenName}-raw) / <alpha-value>)`;
+
 module.exports = {
   darkMode: ['class', '[data-theme="dark"]'],
   content: ['./index.html', './src/**/*.{ts,tsx,js,jsx,mdx}', './.storybook/**/*.{ts,tsx,js,jsx,mdx}'],
@@ -30,56 +32,56 @@ module.exports = {
       spacing: tokens.spacing,
       colors: {
         // Semantic CSS variable-driven colors (theme-aware)
-        background: 'var(--background)',
-        foreground: 'var(--foreground)',
+        background: semanticColor('background'),
+        foreground: semanticColor('foreground'),
         card: {
-          DEFAULT: 'var(--card)',
-          foreground: 'var(--card-foreground)',
+          DEFAULT: semanticColor('card'),
+          foreground: semanticColor('card-foreground'),
         },
         popover: {
-          DEFAULT: 'var(--popover)',
-          foreground: 'var(--popover-foreground)',
+          DEFAULT: semanticColor('popover'),
+          foreground: semanticColor('popover-foreground'),
         },
         primary: {
-          DEFAULT: 'var(--primary)',
-          foreground: 'var(--primary-foreground)',
+          DEFAULT: semanticColor('primary'),
+          foreground: semanticColor('primary-foreground'),
         },
         secondary: {
-          DEFAULT: 'var(--secondary)',
-          foreground: 'var(--secondary-foreground)',
+          DEFAULT: semanticColor('secondary'),
+          foreground: semanticColor('secondary-foreground'),
         },
         tertiary: {
-          DEFAULT: 'var(--tertiary)',
-          foreground: 'var(--tertiary-foreground)',
+          DEFAULT: semanticColor('tertiary'),
+          foreground: semanticColor('tertiary-foreground'),
         },
         muted: {
-          DEFAULT: 'var(--muted)',
-          foreground: 'var(--muted-foreground)',
+          DEFAULT: semanticColor('muted'),
+          foreground: semanticColor('muted-foreground'),
         },
         accent: {
-          DEFAULT: 'var(--accent)',
-          foreground: 'var(--accent-foreground)',
+          DEFAULT: semanticColor('accent'),
+          foreground: semanticColor('accent-foreground'),
         },
         destructive: {
-          DEFAULT: 'var(--destructive)',
-          foreground: 'var(--destructive-foreground)',
+          DEFAULT: semanticColor('destructive'),
+          foreground: semanticColor('destructive-foreground'),
         },
         success: {
-          DEFAULT: 'hsl(var(--success))',
-          foreground: 'hsl(var(--success-foreground))',
+          DEFAULT: semanticColor('success'),
+          foreground: semanticColor('success-foreground'),
         },
         warning: {
-          DEFAULT: 'hsl(var(--warning))',
-          foreground: 'hsl(var(--warning-foreground))',
+          DEFAULT: semanticColor('warning'),
+          foreground: semanticColor('warning-foreground'),
         },
         info: {
-          DEFAULT: 'hsl(var(--info))',
-          foreground: 'hsl(var(--info-foreground))',
+          DEFAULT: semanticColor('info'),
+          foreground: semanticColor('info-foreground'),
         },
-        border: 'var(--border)',
-        'border-strong': 'var(--border-strong)',
-        input: 'var(--input)',
-        ring: 'var(--ring)',
+        border: semanticColor('border'),
+        'border-strong': semanticColor('border-strong'),
+        input: semanticColor('input'),
+        ring: semanticColor('ring'),
       },
       boxShadow: {
         soft: 'var(--shadow-soft)',

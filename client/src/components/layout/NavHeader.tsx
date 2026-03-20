@@ -20,13 +20,14 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { StorageHeaderWidget } from './StorageHeaderWidget';
 import { NAV_DRAWER_SECTION_BUTTON_GUTTER } from './navLayoutConstants';
+import { NavItem, isChannelsSectionActive, isNavPathActive } from './navigation';
 import youtarrWordmark from '../../Youtarr_text.png';
 import './layoutFallback.css';
 
 interface NavHeaderProps {
   appName: string;
   layoutPolicy: ThemeLayoutPolicy;
-  navItems: any[];
+  navItems: NavItem[];
   token: string | null;
   isPlatformManaged: boolean;
   versionLabel?: string;
@@ -70,14 +71,6 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   const usesInsetFrame = isInsetFrame && !showLandscapeNavItems;
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
-
-  const isChannelsSectionActive = (path: string, basePath: string, key: string) => {
-    if (path === basePath || path.startsWith(basePath + '/')) {
-      return true;
-    }
-
-    return key === 'channels' && path.startsWith('/channel/');
-  };
 
   const showTopNavItems = (layoutPolicy.showDesktopNavItems && !isMobile) || showLandscapeNavItems;
   const hasAppUpdate = token && !isPlatformManaged && updateAvailable && Boolean(updateTooltip);
@@ -211,10 +204,10 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
       {navItems.map((item) => {
         const isOpen = activeKey === item.key;
         const hasSubItems = item.subItems && item.subItems.length > 0;
-        const isParentActive = isChannelsSectionActive(location.pathname, item.to, item.key)
-          || item.subItems?.some((subItem: any) => (
-            location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/')
-          ));
+        const isParentActive = Boolean(isChannelsSectionActive(location.pathname, item.to, item.key)
+          || item.subItems?.some((subItem) => (
+            isNavPathActive(location.pathname, subItem.to)
+          )));
 
         return (
           <Box
@@ -252,8 +245,8 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                 }}
               >
                 <Paper style={menuPaperStyle}>
-                  {item.subItems.map((subItem: any) => {
-                    const isSubActive = location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/');
+                  {(item.subItems ?? []).map((subItem) => {
+                    const isSubActive = isNavPathActive(location.pathname, subItem.to);
                     return (
                       <RouterLink
                         key={subItem.key}

@@ -179,8 +179,8 @@ export const linearTheme: ThemeDefinition = {
   ]),
   tokens: {
     light: {
-      'font-body': "'Plus Jakarta Sans'",
-      'font-display': "'Plus Jakarta Sans'",
+      'font-body': "'IBM Plex Sans'",
+      'font-display': "'Space Grotesk'",
       background: '240 10% 3.9%', // Dark by default for linear
       foreground: '0 0% 98%',
       card: '240 10% 3.9%',
@@ -351,8 +351,8 @@ export const linearTheme: ThemeDefinition = {
       'nav-item-text-selected': '#F3F4FF',
     },
     dark: {
-      'font-body': "'Plus Jakarta Sans'",
-      'font-display': "'Plus Jakarta Sans'",
+      'font-body': "'IBM Plex Sans'",
+      'font-display': "'Space Grotesk'",
       background: '240 10% 3.9%',
       foreground: '0 0% 98%',
       card: '240 10% 3.9%',

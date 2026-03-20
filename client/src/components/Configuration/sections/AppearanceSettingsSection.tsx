@@ -38,6 +38,8 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
     event.stopPropagation();
   };
 
+  const motionDescription = 'Motion affects transitions, floating animations, and motion accents throughout the interface.';
+
   return (
     <ConfigurationAccordion
       title="Appearance"
@@ -76,7 +78,7 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
               label="Enable Theme Animations & Motion"
             />
             <InfoTooltip
-              text="Motion affects transitions, floating animations, and motion accents throughout the interface."
+              text={motionDescription}
               onMobileClick={onMobileTooltipClick}
             />
           </div>
@@ -84,7 +86,7 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
 
         <Grid item xs={12}>
           <Typography variant="body2" color="secondary">
-            Motion affects transitions, floating animations, and motion accents throughout the interface.
+            {motionDescription}
           </Typography>
         </Grid>
 

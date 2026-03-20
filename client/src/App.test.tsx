@@ -416,6 +416,22 @@ describe('App Component', () => {
     });
   });
 
+  test('falls back to setup flow when /setup/status returns a non-ok response', async () => {
+    (global.fetch as jest.Mock).mockImplementation(createFetchMock({
+      '/setup/status': {
+        ok: false,
+        status: 500,
+        json: async () => ({ message: 'server error' }),
+      },
+    }));
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('setup-page')).toBeInTheDocument();
+    });
+  });
+
   test('displays ElfHosted branding when platform is elfhosted', async () => {
     localStorageMock.getItem.mockReturnValue('test-token');
     (global.fetch as jest.Mock).mockImplementation(createFetchMock({
@@ -619,6 +635,29 @@ describe('App Component', () => {
       });
 
       expect(screen.getByTestId('error-count')).toHaveTextContent('2 errors');
+    });
+
+    test('shows overlay when /api/db-status returns a non-ok JSON response', async () => {
+      (global.fetch as jest.Mock).mockImplementation(createFetchMock({
+        '/api/db-status': {
+          ok: false,
+          status: 503,
+          json: async () => ({
+            message: 'Database unavailable',
+            database: {
+              errors: ['Connection refused'],
+            },
+          }),
+        },
+      }));
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('database-error-overlay')).toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('error-count')).toHaveTextContent('1 errors');
     });
 
     test('extracts errors correctly from response', async () => {

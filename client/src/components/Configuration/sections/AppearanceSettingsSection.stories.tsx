@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import type { StoryObj } from '@storybook/react';
 import { ThemeEngineProvider, useThemeEngine } from '../../../contexts/ThemeEngineContext';
 import { AppearanceSettingsSection } from './AppearanceSettingsSection';
 
@@ -28,6 +29,6 @@ const meta = {
 };
 
 export default meta;
-type Story = Record<string, never>;
+type Story = StoryObj<typeof meta>;
 
 export const ThemeAndMotionControls: Story = {};

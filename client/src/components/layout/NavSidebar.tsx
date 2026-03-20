@@ -15,6 +15,7 @@ import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { StorageFooterWidget } from './StorageFooterWidget';
 import { getThemeById } from '../../themes';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
+import { NavItem, isNavItemActive, isNavPathActive } from './navigation';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import {
   MOBILE_NAV_PRIMARY_HEIGHT,
@@ -24,10 +25,9 @@ import {
   NAV_DRAWER_PANEL_PADDING_X,
   NAV_DRAWER_PANEL_PADDING_X_COLLAPSED,
   NAV_MAIN_BUTTON_SIDE_PADDING,
+  NAV_SIDEBAR_COLLAPSED_WIDTH,
+  NAV_SIDEBAR_EXPANDED_WIDTH,
 } from './navLayoutConstants';
-
-const EXPANDED_WIDTH = 200;
-const COLLAPSED_WIDTH = 65;
 
 const NAV_MAIN_MIN_HEIGHT = 40;
 const NAV_SUB_MIN_HEIGHT = 20;
@@ -59,7 +59,7 @@ interface NavSidebarProps {
   isTopNav: boolean;
   drawerOpenMobile: boolean;
   collapsed: boolean;
-  navItems: any[];
+  navItems: NavItem[];
   versionLabel?: string;
   token: string | null;
   onCloseMobile: () => void;
@@ -82,7 +82,11 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
   const isCompactHeight = useMediaQuery('(max-height: 500px)');
   const isCompactStorage = false;
   const footerShouldScroll = sidebarBehavior.compactHeightScrollFooter && isCompactHeight;
-  const drawerWidth = isMobile ? EXPANDED_WIDTH : collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH;
+  const drawerWidth = isMobile
+    ? NAV_SIDEBAR_EXPANDED_WIDTH
+    : collapsed
+      ? NAV_SIDEBAR_COLLAPSED_WIDTH
+      : NAV_SIDEBAR_EXPANDED_WIDTH;
   const isNavCollapsed = !isMobile && collapsed;
   const drawerPanelPaddingX = isNavCollapsed ? NAV_DRAWER_PANEL_PADDING_X_COLLAPSED : NAV_DRAWER_PANEL_PADDING_X;
   const drawerPanelPaddingLeft = sidebarBehavior.zeroDesktopPanelPadding ? 0 : drawerPanelPaddingX;
@@ -92,20 +96,12 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
   const iconBoxSize = NAV_ICON_SIZE;
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
-  const isChannelsSectionActive = (path: string, basePath: string, key: string) => {
-    if (path === basePath || path.startsWith(basePath + '/')) {
-      return true;
-    }
-
-    return key === 'channels' && path.startsWith('/channel/');
-  };
-
   // Track expanded menu items on mobile
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const activeItem = navItems.find((item) =>
-      item.subItems?.some((subItem: any) => location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/'))
+      item.subItems?.some((subItem) => isNavPathActive(location.pathname, subItem.to))
     );
 
     if (activeItem?.key) {
@@ -127,25 +123,12 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
   const displayVersionLabel = isNavCollapsed ? collapsedVersionLabel : (versionLabel || '');
 
   const activeSidebarSectionKey = React.useMemo(() => {
-    const activeItem = navItems.find((item) => {
-      const hasSubMatch = item.subItems?.some((subItem: any) => (
-        location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/')
-      ));
-      const parentMatch = isChannelsSectionActive(location.pathname, item.to, item.key);
-      return Boolean(parentMatch || hasSubMatch);
-    });
+    const activeItem = navItems.find((item) => isNavItemActive(location.pathname, item));
     return activeItem?.key || null;
   }, [location.pathname, navItems]);
 
   const activeItem = React.useMemo(
-    () =>
-      navItems.find((item) => {
-        const hasSubMatch = item.subItems?.some((subItem: any) => (
-          location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/')
-        ));
-        const parentMatch = isChannelsSectionActive(location.pathname, item.to, item.key);
-        return Boolean(parentMatch || hasSubMatch);
-      }) || null,
+    () => navItems.find((item) => isNavItemActive(location.pathname, item)) || null,
     [location.pathname, navItems]
   );
 
@@ -214,11 +197,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
           }}
         >
           {navItems.map((item) => {
-            const hasSubMatch = item.subItems?.some((subItem: any) => (
-              location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/')
-            ));
-            const parentMatch = isChannelsSectionActive(location.pathname, item.to, item.key);
-            const selected = Boolean(parentMatch || hasSubMatch);
+            const selected = isNavItemActive(location.pathname, item);
             const isExpanded = isMobile
               ? expandedItems[item.key] || selected
               : !isNavCollapsed && Boolean(item.subItems) && activeSidebarSectionKey === item.key;
@@ -323,8 +302,8 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                 <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                   {item.subItems && (
                     <List disablePadding style={{ marginTop: NAV_SUB_VERTICAL_GAP * 8, display: 'flex', flexDirection: 'column', gap: `${NAV_SUB_VERTICAL_GAP * 8}px` }}>
-                      {item.subItems.map((subItem: any) => {
-                        const subSelected = location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/');
+                      {item.subItems.map((subItem) => {
+                        const subSelected = isNavPathActive(location.pathname, subItem.to);
                         return (
                           <ListItemButton
                             key={subItem.key}
@@ -503,8 +482,8 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
               paddingBottom: 'var(--mobile-subnav-surface-padding-bottom)',
             }}
           >
-            {activeItemWithSubItems.subItems.map((subItem: any) => {
-              const subSelected = location.pathname === subItem.to || location.pathname.startsWith(subItem.to + '/');
+            {(activeItemWithSubItems.subItems ?? []).map((subItem) => {
+              const subSelected = isNavPathActive(location.pathname, subItem.to);
               return (
                 <button
                   key={subItem.key}

@@ -5,14 +5,14 @@ import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { NavHeader } from './NavHeader';
 import { NavSidebar } from './NavSidebar';
 import { BackgroundDecorations } from './BackgroundDecorations';
+import { NavItem } from './navigation';
 import { getThemeById, getThemeLayoutCssVars, resolveThemeLayoutPolicy } from '../../themes';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { NAV_SIDEBAR_COLLAPSED_WIDTH, NAV_SIDEBAR_EXPANDED_WIDTH } from './navLayoutConstants';
 import './layoutFallback.css';
 
 import { Tv as SubscriptionsIcon, Library as VideoLibraryIcon } from 'lucide-react';
 import { Download as DownloadIcon, Settings as SettingsIcon } from '../../lib/icons';
-
-export type AppNavKey = 'channels' | 'videos' | 'downloads' | 'settings';
 
 interface AppShellProps {
   token: string | null;
@@ -27,8 +27,6 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
-const EXPANDED_WIDTH = 200;
-const COLLAPSED_WIDTH = 65;
 const APP_BAR_TOGGLE_SIZE = 44;
 
 export function AppShell({
@@ -57,8 +55,16 @@ export function AppShell({
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
-    const navWidth = isMobile || isTopNav ? 0 : (collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH);
-    document.documentElement.style.setProperty('--nav-width', `${navWidth}px`);
+    const navWidth = isMobile || isTopNav
+      ? 0
+      : (collapsed ? NAV_SIDEBAR_COLLAPSED_WIDTH : NAV_SIDEBAR_EXPANDED_WIDTH);
+    const root = document.documentElement;
+
+    root.style.setProperty('--nav-width', `${navWidth}px`);
+
+    return () => {
+      root.style.removeProperty('--nav-width');
+    };
   }, [collapsed, isMobile, isTopNav]);
 
   useEffect(() => {
@@ -92,7 +98,7 @@ export function AppShell({
     []
   );
 
-  const navItems = useMemo(
+  const navItems = useMemo<NavItem[]>(
     () =>
       [
         {

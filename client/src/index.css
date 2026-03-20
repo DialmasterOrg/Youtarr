@@ -1,7 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Outfit:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-
 :root {
-  --font-body: 'Plus Jakarta Sans';
+  --font-body: 'Outfit';
   --font-display: 'Outfit';
   --transition-bouncy: cubic-bezier(0.34, 1.56, 0.64, 1);
   --transition-base: 300ms;
@@ -39,8 +37,8 @@
   --appbar-gradient: linear-gradient(135deg, rgba(139, 92, 246, 0.45), rgba(251, 113, 133, 0.45));
   --avatar-hover-scale: 1.05;
   /* Navigation width variables */
-  --nav-width-expanded: 260px;
-  --nav-width-collapsed: 72px;
+  --nav-width-expanded: 200px;
+  --nav-width-collapsed: 65px;
   --nav-width: var(--nav-width-expanded);
 }
 
@@ -339,9 +337,21 @@ body[data-motion='off'] {
   --transition-fast: 0ms;
 }
 
-body[data-motion='off'] *,
-body[data-motion='off'] *::before,
-body[data-motion='off'] *::after {
+body[data-motion='off'] .animate-on-mount,
+body[data-motion='off'] .animate-bounce,
+body[data-motion='off'] .animate-slide-left,
+body[data-motion='off'] .animate-slide-right,
+body[data-motion='off'] .playful-shape,
+body[data-motion='off'] .linear-blob,
+body[data-motion='off'] .wiggle-card,
+body[data-motion='off'] .sticker,
+body[data-motion='off'] [data-chip],
+body[data-motion='off'] .pop-toggle,
+body[data-motion='off'] [data-card],
+body[data-motion='off'] [data-btn],
+body[data-motion='off'] .settings-splash-card,
+body[data-motion='off'] .settings-splash-card [data-card-action],
+body[data-motion='off'] .linear-top-rail::after {
   animation-duration: 0ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0ms !important;
@@ -418,11 +428,6 @@ body[data-motion='on'][data-theme='linear'] .animate-slide-right {
 /* Loading Spinner - Always Animated (Even with Motion Off) */
 .loading-spinner {
   animation: spin 1s linear infinite !important;
-}
-
-/* Structural Layout Anchors */
-:root {
-  --nav-width: 260px;
 }
 
 @media (max-width: 767px) {
