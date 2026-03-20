@@ -47,7 +47,7 @@ const LinearProgress = React.forwardRef<HTMLDivElement, LinearProgressProps>(
           className={cn(
             'h-full w-full flex-1 rounded-full',
             !barColor && (colorClass[color] ?? 'bg-primary'),
-            variant === 'indeterminate' && 'animate-spin opacity-50',
+            variant === 'indeterminate' && 'animate-[indeterminate_1.5s_ease-in-out_infinite]',
             barClassName,
           )}
           style={{

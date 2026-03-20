@@ -76,7 +76,8 @@ describe('DownloadFormatIndicator', () => {
       await user.hover(chip);
 
       const tooltip = await screen.findByRole('tooltip');
-      expect(tooltip).toHaveTextContent('channel/video.mp4');
+      expect(tooltip).toHaveTextContent('channel');
+      expect(tooltip).not.toHaveTextContent('video.mp4');
       expect(tooltip).not.toHaveTextContent('/usr/src/app/data/');
     });
 
@@ -93,7 +94,8 @@ describe('DownloadFormatIndicator', () => {
       await user.hover(chip);
 
       const tooltip = await screen.findByRole('tooltip');
-      expect(tooltip).toHaveTextContent('/custom/path/video.mp4');
+      expect(tooltip).toHaveTextContent('/custom/path');
+      expect(tooltip).not.toHaveTextContent('video.mp4');
     });
   });
 });

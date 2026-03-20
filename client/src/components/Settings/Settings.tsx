@@ -173,10 +173,6 @@ export function Settings({ token }: SettingsProps) {
     return `Settings / ${page?.title || suffix}`;
   }, [location.pathname]);
 
-  if (isLoading) {
-    return <ConfigurationSkeleton />;
-  }
-
   return (
     <div>
       <SaveBar
@@ -193,121 +189,125 @@ export function Settings({ token }: SettingsProps) {
         </Typography>
       </div>
 
-      <Routes>
-        <Route index element={<SettingsIndex />} />
-        <Route
-          path="core"
-          element={
-            <CoreSettingsSection
-              config={config}
-              deploymentEnvironment={deploymentEnvironment}
-              isPlatformManaged={isPlatformManaged}
-              onConfigChange={handleConfigChange}
-              onMobileTooltipClick={setMobileTooltip}
-              token={token}
-            />
-          }
-        />
-        <Route path="appearance" element={<AppearanceSettingsSection onMobileTooltipClick={setMobileTooltip} />} />
-        <Route
-          path="plex"
-          element={
-            <PlexIntegrationSection
-              config={config}
-              isPlatformManaged={isPlatformManaged}
-              plexConnectionStatus={plexConnectionStatus}
-              hasPlexServerConfigured={hasPlexServerConfigured}
-              onConfigChange={handleConfigChange}
-              onTestConnection={testPlexConnection}
-              onOpenLibrarySelector={openLibrarySelector}
-              onOpenPlexAuthDialog={() => setOpenPlexAuthDialog(true)}
-              onMobileTooltipClick={setMobileTooltip}
-            />
-          }
-        />
-        <Route
-          path="sponsorblock"
-          element={
-            <SponsorBlockSection
-              config={config}
-              onConfigChange={handleConfigChange}
-              onMobileTooltipClick={setMobileTooltip}
-            />
-          }
-        />
-        <Route
-          path="cookies"
-          element={
-            <CookieConfigSection
-              token={token}
-              config={config}
-              setConfig={setConfig}
-              onConfigChange={handleConfigChange}
-              setSnackbar={setSnackbar}
-              onMobileTooltipClick={setMobileTooltip}
-            />
-          }
-        />
-        <Route
-          path="notifications"
-          element={
-            <NotificationsSection
-              token={token}
-              config={config}
-              onConfigChange={handleConfigChange}
-              onMobileTooltipClick={setMobileTooltip}
-              setSnackbar={setSnackbar}
-            />
-          }
-        />
-        <Route
-          path="downloading"
-          element={
-            <DownloadPerformanceSection
-              config={config}
-              onConfigChange={handleConfigChange}
-              onMobileTooltipClick={setMobileTooltip}
-            />
-          }
-        />
-        <Route path="performance" element={<Navigate to="/settings/downloading" replace />} />
-        <Route path="advanced" element={<Navigate to="/settings/downloading" replace />} />
-        <Route
-          path="autoremove"
-          element={
-            <AutoRemovalSection
-              token={token}
-              config={config}
-              storageAvailable={storageAvailable}
-              onConfigChange={handleConfigChange}
-              onMobileTooltipClick={setMobileTooltip}
-            />
-          }
-        />
-        <Route
-          path="security"
-          element={
-            <AccountSecuritySection
-              token={token}
-              envAuthApplied={config.envAuthApplied}
-              authEnabled={isPlatformManaged.authEnabled}
-              setSnackbar={setSnackbar}
-            />
-          }
-        />
-        <Route
-          path="api-keys"
-          element={
-            <ApiKeysSection
-              token={token}
-              apiKeyRateLimit={config.apiKeyRateLimit}
-              onRateLimitChange={(value) => handleConfigChange({ apiKeyRateLimit: value })}
-            />
-          }
-        />
+      {isLoading ? (
+        <ConfigurationSkeleton compact />
+      ) : (
+        <Routes>
+          <Route index element={<SettingsIndex />} />
+          <Route
+            path="core"
+            element={
+              <CoreSettingsSection
+                config={config}
+                deploymentEnvironment={deploymentEnvironment}
+                isPlatformManaged={isPlatformManaged}
+                onConfigChange={handleConfigChange}
+                onMobileTooltipClick={setMobileTooltip}
+                token={token}
+              />
+            }
+          />
+          <Route path="appearance" element={<AppearanceSettingsSection onMobileTooltipClick={setMobileTooltip} />} />
+          <Route
+            path="plex"
+            element={
+              <PlexIntegrationSection
+                config={config}
+                isPlatformManaged={isPlatformManaged}
+                plexConnectionStatus={plexConnectionStatus}
+                hasPlexServerConfigured={hasPlexServerConfigured}
+                onConfigChange={handleConfigChange}
+                onTestConnection={testPlexConnection}
+                onOpenLibrarySelector={openLibrarySelector}
+                onOpenPlexAuthDialog={() => setOpenPlexAuthDialog(true)}
+                onMobileTooltipClick={setMobileTooltip}
+              />
+            }
+          />
+          <Route
+            path="sponsorblock"
+            element={
+              <SponsorBlockSection
+                config={config}
+                onConfigChange={handleConfigChange}
+                onMobileTooltipClick={setMobileTooltip}
+              />
+            }
+          />
+          <Route
+            path="cookies"
+            element={
+              <CookieConfigSection
+                token={token}
+                config={config}
+                setConfig={setConfig}
+                onConfigChange={handleConfigChange}
+                setSnackbar={setSnackbar}
+                onMobileTooltipClick={setMobileTooltip}
+              />
+            }
+          />
+          <Route
+            path="notifications"
+            element={
+              <NotificationsSection
+                token={token}
+                config={config}
+                onConfigChange={handleConfigChange}
+                onMobileTooltipClick={setMobileTooltip}
+                setSnackbar={setSnackbar}
+              />
+            }
+          />
+          <Route
+            path="downloading"
+            element={
+              <DownloadPerformanceSection
+                config={config}
+                onConfigChange={handleConfigChange}
+                onMobileTooltipClick={setMobileTooltip}
+              />
+            }
+          />
+          <Route path="performance" element={<Navigate to="/settings/downloading" replace />} />
+          <Route path="advanced" element={<Navigate to="/settings/downloading" replace />} />
+          <Route
+            path="autoremove"
+            element={
+              <AutoRemovalSection
+                token={token}
+                config={config}
+                storageAvailable={storageAvailable}
+                onConfigChange={handleConfigChange}
+                onMobileTooltipClick={setMobileTooltip}
+              />
+            }
+          />
+          <Route
+            path="security"
+            element={
+              <AccountSecuritySection
+                token={token}
+                envAuthApplied={config.envAuthApplied}
+                authEnabled={isPlatformManaged.authEnabled}
+                setSnackbar={setSnackbar}
+              />
+            }
+          />
+          <Route
+            path="api-keys"
+            element={
+              <ApiKeysSection
+                token={token}
+                apiKeyRateLimit={config.apiKeyRateLimit}
+                onRateLimitChange={(value) => handleConfigChange({ apiKeyRateLimit: value })}
+              />
+            }
+          />
 
-        <Route path="*" element={<Navigate to="/settings" replace />} />
-      </Routes>
+          <Route path="*" element={<Navigate to="/settings" replace />} />
+        </Routes>
+      )}
 
       <PlexLibrarySelector
         open={openPlexLibrarySelector}

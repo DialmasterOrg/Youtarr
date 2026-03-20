@@ -34,6 +34,10 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
     setShowHeaderWordmark,
   } = useThemeEngine();
 
+  const stopThemeSelection = (event: React.SyntheticEvent) => {
+    event.stopPropagation();
+  };
+
   return (
     <ConfigurationAccordion
       title="Appearance"
@@ -84,42 +88,6 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
           </Typography>
         </Grid>
 
-        <Grid item xs={12} sm={6}>
-          <div className="flex items-center">
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={showHeaderWordmark}
-                  onChange={(event) => setShowHeaderWordmark(event.target.checked)}
-                />
-              }
-              label="Show Header Text Image"
-            />
-            <InfoTooltip
-              text={`Shows the Youtarr wordmark image in the top bar. This preference is stored separately for the ${ALL_THEMES[themeMode]?.name || themeMode} style.`}
-              onMobileClick={onMobileTooltipClick}
-            />
-          </div>
-        </Grid>
-
-        <Grid item xs={12} sm={6}>
-          <div className="flex items-center">
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={showHeaderLogo}
-                  onChange={(event) => setShowHeaderLogo(event.target.checked)}
-                />
-              }
-              label="Show Header Logo"
-            />
-            <InfoTooltip
-              text={`Shows the circular Youtarr logo in the top bar next to the wordmark or app title. This preference is stored separately for the ${ALL_THEMES[themeMode]?.name || themeMode} style.`}
-              onMobileClick={onMobileTooltipClick}
-            />
-          </div>
-        </Grid>
-
         {/* Visual Style Selection */}
         <Grid item xs={12}>
           <div className="flex items-center gap-2">
@@ -140,8 +108,10 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
           <Grid item xs={12} sm={4} key={theme.id}>
             <Card
               className="h-full flex flex-col"
+              onClick={() => setThemeMode(theme.id)}
               style={{
                 width: '100%',
+                cursor: 'pointer',
                 borderRadius: theme.tokens.light['radius-ui'] || 'var(--radius-ui)',
                 border: themeMode === theme.id ? '2px solid var(--primary)' : '2px solid var(--border-strong)',
                 boxShadow: themeMode === theme.id ? 'var(--shadow-hard)' : 'var(--shadow-soft)',
@@ -149,12 +119,11 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
               }}
             >
               <CardActionArea
-                onClick={() => setThemeMode(theme.id)}
                 aria-label={`Select ${theme.name} theme`}
-                className="h-full flex flex-col"
+                className="flex flex-col"
                 style={{ width: '100%' }}
               >
-                <CardContent className="flex flex-col gap-3 flex-1 w-full">
+                <CardContent className="flex flex-col gap-3 w-full">
                   <div className="flex items-center justify-between">
                     <Typography variant="subtitle1" className="font-bold">
                       {theme.name}
@@ -169,6 +138,51 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
                   </Typography>
                 </CardContent>
               </CardActionArea>
+              {themeMode === theme.id && (
+                <div
+                  className="border-t border-stone-300 dark:border-stone-700 px-4 pb-4 pt-3 space-y-2"
+                  onClick={stopThemeSelection}
+                  onMouseDown={stopThemeSelection}
+                >
+                  <Typography variant="caption" className="font-semibold text-xs block mb-2">
+                    Header Settings
+                  </Typography>
+                  <div className="flex items-center gap-2 -ml-2">
+                    <FormControlLabel
+                      onClick={stopThemeSelection}
+                      control={
+                        <Switch
+                          checked={showHeaderLogo}
+                          onChange={(event) => setShowHeaderLogo(event.target.checked)}
+                          size="small"
+                        />
+                      }
+                      label={<span className="text-xs">Logo</span>}
+                    />
+                    <InfoTooltip
+                      text="Show the circular Youtarr logo in the header"
+                      onMobileClick={onMobileTooltipClick}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 -ml-2">
+                    <FormControlLabel
+                      onClick={stopThemeSelection}
+                      control={
+                        <Switch
+                          checked={showHeaderWordmark}
+                          onChange={(event) => setShowHeaderWordmark(event.target.checked)}
+                          size="small"
+                        />
+                      }
+                      label={<span className="text-xs">Text Image</span>}
+                    />
+                    <InfoTooltip
+                      text="Show the Youtarr wordmark image in the header"
+                      onMobileClick={onMobileTooltipClick}
+                    />
+                  </div>
+                </div>
+              )}
             </Card>
           </Grid>
         ))}

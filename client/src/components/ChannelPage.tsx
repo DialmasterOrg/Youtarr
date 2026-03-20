@@ -338,139 +338,149 @@ function ChannelPage({ token }: ChannelPageProps) {
         </CardContent>
       </Card>
 
-      {channel && (
-        <Card elevation={3} className="mb-4 flex flex-col justify-center">
-          <CardContent
-            style={{
-              paddingLeft: isMobile ? 10 : 16,
-              paddingRight: isMobile ? 10 : 16,
-              paddingTop: isMobile ? 10 : 10,
-              paddingBottom: '10px'
-            }}
-            className="flex flex-col gap-4 justify-center"
-          >
-            {isMobile ? (
-              // Mobile: Compact layout with title and settings in a grid
-              <Box className="flex flex-col gap-4">
-                {/* Title */}
-                <Typography variant="h6" className="font-bold text-base">
+      <Card elevation={3} className="mb-4 flex flex-col justify-center">
+        <CardContent
+          style={{
+            paddingLeft: isMobile ? 10 : 16,
+            paddingRight: isMobile ? 10 : 16,
+            paddingTop: isMobile ? 10 : 10,
+            paddingBottom: '10px',
+            opacity: channel ? 1 : 0.5,
+            transition: 'opacity 200ms ease-in-out'
+          }}
+          className="flex flex-col gap-4 justify-center"
+        >
+          {isMobile ? (
+            // Mobile: Compact layout with title and settings in a grid
+            <Box className="flex flex-col gap-4">
+              {/* Title */}
+              <Typography variant="h6" className="font-bold text-base">
+                Channel Settings
+              </Typography>
+
+              {/* Compact grid layout */}
+              <Box className="grid grid-cols-2 gap-3 text-sm">
+                {/* Auto Download */}
+                <Box className="flex flex-col gap-1">
+                  <Typography variant="caption" color="text.secondary" className="font-semibold uppercase" style={{ fontSize: '0.65rem' }}>
+                    Auto Download
+                  </Typography>
+                  <Box className="flex gap-1 flex-wrap">
+                    {channel ? renderAutoDownloadChips() : <span className="text-xs text-muted">Loading...</span>}
+                  </Box>
+                </Box>
+
+                {/* Rating */}
+                <Box className="flex flex-col gap-1">
+                  <Typography variant="caption" color="text.secondary" className="font-semibold uppercase" style={{ fontSize: '0.65rem' }}>
+                    Rating
+                  </Typography>
+                  {channel ? (
+                    <RatingBadge
+                      rating={channel.default_rating}
+                      ratingSource="Channel Default"
+                      size="small"
+                    />
+                  ) : (
+                    <span className="text-xs text-muted">Loading...</span>
+                  )}
+                </Box>
+
+                {/* Folder */}
+                <Box className="flex flex-col gap-1">
+                  <Typography variant="caption" color="text.secondary" className="font-semibold uppercase" style={{ fontSize: '0.65rem' }}>
+                    Folder
+                  </Typography>
+                  {channel ? renderSubFolder() : <span className="text-xs text-muted">Loading...</span>}
+                </Box>
+
+                {/* Edit Button */}
+                <Box className="flex flex-col gap-1">
+                  <Typography variant="caption" color="text.secondary" className="font-semibold uppercase" style={{ fontSize: '0.65rem', visibility: 'hidden', height: '0.7rem' }}>
+                    Edit
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => setSettingsOpen(true)}
+                    aria-label="Edit settings"
+                    disabled={!channel}
+                    className="text-foreground border-border hover:bg-muted hover:border-foreground hover:text-foreground disabled:opacity-50"
+                    style={{ textTransform: 'none', minWidth: 0, paddingLeft: 12, paddingRight: 12, fontSize: '0.8rem', height: 28 }}
+                  >
+                    Edit
+                  </Button>
+                </Box>
+              </Box>
+            </Box>
+          ) : (
+            // Desktop: Original layout
+            <Box className="flex flex-row items-center justify-between gap-8 m-0">
+              <Box className="min-w-0 flex flex-row items-center gap-6 flex-wrap">
+                <Typography variant="h6" className="font-bold mr-2">
                   Channel Settings
                 </Typography>
-
-                {/* Compact grid layout */}
-                <Box className="grid grid-cols-2 gap-3 text-sm">
-                  {/* Auto Download */}
-                  <Box className="flex flex-col gap-1">
-                    <Typography variant="caption" color="text.secondary" className="font-semibold uppercase" style={{ fontSize: '0.65rem' }}>
-                      Auto Download
-                    </Typography>
-                    <Box className="flex gap-1 flex-wrap">
-                      {renderAutoDownloadChips()}
-                    </Box>
-                  </Box>
-
-                  {/* Rating */}
-                  <Box className="flex flex-col gap-1">
-                    <Typography variant="caption" color="text.secondary" className="font-semibold uppercase" style={{ fontSize: '0.65rem' }}>
-                      Rating
-                    </Typography>
-                    <RatingBadge
-                      rating={channel.default_rating}
-                      ratingSource="Channel Default"
-                      size="small"
-                    />
-                  </Box>
-
-                  {/* Folder */}
-                  <Box className="flex flex-col gap-1">
-                    <Typography variant="caption" color="text.secondary" className="font-semibold uppercase" style={{ fontSize: '0.65rem' }}>
-                      Folder
-                    </Typography>
-                    {renderSubFolder()}
-                  </Box>
-
-                  {/* Edit Button */}
-                  <Box className="flex flex-col gap-1">
-                    <Typography variant="caption" color="text.secondary" className="font-semibold uppercase" style={{ fontSize: '0.65rem', visibility: 'hidden', height: '0.7rem' }}>
-                      Edit
-                    </Typography>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      onClick={() => setSettingsOpen(true)}
-                      aria-label="Edit settings"
-                      className="text-foreground border-border hover:bg-muted hover:border-foreground hover:text-foreground"
-                      style={{ textTransform: 'none', minWidth: 0, paddingLeft: 12, paddingRight: 12, fontSize: '0.8rem', height: 28 }}
-                    >
-                      Edit
-                    </Button>
-                  </Box>
-                </Box>
-              </Box>
-            ) : (
-              // Desktop: Original layout
-              <Box className="flex flex-row items-center justify-between gap-8 m-0">
-                <Box className="min-w-0 flex flex-row items-center gap-6 flex-wrap">
-                  <Typography variant="h6" className="font-bold mr-2">
-                    Channel Settings
+                <Box className="flex items-center gap-2 flex-wrap">
+                  <Typography
+                    variant="body2"
+                    component="span"
+                    color="text.secondary"
+                    className="whitespace-nowrap inline-flex items-center"
+                    style={{ lineHeight: 1.2 }}
+                  >
+                    Auto Download:
                   </Typography>
-                  <Box className="flex items-center gap-2 flex-wrap">
-                    <Typography
-                      variant="body2"
-                      component="span"
-                      color="text.secondary"
-                      className="whitespace-nowrap inline-flex items-center"
-                      style={{ lineHeight: 1.2 }}
-                    >
-                      Auto Download:
-                    </Typography>
-                    {renderAutoDownloadChips()}
-                  </Box>
-                  <Box className="flex items-center gap-2 flex-wrap">
-                    <Typography
-                      variant="body2"
-                      component="span"
-                      color="text.secondary"
-                      className="whitespace-nowrap inline-flex items-center"
-                      style={{ lineHeight: 1.2 }}
-                    >
-                      Rating:
-                    </Typography>
+                  {channel ? renderAutoDownloadChips() : <span className="text-xs text-muted">Loading...</span>}
+                </Box>
+                <Box className="flex items-center gap-2 flex-wrap">
+                  <Typography
+                    variant="body2"
+                    component="span"
+                    color="text.secondary"
+                    className="whitespace-nowrap inline-flex items-center"
+                    style={{ lineHeight: 1.2 }}
+                  >
+                    Rating:
+                  </Typography>
+                  {channel ? (
                     <RatingBadge
                       rating={channel.default_rating}
                       ratingSource="Channel Default"
                       size="small"
                     />
-                  </Box>
-                  <Box className="flex items-center gap-2 flex-wrap">
-                    <Typography
-                      variant="body2"
-                      component="span"
-                      color="text.secondary"
-                      className="whitespace-nowrap inline-flex items-center"
-                      style={{ lineHeight: 1.2 }}
-                    >
-                      Folder:
-                    </Typography>
-                    {renderSubFolder()}
-                  </Box>
+                  ) : (
+                    <span className="text-xs text-muted">Loading...</span>
+                  )}
                 </Box>
-                <Button
-                  variant="outlined"
-                  startIcon={<SettingsIcon size={16} />}
-                  onClick={() => setSettingsOpen(true)}
-                  size="small"
-                  aria-label="Edit settings"
-                  className="text-foreground border-border hover:bg-muted hover:border-foreground hover:text-foreground ml-auto"
-                  style={{ textTransform: 'none', minWidth: 0, padding: '6px 16px' }}
-                >
-                  Edit
-                </Button>
+                <Box className="flex items-center gap-2 flex-wrap">
+                  <Typography
+                    variant="body2"
+                    component="span"
+                    color="text.secondary"
+                    className="whitespace-nowrap inline-flex items-center"
+                    style={{ lineHeight: 1.2 }}
+                  >
+                    Folder:
+                  </Typography>
+                  {channel ? renderSubFolder() : <span className="text-xs text-muted">Loading...</span>}
+                </Box>
               </Box>
-            )}
-          </CardContent>
-        </Card>
-      )}
+              <Button
+                variant="outlined"
+                startIcon={<SettingsIcon size={16} />}
+                onClick={() => setSettingsOpen(true)}
+                size="small"
+                aria-label="Edit settings"
+                disabled={!channel}
+                className="text-foreground border-border hover:bg-muted hover:border-foreground hover:text-foreground ml-auto disabled:opacity-50"
+                style={{ textTransform: 'none', minWidth: 0, padding: '6px 16px' }}
+              >
+                Edit
+              </Button>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
 
       <ChannelVideos
         token={token}
