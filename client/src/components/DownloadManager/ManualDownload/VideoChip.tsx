@@ -37,6 +37,50 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [tooltipOpen, setTooltipOpen] = useState(false);
 
+  if (video.isBulkImport) {
+    const bulkLabel = (
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <LinkIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', flexShrink: 0 }} />
+        <Box>
+          <Box sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+            {video.youtubeId}
+          </Box>
+          <Box sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
+            URL-only import
+          </Box>
+        </Box>
+      </Box>
+    );
+
+    return (
+      <Grow in timeout={300}>
+        <Tooltip title={video.url}>
+          <Chip
+            label={bulkLabel}
+            onDelete={() => onDelete(video.youtubeId)}
+            deleteIcon={<CloseIcon />}
+            color="info"
+            variant="filled"
+            sx={{
+              height: 'auto',
+              py: 1,
+              '& .MuiChip-label': {
+                display: 'block',
+                whiteSpace: 'normal'
+              },
+              width: '100%',
+              transition: 'all 0.2s ease',
+              '&:hover': {
+                transform: 'scale(1.02)',
+                boxShadow: 2
+              }
+            }}
+          />
+        </Tooltip>
+      </Grow>
+    );
+  }
+
   const handlePopoverOpen = (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();
     setAnchorEl(event.currentTarget);

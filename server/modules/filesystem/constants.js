@@ -104,6 +104,13 @@ const MAIN_MEDIA_FILE_PATTERN = /\[[a-zA-Z0-9_-]{10,12}\]\.(mp4|mkv|webm|mp3)$/;
  */
 const FRAGMENT_FILE_PATTERN = /\.f[\d-]+\.(mp4|m4a|webm|mkv)$/;
 
+/**
+ * Files that can be ignored when deciding whether a channel directory is empty
+ * If a channel directory contains ONLY these files (and no actual video content),
+ * it is considered "effectively empty" and eligible for cleanup
+ */
+const CHANNEL_CLEANUP_IGNORABLE_FILES = ['poster.jpg'];
+
 module.exports = {
   SUBFOLDER_PREFIX,
   GLOBAL_DEFAULT_SENTINEL,
@@ -120,5 +127,6 @@ module.exports = {
   MAIN_VIDEO_FILE_PATTERN,
   MAIN_AUDIO_FILE_PATTERN,
   MAIN_MEDIA_FILE_PATTERN,
-  FRAGMENT_FILE_PATTERN
+  FRAGMENT_FILE_PATTERN,
+  CHANNEL_CLEANUP_IGNORABLE_FILES
 };

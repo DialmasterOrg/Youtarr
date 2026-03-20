@@ -307,6 +307,20 @@ describe('ytdlpModule', () => {
       expect(result.message).toContain('Permission denied');
     });
 
+    it('handles "Unable to write to" permission error', async () => {
+      const mockProcess = createMockProcess();
+      spawn.mockReturnValue(mockProcess);
+
+      const updatePromise = ytdlpModule.performUpdate();
+
+      mockProcess.stderr.emit('data', 'Unable to write to /usr/local/bin/yt-dlp; try running as administrator');
+      mockProcess.emit('close', 100);
+
+      const result = await updatePromise;
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Permission denied');
+    });
+
     it('handles non-zero exit code', async () => {
       const mockProcess = createMockProcess();
       spawn.mockReturnValue(mockProcess);

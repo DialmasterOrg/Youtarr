@@ -196,7 +196,7 @@ function performUpdate() {
       const output = stdout + stderr;
 
       if (code !== 0) {
-        if (output.includes('Permission denied')) {
+        if (output.includes('Permission denied') || output.includes('Unable to write to')) {
           logger.warn({ output }, 'yt-dlp update failed: permission denied');
           resolve({
             success: false,
