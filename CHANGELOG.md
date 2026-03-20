@@ -12,6 +12,15 @@
 * **channels:** fixed list view icon (was incorrectly using the same icon as grid view)
 * **nav:** app version label is now clickable on both mobile and desktop — hover/tap shows a "Click to view changelog" tooltip that navigates to the changelog page
 
+## [v1.60.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.60.1) - 2026-03-05
+
+### [1.60.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.60.0...v1.60.1) (2026-03-05)
+
+
+### Documentation
+
+* update CHANGELOG for v1.60.0 [skip ci] ([a43e9a1](https://github.com/DialmasterOrg/Youtarr/commit/a43e9a1356e9723647cc0dd0a1c07661d4aa8985))
+
 
 ## [v1.60.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.60.0) - 2026-03-02
 
