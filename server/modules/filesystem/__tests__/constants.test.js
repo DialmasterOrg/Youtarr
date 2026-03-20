@@ -9,7 +9,8 @@ const {
   YOUTUBE_ID_DASH_PATTERN,
   YOUTUBE_ID_PATTERN,
   MAIN_VIDEO_FILE_PATTERN,
-  FRAGMENT_FILE_PATTERN
+  FRAGMENT_FILE_PATTERN,
+  CHANNEL_CLEANUP_IGNORABLE_FILES
 } = require('../constants');
 
 describe('filesystem/constants', () => {
@@ -134,6 +135,16 @@ describe('filesystem/constants', () => {
 
     it('should not match main video files', () => {
       expect(FRAGMENT_FILE_PATTERN.test('Channel - Title [dQw4w9WgXcQ].mp4')).toBe(false);
+    });
+  });
+
+  describe('CHANNEL_CLEANUP_IGNORABLE_FILES', () => {
+    it('should exist and be an array', () => {
+      expect(Array.isArray(CHANNEL_CLEANUP_IGNORABLE_FILES)).toBe(true);
+    });
+
+    it('should contain poster.jpg', () => {
+      expect(CHANNEL_CLEANUP_IGNORABLE_FILES).toContain('poster.jpg');
     });
   });
 });
