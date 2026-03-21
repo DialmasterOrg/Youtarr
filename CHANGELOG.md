@@ -1,5 +1,29 @@
 # Changelog
 
+## [v1.61.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.61.0) - 2026-03-21
+
+## [1.61.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.60.1...v1.61.0) (2026-03-21)
+
+
+### Features
+
+* add bulk import video downloads ([#327](https://github.com/DialmasterOrg/Youtarr/issues/327)) ([1875cc7](https://github.com/DialmasterOrg/Youtarr/commit/1875cc7c8d7d72eef48c16946aba863562e08ffa))
+* auto-clean empty channel directories ([#443](https://github.com/DialmasterOrg/Youtarr/issues/443)) ([26f16d8](https://github.com/DialmasterOrg/Youtarr/commit/26f16d8bc5f9209f565d9904389f832bb05a9b7e))
+
+
+### Bug Fixes
+
+* yt-dlp update failure when run as non-root user ([#451](https://github.com/DialmasterOrg/Youtarr/issues/451)) ([45021fa](https://github.com/DialmasterOrg/Youtarr/commit/45021fae9b0b0af6db8a67c5a45dc3b2669de1b6))
+
+
+### Documentation
+
+* update CHANGELOG for v1.60.1 [skip ci] ([1c57705](https://github.com/DialmasterOrg/Youtarr/commit/1c577053d91f64e2e5e535a74c5638e0e5fb7ae4))
+
+
+
+
+
 ## [v1.60.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.60.1) - 2026-03-05
 
 ### [1.60.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.60.0...v1.60.1) (2026-03-05)
