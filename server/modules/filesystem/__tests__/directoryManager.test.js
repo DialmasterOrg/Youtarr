@@ -8,7 +8,8 @@ jest.mock('fs', () => ({
   promises: {
     readdir: jest.fn(),
     rmdir: jest.fn(),
-    access: jest.fn()
+    access: jest.fn(),
+    unlink: jest.fn()
   }
 }));
 
@@ -25,6 +26,7 @@ const {
   ensureDirSync,
   ensureDirWithRetries,
   isDirectoryEmpty,
+  isDirectoryEffectivelyEmpty,
   removeIfEmpty,
   isVideoDirectory,
   isChannelDirectory,
@@ -149,6 +151,56 @@ describe('filesystem/directoryManager', () => {
     });
   });
 
+  describe('isDirectoryEffectivelyEmpty', () => {
+    it('should return true for truly empty directory', async () => {
+      fsPromises.readdir.mockResolvedValueOnce([]);
+
+      const result = await isDirectoryEffectivelyEmpty('/path/empty');
+
+      expect(result).toBe(true);
+    });
+
+    it('should return true for directory containing only poster.jpg', async () => {
+      fsPromises.readdir.mockResolvedValueOnce(['poster.jpg']);
+
+      const result = await isDirectoryEffectivelyEmpty('/path/channel');
+
+      expect(result).toBe(true);
+    });
+
+    it('should return true with case-insensitive match (Poster.JPG)', async () => {
+      fsPromises.readdir.mockResolvedValueOnce(['Poster.JPG']);
+
+      const result = await isDirectoryEffectivelyEmpty('/path/channel');
+
+      expect(result).toBe(true);
+    });
+
+    it('should return false when directory contains video files', async () => {
+      fsPromises.readdir.mockResolvedValueOnce(['poster.jpg', 'video.mp4']);
+
+      const result = await isDirectoryEffectivelyEmpty('/path/channel');
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false for non-existent directory', async () => {
+      fsPromises.readdir.mockRejectedValueOnce(new Error('ENOENT'));
+
+      const result = await isDirectoryEffectivelyEmpty('/path/missing');
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false when directory contains non-ignorable files only', async () => {
+      fsPromises.readdir.mockResolvedValueOnce(['Channel - Title - abc123']);
+
+      const result = await isDirectoryEffectivelyEmpty('/path/channel');
+
+      expect(result).toBe(false);
+    });
+  });
+
   describe('removeIfEmpty', () => {
     it('should remove empty directory', async () => {
       fsPromises.readdir.mockResolvedValueOnce([]);
@@ -244,29 +296,100 @@ describe('filesystem/directoryManager', () => {
   describe('cleanupEmptyChannelDirectory', () => {
     const baseDir = '/videos';
 
-    it('should remove empty channel directory', async () => {
+    it('should remove empty channel directory and return true', async () => {
       fsPromises.access.mockResolvedValueOnce();
       fsPromises.readdir.mockResolvedValueOnce([]);
       fsPromises.rmdir.mockResolvedValueOnce();
 
-      await cleanupEmptyChannelDirectory('/videos/ChannelName', baseDir);
+      const result = await cleanupEmptyChannelDirectory('/videos/ChannelName', baseDir);
 
       expect(fsPromises.rmdir).toHaveBeenCalledWith('/videos/ChannelName');
+      expect(result).toBe(true);
     });
 
-    it('should not remove non-channel directory', async () => {
-      await cleanupEmptyChannelDirectory('/videos', baseDir);
+    it('should not remove non-channel directory and return false', async () => {
+      const result = await cleanupEmptyChannelDirectory('/videos', baseDir);
 
       expect(fsPromises.rmdir).not.toHaveBeenCalled();
+      expect(result).toBe(false);
     });
 
-    it('should not remove non-empty channel directory', async () => {
+    it('should not remove non-empty channel directory and return false', async () => {
       fsPromises.access.mockResolvedValueOnce();
       fsPromises.readdir.mockResolvedValueOnce(['video-folder']);
 
-      await cleanupEmptyChannelDirectory('/videos/ChannelName', baseDir);
+      const result = await cleanupEmptyChannelDirectory('/videos/ChannelName', baseDir);
 
       expect(fsPromises.rmdir).not.toHaveBeenCalled();
+      expect(result).toBe(false);
+    });
+
+    it('should return false when directory does not exist', async () => {
+      fsPromises.access.mockRejectedValueOnce(new Error('ENOENT'));
+
+      const result = await cleanupEmptyChannelDirectory('/videos/ChannelName', baseDir);
+
+      expect(fsPromises.rmdir).not.toHaveBeenCalled();
+      expect(result).toBe(false);
+    });
+
+    describe('with includeIgnorableFiles: true', () => {
+      it('should remove directory with only poster.jpg', async () => {
+        fsPromises.access.mockResolvedValueOnce();
+        // First readdir for isDirectoryEffectivelyEmpty
+        fsPromises.readdir.mockResolvedValueOnce(['poster.jpg']);
+        fsPromises.unlink.mockResolvedValueOnce();
+        // Second readdir for deleting ignorable files
+        fsPromises.readdir.mockResolvedValueOnce(['poster.jpg']);
+        fsPromises.rmdir.mockResolvedValueOnce();
+
+        const result = await cleanupEmptyChannelDirectory('/videos/ChannelName', baseDir, {
+          includeIgnorableFiles: true
+        });
+
+        expect(fsPromises.unlink).toHaveBeenCalledWith('/videos/ChannelName/poster.jpg');
+        expect(fsPromises.rmdir).toHaveBeenCalledWith('/videos/ChannelName');
+        expect(result).toBe(true);
+      });
+
+      it('should not remove directory with video files present', async () => {
+        fsPromises.access.mockResolvedValueOnce();
+        fsPromises.readdir.mockResolvedValueOnce(['poster.jpg', 'video.mp4']);
+
+        const result = await cleanupEmptyChannelDirectory('/videos/ChannelName', baseDir, {
+          includeIgnorableFiles: true
+        });
+
+        expect(fsPromises.rmdir).not.toHaveBeenCalled();
+        expect(result).toBe(false);
+      });
+
+      it('should remove truly empty directory', async () => {
+        fsPromises.access.mockResolvedValueOnce();
+        fsPromises.readdir.mockResolvedValueOnce([]);
+        // Second readdir for deleting ignorable files (empty, so no unlinking)
+        fsPromises.readdir.mockResolvedValueOnce([]);
+        fsPromises.rmdir.mockResolvedValueOnce();
+
+        const result = await cleanupEmptyChannelDirectory('/videos/ChannelName', baseDir, {
+          includeIgnorableFiles: true
+        });
+
+        expect(fsPromises.unlink).not.toHaveBeenCalled();
+        expect(fsPromises.rmdir).toHaveBeenCalledWith('/videos/ChannelName');
+        expect(result).toBe(true);
+      });
+    });
+
+    it('should default includeIgnorableFiles to false (backward compat)', async () => {
+      fsPromises.access.mockResolvedValueOnce();
+      // Directory contains only poster.jpg — should NOT be removed with default options
+      fsPromises.readdir.mockResolvedValueOnce(['poster.jpg']);
+
+      const result = await cleanupEmptyChannelDirectory('/videos/ChannelName', baseDir);
+
+      expect(fsPromises.rmdir).not.toHaveBeenCalled();
+      expect(result).toBe(false);
     });
   });
 

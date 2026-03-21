@@ -7,7 +7,7 @@ const fs = require('fs-extra');
 const fsPromises = require('fs').promises;
 const path = require('path');
 const logger = require('../../logger');
-const { YOUTUBE_ID_PATTERN, SUBFOLDER_PREFIX, MAIN_VIDEO_FILE_PATTERN, FRAGMENT_FILE_PATTERN } = require('./constants');
+const { YOUTUBE_ID_PATTERN, SUBFOLDER_PREFIX, MAIN_VIDEO_FILE_PATTERN, FRAGMENT_FILE_PATTERN, CHANNEL_CLEANUP_IGNORABLE_FILES } = require('./constants');
 const { sleep } = require('./fileOperations');
 
 /**
@@ -68,6 +68,26 @@ async function isDirectoryEmpty(dirPath) {
     return entries.length === 0;
   } catch (error) {
     // Directory doesn't exist or can't be read - treat as "empty" for cleanup purposes
+    logger.debug({ err: error, dirPath }, 'Cannot read directory (may not exist)');
+    return false;
+  }
+}
+
+/**
+ * Check if a directory is "effectively empty" — either truly empty
+ * or contains only ignorable files (e.g., poster.jpg)
+ *
+ * @param {string} dirPath - Directory path to check
+ * @returns {Promise<boolean>} - True if directory is effectively empty
+ */
+async function isDirectoryEffectivelyEmpty(dirPath) {
+  try {
+    const entries = await fsPromises.readdir(dirPath);
+    if (entries.length === 0) return true;
+    return entries.every(entry =>
+      CHANNEL_CLEANUP_IGNORABLE_FILES.includes(entry.toLowerCase())
+    );
+  } catch (error) {
     logger.debug({ err: error, dirPath }, 'Cannot read directory (may not exist)');
     return false;
   }
@@ -186,14 +206,18 @@ function isSubfolderDir(dirName) {
  *
  * @param {string} channelDir - Channel directory path
  * @param {string} baseDir - The base output directory
- * @returns {Promise<void>}
+ * @param {Object} [options] - Options
+ * @param {boolean} [options.includeIgnorableFiles=false] - When true, also removes directories containing only ignorable files (e.g., poster.jpg)
+ * @returns {Promise<boolean>} - True if directory was removed
  */
-async function cleanupEmptyChannelDirectory(channelDir, baseDir) {
+async function cleanupEmptyChannelDirectory(channelDir, baseDir, options = {}) {
+  const { includeIgnorableFiles = false } = options;
+
   try {
     // Verify this is actually a channel directory (not root or subfolder)
     if (!isChannelDirectory(channelDir, baseDir)) {
       logger.debug({ channelDir }, 'Not a channel directory, skipping cleanup');
-      return;
+      return false;
     }
 
     // Check if directory exists
@@ -201,22 +225,42 @@ async function cleanupEmptyChannelDirectory(channelDir, baseDir) {
       await fsPromises.access(channelDir);
     } catch {
       logger.debug({ channelDir }, 'Channel directory does not exist');
-      return;
+      return false;
     }
 
-    // Check if directory is empty
-    const isEmpty = await isDirectoryEmpty(channelDir);
+    // Check if directory is empty (or effectively empty)
+    const isEmpty = includeIgnorableFiles
+      ? await isDirectoryEffectivelyEmpty(channelDir)
+      : await isDirectoryEmpty(channelDir);
     if (!isEmpty) {
       logger.debug({ channelDir }, 'Channel directory not empty, keeping it');
-      return;
+      return false;
+    }
+
+    // When includeIgnorableFiles is true, delete ignorable files before rmdir
+    if (includeIgnorableFiles) {
+      const entries = await fsPromises.readdir(channelDir);
+      for (const entry of entries) {
+        const filePath = path.join(channelDir, entry);
+        try {
+          await fsPromises.unlink(filePath);
+          logger.debug({ filePath }, 'Removed ignorable file from channel directory');
+        } catch (unlinkErr) {
+          if (unlinkErr.code !== 'ENOENT') {
+            logger.warn({ err: unlinkErr, filePath }, 'Failed to remove ignorable file');
+          }
+        }
+      }
     }
 
     // Remove empty channel directory
     await fsPromises.rmdir(channelDir);
     logger.info({ channelDir }, 'Removed empty channel directory');
+    return true;
   } catch (error) {
     logger.error({ err: error, channelDir }, 'Error cleaning up empty channel directory');
     // Don't throw - this is a best-effort cleanup
+    return false;
   }
 }
 
@@ -303,6 +347,7 @@ module.exports = {
   ensureDirSync,
   ensureDirWithRetries,
   isDirectoryEmpty,
+  isDirectoryEffectivelyEmpty,
   removeIfEmpty,
   isVideoDirectory,
   isChannelDirectory,

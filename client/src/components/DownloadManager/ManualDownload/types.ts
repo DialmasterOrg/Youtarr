@@ -9,6 +9,7 @@ export interface VideoInfo {
   isAlreadyDownloaded: boolean;
   isMembersOnly: boolean;
   media_type?: string;
+  isBulkImport?: boolean;
 }
 
 export interface DownloadSettings {
