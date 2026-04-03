@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.61.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.61.1) - 2026-04-03
+
+### [1.61.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.61.0...v1.61.1) (2026-04-03)
+
+
+### Bug Fixes
+
+* patch high-severity dependency vulns ([0841f8b](https://github.com/DialmasterOrg/Youtarr/commit/0841f8beae12b5f09dd6b8b531985f58eec4cb19))
+
+
+### Documentation
+
+* update CHANGELOG for v1.61.0 [skip ci] ([f96fcae](https://github.com/DialmasterOrg/Youtarr/commit/f96fcaeb7342fb80271a66d97af9772836f306db))
+
+
+
+
+
 ## [v1.61.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.61.0) - 2026-03-21
 
 ## [1.61.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.60.1...v1.61.0) (2026-03-21)
