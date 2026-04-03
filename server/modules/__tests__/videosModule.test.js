@@ -360,6 +360,17 @@ describe('VideosModule', () => {
       expect(replacements.channelFilter).toBe('Test Channel');
     });
 
+    test('should handle hideMissing filter correctly', async () => {
+      mockSequelize.query.mockResolvedValueOnce([{ total: 5 }]);
+      mockSequelize.query.mockResolvedValueOnce([]);
+      mockSequelize.query.mockResolvedValueOnce([]); // getAllUniqueChannels
+
+      await VideosModule.getVideosPaginated({ hideMissing: true });
+
+      const query = mockSequelize.query.mock.calls[0][0];
+      expect(query).toContain('Videos.removed = :hideMissingVal');
+    });
+
     test('should update file metadata when file exists', async () => {
       const mockVideos = [
         {

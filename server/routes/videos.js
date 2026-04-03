@@ -100,6 +100,11 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
    *         schema:
    *           type: string
    *         description: Filter by channel
+   *       - in: query
+   *         name: hideMissing
+   *         schema:
+   *           type: boolean
+   *         description: Hide missing videos
    *     responses:
    *       200:
    *         description: Paginated list of videos
@@ -110,7 +115,7 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
     req.log.info('Getting videos');
 
     try {
-      const { page, limit, search, dateFrom, dateTo, sortBy, sortOrder, channelFilter } = req.query;
+      const { page, limit, search, dateFrom, dateTo, sortBy, sortOrder, channelFilter, hideMissing } = req.query;
 
       const options = {
         page: parseInt(page) || 1,
@@ -120,7 +125,8 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
         dateTo: dateTo || null,
         sortBy: sortBy || 'added',
         sortOrder: sortOrder || 'desc',
-        channelFilter: channelFilter || ''
+        channelFilter: channelFilter || '',
+        hideMissing: hideMissing === 'true'
       };
 
       const result = await videosModule.getVideosPaginated(options);

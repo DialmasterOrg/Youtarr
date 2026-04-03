@@ -466,7 +466,8 @@ describe('server initialization', () => {
       dateTo: '2024-12-31',
       sortBy: 'title',
       sortOrder: 'asc',
-      channelFilter: 'channel123'
+      channelFilter: 'channel123',
+      hideMissing: false
     });
 
     expect(res.statusCode).toBe(200);
@@ -560,7 +561,8 @@ describe('server initialization', () => {
       dateTo: null,
       sortBy: 'added',
       sortOrder: 'desc',
-      channelFilter: ''
+      channelFilter: '',
+      hideMissing: false
     });
 
     expect(res.statusCode).toBe(200);

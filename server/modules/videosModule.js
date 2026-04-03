@@ -18,7 +18,8 @@ class VideosModule {
       dateTo = null,
       sortBy = 'added',
       sortOrder = 'desc',
-      channelFilter = ''
+      channelFilter = '',
+      hideMissing = false
     } = options;
 
     try {
@@ -36,6 +37,11 @@ class VideosModule {
       if (channelFilter) {
         whereConditions.push('Videos.youTubeChannelName = :channelFilter');
         replacements.channelFilter = channelFilter;
+      }
+
+      if (hideMissing) {
+        whereConditions.push('Videos.removed = :hideMissingVal');
+        replacements.hideMissingVal = false;
       }
 
       if (dateFrom) {
