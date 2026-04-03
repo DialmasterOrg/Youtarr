@@ -202,7 +202,7 @@ jobs:
 
       - name: Cache Storybook build
         id: cache-storybook
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: client/storybook-static
           key: ${{ runner.os }}-storybook-${{ hashFiles('client/src/**', 'client/.storybook/**', 'client/package-lock.json') }}
