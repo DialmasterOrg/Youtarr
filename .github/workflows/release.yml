@@ -231,7 +231,7 @@ jobs:
 
       - name: Cleanup tag and release on failure
         if: ${{ failure() && !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.ACTION_RUNNER_TOKEN }}
           script: |
