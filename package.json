@@ -62,7 +62,7 @@
     "sequelize-cli": "^6.6.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
-    "umzug": "^2.3.0",
+    "umzug": "^3.8.2",
     "uuid": "^9.0.0",
     "ws": "^8.13.0"
   }
