@@ -1,5 +1,28 @@
 # Changelog
 
+## [v1.62.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.62.0) - 2026-04-03
+
+## [1.62.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.61.1...v1.62.0) (2026-04-03)
+
+
+### Features
+
+* announce production releases in Discord ([03a5f0e](https://github.com/DialmasterOrg/Youtarr/commit/03a5f0e81f5d8ab228932be3f767b1dd9bf9927e))
+
+
+### Bug Fixes
+
+* remove dependabot and patch lodash vulnerability ([86a6e93](https://github.com/DialmasterOrg/Youtarr/commit/86a6e9354d24aeb1577d73579a3f5157007e09e5))
+
+
+### Documentation
+
+* update CHANGELOG for v1.61.1 [skip ci] ([994cc95](https://github.com/DialmasterOrg/Youtarr/commit/994cc95785acbb5ae0edf9b663607dc5fcbe6c5d))
+
+
+
+
+
 ## [v1.61.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.61.1) - 2026-04-03
 
 ### [1.61.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.61.0...v1.61.1) (2026-04-03)
