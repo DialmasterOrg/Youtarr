@@ -7,7 +7,7 @@
   "dependencies": {
     "@emotion/react": "^11.11.0",
     "@emotion/styled": "^11.11.0",
-    "@mui/icons-material": "^5.11.16",
+    "@mui/icons-material": "^7.3.9",
     "@mui/material": "^5.13.0",
     "@mui/x-date-pickers": "^5.0.20",
     "@types/jest": "^27.5.2",
