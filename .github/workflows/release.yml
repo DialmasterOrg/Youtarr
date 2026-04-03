@@ -55,7 +55,7 @@ jobs:
           echo "No conventional commit changes since last tag (${{ steps.calculate_version.outputs.previous_tag }}). Skipping release."
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
 
