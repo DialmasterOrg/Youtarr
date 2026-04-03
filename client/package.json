@@ -25,7 +25,7 @@
     "react-router-dom": "^6.11.1",
     "react-swipeable": "^7.0.1",
     "react-transition-group": "^4.4.5",
-    "typescript": "5.9.3"
+    "typescript": "6.0.2"
   },
   "scripts": {
     "postinstall": "npx msw init public/ --save",
