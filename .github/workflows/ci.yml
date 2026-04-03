@@ -15,10 +15,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '20.x'
           cache: 'npm'
@@ -67,10 +67,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '20.x'
           cache: 'npm'
@@ -123,10 +123,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '20.x'
           cache: 'npm'
@@ -184,10 +184,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '20.x'
           cache: 'npm'
@@ -202,7 +202,7 @@ jobs:
 
       - name: Cache Storybook build
         id: cache-storybook
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: client/storybook-static
           key: ${{ runner.os }}-storybook-${{ hashFiles('client/src/**', 'client/.storybook/**', 'client/package-lock.json') }}
@@ -218,12 +218,40 @@ jobs:
         env:
           CI: true
 
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install client dependencies
+        run: |
+          cd client
+          npm ci
+
+      - name: Audit root dependencies
+        run: npm audit --audit-level=high --omit=dev
+
+      - name: Audit client dependencies
+        run: cd client && npm audit --audit-level=high --omit=dev
+
   # This job is required for branch protection rules
   # It will only succeed if all tests and linting pass
   check-all:
     name: All Checks
     runs-on: ubuntu-latest
-    needs: [lint, test-backend, test-frontend, test-storybook]
+    needs: [lint, test-backend, test-frontend, test-storybook, security-audit]
     if: always()
     steps:
       - name: Check all results
@@ -233,11 +261,13 @@ jobs:
           echo "Backend Tests: ${{ needs.test-backend.result }}"
           echo "Frontend Tests: ${{ needs.test-frontend.result }}"
           echo "Storybook Tests: ${{ needs.test-storybook.result }}"
+          echo "Security Audit: ${{ needs.security-audit.result }}"
 
           if [ "${{ needs.lint.result }}" != "success" ] || \
              [ "${{ needs.test-backend.result }}" != "success" ] || \
              [ "${{ needs.test-frontend.result }}" != "success" ] || \
-             [ "${{ needs.test-storybook.result }}" != "success" ]; then
+             [ "${{ needs.test-storybook.result }}" != "success" ] || \
+             [ "${{ needs.security-audit.result }}" != "success" ]; then
             echo ""
             echo "❌ One or more checks failed!"
             echo ""
@@ -246,6 +276,7 @@ jobs:
             [ "${{ needs.test-backend.result }}" != "success" ] && echo "  - Backend Tests"
             [ "${{ needs.test-frontend.result }}" != "success" ] && echo "  - Frontend Tests"
             [ "${{ needs.test-storybook.result }}" != "success" ] && echo "  - Storybook Tests"
+            [ "${{ needs.security-audit.result }}" != "success" ] && echo "  - Security Audit"
             exit 1
           fi
 
