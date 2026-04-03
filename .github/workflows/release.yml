@@ -201,6 +201,50 @@ jobs:
             ${{ vars.DOCKERHUB_USERNAME }}/youtarr:latest
           no-cache: true
 
+      - name: Announce release on Discord
+        if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
+        continue-on-error: true
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_ANNOUNCEMENT_WEBHOOK_URL }}
+          NEW_TAG: ${{ steps.calculate_version.outputs.new_tag }}
+          CHANGELOG: ${{ steps.calculate_version.outputs.changelog }}
+          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.calculate_version.outputs.new_tag }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK" ]; then
+            echo "⚠️ DISCORD_ANNOUNCEMENT_WEBHOOK_URL secret not set, skipping Discord notification"
+            exit 0
+          fi
+
+          # Strip the leading ### [version](url) (date) header line — it's redundant with the embed title
+          CLEAN_CHANGELOG=$(echo "$CHANGELOG" | sed '1{/^### \[/d}')
+
+          # Truncate if too long for Discord embed description (max 4096, keep under 3800 for safety)
+          MAX_LEN=3800
+          if [ ${#CLEAN_CHANGELOG} -gt $MAX_LEN ]; then
+            CLEAN_CHANGELOG="${CLEAN_CHANGELOG:0:$MAX_LEN}..."$'\n\n'"[See full release notes](${RELEASE_URL})"
+          fi
+
+          jq -n \
+            --arg title "Youtarr ${NEW_TAG} Released!" \
+            --arg desc "$CLEAN_CHANGELOG" \
+            --arg url "$RELEASE_URL" \
+            '{
+              username: "Youtarr Releases",
+              embeds: [{
+                title: $title,
+                description: $desc,
+                url: $url,
+                color: 5763719,
+                timestamp: (now | strftime("%Y-%m-%dT%H:%M:%SZ")),
+                footer: { text: "Youtarr" }
+              }]
+            }' \
+          | curl -sf -X POST "$DISCORD_WEBHOOK" \
+              -H "Content-Type: application/json" \
+              -d @-
+
+          echo "✅ Discord announcement sent"
+
       - name: Revert release commits on failure
         if: ${{ failure() && !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
         run: |
