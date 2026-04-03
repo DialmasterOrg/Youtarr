@@ -102,7 +102,7 @@ jobs:
 
       - name: Build Docker image (verification)
         if: ${{ steps.calculate_version.outputs.release_type != 'none' }}
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: false
@@ -191,7 +191,7 @@ jobs:
 
       - name: Build and push Docker images
         if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
