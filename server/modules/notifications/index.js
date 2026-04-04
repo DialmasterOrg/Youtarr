@@ -140,6 +140,51 @@ class NotificationModule {
   }
 
   /**
+   * Send a notification about automatically removed videos
+   * @param {Object} cleanupResult - Result from videoDeletionModule.performAutomaticCleanup()
+   */
+  async sendAutoRemovalNotification(cleanupResult) {
+    if (!this.isConfigured()) {
+      logger.debug('Notifications not configured, skipping auto-removal notification');
+      return;
+    }
+
+    if (!cleanupResult || cleanupResult.totalDeleted === 0) {
+      logger.debug('No videos were removed, skipping auto-removal notification');
+      return;
+    }
+
+    try {
+      const config = this.configModule.getConfig();
+      const urls = this.getUrlsFromConfig(config);
+
+      const results = await Promise.all(urls.map(async (entry) => {
+        try {
+          const service = getServiceForUrl(entry.url);
+          const useRichFormatting = entry.richFormatting && service.supportsRichFormatting;
+
+          const formatter = useRichFormatting ? getFormatter(service) : plainFormatter;
+          const sendMethod = useRichFormatting ? service.sendMethod : 'apprise-plain';
+
+          const message = formatter.formatAutoRemovalMessage(cleanupResult);
+          await sendNotification(entry.url, message, sendMethod);
+          return true;
+        } catch (err) {
+          logger.error({ err, name: entry.name }, 'Failed to send auto-removal notification');
+          return false;
+        }
+      }));
+
+      const successCount = results.filter(Boolean).length;
+      if (successCount > 0) {
+        logger.info({ totalDeleted: cleanupResult.totalDeleted, successCount, totalCount: urls.length }, 'Auto-removal notification sent successfully');
+      }
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to send auto-removal notification');
+    }
+  }
+
+  /**
    * Send a test notification to all configured webhooks
    */
   async sendTestNotification() {
