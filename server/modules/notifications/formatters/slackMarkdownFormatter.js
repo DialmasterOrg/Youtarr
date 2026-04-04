@@ -4,7 +4,7 @@
  * Note: Slack uses *bold*, _italic_, ~strike~, `code`
  */
 
-const { formatDuration, buildTitle, getSubtitle } = require('../utils');
+const { formatDuration, buildTitle, getSubtitle, buildAutoRemovalTitle, formatBytes, groupVideosByChannel } = require('../utils');
 
 /**
  * Format download notification as Slack markdown
@@ -65,8 +65,53 @@ Example Video Title
   return { title, body };
 }
 
+/**
+ * Format auto-removal notification as Slack markdown
+ * @param {Object} cleanupResult - Result object from performAutomaticCleanup()
+ * @returns {Object} { title, body } for Apprise
+ */
+function formatAutoRemovalMessage(cleanupResult) {
+  const { totalDeleted, deletedByAge, deletedBySpace, freedBytes, plan = {} } = cleanupResult;
+  const ageStrategy = plan.ageStrategy || {};
+  const spaceStrategy = plan.spaceStrategy || {};
+
+  const title = buildAutoRemovalTitle(totalDeleted);
+  let body = `Freed *${formatBytes(freedBytes)}* of storage\n`;
+
+  if (deletedByAge > 0) {
+    const threshold = ageStrategy.thresholdDays;
+    body += `\n*Removed by age (exceeded ${threshold}-day limit): ${deletedByAge} ${deletedByAge === 1 ? 'video' : 'videos'}*\n`;
+
+    const { groups, truncatedCount } = groupVideosByChannel(ageStrategy.sampleVideos, 5, deletedByAge);
+    for (const group of groups) {
+      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
+      body += `📺 *${group.channel}* (${videoLabel}): ${group.titles.join(', ')}\n`;
+    }
+    if (truncatedCount > 0) {
+      body += `_...and ${truncatedCount} more videos_\n`;
+    }
+  }
+
+  if (deletedBySpace > 0) {
+    const threshold = spaceStrategy.threshold;
+    body += `\n*Removed for storage (below ${threshold} threshold): ${deletedBySpace} ${deletedBySpace === 1 ? 'video' : 'videos'}*\n`;
+
+    const { groups, truncatedCount } = groupVideosByChannel(spaceStrategy.sampleVideos, 5, deletedBySpace);
+    for (const group of groups) {
+      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
+      body += `📺 *${group.channel}* (${videoLabel}): ${group.titles.join(', ')}\n`;
+    }
+    if (truncatedCount > 0) {
+      body += `_...and ${truncatedCount} more videos_\n`;
+    }
+  }
+
+  return { title, body };
+}
+
 module.exports = {
   formatDownloadMessage,
-  formatTestMessage
+  formatTestMessage,
+  formatAutoRemovalMessage
 };
 
