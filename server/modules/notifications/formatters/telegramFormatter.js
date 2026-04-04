@@ -65,13 +65,16 @@ function formatAutoRemovalMessage(cleanupResult) {
   let body = `Freed <b>${formatBytes(freedBytes)}</b> of storage\n`;
 
   if (deletedByAge > 0) {
-    const threshold = ageStrategy.thresholdDays;
+    const threshold = escapeHtml(String(ageStrategy.thresholdDays));
     body += `\n<b>Removed by age (exceeded ${threshold}-day limit): ${deletedByAge} ${deletedByAge === 1 ? 'video' : 'videos'}</b>\n`;
 
-    const grouped = groupVideosByChannel(ageStrategy.sampleVideos);
-    for (const group of grouped) {
+    const { groups, truncatedCount } = groupVideosByChannel(ageStrategy.sampleVideos, 5, deletedByAge);
+    for (const group of groups) {
       const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
       body += `📺 <b>${escapeHtml(group.channel)}</b> (${videoLabel}): ${group.titles.map(t => escapeHtml(t)).join(', ')}\n`;
+    }
+    if (truncatedCount > 0) {
+      body += `<i>...and ${truncatedCount} more videos</i>\n`;
     }
   }
 
@@ -79,10 +82,13 @@ function formatAutoRemovalMessage(cleanupResult) {
     const threshold = escapeHtml(String(spaceStrategy.threshold));
     body += `\n<b>Removed for storage (below ${threshold} threshold): ${deletedBySpace} ${deletedBySpace === 1 ? 'video' : 'videos'}</b>\n`;
 
-    const grouped = groupVideosByChannel(spaceStrategy.sampleVideos);
-    for (const group of grouped) {
+    const { groups, truncatedCount } = groupVideosByChannel(spaceStrategy.sampleVideos, 5, deletedBySpace);
+    for (const group of groups) {
       const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
       body += `📺 <b>${escapeHtml(group.channel)}</b> (${videoLabel}): ${group.titles.map(t => escapeHtml(t)).join(', ')}\n`;
+    }
+    if (truncatedCount > 0) {
+      body += `<i>...and ${truncatedCount} more videos</i>\n`;
     }
   }
 

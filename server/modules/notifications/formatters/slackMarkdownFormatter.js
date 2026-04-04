@@ -82,10 +82,13 @@ function formatAutoRemovalMessage(cleanupResult) {
     const threshold = ageStrategy.thresholdDays;
     body += `\n*Removed by age (exceeded ${threshold}-day limit): ${deletedByAge} ${deletedByAge === 1 ? 'video' : 'videos'}*\n`;
 
-    const grouped = groupVideosByChannel(ageStrategy.sampleVideos);
-    for (const group of grouped) {
+    const { groups, truncatedCount } = groupVideosByChannel(ageStrategy.sampleVideos, 5, deletedByAge);
+    for (const group of groups) {
       const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
       body += `📺 *${group.channel}* (${videoLabel}): ${group.titles.join(', ')}\n`;
+    }
+    if (truncatedCount > 0) {
+      body += `_...and ${truncatedCount} more videos_\n`;
     }
   }
 
@@ -93,10 +96,13 @@ function formatAutoRemovalMessage(cleanupResult) {
     const threshold = spaceStrategy.threshold;
     body += `\n*Removed for storage (below ${threshold} threshold): ${deletedBySpace} ${deletedBySpace === 1 ? 'video' : 'videos'}*\n`;
 
-    const grouped = groupVideosByChannel(spaceStrategy.sampleVideos);
-    for (const group of grouped) {
+    const { groups, truncatedCount } = groupVideosByChannel(spaceStrategy.sampleVideos, 5, deletedBySpace);
+    for (const group of groups) {
       const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
       body += `📺 *${group.channel}* (${videoLabel}): ${group.titles.join(', ')}\n`;
+    }
+    if (truncatedCount > 0) {
+      body += `_...and ${truncatedCount} more videos_\n`;
     }
   }
 

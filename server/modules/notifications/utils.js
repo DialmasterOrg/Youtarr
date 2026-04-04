@@ -87,6 +87,10 @@ function formatBytes(bytes) {
     return `${mb.toFixed(2)} MB`;
   }
 
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
   const kb = bytes / 1024;
   return `${kb.toFixed(2)} KB`;
 }
@@ -95,12 +99,14 @@ function formatBytes(bytes) {
  * Group sample videos by channel name
  * @param {Array<{channel: string, title: string}>} sampleVideos - Video samples from cleanup result
  * @param {number} [maxVideos=5] - Maximum number of videos to include
- * @returns {Array<{channel: string, titles: string[], count: number}>} Grouped videos
+ * @param {number|null} [totalCount=null] - Actual total number of deleted videos (used to compute truncation; falls back to sampleVideos.length)
+ * @returns {{groups: Array<{channel: string, titles: string[], count: number}>, truncatedCount: number}} Grouped videos with truncation info
  */
-function groupVideosByChannel(sampleVideos, maxVideos = 5) {
-  if (!sampleVideos || sampleVideos.length === 0) return [];
-
+function groupVideosByChannel(sampleVideos, maxVideos = 5, totalCount = null) {
+  if (!sampleVideos || sampleVideos.length === 0) return { groups: [], truncatedCount: 0 };
   const limited = sampleVideos.slice(0, maxVideos);
+  const displayedCount = limited.length;
+  const truncatedCount = Math.max(0, (totalCount !== null ? totalCount : sampleVideos.length) - displayedCount);
   const channelMap = new Map();
 
   for (const video of limited) {
@@ -111,11 +117,13 @@ function groupVideosByChannel(sampleVideos, maxVideos = 5) {
     channelMap.get(channel).push(video.title || 'Unknown Title');
   }
 
-  return Array.from(channelMap.entries()).map(([channel, titles]) => ({
+  const groups = Array.from(channelMap.entries()).map(([channel, titles]) => ({
     channel,
     titles,
     count: titles.length
   }));
+
+  return { groups, truncatedCount };
 }
 
 module.exports = {

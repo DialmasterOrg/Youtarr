@@ -4,16 +4,20 @@
 
 const { escapeHtml, formatDuration, buildTitle, getSubtitle, buildAutoRemovalTitle, formatBytes, groupVideosByChannel } = require('../utils');
 
+const DEFAULT_HEADER_GRADIENT = 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)';
+const AUTO_REMOVAL_HEADER_GRADIENT = 'linear-gradient(135deg, #f57c00 0%, #e65100 100%)';
+
 /**
  * Generate the email CSS styles
+ * @param {{ headerGradient?: string }} [options] - Style options
  * @returns {string} CSS styles
  */
-function getStyles() {
-  // Using MUI primary blue (#1976d2) for consistency with the app UI
+function getStyles({ headerGradient = DEFAULT_HEADER_GRADIENT } = {}) {
+  // Using MUI primary blue (#1976d2) by default for consistency with the app UI
   return `
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
     .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-    .header { background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%); color: white; padding: 24px; text-align: center; }
+    .header { background: ${headerGradient}; color: white; padding: 24px; text-align: center; }
     .header h1 { margin: 0; font-size: 24px; }
     .content { padding: 24px; }
     .subtitle { color: #666; font-size: 14px; margin-bottom: 20px; }
@@ -127,17 +131,11 @@ function formatTestMessage(name) {
  * @returns {string} Complete HTML email
  */
 function buildAutoRemovalEmailHtml(title, subtitle, content) {
-  // Override header gradient to orange for auto-removal
-  const styles = getStyles().replace(
-    'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-    'linear-gradient(135deg, #f57c00 0%, #e65100 100%)'
-  );
-
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <style>${styles}</style>
+  <style>${getStyles({ headerGradient: AUTO_REMOVAL_HEADER_GRADIENT })}</style>
 </head>
 <body>
   <div class="container">
@@ -175,8 +173,8 @@ function formatAutoRemovalMessage(cleanupResult) {
     const threshold = escapeHtml(String(ageStrategy.thresholdDays));
     content += `<h3 style="color: #e65100; margin-top: 20px;">🕐 Removed by age (exceeded ${threshold}-day limit): ${deletedByAge} ${deletedByAge === 1 ? 'video' : 'videos'}</h3>`;
 
-    const grouped = groupVideosByChannel(ageStrategy.sampleVideos);
-    for (const group of grouped) {
+    const { groups, truncatedCount } = groupVideosByChannel(ageStrategy.sampleVideos, 5, deletedByAge);
+    for (const group of groups) {
       const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
       content += `
       <div class="video-card" style="border-left-color: #f57c00;">
@@ -184,20 +182,26 @@ function formatAutoRemovalMessage(cleanupResult) {
         <div class="video-title">${group.titles.map(t => escapeHtml(t)).join(', ')}</div>
       </div>`;
     }
+    if (truncatedCount > 0) {
+      content += `<p class="more-videos">...and ${truncatedCount} more videos</p>`;
+    }
   }
 
   if (deletedBySpace > 0) {
     const threshold = escapeHtml(String(spaceStrategy.threshold));
     content += `<h3 style="color: #e65100; margin-top: 20px;">💾 Removed for storage (below ${threshold} threshold): ${deletedBySpace} ${deletedBySpace === 1 ? 'video' : 'videos'}</h3>`;
 
-    const grouped = groupVideosByChannel(spaceStrategy.sampleVideos);
-    for (const group of grouped) {
+    const { groups, truncatedCount } = groupVideosByChannel(spaceStrategy.sampleVideos, 5, deletedBySpace);
+    for (const group of groups) {
       const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
       content += `
       <div class="video-card" style="border-left-color: #f57c00;">
         <div class="channel-name">📺 ${escapeHtml(group.channel)} (${videoLabel})</div>
         <div class="video-title">${group.titles.map(t => escapeHtml(t)).join(', ')}</div>
       </div>`;
+    }
+    if (truncatedCount > 0) {
+      content += `<p class="more-videos">...and ${truncatedCount} more videos</p>`;
     }
   }
 

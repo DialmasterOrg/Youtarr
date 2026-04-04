@@ -46,7 +46,7 @@ function formatDownloadMessage(finalSummary, videoData) {
       title,
       description,
       color: 0x00ff00, // Green for success
-      fields: fields.length > 0 ? fields : undefined,
+      fields,
       timestamp: new Date().toISOString(),
       footer: {
         text: 'Youtarr'
@@ -110,11 +110,15 @@ function formatAutoRemovalMessage(cleanupResult) {
 
   if (deletedByAge > 0) {
     const threshold = ageStrategy.thresholdDays;
-    const grouped = groupVideosByChannel(ageStrategy.sampleVideos);
-    let value = grouped.map(group => {
+    const { groups, truncatedCount } = groupVideosByChannel(ageStrategy.sampleVideos, 5, deletedByAge);
+    let value = groups.map(group => {
       const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
       return `📺 **${group.channel}** (${videoLabel})\n${group.titles.join(', ')}`;
     }).join('\n\n');
+
+    if (truncatedCount > 0) {
+      value += `\n\n...and ${truncatedCount} more videos`;
+    }
 
     if (!value) value = `${deletedByAge} ${deletedByAge === 1 ? 'video' : 'videos'}`;
 
@@ -127,11 +131,15 @@ function formatAutoRemovalMessage(cleanupResult) {
 
   if (deletedBySpace > 0) {
     const threshold = spaceStrategy.threshold;
-    const grouped = groupVideosByChannel(spaceStrategy.sampleVideos);
-    let value = grouped.map(group => {
+    const { groups, truncatedCount } = groupVideosByChannel(spaceStrategy.sampleVideos, 5, deletedBySpace);
+    let value = groups.map(group => {
       const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
       return `📺 **${group.channel}** (${videoLabel})\n${group.titles.join(', ')}`;
     }).join('\n\n');
+
+    if (truncatedCount > 0) {
+      value += `\n\n...and ${truncatedCount} more videos`;
+    }
 
     if (!value) value = `${deletedBySpace} ${deletedBySpace === 1 ? 'video' : 'videos'}`;
 
@@ -147,7 +155,7 @@ function formatAutoRemovalMessage(cleanupResult) {
       title,
       description,
       color: 0xFFA500, // Orange for auto-removal
-      fields: fields.length > 0 ? fields : undefined,
+      fields,
       timestamp: new Date().toISOString(),
       footer: {
         text: 'Youtarr'

@@ -817,6 +817,11 @@ describe('Auto-Removal Utils', () => {
       expect(formatBytes(undefined)).toBe('0 B');
     });
 
+    it('should format bytes under 1 KB', () => {
+      expect(formatBytes(512)).toBe('512 B');
+      expect(formatBytes(1)).toBe('1 B');
+    });
+
     it('should format kilobytes', () => {
       expect(formatBytes(512 * 1024)).toBe('512.00 KB');
     });
@@ -842,37 +847,63 @@ describe('Auto-Removal Utils', () => {
         { channel: 'Music', title: 'Video C' }
       ];
 
-      const grouped = groupVideosByChannel(videos);
+      const { groups, truncatedCount } = groupVideosByChannel(videos);
 
-      expect(grouped).toHaveLength(2);
-      expect(grouped[0]).toEqual({ channel: 'Tech', titles: ['Video A', 'Video B'], count: 2 });
-      expect(grouped[1]).toEqual({ channel: 'Music', titles: ['Video C'], count: 1 });
+      expect(groups).toHaveLength(2);
+      expect(groups[0]).toEqual({ channel: 'Tech', titles: ['Video A', 'Video B'], count: 2 });
+      expect(groups[1]).toEqual({ channel: 'Music', titles: ['Video C'], count: 1 });
+      expect(truncatedCount).toBe(0);
     });
 
-    it('should limit to maxVideos parameter', () => {
+    it('should limit to maxVideos parameter and report truncation', () => {
       const videos = Array.from({ length: 10 }, (_, i) => ({
         channel: 'Channel', title: `Video ${i}`
       }));
 
-      const grouped = groupVideosByChannel(videos, 3);
+      const { groups, truncatedCount } = groupVideosByChannel(videos, 3);
 
-      expect(grouped[0].titles).toHaveLength(3);
+      expect(groups[0].titles).toHaveLength(3);
+      expect(truncatedCount).toBe(7);
     });
 
-    it('should default to 5 videos max', () => {
+    it('should default to 5 videos max and report truncation', () => {
       const videos = Array.from({ length: 10 }, (_, i) => ({
         channel: 'Channel', title: `Video ${i}`
       }));
 
-      const grouped = groupVideosByChannel(videos);
+      const { groups, truncatedCount } = groupVideosByChannel(videos);
 
-      expect(grouped[0].titles).toHaveLength(5);
+      expect(groups[0].titles).toHaveLength(5);
+      expect(truncatedCount).toBe(5);
+    });
+
+    it('should use totalCount for truncation when provided', () => {
+      const videos = Array.from({ length: 5 }, (_, i) => ({
+        channel: 'Channel', title: `Video ${i}`
+      }));
+
+      const { groups, truncatedCount } = groupVideosByChannel(videos, 5, 175);
+
+      expect(groups[0].titles).toHaveLength(5);
+      expect(truncatedCount).toBe(170);
+    });
+
+    it('should report zero truncation when all videos fit', () => {
+      const videos = [
+        { channel: 'Tech', title: 'Video A' },
+        { channel: 'Tech', title: 'Video B' }
+      ];
+
+      const { groups, truncatedCount } = groupVideosByChannel(videos);
+
+      expect(groups[0].titles).toHaveLength(2);
+      expect(truncatedCount).toBe(0);
     });
 
     it('should handle empty or null input', () => {
-      expect(groupVideosByChannel([])).toEqual([]);
-      expect(groupVideosByChannel(null)).toEqual([]);
-      expect(groupVideosByChannel(undefined)).toEqual([]);
+      expect(groupVideosByChannel([])).toEqual({ groups: [], truncatedCount: 0 });
+      expect(groupVideosByChannel(null)).toEqual({ groups: [], truncatedCount: 0 });
+      expect(groupVideosByChannel(undefined)).toEqual({ groups: [], truncatedCount: 0 });
     });
 
     it('should handle missing channel or title', () => {
@@ -881,10 +912,10 @@ describe('Auto-Removal Utils', () => {
         { channel: 'Has Channel' }
       ];
 
-      const grouped = groupVideosByChannel(videos);
+      const { groups } = groupVideosByChannel(videos);
 
-      expect(grouped[0]).toEqual({ channel: 'Unknown Channel', titles: ['No Channel'], count: 1 });
-      expect(grouped[1]).toEqual({ channel: 'Has Channel', titles: ['Unknown Title'], count: 1 });
+      expect(groups[0]).toEqual({ channel: 'Unknown Channel', titles: ['No Channel'], count: 1 });
+      expect(groups[1]).toEqual({ channel: 'Has Channel', titles: ['Unknown Title'], count: 1 });
     });
   });
 });
