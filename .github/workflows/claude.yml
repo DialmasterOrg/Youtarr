@@ -36,6 +36,8 @@ jobs:
             PR NUMBER: ${{ github.event.pull_request.number }}
             PR TITLE: ${{ github.event.pull_request.title }}
 
+            Note: The PR branch is already checked out in the current working directory.
+
             Please review this pull request with a focus on:
             - Code quality and best practices
             - Potential bugs or issues
@@ -43,12 +45,17 @@ jobs:
             - Performance considerations
 
             Use `gh pr diff ${{ github.event.pull_request.number }}` to see the changes.
+            Use `gh pr view ${{ github.event.pull_request.number }}` for PR metadata.
 
             IMPORTANT: Only use `gh` commands. Do NOT run tests, npm commands, or any other shell commands.
 
-            Post your review as a comment on the PR using `gh pr comment ${{ github.event.pull_request.number }} --body "your review here"`.
+            Post your review as a single comment on the PR using `gh pr comment ${{ github.event.pull_request.number }} --body "your review here"`.
+            Use `mcp__github_inline_comment__create_inline_comment` (with `confirmed: true`) for code-specific annotations on diff lines.
             Only post GitHub comments - don't just output text.
-          claude_args: '--max-turns 20 --allowedTools "Bash(gh:*)" "Bash(git fetch *)"'
+            Do NOT post test or probe comments - only post your final review.
+          claude_args: |
+            --max-turns 20
+            --allowedTools "Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(git fetch *),mcp__github_inline_comment__create_inline_comment"
 
   # Manual @claude responses - restricted to authorized users
   manual-claude:
@@ -68,4 +75,6 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude_args: '--max-turns 20 --allowedTools "Bash(gh:*)" "Bash(git fetch *)"'
+          claude_args: |
+            --max-turns 20
+            --allowedTools "Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh issue view:*),Bash(git fetch *),mcp__github_inline_comment__create_inline_comment"
