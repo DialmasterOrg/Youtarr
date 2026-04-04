@@ -57,6 +57,11 @@ describe('CronJobs', () => {
 
     jest.doMock('../videoDeletionModule', () => mockVideoDeletionModule);
 
+    // Mock notificationModule to prevent real notifications during tests
+    jest.doMock('../notificationModule', () => ({
+      sendAutoRemovalNotification: jest.fn().mockResolvedValue(undefined)
+    }));
+
     // Require the module after mocks are in place
     cronJobs = require('../cronJobs');
   });

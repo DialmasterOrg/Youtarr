@@ -2,7 +2,7 @@
  * HTML email notification formatter
  */
 
-const { escapeHtml, formatDuration, buildTitle, getSubtitle } = require('../utils');
+const { escapeHtml, formatDuration, buildTitle, getSubtitle, buildAutoRemovalTitle, formatBytes, groupVideosByChannel } = require('../utils');
 
 /**
  * Generate the email CSS styles
@@ -119,8 +119,97 @@ function formatTestMessage(name) {
   };
 }
 
+/**
+ * Build HTML email wrapper with orange header for auto-removal notifications
+ * @param {string} title - Email title
+ * @param {string} subtitle - Email subtitle
+ * @param {string} content - Email content HTML
+ * @returns {string} Complete HTML email
+ */
+function buildAutoRemovalEmailHtml(title, subtitle, content) {
+  // Override header gradient to orange for auto-removal
+  const styles = getStyles().replace(
+    'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+    'linear-gradient(135deg, #f57c00 0%, #e65100 100%)'
+  );
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>${styles}</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>${escapeHtml(title)}</h1>
+    </div>
+    <div class="content">
+      <p class="subtitle">${escapeHtml(subtitle)}</p>
+      ${content}
+    </div>
+    <div class="footer">
+      Sent by Youtarr &bull; ${new Date().toLocaleString()}
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+/**
+ * Format auto-removal notification as HTML email
+ * @param {Object} cleanupResult - Result object from performAutomaticCleanup()
+ * @returns {Object} Object with title and HTML body strings
+ */
+function formatAutoRemovalMessage(cleanupResult) {
+  const { totalDeleted, deletedByAge, deletedBySpace, freedBytes, plan = {} } = cleanupResult;
+  const ageStrategy = plan.ageStrategy || {};
+  const spaceStrategy = plan.spaceStrategy || {};
+
+  const title = buildAutoRemovalTitle(totalDeleted);
+  const subtitle = `Freed ${formatBytes(freedBytes)} of storage`;
+
+  let content = '';
+
+  if (deletedByAge > 0) {
+    const threshold = escapeHtml(String(ageStrategy.thresholdDays));
+    content += `<h3 style="color: #e65100; margin-top: 20px;">🕐 Removed by age (exceeded ${threshold}-day limit): ${deletedByAge} ${deletedByAge === 1 ? 'video' : 'videos'}</h3>`;
+
+    const grouped = groupVideosByChannel(ageStrategy.sampleVideos);
+    for (const group of grouped) {
+      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
+      content += `
+      <div class="video-card" style="border-left-color: #f57c00;">
+        <div class="channel-name">📺 ${escapeHtml(group.channel)} (${videoLabel})</div>
+        <div class="video-title">${group.titles.map(t => escapeHtml(t)).join(', ')}</div>
+      </div>`;
+    }
+  }
+
+  if (deletedBySpace > 0) {
+    const threshold = escapeHtml(String(spaceStrategy.threshold));
+    content += `<h3 style="color: #e65100; margin-top: 20px;">💾 Removed for storage (below ${threshold} threshold): ${deletedBySpace} ${deletedBySpace === 1 ? 'video' : 'videos'}</h3>`;
+
+    const grouped = groupVideosByChannel(spaceStrategy.sampleVideos);
+    for (const group of grouped) {
+      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
+      content += `
+      <div class="video-card" style="border-left-color: #f57c00;">
+        <div class="channel-name">📺 ${escapeHtml(group.channel)} (${videoLabel})</div>
+        <div class="video-title">${group.titles.map(t => escapeHtml(t)).join(', ')}</div>
+      </div>`;
+    }
+  }
+
+  return {
+    title,
+    body: buildAutoRemovalEmailHtml(title, subtitle, content)
+  };
+}
+
 module.exports = {
   formatDownloadMessage,
-  formatTestMessage
+  formatTestMessage,
+  formatAutoRemovalMessage
 };
 

@@ -37,7 +37,7 @@ const notificationModule = require('../notificationModule');
 // Also require the formatters and senders for direct testing
 const { plainFormatter, discordFormatter } = require('../notifications/formatters');
 const { appriseSender, discordSender } = require('../notifications/senders');
-const { formatDuration } = require('../notifications/utils');
+const { formatDuration, buildAutoRemovalTitle, formatBytes, groupVideosByChannel } = require('../notifications/utils');
 
 describe('NotificationModule', () => {
   let mockConfig;
@@ -700,5 +700,347 @@ describe('NotificationModule Integration', () => {
         expect.stringContaining('embeds')
       );
     });
+  });
+
+  describe('sendAutoRemovalNotification', () => {
+    const baseCleanupResult = {
+      success: true,
+      totalDeleted: 5,
+      deletedByAge: 3,
+      deletedBySpace: 2,
+      freedBytes: 5368709120, // 5 GB
+      errors: [],
+      plan: {
+        ageStrategy: {
+          thresholdDays: 30,
+          sampleVideos: [
+            { id: 1, youtubeId: 'abc123', title: 'Old Video 1', channel: 'Tech Channel', fileSize: 1073741824, timeCreated: new Date() },
+            { id: 2, youtubeId: 'def456', title: 'Old Video 2', channel: 'Tech Channel', fileSize: 1073741824, timeCreated: new Date() },
+            { id: 3, youtubeId: 'ghi789', title: 'Old Video 3', channel: 'Music Channel', fileSize: 1073741824, timeCreated: new Date() }
+          ]
+        },
+        spaceStrategy: {
+          threshold: '50GB',
+          sampleVideos: [
+            { id: 4, youtubeId: 'jkl012', title: 'Space Video 1', channel: 'Gaming Channel', fileSize: 1073741824, timeCreated: new Date() },
+            { id: 5, youtubeId: 'mno345', title: 'Space Video 2', channel: 'Gaming Channel', fileSize: 1073741824, timeCreated: new Date() }
+          ]
+        }
+      }
+    };
+
+    it('should send notification when properly configured and videos were deleted', async () => {
+      const sendPromise = notificationModule.sendAutoRemovalNotification(baseCleanupResult);
+
+      setImmediate(() => {
+        mockProcess.emit('close', 0);
+      });
+
+      await sendPromise;
+
+      expect(mockSpawn).toHaveBeenCalled();
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        { totalDeleted: 5, successCount: 1, totalCount: 1 },
+        'Auto-removal notification sent successfully'
+      );
+    });
+
+    it('should skip notification when not configured', async () => {
+      mockGetConfig.mockReturnValue({
+        notificationsEnabled: false,
+        appriseUrls: []
+      });
+
+      await notificationModule.sendAutoRemovalNotification(baseCleanupResult);
+
+      expect(mockSpawn).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith('Notifications not configured, skipping auto-removal notification');
+    });
+
+    it('should skip notification when no videos were deleted', async () => {
+      const emptyResult = { ...baseCleanupResult, totalDeleted: 0 };
+
+      await notificationModule.sendAutoRemovalNotification(emptyResult);
+
+      expect(mockSpawn).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith('No videos were removed, skipping auto-removal notification');
+    });
+
+    it('should skip notification when cleanupResult is null', async () => {
+      await notificationModule.sendAutoRemovalNotification(null);
+
+      expect(mockSpawn).not.toHaveBeenCalled();
+    });
+
+    it('should use Discord embed for Discord URLs with rich formatting', async () => {
+      mockGetConfig.mockReturnValue({
+        notificationsEnabled: true,
+        appriseUrls: [{
+          url: 'https://discord.com/api/webhooks/123/abc',
+          name: 'Discord',
+          richFormatting: true
+        }]
+      });
+
+      const sendPromise = notificationModule.sendAutoRemovalNotification(baseCleanupResult);
+
+      setImmediate(() => {
+        mockResponse.emit('data', '');
+        mockResponse.emit('end');
+      });
+
+      await sendPromise;
+
+      expect(mockHttpsRequest).toHaveBeenCalled();
+      expect(mockRequest.write).toHaveBeenCalledWith(
+        expect.stringContaining('embeds')
+      );
+    });
+  });
+});
+
+describe('Auto-Removal Utils', () => {
+  describe('buildAutoRemovalTitle', () => {
+    it('should return singular form for 1 video', () => {
+      expect(buildAutoRemovalTitle(1)).toBe('🗑️ 1 Video Auto-Removed');
+    });
+
+    it('should return plural form for multiple videos', () => {
+      expect(buildAutoRemovalTitle(5)).toBe('🗑️ 5 Videos Auto-Removed');
+    });
+  });
+
+  describe('formatBytes', () => {
+    it('should return "0 B" for zero or falsy values', () => {
+      expect(formatBytes(0)).toBe('0 B');
+      expect(formatBytes(null)).toBe('0 B');
+      expect(formatBytes(undefined)).toBe('0 B');
+    });
+
+    it('should format kilobytes', () => {
+      expect(formatBytes(512 * 1024)).toBe('512.00 KB');
+    });
+
+    it('should format megabytes', () => {
+      expect(formatBytes(256 * 1024 * 1024)).toBe('256.00 MB');
+    });
+
+    it('should format gigabytes', () => {
+      expect(formatBytes(5 * 1024 * 1024 * 1024)).toBe('5.00 GB');
+    });
+
+    it('should format fractional gigabytes', () => {
+      expect(formatBytes(1.5 * 1024 * 1024 * 1024)).toBe('1.50 GB');
+    });
+  });
+
+  describe('groupVideosByChannel', () => {
+    it('should group videos by channel name', () => {
+      const videos = [
+        { channel: 'Tech', title: 'Video A' },
+        { channel: 'Tech', title: 'Video B' },
+        { channel: 'Music', title: 'Video C' }
+      ];
+
+      const grouped = groupVideosByChannel(videos);
+
+      expect(grouped).toHaveLength(2);
+      expect(grouped[0]).toEqual({ channel: 'Tech', titles: ['Video A', 'Video B'], count: 2 });
+      expect(grouped[1]).toEqual({ channel: 'Music', titles: ['Video C'], count: 1 });
+    });
+
+    it('should limit to maxVideos parameter', () => {
+      const videos = Array.from({ length: 10 }, (_, i) => ({
+        channel: 'Channel', title: `Video ${i}`
+      }));
+
+      const grouped = groupVideosByChannel(videos, 3);
+
+      expect(grouped[0].titles).toHaveLength(3);
+    });
+
+    it('should default to 5 videos max', () => {
+      const videos = Array.from({ length: 10 }, (_, i) => ({
+        channel: 'Channel', title: `Video ${i}`
+      }));
+
+      const grouped = groupVideosByChannel(videos);
+
+      expect(grouped[0].titles).toHaveLength(5);
+    });
+
+    it('should handle empty or null input', () => {
+      expect(groupVideosByChannel([])).toEqual([]);
+      expect(groupVideosByChannel(null)).toEqual([]);
+      expect(groupVideosByChannel(undefined)).toEqual([]);
+    });
+
+    it('should handle missing channel or title', () => {
+      const videos = [
+        { title: 'No Channel' },
+        { channel: 'Has Channel' }
+      ];
+
+      const grouped = groupVideosByChannel(videos);
+
+      expect(grouped[0]).toEqual({ channel: 'Unknown Channel', titles: ['No Channel'], count: 1 });
+      expect(grouped[1]).toEqual({ channel: 'Has Channel', titles: ['Unknown Title'], count: 1 });
+    });
+  });
+});
+
+describe('Plain Formatter - Auto-Removal', () => {
+  const baseCleanupResult = {
+    totalDeleted: 5,
+    deletedByAge: 3,
+    deletedBySpace: 2,
+    freedBytes: 5368709120,
+    plan: {
+      ageStrategy: {
+        thresholdDays: 30,
+        sampleVideos: [
+          { id: 1, title: 'Old Video 1', channel: 'Tech Channel' },
+          { id: 2, title: 'Old Video 2', channel: 'Tech Channel' },
+          { id: 3, title: 'Old Video 3', channel: 'Music Channel' }
+        ]
+      },
+      spaceStrategy: {
+        threshold: '50GB',
+        sampleVideos: [
+          { id: 4, title: 'Space Video 1', channel: 'Gaming Channel' },
+          { id: 5, title: 'Space Video 2', channel: 'Gaming Channel' }
+        ]
+      }
+    }
+  };
+
+  it('should format combined age and space removal', () => {
+    const message = plainFormatter.formatAutoRemovalMessage(baseCleanupResult);
+
+    expect(message.title).toBe('🗑️ 5 Videos Auto-Removed');
+    expect(message.body).toContain('Freed 5.00 GB of storage');
+    expect(message.body).toContain('Removed by age (exceeded 30-day limit): 3 videos');
+    expect(message.body).toContain('Tech Channel (2 videos): Old Video 1, Old Video 2');
+    expect(message.body).toContain('Music Channel (1 video): Old Video 3');
+    expect(message.body).toContain('Removed for storage (below 50GB threshold): 2 videos');
+    expect(message.body).toContain('Gaming Channel (2 videos): Space Video 1, Space Video 2');
+  });
+
+  it('should format age-only removal', () => {
+    const ageOnly = {
+      ...baseCleanupResult,
+      deletedBySpace: 0,
+      totalDeleted: 3,
+      plan: {
+        ...baseCleanupResult.plan,
+        spaceStrategy: { threshold: null, sampleVideos: [] }
+      }
+    };
+
+    const message = plainFormatter.formatAutoRemovalMessage(ageOnly);
+
+    expect(message.body).toContain('Removed by age');
+    expect(message.body).not.toContain('Removed for storage');
+  });
+
+  it('should format space-only removal', () => {
+    const spaceOnly = {
+      ...baseCleanupResult,
+      deletedByAge: 0,
+      totalDeleted: 2,
+      plan: {
+        ...baseCleanupResult.plan,
+        ageStrategy: { thresholdDays: null, sampleVideos: [] }
+      }
+    };
+
+    const message = plainFormatter.formatAutoRemovalMessage(spaceOnly);
+
+    expect(message.body).not.toContain('Removed by age');
+    expect(message.body).toContain('Removed for storage');
+  });
+
+  it('should use singular form for 1 video', () => {
+    const singleVideo = {
+      totalDeleted: 1,
+      deletedByAge: 1,
+      deletedBySpace: 0,
+      freedBytes: 1073741824,
+      plan: {
+        ageStrategy: {
+          thresholdDays: 30,
+          sampleVideos: [{ id: 1, title: 'Only Video', channel: 'Channel' }]
+        },
+        spaceStrategy: { threshold: null, sampleVideos: [] }
+      }
+    };
+
+    const message = plainFormatter.formatAutoRemovalMessage(singleVideo);
+
+    expect(message.title).toBe('🗑️ 1 Video Auto-Removed');
+    expect(message.body).toContain('1 video');
+  });
+});
+
+describe('Discord Formatter - Auto-Removal', () => {
+  const baseCleanupResult = {
+    totalDeleted: 3,
+    deletedByAge: 3,
+    deletedBySpace: 0,
+    freedBytes: 3221225472,
+    plan: {
+      ageStrategy: {
+        thresholdDays: 30,
+        sampleVideos: [
+          { id: 1, title: 'Video 1', channel: 'Tech Channel' },
+          { id: 2, title: 'Video 2', channel: 'Tech Channel' },
+          { id: 3, title: 'Video 3', channel: 'Music Channel' }
+        ]
+      },
+      spaceStrategy: { threshold: null, sampleVideos: [] }
+    }
+  };
+
+  it('should return Discord embed format with orange color', () => {
+    const message = discordFormatter.formatAutoRemovalMessage(baseCleanupResult);
+
+    expect(message).toHaveProperty('embeds');
+    expect(message.embeds).toHaveLength(1);
+    expect(message.embeds[0].color).toBe(0xFFA500);
+    expect(message.embeds[0].title).toContain('Auto-Removed');
+    expect(message.embeds[0].description).toContain('3.00 GB');
+    expect(message.embeds[0].timestamp).toBeDefined();
+    expect(message.embeds[0].footer.text).toBe('Youtarr');
+  });
+
+  it('should include age strategy field with grouped channels', () => {
+    const message = discordFormatter.formatAutoRemovalMessage(baseCleanupResult);
+
+    expect(message.embeds[0].fields).toHaveLength(1);
+    expect(message.embeds[0].fields[0].name).toContain('Removed by age');
+    expect(message.embeds[0].fields[0].name).toContain('30-day');
+    expect(message.embeds[0].fields[0].value).toContain('Tech Channel');
+    expect(message.embeds[0].fields[0].value).toContain('Music Channel');
+  });
+
+  it('should include both strategy fields when both active', () => {
+    const combined = {
+      ...baseCleanupResult,
+      deletedBySpace: 2,
+      totalDeleted: 5,
+      plan: {
+        ...baseCleanupResult.plan,
+        spaceStrategy: {
+          threshold: '50GB',
+          sampleVideos: [{ id: 4, title: 'Space Video', channel: 'Gaming' }]
+        }
+      }
+    };
+
+    const message = discordFormatter.formatAutoRemovalMessage(combined);
+
+    expect(message.embeds[0].fields).toHaveLength(2);
+    expect(message.embeds[0].fields[0].name).toContain('age');
+    expect(message.embeds[0].fields[1].name).toContain('storage');
   });
 });

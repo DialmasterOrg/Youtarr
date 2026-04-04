@@ -9,6 +9,7 @@ function initialize() {
   const db = require('../db');
   const videosModule = require('./videosModule');
   const videoDeletionModule = require('./videoDeletionModule');
+  const notificationModule = require('./notificationModule');
 
   logger.info('Initializing scheduled cron jobs');
 
@@ -25,6 +26,9 @@ function initialize() {
           totalDeleted: result.totalDeleted,
           freedGB: (result.freedBytes / (1024 ** 3)).toFixed(2)
         }, 'Automatic cleanup completed successfully');
+
+        notificationModule.sendAutoRemovalNotification(result)
+          .catch(err => logger.error({ err }, 'Failed to send auto-removal notification'));
       } else {
         logger.info('Automatic cleanup completed: no videos deleted');
       }
