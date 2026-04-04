@@ -146,5 +146,16 @@ describe('filesystem/constants', () => {
     it('should contain poster.jpg', () => {
       expect(CHANNEL_CLEANUP_IGNORABLE_FILES).toContain('poster.jpg');
     });
+
+    it('should contain alternate poster formats', () => {
+      expect(CHANNEL_CLEANUP_IGNORABLE_FILES).toContain('poster.png');
+      expect(CHANNEL_CLEANUP_IGNORABLE_FILES).toContain('poster.jpeg');
+    });
+
+    it('should contain OS metadata files', () => {
+      expect(CHANNEL_CLEANUP_IGNORABLE_FILES).toContain('.ds_store');
+      expect(CHANNEL_CLEANUP_IGNORABLE_FILES).toContain('thumbs.db');
+      expect(CHANNEL_CLEANUP_IGNORABLE_FILES).toContain('desktop.ini');
+    });
   });
 });
