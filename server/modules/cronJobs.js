@@ -39,6 +39,15 @@ function initialize() {
     } catch (error) {
       logger.error({ err: error }, 'Error during automatic video cleanup');
     }
+
+    // Always scan for orphan empty channel directories, regardless of auto-removal settings.
+    // This handles directories left behind from deletions before the cleanup feature existed,
+    // or from files deleted outside of Youtarr.
+    try {
+      await videoDeletionModule.cleanupOrphanDirectories();
+    } catch (error) {
+      logger.error({ err: error }, 'Error during orphan directory cleanup');
+    }
   });
 
   // ============================================================================
