@@ -46,6 +46,23 @@ class NfoGenerator {
   }
 
   /**
+   * Formats a Date as YYYY-MM-DD HH:MM:SS for NFO <dateadded> element
+   * @param {Date} [date=new Date()] - Date to format (defaults to now)
+   * @returns {string} Formatted date string
+   */
+  formatDateAdded(date = new Date()) {
+    const d = date instanceof Date ? date : new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const year = d.getUTCFullYear();
+    const month = pad(d.getUTCMonth() + 1);
+    const day = pad(d.getUTCDate());
+    const hours = pad(d.getUTCHours());
+    const minutes = pad(d.getUTCMinutes());
+    const seconds = pad(d.getUTCSeconds());
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  }
+
+  /**
    * Converts duration in seconds to minutes (rounded up)
    * @param {number} seconds - Duration in seconds
    * @returns {number} Duration in minutes

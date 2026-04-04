@@ -81,6 +81,31 @@ describe('NfoGenerator', () => {
     });
   });
 
+  describe('formatDateAdded', () => {
+    it('should format a Date object to YYYY-MM-DD HH:MM:SS', () => {
+      const date = new Date('2026-04-04T14:30:45Z');
+      const result = nfoGenerator.formatDateAdded(date);
+      expect(result).toBe('2026-04-04 14:30:45');
+    });
+
+    it('should use current time when no date is provided', () => {
+      const before = new Date();
+      const result = nfoGenerator.formatDateAdded();
+      const after = new Date();
+
+      // Parse result back to a Date as UTC and verify it falls within the test window
+      const parsed = new Date(result.replace(' ', 'T') + 'Z');
+      expect(parsed.getTime()).toBeGreaterThanOrEqual(before.getTime() - 1000);
+      expect(parsed.getTime()).toBeLessThanOrEqual(after.getTime() + 1000);
+    });
+
+    it('should zero-pad single-digit months, days, hours, minutes, seconds', () => {
+      const date = new Date('2026-01-05T03:07:09Z');
+      const result = nfoGenerator.formatDateAdded(date);
+      expect(result).toBe('2026-01-05 03:07:09');
+    });
+  });
+
   describe('calculateRuntime', () => {
     it('should convert seconds to minutes rounded up', () => {
       expect(nfoGenerator.calculateRuntime(60)).toBe(1);
