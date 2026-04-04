@@ -1,5 +1,29 @@
 # Changelog
 
+## [v1.63.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.63.0) - 2026-04-04
+
+## [1.63.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.62.0...v1.63.0) (2026-04-04)
+
+
+### Features
+
+* add notifications for automatically removed videos ([062fee6](https://github.com/DialmasterOrg/Youtarr/commit/062fee6dacc7e748d747d7f6ca4003b4c6d844ab)), closes [#218](https://github.com/DialmasterOrg/Youtarr/issues/218)
+
+
+### Bug Fixes
+
+* show actual total deleted count in auto-removal notification truncation ([17df3ac](https://github.com/DialmasterOrg/Youtarr/commit/17df3acfd40f4edda03a9bdcff8686f5bcabadd5))
+* tighten Claude review workflow permissions and expand CLAUDE.md ([ccbe8ac](https://github.com/DialmasterOrg/Youtarr/commit/ccbe8aca5d5b4fb985e6c027721040226745679d))
+
+
+### Documentation
+
+* update CHANGELOG for v1.62.0 [skip ci] ([d763ba5](https://github.com/DialmasterOrg/Youtarr/commit/d763ba51e25f356fc7f4ca4d4a25f6d038c632ae))
+
+
+
+
+
 ## [v1.62.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.62.0) - 2026-04-03
 
 ## [1.62.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.61.1...v1.62.0) (2026-04-03)
