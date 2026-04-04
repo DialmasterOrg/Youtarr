@@ -1435,6 +1435,26 @@ describe('VideoDeletionModule', () => {
       expect(result.removed).toEqual([]);
     });
 
+    test('should continue processing after a subfolder error', async () => {
+      mockFilesystem.listSubdirectories
+        .mockResolvedValueOnce([
+          '/test/output/__Broken',
+          '/test/output/GoodChannel',
+        ])
+        .mockRejectedValueOnce(new Error('EACCES: permission denied')); // __Broken fails
+
+      mockFilesystem.cleanupEmptyChannelDirectory.mockResolvedValueOnce(true); // GoodChannel removed
+
+      const result = await VideoDeletionModule.cleanupOrphanDirectories();
+
+      expect(result.removed).toEqual(['/test/output/GoodChannel']);
+      expect(result.errors).toEqual(['EACCES: permission denied']);
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ err: expect.any(Error), dir: '/test/output/__Broken' }),
+        expect.stringContaining('Error processing subfolder directory')
+      );
+    });
+
     test('should handle mixed root and subfolder directories', async () => {
       mockFilesystem.listSubdirectories
         .mockResolvedValueOnce([

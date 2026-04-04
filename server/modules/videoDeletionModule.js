@@ -383,17 +383,22 @@ ${excludeClause}        ORDER BY timeCreated ASC
 
         if (isSubfolderDir(dirName)) {
           // Subfolder directory (e.g., __Music) — check its children as channel dirs
-          const channelDirs = await listSubdirectories(dir);
-          for (const channelDir of channelDirs) {
-            const wasRemoved = await cleanupEmptyChannelDirectory(channelDir, baseDir, {
-              includeIgnorableFiles: true
-            });
-            if (wasRemoved) {
-              removed.push(channelDir);
+          try {
+            const channelDirs = await listSubdirectories(dir);
+            for (const channelDir of channelDirs) {
+              const wasRemoved = await cleanupEmptyChannelDirectory(channelDir, baseDir, {
+                includeIgnorableFiles: true
+              });
+              if (wasRemoved) {
+                removed.push(channelDir);
+              }
             }
+            // Clean up the subfolder itself if it's now empty
+            await cleanupEmptyParents(dir, baseDir);
+          } catch (dirError) {
+            logger.warn({ err: dirError, dir }, '[Orphan Cleanup] Error processing subfolder directory');
+            errors.push(dirError.message);
           }
-          // Clean up the subfolder itself if it's now empty
-          await cleanupEmptyParents(dir, baseDir);
         } else {
           // Root-level channel directory
           const wasRemoved = await cleanupEmptyChannelDirectory(dir, baseDir, {
