@@ -1,18 +1,17 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent, { UserEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import VideosPage from '../VideosPage';
 import { VideoData } from '../../types/VideoData';
 
-
 jest.mock('axios', () => ({
-  get: jest.fn(),
+  get: jest.fn()
 }));
 
 const axios = require('axios');
 
 jest.mock('react-swipeable', () => ({
-  useSwipeable: jest.fn(() => ({})),
+  useSwipeable: jest.fn(() => ({}))
 }));
 
 jest.mock('../../utils', () => ({
@@ -23,7 +22,7 @@ jest.mock('../../utils', () => ({
   formatYTDate: jest.fn((date: string | null) => {
     if (!date) return 'Unknown';
     return '1/15/2024';
-  }),
+  })
 }));
 
 jest.mock('@mui/material/useMediaQuery');
@@ -32,9 +31,9 @@ jest.mock('@mui/material/styles', () => ({
   ...jest.requireActual('@mui/material/styles'),
   useTheme: () => ({
     breakpoints: {
-      down: (breakpoint: string) => false,
-    },
-  }),
+      down: (breakpoint: string) => false
+    }
+  })
 }));
 
 jest.mock('../shared/DeleteVideosDialog', () => ({
@@ -49,19 +48,19 @@ jest.mock('../shared/DeleteVideosDialog', () => ({
       React.createElement('button', {
         key: 'cancel',
         'data-testid': 'dialog-cancel',
-        onClick: props.onClose,
+        onClick: props.onClose
       }, 'Cancel'),
       React.createElement('button', {
         key: 'confirm',
         'data-testid': 'dialog-confirm',
-        onClick: props.onConfirm,
-      }, 'Confirm Delete'),
+        onClick: props.onConfirm
+      }, 'Confirm Delete')
     ]);
-  },
+  }
 }));
 
 jest.mock('../shared/useVideoDeletion', () => ({
-  useVideoDeletion: jest.fn(),
+  useVideoDeletion: jest.fn()
 }));
 
 const mockVideos: VideoData[] = [
@@ -75,7 +74,7 @@ const mockVideos: VideoData[] = [
     duration: 600,
     description: 'A coding tutorial',
     removed: false,
-    fileSize: '1073741824',
+    fileSize: '1073741824'
   },
   {
     id: 2,
@@ -87,7 +86,7 @@ const mockVideos: VideoData[] = [
     duration: 1200,
     description: 'Game review video',
     removed: false,
-    fileSize: '2147483648',
+    fileSize: '2147483648'
   },
   {
     id: 3,
@@ -99,8 +98,8 @@ const mockVideos: VideoData[] = [
     duration: null,
     description: null,
     removed: false,
-    fileSize: null,
-  },
+    fileSize: null
+  }
 ];
 
 const mockPaginatedResponse = (videos: VideoData[], page = 1, limit = 12) => {
@@ -113,7 +112,7 @@ const mockPaginatedResponse = (videos: VideoData[], page = 1, limit = 12) => {
     totalPages: Math.ceil(videos.length / limit),
     page,
     limit,
-    channels: uniqueChannels,
+    channels: uniqueChannels
   };
 };
 
@@ -136,7 +135,7 @@ describe('VideosPage Component', () => {
       deleteVideos: mockDeleteVideos,
       deleteVideosByYoutubeIds: jest.fn(),
       loading: false,
-      error: null,
+      error: null
     });
   });
 
@@ -162,12 +161,12 @@ describe('VideosPage Component', () => {
 
       await waitFor(() => {
         expect(axios.get).toHaveBeenCalledWith(
-            expect.stringContaining('/getVideos?'),
-            expect.objectContaining({
-              headers: {
-                'x-access-token': mockToken,
-              },
-            }),
+          expect.stringContaining('/getVideos?'),
+          expect.objectContaining({
+            headers: {
+              'x-access-token': mockToken,
+            }
+          })
         );
       });
 
@@ -316,7 +315,7 @@ describe('VideosPage Component', () => {
         duration: 600,
         description: 'Description',
         removed: false,
-        fileSize: null,
+        fileSize: null
       }));
 
       // Page 1 response
@@ -424,7 +423,7 @@ describe('VideosPage Component', () => {
         duration: 600,
         description: 'Description',
         removed: false,
-        fileSize: null,
+        fileSize: null
       }));
 
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(manyVideos, 1, 6) });
@@ -492,7 +491,7 @@ describe('VideosPage Component', () => {
 
       // After search - only videos with "code" in the name
       const searchResults = mockVideos.filter(v =>
-          v.youTubeVideoName.toLowerCase().includes('code'),
+        v.youTubeVideoName.toLowerCase().includes('code')
       );
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(searchResults) });
 
@@ -514,7 +513,7 @@ describe('VideosPage Component', () => {
     test('displays file size information when available', async () => {
       const videoWithFile = {
         ...mockVideos[0],
-        filePath: '/path/to/video.mp4',
+        filePath: '/path/to/video.mp4'
       };
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([videoWithFile]) });
 
@@ -532,7 +531,7 @@ describe('VideosPage Component', () => {
     test('displays missing file status for removed videos', async () => {
       const removedVideo = {
         ...mockVideos[0],
-        removed: true,
+        removed: true
       };
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([removedVideo]) });
 
@@ -549,8 +548,8 @@ describe('VideosPage Component', () => {
       axios.get.mockResolvedValueOnce({
         data: {
           ...mockPaginatedResponse(mockVideos),
-          total: 42,
-        },
+          total: 42
+        }
       });
 
       render(<VideosPage token={mockToken} />);
@@ -562,9 +561,9 @@ describe('VideosPage Component', () => {
 
     test('displays loading state during data fetch', async () => {
       axios.get.mockImplementationOnce(() =>
-          new Promise(resolve => setTimeout(() =>
-              resolve({ data: mockPaginatedResponse(mockVideos) }), 100,
-          )),
+        new Promise(resolve => setTimeout(() =>
+          resolve({ data: mockPaginatedResponse(mockVideos) }), 100
+        ))
       );
 
       render(<VideosPage token={mockToken} />);
@@ -582,7 +581,7 @@ describe('VideosPage Component', () => {
     test('handles videos with no file size information', async () => {
       const videoNoSize = {
         ...mockVideos[0],
-        fileSize: null,
+        fileSize: null
       };
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([videoNoSize]) });
 
@@ -681,8 +680,7 @@ describe('VideosPage Component', () => {
     });
 
     test('handles API error gracefully', async () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {
-      });
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
       axios.get.mockRejectedValueOnce(new Error('Network error'));
 
@@ -701,7 +699,7 @@ describe('VideosPage Component', () => {
     test('handles videos without channel names', async () => {
       const videosWithoutChannel = [{
         ...mockVideos[0],
-        youTubeChannelName: '',
+        youTubeChannelName: ''
       }];
 
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(videosWithoutChannel) });
@@ -755,7 +753,7 @@ describe('VideosPage Component', () => {
         duration: 600,
         description: 'Description',
         removed: false,
-        fileSize: null,
+        fileSize: null
       }));
 
       // Page 1 initial load - has both Channel A and B
@@ -868,8 +866,8 @@ describe('VideosPage Component', () => {
             duration: 600,
             description: 'Removed',
             removed: true,
-            fileSize: null,
-          },
+            fileSize: null
+          }
         ];
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(videosWithRemoved) });
 
@@ -1011,7 +1009,7 @@ describe('VideosPage Component', () => {
       test('removed videos cannot be selected', async () => {
         const removedVideo = {
           ...mockVideos[0],
-          removed: true,
+          removed: true
         };
         axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([removedVideo]) });
 
@@ -1107,7 +1105,7 @@ describe('VideosPage Component', () => {
         mockDeleteVideos.mockResolvedValueOnce({
           success: true,
           deleted: [1, 2],
-          failed: [],
+          failed: []
         });
 
         render(<VideosPage token={mockToken} />);
@@ -1157,7 +1155,7 @@ describe('VideosPage Component', () => {
         mockDeleteVideos.mockResolvedValueOnce({
           success: false,
           deleted: [1],
-          failed: [{ videoId: 2, error: 'File not found' }],
+          failed: [{ videoId: 2, error: 'File not found' }]
         });
 
         render(<VideosPage token={mockToken} />);
@@ -1197,8 +1195,8 @@ describe('VideosPage Component', () => {
           deleted: [],
           failed: [
             { videoId: 1, error: 'Permission denied' },
-            { videoId: 2, error: 'Permission denied' },
-          ],
+            { videoId: 2, error: 'Permission denied' }
+          ]
         });
 
         render(<VideosPage token={mockToken} />);
@@ -1267,7 +1265,7 @@ describe('VideosPage Component', () => {
         mockDeleteVideos.mockResolvedValueOnce({
           success: true,
           deleted: [1, 2],
-          failed: [],
+          failed: []
         });
 
         render(<VideosPage token={mockToken} />);
@@ -1307,7 +1305,7 @@ describe('VideosPage Component', () => {
           deleteVideos: mockDeleteVideos,
           deleteVideosByYoutubeIds: jest.fn(),
           loading: true,
-          error: null,
+          error: null
         });
 
         render(<VideosPage token={mockToken} />);
@@ -1338,7 +1336,7 @@ describe('VideosPage Component', () => {
         mockDeleteVideos.mockResolvedValueOnce({
           success: true,
           deleted: [1],
-          failed: [],
+          failed: []
         });
 
         render(<VideosPage token={mockToken} />);
@@ -1372,7 +1370,7 @@ describe('VideosPage Component', () => {
         mockDeleteVideos.mockResolvedValueOnce({
           success: false,
           deleted: [],
-          failed: [{ videoId: 1, error: 'Network error' }],
+          failed: [{ videoId: 1, error: 'Network error' }]
         });
 
         render(<VideosPage token={mockToken} />);
