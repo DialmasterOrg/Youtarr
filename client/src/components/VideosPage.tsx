@@ -27,6 +27,8 @@ import {
   Fab,
   Badge,
   Zoom,
+  FormControlLabel,
+  Switch,
 } from '@mui/material';
 import Pagination from '@mui/material/Pagination';
 import FilterListIcon from '@mui/icons-material/FilterList';
@@ -84,6 +86,7 @@ function VideosPage({ token }: VideosPageProps) {
   const [ratingLoading, setRatingLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [hideMissing, setHideMissing] = useState(false);
 
   const { deleteVideos, loading: deleteLoading } = useVideoDeletion();
 
@@ -119,6 +122,7 @@ function VideosPage({ token }: VideosPageProps) {
     if (filter) params.append('channelFilter', filter);
     if (dateFrom) params.append('dateFrom', dateFrom.toISOString().split('T')[0]);
     if (dateTo) params.append('dateTo', dateTo.toISOString().split('T')[0]);
+    if (hideMissing) params.append('hideMissing', 'true');
 
     try {
       const response = await axios.get<PaginatedVideosResponse>(`/getVideos?${params.toString()}`, {
@@ -146,7 +150,7 @@ function VideosPage({ token }: VideosPageProps) {
     } finally {
       setLoading(false);
     }
-  }, [token, page, videosPerPage, orderBy, sortOrder, search, filter, dateFrom, dateTo]);
+  }, [token, page, videosPerPage, orderBy, sortOrder, search, filter, dateFrom, dateTo, hideMissing]);
 
   useEffect(() => {
     fetchVideos();
@@ -174,6 +178,11 @@ function VideosPage({ token }: VideosPageProps) {
 
   const handleClose = () => {
     setAnchorEl(null);
+  };
+
+  const handleHideMissingChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setHideMissing(event.target.checked);
+    setPage(1);
   };
 
   const handleSortChange = (newOrderBy: 'published' | 'added') => {
@@ -349,19 +358,33 @@ function VideosPage({ token }: VideosPageProps) {
 
         {/* Search and Filter Controls */}
         <Stack spacing={2} sx={{ mb: 3 }}>
-          <TextField
-            fullWidth
-            variant="outlined"
-            placeholder="Search videos by name or channel..."
-            onChange={(e) => debouncedSearch(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-          />
+          <Stack direction={isMobile ? 'column' : 'row'} spacing={2} alignItems={isMobile ? 'stretch' : 'center'}>
+            <TextField
+              fullWidth
+              variant="outlined"
+              placeholder="Search videos by name or channel..."
+              onChange={(e) => debouncedSearch(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={hideMissing}
+                  onChange={handleHideMissingChange}
+                  color="primary"
+                  inputProps={{ 'aria-label': 'Hide missing videos toggle' }}
+                />
+              }
+              label="Hide missing"
+              sx={{ whiteSpace: 'nowrap' }}
+            />
+          </Stack>
 
           {!isMobile && (
             <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -467,6 +490,7 @@ function VideosPage({ token }: VideosPageProps) {
                         indeterminate={selectedVideos.length > 0 && selectedVideos.length < videos.filter(v => !v.removed).length}
                         checked={videos.filter(v => !v.removed).length > 0 && selectedVideos.length === videos.filter(v => !v.removed).length}
                         onChange={handleSelectAll}
+                        inputProps={{ 'aria-label': 'select all videos' }}
                       />
                     </TableCell>
                     <TableCell
@@ -785,6 +809,7 @@ function VideosPage({ token }: VideosPageProps) {
                               checked={selectedVideos.includes(video.id)}
                               onChange={() => handleSelectVideo(video.id)}
                               disabled={video.removed}
+                              inputProps={{ 'aria-label': `select video ${video.youTubeVideoName}` }}
                             />
                           </TableCell>
                           <TableCell>
