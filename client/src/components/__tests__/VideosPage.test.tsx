@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import userEvent, { UserEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import VideosPage from '../VideosPage';
 import { VideoData } from '../../types/VideoData';
@@ -597,6 +597,74 @@ describe('VideosPage Component', () => {
     });
   });
 
+  describe('VideosPage - Hide Missing Toggle', () => {
+    let user: UserEvent;
+    beforeEach(() => {
+      user = setupUser();
+      // Initial load - all videos
+      axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
+    });
+
+    it('should render the hide missing toggle and be unchecked', async () => {
+      render(<VideosPage token={mockToken} />);
+      const hideMissingToggle = await screen.findByRole('checkbox', {
+        name: /hide missing videos toggle/i,
+      });
+      expect(hideMissingToggle).toBeInTheDocument();
+      expect(hideMissingToggle).not.toBeChecked();
+    });
+
+    it('should call setHideMissing when the toggle is clicked', async () => {
+      render(<VideosPage token={mockToken} />);
+      const hideMissingToggle = await screen.findByRole('checkbox', {
+        name: /hide missing videos toggle/i,
+      });
+      expect(hideMissingToggle).toBeInTheDocument();
+      expect(hideMissingToggle).not.toBeChecked();
+      // click toggle and wait for state to update with hideMissingToggle checked
+      await user.click(hideMissingToggle);
+      await waitFor(() => {
+        expect(hideMissingToggle).toBeChecked();
+      });
+    });
+
+    it('should call api with page 1 and hideMissing set to true when the toggle is clicked', async () => {
+      render(<VideosPage token={mockToken} />);
+      const hideMissingToggle = await screen.findByRole('checkbox', {
+        name: /hide missing videos toggle/i,
+      });
+      expect(hideMissingToggle).toBeInTheDocument();
+      expect(hideMissingToggle).not.toBeChecked();
+      // click toggle and wait for state to update and call to be made
+      await user.click(hideMissingToggle);
+      await waitFor(() => expect(axios.get).toHaveBeenCalled());
+      // check that the last api call includes necessary query params
+      const axiosMockCalls = axios.get.mock.calls;
+      const lastCall = axiosMockCalls[axiosMockCalls.length - 1];
+      expect(lastCall[0]).toContain('hideMissing=true');
+      expect(lastCall[0]).toContain('page=1');
+    });
+
+    it('should not include hideMissing parameter in API request when toggled off', async () => {
+      render(<VideosPage token={mockToken} />);
+      const hideMissingToggle = await screen.findByRole('checkbox', {
+        name: /hide missing videos toggle/i,
+      });
+      expect(hideMissingToggle).toBeInTheDocument();
+      expect(hideMissingToggle).not.toBeChecked();
+      // click toggle on and wait for state to update
+      await user.click(hideMissingToggle);
+      await waitFor(() => expect(hideMissingToggle).toBeChecked());
+      // click toggle off and wait for state to update and call to be made
+      await user.click(hideMissingToggle);
+      await waitFor(() => expect(hideMissingToggle).not.toBeChecked());
+      // check that the last api call does not include the hideMissing query param
+      const axiosMockCalls = axios.get.mock.calls;
+      const lastCall = axiosMockCalls[axiosMockCalls.length - 1];
+      expect(lastCall[0]).not.toContain('hideMissing');
+    });
+  });
+
   describe('Edge Cases', () => {
     test('handles empty video list', async () => {
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([]) });
@@ -747,7 +815,7 @@ describe('VideosPage Component', () => {
         expect(selectAllCheckbox).toBeInTheDocument();
         const checkboxes = screen.getAllByRole('checkbox', {
           name: /^select video .+/i,
-        })
+        });
         expect(checkboxes.length).toBeGreaterThan(0);
       });
 

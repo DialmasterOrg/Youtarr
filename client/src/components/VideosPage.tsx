@@ -378,7 +378,7 @@ function VideosPage({ token }: VideosPageProps) {
                   checked={hideMissing}
                   onChange={handleHideMissingChange}
                   color="primary"
-                  inputProps={{ 'aria-label': 'Hide missing videos toggle' }}
+                  inputProps={{ 'aria-label': 'hide missing videos toggle' }}
                 />
               }
               label="Hide missing"
