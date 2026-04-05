@@ -17,7 +17,7 @@ Job.init(
       allowNull: false,
     },
     output: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT('medium'),
       allowNull: true,
     },
     timeInitiated: {
