@@ -740,9 +740,10 @@ class ChannelModule {
    * @param {string} channelUrlOrId - YouTube channel URL or channel ID
    * @param {boolean} emitMessage - Whether to emit WebSocket update message
    * @param {boolean} enableChannel - Whether to enable the channel if it's new (default: false)
+   * @param {object} initialSettings - Optional per-channel settings (video_quality, sub_folder, default_rating) passed to upsertChannel
    * @returns {Promise<Object>} - Channel information object
    */
-  async getChannelInfo(channelUrlOrId, emitMessage = true, enableChannel = false) {
+  async getChannelInfo(channelUrlOrId, emitMessage = true, enableChannel = false, initialSettings = {}) {
     const { foundChannel, channelUrl } = await this.findChannelByUrlOrId(channelUrlOrId);
 
     if (foundChannel) {
@@ -791,7 +792,7 @@ class ChannelModule {
       uploader: channelData.uploader,
       url: actualChannelUrl,  // Store the actual handle URL for display
       folder_name: folderName,
-    }, enableChannel);
+    }, enableChannel, null, initialSettings);
 
     // Now process thumbnail using the proper channel ID (uses metadata URL, falls back to yt-dlp)
     logger.info('Processing channel thumbnail');

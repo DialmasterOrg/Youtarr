@@ -114,6 +114,45 @@ describe('importJobRunner.runImport', () => {
     expect(ch1Result.reason).toMatch(/already/i);
   });
 
+  test('passes channel settings as initialSettings to getChannelInfo', async () => {
+    const channels = [
+      {
+        channelId: 'UC_settings_test',
+        url: 'https://www.youtube.com/channel/UC_settings_test',
+        title: 'Settings Channel',
+        settings: { video_quality: '1080', sub_folder: 'custom', default_rating: '8' },
+      },
+    ];
+    activeJob = makeActiveJob(1);
+    await runImport(deps, activeJob, channels);
+
+    expect(deps.channelModule.getChannelInfo).toHaveBeenCalledWith(
+      channels[0].url,
+      false,
+      true,
+      { video_quality: '1080', sub_folder: 'custom', default_rating: '8' }
+    );
+  });
+
+  test('passes empty object as initialSettings when channel has no settings', async () => {
+    const channels = [
+      {
+        channelId: 'UC_no_settings',
+        url: 'https://www.youtube.com/channel/UC_no_settings',
+        title: 'No Settings Channel',
+      },
+    ];
+    activeJob = makeActiveJob(1);
+    await runImport(deps, activeJob, channels);
+
+    expect(deps.channelModule.getChannelInfo).toHaveBeenCalledWith(
+      channels[0].url,
+      false,
+      true,
+      {}
+    );
+  });
+
   test('writes results to job output on completion', async () => {
     const channels = makeChannels(2);
     activeJob = makeActiveJob(2);

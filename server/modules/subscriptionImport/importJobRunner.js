@@ -84,10 +84,13 @@ async function processOneChannel(deps, activeJob, ch) {
     const url =
       ch.url || `https://www.youtube.com/channel/${ch.channelId}`;
 
-    // getChannelInfo(channelUrlOrId, emitMessage, enableChannel)
+    // Build per-channel settings from the import descriptor
+    const initialSettings = ch.settings || {};
+
+    // getChannelInfo(channelUrlOrId, emitMessage, enableChannel, initialSettings)
     // emitMessage = false because we broadcast our own progress
     // enableChannel = true so the channel is active immediately
-    await channelModule.getChannelInfo(url, false, true);
+    await channelModule.getChannelInfo(url, false, true, initialSettings);
 
     activeJob.results.push({
       channelId: ch.channelId,
