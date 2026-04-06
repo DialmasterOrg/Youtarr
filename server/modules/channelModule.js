@@ -1939,11 +1939,21 @@ class ChannelModule {
         availableTabs = [TAB_TYPES.VIDEOS];
       }
 
-      // Determine smart default for auto_download_enabled_tabs
-      let autoDownloadEnabledTabs = 'video';
-      if (!availableTabs.includes(TAB_TYPES.VIDEOS) && availableTabs.length > 0) {
-        autoDownloadEnabledTabs = MEDIA_TAB_TYPE_MAP[availableTabs[0]] || 'video';
-        logger.info({ channelId, defaultTab: autoDownloadEnabledTabs }, 'Channel has no videos tab, using alternative default');
+      // Determine auto_download_enabled_tabs: preserve existing user choice if set,
+      // otherwise pick a smart default based on available tabs
+      const existingEnabledTabs = channel.auto_download_enabled_tabs;
+      const hasUserChoice = existingEnabledTabs !== null && existingEnabledTabs !== undefined;
+
+      let autoDownloadEnabledTabs;
+      if (hasUserChoice) {
+        // User already set a value (including empty string for "disabled") -- preserve it
+        autoDownloadEnabledTabs = existingEnabledTabs;
+      } else {
+        autoDownloadEnabledTabs = 'video';
+        if (!availableTabs.includes(TAB_TYPES.VIDEOS) && availableTabs.length > 0) {
+          autoDownloadEnabledTabs = MEDIA_TAB_TYPE_MAP[availableTabs[0]] || 'video';
+          logger.info({ channelId, defaultTab: autoDownloadEnabledTabs }, 'Channel has no videos tab, using alternative default');
+        }
       }
 
       // Update channel with detected tabs

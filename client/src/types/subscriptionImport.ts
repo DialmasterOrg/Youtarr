@@ -1,3 +1,5 @@
+import { GLOBAL_DEFAULT_SENTINEL } from '../utils/channelHelpers';
+
 export interface ReviewChannel {
   channelId: string;
   title: string;
@@ -65,6 +67,6 @@ export const DEFAULT_ROW_SETTINGS: RowSettings = {
   autoDownloadEnabled: true,
   videoQuality: null,
   downloadType: 'videos',
-  subFolder: null,
+  subFolder: GLOBAL_DEFAULT_SENTINEL,
   defaultRating: null,
 };

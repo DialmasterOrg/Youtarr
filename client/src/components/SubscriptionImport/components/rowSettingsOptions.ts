@@ -1,18 +1,11 @@
-import { RowSettings } from '../../../types/subscriptionImport';
-
 export const QUALITY_OPTIONS: Array<{ value: string; label: string }> = [
   { value: '', label: 'Use global default' },
-  { value: '720p', label: '720p' },
-  { value: '1080p', label: '1080p' },
-  { value: '1440p', label: '1440p' },
-  { value: '2160p', label: '2160p' },
-  { value: 'best', label: 'best' },
-];
-
-export const DOWNLOAD_TYPE_OPTIONS: Array<{ value: RowSettings['downloadType']; label: string }> = [
-  { value: 'videos', label: 'Videos' },
-  { value: 'shorts', label: 'Shorts' },
-  { value: 'livestreams', label: 'Livestreams' },
+  { value: '2160', label: '2160p' },
+  { value: '1440', label: '1440p' },
+  { value: '1080', label: '1080p' },
+  { value: '720', label: '720p' },
+  { value: '480', label: '480p' },
+  { value: '360', label: '360p' },
 ];
 
 export const RATING_OPTIONS: Array<{ value: string; label: string }> = [

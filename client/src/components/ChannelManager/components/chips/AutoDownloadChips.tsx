@@ -37,16 +37,19 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
     : [];
 
   // When tabs haven't been detected yet (e.g. newly imported channels),
-  // show a default indicator with an info icon instead of blank space
+  // show a default indicator with an info icon instead of blank space.
+  // Reflect whether auto-download is actually enabled based on autoDownloadTabs.
   if (available.length === 0) {
+    const willAutoDownload = autoDownloadEnabled.length > 0;
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
         <Chip
           label={isMobile ? 'Videos' : 'Videos (default)'}
           size="small"
-          variant="outlined"
-          color="default"
-          sx={{ fontSize: '0.7rem', opacity: 0.7 }}
+          variant={willAutoDownload ? 'filled' : 'outlined'}
+          color={willAutoDownload ? 'primary' : 'default'}
+          icon={willAutoDownload ? <FileDownloadIcon sx={{ fontSize: '0.85rem' }} /> : undefined}
+          sx={{ fontSize: '0.7rem', opacity: willAutoDownload ? 1 : 0.7 }}
         />
         <IconButton
           size="small"
@@ -65,7 +68,7 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
           <Typography variant="body2" sx={{ p: 2, maxWidth: 300 }}>
             Available tabs (Videos, Shorts, Streams) have not been detected for this
             channel yet. They will be automatically detected when you visit the channel
-            page. Until then, auto-download defaults to the Videos tab.
+            page.
           </Typography>
         </Popover>
       </Box>

@@ -17,6 +17,8 @@ import ImportSummary from './components/ImportSummary';
 import RecentImportsSection from './components/RecentImportsSection';
 
 import { ImportSource } from '../../types/subscriptionImport';
+import { useSubfolders } from '../../hooks/useSubfolders';
+import { useConfig } from '../../hooks/useConfig';
 
 interface ImportSubscriptionsPageProps {
   token: string;
@@ -29,6 +31,10 @@ const ImportSubscriptionsPage: React.FC<ImportSubscriptionsPageProps> = ({ token
   const { loading: uploadLoading, error: uploadError, upload } = usePreviewUpload(token);
   const { jobDetail } = useImportJob(state.activeJobId, token);
   const prevStatusRef = useRef<string | null>(null);
+  const { subfolders } = useSubfolders(token);
+  const { config } = useConfig(token);
+  const defaultSubfolderDisplay = config.defaultSubfolder || null;
+  const globalPreferredResolution = config.preferredResolution || '1080';
 
   // Support ?job=<id> URL parameter to resume watching an import
   useEffect(() => {
@@ -136,6 +142,9 @@ const ImportSubscriptionsPage: React.FC<ImportSubscriptionsPageProps> = ({ token
             channels={state.channels}
             rowStates={state.rowStates}
             dispatch={dispatch}
+            subfolders={subfolders}
+            defaultSubfolderDisplay={defaultSubfolderDisplay}
+            globalPreferredResolution={globalPreferredResolution}
           />
         </>
       )}

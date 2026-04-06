@@ -1,18 +1,26 @@
 import React, { useState } from 'react';
-import { Checkbox, Chip, IconButton, TableCell, TableRow } from '@mui/material';
+import { Box, Checkbox, Chip, IconButton, TableCell, TableRow } from '@mui/material';
 import { Settings as SettingsIcon } from '@mui/icons-material';
 import { ReviewChannel, RowState } from '../../../types/subscriptionImport';
 import { ImportFlowAction } from '../hooks/useImportFlow';
 import ChannelThumbnail from './ChannelThumbnail';
 import RowSettingsPopover from './RowSettingsPopover';
+import SubFolderChip from '../../ChannelManager/components/chips/SubFolderChip';
+import QualityChip from '../../ChannelManager/components/chips/QualityChip';
+import RatingBadge from '../../shared/RatingBadge';
 
 interface ReviewTableRowProps {
   channel: ReviewChannel;
   rowState: RowState;
   dispatch: React.Dispatch<ImportFlowAction>;
+  subfolders: string[];
+  defaultSubfolderDisplay: string | null;
+  globalPreferredResolution: string;
 }
 
-const ReviewTableRow: React.FC<ReviewTableRowProps> = ({ channel, rowState, dispatch }) => {
+const ReviewTableRow: React.FC<ReviewTableRowProps> = ({
+  channel, rowState, dispatch, subfolders, defaultSubfolderDisplay, globalPreferredResolution,
+}) => {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const popoverOpen = Boolean(anchorEl);
 
@@ -47,8 +55,17 @@ const ReviewTableRow: React.FC<ReviewTableRowProps> = ({ channel, rowState, disp
       </TableCell>
       <TableCell>{channel.title}</TableCell>
       <TableCell>
-        {channel.alreadySubscribed && (
+        {channel.alreadySubscribed ? (
           <Chip label="Already subscribed" size="small" color="default" />
+        ) : (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
+            <SubFolderChip subFolder={rowState.settings.subFolder} />
+            <QualityChip
+              videoQuality={rowState.settings.videoQuality}
+              globalPreferredResolution={globalPreferredResolution}
+            />
+            <RatingBadge rating={rowState.settings.defaultRating} />
+          </Box>
         )}
       </TableCell>
       <TableCell align="right" sx={{ width: 56 }}>
@@ -66,6 +83,8 @@ const ReviewTableRow: React.FC<ReviewTableRowProps> = ({ channel, rowState, disp
           channelId={channel.channelId}
           rowState={rowState}
           dispatch={dispatch}
+          subfolders={subfolders}
+          defaultSubfolderDisplay={defaultSubfolderDisplay}
         />
       </TableCell>
     </TableRow>

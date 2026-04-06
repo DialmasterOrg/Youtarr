@@ -18,6 +18,8 @@ interface WrapperProps {
   channelId: string;
   rowState: RowState;
   dispatch: React.Dispatch<ImportFlowAction>;
+  subfolders?: string[];
+  defaultSubfolderDisplay?: string | null;
 }
 
 const PopoverWrapper: React.FC<WrapperProps> = (props) => {
@@ -38,6 +40,8 @@ const PopoverWrapper: React.FC<WrapperProps> = (props) => {
         channelId={props.channelId}
         rowState={props.rowState}
         dispatch={props.dispatch}
+        subfolders={props.subfolders ?? []}
+        defaultSubfolderDisplay={props.defaultSubfolderDisplay ?? null}
       />
     </div>
   );
@@ -66,7 +70,6 @@ describe('RowSettingsPopover', () => {
     });
     expect(screen.getByLabelText('Auto-download enabled')).toBeInTheDocument();
     expect(screen.getByLabelText('Video Quality')).toBeInTheDocument();
-    expect(screen.getByLabelText('Download Type')).toBeInTheDocument();
     expect(screen.getByLabelText('Subfolder')).toBeInTheDocument();
     expect(screen.getByLabelText('Content Rating')).toBeInTheDocument();
   });
@@ -121,7 +124,7 @@ describe('RowSettingsPopover', () => {
     expect(optionTexts).toContain('Use global default');
     expect(optionTexts).toContain('720p');
     expect(optionTexts).toContain('1080p');
-    expect(optionTexts).toContain('best');
+    expect(optionTexts).toContain('360p');
   });
 
   test('not rendered when open=false', () => {

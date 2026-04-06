@@ -5,15 +5,21 @@ import { ReviewChannel, RowState } from '../../../types/subscriptionImport';
 import { ImportFlowAction } from '../hooks/useImportFlow';
 import ChannelThumbnail from './ChannelThumbnail';
 import RowSettingsSheet from './RowSettingsSheet';
+import SubFolderChip from '../../ChannelManager/components/chips/SubFolderChip';
+import QualityChip from '../../ChannelManager/components/chips/QualityChip';
+import RatingBadge from '../../shared/RatingBadge';
 
 interface ReviewTableMobileCardProps {
   channel: ReviewChannel;
   rowState: RowState;
   dispatch: React.Dispatch<ImportFlowAction>;
+  subfolders: string[];
+  defaultSubfolderDisplay: string | null;
+  globalPreferredResolution: string;
 }
 
 const ReviewTableMobileCard: React.FC<ReviewTableMobileCardProps> = ({
-  channel, rowState, dispatch,
+  channel, rowState, dispatch, subfolders, defaultSubfolderDisplay, globalPreferredResolution,
 }) => {
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -39,8 +45,17 @@ const ReviewTableMobileCard: React.FC<ReviewTableMobileCardProps> = ({
           <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>
             {channel.title}
           </Typography>
-          {channel.alreadySubscribed && (
+          {channel.alreadySubscribed ? (
             <Chip label="Already subscribed" size="small" color="default" sx={{ mt: 0.5 }} />
+          ) : (
+            <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+              <SubFolderChip subFolder={rowState.settings.subFolder} />
+              <QualityChip
+                videoQuality={rowState.settings.videoQuality}
+                globalPreferredResolution={globalPreferredResolution}
+              />
+              <RatingBadge rating={rowState.settings.defaultRating} />
+            </Box>
           )}
         </Box>
       </Box>
@@ -69,6 +84,8 @@ const ReviewTableMobileCard: React.FC<ReviewTableMobileCardProps> = ({
         channelId={channel.channelId}
         rowState={rowState}
         dispatch={dispatch}
+        subfolders={subfolders}
+        defaultSubfolderDisplay={defaultSubfolderDisplay}
       />
     </Card>
   );

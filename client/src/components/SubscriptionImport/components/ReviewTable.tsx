@@ -12,11 +12,16 @@ interface ReviewTableProps {
   channels: ReviewChannel[];
   rowStates: Record<string, RowState>;
   dispatch: React.Dispatch<ImportFlowAction>;
+  subfolders: string[];
+  defaultSubfolderDisplay: string | null;
+  globalPreferredResolution: string;
 }
 
 const ROWS_PER_PAGE = 100;
 
-const ReviewTable: React.FC<ReviewTableProps> = ({ channels, rowStates, dispatch }) => {
+const ReviewTable: React.FC<ReviewTableProps> = ({
+  channels, rowStates, dispatch, subfolders, defaultSubfolderDisplay, globalPreferredResolution,
+}) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [page, setPage] = useState(0);
@@ -70,6 +75,9 @@ const ReviewTable: React.FC<ReviewTableProps> = ({ channels, rowStates, dispatch
               channel={channel}
               rowState={rowStates[channel.channelId]}
               dispatch={dispatch}
+              subfolders={subfolders}
+              defaultSubfolderDisplay={defaultSubfolderDisplay}
+              globalPreferredResolution={globalPreferredResolution}
             />
           ))}
         </List>
@@ -102,7 +110,7 @@ const ReviewTable: React.FC<ReviewTableProps> = ({ channels, rowStates, dispatch
             </TableCell>
             <TableCell sx={{ width: 56 }} />
             <TableCell>Channel</TableCell>
-            <TableCell>Status</TableCell>
+            <TableCell>Settings</TableCell>
             <TableCell align="right" sx={{ width: 56 }} />
           </TableRow>
         </TableHead>
@@ -113,6 +121,9 @@ const ReviewTable: React.FC<ReviewTableProps> = ({ channels, rowStates, dispatch
               channel={channel}
               rowState={rowStates[channel.channelId]}
               dispatch={dispatch}
+              subfolders={subfolders}
+              defaultSubfolderDisplay={defaultSubfolderDisplay}
+              globalPreferredResolution={globalPreferredResolution}
             />
           ))}
         </TableBody>
