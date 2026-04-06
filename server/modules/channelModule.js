@@ -393,9 +393,10 @@ class ChannelModule {
    * @param {Object} channelData - Channel data to save
    * @param {boolean} enabled - Whether the channel should be enabled (default: false)
    * @param {string|null} autoDownloadEnabledTabs - Comma-separated list of enabled tabs (default: null, uses model default)
+   * @param {Object} initialSettings - Optional settings to apply only when creating a new channel (e.g., video_quality, sub_folder, default_rating)
    * @returns {Promise<Object>} - Saved channel record
    */
-  async upsertChannel(channelData, enabled = false, autoDownloadEnabledTabs = null) {
+  async upsertChannel(channelData, enabled = false, autoDownloadEnabledTabs = null, initialSettings = {}) {
     // First, try to find by channel_id (preferred)
     let channel = await Channel.findOne({
       where: { channel_id: channelData.id }
@@ -439,6 +440,11 @@ class ChannelModule {
 
     // Only create if not found by either method
     if (!channel) {
+      // Apply initial settings only for new channels
+      if (initialSettings.video_quality != null) updateData.video_quality = initialSettings.video_quality;
+      if (initialSettings.sub_folder != null) updateData.sub_folder = initialSettings.sub_folder;
+      if (initialSettings.default_rating != null) updateData.default_rating = initialSettings.default_rating;
+
       channel = await Channel.create(updateData);
     }
 

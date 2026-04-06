@@ -570,6 +570,172 @@ describe('ChannelModule', () => {
           enabled: false
         });
       });
+
+      test('should apply initialSettings when creating a new channel', async () => {
+        const mockChannel = { ...mockChannelData };
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by channel_id
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by URL
+        Channel.create.mockResolvedValue(mockChannel);
+
+        const channelData = {
+          id: 'UC_NEW',
+          title: 'New Channel',
+          description: 'New Description',
+          uploader: 'New Uploader',
+          url: 'https://youtube.com/@newchannel'
+        };
+
+        const initialSettings = {
+          video_quality: '720',
+          sub_folder: 'MySubFolder',
+          default_rating: 'PG'
+        };
+
+        const result = await ChannelModule.upsertChannel(channelData, true, null, initialSettings);
+
+        expect(Channel.create).toHaveBeenCalledWith({
+          channel_id: channelData.id,
+          title: channelData.title,
+          description: channelData.description,
+          uploader: channelData.uploader,
+          url: channelData.url,
+          enabled: true,
+          video_quality: '720',
+          sub_folder: 'MySubFolder',
+          default_rating: 'PG'
+        });
+        expect(result).toBe(mockChannel);
+      });
+
+      test('should ignore initialSettings when channel already exists by channel_id', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          update: jest.fn()
+        };
+        Channel.findOne.mockResolvedValueOnce(mockChannel); // Found by channel_id
+
+        const channelData = {
+          id: 'UC123',
+          title: 'Existing Channel',
+          description: 'Description',
+          uploader: 'Uploader',
+          url: 'https://youtube.com/@existing'
+        };
+
+        const initialSettings = {
+          video_quality: '480',
+          sub_folder: 'ShouldBeIgnored',
+          default_rating: 'R'
+        };
+
+        await ChannelModule.upsertChannel(channelData, false, null, initialSettings);
+
+        // Should update without initialSettings fields
+        expect(mockChannel.update).toHaveBeenCalledWith({
+          channel_id: channelData.id,
+          title: channelData.title,
+          description: channelData.description,
+          uploader: channelData.uploader,
+          url: channelData.url,
+          enabled: false
+        });
+        expect(Channel.create).not.toHaveBeenCalled();
+      });
+
+      test('should ignore initialSettings when channel already exists by URL', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          update: jest.fn()
+        };
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by channel_id
+        Channel.findOne.mockResolvedValueOnce(mockChannel); // Found by URL
+
+        const channelData = {
+          id: 'UC456',
+          title: 'Legacy Channel',
+          description: 'Description',
+          uploader: 'Uploader',
+          url: 'https://youtube.com/@legacy'
+        };
+
+        const initialSettings = {
+          video_quality: '1080',
+          sub_folder: 'ShouldBeIgnored'
+        };
+
+        await ChannelModule.upsertChannel(channelData, false, null, initialSettings);
+
+        // Should update without initialSettings fields
+        expect(mockChannel.update).toHaveBeenCalledWith({
+          channel_id: channelData.id,
+          title: channelData.title,
+          description: channelData.description,
+          uploader: channelData.uploader,
+          url: channelData.url,
+          enabled: false
+        });
+        expect(Channel.create).not.toHaveBeenCalled();
+      });
+
+      test('should work without initialSettings for backward compatibility', async () => {
+        const mockChannel = { ...mockChannelData };
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by channel_id
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by URL
+        Channel.create.mockResolvedValue(mockChannel);
+
+        const channelData = {
+          id: 'UC_COMPAT',
+          title: 'Compat Channel',
+          description: 'Description',
+          uploader: 'Uploader',
+          url: 'https://youtube.com/@compat'
+        };
+
+        // Call without initialSettings (old callers)
+        const result = await ChannelModule.upsertChannel(channelData, true);
+
+        expect(Channel.create).toHaveBeenCalledWith({
+          channel_id: channelData.id,
+          title: channelData.title,
+          description: channelData.description,
+          uploader: channelData.uploader,
+          url: channelData.url,
+          enabled: true
+        });
+        expect(result).toBe(mockChannel);
+      });
+
+      test('should apply only provided initialSettings fields on create', async () => {
+        const mockChannel = { ...mockChannelData };
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by channel_id
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by URL
+        Channel.create.mockResolvedValue(mockChannel);
+
+        const channelData = {
+          id: 'UC_PARTIAL',
+          title: 'Partial Settings Channel',
+          description: 'Description',
+          uploader: 'Uploader',
+          url: 'https://youtube.com/@partial'
+        };
+
+        // Only provide sub_folder, not video_quality or default_rating
+        const initialSettings = {
+          sub_folder: 'CustomFolder'
+        };
+
+        await ChannelModule.upsertChannel(channelData, false, null, initialSettings);
+
+        expect(Channel.create).toHaveBeenCalledWith({
+          channel_id: channelData.id,
+          title: channelData.title,
+          description: channelData.description,
+          uploader: channelData.uploader,
+          url: channelData.url,
+          enabled: false,
+          sub_folder: 'CustomFolder'
+        });
+      });
     });
 
     describe('insertVideosIntoDb', () => {
