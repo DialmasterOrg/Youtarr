@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { Box, Typography, Button } from '@mui/material';
 import { ArrowBack } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 
 import { useImportFlow } from './hooks/useImportFlow';
 import { usePreviewUpload } from './hooks/usePreviewUpload';
@@ -81,8 +81,11 @@ const ImportSubscriptionsPage: React.FC<ImportSubscriptionsPageProps> = ({ token
         { headers: { 'x-access-token': token } },
       );
       dispatch({ type: 'START_IMPORT', payload: res.data.jobId });
-    } catch {
-      // Could add error handling here in the future
+    } catch (err: unknown) {
+      const message = err instanceof AxiosError
+        ? err.response?.data?.error || err.message
+        : 'Failed to start import';
+      dispatch({ type: 'PREVIEW_ERROR', payload: message });
     }
   }, [state.channels, state.rowStates, token, dispatch]);
 

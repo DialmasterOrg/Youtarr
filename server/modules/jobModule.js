@@ -564,12 +564,12 @@ class JobModule {
   async saveJobOnly(jobId, jobDataOriginal) {
     const jobData = { ...jobDataOriginal };
 
-    if (!jobData.data) {
-      return;
+    // Extract video data if present (download jobs); non-download jobs may not have data
+    let videos = [];
+    if (jobData.data) {
+      videos = jobData.data.videos ? jobData.data.videos : [];
+      delete jobData.data; // Remove videos from job data before DB update
     }
-
-    let videos = jobData.data.videos ? jobData.data.videos : [];
-    delete jobData.data; // Remove videos from job data
 
     try {
       // Update the job in the database
@@ -580,7 +580,7 @@ class JobModule {
         jobInstance = await Job.create(jobData);
       }
 
-      // Process videos for this job only
+      // Process videos for this job only (download jobs)
       for (let video of videos) {
         await this.upsertVideoForJob(video, jobInstance);
 
@@ -616,13 +616,13 @@ class JobModule {
       let jobDataOriginal = this.jobs[jobId];
       const jobData = { ...jobDataOriginal };
 
-      if (!jobData.data) {
-        logger.debug({ jobId }, 'Job has no data field, skipping');
-        continue;
+      // Extract video data if present (download jobs); non-download jobs may not have data
+      let videos = [];
+      if (jobData.data) {
+        videos = jobData.data.videos ? jobData.data.videos : [];
+        logger.debug({ jobId, videoCount: videos.length }, 'Job has videos to save');
+        delete jobData.data; // Remove videos from job data before DB update
       }
-      let videos = jobData.data.videos ? jobData.data.videos : [];
-      logger.debug({ jobId, videoCount: videos.length }, 'Job has videos to save');
-      delete jobData.data; // Remove videos from job data
 
       try {
         // Find the job in the database.
@@ -1125,8 +1125,10 @@ class JobModule {
         logger.error({ err: loadErr, jobId }, 'Error loading videos from database for completed job');
         // Continue with save anyway - don't fail the job completion
       }
+    }
 
-      // For completed jobs, save the job and its video data with retry on failure
+    if (isCompletedJob) {
+      // Save ALL completed jobs to DB (download and non-download alike) with retry on failure
       this.saveJobOnly(jobId, job).catch(err => {
         logger.error({ err, jobId }, 'Failed to save completed job, marking for retry');
         // Track retry attempts to avoid infinite loops

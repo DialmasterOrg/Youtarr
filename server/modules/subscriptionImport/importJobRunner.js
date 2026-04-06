@@ -84,14 +84,31 @@ async function processOneChannel(deps, activeJob, ch) {
     const url =
       ch.url || `https://www.youtube.com/channel/${ch.channelId}`;
 
-    // Build per-channel settings from the import descriptor
-    const initialSettings = ch.settings || {};
+    // Map frontend camelCase settings to backend snake_case column names
+    const frontendSettings = ch.settings || {};
+    const initialSettings = {};
+    if (frontendSettings.videoQuality) initialSettings.video_quality = frontendSettings.videoQuality;
+    if (frontendSettings.subFolder) initialSettings.sub_folder = frontendSettings.subFolder;
+    if (frontendSettings.defaultRating) initialSettings.default_rating = frontendSettings.defaultRating;
+
+    // Respect the user's auto-download toggle: false means channel is disabled
+    const enableChannel = frontendSettings.autoDownloadEnabled !== false;
 
     // getChannelInfo(channelUrlOrId, emitMessage, enableChannel, initialSettings, options)
     // emitMessage = false because we broadcast our own progress
-    // enableChannel = true so the channel is active immediately
     // skipTabDetection = true to speed up import; tabs are lazy-detected on first channel page visit
-    await channelModule.getChannelInfo(url, false, true, initialSettings, { skipTabDetection: true });
+    await channelModule.getChannelInfo(url, false, enableChannel, initialSettings, { skipTabDetection: true });
+
+    // Apply downloadType as auto_download_enabled_tabs if specified
+    // This maps frontend values ('videos'/'shorts'/'livestreams') to the DB media type values
+    const downloadTypeMap = { videos: 'video', shorts: 'short', livestreams: 'livestream' };
+    const downloadType = frontendSettings.downloadType;
+    if (downloadType && downloadTypeMap[downloadType]) {
+      await Channel.update(
+        { auto_download_enabled_tabs: downloadTypeMap[downloadType] },
+        { where: { channel_id: ch.channelId } }
+      );
+    }
 
     activeJob.results.push({
       channelId: ch.channelId,

@@ -7,7 +7,7 @@ import { ImportJobSummary } from '../../../../types/subscriptionImport';
 
 const makeImport = (overrides: Partial<ImportJobSummary> = {}): ImportJobSummary => ({
   jobId: 'job-1',
-  status: 'running',
+  status: 'In Progress',
   total: 10,
   done: 3,
   errors: 0,
@@ -23,7 +23,7 @@ describe('ActiveImportBanner', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  test('shows progress text when activeImport is provided', () => {
+  test('shows progress text when import is in progress', () => {
     renderWithProviders(
       <ActiveImportBanner activeImport={makeImport({ done: 3, total: 10 })} />
     );
@@ -43,13 +43,13 @@ describe('ActiveImportBanner', () => {
 
   test('shows success message when import is complete', () => {
     renderWithProviders(
-      <ActiveImportBanner activeImport={makeImport({ status: 'complete', done: 10, total: 10 })} />
+      <ActiveImportBanner activeImport={makeImport({ status: 'Complete', done: 10, total: 10 })} />
     );
 
     expect(screen.getByText('Import complete! 10 channels imported.')).toBeInTheDocument();
   });
 
-  test('shows progress bar when import is running', () => {
+  test('shows progress bar when import is in progress', () => {
     renderWithProviders(
       <ActiveImportBanner activeImport={makeImport({ done: 5, total: 10 })} />
     );
@@ -59,7 +59,7 @@ describe('ActiveImportBanner', () => {
 
   test('does not show progress bar when import is complete', () => {
     renderWithProviders(
-      <ActiveImportBanner activeImport={makeImport({ status: 'complete', done: 10, total: 10 })} />
+      <ActiveImportBanner activeImport={makeImport({ status: 'Complete', done: 10, total: 10 })} />
     );
 
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();

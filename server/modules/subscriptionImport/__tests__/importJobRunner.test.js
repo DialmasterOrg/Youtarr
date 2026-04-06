@@ -25,6 +25,7 @@ describe('importJobRunner.runImport', () => {
       },
       Channel: {
         findOne: jest.fn().mockResolvedValue(null), // not found = new channel
+        update: jest.fn().mockResolvedValue([1]),
       },
     };
   });
@@ -66,8 +67,10 @@ describe('importJobRunner.runImport', () => {
     await runImport(deps, activeJob, channels);
 
     expect(activeJob.results).toHaveLength(5);
-    expect(activeJob.results[2].state).toBe('error');
-    expect(activeJob.results[2].error).toMatch(/not found/i);
+    // With concurrency, results may arrive in any order; find by state
+    const errorResults = activeJob.results.filter((r) => r.state === 'error');
+    expect(errorResults).toHaveLength(1);
+    expect(errorResults[0].error).toMatch(/not found/i);
     expect(activeJob.results.filter((r) => r.state === 'success')).toHaveLength(4);
   });
 
@@ -114,13 +117,13 @@ describe('importJobRunner.runImport', () => {
     expect(ch1Result.reason).toMatch(/already/i);
   });
 
-  test('passes channel settings as initialSettings to getChannelInfo', async () => {
+  test('maps camelCase frontend settings to snake_case initialSettings', async () => {
     const channels = [
       {
         channelId: 'UC_settings_test',
         url: 'https://www.youtube.com/channel/UC_settings_test',
         title: 'Settings Channel',
-        settings: { video_quality: '1080', sub_folder: 'custom', default_rating: '8' },
+        settings: { videoQuality: '1080p', subFolder: 'custom', defaultRating: 'PG', autoDownloadEnabled: true, downloadType: 'videos' },
       },
     ];
     activeJob = makeActiveJob(1);
@@ -129,13 +132,52 @@ describe('importJobRunner.runImport', () => {
     expect(deps.channelModule.getChannelInfo).toHaveBeenCalledWith(
       channels[0].url,
       false,
-      true,
-      { video_quality: '1080', sub_folder: 'custom', default_rating: '8' },
+      true, // autoDownloadEnabled = true means enableChannel = true
+      { video_quality: '1080p', sub_folder: 'custom', default_rating: 'PG' },
       { skipTabDetection: true }
     );
   });
 
-  test('passes empty object as initialSettings when channel has no settings', async () => {
+  test('disables channel when autoDownloadEnabled is false', async () => {
+    const channels = [
+      {
+        channelId: 'UC_disabled_test',
+        url: 'https://www.youtube.com/channel/UC_disabled_test',
+        title: 'Disabled Channel',
+        settings: { autoDownloadEnabled: false },
+      },
+    ];
+    activeJob = makeActiveJob(1);
+    await runImport(deps, activeJob, channels);
+
+    expect(deps.channelModule.getChannelInfo).toHaveBeenCalledWith(
+      channels[0].url,
+      false,
+      false, // autoDownloadEnabled = false means enableChannel = false
+      {},
+      { skipTabDetection: true }
+    );
+  });
+
+  test('applies downloadType as auto_download_enabled_tabs after import', async () => {
+    const channels = [
+      {
+        channelId: 'UC_dltype_test',
+        url: 'https://www.youtube.com/channel/UC_dltype_test',
+        title: 'DL Type Channel',
+        settings: { autoDownloadEnabled: true, downloadType: 'shorts' },
+      },
+    ];
+    activeJob = makeActiveJob(1);
+    await runImport(deps, activeJob, channels);
+
+    expect(deps.Channel.update).toHaveBeenCalledWith(
+      { auto_download_enabled_tabs: 'short' },
+      { where: { channel_id: 'UC_dltype_test' } }
+    );
+  });
+
+  test('passes empty initialSettings when channel has no settings', async () => {
     const channels = [
       {
         channelId: 'UC_no_settings',

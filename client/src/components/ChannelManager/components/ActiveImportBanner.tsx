@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { Alert, Box, LinearProgress, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import MuiLink from '@mui/material/Link';
@@ -9,42 +9,27 @@ interface ActiveImportBannerProps {
 }
 
 const ActiveImportBanner: React.FC<ActiveImportBannerProps> = ({ activeImport }) => {
-  const prevStatusRef = useRef<string | null>(null);
-  const justCompleted = useRef(false);
-
-  useEffect(() => {
-    if (
-      prevStatusRef.current &&
-      prevStatusRef.current !== 'complete' &&
-      activeImport?.status === 'complete'
-    ) {
-      justCompleted.current = true;
-    } else if (!activeImport) {
-      justCompleted.current = false;
-    }
-    prevStatusRef.current = activeImport?.status ?? null;
-  }, [activeImport?.status, activeImport]);
-
   if (!activeImport) {
     return null;
   }
 
-  const isComplete = activeImport.status === 'complete';
+  // Backend sends statuses like 'In Progress', 'Complete', 'Complete with Warnings', 'Cancelled', 'Failed'
+  const isInProgress = activeImport.status === 'In Progress';
   const progressPercent = activeImport.total > 0
     ? (activeImport.done / activeImport.total) * 100
     : 0;
 
   return (
     <Alert
-      severity={isComplete ? 'success' : 'info'}
+      severity={isInProgress ? 'info' : 'success'}
       sx={{ mb: 2 }}
     >
       <Box sx={{ width: '100%' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
           <Typography variant="body2">
-            {isComplete
-              ? `Import complete! ${activeImport.done} channels imported.`
-              : `Importing channels: ${activeImport.done} of ${activeImport.total}...`}
+            {isInProgress
+              ? `Importing channels: ${activeImport.done} of ${activeImport.total}...`
+              : `Import complete! ${activeImport.done} channels imported.`}
           </Typography>
           <MuiLink
             component={RouterLink}
@@ -55,7 +40,7 @@ const ActiveImportBanner: React.FC<ActiveImportBannerProps> = ({ activeImport })
             View details
           </MuiLink>
         </Box>
-        {!isComplete && (
+        {isInProgress && (
           <LinearProgress
             variant="determinate"
             value={progressPercent}
