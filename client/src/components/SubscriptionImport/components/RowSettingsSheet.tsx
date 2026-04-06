@@ -1,12 +1,13 @@
 import React from 'react';
 import {
   Box, FormControl, InputLabel, MenuItem, Select,
-  SwipeableDrawer, Switch, TextField, Typography, FormControlLabel,
+  SwipeableDrawer, Switch, Typography, FormControlLabel,
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 import { RowState, RowSettings } from '../../../types/subscriptionImport';
 import { ImportFlowAction } from '../hooks/useImportFlow';
 import { QUALITY_OPTIONS, DOWNLOAD_TYPE_OPTIONS, RATING_OPTIONS } from './rowSettingsOptions';
+import SubfolderAutocomplete from '../../shared/SubfolderAutocomplete';
 
 interface RowSettingsSheetProps {
   open: boolean;
@@ -15,10 +16,12 @@ interface RowSettingsSheetProps {
   channelId: string;
   rowState: RowState;
   dispatch: React.Dispatch<ImportFlowAction>;
+  subfolders: string[];
+  defaultSubfolderDisplay: string | null;
 }
 
 const RowSettingsSheet: React.FC<RowSettingsSheetProps> = ({
-  open, onClose, onOpen, channelId, rowState, dispatch,
+  open, onClose, onOpen, channelId, rowState, dispatch, subfolders, defaultSubfolderDisplay,
 }) => {
   const { settings } = rowState;
 
@@ -37,11 +40,6 @@ const RowSettingsSheet: React.FC<RowSettingsSheetProps> = ({
 
   const handleDownloadTypeChange = (event: SelectChangeEvent<string>) => {
     updateSettings({ downloadType: event.target.value as RowSettings['downloadType'] });
-  };
-
-  const handleSubFolderChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
-    updateSettings({ subFolder: value === '' ? null : value });
   };
 
   const handleRatingChange = (event: SelectChangeEvent<string>) => {
@@ -103,13 +101,13 @@ const RowSettingsSheet: React.FC<RowSettingsSheetProps> = ({
           </Select>
         </FormControl>
 
-        <TextField
-          size="small"
+        <SubfolderAutocomplete
+          mode="channel"
+          value={settings.subFolder}
+          onChange={(newValue) => updateSettings({ subFolder: newValue })}
+          subfolders={subfolders}
+          defaultSubfolderDisplay={defaultSubfolderDisplay}
           label="Subfolder"
-          placeholder="Use global default"
-          value={settings.subFolder ?? ''}
-          onChange={handleSubFolderChange}
-          fullWidth
         />
 
         <FormControl size="small" fullWidth>

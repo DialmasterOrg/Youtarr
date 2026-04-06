@@ -85,6 +85,8 @@ const ReviewTableMobileCard: React.FC<ReviewTableMobileCardProps> = ({
         channelId={channel.channelId}
         rowState={rowState}
         dispatch={dispatch}
+        subfolders={subfolders}
+        defaultSubfolderDisplay={defaultSubfolderDisplay}
       />
     </Card>
   );
