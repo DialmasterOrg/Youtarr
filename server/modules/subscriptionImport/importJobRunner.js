@@ -91,23 +91,30 @@ async function processOneChannel(deps, activeJob, ch) {
     if (frontendSettings.subFolder) initialSettings.sub_folder = frontendSettings.subFolder;
     if (frontendSettings.defaultRating) initialSettings.default_rating = frontendSettings.defaultRating;
 
-    // Respect the user's auto-download toggle: false means channel is disabled
-    const enableChannel = frontendSettings.autoDownloadEnabled !== false;
-
+    // Imported channels are always visible (enabled = true).
+    // The autoDownloadEnabled toggle only controls auto_download_enabled_tabs (handled below).
     // getChannelInfo(channelUrlOrId, emitMessage, enableChannel, initialSettings, options)
     // emitMessage = false because we broadcast our own progress
     // skipTabDetection = true to speed up import; tabs are lazy-detected on first channel page visit
-    await channelModule.getChannelInfo(url, false, enableChannel, initialSettings, { skipTabDetection: true });
+    await channelModule.getChannelInfo(url, false, true, initialSettings, { skipTabDetection: true });
 
-    // Apply downloadType as auto_download_enabled_tabs if specified
-    // This maps frontend values ('videos'/'shorts'/'livestreams') to the DB media type values
-    const downloadTypeMap = { videos: 'video', shorts: 'short', livestreams: 'livestream' };
-    const downloadType = frontendSettings.downloadType;
-    if (downloadType && downloadTypeMap[downloadType]) {
+    // Apply auto-download settings after channel creation
+    if (frontendSettings.autoDownloadEnabled === false) {
+      // User disabled auto-download: clear all tabs so the channel is skipped during cron runs
       await Channel.update(
-        { auto_download_enabled_tabs: downloadTypeMap[downloadType] },
+        { auto_download_enabled_tabs: '' },
         { where: { channel_id: ch.channelId } }
       );
+    } else {
+      // Map frontend downloadType to DB media type values
+      const downloadTypeMap = { videos: 'video', shorts: 'short', livestreams: 'livestream' };
+      const downloadType = frontendSettings.downloadType;
+      if (downloadType && downloadTypeMap[downloadType]) {
+        await Channel.update(
+          { auto_download_enabled_tabs: downloadTypeMap[downloadType] },
+          { where: { channel_id: ch.channelId } }
+        );
+      }
     }
 
     activeJob.results.push({

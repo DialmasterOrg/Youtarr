@@ -45,19 +45,18 @@ const ReviewTableMobileCard: React.FC<ReviewTableMobileCardProps> = ({
           <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>
             {channel.title}
           </Typography>
-          {channel.alreadySubscribed && (
+          {channel.alreadySubscribed ? (
             <Chip label="Already subscribed" size="small" color="default" sx={{ mt: 0.5 }} />
-          )}
-          <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
-            <SubFolderChip subFolder={rowState.settings.subFolder} />
-            {rowState.settings.videoQuality && (
+          ) : (
+            <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+              <SubFolderChip subFolder={rowState.settings.subFolder} />
               <QualityChip
                 videoQuality={rowState.settings.videoQuality}
                 globalPreferredResolution={globalPreferredResolution}
               />
-            )}
-            <RatingBadge rating={rowState.settings.defaultRating} />
-          </Box>
+              <RatingBadge rating={rowState.settings.defaultRating} />
+            </Box>
+          )}
         </Box>
       </Box>
 

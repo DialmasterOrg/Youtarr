@@ -138,7 +138,7 @@ describe('importJobRunner.runImport', () => {
     );
   });
 
-  test('disables channel when autoDownloadEnabled is false', async () => {
+  test('always enables channel even when autoDownloadEnabled is false', async () => {
     const channels = [
       {
         channelId: 'UC_disabled_test',
@@ -150,12 +150,19 @@ describe('importJobRunner.runImport', () => {
     activeJob = makeActiveJob(1);
     await runImport(deps, activeJob, channels);
 
+    // Channel should always be enabled (visible) regardless of auto-download setting
     expect(deps.channelModule.getChannelInfo).toHaveBeenCalledWith(
       channels[0].url,
       false,
-      false, // autoDownloadEnabled = false means enableChannel = false
+      true,
       {},
       { skipTabDetection: true }
+    );
+
+    // Auto-download disabled: clears auto_download_enabled_tabs
+    expect(deps.Channel.update).toHaveBeenCalledWith(
+      { auto_download_enabled_tabs: '' },
+      { where: { channel_id: 'UC_disabled_test' } }
     );
   });
 

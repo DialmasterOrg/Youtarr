@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { Box, Typography, Button } from '@mui/material';
 import { ArrowBack } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -18,6 +18,7 @@ import RecentImportsSection from './components/RecentImportsSection';
 
 import { ImportSource } from '../../types/subscriptionImport';
 import { useSubfolders } from '../../hooks/useSubfolders';
+import { useConfig } from '../../hooks/useConfig';
 
 interface ImportSubscriptionsPageProps {
   token: string;
@@ -31,24 +32,9 @@ const ImportSubscriptionsPage: React.FC<ImportSubscriptionsPageProps> = ({ token
   const { jobDetail } = useImportJob(state.activeJobId, token);
   const prevStatusRef = useRef<string | null>(null);
   const { subfolders } = useSubfolders(token);
-  const [defaultSubfolderDisplay, setDefaultSubfolderDisplay] = useState<string | null>(null);
-  const [globalPreferredResolution, setGlobalPreferredResolution] = useState<string>('1080');
-
-  useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const res = await axios.get<{ defaultSubfolder?: string; preferredResolution?: string }>(
-          '/api/config',
-          { headers: { 'x-access-token': token } },
-        );
-        setDefaultSubfolderDisplay(res.data.defaultSubfolder || null);
-        setGlobalPreferredResolution(res.data.preferredResolution || '1080');
-      } catch {
-        // Config fetch is best-effort; defaults are fine
-      }
-    };
-    fetchConfig();
-  }, [token]);
+  const { config } = useConfig(token);
+  const defaultSubfolderDisplay = config.defaultSubfolder || null;
+  const globalPreferredResolution = config.preferredResolution || '1080';
 
   // Support ?job=<id> URL parameter to resume watching an import
   useEffect(() => {

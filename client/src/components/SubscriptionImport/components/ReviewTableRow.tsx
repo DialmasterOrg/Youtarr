@@ -55,19 +55,18 @@ const ReviewTableRow: React.FC<ReviewTableRowProps> = ({
       </TableCell>
       <TableCell>{channel.title}</TableCell>
       <TableCell>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
-          {channel.alreadySubscribed && (
-            <Chip label="Already subscribed" size="small" color="default" />
-          )}
-          <SubFolderChip subFolder={rowState.settings.subFolder} />
-          {rowState.settings.videoQuality && (
+        {channel.alreadySubscribed ? (
+          <Chip label="Already subscribed" size="small" color="default" />
+        ) : (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
+            <SubFolderChip subFolder={rowState.settings.subFolder} />
             <QualityChip
               videoQuality={rowState.settings.videoQuality}
               globalPreferredResolution={globalPreferredResolution}
             />
-          )}
-          <RatingBadge rating={rowState.settings.defaultRating} />
-        </Box>
+            <RatingBadge rating={rowState.settings.defaultRating} />
+          </Box>
+        )}
       </TableCell>
       <TableCell align="right" sx={{ width: 56 }}>
         <IconButton

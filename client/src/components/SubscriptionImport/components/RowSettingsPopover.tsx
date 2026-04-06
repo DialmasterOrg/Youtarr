@@ -6,7 +6,7 @@ import {
 import type { SelectChangeEvent } from '@mui/material';
 import { RowState, RowSettings } from '../../../types/subscriptionImport';
 import { ImportFlowAction } from '../hooks/useImportFlow';
-import { QUALITY_OPTIONS, DOWNLOAD_TYPE_OPTIONS, RATING_OPTIONS } from './rowSettingsOptions';
+import { QUALITY_OPTIONS, RATING_OPTIONS } from './rowSettingsOptions';
 import SubfolderAutocomplete from '../../shared/SubfolderAutocomplete';
 
 interface RowSettingsPopoverProps {
@@ -36,10 +36,6 @@ const RowSettingsPopover: React.FC<RowSettingsPopoverProps> = ({
   const handleQualityChange = (event: SelectChangeEvent<string>) => {
     const value = event.target.value;
     updateSettings({ videoQuality: value === '' ? null : value });
-  };
-
-  const handleDownloadTypeChange = (event: SelectChangeEvent<string>) => {
-    updateSettings({ downloadType: event.target.value as RowSettings['downloadType'] });
   };
 
   const handleRatingChange = (event: SelectChangeEvent<string>) => {
@@ -78,20 +74,6 @@ const RowSettingsPopover: React.FC<RowSettingsPopoverProps> = ({
             onChange={handleQualityChange}
           >
             {QUALITY_OPTIONS.map((opt) => (
-              <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        <FormControl size="small" fullWidth>
-          <InputLabel id={`download-type-label-${channelId}`}>Download Type</InputLabel>
-          <Select
-            labelId={`download-type-label-${channelId}`}
-            label="Download Type"
-            value={settings.downloadType}
-            onChange={handleDownloadTypeChange}
-          >
-            {DOWNLOAD_TYPE_OPTIONS.map((opt) => (
               <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
             ))}
           </Select>
