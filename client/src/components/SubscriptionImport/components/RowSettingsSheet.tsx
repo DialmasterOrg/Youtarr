@@ -6,6 +6,7 @@ import {
 import type { SelectChangeEvent } from '@mui/material';
 import { RowState, RowSettings } from '../../../types/subscriptionImport';
 import { ImportFlowAction } from '../hooks/useImportFlow';
+import { QUALITY_OPTIONS, DOWNLOAD_TYPE_OPTIONS, RATING_OPTIONS } from './rowSettingsOptions';
 
 interface RowSettingsSheetProps {
   open: boolean;
@@ -15,30 +16,6 @@ interface RowSettingsSheetProps {
   rowState: RowState;
   dispatch: React.Dispatch<ImportFlowAction>;
 }
-
-const QUALITY_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: '', label: 'Use global default' },
-  { value: '720p', label: '720p' },
-  { value: '1080p', label: '1080p' },
-  { value: '1440p', label: '1440p' },
-  { value: '2160p', label: '2160p' },
-  { value: 'best', label: 'best' },
-];
-
-const DOWNLOAD_TYPE_OPTIONS: Array<{ value: RowSettings['downloadType']; label: string }> = [
-  { value: 'videos', label: 'Videos' },
-  { value: 'shorts', label: 'Shorts' },
-  { value: 'livestreams', label: 'Livestreams' },
-];
-
-const RATING_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: '', label: 'Use global default' },
-  { value: 'G', label: 'G' },
-  { value: 'PG', label: 'PG' },
-  { value: 'PG-13', label: 'PG-13' },
-  { value: 'R', label: 'R' },
-  { value: 'NC-17', label: 'NC-17' },
-];
 
 const RowSettingsSheet: React.FC<RowSettingsSheetProps> = ({
   open, onClose, onOpen, channelId, rowState, dispatch,

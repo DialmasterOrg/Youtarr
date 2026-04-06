@@ -64,4 +64,55 @@ describe('ActiveImportBanner', () => {
 
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   });
+
+  test('shows warning alert when import is cancelled', () => {
+    renderWithProviders(
+      <ActiveImportBanner activeImport={makeImport({ status: 'Cancelled', done: 4, total: 10 })} />
+    );
+
+    expect(screen.getByText('Import cancelled (4 of 10 processed).')).toBeInTheDocument();
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveClass('MuiAlert-standardWarning');
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
+  test('shows error alert when import has failed', () => {
+    renderWithProviders(
+      <ActiveImportBanner activeImport={makeImport({ status: 'Failed', done: 2, total: 10 })} />
+    );
+
+    expect(screen.getByText('Import failed (2 of 10 processed).')).toBeInTheDocument();
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveClass('MuiAlert-standardError');
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
+  test('shows warning alert when import completes with warnings', () => {
+    renderWithProviders(
+      <ActiveImportBanner activeImport={makeImport({ status: 'Complete with Warnings', done: 8, total: 10 })} />
+    );
+
+    expect(screen.getByText('Import complete with warnings. 8 channels imported.')).toBeInTheDocument();
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveClass('MuiAlert-standardWarning');
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
+  test('shows info alert when import is in progress', () => {
+    renderWithProviders(
+      <ActiveImportBanner activeImport={makeImport({ status: 'In Progress', done: 3, total: 10 })} />
+    );
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveClass('MuiAlert-standardInfo');
+  });
+
+  test('shows success alert when import is complete', () => {
+    renderWithProviders(
+      <ActiveImportBanner activeImport={makeImport({ status: 'Complete', done: 10, total: 10 })} />
+    );
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveClass('MuiAlert-standardSuccess');
+  });
 });
