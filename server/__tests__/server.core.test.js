@@ -193,7 +193,9 @@ const createServerModule = ({
         // Mock ipKeyGenerator to normalize IPv6 addresses
         rateLimitMiddleware.ipKeyGenerator = jest.fn((ip) => ip);
         const multerSingleMock = jest.fn(() => (req, res, next) => next());
-        const multerMock = jest.fn(() => ({ single: multerSingleMock }));
+        const multerMock = Object.assign(jest.fn(() => ({ single: multerSingleMock })), {
+          memoryStorage: jest.fn(() => ({})),
+        });
         const childProcessMock = {
           execSync: jest.fn(() => '2025.09.23')
         };
@@ -215,6 +217,17 @@ const createServerModule = ({
         }));
         jest.doMock('../modules/archiveModule', () => ({
           getAutoRemovalDryRun: jest.fn().mockResolvedValue({ videos: [], totalSize: 0 })
+        }));
+        jest.doMock('../modules/subscriptionImport', () => ({
+          init: jest.fn(),
+          ImportInProgressError: class ImportInProgressError extends Error {}
+        }));
+        jest.doMock('../modules/messageEmitter', () => ({
+          emitMessage: jest.fn(),
+          getLastMessages: jest.fn(() => [])
+        }));
+        jest.doMock('../models', () => ({
+          Channel: { findAll: jest.fn().mockResolvedValue([]) }
         }));
         jest.doMock('../modules/videoDeletionModule', () => ({
           deleteVideos: jest.fn().mockResolvedValue({ deleted: [], failed: [] }),
