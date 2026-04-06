@@ -7,6 +7,8 @@ describe('classifyYtdlpError', () => {
     ['ERROR: Sign in to confirm you are not a bot', ERROR_CODES.BOT_CHECK],
     ['ERROR: Please sign in to view this channel', ERROR_CODES.EXPIRED_COOKIES],
     ['ERROR: This cookie has expired', ERROR_CODES.EXPIRED_COOKIES],
+    ['WARNING: The provided YouTube account cookies are no longer valid. They have likely been rotated', ERROR_CODES.EXPIRED_COOKIES],
+    ['cookies have been rotated in the browser', ERROR_CODES.EXPIRED_COOKIES],
     ['ERROR: unable to download webpage: HTTPSConnectionPool', ERROR_CODES.NETWORK],
     ['ERROR: Network is unreachable', ERROR_CODES.NETWORK],
     ['ERROR: getaddrinfo ENOTFOUND www.youtube.com', ERROR_CODES.NETWORK],

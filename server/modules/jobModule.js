@@ -1042,11 +1042,25 @@ class JobModule {
       logger.debug({ jobId, videoCount: updatedFields.data.videos.length }, 'updateJob data contains videos');
     }
 
+    const job = this.jobs[jobId];
+    if (!job) {
+      logger.warn('Job to update did not exist!');
+      return;
+    }
+
+    // Download-specific completion logic: only for download job types.
+    // Non-download jobs (e.g. Import Subscriptions) manage their own output field.
+    const isDownloadJob = job.jobType && (
+      job.jobType.includes('Channel Downloads') || job.jobType.includes('Manually Added Urls')
+    );
+
     if (
-      updatedFields.status === 'Complete' ||
-      updatedFields.status === 'Error' ||
-      updatedFields.status === 'Complete with Warnings' ||
-      updatedFields.status === 'Terminated'
+      isDownloadJob && (
+        updatedFields.status === 'Complete' ||
+        updatedFields.status === 'Error' ||
+        updatedFields.status === 'Complete with Warnings' ||
+        updatedFields.status === 'Terminated'
+      )
     ) {
       // downloadModule already sends proper completion messages with finalSummary
       // Only send the downloadComplete event for backwards compatibility
@@ -1065,11 +1079,6 @@ class JobModule {
         updatedFields.status = 'Complete';
       }
     }
-    const job = this.jobs[jobId];
-    if (!job) {
-      logger.warn('Job to update did not exist!');
-      return;
-    }
 
     // Update in-memory job
     for (let field in updatedFields) {
@@ -1083,8 +1092,8 @@ class JobModule {
                            updatedFields.status === 'Terminated' ||
                            updatedFields.status === 'Killed';
 
-    if (isCompletedJob) {
-      // For completed jobs, reload videos from DB to ensure accurate counts
+    if (isCompletedJob && isDownloadJob) {
+      // For completed download jobs, reload videos from DB to ensure accurate counts
       // This is especially important for multi-group downloads where each group
       // updates the job with only its own videos, potentially losing earlier videos
       try {

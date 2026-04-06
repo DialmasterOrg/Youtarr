@@ -2,9 +2,14 @@ import { useState, useCallback } from 'react';
 import axios, { AxiosError } from 'axios';
 import { ImportSource, PreviewResponse } from '../../../types/subscriptionImport';
 
+interface PreviewError {
+  message: string;
+  details?: string;
+}
+
 export function usePreviewUpload(token: string) {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<PreviewError | null>(null);
 
   const upload = useCallback(async (source: ImportSource, file: File): Promise<PreviewResponse> => {
     setLoading(true);
@@ -20,10 +25,15 @@ export function usePreviewUpload(token: string) {
       });
       return res.data;
     } catch (err: unknown) {
-      const message = err instanceof AxiosError
-        ? err.response?.data?.error || err.message
-        : 'Upload failed';
-      setError(message);
+      let message = 'Upload failed';
+      let details: string | undefined;
+      if (err instanceof AxiosError && err.response?.data) {
+        message = err.response.data.error || err.message;
+        details = err.response.data.details || undefined;
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
+      setError({ message, details });
       throw new Error(message);
     } finally {
       setLoading(false);

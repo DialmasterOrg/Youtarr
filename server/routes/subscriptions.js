@@ -24,6 +24,28 @@ const cookiesUpload = multer({
   limits: { fileSize: COOKIES_FILE_MAX_BYTES },
 });
 
+/**
+ * Wraps a multer upload middleware so that MulterErrors (e.g. file too large)
+ * are caught and returned as JSON error responses instead of crashing the
+ * request with an unhandled middleware error.
+ */
+function handleUpload(uploadMiddleware) {
+  return (req, res, next) => {
+    uploadMiddleware(req, res, (err) => {
+      if (err) {
+        if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(413).json({ error: 'File exceeds maximum allowed size.' });
+        }
+        if (err instanceof multer.MulterError) {
+          return res.status(400).json({ error: err.message });
+        }
+        return res.status(500).json({ error: err.message || 'File upload failed' });
+      }
+      next();
+    });
+  };
+}
+
 // Rate limiter for the cookies preview endpoint (expensive yt-dlp call)
 const cookiesLimiter = rateLimit({
   windowMs: COOKIES_RATE_LIMIT_WINDOW_MS,
@@ -83,7 +105,7 @@ function createSubscriptionRoutes({ verifyToken, subscriptionImportModule }) {
   router.post(
     '/api/subscriptions/preview/takeout',
     verifyToken,
-    takeoutUpload.single('file'),
+    handleUpload(takeoutUpload.single('file')),
     async (req, res) => {
       try {
         if (!req.file) {
@@ -97,13 +119,8 @@ function createSubscriptionRoutes({ verifyToken, subscriptionImportModule }) {
           return res.status(400).json({ error: err.message });
         }
 
-        // Multer file-size errors surface as MulterError
-        if (err.code === 'LIMIT_FILE_SIZE') {
-          return res.status(413).json({ error: 'File exceeds maximum allowed size' });
-        }
-
         req.log.error({ err }, 'Takeout preview failed');
-        return res.status(500).json({ error: 'Failed to process takeout file' });
+        return res.status(500).json({ error: err.message || 'Failed to process takeout file' });
       }
     }
   );
@@ -143,7 +160,7 @@ function createSubscriptionRoutes({ verifyToken, subscriptionImportModule }) {
     '/api/subscriptions/preview/cookies',
     verifyToken,
     cookiesLimiter,
-    cookiesUpload.single('file'),
+    handleUpload(cookiesUpload.single('file')),
     async (req, res) => {
       try {
         if (!req.file) {

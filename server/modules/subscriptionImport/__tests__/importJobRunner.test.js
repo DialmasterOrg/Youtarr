@@ -130,7 +130,8 @@ describe('importJobRunner.runImport', () => {
       channels[0].url,
       false,
       true,
-      { video_quality: '1080', sub_folder: 'custom', default_rating: '8' }
+      { video_quality: '1080', sub_folder: 'custom', default_rating: '8' },
+      { skipTabDetection: true }
     );
   });
 
@@ -149,7 +150,8 @@ describe('importJobRunner.runImport', () => {
       channels[0].url,
       false,
       true,
-      {}
+      {},
+      { skipTabDetection: true }
     );
   });
 

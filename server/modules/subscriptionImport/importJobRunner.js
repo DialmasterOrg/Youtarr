@@ -87,10 +87,11 @@ async function processOneChannel(deps, activeJob, ch) {
     // Build per-channel settings from the import descriptor
     const initialSettings = ch.settings || {};
 
-    // getChannelInfo(channelUrlOrId, emitMessage, enableChannel, initialSettings)
+    // getChannelInfo(channelUrlOrId, emitMessage, enableChannel, initialSettings, options)
     // emitMessage = false because we broadcast our own progress
     // enableChannel = true so the channel is active immediately
-    await channelModule.getChannelInfo(url, false, true, initialSettings);
+    // skipTabDetection = true to speed up import; tabs are lazy-detected on first channel page visit
+    await channelModule.getChannelInfo(url, false, true, initialSettings, { skipTabDetection: true });
 
     activeJob.results.push({
       channelId: ch.channelId,

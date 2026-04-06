@@ -38,6 +38,8 @@ const PATTERNS = [
   { re: /captcha/i, code: ERROR_CODES.BOT_CHECK },
   { re: /please sign in/i, code: ERROR_CODES.EXPIRED_COOKIES },
   { re: /cookie.*expired/i, code: ERROR_CODES.EXPIRED_COOKIES },
+  { re: /cookies are no longer valid/i, code: ERROR_CODES.EXPIRED_COOKIES },
+  { re: /cookies.*rotated/i, code: ERROR_CODES.EXPIRED_COOKIES },
   { re: /login required/i, code: ERROR_CODES.EXPIRED_COOKIES },
   {
     re: /HTTPSConnectionPool|connection refused|network is unreachable|getaddrinfo|ENOTFOUND|ECONNREFUSED|ETIMEDOUT/i,

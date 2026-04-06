@@ -1018,7 +1018,7 @@ describe('JobModule', () => {
 
     test('should emit download complete message for completion statuses', async () => {
       JobModule.jobs = {
-        'job-1': { status: 'In Progress' }
+        'job-1': { status: 'In Progress', jobType: 'Channel Downloads' }
       };
 
       JobModule.saveJobOnly = jest.fn().mockResolvedValue();
@@ -1095,7 +1095,7 @@ describe('JobModule', () => {
 
     test('should emit download complete with videos when data.videos is present', async () => {
       JobModule.jobs = {
-        'job-1': { status: 'In Progress', data: { videos: [] } }
+        'job-1': { status: 'In Progress', jobType: 'Channel Downloads', data: { videos: [] } }
       };
 
       JobModule.saveJobOnly = jest.fn().mockResolvedValue();
@@ -1136,6 +1136,7 @@ describe('JobModule', () => {
       JobModule.jobs = {
         'job-1': {
           status: 'In Progress',
+          jobType: 'Channel Downloads',
           data: { videos: ['incomplete-video'] } // This should be replaced by DB data
         }
       };
@@ -1189,7 +1190,7 @@ describe('JobModule', () => {
 
     test('should handle video reload errors gracefully', async () => {
       JobModule.jobs = {
-        'job-1': { status: 'In Progress', data: { videos: [] } }
+        'job-1': { status: 'In Progress', jobType: 'Channel Downloads', data: { videos: [] } }
       };
 
       JobModule.saveJobOnly = jest.fn().mockResolvedValue();

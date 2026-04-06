@@ -265,12 +265,16 @@ class SubscriptionImportModule {
 
     const importJobs = Object.entries(allJobs)
       .filter(([, job]) => job.jobType === JOB_TYPE)
-      .map(([id, job]) => ({
-        jobId: id,
-        status: job.status,
-        timeInitiated: job.timeInitiated,
-      }))
-      .sort((a, b) => b.timeInitiated - a.timeInitiated)
+      .map(([id, job]) => {
+        const { results } = parseJobOutput(job.output);
+        return {
+          jobId: id,
+          status: job.status,
+          startedAt: job.timeInitiated,
+          total: results.length,
+        };
+      })
+      .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))
       .slice(0, limit);
 
     return importJobs;

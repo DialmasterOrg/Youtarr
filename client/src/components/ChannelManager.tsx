@@ -326,7 +326,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
                 startIcon={<FileUploadIcon />}
                 onClick={() => navigate('/channels/import')}
               >
-                Import
+                Import Channels
               </Button>
               <Tooltip title="Learn how channel downloads work">
                 <IconButton onClick={() => setHelpDialogOpen(true)}>
