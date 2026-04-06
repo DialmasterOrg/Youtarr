@@ -50,6 +50,7 @@ import VideosPage from './components/VideosPage';
 import LocalLogin from './components/LocalLogin';
 import InitialSetup from './components/InitialSetup';
 import ChannelPage from './components/ChannelPage';
+import ImportSubscriptionsPage from './components/SubscriptionImport';
 import ChangelogPage from './components/ChangelogPage';
 import StorageStatus from './components/StorageStatus';
 import { useConfig } from './hooks/useConfig';
@@ -881,6 +882,10 @@ function AppContent() {
                     <Route
                       path='/channels'
                       element={<ChannelManager token={token} />}
+                    />
+                    <Route
+                      path='/channels/import'
+                      element={<ImportSubscriptionsPage token={token} />}
                     />
                     <Route
                       path='/downloads'
