@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Typography, Button } from '@mui/material';
 import { ArrowBack } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -17,6 +17,7 @@ import ImportSummary from './components/ImportSummary';
 import RecentImportsSection from './components/RecentImportsSection';
 
 import { ImportSource } from '../../types/subscriptionImport';
+import { useSubfolders } from '../../hooks/useSubfolders';
 
 interface ImportSubscriptionsPageProps {
   token: string;
@@ -29,6 +30,25 @@ const ImportSubscriptionsPage: React.FC<ImportSubscriptionsPageProps> = ({ token
   const { loading: uploadLoading, error: uploadError, upload } = usePreviewUpload(token);
   const { jobDetail } = useImportJob(state.activeJobId, token);
   const prevStatusRef = useRef<string | null>(null);
+  const { subfolders } = useSubfolders(token);
+  const [defaultSubfolderDisplay, setDefaultSubfolderDisplay] = useState<string | null>(null);
+  const [globalPreferredResolution, setGlobalPreferredResolution] = useState<string>('1080');
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await axios.get<{ defaultSubfolder?: string; preferredResolution?: string }>(
+          '/api/config',
+          { headers: { 'x-access-token': token } },
+        );
+        setDefaultSubfolderDisplay(res.data.defaultSubfolder || null);
+        setGlobalPreferredResolution(res.data.preferredResolution || '1080');
+      } catch {
+        // Config fetch is best-effort; defaults are fine
+      }
+    };
+    fetchConfig();
+  }, [token]);
 
   // Support ?job=<id> URL parameter to resume watching an import
   useEffect(() => {
@@ -136,6 +156,9 @@ const ImportSubscriptionsPage: React.FC<ImportSubscriptionsPageProps> = ({ token
             channels={state.channels}
             rowStates={state.rowStates}
             dispatch={dispatch}
+            subfolders={subfolders}
+            defaultSubfolderDisplay={defaultSubfolderDisplay}
+            globalPreferredResolution={globalPreferredResolution}
           />
         </>
       )}
