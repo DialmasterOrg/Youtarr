@@ -393,9 +393,10 @@ class ChannelModule {
    * @param {Object} channelData - Channel data to save
    * @param {boolean} enabled - Whether the channel should be enabled (default: false)
    * @param {string|null} autoDownloadEnabledTabs - Comma-separated list of enabled tabs (default: null, uses model default)
+   * @param {Object} initialSettings - Optional settings to apply only when creating a new channel (e.g., video_quality, sub_folder, default_rating)
    * @returns {Promise<Object>} - Saved channel record
    */
-  async upsertChannel(channelData, enabled = false, autoDownloadEnabledTabs = null) {
+  async upsertChannel(channelData, enabled = false, autoDownloadEnabledTabs = null, initialSettings = {}) {
     // First, try to find by channel_id (preferred)
     let channel = await Channel.findOne({
       where: { channel_id: channelData.id }
@@ -439,6 +440,11 @@ class ChannelModule {
 
     // Only create if not found by either method
     if (!channel) {
+      // Apply initial settings only for new channels
+      if (initialSettings.video_quality != null) updateData.video_quality = initialSettings.video_quality;
+      if (initialSettings.sub_folder != null) updateData.sub_folder = initialSettings.sub_folder;
+      if (initialSettings.default_rating != null) updateData.default_rating = initialSettings.default_rating;
+
       channel = await Channel.create(updateData);
     }
 
@@ -734,9 +740,10 @@ class ChannelModule {
    * @param {string} channelUrlOrId - YouTube channel URL or channel ID
    * @param {boolean} emitMessage - Whether to emit WebSocket update message
    * @param {boolean} enableChannel - Whether to enable the channel if it's new (default: false)
+   * @param {object} initialSettings - Optional per-channel settings (video_quality, sub_folder, default_rating) passed to upsertChannel
    * @returns {Promise<Object>} - Channel information object
    */
-  async getChannelInfo(channelUrlOrId, emitMessage = true, enableChannel = false) {
+  async getChannelInfo(channelUrlOrId, emitMessage = true, enableChannel = false, initialSettings = {}, { skipTabDetection = false } = {}) {
     const { foundChannel, channelUrl } = await this.findChannelByUrlOrId(channelUrlOrId);
 
     if (foundChannel) {
@@ -785,15 +792,20 @@ class ChannelModule {
       uploader: channelData.uploader,
       url: actualChannelUrl,  // Store the actual handle URL for display
       folder_name: folderName,
-    }, enableChannel);
+    }, enableChannel, null, initialSettings);
 
     // Now process thumbnail using the proper channel ID (uses metadata URL, falls back to yt-dlp)
     logger.info('Processing channel thumbnail');
     await this.processChannelThumbnail(channelData, properChannelId, channelUrl);
     logger.info('Channel thumbnail processed successfully');
 
-    // Detect available tabs (fast via RSS feeds)
-    const tabResult = await this.detectAndSaveChannelTabs(properChannelId);
+    // Detect available tabs (fast via RSS feeds).
+    // When skipTabDetection is true (e.g. bulk import), leave available_tabs as null
+    // so the frontend's lazy-load system detects tabs on first channel page visit.
+    let tabResult = null;
+    if (!skipTabDetection) {
+      tabResult = await this.detectAndSaveChannelTabs(properChannelId);
+    }
 
     if (emitMessage) {
       logger.debug('Channel data fetched, emitting update message');
@@ -1839,26 +1851,31 @@ class ChannelModule {
   }
 
   /**
-   * Check if a tab exists for a channel by testing its RSS feed.
-   * A non-404 response indicates the tab exists.
+   * Check if a tab exists for a channel by probing with yt-dlp.
+   * Attempts to fetch 1 entry from the tab URL. If entries exist, the tab is available.
    * @param {string} channelId - Channel ID
-   * @param {string} tabType - Tab type to check
+   * @param {string} tabType - Tab type to check ('videos', 'shorts', or 'streams')
    * @returns {Promise<boolean>} - True if tab exists
    */
-  async checkTabExistsViaRss(channelId, tabType) {
-    const rssUrl = this.buildRssFeedUrl(channelId, tabType);
+  async checkTabExistsViaYtdlp(channelId, tabType) {
+    const tabUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
 
     try {
-      const response = await fetch(rssUrl, {
-        method: 'GET',
-        signal: AbortSignal.timeout(10000), // 10 second timeout
+      const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
+      const result = await this.withTempFile(`tab-check-${tabType}`, async (outputFilePath) => {
+        const args = YtdlpCommandBuilder.buildMetadataFetchArgs(tabUrl, {
+          flatPlaylist: true,
+          playlistEnd: 1,
+          skipSleepRequests: true,
+        });
+        const content = await this.executeYtDlpCommand(args, outputFilePath);
+        const parsed = JSON.parse(content);
+        const entries = parsed.entries || [];
+        return entries.length > 0;
       });
-      // Any non-404 response means the tab exists
-      // (YouTube returns 404 for non-existent playlist feeds)
-      return response.status !== 404;
+      return result;
     } catch (error) {
-      // Network error or timeout - assume tab doesn't exist
-      logger.debug({ channelId, tabType, error: error.message }, 'RSS feed check failed');
+      logger.debug({ channelId, tabType, error: error.message }, 'yt-dlp tab check failed');
       return false;
     }
   }
@@ -1895,13 +1912,13 @@ class ChannelModule {
         };
       }
 
-      logger.info({ channelId, channelTitle: channel.title }, 'Starting tab detection for channel (via RSS)');
+      logger.info({ channelId, channelTitle: channel.title }, 'Starting tab detection for channel (via yt-dlp)');
 
-      // Check all tabs in parallel using RSS feeds - much faster than yt-dlp
+      // Check all tabs in parallel using yt-dlp probing
       const tabTypesToTest = [TAB_TYPES.VIDEOS, TAB_TYPES.SHORTS, TAB_TYPES.LIVE];
       const tabChecks = await Promise.all(
         tabTypesToTest.map(async (tabType) => {
-          const exists = await this.checkTabExistsViaRss(channelId, tabType);
+          const exists = await this.checkTabExistsViaYtdlp(channelId, tabType);
           if (exists) {
             logger.info({ channelId, tabType }, 'Tab exists for channel');
           } else {
@@ -1918,7 +1935,7 @@ class ChannelModule {
       // Fallback: if all RSS checks failed (e.g., network timeout), assume "videos" tab exists
       // This prevents channels from being added with no tabs, which would make them unusable
       if (availableTabs.length === 0) {
-        logger.warn({ channelId }, 'All RSS tab checks failed, defaulting to videos tab');
+        logger.warn({ channelId }, 'All tab checks failed, defaulting to videos tab');
         availableTabs = [TAB_TYPES.VIDEOS];
       }
 

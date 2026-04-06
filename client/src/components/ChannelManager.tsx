@@ -29,6 +29,7 @@ import {
   ListItemText,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import SortByAlphaIcon from '@mui/icons-material/SortByAlpha';
@@ -57,6 +58,8 @@ import {
 } from '../utils/channelHelpers';
 import HelpDialog from './ChannelManager/HelpDialog';
 import PendingSaveBanner from './ChannelManager/components/PendingSaveBanner';
+import ActiveImportBanner from './ChannelManager/components/ActiveImportBanner';
+import { useActiveImport } from '../hooks/useActiveImport';
 
 type ViewMode = 'list' | 'grid';
 type SortOrder = 'asc' | 'desc';
@@ -76,6 +79,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { config } = useConfig(token);
   const globalPreferredResolution = config.preferredResolution || '1080';
+  const { activeImport } = useActiveImport(token);
 
   const [newChannelUrl, setNewChannelUrl] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -316,11 +320,20 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
         <CardHeader
           title="Your Channels"
           action={
-            <Tooltip title="Learn how channel downloads work">
-              <IconButton onClick={() => setHelpDialogOpen(true)}>
-                <HelpOutlineIcon />
-              </IconButton>
-            </Tooltip>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Button
+                size="small"
+                startIcon={<FileUploadIcon />}
+                onClick={() => navigate('/channels/import')}
+              >
+                Import Channels
+              </Button>
+              <Tooltip title="Learn how channel downloads work">
+                <IconButton onClick={() => setHelpDialogOpen(true)}>
+                  <HelpOutlineIcon />
+                </IconButton>
+              </Tooltip>
+            </Box>
           }
         />
         <Divider />
@@ -333,6 +346,8 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
             overflow: 'hidden',
           }}
         >
+          <ActiveImportBanner activeImport={activeImport} />
+
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {error}

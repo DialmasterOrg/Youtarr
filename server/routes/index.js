@@ -7,6 +7,7 @@ const createVideoRoutes = require('./videos');
 const createJobRoutes = require('./jobs');
 const createPlexRoutes = require('./plex');
 const createApiKeyRoutes = require('./apikeys');
+const createSubscriptionRoutes = require('./subscriptions');
 
 /**
  * Registers all route modules with the Express app
@@ -24,6 +25,7 @@ function registerRoutes(app, deps) {
     jobModule,
     videosModule,
     archiveModule,
+    subscriptionImportModule,
     getCachedYtDlpVersion,
     refreshYtDlpVersionCache,
     validateEnvAuthCredentials,
@@ -57,6 +59,9 @@ function registerRoutes(app, deps) {
 
   // API Key routes
   app.use(createApiKeyRoutes({ verifyToken }));
+
+  // Subscription import routes
+  app.use(createSubscriptionRoutes({ verifyToken, subscriptionImportModule }));
 }
 
 module.exports = { registerRoutes };
