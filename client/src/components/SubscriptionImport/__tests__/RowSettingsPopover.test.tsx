@@ -18,6 +18,8 @@ interface WrapperProps {
   channelId: string;
   rowState: RowState;
   dispatch: React.Dispatch<ImportFlowAction>;
+  subfolders?: string[];
+  defaultSubfolderDisplay?: string | null;
 }
 
 const PopoverWrapper: React.FC<WrapperProps> = (props) => {
@@ -38,6 +40,8 @@ const PopoverWrapper: React.FC<WrapperProps> = (props) => {
         channelId={props.channelId}
         rowState={props.rowState}
         dispatch={props.dispatch}
+        subfolders={props.subfolders ?? []}
+        defaultSubfolderDisplay={props.defaultSubfolderDisplay ?? null}
       />
     </div>
   );

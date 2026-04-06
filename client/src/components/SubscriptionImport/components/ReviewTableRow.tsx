@@ -84,6 +84,8 @@ const ReviewTableRow: React.FC<ReviewTableRowProps> = ({
           channelId={channel.channelId}
           rowState={rowState}
           dispatch={dispatch}
+          subfolders={subfolders}
+          defaultSubfolderDisplay={defaultSubfolderDisplay}
         />
       </TableCell>
     </TableRow>
