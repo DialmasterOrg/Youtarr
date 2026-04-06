@@ -10,9 +10,14 @@ interface ReviewTableRowProps {
   channel: ReviewChannel;
   rowState: RowState;
   dispatch: React.Dispatch<ImportFlowAction>;
+  subfolders: string[];
+  defaultSubfolderDisplay: string | null;
+  globalPreferredResolution: string;
 }
 
-const ReviewTableRow: React.FC<ReviewTableRowProps> = ({ channel, rowState, dispatch }) => {
+const ReviewTableRow: React.FC<ReviewTableRowProps> = ({
+  channel, rowState, dispatch, subfolders, defaultSubfolderDisplay, globalPreferredResolution,
+}) => {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const popoverOpen = Boolean(anchorEl);
 

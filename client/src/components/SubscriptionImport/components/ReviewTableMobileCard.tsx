@@ -10,10 +10,13 @@ interface ReviewTableMobileCardProps {
   channel: ReviewChannel;
   rowState: RowState;
   dispatch: React.Dispatch<ImportFlowAction>;
+  subfolders: string[];
+  defaultSubfolderDisplay: string | null;
+  globalPreferredResolution: string;
 }
 
 const ReviewTableMobileCard: React.FC<ReviewTableMobileCardProps> = ({
-  channel, rowState, dispatch,
+  channel, rowState, dispatch, subfolders, defaultSubfolderDisplay, globalPreferredResolution,
 }) => {
   const [sheetOpen, setSheetOpen] = useState(false);
 
