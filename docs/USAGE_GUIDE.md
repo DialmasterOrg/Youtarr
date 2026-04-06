@@ -6,6 +6,7 @@ This guide provides step-by-step instructions for common tasks in Youtarr. After
 
 - [Download Individual Videos](#download-individual-videos)
 - [Subscribe to Channels](#subscribe-to-channels)
+- [Import YouTube Subscriptions](#import-youtube-subscriptions)
 - [Configure Automation](#configure-automation)
 - [Configure SponsorBlock](#configure-sponsorblock)
 - [Enable Download Notifications](#enable-download-notifications)
@@ -66,6 +67,79 @@ Subscribe to YouTube channels to automatically download new videos as they're pu
        - `Videos`
        - `Shorts`
        - `Live`
+
+## Import YouTube Subscriptions
+
+Bulk-import channels from your existing YouTube subscriptions instead of adding them one at a time. Youtarr supports two import methods: a Google Takeout CSV file or a one-time cookies file upload.
+
+1. **Open the import page**
+   - Go to the Channels page
+   - Click the **Import Channels** button
+
+### Method 1: Google Takeout CSV
+
+Export your subscription list from Google and upload the CSV file. This method does not require sharing any login credentials, but the export can take 24-72 hours to arrive.
+
+1. **Export your subscriptions from Google Takeout**
+   - Go to [takeout.google.com](https://takeout.google.com/) and sign in
+   - Click **Deselect all** to clear pre-selected data products
+   - Scroll down to **YouTube and YouTube Music** and check its checkbox
+   - Click the **All YouTube data included** button that appears
+   - In the panel that opens, click **Deselect all**, then check **only** the **subscriptions** checkbox
+   - Click **OK**, then **Next step**
+   - Choose **Export once**, keep the file type as ZIP, and click **Create export**
+   - Wait for the email from Google (can take 24-72 hours), download the ZIP, and extract it
+
+2. **Upload the CSV**
+   - On the import page, select the **Import Using CSV** tab
+   - Click **Choose File** and select the file at: `Takeout/YouTube and YouTube Music/subscriptions/subscriptions.csv`
+   - Click **Upload & Preview**
+
+### Method 2: Cookies File
+
+Fetch your subscription list directly from YouTube using a cookies file. This is faster than Google Takeout since there is no waiting period.
+
+1. **Export your cookies**
+   - Install a browser extension such as [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
+   - Open YouTube in a browser where you are logged into the account you want to import from
+   - Use the extension to export your cookies to a `.txt` file
+
+2. **Upload the cookies file**
+   - On the import page, select the **Import Using Cookies** tab
+   - Click **Choose File** and select your exported cookies `.txt` file
+   - Click **Upload & Preview**
+
+> **Privacy note:** Your cookies are used only once to fetch the subscription list and are deleted immediately afterward. They are never saved to disk or stored in the database.
+
+### Reviewing Channels
+
+After uploading, Youtarr displays a review table with all discovered channels.
+
+- Each channel shows a thumbnail and name
+- Channels you are already subscribed to are marked with an "already subscribed" badge and cannot be selected
+- Use the **Select all** / **Deselect all** buttons (or the header checkbox) to quickly toggle the entire list
+- Click the settings icon (gear) on any channel row to configure per-channel settings before importing:
+  - **Auto-download enabled** - toggle automatic downloads on or off
+  - **Video quality** - set a quality override (720p through 2160p, or use the global default)
+  - **Download type** - choose Videos, Shorts, or Livestreams
+  - **Subfolder** - assign the channel to a subfolder for multi-library organization
+  - **Content rating** - set a default content rating (G, PG, PG-13, R, NC-17)
+- Use the **Enable auto-download** / **Disable auto-download** button to toggle auto-download for all selected channels at once
+
+When you are satisfied with your selections, click **Import selected** to begin.
+
+### Import Progress
+
+Once the import starts, Youtarr processes the selected channels as a background job.
+
+- A progress bar and per-channel status list update in real time
+- Each channel shows a success, error, or skipped icon as it completes
+- You can click **Cancel Import** at any time to stop the job; channels already imported are kept
+- If you navigate away from the import page, a banner appears at the top of the Channels page showing overall progress with a **View details** link to return to the full progress view
+
+### Error Handling
+
+Individual channel errors (for example, bot detection or network timeouts) are displayed inline next to the affected channel. They do not stop the rest of the import. After the job finishes, the final status will read "Complete with Warnings" if some channels failed, so you can review which ones need attention.
 
 ## Configure Automation
 
