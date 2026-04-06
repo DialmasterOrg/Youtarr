@@ -482,6 +482,65 @@ YouTube is blocking your downloads.
 3. Check firewall isn't blocking local connections
 4. Verify Plex is accessible at the configured IP and port
 
+## Subscription Import Issues
+
+### Cookies Upload Fails or Returns No Channels
+
+**Problem**: Uploading a cookies file returns an error, or YouTube reports no subscriptions for the account.
+
+**Common causes and solutions**:
+
+1. **Expired or invalid cookies**: Cookies from YouTube sessions expire. If you see "cookies appear to be expired or invalid," sign into YouTube in your browser, re-export your cookies using a browser extension (e.g., "Get cookies.txt LOCALLY"), and upload the fresh file.
+
+2. **Wrong file format**: The cookies file must be in Netscape cookies.txt format (the first line starts with `# Netscape HTTP Cookie File`). If you copied cookies from browser dev tools or exported in a different format, the upload will be rejected. Use a browser extension that exports in the Netscape format.
+
+3. **Not logged into the right YouTube account**: If the upload succeeds but returns zero channels, the cookies may belong to an account with no subscriptions. Make sure you are signed into the correct YouTube account before exporting cookies.
+
+4. **Bot detection / verification challenge**: YouTube sometimes flags automated access and shows a CAPTCHA or verification prompt. If you see "YouTube is asking for verification," open YouTube in your browser using the same account, complete any security challenges, then re-export your cookies and try again.
+
+### CSV Upload Errors
+
+**Problem**: Uploading a CSV file returns "Missing header" or another parsing error.
+
+**Common causes and solutions**:
+
+1. **Wrong file**: The import expects the `subscriptions.csv` file from Google Takeout, which has exactly three columns: Channel Id, Channel Url, Channel Title. If you uploaded a different CSV (e.g., a watch history or playlist export), select the correct file from your Takeout archive under `YouTube and YouTube Music/subscriptions/subscriptions.csv`.
+
+2. **File too large**: CSV uploads are limited to 5 MB. A typical Takeout subscriptions file is well under this limit. If your file exceeds it, verify you selected the right file; the subscriptions CSV should not be that large.
+
+3. **Encoding issues**: The parser expects UTF-8 encoding and handles a UTF-8 BOM if present. If your CSV was re-saved in a different encoding (e.g., UTF-16 or Latin-1), re-export from Google Takeout or re-save as UTF-8 in a text editor before uploading.
+
+4. **No valid channels found**: If the file parses but contains no rows with valid YouTube channel IDs (IDs starting with "UC"), the CSV may have been modified or corrupted. Download a fresh copy from Google Takeout.
+
+### Individual Channels Fail During Import
+
+**Problem**: Some channels show errors during import while others succeed.
+
+Per-channel failures are normal and do not stop the overall import. The import processes each channel independently and records individual results. Common reasons a single channel may fail:
+
+1. **Bot detection / rate limiting**: YouTube may throttle or block requests when many channels are resolved in sequence. Failed channels are marked with their error, and you can retry them later by running another import.
+
+2. **Private or terminated channels**: Channels that have been made private, deleted, or terminated by YouTube will fail with a lookup error. These cannot be imported.
+
+3. **Network timeouts**: Transient network issues can cause individual channel lookups to fail. Check the per-channel status on the import progress page; channels that failed due to temporary errors can be retried in a subsequent import.
+
+### Import Appears Stuck
+
+**Problem**: The import has been running for a long time with no visible progress.
+
+Large imports take time because each channel requires a yt-dlp lookup to resolve metadata (name, thumbnail, video feed URL). An import of several hundred channels can take 10-30 minutes depending on network speed and YouTube's response times.
+
+**What to check**:
+1. Open the import progress page to see per-channel status. If channels are still being processed, the import is working normally.
+2. Check the container logs for errors: `docker compose logs -f youtarr`
+3. If the import is truly unresponsive (no channels have progressed for several minutes), you can cancel it from the progress page and start a new one.
+
+### "Too Many Requests" Error
+
+**Problem**: The cookies upload endpoint returns a 429 "Too many requests" error.
+
+The cookies preview endpoint is rate-limited to 3 requests per minute because each request runs a yt-dlp process against YouTube. Wait at least one minute before retrying. If you need to test multiple cookies files, space your uploads about 20-30 seconds apart.
+
 ## Performance Issues
 
 ### High Memory/CPU Usage
