@@ -5,6 +5,9 @@ import { ReviewChannel, RowState } from '../../../types/subscriptionImport';
 import { ImportFlowAction } from '../hooks/useImportFlow';
 import ChannelThumbnail from './ChannelThumbnail';
 import RowSettingsSheet from './RowSettingsSheet';
+import SubFolderChip from '../../ChannelManager/components/chips/SubFolderChip';
+import QualityChip from '../../ChannelManager/components/chips/QualityChip';
+import RatingBadge from '../../shared/RatingBadge';
 
 interface ReviewTableMobileCardProps {
   channel: ReviewChannel;
@@ -45,6 +48,16 @@ const ReviewTableMobileCard: React.FC<ReviewTableMobileCardProps> = ({
           {channel.alreadySubscribed && (
             <Chip label="Already subscribed" size="small" color="default" sx={{ mt: 0.5 }} />
           )}
+          <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+            <SubFolderChip subFolder={rowState.settings.subFolder} />
+            {rowState.settings.videoQuality && (
+              <QualityChip
+                videoQuality={rowState.settings.videoQuality}
+                globalPreferredResolution={globalPreferredResolution}
+              />
+            )}
+            <RatingBadge rating={rowState.settings.defaultRating} />
+          </Box>
         </Box>
       </Box>
 
