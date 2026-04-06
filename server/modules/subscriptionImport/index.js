@@ -66,7 +66,9 @@ async function buildPreviewResponse(Channel, channels, source) {
     source,
     totalFound: channels.length,
     alreadySubscribedCount: existingSet.size,
-    channels: annotated,
+    channels: annotated.sort((a, b) =>
+      a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
+    ),
   };
 }
 
