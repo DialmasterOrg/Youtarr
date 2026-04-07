@@ -11,7 +11,7 @@ export const flatTheme: ThemeDefinition = {
   description: 'Zero depth, bold colors, and geometric precision. No shadows, pure flat design with color as structure.',
   layoutMode: 'top-nav',
   headerPreferences: {
-    showLogoDefault: false,
+    showLogoDefault: true,
     showWordmarkDefault: true,
   },
   headerBehavior: {

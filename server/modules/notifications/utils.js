@@ -57,10 +57,82 @@ function getSubtitle(jobType) {
   return isChannelDownload ? 'Channel Video Downloads' : 'Manually Selected Downloads';
 }
 
+/**
+ * Build notification title for auto-removal events
+ * @param {number} totalDeleted - Number of videos removed
+ * @returns {string} Title string
+ */
+function buildAutoRemovalTitle(totalDeleted) {
+  if (totalDeleted === 1) {
+    return '🗑️ 1 Video Auto-Removed';
+  }
+  return `🗑️ ${totalDeleted} Videos Auto-Removed`;
+}
+
+/**
+ * Format byte count as human-readable string (e.g. "12.50 GB")
+ * @param {number} bytes - Number of bytes
+ * @returns {string} Formatted string
+ */
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '0 B';
+
+  const gb = bytes / (1024 ** 3);
+  if (gb >= 1) {
+    return `${gb.toFixed(2)} GB`;
+  }
+
+  const mb = bytes / (1024 ** 2);
+  if (mb >= 1) {
+    return `${mb.toFixed(2)} MB`;
+  }
+
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  const kb = bytes / 1024;
+  return `${kb.toFixed(2)} KB`;
+}
+
+/**
+ * Group sample videos by channel name
+ * @param {Array<{channel: string, title: string}>} sampleVideos - Video samples from cleanup result
+ * @param {number} [maxVideos=5] - Maximum number of videos to include
+ * @param {number|null} [totalCount=null] - Actual total number of deleted videos (used to compute truncation; falls back to sampleVideos.length)
+ * @returns {{groups: Array<{channel: string, titles: string[], count: number}>, truncatedCount: number}} Grouped videos with truncation info
+ */
+function groupVideosByChannel(sampleVideos, maxVideos = 5, totalCount = null) {
+  if (!sampleVideos || sampleVideos.length === 0) return { groups: [], truncatedCount: 0 };
+  const limited = sampleVideos.slice(0, maxVideos);
+  const displayedCount = limited.length;
+  const truncatedCount = Math.max(0, (totalCount !== null ? totalCount : sampleVideos.length) - displayedCount);
+  const channelMap = new Map();
+
+  for (const video of limited) {
+    const channel = video.channel || 'Unknown Channel';
+    if (!channelMap.has(channel)) {
+      channelMap.set(channel, []);
+    }
+    channelMap.get(channel).push(video.title || 'Unknown Title');
+  }
+
+  const groups = Array.from(channelMap.entries()).map(([channel, titles]) => ({
+    channel,
+    titles,
+    count: titles.length
+  }));
+
+  return { groups, truncatedCount };
+}
+
 module.exports = {
   escapeHtml,
   formatDuration,
   buildTitle,
-  getSubtitle
+  getSubtitle,
+  buildAutoRemovalTitle,
+  formatBytes,
+  groupVideosByChannel
 };
 

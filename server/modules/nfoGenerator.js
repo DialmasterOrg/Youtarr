@@ -46,6 +46,22 @@ class NfoGenerator {
   }
 
   /**
+   * Formats a Date as YYYY-MM-DD HH:mm:ss for NFO <dateadded> element
+   * @param {Date} [date=new Date()] - Date to format (defaults to now)
+   * @returns {string} Formatted date string in 'YYYY-MM-DD HH:mm:ss' format (UTC)
+   */
+  formatDateAdded(date = new Date()) {
+    const pad = (n) => String(n).padStart(2, '0');
+    const year = date.getUTCFullYear();
+    const month = pad(date.getUTCMonth() + 1);
+    const day = pad(date.getUTCDate());
+    const hours = pad(date.getUTCHours());
+    const minutes = pad(date.getUTCMinutes());
+    const seconds = pad(date.getUTCSeconds());
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  }
+
+  /**
    * Converts duration in seconds to minutes (rounded up)
    * @param {number} seconds - Duration in seconds
    * @returns {number} Duration in minutes
@@ -127,10 +143,11 @@ class NfoGenerator {
         xml += `  <youtubeid>${youtubeId}</youtubeid>\n`;
       }
 
+      xml += '\n  <!-- Dates -->\n';
       if (premiered) {
-        xml += '\n  <!-- Dates -->\n';
         xml += `  <premiered>${premiered}</premiered>\n`;
       }
+      xml += `  <dateadded>${this.formatDateAdded()}</dateadded>\n`;
 
       xml += '\n  <!-- People / orgs -->\n';
       xml += `  <studio>${studio}</studio>\n`;

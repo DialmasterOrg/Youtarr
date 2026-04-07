@@ -20,7 +20,7 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { StorageHeaderWidget } from './StorageHeaderWidget';
 import { NAV_DRAWER_SECTION_BUTTON_GUTTER } from './navLayoutConstants';
-import { NavItem, isChannelsSectionActive, isNavPathActive } from './navigation';
+import { NavItem, isNavItemSelected, isNavPathActive } from './navigation';
 import youtarrWordmark from '../../Youtarr_text.png';
 import './layoutFallback.css';
 
@@ -204,10 +204,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
       {navItems.map((item) => {
         const isOpen = activeKey === item.key;
         const hasSubItems = item.subItems && item.subItems.length > 0;
-        const isParentActive = Boolean(isChannelsSectionActive(location.pathname, item.to, item.key)
-          || item.subItems?.some((subItem) => (
-            isNavPathActive(location.pathname, subItem.to)
-          )));
+        const isParentActive = isNavItemSelected(location.pathname, item);
 
         return (
           <Box

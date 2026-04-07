@@ -88,6 +88,14 @@ export function AppShell({
     []
   );
 
+  const channelsSubItems = useMemo(
+    () => [
+      { key: 'channels-list', label: 'Channels', to: '/channels' },
+      { key: 'channels-subscriptions', label: 'Subscriptions', to: '/channels/subscriptions' },
+    ],
+    []
+  );
+
   const settingsSubItems = useMemo(
     () =>
       SETTINGS_PAGES.map((page) => ({
@@ -107,6 +115,7 @@ export function AppShell({
           oldLabel: 'Your Channels',
           icon: <SubscriptionsIcon />,
           to: '/channels',
+          subItems: channelsSubItems,
         },
         {
           key: 'videos' as const,
@@ -132,7 +141,7 @@ export function AppShell({
           subItems: settingsSubItems,
         },
       ],
-    [downloadsSubItems, settingsSubItems]
+    [channelsSubItems, downloadsSubItems, settingsSubItems]
   );
 
   const toggleDrawer = () => {

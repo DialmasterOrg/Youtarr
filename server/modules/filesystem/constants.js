@@ -109,7 +109,14 @@ const FRAGMENT_FILE_PATTERN = /\.f[\d-]+\.(mp4|m4a|webm|mkv)$/;
  * If a channel directory contains ONLY these files (and no actual video content),
  * it is considered "effectively empty" and eligible for cleanup
  */
-const CHANNEL_CLEANUP_IGNORABLE_FILES = ['poster.jpg'];
+const CHANNEL_CLEANUP_IGNORABLE_FILES = [
+  'poster.jpg',
+  'poster.png',
+  'poster.jpeg',
+  '.ds_store',
+  'thumbs.db',
+  'desktop.ini',
+];
 
 module.exports = {
   SUBFOLDER_PREFIX,

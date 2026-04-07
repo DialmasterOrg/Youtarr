@@ -56,12 +56,11 @@ import PageControls from '../shared/PageControls';
     const { config } = useConfig(token);
     const useInfiniteScroll = config.channelVideosHotLoad ?? false;
 
-    let jobsToDisplay = jobs.filter((job) => {
+    let jobsToDisplay = jobs.filter((job) => !job.jobType?.includes('Import Subscriptions')).filter((job) => {
       if (showNoVideoJobs) return true;
       if (!job.data?.videos) return true;
       return job.data.videos && job.data.videos.length > 0;
     });
-
     const totalPages = Math.max(1, Math.ceil(jobsToDisplay.length / itemsPerPage));
     const hasMoreHotLoadItems = visibleCount < jobsToDisplay.length;
     const currentJobs = useMemo(() => {

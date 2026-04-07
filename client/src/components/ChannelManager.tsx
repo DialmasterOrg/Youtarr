@@ -19,6 +19,7 @@ import {
   Typography,
   ListItemText,
   Grow,
+  IconButton,
 } from './ui';
 import {
   Add as AddIcon,
@@ -31,6 +32,7 @@ import {
   ViewList as ViewListIcon,
   Save as SaveIcon,
   MoreVert as MoreVertIcon,
+  Upload as UploadIcon,
 } from '../lib/icons';
 import { Undo2 as UndoIcon, FolderOpen as FolderSpecialIcon } from 'lucide-react';
 import useMediaQuery from '../hooks/useMediaQuery';
@@ -51,6 +53,8 @@ import {
 import HelpDialog from './ChannelManager/HelpDialog';
 import PendingSaveBanner from './ChannelManager/components/PendingSaveBanner';
 import PageControls from './shared/PageControls';
+import ActiveImportBanner from './ChannelManager/components/ActiveImportBanner';
+import { useActiveImport } from '../hooks/useActiveImport';
 
 type ViewMode = 'list' | 'grid';
 type SortOrder = 'asc' | 'desc';
@@ -70,6 +74,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const { config } = useConfig(token);
   const useInfiniteScroll = config.channelVideosHotLoad ?? false;
   const globalPreferredResolution = config.preferredResolution || '1080';
+  const { activeImport } = useActiveImport(token);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const [newChannelUrl, setNewChannelUrl] = useState('');
@@ -363,17 +368,23 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
     navigate(`/channel/${channel.channel_id}`);
   };
 
+  const handleOpenSubscriptions = () => {
+    navigate('/channels/subscriptions');
+  };
+
   return (
     <>
       <div style={{ display: 'flex', flexDirection: 'column', height: 'auto', minHeight: 0 }}>
         <CardHeader
           title="Channels"
           action={
-            <Tooltip title="Learn how channel downloads work">
-              <button aria-label="Learn how channel downloads work" className="icon-btn" type="button" onClick={() => setHelpDialogOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 8 }}>
-                <HelpOutlineIcon size={20} />
-              </button>
-            </Tooltip>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Tooltip title="Learn how channel downloads work">
+                <IconButton aria-label="Learn how channel downloads work" onClick={() => setHelpDialogOpen(true)}>
+                  <HelpOutlineIcon size={18} />
+                </IconButton>
+              </Tooltip>
+            </div>
           }
           className="px-0 pt-0"
         />
@@ -386,6 +397,8 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
             gap: 8,
           }}
         >
+          <ActiveImportBanner activeImport={activeImport} />
+
           {error && (
             <Alert severity="error" style={{ marginBottom: 16 }}>
               {error}
@@ -393,7 +406,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
           )}
 
           <Grid container spacing={2} alignItems="center" style={{ marginBottom: isMobile ? 8 : 16 }}>
-            <Grid item xs={12} md={9}>
+            <Grid item xs={12} md={8}>
               <TextField
                 fullWidth
                 size="small"
@@ -412,16 +425,30 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
                 disabled={isAddingChannel}
               />
             </Grid>
-            <Grid item xs={12} md={3}>
-              <Button
-                fullWidth
-                variant="contained"
-                startIcon={isAddingChannel ? <CircularProgress size={16} color="inherit" /> : <AddIcon />}
-                onClick={handleAddChannel}
-                disabled={isAddingChannel || !newChannelUrl.trim()}
-              >
-                {isAddingChannel ? 'Adding…' : 'Add Channel'}
-              </Button>
+            <Grid item xs={12} md={4}>
+              <Grid container spacing={1.5}>
+                <Grid item xs={6}>
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    startIcon={isAddingChannel ? <CircularProgress size={16} color="inherit" /> : <AddIcon />}
+                    onClick={handleAddChannel}
+                    disabled={isAddingChannel || !newChannelUrl.trim()}
+                  >
+                    {isAddingChannel ? 'Adding…' : 'Channel'}
+                  </Button>
+                </Grid>
+                <Grid item xs={6}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<UploadIcon />}
+                    onClick={handleOpenSubscriptions}
+                  >
+                    Import
+                  </Button>
+                </Grid>
+              </Grid>
             </Grid>
           </Grid>
 

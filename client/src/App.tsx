@@ -26,6 +26,7 @@ import VideosPage from './components/VideosPage';
 import LocalLogin from './components/LocalLogin';
 import InitialSetup from './components/InitialSetup';
 import ChannelPage from './components/ChannelPage';
+import ImportSubscriptionsPage from './components/SubscriptionImport';
 import ChangelogPage from './components/ChangelogPage';
 import { AuthSplash } from './components/AuthSplash';
 import { useConfig } from './hooks/useConfig';
@@ -515,8 +516,8 @@ function AppContent() {
                   >
                     <Container
                       maxWidth={false}
-                      className={location.pathname === '/channels' ? 'w-full flex flex-col' : 'w-full'}
-                      style={location.pathname === '/channels' ? { minHeight: 'calc(100vh - 140px)' } : undefined}
+                      className={location.pathname.startsWith('/channels') ? 'w-full flex flex-col' : 'w-full'}
+                      style={location.pathname.startsWith('/channels') ? { minHeight: 'calc(100vh - 140px)' } : undefined}
                     >
                       <ErrorBoundary fallbackMessage="An unexpected error occurred. Please refresh the page to continue.">
                         <Routes>
@@ -524,6 +525,8 @@ function AppContent() {
                           <Route path="/settings/*" element={<Settings token={token} />} />
                           <Route path="/configuration" element={<Navigate to="/settings" replace />} />
                           <Route path="/channels" element={<ChannelManager token={token} />} />
+                          <Route path="/channels/import" element={<Navigate to="/channels/subscriptions" replace />} />
+                          <Route path="/channels/subscriptions" element={<ImportSubscriptionsPage token={token} />} />
                           <Route path="/downloads/*" element={<DownloadManager token={token} />} />
                           <Route path="/videos" element={<VideosPage token={token} />} />
                           <Route path="/channel/:channel_id" element={<ChannelPage token={token} />} />

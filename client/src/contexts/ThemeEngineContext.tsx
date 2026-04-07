@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { ALL_THEMES, ThemeMode, getThemeById } from '../themes';
 
+const DEFAULT_THEME_MODE: ThemeMode = 'linear';
+const DEFAULT_COLOR_MODE: 'light' | 'dark' = 'light';
+
 interface ThemeEngineState {
   themeMode: ThemeMode;
   colorMode: 'light' | 'dark';
@@ -23,16 +26,20 @@ const HEADER_WORDMARK_STORAGE_KEY = 'uiHeaderWordmarkVisible';
 const ThemeEngineContext = createContext<ThemeEngineState | undefined>(undefined);
 
 const FALLBACK_THEME_ENGINE: ThemeEngineState = {
-  themeMode: 'playful',
-  colorMode: 'light',
+  themeMode: DEFAULT_THEME_MODE,
+  colorMode: DEFAULT_COLOR_MODE,
   motionEnabled: false,
-  showHeaderLogo: false,
+  showHeaderLogo: true,
   showHeaderWordmark: true,
   setThemeMode: () => {},
   setColorMode: () => {},
   setMotionEnabled: () => {},
   setShowHeaderLogo: () => {},
   setShowHeaderWordmark: () => {},
+};
+
+const isThemeMode = (value: string | null): value is ThemeMode => {
+  return value !== null && value in ALL_THEMES;
 };
 
 const getScopedPreferenceStorageKey = (baseKey: string, mode: ThemeMode) => `${baseKey}:${mode}`;
@@ -61,9 +68,9 @@ const readThemeScopedPreference = (
 
 export function ThemeEngineProvider({ children }: { children: React.ReactNode }) {
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
-    if (typeof window === 'undefined') return 'playful';
+    if (typeof window === 'undefined') return DEFAULT_THEME_MODE;
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return stored && stored in ALL_THEMES ? (stored as ThemeMode) : 'playful';
+    return isThemeMode(stored) ? stored : DEFAULT_THEME_MODE;
   });
 
   const [motionEnabled, setMotionEnabled] = useState<boolean>(() => {
@@ -76,9 +83,9 @@ export function ThemeEngineProvider({ children }: { children: React.ReactNode })
   });
 
   const [colorMode, setColorMode] = useState<'light' | 'dark'>(() => {
-    if (typeof window === 'undefined') return 'light';
+    if (typeof window === 'undefined') return DEFAULT_COLOR_MODE;
     const stored = localStorage.getItem(COLOR_MODE_STORAGE_KEY);
-    return stored === 'dark' ? 'dark' : 'light';
+    return stored === 'dark' ? 'dark' : DEFAULT_COLOR_MODE;
   });
 
   const [showHeaderLogo, setShowHeaderLogo] = useState<boolean>(() => {

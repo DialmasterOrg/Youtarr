@@ -12,11 +12,13 @@ import { RadioGroup, RadioGroupItem } from '../../ui/form';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { useThemeEngine } from '../../../contexts/ThemeEngineContext';
-import { ALL_THEMES } from '../../../themes';
+import { ALL_THEMES, ThemeMode } from '../../../themes';
 
 interface AppearanceSettingsSectionProps {
   onMobileTooltipClick?: (text: string) => void;
 }
+
+const isThemeMode = (value: string): value is ThemeMode => value in ALL_THEMES;
 
 export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps> = ({
   onMobileTooltipClick,
@@ -104,7 +106,14 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
         </Grid>
 
         <Grid item xs={12}>
-          <RadioGroup value={themeMode} onValueChange={(v) => setThemeMode(v as any)}>
+          <RadioGroup
+            value={themeMode}
+            onValueChange={(value) => {
+              if (isThemeMode(value)) {
+                setThemeMode(value);
+              }
+            }}
+          >
             <Grid container spacing={2}>
         {Object.values(ALL_THEMES).map((theme) => (
           <Grid item xs={12} sm={4} key={theme.id}>

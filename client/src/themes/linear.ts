@@ -37,7 +37,7 @@ export const linearTheme: ThemeDefinition = {
   description: 'Deep atmosphere, precision depth, and ambient lighting pools.',
   layoutMode: 'top-nav',
   headerPreferences: {
-    showLogoDefault: false,
+    showLogoDefault: true,
     showWordmarkDefault: true,
   },
   headerBehavior: {

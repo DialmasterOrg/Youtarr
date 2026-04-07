@@ -570,6 +570,172 @@ describe('ChannelModule', () => {
           enabled: false
         });
       });
+
+      test('should apply initialSettings when creating a new channel', async () => {
+        const mockChannel = { ...mockChannelData };
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by channel_id
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by URL
+        Channel.create.mockResolvedValue(mockChannel);
+
+        const channelData = {
+          id: 'UC_NEW',
+          title: 'New Channel',
+          description: 'New Description',
+          uploader: 'New Uploader',
+          url: 'https://youtube.com/@newchannel'
+        };
+
+        const initialSettings = {
+          video_quality: '720',
+          sub_folder: 'MySubFolder',
+          default_rating: 'PG'
+        };
+
+        const result = await ChannelModule.upsertChannel(channelData, true, null, initialSettings);
+
+        expect(Channel.create).toHaveBeenCalledWith({
+          channel_id: channelData.id,
+          title: channelData.title,
+          description: channelData.description,
+          uploader: channelData.uploader,
+          url: channelData.url,
+          enabled: true,
+          video_quality: '720',
+          sub_folder: 'MySubFolder',
+          default_rating: 'PG'
+        });
+        expect(result).toBe(mockChannel);
+      });
+
+      test('should ignore initialSettings when channel already exists by channel_id', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          update: jest.fn()
+        };
+        Channel.findOne.mockResolvedValueOnce(mockChannel); // Found by channel_id
+
+        const channelData = {
+          id: 'UC123',
+          title: 'Existing Channel',
+          description: 'Description',
+          uploader: 'Uploader',
+          url: 'https://youtube.com/@existing'
+        };
+
+        const initialSettings = {
+          video_quality: '480',
+          sub_folder: 'ShouldBeIgnored',
+          default_rating: 'R'
+        };
+
+        await ChannelModule.upsertChannel(channelData, false, null, initialSettings);
+
+        // Should update without initialSettings fields
+        expect(mockChannel.update).toHaveBeenCalledWith({
+          channel_id: channelData.id,
+          title: channelData.title,
+          description: channelData.description,
+          uploader: channelData.uploader,
+          url: channelData.url,
+          enabled: false
+        });
+        expect(Channel.create).not.toHaveBeenCalled();
+      });
+
+      test('should ignore initialSettings when channel already exists by URL', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          update: jest.fn()
+        };
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by channel_id
+        Channel.findOne.mockResolvedValueOnce(mockChannel); // Found by URL
+
+        const channelData = {
+          id: 'UC456',
+          title: 'Legacy Channel',
+          description: 'Description',
+          uploader: 'Uploader',
+          url: 'https://youtube.com/@legacy'
+        };
+
+        const initialSettings = {
+          video_quality: '1080',
+          sub_folder: 'ShouldBeIgnored'
+        };
+
+        await ChannelModule.upsertChannel(channelData, false, null, initialSettings);
+
+        // Should update without initialSettings fields
+        expect(mockChannel.update).toHaveBeenCalledWith({
+          channel_id: channelData.id,
+          title: channelData.title,
+          description: channelData.description,
+          uploader: channelData.uploader,
+          url: channelData.url,
+          enabled: false
+        });
+        expect(Channel.create).not.toHaveBeenCalled();
+      });
+
+      test('should work without initialSettings for backward compatibility', async () => {
+        const mockChannel = { ...mockChannelData };
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by channel_id
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by URL
+        Channel.create.mockResolvedValue(mockChannel);
+
+        const channelData = {
+          id: 'UC_COMPAT',
+          title: 'Compat Channel',
+          description: 'Description',
+          uploader: 'Uploader',
+          url: 'https://youtube.com/@compat'
+        };
+
+        // Call without initialSettings (old callers)
+        const result = await ChannelModule.upsertChannel(channelData, true);
+
+        expect(Channel.create).toHaveBeenCalledWith({
+          channel_id: channelData.id,
+          title: channelData.title,
+          description: channelData.description,
+          uploader: channelData.uploader,
+          url: channelData.url,
+          enabled: true
+        });
+        expect(result).toBe(mockChannel);
+      });
+
+      test('should apply only provided initialSettings fields on create', async () => {
+        const mockChannel = { ...mockChannelData };
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by channel_id
+        Channel.findOne.mockResolvedValueOnce(null); // Not found by URL
+        Channel.create.mockResolvedValue(mockChannel);
+
+        const channelData = {
+          id: 'UC_PARTIAL',
+          title: 'Partial Settings Channel',
+          description: 'Description',
+          uploader: 'Uploader',
+          url: 'https://youtube.com/@partial'
+        };
+
+        // Only provide sub_folder, not video_quality or default_rating
+        const initialSettings = {
+          sub_folder: 'CustomFolder'
+        };
+
+        await ChannelModule.upsertChannel(channelData, false, null, initialSettings);
+
+        expect(Channel.create).toHaveBeenCalledWith({
+          channel_id: channelData.id,
+          title: channelData.title,
+          description: channelData.description,
+          uploader: channelData.uploader,
+          url: channelData.url,
+          enabled: false,
+          sub_folder: 'CustomFolder'
+        });
+      });
     });
 
     describe('insertVideosIntoDb', () => {
@@ -2428,44 +2594,32 @@ describe('ChannelModule', () => {
         Channel.findOne.mockResolvedValue(mockChannel);
         Channel.update.mockResolvedValue([1]);
 
-        // Mock fetch responses for RSS feed checks:
-        // - videos tab exists (200 OK)
-        // - shorts tab exists (200 OK)
-        // - streams tab doesn't exist (404)
-        const originalFetch = global.fetch;
-        global.fetch = jest.fn((url) => {
-          if (url.includes('UULF')) {
-            // Videos tab - exists
-            return Promise.resolve({ status: 200 });
-          } else if (url.includes('UUSH')) {
-            // Shorts tab - exists
-            return Promise.resolve({ status: 200 });
-          } else if (url.includes('UULV')) {
-            // Streams tab - doesn't exist
-            return Promise.resolve({ status: 404 });
-          }
-          return Promise.resolve({ status: 404 });
-        });
-
-        try {
-          const result = await ChannelModule.detectAndSaveChannelTabs('UC123');
-
-          expect(Channel.update).toHaveBeenCalledWith(
-            expect.objectContaining({
-              available_tabs: 'videos,shorts',
-              auto_download_enabled_tabs: 'video'
-            }),
-            { where: { channel_id: 'UC123' } }
-          );
-
-          // Should return detected tabs
-          expect(result).toEqual({
-            availableTabs: ['videos', 'shorts'],
-            autoDownloadEnabledTabs: 'video'
+        // Mock yt-dlp tab probing:
+        // - videos tab exists (returns entries)
+        // - shorts tab exists (returns entries)
+        // - streams tab doesn't exist (errors)
+        ChannelModule.checkTabExistsViaYtdlp = jest.fn()
+          .mockImplementation(async (chId, tabType) => {
+            if (tabType === 'videos') return true;
+            if (tabType === 'shorts') return true;
+            return false; // streams
           });
-        } finally {
-          global.fetch = originalFetch;
-        }
+
+        const result = await ChannelModule.detectAndSaveChannelTabs('UC123');
+
+        expect(Channel.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            available_tabs: 'videos,shorts',
+            auto_download_enabled_tabs: 'video'
+          }),
+          { where: { channel_id: 'UC123' } }
+        );
+
+        // Should return detected tabs
+        expect(result).toEqual({
+          availableTabs: ['videos', 'shorts'],
+          autoDownloadEnabledTabs: 'video'
+        });
       });
 
       test('should return null if already detecting', async () => {
@@ -2560,57 +2714,49 @@ describe('ChannelModule', () => {
       });
     });
 
-    describe('checkTabExistsViaRss', () => {
-      test('should return true when RSS feed returns 200', async () => {
-        const originalFetch = global.fetch;
-        global.fetch = jest.fn().mockResolvedValue({ status: 200 });
+    describe('checkTabExistsViaYtdlp', () => {
+      test('should return true when yt-dlp returns entries for the tab', async () => {
+        ChannelModule.withTempFile = jest.fn().mockImplementation(async (prefix, fn) => {
+          return fn('/tmp/test-output');
+        });
+        ChannelModule.executeYtDlpCommand = jest.fn().mockResolvedValue(
+          JSON.stringify({ entries: [{ id: 'video1' }] })
+        );
 
-        try {
-          const exists = await ChannelModule.checkTabExistsViaRss('UC123', 'videos');
-          expect(exists).toBe(true);
-          expect(global.fetch).toHaveBeenCalledWith(
-            'https://www.youtube.com/feeds/videos.xml?playlist_id=UULF123',
-            expect.objectContaining({ method: 'GET', signal: expect.any(AbortSignal) })
-          );
-        } finally {
-          global.fetch = originalFetch;
-        }
+        const exists = await ChannelModule.checkTabExistsViaYtdlp('UC123testchannel456', 'videos');
+        expect(exists).toBe(true);
       });
 
-      test('should return false when RSS feed returns 404', async () => {
-        const originalFetch = global.fetch;
-        global.fetch = jest.fn().mockResolvedValue({ status: 404 });
+      test('should return false when yt-dlp returns empty entries', async () => {
+        ChannelModule.withTempFile = jest.fn().mockImplementation(async (prefix, fn) => {
+          return fn('/tmp/test-output');
+        });
+        ChannelModule.executeYtDlpCommand = jest.fn().mockResolvedValue(
+          JSON.stringify({ entries: [] })
+        );
 
-        try {
-          const exists = await ChannelModule.checkTabExistsViaRss('UC123', 'videos');
-          expect(exists).toBe(false);
-        } finally {
-          global.fetch = originalFetch;
-        }
+        const exists = await ChannelModule.checkTabExistsViaYtdlp('UC123testchannel456', 'videos');
+        expect(exists).toBe(false);
       });
 
-      test('should return false on network error', async () => {
-        const originalFetch = global.fetch;
-        global.fetch = jest.fn().mockRejectedValue(new Error('Network error'));
+      test('should return false when yt-dlp errors', async () => {
+        ChannelModule.withTempFile = jest.fn().mockImplementation(async (prefix, fn) => {
+          return fn('/tmp/test-output');
+        });
+        ChannelModule.executeYtDlpCommand = jest.fn().mockRejectedValue(new Error('yt-dlp failed'));
 
-        try {
-          const exists = await ChannelModule.checkTabExistsViaRss('UC123', 'videos');
-          expect(exists).toBe(false);
-        } finally {
-          global.fetch = originalFetch;
-        }
+        const exists = await ChannelModule.checkTabExistsViaYtdlp('UC123testchannel456', 'videos');
+        expect(exists).toBe(false);
       });
 
-      test('should return true for non-404 error codes (e.g., 500)', async () => {
-        const originalFetch = global.fetch;
-        global.fetch = jest.fn().mockResolvedValue({ status: 500 });
+      test('should return false on JSON parse error', async () => {
+        ChannelModule.withTempFile = jest.fn().mockImplementation(async (prefix, fn) => {
+          return fn('/tmp/test-output');
+        });
+        ChannelModule.executeYtDlpCommand = jest.fn().mockResolvedValue('not json');
 
-        try {
-          const exists = await ChannelModule.checkTabExistsViaRss('UC123', 'videos');
-          expect(exists).toBe(true); // Non-404 means the feed exists, even if there's an error
-        } finally {
-          global.fetch = originalFetch;
-        }
+        const exists = await ChannelModule.checkTabExistsViaYtdlp('UC123testchannel456', 'videos');
+        expect(exists).toBe(false);
       });
     });
 

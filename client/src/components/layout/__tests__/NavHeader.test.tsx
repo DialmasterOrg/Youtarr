@@ -100,7 +100,7 @@ describe('NavHeader shared update indicator', () => {
     renderHeader({ layoutPolicy: resolveThemeLayoutPolicy(getThemeById('flat'), 'desktop') });
 
     const header = screen.getByRole('banner') as HTMLElement;
-    const titleLink = screen.getByRole('link', { name: 'Youtarr' });
+    const titleLink = screen.getByRole('link', { name: /youtarr logo youtarr/i });
     expect(header.style.getPropertyValue('--layout-header-title-inset')).toBe('12px');
     expect(titleLink).toHaveStyle({ marginLeft: 'var(--layout-header-title-inset)' });
   });
@@ -167,9 +167,9 @@ describe('NavHeader shared update indicator', () => {
 
     const headerInner = screen.getByTestId('nav-header-inner');
 
-    // On mobile playful, header should use 3px padding to match contentPadding: '8px 3px'
+    // On mobile playful, header should use 4px padding to match contentPadding: '8px 4px'
     const computedStyle = window.getComputedStyle(headerInner);
-    expect(computedStyle.paddingLeft).toBe('3px');
-    expect(computedStyle.paddingRight).toBe('3px');
+    expect(computedStyle.paddingLeft).toBe('4px');
+    expect(computedStyle.paddingRight).toBe('4px');
   });
 });

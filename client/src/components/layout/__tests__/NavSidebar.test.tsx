@@ -19,6 +19,10 @@ const CHANNELS_ITEM = {
   oldLabel: 'Your Channels',
   icon: <span>ChannelsIcon</span>,
   to: '/channels',
+  subItems: [
+    { key: 'channels-list', label: 'Channels', to: '/channels' },
+    { key: 'channels-subscriptions', label: 'Subscriptions', to: '/channels/subscriptions' },
+  ],
 };
 
 const DOWNLOADS_ITEM = {
@@ -89,6 +93,20 @@ function renderSidebar(initialRoute: string, props = {}) {
 // ─────────────────────────────────────────────────────────────────
 
 describe('NavSidebar – sub-item visibility', () => {
+  it('shows channels sub-items when at the channels root page', () => {
+    renderSidebar('/channels');
+
+    expect(screen.getByText('Subscriptions')).toBeInTheDocument();
+    expect(screen.getAllByText('Channels').length).toBeGreaterThan(0);
+  });
+
+  it('shows channels sub-items when at the subscriptions sub-page', () => {
+    renderSidebar('/channels/subscriptions');
+
+    expect(screen.getByText('Subscriptions')).toBeInTheDocument();
+    expect(screen.getAllByText('Channels').length).toBeGreaterThan(0);
+  });
+
   it('shows settings sub-items when at the settings root page', () => {
     renderSidebar('/settings');
 

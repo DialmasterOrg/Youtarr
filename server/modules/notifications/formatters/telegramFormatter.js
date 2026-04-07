@@ -2,7 +2,7 @@
  * Telegram HTML notification formatter
  */
 
-const { escapeHtml, formatDuration, buildTitle, getSubtitle } = require('../utils');
+const { escapeHtml, formatDuration, buildTitle, getSubtitle, buildAutoRemovalTitle, formatBytes, groupVideosByChannel } = require('../utils');
 
 /**
  * Format download notification as Telegram HTML message
@@ -51,8 +51,55 @@ function formatTestMessage(name) {
   };
 }
 
+/**
+ * Format auto-removal notification as Telegram HTML
+ * @param {Object} cleanupResult - Result object from performAutomaticCleanup()
+ * @returns {Object} Object with title and HTML body strings
+ */
+function formatAutoRemovalMessage(cleanupResult) {
+  const { totalDeleted, deletedByAge, deletedBySpace, freedBytes, plan = {} } = cleanupResult;
+  const ageStrategy = plan.ageStrategy || {};
+  const spaceStrategy = plan.spaceStrategy || {};
+
+  const title = buildAutoRemovalTitle(totalDeleted);
+  let body = `Freed <b>${formatBytes(freedBytes)}</b> of storage\n`;
+
+  if (deletedByAge > 0) {
+    const threshold = escapeHtml(String(ageStrategy.thresholdDays));
+    body += `\n<b>Removed by age (exceeded ${threshold}-day limit): ${deletedByAge} ${deletedByAge === 1 ? 'video' : 'videos'}</b>\n`;
+
+    const { groups, truncatedCount } = groupVideosByChannel(ageStrategy.sampleVideos, 5, deletedByAge);
+    for (const group of groups) {
+      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
+      body += `📺 <b>${escapeHtml(group.channel)}</b> (${videoLabel}): ${group.titles.map(t => escapeHtml(t)).join(', ')}\n`;
+    }
+    if (truncatedCount > 0) {
+      body += `<i>...and ${truncatedCount} more videos</i>\n`;
+    }
+  }
+
+  if (deletedBySpace > 0) {
+    const threshold = escapeHtml(String(spaceStrategy.threshold));
+    body += `\n<b>Removed for storage (below ${threshold} threshold): ${deletedBySpace} ${deletedBySpace === 1 ? 'video' : 'videos'}</b>\n`;
+
+    const { groups, truncatedCount } = groupVideosByChannel(spaceStrategy.sampleVideos, 5, deletedBySpace);
+    for (const group of groups) {
+      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
+      body += `📺 <b>${escapeHtml(group.channel)}</b> (${videoLabel}): ${group.titles.map(t => escapeHtml(t)).join(', ')}\n`;
+    }
+    if (truncatedCount > 0) {
+      body += `<i>...and ${truncatedCount} more videos</i>\n`;
+    }
+  }
+
+  body += '\n<i>— Youtarr</i>';
+
+  return { title, body };
+}
+
 module.exports = {
   formatDownloadMessage,
-  formatTestMessage
+  formatTestMessage,
+  formatAutoRemovalMessage
 };
 

@@ -2,7 +2,7 @@
  * Plain text notification formatter
  */
 
-const { formatDuration, buildTitle, getSubtitle } = require('../utils');
+const { formatDuration, buildTitle, getSubtitle, buildAutoRemovalTitle, formatBytes, groupVideosByChannel } = require('../utils');
 
 /**
  * Format download notification as plain text
@@ -49,8 +49,53 @@ function formatTestMessage(name) {
   };
 }
 
+/**
+ * Format auto-removal notification as plain text
+ * @param {Object} cleanupResult - Result object from performAutomaticCleanup()
+ * @returns {Object} Object with title and body strings
+ */
+function formatAutoRemovalMessage(cleanupResult) {
+  const { totalDeleted, deletedByAge, deletedBySpace, freedBytes, plan = {} } = cleanupResult;
+  const ageStrategy = plan.ageStrategy || {};
+  const spaceStrategy = plan.spaceStrategy || {};
+
+  const title = buildAutoRemovalTitle(totalDeleted);
+  let body = `Freed ${formatBytes(freedBytes)} of storage\n`;
+
+  if (deletedByAge > 0) {
+    const threshold = ageStrategy.thresholdDays;
+    body += `\nRemoved by age (exceeded ${threshold}-day limit): ${deletedByAge} ${deletedByAge === 1 ? 'video' : 'videos'}`;
+
+    const { groups, truncatedCount } = groupVideosByChannel(ageStrategy.sampleVideos, 5, deletedByAge);
+    for (const group of groups) {
+      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
+      body += `\n  ${group.channel} (${videoLabel}): ${group.titles.join(', ')}`;
+    }
+    if (truncatedCount > 0) {
+      body += `\n  ...and ${truncatedCount} more videos`;
+    }
+  }
+
+  if (deletedBySpace > 0) {
+    const threshold = spaceStrategy.threshold;
+    body += `\nRemoved for storage (below ${threshold} threshold): ${deletedBySpace} ${deletedBySpace === 1 ? 'video' : 'videos'}`;
+
+    const { groups, truncatedCount } = groupVideosByChannel(spaceStrategy.sampleVideos, 5, deletedBySpace);
+    for (const group of groups) {
+      const videoLabel = group.count === 1 ? '1 video' : `${group.count} videos`;
+      body += `\n  ${group.channel} (${videoLabel}): ${group.titles.join(', ')}`;
+    }
+    if (truncatedCount > 0) {
+      body += `\n  ...and ${truncatedCount} more videos`;
+    }
+  }
+
+  return { title, body };
+}
+
 module.exports = {
   formatDownloadMessage,
-  formatTestMessage
+  formatTestMessage,
+  formatAutoRemovalMessage
 };
 

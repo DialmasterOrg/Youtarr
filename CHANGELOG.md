@@ -12,6 +12,91 @@
 * **channels:** fixed list view icon (was incorrectly using the same icon as grid view)
 * **nav:** app version label is now clickable on both mobile and desktop — hover/tap shows a "Click to view changelog" tooltip that navigates to the changelog page
 
+## [v1.63.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.63.0) - 2026-04-04
+
+## [1.63.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.62.0...v1.63.0) (2026-04-04)
+
+
+### Features
+
+* add notifications for automatically removed videos ([062fee6](https://github.com/DialmasterOrg/Youtarr/commit/062fee6dacc7e748d747d7f6ca4003b4c6d844ab)), closes [#218](https://github.com/DialmasterOrg/Youtarr/issues/218)
+
+
+### Bug Fixes
+
+* show actual total deleted count in auto-removal notification truncation ([17df3ac](https://github.com/DialmasterOrg/Youtarr/commit/17df3acfd40f4edda03a9bdcff8686f5bcabadd5))
+* tighten Claude review workflow permissions and expand CLAUDE.md ([ccbe8ac](https://github.com/DialmasterOrg/Youtarr/commit/ccbe8aca5d5b4fb985e6c027721040226745679d))
+
+
+### Documentation
+
+* update CHANGELOG for v1.62.0 [skip ci] ([d763ba5](https://github.com/DialmasterOrg/Youtarr/commit/d763ba51e25f356fc7f4ca4d4a25f6d038c632ae))
+
+
+
+
+
+## [v1.62.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.62.0) - 2026-04-03
+
+## [1.62.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.61.1...v1.62.0) (2026-04-03)
+
+
+### Features
+
+* announce production releases in Discord ([03a5f0e](https://github.com/DialmasterOrg/Youtarr/commit/03a5f0e81f5d8ab228932be3f767b1dd9bf9927e))
+
+
+### Bug Fixes
+
+* remove dependabot and patch lodash vulnerability ([86a6e93](https://github.com/DialmasterOrg/Youtarr/commit/86a6e9354d24aeb1577d73579a3f5157007e09e5))
+
+
+### Documentation
+
+* update CHANGELOG for v1.61.1 [skip ci] ([994cc95](https://github.com/DialmasterOrg/Youtarr/commit/994cc95785acbb5ae0edf9b663607dc5fcbe6c5d))
+
+
+
+
+
+## [v1.61.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.61.1) - 2026-04-03
+
+### [1.61.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.61.0...v1.61.1) (2026-04-03)
+
+
+### Bug Fixes
+
+* patch high-severity dependency vulns ([0841f8b](https://github.com/DialmasterOrg/Youtarr/commit/0841f8beae12b5f09dd6b8b531985f58eec4cb19))
+
+
+### Documentation
+
+* update CHANGELOG for v1.61.0 [skip ci] ([f96fcae](https://github.com/DialmasterOrg/Youtarr/commit/f96fcaeb7342fb80271a66d97af9772836f306db))
+
+
+
+
+
+## [v1.61.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.61.0) - 2026-03-21
+
+## [1.61.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.60.1...v1.61.0) (2026-03-21)
+
+
+### Features
+
+* add bulk import video downloads ([#327](https://github.com/DialmasterOrg/Youtarr/issues/327)) ([1875cc7](https://github.com/DialmasterOrg/Youtarr/commit/1875cc7c8d7d72eef48c16946aba863562e08ffa))
+* auto-clean empty channel directories ([#443](https://github.com/DialmasterOrg/Youtarr/issues/443)) ([26f16d8](https://github.com/DialmasterOrg/Youtarr/commit/26f16d8bc5f9209f565d9904389f832bb05a9b7e))
+
+
+### Bug Fixes
+
+* yt-dlp update failure when run as non-root user ([#451](https://github.com/DialmasterOrg/Youtarr/issues/451)) ([45021fa](https://github.com/DialmasterOrg/Youtarr/commit/45021fae9b0b0af6db8a67c5a45dc3b2669de1b6))
+
+
+### Documentation
+
+* update CHANGELOG for v1.60.1 [skip ci] ([1c57705](https://github.com/DialmasterOrg/Youtarr/commit/1c577053d91f64e2e5e535a74c5638e0e5fb7ae4))
+
 ## [v1.60.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.60.1) - 2026-03-05
 
 ### [1.60.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.60.0...v1.60.1) (2026-03-05)
