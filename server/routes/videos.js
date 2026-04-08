@@ -111,7 +111,7 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
     req.log.info('Getting videos');
 
     try {
-      const { page, limit, search, dateFrom, dateTo, sortBy, sortOrder, channelFilter } = req.query;
+      const { page, limit, search, dateFrom, dateTo, sortBy, sortOrder, channelFilter, protectedFilter } = req.query;
 
       const options = {
         page: parseInt(page) || 1,
@@ -121,7 +121,8 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
         dateTo: dateTo || null,
         sortBy: sortBy || 'added',
         sortOrder: sortOrder || 'desc',
-        channelFilter: channelFilter || ''
+        channelFilter: channelFilter || '',
+        protectedFilter: protectedFilter === 'true',
       };
 
       const result = await videosModule.getVideosPaginated(options);

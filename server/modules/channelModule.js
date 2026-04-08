@@ -1296,7 +1296,8 @@ class ChannelModule {
         'audioFilePath',
         'audioFileSize',
         'normalized_rating',
-        'rating_source'
+        'rating_source',
+        'protected'
       ]
     });
 
@@ -1313,7 +1314,8 @@ class ChannelModule {
         filePath: v.filePath,
         audioFilePath: v.audioFilePath,
         audioFileSize: v.audioFileSize,
-        normalized_rating: v.normalized_rating
+        normalized_rating: v.normalized_rating,
+        protected: v.protected
       });
 
       // Collect videos that need file checking (only if checkFiles is true and have any file path)
@@ -1358,6 +1360,8 @@ class ChannelModule {
         if (status.normalized_rating) {
           plainVideoObject.normalized_rating = status.normalized_rating;
         }
+        plainVideoObject.id = status.id;
+        plainVideoObject.protected = status.protected;
       } else {
         // Video never downloaded
         plainVideoObject.added = false;
@@ -1366,6 +1370,7 @@ class ChannelModule {
         plainVideoObject.filePath = null;
         plainVideoObject.audioFilePath = null;
         plainVideoObject.audioFileSize = null;
+        plainVideoObject.protected = false;
       }
 
       // Replace thumbnail with template format (unless video is removed from YouTube)

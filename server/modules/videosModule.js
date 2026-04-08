@@ -18,7 +18,8 @@ class VideosModule {
       dateTo = null,
       sortBy = 'added',
       sortOrder = 'desc',
-      channelFilter = ''
+      channelFilter = '',
+      protectedFilter = false,
     } = options;
 
     try {
@@ -46,6 +47,10 @@ class VideosModule {
       if (dateTo) {
         whereConditions.push('Videos.originalDate <= :dateTo');
         replacements.dateTo = dateTo.replace(/-/g, '');
+      }
+
+      if (protectedFilter) {
+        whereConditions.push('Videos.protected = 1');
       }
 
       const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
@@ -95,6 +100,7 @@ class VideosModule {
           Videos.media_type,
           Videos.normalized_rating,
           Videos.rating_source,
+          Videos.protected,
           COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) AS timeCreated
         FROM Videos
         LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
