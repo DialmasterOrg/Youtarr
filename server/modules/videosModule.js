@@ -631,6 +631,15 @@ class VideosModule {
       throw err;
     }
   }
+
+  async setVideoProtection(id, protectedState) {
+    const video = await Video.findByPk(id);
+    if (!video) {
+      throw new Error('Video not found');
+    }
+    await video.update({ protected: protectedState });
+    return { id: video.id, protected: protectedState };
+  }
 }
 
 module.exports = new VideosModule();
