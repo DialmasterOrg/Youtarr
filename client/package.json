@@ -1,6 +1,6 @@
 {
   "name": "client",
-  "version": "1.63.0",
+  "version": "1.64.0",
   "private": true,
   "type": "module",
   "proxy": "http://localhost:3011",

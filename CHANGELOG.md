@@ -1,16 +1,65 @@
 # Changelog
 
-## [Unreleased]
+## [v1.64.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.64.0) - 2026-04-08
+
+## [1.64.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.63.0...v1.64.0) (2026-04-08)
+
 
 ### Features
 
-* **channels:** replace video selection checkboxes with highlighted border outline for cleaner selected state
-* **channels:** search bar now fills full width on its own row on mobile
-* **channels:** thumbnail vertical alignment fixed for all themes (previously only playful theme was centered)
-* **channels:** removed redundant "Max Rating" label from rating dropdown for cleaner filter row
-* **channels:** moved grid/list view toggle to the action/filters bar row
-* **channels:** fixed list view icon (was incorrectly using the same icon as grid view)
-* **nav:** app version label is now clickable on both mobile and desktop — hover/tap shows a "Click to view changelog" tooltip that navigates to the changelog page
+* add dateadded element to NFO output ([#444](https://github.com/DialmasterOrg/Youtarr/issues/444)) ([7ae6487](https://github.com/DialmasterOrg/Youtarr/commit/7ae6487a7ad64fdce382ee33006e8d705a4b2b09))
+* add formatDateAdded method to NfoGenerator ([#444](https://github.com/DialmasterOrg/Youtarr/issues/444)) ([ea7eefd](https://github.com/DialmasterOrg/Youtarr/commit/ea7eefd8b2c9861869359388d6780dd580fc7c3d))
+* **channels:** add optional initialSettings param to upsertChannel for new rows ([01b7b0d](https://github.com/DialmasterOrg/Youtarr/commit/01b7b0dec2450fa95005bbcfbd3f1f3fc25deb54))
+* **subscriptions:** add constants and concurrency limiter for import module ([595e577](https://github.com/DialmasterOrg/Youtarr/commit/595e577dedc4f0534130281352b50bb47deb1624))
+* **subscriptions:** add import job runner with concurrency, cancellation, belt-and-suspenders dedup ([04964f4](https://github.com/DialmasterOrg/Youtarr/commit/04964f47b798e1ce15aacf7185068f416622db10))
+* **subscriptions:** add og:image thumbnail enricher with concurrency cap ([4481172](https://github.com/DialmasterOrg/Youtarr/commit/4481172c8dcb262113c914422441d7b152aaee21))
+* **subscriptions:** add one-time cookies yt-dlp fetcher with temp file isolation ([a12f552](https://github.com/DialmasterOrg/Youtarr/commit/a12f552606c5dcace9c0130c91c8bfced899a7fc))
+* **subscriptions:** add ReviewTable, MobileCard, BulkActionsBar, RowSettingsPopover/Sheet ([cb8f267](https://github.com/DialmasterOrg/Youtarr/commit/cb8f26782c8e3a04689c3ae1e435faf7cd171ae5))
+* **subscriptions:** add settings chips to mobile import cards ([d1a7e5d](https://github.com/DialmasterOrg/Youtarr/commit/d1a7e5d04a48cb70857b00538bf4682307047f8e))
+* **subscriptions:** add subfolder, quality, and rating chips to import table rows ([502c013](https://github.com/DialmasterOrg/Youtarr/commit/502c013ce4aaad308db9424a2ce0ab7d73b1c502))
+* **subscriptions:** add subscription import API routes ([b61df39](https://github.com/DialmasterOrg/Youtarr/commit/b61df391511210065d5ca52d9b304517650e3271))
+* **subscriptions:** add SubscriptionImportModule singleton with preview and import orchestration ([99aedd8](https://github.com/DialmasterOrg/Youtarr/commit/99aedd8b008964c38c6130afb56dec7dacb8a947))
+* **subscriptions:** add Takeout CSV parser with quoted field and BOM support ([9be7221](https://github.com/DialmasterOrg/Youtarr/commit/9be722178e9e06b444557c1ded32b920d6857662))
+* **subscriptions:** add types, useActiveImport hook, ActiveImportBanner, import page skeleton, and route ([a72048b](https://github.com/DialmasterOrg/Youtarr/commit/a72048b2f6996af8e8915a3baa2b70bee39c22f4))
+* **subscriptions:** add useImportFlow state machine, SourcePicker, ChannelThumbnail, DisclaimerBanner ([2929439](https://github.com/DialmasterOrg/Youtarr/commit/292943992e93a52d50bbb277882ee701fb1b3259))
+* **subscriptions:** add yt-dlp error classifier for friendly user messages ([4b21d27](https://github.com/DialmasterOrg/Youtarr/commit/4b21d27e9f8973996fab018dcc2daa6a6f074860))
+* **subscriptions:** fetch subfolders and config in import page ([2b0a08b](https://github.com/DialmasterOrg/Youtarr/commit/2b0a08bcf5fc875679847918ebdaa569d8331d88))
+* **subscriptions:** migrate jobs.output to MEDIUMTEXT for import results ([47763c2](https://github.com/DialmasterOrg/Youtarr/commit/47763c2301180cf90cab5a1788a62800f7f5aa95))
+* **subscriptions:** replace subfolder text field with SubfolderAutocomplete in mobile sheet ([1465453](https://github.com/DialmasterOrg/Youtarr/commit/1465453d10efc18ce0feb1494a63fd846413f02a))
+* **subscriptions:** replace subfolder text field with SubfolderAutocomplete in popover ([8769597](https://github.com/DialmasterOrg/Youtarr/commit/87695975bb334402ec3ca05d774f15a831a88ecf))
+* **subscriptions:** sort imported channels alphabetically in preview ([a57b6be](https://github.com/DialmasterOrg/Youtarr/commit/a57b6be538af3939e6a2fb757a90338c5e0ddee2))
+* **subscriptions:** thread subfolder and config props through review table ([c7c4e46](https://github.com/DialmasterOrg/Youtarr/commit/c7c4e46af937facce9d4dcbb8cbb0502cf16e213))
+* **subscriptions:** wire subscription import routes and module init ([34a4452](https://github.com/DialmasterOrg/Youtarr/commit/34a4452d0327e9e591cda6618cc4e9d233ce18f0))
+
+
+### Bug Fixes
+
+* add backend tests to pre-commit hook and fix cronJobs test mock ([a92325f](https://github.com/DialmasterOrg/Youtarr/commit/a92325f8f80c3e67fa08221e89417a41990b2dc2))
+* make orphan directory scan resilient to per-subfolder errors ([be17371](https://github.com/DialmasterOrg/Youtarr/commit/be17371d7cd6c33244ac898f188a059806425abc))
+* proactively clean up orphan empty channel directories ([#443](https://github.com/DialmasterOrg/Youtarr/issues/443)) ([ddd7c4a](https://github.com/DialmasterOrg/Youtarr/commit/ddd7c4a75fef99fdffd58419aa2ab20e25543762))
+* **channels:** pass initialSettings through getChannelInfo to upsertChannel ([713bf88](https://github.com/DialmasterOrg/Youtarr/commit/713bf88ebbe82d3813a6c660b789549b9bfd68f0))
+* **downloads:** filter out Import Subscriptions jobs from download history ([b641bb1](https://github.com/DialmasterOrg/Youtarr/commit/b641bb1e4506a5476e9e4305242d46687db51ce6))
+* **subscriptions:** address code review findings for import banner and settings ([2878fd5](https://github.com/DialmasterOrg/Youtarr/commit/2878fd5276e1c13e36beb55408c1290ed8b31ce2))
+* **subscriptions:** address multiple import settings and display issues ([9764046](https://github.com/DialmasterOrg/Youtarr/commit/976404614f178d9ee64f41439bf7e76da90b80ff))
+* **subscriptions:** default imported channels to global default subfolder ([7abdb24](https://github.com/DialmasterOrg/Youtarr/commit/7abdb24ed9dd97dae34a04b893631c0b995bb86f))
+* **subscriptions:** fix settings mapping, job persistence, and code review findings ([ab3680b](https://github.com/DialmasterOrg/Youtarr/commit/ab3680bd4ee193546f359855fe27b1471e3f298d))
+* **subscriptions:** resolve integration issues from manual testing ([91ee35e](https://github.com/DialmasterOrg/Youtarr/commit/91ee35eb4342d9264079cc2683c908d170356403))
+
+
+### Styles
+
+* **subscriptions:** move import statement to top of file ([bd9c64d](https://github.com/DialmasterOrg/Youtarr/commit/bd9c64d294e0a87efb20f1f00bb3e4554a1c89e0))
+
+
+### Documentation
+
+* add subscription import documentation to usage guide, troubleshooting, and CLAUDE.md ([06c3354](https://github.com/DialmasterOrg/Youtarr/commit/06c33546a1884597e938d598abba627b715a13c1))
+* update CHANGELOG for v1.63.0 [skip ci] ([b087e43](https://github.com/DialmasterOrg/Youtarr/commit/b087e43eb667cd673345fa1e6cab181008c52cac))
+
+
+
+
+
 ## [v1.63.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.63.0) - 2026-04-04
 
 ## [1.63.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.62.0...v1.63.0) (2026-04-04)
