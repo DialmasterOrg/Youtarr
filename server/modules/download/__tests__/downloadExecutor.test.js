@@ -37,7 +37,8 @@ jest.mock('../../configModule', () => ({
 }));
 
 jest.mock('../../plexModule', () => ({
-  refreshLibrary: jest.fn().mockResolvedValue()
+  refreshLibrary: jest.fn().mockResolvedValue(),
+  refreshLibraryForSubfolder: jest.fn().mockResolvedValue(),
 }));
 
 jest.mock('../../jobModule', () => ({
@@ -796,14 +797,35 @@ describe('DownloadExecutor', () => {
       expect(archiveModule.addVideoToArchive).toHaveBeenCalledWith('abc123XYZ_d');
     });
 
-    it('should trigger Plex library refresh on completion', async () => {
+    it('should trigger Plex library refresh for the subfolder on completion', async () => {
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, 'kids');
+
+      expect(plexModule.refreshLibraryForSubfolder).toHaveBeenCalledWith('kids');
+    });
+
+    it('should trigger Plex library refresh with null subfolder when none provided', async () => {
       setTimeout(() => {
         mockProcess.emit('exit', 0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
 
-      expect(plexModule.refreshLibrary).toHaveBeenCalled();
+      expect(plexModule.refreshLibraryForSubfolder).toHaveBeenCalledWith(null);
+    });
+
+    it('should NOT trigger Plex refresh when skipJobTransition is true', async () => {
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      // skipJobTransition=true (7th positional arg)
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true, 'kids');
+
+      expect(plexModule.refreshLibraryForSubfolder).not.toHaveBeenCalled();
     });
 
     it('should start next job after completion', async () => {
