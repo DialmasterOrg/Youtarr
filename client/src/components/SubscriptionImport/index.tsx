@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import axios, { AxiosError } from 'axios';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
-import { Card, CardContent, CircularProgress, Typography } from '../ui';
+import { Button, Card, CardContent, CircularProgress, Typography } from '../ui';
 
 import { useImportFlow } from './hooks/useImportFlow';
 import { usePreviewUpload } from './hooks/usePreviewUpload';
@@ -25,6 +25,7 @@ interface ImportSubscriptionsPageProps {
 }
 
 const ImportSubscriptionsPage: React.FC<ImportSubscriptionsPageProps> = ({ token }) => {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { state, dispatch } = useImportFlow();
   const { loading: uploadLoading, error: uploadError, upload } = usePreviewUpload(token);
@@ -111,11 +112,16 @@ const ImportSubscriptionsPage: React.FC<ImportSubscriptionsPageProps> = ({ token
 
   return (
     <div className="space-y-5">
-      <div className="space-y-1">
-        <Typography variant="h5">Subscription Import</Typography>
-        <Typography variant="body2" color="secondary">
-          Preview subscriptions, tune per-channel defaults, and import them directly into your channels list.
-        </Typography>
+      <div className="flex flex-wrap items-start gap-3">
+        <Button variant="outlined" size="small" onClick={() => navigate('/channels')}>
+          Back to channels
+        </Button>
+        <div className="space-y-1">
+          <Typography variant="h5">Subscription Import</Typography>
+          <Typography variant="body2" color="secondary">
+            Preview subscriptions, tune per-channel defaults, and import them directly into your channels list.
+          </Typography>
+        </div>
       </div>
 
       {(state.phase === 'source' || state.phase === 'preview-loading') && (
@@ -156,7 +162,6 @@ const ImportSubscriptionsPage: React.FC<ImportSubscriptionsPageProps> = ({ token
           </CardContent>
         </Card>
       )}
-
       {state.phase === 'importing' && jobDetail && (
         <ImportProgress
           jobDetail={jobDetail}

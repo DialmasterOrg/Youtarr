@@ -223,6 +223,21 @@ This is a known Docker Desktop issue on Windows where mount points become corrup
 
 ## Database Issues
 
+### Table Corruption After Simultaneous Database and Youtarr Update
+
+**Problem**: After updating both your external MariaDB/MySQL and Youtarr at the same time, logs show errors like:
+```
+SequelizeDatabaseError: Table 'youtarr.Jobs' doesn't exist in engine
+```
+(errno 1932), and/or tables appear empty despite having data before the update.
+
+**Cause**: When MariaDB upgrades to a new version, it performs internal data file upgrades on startup. If a Youtarr migration runs before that process completes, the combination of a database engine upgrade and an ALTER TABLE happening back-to-back can corrupt tables or cause data loss. This is a MariaDB/InnoDB limitation that affects any application running migrations during a database version change.
+
+**Solution**:
+Restart Youtarr. In most cases the table corruption is transient and the health check will recover automatically on restart. The error in the logs may look severe, but the database typically self-heals once MariaDB finishes its internal upgrade. Job/download history may be lost, but channels, videos, and settings are unaffected.
+
+**Prevention**: Never update your database server and Youtarr at the same time. Update MariaDB first, confirm it is fully running (check its logs for "ready for connections"), then update Youtarr. See the [External Database Guide](platforms/external-db.md) for details.
+
 ### UTF-8 Character Errors
 
 **Problem**: Errors like `Incorrect string value: '\\xF0\\x9F\\xA7\\xA1'` when channel names or video titles contain emojis.

@@ -26,93 +26,102 @@ import { useSwipeable } from 'react-swipeable';
 import { useConfig } from '../../hooks/useConfig';
 import PageControls from '../shared/PageControls';
 
-  interface DownloadHistoryProps {
-    jobs: Job[];
-    currentTime: Date;
-    expanded: Record<string, boolean>;
-    handleExpandCell: (id: string) => void;
-    anchorEl?: Record<string, null | HTMLButtonElement>;
-    setAnchorEl?: React.Dispatch<React.SetStateAction<Record<string, null | HTMLButtonElement>>>;
-    isMobile: boolean;
-    token?: string | null;
-  }
+interface DownloadHistoryProps {
+  jobs: Job[];
+  currentTime: Date;
+  expanded: Record<string, boolean>;
+  handleExpandCell: (id: string) => void;
+  anchorEl?: Record<string, null | HTMLButtonElement>;
+  setAnchorEl?: React.Dispatch<React.SetStateAction<Record<string, null | HTMLButtonElement>>>;
+  isMobile: boolean;
+  token?: string | null;
+}
 
-  const DownloadHistory: React.FC<DownloadHistoryProps> = ({
-    jobs,
-    currentTime,
-    expanded,
-    handleExpandCell,
-    anchorEl,
-    setAnchorEl,
-    isMobile,
-    token = null,
-  }) => {
-    const [showNoVideoJobs, setShowNoVideoJobs] = useState(false);
-    const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-    const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage] = useState(12);
-    const [visibleCount, setVisibleCount] = useState(12);
-    const loadMoreRef = useRef<HTMLDivElement | null>(null);
-    const { config } = useConfig(token);
-    const useInfiniteScroll = config.channelVideosHotLoad ?? false;
+const DownloadHistory: React.FC<DownloadHistoryProps> = ({
+  jobs,
+  currentTime,
+  expanded,
+  handleExpandCell,
+  anchorEl,
+  setAnchorEl,
+  isMobile,
+  token = null,
+}) => {
+  const [showNoVideoJobs, setShowNoVideoJobs] = useState(false);
+  const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(12);
+  const [visibleCount, setVisibleCount] = useState(12);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const { config } = useConfig(token);
+  const useInfiniteScroll = config.channelVideosHotLoad ?? false;
 
-    let jobsToDisplay = jobs.filter((job) => !job.jobType?.includes('Import Subscriptions')).filter((job) => {
-      if (showNoVideoJobs) return true;
-      if (!job.data?.videos) return true;
-      return job.data.videos && job.data.videos.length > 0;
+  const jobsToDisplay = jobs
+    .filter((job) => !job.jobType?.includes('Import Subscriptions'))
+    .filter((job) => {
+      if (showNoVideoJobs) {
+        return true;
+      }
+
+      if (!job.data?.videos) {
+        return true;
+      }
+
+      return job.data.videos.length > 0;
     });
-    const totalPages = Math.max(1, Math.ceil(jobsToDisplay.length / itemsPerPage));
-    const hasMoreHotLoadItems = visibleCount < jobsToDisplay.length;
-    const currentJobs = useMemo(() => {
-      if (useInfiniteScroll) {
-        return jobsToDisplay.slice(0, visibleCount);
-      }
 
-      const indexOfLastJob = currentPage * itemsPerPage;
-      const indexOfFirstJob = indexOfLastJob - itemsPerPage;
-      return jobsToDisplay.slice(indexOfFirstJob, indexOfLastJob);
-    }, [useInfiniteScroll, jobsToDisplay, visibleCount, currentPage, itemsPerPage]);
+  const totalPages = Math.max(1, Math.ceil(jobsToDisplay.length / itemsPerPage));
+  const hasMoreHotLoadItems = visibleCount < jobsToDisplay.length;
+  const currentJobs = useMemo(() => {
+    if (useInfiniteScroll) {
+      return jobsToDisplay.slice(0, visibleCount);
+    }
 
-    React.useEffect(() => {
-      setCurrentPage(1);
-      setVisibleCount(itemsPerPage);
-    }, [showNoVideoJobs, itemsPerPage]);
+    const indexOfLastJob = currentPage * itemsPerPage;
+    const indexOfFirstJob = indexOfLastJob - itemsPerPage;
+    return jobsToDisplay.slice(indexOfFirstJob, indexOfLastJob);
+  }, [useInfiniteScroll, jobsToDisplay, visibleCount, currentPage, itemsPerPage]);
 
-    React.useEffect(() => {
-      if (!useInfiniteScroll) {
-        return;
-      }
-      if (!loadMoreRef.current || !hasMoreHotLoadItems) {
-        return;
-      }
+  React.useEffect(() => {
+    setCurrentPage(1);
+    setVisibleCount(itemsPerPage);
+  }, [showNoVideoJobs, itemsPerPage]);
 
-      const observer = new IntersectionObserver(
-        (entries) => {
-          const [entry] = entries;
-          if (entry.isIntersecting) {
-            setVisibleCount((prev) => Math.min(prev + itemsPerPage, jobsToDisplay.length));
-          }
-        },
-        {
-          root: null,
-          rootMargin: '0px 0px 180px 0px',
-          threshold: 0,
+  React.useEffect(() => {
+    if (!useInfiniteScroll) {
+      return;
+    }
+    if (!loadMoreRef.current || !hasMoreHotLoadItems) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting) {
+          setVisibleCount((prev) => Math.min(prev + itemsPerPage, jobsToDisplay.length));
         }
-      );
-
-      observer.observe(loadMoreRef.current);
-      return () => observer.disconnect();
-    }, [useInfiniteScroll, hasMoreHotLoadItems, itemsPerPage, jobsToDisplay.length]);
-
-    const handlers = useSwipeable({
-      onSwipedLeft: () => {
-        if (currentPage < totalPages) setCurrentPage((p) => p + 1);
       },
-      onSwipedRight: () => {
-        if (currentPage > 1) setCurrentPage((p) => p - 1);
-      },
-      trackMouse: true,
-    });
+      {
+        root: null,
+        rootMargin: '0px 0px 180px 0px',
+        threshold: 0,
+      }
+    );
+
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [useInfiniteScroll, hasMoreHotLoadItems, itemsPerPage, jobsToDisplay.length]);
+
+  const handlers = useSwipeable({
+    onSwipedLeft: () => {
+      if (currentPage < totalPages) setCurrentPage((p) => p + 1);
+    },
+    onSwipedRight: () => {
+      if (currentPage > 1) setCurrentPage((p) => p - 1);
+    },
+    trackMouse: true,
+  });
 
     if (isMobile) {
       return (
