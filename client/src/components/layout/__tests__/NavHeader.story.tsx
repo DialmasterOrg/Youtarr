@@ -56,7 +56,8 @@ function makeStory(themeMode: 'playful' | 'linear' | 'flat', breakpoint: 'mobile
     },
     play: async ({ canvasElement }) => {
       const canvas = within(canvasElement);
-      await expect(canvas.getByRole('link', { name: 'Youtarr' })).toBeInTheDocument();
+      const expectedLinkName = themeMode === 'playful' ? 'Youtarr' : /youtarr logo youtarr/i;
+      await expect(canvas.getByRole('link', { name: expectedLinkName })).toBeInTheDocument();
 
       const header = canvasElement.querySelector('[data-nav-container]') as HTMLElement;
       await expect(header.dataset.layoutBreakpoint).toBe(breakpoint);

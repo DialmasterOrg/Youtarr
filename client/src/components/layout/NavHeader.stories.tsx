@@ -64,29 +64,43 @@ const meta: Meta<typeof NavHeader> = {
 export default meta;
 type Story = StoryObj<typeof NavHeader>;
 
-export const Default: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await expect(canvas.getByRole('link', { name: 'Youtarr' })).toBeInTheDocument();
+function makeStory(themeMode: 'playful' | 'linear' | 'flat', breakpoint: 'mobile' | 'desktop'): Story {
+  const policy = resolveThemeLayoutPolicy(getThemeById(themeMode), breakpoint);
 
-    const updateButton = canvas.getByRole('button', { name: /youtarr and yt-dlp updates available/i });
-    await userEvent.hover(updateButton);
-    await expect(await within(canvasElement.ownerDocument.body).findByRole('tooltip')).toBeInTheDocument();
-  },
-};
+  return {
+    args: {
+      layoutPolicy: policy,
+    },
+    globals: {
+      themeMode,
+      colorMode: themeMode === 'linear' ? 'dark' : 'light',
+      motionEnabled: themeMode === 'playful' ? 'on' : 'off',
+    },
+    play: async ({ canvasElement }) => {
+      const canvas = within(canvasElement);
+      const expectedLinkName = themeMode === 'playful' ? 'Youtarr' : /youtarr logo youtarr/i;
+      await expect(canvas.getByRole('link', { name: expectedLinkName })).toBeInTheDocument();
 
-export const Mobile: Story = {
-  args: {
-    layoutPolicy: resolveThemeLayoutPolicy(getThemeById('linear'), 'mobile'),
-  },
-};
+      const header = canvasElement.querySelector('[data-nav-container]') as HTMLElement;
+      await expect(header.dataset.layoutBreakpoint).toBe(breakpoint);
+      await expect(header.dataset.navPlacement).toBe(policy.navPlacement);
+      await expect(header.style.getPropertyValue('--layout-header-title-inset')).toBe(policy.headerTitleInset);
 
-export const PlayfulTheme: Story = {
-  args: {
-    layoutPolicy: resolveThemeLayoutPolicy(getThemeById('playful'), 'desktop'),
-  },
-  globals: {
-    themeMode: 'playful',
-    motionEnabled: 'on',
-  },
-};
+      const isTopNav = policy.navPlacement === 'top';
+      const isMobileBreakpoint = breakpoint === 'mobile';
+      const showsToggle = (!isMobileBreakpoint && !isTopNav) || (isMobileBreakpoint && policy.showHeaderToggleOnMobile);
+      if (showsToggle) {
+        await expect(canvas.getByRole('button', { name: /toggle navigation/i })).toBeInTheDocument();
+      } else {
+        await expect(canvas.queryByRole('button', { name: /toggle navigation/i })).not.toBeInTheDocument();
+      }
+    },
+  };
+}
+
+export const PlayfulDesktop = makeStory('playful', 'desktop');
+export const PlayfulMobile = makeStory('playful', 'mobile');
+export const LinearDesktop = makeStory('linear', 'desktop');
+export const LinearMobile = makeStory('linear', 'mobile');
+export const FlatDesktop = makeStory('flat', 'desktop');
+export const FlatMobile = makeStory('flat', 'mobile');

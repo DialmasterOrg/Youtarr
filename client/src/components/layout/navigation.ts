@@ -42,7 +42,7 @@ export const isChannelsSectionActive = (path: string, basePath: string, key: App
 };
 
 export const isNavPathActive = (path: string, targetPath: string) => {
-  return path === targetPath || path.startsWith(`${targetPath}/`);
+  return path === targetPath;
 };
 
 export const isNavItemActive = (path: string, item: NavItem) => {

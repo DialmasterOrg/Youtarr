@@ -101,6 +101,7 @@ describe('SourcePicker', () => {
     render(<SourcePicker {...defaultProps} />);
 
     expect(screen.getByText(/cookies will only be used once/i)).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveClass('alert-standard-warning');
   });
 
   test('shows takeout delay warning on CSV tab', () => {

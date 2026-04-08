@@ -15,7 +15,7 @@ import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { StorageFooterWidget } from './StorageFooterWidget';
 import { getThemeById } from '../../themes';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
-import { NavItem, isNavItemExpanded, isNavItemSelected, isNavPathActive } from './navigation';
+import { NavItem, isNavItemExpanded, isNavPathActive } from './navigation';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import {
   MOBILE_NAV_PRIMARY_HEIGHT,
@@ -128,7 +128,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
   }, [location.pathname, navItems]);
 
   const activeItem = React.useMemo(
-    () => navItems.find((item) => isNavItemSelected(location.pathname, item)) || null,
+    () => navItems.find((item) => isNavItemExpanded(location.pathname, item)) || null,
     [location.pathname, navItems]
   );
 
@@ -200,7 +200,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
           }}
         >
           {navItems.map((item) => {
-            const selected = isNavItemSelected(location.pathname, item);
+            const selected = isNavItemExpanded(location.pathname, item);
             const isExpanded = isMobile
               ? expandedItems[item.key] || selected
               : !isNavCollapsed && Boolean(item.subItems) && activeSidebarSectionKey === item.key;
@@ -282,7 +282,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                     }}
                     primaryTypographyProps={{
                       style: {
-                        fontWeight: 700,
+                        fontWeight: selected ? 700 : 500,
                         fontSize: NAV_PRIMARY_FONT_SIZE,
                         lineHeight: NAV_PRIMARY_LINE_HEIGHT,
                       },
@@ -302,7 +302,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                   />
                 </ListItemButton>
                 
-                <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                <Collapse in={isExpanded} timeout="auto" unmountOnExit overflowVisible>
                   {item.subItems && (
                     <List disablePadding style={{ marginTop: NAV_SUB_VERTICAL_GAP * 8, display: 'flex', flexDirection: 'column', gap: `${NAV_SUB_VERTICAL_GAP * 8}px` }}>
                       {item.subItems.map((subItem) => {

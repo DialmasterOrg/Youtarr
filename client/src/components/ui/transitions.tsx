@@ -159,6 +159,7 @@ export interface CollapseProps {
   timeout?: number | 'auto';
   unmountOnExit?: boolean;
   className?: string;
+  overflowVisible?: boolean;
 }
 
 const Collapse: React.FC<CollapseProps> = ({
@@ -167,6 +168,7 @@ const Collapse: React.FC<CollapseProps> = ({
   timeout = 300,
   unmountOnExit = false,
   className,
+  overflowVisible = false,
 }) => {
   const duration = timeout === 'auto' ? 300 : timeout;
   const [mounted, setMounted] = React.useState(inProp);
@@ -223,6 +225,7 @@ const Collapse: React.FC<CollapseProps> = ({
       ref={containerRef}
       className={cn('overflow-hidden', className)}
       style={{
+        overflow: overflowVisible ? 'visible' : undefined,
         height: height === 'auto' ? 'auto' : `${height}px`,
         transition: height !== 'auto' ? `height ${duration}ms cubic-bezier(0.4,0,0.2,1)` : undefined,
       }}

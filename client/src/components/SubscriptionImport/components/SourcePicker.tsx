@@ -90,7 +90,7 @@ const SourcePicker: React.FC<SourcePickerProps> = ({ loading, error, errorDetail
             Upload the exported cookies.txt file below and we will fetch your subscribed
             channels directly from YouTube.
             </Typography>
-            <Alert severity="info">
+            <Alert severity="warning">
               <Typography variant="body2">
                 Your cookies will only be used once to fetch your subscribed channels and will
                 not be saved. They are deleted immediately after the fetch completes.

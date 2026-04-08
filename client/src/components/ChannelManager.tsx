@@ -321,7 +321,8 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
       return;
     }
 
-    setFilterAnchorEl((prev) => (prev ? null : event.currentTarget));
+    const anchorEl = event.currentTarget;
+    setFilterAnchorEl((prev) => (prev ? null : anchorEl));
   };
 
   const handleFilterChange = (value: string) => {

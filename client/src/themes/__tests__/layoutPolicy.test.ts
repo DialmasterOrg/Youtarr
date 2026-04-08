@@ -45,4 +45,13 @@ describe('theme layout policy contracts', () => {
       });
     }
   });
+
+  it('uses rounded rectangle mobile subnav tokens for the linear theme', () => {
+    const linearTheme = getThemeById('linear');
+
+    expect(linearTheme.tokens.light['mobile-subnav-surface-radius']).toBe('var(--radius-ui)');
+    expect(linearTheme.tokens.light['mobile-subnav-item-radius']).toBe('var(--radius-ui)');
+    expect(linearTheme.tokens.dark['mobile-subnav-surface-radius']).toBe('var(--radius-ui)');
+    expect(linearTheme.tokens.dark['mobile-subnav-item-radius']).toBe('var(--radius-ui)');
+  });
 });
