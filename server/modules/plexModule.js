@@ -30,22 +30,72 @@ class PlexModule {
     return `${protocol}://${ip}:${port}`;
   }
 
-  async refreshLibrary() {
-    logger.info('Refreshing Plex library');
-    // Example GET http://[plexIP]:[plexPort]/library/sections/[plexYoutubeLibraryId]/refresh?X-Plex-Token=[plexApiKey]
+  /**
+   * Get the Plex library ID that should be refreshed for a given resolved subfolder.
+   * Falls back to the global plexYoutubeLibraryId when no specific mapping is found.
+   * @param {string|null} subfolder - Resolved subfolder name (no __ prefix, null = root)
+   * @returns {string} Library ID to refresh
+   */
+  getLibraryIdForSubfolder(subfolder) {
+    const config = configModule.getConfig();
+    const raw = config.plexSubfolderLibraryMappings;
+    const mappings = Array.isArray(raw) ? raw : [];
+
+    const normalizedSubfolder = subfolder || null;
+    const match = mappings.find((m) => (m.subfolder || null) === normalizedSubfolder);
+    return (match && match.libraryId) || config.plexYoutubeLibraryId || '';
+  }
+
+  /**
+   * Refresh the Plex library associated with the given resolved subfolder.
+   * Falls back to the global library when no specific mapping exists.
+   * @param {string|null} subfolder - Resolved subfolder name (no __ prefix, null = root)
+   * @returns {Promise<Object|null>}
+   */
+  async refreshLibraryForSubfolder(subfolder) {
+    const libraryId = this.getLibraryIdForSubfolder(subfolder);
+    return this.refreshLibrary(libraryId);
+  }
+
+  /**
+   * Refresh all distinct Plex libraries mapped to the provided subfolders.
+   * Deduplicates library IDs so each library is only refreshed once.
+   * @param {Array<string|null>} subfolders - Array of resolved subfolder names
+   * @returns {Promise<void>}
+   */
+  async refreshLibrariesForSubfolders(subfolders) {
+    const libraryIds = new Set(subfolders.map((sf) => this.getLibraryIdForSubfolder(sf)));
+    await Promise.all(
+      [...libraryIds].map((libraryId) =>
+        this.refreshLibrary(libraryId).catch((err) => {
+          logger.error({ err, libraryId }, 'Failed to refresh Plex library for subfolder');
+        })
+      )
+    );
+  }
+
+  async refreshLibrary(libraryId) {
+    const config = configModule.getConfig();
+    const resolvedLibraryId = libraryId || config.plexYoutubeLibraryId;
+    logger.info({ libraryId: resolvedLibraryId }, 'Refreshing Plex library');
     try {
-      const config = configModule.getConfig();
       const baseUrl = this.getBaseUrl(config.plexIP, config, config.plexPort, config.plexViaHttps);
 
-      if (!baseUrl || !config.plexYoutubeLibraryId || !config.plexApiKey) {
+      if (!baseUrl || !resolvedLibraryId || !config.plexApiKey) {
         logger.warn('Skipping Plex refresh - missing server details or credentials');
         return null;
       }
 
+      // Plex library IDs are always numeric; reject anything else to prevent path traversal
+      if (!/^\d+$/.test(String(resolvedLibraryId))) {
+        logger.warn({ libraryId: resolvedLibraryId }, 'Skipping Plex refresh - invalid non-numeric library ID');
+        return null;
+      }
+
       const response = await axios.get(
-        `${baseUrl}/library/sections/${config.plexYoutubeLibraryId}/refresh?X-Plex-Token=${config.plexApiKey}`
+        `${baseUrl}/library/sections/${encodeURIComponent(resolvedLibraryId)}/refresh?X-Plex-Token=${config.plexApiKey}`
       );
-      logger.info({ libraryId: config.plexYoutubeLibraryId }, 'Plex library refresh initiated successfully');
+      logger.info({ libraryId: resolvedLibraryId }, 'Plex library refresh initiated successfully');
       return response;
     } catch (error) {
       logger.error({ err: error }, 'Failed to refresh Plex library');

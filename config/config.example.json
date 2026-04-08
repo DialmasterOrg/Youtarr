@@ -11,6 +11,7 @@
   "plexViaHttps": false,
   "plexApiKey": "",
   "plexYoutubeLibraryId": "",
+  "plexSubfolderLibraryMappings": [],
   "plexUrl": "",
   "sponsorblockEnabled": false,
   "sponsorblockAction": "remove",
