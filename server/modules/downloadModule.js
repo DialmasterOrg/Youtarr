@@ -1,5 +1,6 @@
 const configModule = require('./configModule');
 const jobModule = require('./jobModule');
+const plexModule = require('./plexModule');
 const DownloadExecutor = require('./download/downloadExecutor');
 const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
 const tempPathManager = require('./download/tempPathManager');
@@ -106,7 +107,7 @@ class DownloadModule {
         groups.some((g) => g.filterConfig && g.filterConfig.hasGroupingCriteria && g.filterConfig.hasGroupingCriteria());
 
       if (needsGrouping) {
-        console.log(`Using grouped downloads: ${groups.length} group(s) with resolved settings`);
+        logger.info({ groupCount: groups.length }, 'Using grouped downloads with resolved settings');
         return await this.doGroupedChannelDownloads(jobData, groups, isNextJob);
       }
 
@@ -187,7 +188,7 @@ class DownloadModule {
   }
 
   async doGroupedChannelDownloads(jobData, groups, isNextJob = false) {
-    console.log(`Processing ${groups.length} channel download groups in a single job`);
+    logger.info({ groupCount: groups.length }, 'Processing channel download groups in a single job');
 
     // Create ONE job for all groups
     const jobType = `Channel Downloads - ${groups.length} group(s)`;
@@ -227,7 +228,7 @@ class DownloadModule {
       const groupDesc = `Group ${i + 1}/${groups.length} (${group.quality}p${group.subFolder ? `, ${group.subFolder}` : ''})`;
       const groupJobType = `Channel Downloads - ${groupDesc}`;
 
-      console.log(`Processing ${groupJobType} with ${group.channels.length} channels`);
+      logger.info({ groupJobType, channelCount: group.channels.length }, 'Processing download group');
 
       // Update job type to show current group
       await jobModule.updateJob(jobId, {
@@ -237,7 +238,7 @@ class DownloadModule {
       try {
         // Execute this group's download (without starting next job)
         await this.executeGroupDownload(group, jobId, groupJobType, jobData, true);
-        console.log(`Completed ${groupJobType}`);
+        logger.info({ groupJobType }, 'Completed download group');
       } catch (err) {
         logger.error({ err, group: groupDesc }, 'Error processing download group');
         await jobModule.updateJob(jobId, {
@@ -319,10 +320,12 @@ class DownloadModule {
       }
     }
 
-    // Refresh Plex library once after all groups
-    const plexModule = require('./plexModule');
-    plexModule.refreshLibrary().catch(err => {
-      logger.error({ err }, 'Failed to refresh Plex library');
+    // Refresh each distinct Plex library mapped to the downloaded subfolders.
+    // Pre-condition: g.subFolder must already be a resolved effective subfolder
+    // (clean name, no __ prefix, no ##USE_GLOBAL_DEFAULT## sentinel) as produced
+    // by channelDownloadGrouper. null means root (no subfolder).
+    plexModule.refreshLibrariesForSubfolders(groups.map(g => g.subFolder ?? null)).catch(err => {
+      logger.error({ err }, 'Failed to refresh Plex libraries after grouped download');
     });
 
     // Now start the next job in the queue
@@ -376,7 +379,7 @@ class DownloadModule {
       // Check if we have any URLs to download
       if (urls.length === 0) {
         logger.warn({ jobType }, 'Skipping group - no enabled tabs for any channels in this group');
-        console.log(`Skipping ${jobType} - no enabled tabs for any channels`);
+        logger.info({ jobType }, 'Skipping group - no enabled tabs for any channels');
         return; // Skip this group, continue with next group in sequence
       }
 

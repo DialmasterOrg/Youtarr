@@ -2,6 +2,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const Channel = require('../models/channel');
 const configModule = require('./configModule');
+const plexModule = require('./plexModule');
 const { Op } = require('sequelize');
 const logger = require('../logger');
 const ratingMapper = require('./ratingMapper');
@@ -763,11 +764,13 @@ class ChannelSettingsModule {
       // Don't await this to prevent timeout issues from blocking the operation
       setImmediate(async () => {
         try {
-          const plexModule = require('./plexModule');
-          await plexModule.refreshLibrary();
-          logger.info('Plex library refresh completed after folder move');
+          await plexModule.refreshLibrariesForSubfolders([effectiveOldSubFolder, effectiveNewSubFolder]);
+          logger.info(
+            { oldSubfolder: effectiveOldSubFolder, newSubfolder: effectiveNewSubFolder },
+            'Plex library refresh completed after folder move (source and destination libraries notified)'
+          );
         } catch (plexError) {
-          logger.error({ err: plexError.message }, 'Could not refresh Plex library');
+          logger.error({ err: plexError }, 'Could not refresh Plex library');
           // Don't fail the whole operation if Plex refresh fails
         }
       });
@@ -780,7 +783,7 @@ class ChannelSettingsModule {
         newPath
       };
     } catch (error) {
-      logger.error({ err: error.message }, 'Error moving channel folder');
+      logger.error({ err: error }, 'Error moving channel folder');
       throw new Error(`Failed to move channel folder: ${error.message}`);
     }
   }
