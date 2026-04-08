@@ -931,6 +931,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                       onHoverChange={setHoveredVideo}
                       onToggleDeletion={toggleDeletionSelection}
                       onToggleIgnore={toggleIgnore}
+                      onToggleProtection={() => {}}
                       onMobileTooltip={setMobileTooltip}
                     />
                   ))}
