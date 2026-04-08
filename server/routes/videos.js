@@ -1,5 +1,4 @@
 const express = require('express');
-const router = express.Router();
 const rateLimit = require('express-rate-limit');
 
 // Video validation rate limiter
@@ -44,6 +43,8 @@ const apiKeyDownloadLimiter = rateLimit({
  * @returns {express.Router}
  */
 module.exports = function createVideoRoutes({ verifyToken, videosModule, downloadModule }) {
+  const router = express.Router();
+
   /**
    * @swagger
    * /getVideos:
@@ -209,6 +210,61 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
         success: false,
         error: error.message
       });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/videos/{id}/protected:
+   *   patch:
+   *     summary: Toggle video protection
+   *     description: Set whether a video is protected from automatic deletion.
+   *     tags: [Videos]
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: integer
+   *         description: Video database ID
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - protected
+   *             properties:
+   *               protected:
+   *                 type: boolean
+   *     responses:
+   *       200:
+   *         description: Protection status updated
+   *       400:
+   *         description: Invalid request
+   *       404:
+   *         description: Video not found
+   *       500:
+   *         description: Failed to update protection status
+   */
+  router.patch('/api/videos/:id/protected', verifyToken, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { protected: protectedState } = req.body;
+
+      if (typeof protectedState !== 'boolean') {
+        return res.status(400).json({ error: 'protected field (boolean) is required' });
+      }
+
+      const result = await videosModule.setVideoProtection(parseInt(id, 10), protectedState);
+      res.json(result);
+    } catch (error) {
+      if (error.message === 'Video not found') {
+        return res.status(404).json({ error: 'Video not found' });
+      }
+      req.log.error({ err: error }, 'Failed to update video protection status');
+      res.status(500).json({ error: error.message });
     }
   });
 
