@@ -871,6 +871,15 @@ describe('VideoDeletionModule', () => {
         'Error getting videos older than threshold'
       );
     });
+
+    test('should exclude protected videos from results', async () => {
+      mockSequelize.query.mockResolvedValue([]);
+
+      await VideoDeletionModule.getVideosOlderThanThreshold(30);
+
+      const queryString = mockSequelize.query.mock.calls[0][0];
+      expect(queryString).toContain('Videos.protected = 0');
+    });
   });
 
   describe('getOldestVideos', () => {
@@ -982,6 +991,15 @@ describe('VideoDeletionModule', () => {
         expect.objectContaining({ err: expect.any(Error) }),
         'Error getting oldest videos'
       );
+    });
+
+    test('should exclude protected videos from results', async () => {
+      mockSequelize.query.mockResolvedValue([]);
+
+      await VideoDeletionModule.getOldestVideos(10);
+
+      const queryString = mockSequelize.query.mock.calls[0][0];
+      expect(queryString).toContain('Videos.protected = 0');
     });
   });
 
