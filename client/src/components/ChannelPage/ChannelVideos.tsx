@@ -949,6 +949,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                       onCheckChange={handleCheckChange}
                       onToggleDeletion={toggleDeletionSelection}
                       onToggleIgnore={toggleIgnore}
+                      onToggleProtection={() => {}}
                       onMobileTooltip={setMobileTooltip}
                     />
                   ))}
@@ -968,6 +969,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                   onSortChange={handleSortChange}
                   onToggleDeletion={toggleDeletionSelection}
                   onToggleIgnore={toggleIgnore}
+                  onToggleProtection={() => {}}
                   onMobileTooltip={setMobileTooltip}
                 />
               )}

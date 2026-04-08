@@ -14,6 +14,8 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import ShieldIcon from '@mui/icons-material/Shield';
+import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import { useTheme } from '@mui/material/styles';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
@@ -30,6 +32,7 @@ interface VideoListItemProps {
   onCheckChange: (videoId: string, isChecked: boolean) => void;
   onToggleDeletion: (youtubeId: string) => void;
   onToggleIgnore: (youtubeId: string) => void;
+  onToggleProtection: (youtubeId: string) => void;
   onMobileTooltip?: (message: string) => void;
 }
 
@@ -40,6 +43,7 @@ function VideoListItem({
   onCheckChange,
   onToggleDeletion,
   onToggleIgnore,
+  onToggleProtection,
   onMobileTooltip,
 }: VideoListItemProps) {
   const theme = useTheme();
@@ -168,6 +172,7 @@ function VideoListItem({
           {/* Delete icon for downloaded videos that exist on disk */}
           {video.added && !video.removed && (
             <IconButton
+              aria-label="Delete video"
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleDeletion(video.youtube_id);
@@ -217,6 +222,40 @@ function VideoListItem({
                 size="small"
               >
                 {isIgnored ? <CheckCircleOutlineIcon sx={{ fontSize: 18 }} /> : <BlockIcon sx={{ fontSize: 18 }} />}
+              </IconButton>
+            </Tooltip>
+          )}
+
+          {/* Protection shield for downloaded videos */}
+          {video.added && !video.removed && (
+            <Tooltip title={video.protected ? 'Remove protection' : 'Protect from auto-deletion'} arrow>
+              <IconButton
+                aria-label={video.protected ? 'Remove protection' : 'Protect from auto-deletion'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleProtection(video.youtube_id);
+                }}
+                sx={{
+                  position: 'absolute',
+                  bottom: 3,
+                  left: 3,
+                  bgcolor: video.protected ? 'primary.main' : 'rgba(0,0,0,0.5)',
+                  color: video.protected ? 'white' : 'grey.500',
+                  padding: 0.3,
+                  opacity: video.protected ? 1 : 0.6,
+                  '&:hover': {
+                    bgcolor: video.protected ? 'primary.dark' : 'rgba(0,0,0,0.8)',
+                    opacity: 1,
+                  },
+                  transition: 'all 0.2s',
+                  boxShadow: video.protected ? '0 0 4px rgba(25,118,210,0.5)' : 'none',
+                }}
+                size="small"
+              >
+                {video.protected
+                  ? <ShieldIcon sx={{ fontSize: 14 }} />
+                  : <ShieldOutlinedIcon sx={{ fontSize: 14 }} />
+                }
               </IconButton>
             </Tooltip>
           )}
