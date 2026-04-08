@@ -283,11 +283,24 @@ const createServerModule = ({
             getAutoRemovalDryRun: jest.fn().mockResolvedValue({ videos: [], totalSize: 0 })
           }));
         }
+        jest.doMock('../modules/subscriptionImport', () => ({
+          init: jest.fn(),
+          ImportInProgressError: class ImportInProgressError extends Error {}
+        }));
+        jest.doMock('../modules/messageEmitter', () => ({
+          emitMessage: jest.fn(),
+          getLastMessages: jest.fn(() => [])
+        }));
+        jest.doMock('../models', () => ({
+          Channel: { findAll: jest.fn().mockResolvedValue([]) }
+        }));
         jest.doMock('../modules/cronJobs', () => ({ initialize: jest.fn() }));
         jest.doMock('../modules/webSocketServer.js', () => jest.fn());
         jest.doMock('node-cron', () => ({ schedule: jest.fn() }));
         jest.doMock('express-rate-limit', () => jest.fn(() => (req, res, next) => next()));
-        jest.doMock('multer', () => jest.fn(() => ({ single: jest.fn(() => (req, res, next) => next()) })));
+        jest.doMock('multer', () => Object.assign(jest.fn(() => ({ single: jest.fn(() => (req, res, next) => next()) })), {
+          memoryStorage: jest.fn(() => ({})),
+        }));
         jest.doMock('https', () => httpsMock);
         jest.doMock('bcrypt', () => bcryptMock);
         jest.doMock('uuid', () => ({ v4: jest.fn(() => 'test-uuid') }));

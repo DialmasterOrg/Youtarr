@@ -51,7 +51,8 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(12);
   // If showNoVideoJobs is true, show all jobs, otherwise only show jobs with videos
-  let jobsToDisplay = jobs.filter((job) => {
+  // Always exclude Import Subscriptions jobs — they have their own dedicated view
+  let jobsToDisplay = jobs.filter((job) => !job.jobType?.includes('Import Subscriptions')).filter((job) => {
     if (showNoVideoJobs) {
       return true;
     } else {

@@ -145,6 +145,17 @@ const setupServer = async ({ authEnabled = 'false', passwordHash = null } = {}) 
   jest.doMock('../modules/archiveModule', () => ({
     getAutoRemovalDryRun: jest.fn().mockResolvedValue({ videos: [], totalSize: 0 })
   }));
+  jest.doMock('../modules/subscriptionImport', () => ({
+    init: jest.fn(),
+    ImportInProgressError: class ImportInProgressError extends Error {}
+  }));
+  jest.doMock('../modules/messageEmitter', () => ({
+    emitMessage: jest.fn(),
+    getLastMessages: jest.fn(() => [])
+  }));
+  jest.doMock('../models', () => ({
+    Channel: { findAll: jest.fn().mockResolvedValue([]) }
+  }));
   jest.doMock('../modules/videoDeletionModule', () => ({
     deleteVideos: jest.fn().mockResolvedValue({ deleted: [], failed: [] }),
     deleteVideosByYoutubeIds: jest.fn().mockResolvedValue({ deleted: [], failed: [] })

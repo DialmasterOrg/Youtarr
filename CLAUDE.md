@@ -25,6 +25,7 @@ Youtarr is a Dockerized application that automatically downloads videos from You
   - `jobs.js`: Download job status
   - `plex.js`: Plex integration
   - `setup.js`: Initial setup wizard
+  - `subscriptions.js`: Subscription import (Takeout CSV, cookies upload, import jobs)
   - `apikeys.js`: API key management
   - `health.js`: Health check endpoints
 - `modules/`: Core business logic modules
@@ -57,6 +58,15 @@ Youtarr is a Dockerized application that automatically downloads videos from You
   - `serviceRegistry.js`: Service detection (Discord, Slack, Telegram, Email, etc.)
   - `formatters/`: Service-specific message formatters
   - `senders/`: Delivery mechanisms (Discord webhooks, Apprise)
+- `modules/subscriptionImport/`: Bulk subscription import orchestration
+  - `index.js`: Aggregator entry point
+  - `importJobRunner.js`: Import job execution and channel resolution
+  - `takeoutParser.js`: Google Takeout CSV parsing
+  - `cookiesFetcher.js`: Cookie-based channel fetching
+  - `thumbnailEnricher.js`: Channel thumbnail resolution
+  - `concurrencyLimiter.js`: Parallel request throttling
+  - `errorClassifier.js`: Import error categorization
+  - `constants.js`: Import-related constants
 
 ## Task Handling
 
@@ -73,6 +83,7 @@ For multi-part requests (e.g., 'review this PR AND explain WebSocket handling'),
   - `InitialSetup.tsx`: First-time setup wizard
   - `LocalLogin.tsx`: Local user authentication form
   - `StorageStatus.tsx`: Real-time storage status display
+  - `SubscriptionImport/`: Bulk channel import from YouTube (with `hooks/`, `components/`, and `__tests__/` subdirectories)
   - `shared/`: Shared/reusable components (e.g., DeleteVideosDialog) and hooks
   - Additional pages: `ChangelogPage.tsx`, `PlexAuthDialog.tsx`, `DatabaseErrorOverlay.tsx`, `ErrorBoundary.tsx`
 - `hooks/`: Custom React hooks for data fetching and state management

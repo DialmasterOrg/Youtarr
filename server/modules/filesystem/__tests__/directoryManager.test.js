@@ -192,6 +192,22 @@ describe('filesystem/directoryManager', () => {
       expect(result).toBe(false);
     });
 
+    it('should return true for directory with only OS metadata files', async () => {
+      fsPromises.readdir.mockResolvedValueOnce(['.DS_Store', 'Thumbs.db']);
+
+      const result = await isDirectoryEffectivelyEmpty('/path/channel');
+
+      expect(result).toBe(true);
+    });
+
+    it('should return true for directory with mixed ignorable files', async () => {
+      fsPromises.readdir.mockResolvedValueOnce(['poster.jpg', '.DS_Store', 'desktop.ini']);
+
+      const result = await isDirectoryEffectivelyEmpty('/path/channel');
+
+      expect(result).toBe(true);
+    });
+
     it('should return false when directory contains non-ignorable files only', async () => {
       fsPromises.readdir.mockResolvedValueOnce(['Channel - Title - abc123']);
 

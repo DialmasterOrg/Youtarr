@@ -15,13 +15,22 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-echo "🧪 Running tests..."
+echo "🧪 Running frontend tests..."
 cd client && CI=true npm test -- --watchAll=false --passWithNoTests --silent
-TEST_RESULT=$?
+FRONTEND_RESULT=$?
 cd ..
 
-if [ $TEST_RESULT -ne 0 ]; then
-  echo "❌ Tests failed. Please fix the failing tests before committing."
+if [ $FRONTEND_RESULT -ne 0 ]; then
+  echo "❌ Frontend tests failed. Please fix the failing tests before committing."
+  exit 1
+fi
+
+echo "🧪 Running backend tests..."
+npx jest --config jest.config.js --silent
+BACKEND_RESULT=$?
+
+if [ $BACKEND_RESULT -ne 0 ]; then
+  echo "❌ Backend tests failed. Please fix the failing tests before committing."
   exit 1
 fi
 
