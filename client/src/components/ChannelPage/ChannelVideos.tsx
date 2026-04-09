@@ -100,6 +100,9 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   // Local state to track protection status changes without refetching
   const [localProtectedStatus, setLocalProtectedStatus] = useState<Record<string, boolean>>({});
 
+  // Protected filter state
+  const [protectedFilter, setProtectedFilter] = useState(false);
+
   // Filter state
   const {
     filters,
@@ -111,8 +114,12 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     setDateTo,
     clearAllFilters,
     hasActiveFilters,
-    activeFilterCount,
+    activeFilterCount: baseActiveFilterCount,
   } = useChannelVideoFilters();
+
+  // Include protectedFilter in the active filter count and hasActiveFilters
+  const activeFilterCount = baseActiveFilterCount + (protectedFilter ? 1 : 0);
+  const hasAnyActiveFilter = hasActiveFilters || protectedFilter;
 
   const { deleteVideosByYoutubeIds, loading: deleteLoading } = useVideoDeletion();
   const { toggleProtection, successMessage: protectionSuccess, error: protectionError, clearMessages: clearProtectionMessages } = useVideoProtection(token);
@@ -355,7 +362,10 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   }, [videos, localIgnoreStatus, localProtectedStatus]);
 
   // Videos are already filtered, sorted, and paginated by the server
-  const paginatedVideos = videosWithOverrides;
+  // Apply client-side protected filter (after optimistic overrides are applied)
+  const paginatedVideos = protectedFilter
+    ? videosWithOverrides.filter(v => v.protected)
+    : videosWithOverrides;
 
   // Use server-provided total count for pagination
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
@@ -617,7 +627,13 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     setCheckedBoxes([]); // Clear selections when changing tabs
     setSelectedForDeletion([]); // Clear deletion selections when changing tabs
     clearAllFilters(); // Clear filters when changing tabs
+    setProtectedFilter(false); // Clear protected filter when changing tabs
   };
+
+  const handleClearAllFilters = useCallback(() => {
+    clearAllFilters();
+    setProtectedFilter(false);
+  }, [clearAllFilters]);
 
   const handleAutoDownloadChange = async (enabled: boolean) => {
     if (!channelId || !token || !selectedTab) return;
@@ -888,11 +904,13 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           onMaxDurationChange={setMaxDuration}
           onDateFromChange={setDateFrom}
           onDateToChange={setDateTo}
-          onClearAll={clearAllFilters}
-          hasActiveFilters={hasActiveFilters}
+          onClearAll={handleClearAllFilters}
+          hasActiveFilters={hasAnyActiveFilter}
           activeFilterCount={activeFilterCount}
           hideDateFilter={selectedTab === 'shorts'}
           filtersExpanded={filtersExpanded}
+          protectedFilter={protectedFilter}
+          onProtectedFilterChange={setProtectedFilter}
         />
 
         {/* Tabs */}
@@ -928,7 +946,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
         {/* Content area */}
         <Box sx={{ p: 2 }} {...(isMobile ? handlers : {})}>
-          {videoFailed && videos.length === 0 && !hasActiveFilters && !searchQuery ? (
+          {videoFailed && videos.length === 0 && !hasAnyActiveFilter && !searchQuery ? (
             <Alert severity="error">
               Failed to fetch channel videos. Please try again later.
             </Alert>
@@ -947,10 +965,10 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                 ))}
               </Grid>
             </Box>
-          ) : videos.length === 0 ? (
+          ) : videos.length === 0 || paginatedVideos.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <Typography variant="body1" color="text.secondary">
-                {hasActiveFilters || searchQuery
+                {hasAnyActiveFilter || searchQuery
                   ? 'No videos found matching your search and filter criteria'
                   : 'No videos found'}
               </Typography>
