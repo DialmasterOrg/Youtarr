@@ -384,21 +384,9 @@ function VideosPage({ token }: VideosPageProps) {
             }}
           />
 
-          <Box display="flex" gap={1} flexWrap="wrap">
-            <Chip
-              icon={<ShieldIcon />}
-              label="Protected"
-              variant={protectedFilter ? 'filled' : 'outlined'}
-              color={protectedFilter ? 'primary' : 'default'}
-              size="small"
-              onClick={() => setProtectedFilter(!protectedFilter)}
-              sx={{ cursor: 'pointer' }}
-            />
-          </Box>
-
           {!isMobile && (
             <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <Stack direction="row" spacing={2}>
+              <Stack direction="row" spacing={2} alignItems="center">
                 <DatePicker
                   label="From Date"
                   value={dateFrom}
@@ -416,6 +404,15 @@ function VideosPage({ token }: VideosPageProps) {
                     setPage(1);
                   }}
                   renderInput={(params) => <TextField {...params} variant="outlined" fullWidth />}
+                />
+                <Chip
+                  icon={<ShieldIcon />}
+                  label={protectedFilter ? 'Protected Only' : 'Protected'}
+                  variant={protectedFilter ? 'filled' : 'outlined'}
+                  color={protectedFilter ? 'primary' : 'default'}
+                  onClick={() => setProtectedFilter(!protectedFilter)}
+                  onDelete={protectedFilter ? () => setProtectedFilter(false) : undefined}
+                  sx={{ cursor: 'pointer', height: 36 }}
                 />
                 {(dateFrom || dateTo) && (
                   <Button
@@ -455,7 +452,7 @@ function VideosPage({ token }: VideosPageProps) {
         </Stack>
 
         {isMobile && (
-          <Box display='flex' justifyContent='center' mb={2}>
+          <Box display='flex' justifyContent='center' gap={1} mb={2}>
             <Button
               variant='outlined'
               startIcon={<FilterListIcon />}
@@ -463,6 +460,15 @@ function VideosPage({ token }: VideosPageProps) {
             >
               Filter by Channel
             </Button>
+            <Chip
+              icon={<ShieldIcon />}
+              label={protectedFilter ? 'Protected Only' : 'Protected'}
+              variant={protectedFilter ? 'filled' : 'outlined'}
+              color={protectedFilter ? 'primary' : 'default'}
+              onClick={() => setProtectedFilter(!protectedFilter)}
+              onDelete={protectedFilter ? () => setProtectedFilter(false) : undefined}
+              sx={{ cursor: 'pointer', height: 36 }}
+            />
             <FilterMenu
               anchorEl={anchorEl}
               handleClose={handleClose}
