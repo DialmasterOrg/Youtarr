@@ -831,7 +831,8 @@ describe('server routes - channels', () => {
         null, // default minDuration
         null, // default maxDuration
         null, // default dateFrom
-        null  // default dateTo
+        null, // default dateTo
+        false // default protectedFilter
       );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -897,7 +898,8 @@ describe('server routes - channels', () => {
         null, // default minDuration
         null, // default maxDuration
         null, // default dateFrom
-        null  // default dateTo
+        null, // default dateTo
+        false // default protectedFilter
       );
       expect(res.statusCode).toBe(200);
     });
@@ -936,7 +938,8 @@ describe('server routes - channels', () => {
         null, // default minDuration
         null, // default maxDuration
         null, // default dateFrom
-        null  // default dateTo
+        null, // default dateTo
+        false // default protectedFilter
       );
       expect(res.statusCode).toBe(200);
     });
@@ -1215,7 +1218,8 @@ describe('server routes - videos', () => {
         dateTo: null,
         sortBy: 'added',
         sortOrder: 'desc',
-        channelFilter: ''
+        channelFilter: '',
+        protectedFilter: false,
       });
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -1262,7 +1266,8 @@ describe('server routes - videos', () => {
         dateTo: '2024-12-31',
         sortBy: 'title',
         sortOrder: 'asc',
-        channelFilter: 'channel123'
+        channelFilter: 'channel123',
+        protectedFilter: false,
       });
       expect(res.statusCode).toBe(200);
     });

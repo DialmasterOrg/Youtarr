@@ -956,7 +956,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2', 'video3']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -985,7 +985,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -1042,7 +1042,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -1071,7 +1071,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2', 'video3']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
         });
 
         // Video1 - not downloaded
@@ -1099,7 +1099,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: []
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
         });
         expect(result).toEqual([]);
       });
@@ -1205,7 +1205,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);

@@ -1296,7 +1296,8 @@ class ChannelModule {
         'audioFilePath',
         'audioFileSize',
         'normalized_rating',
-        'rating_source'
+        'rating_source',
+        'protected'
       ]
     });
 
@@ -1313,7 +1314,8 @@ class ChannelModule {
         filePath: v.filePath,
         audioFilePath: v.audioFilePath,
         audioFileSize: v.audioFileSize,
-        normalized_rating: v.normalized_rating
+        normalized_rating: v.normalized_rating,
+        protected: v.protected
       });
 
       // Collect videos that need file checking (only if checkFiles is true and have any file path)
@@ -1358,6 +1360,8 @@ class ChannelModule {
         if (status.normalized_rating) {
           plainVideoObject.normalized_rating = status.normalized_rating;
         }
+        plainVideoObject.id = status.id;
+        plainVideoObject.protected = status.protected;
       } else {
         // Video never downloaded
         plainVideoObject.added = false;
@@ -1366,6 +1370,7 @@ class ChannelModule {
         plainVideoObject.filePath = null;
         plainVideoObject.audioFilePath = null;
         plainVideoObject.audioFileSize = null;
+        plainVideoObject.protected = false;
       }
 
       // Replace thumbnail with template format (unless video is removed from YouTube)
@@ -1434,7 +1439,7 @@ class ChannelModule {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Array>} - Array of video objects with download status
    */
-  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, excludeDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null) {
+  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, excludeDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = false) {
     // First get all videos to enrich with download status
     const allChannelVideos = await ChannelVideo.findAll({
       where: {
@@ -1464,6 +1469,11 @@ class ChannelModule {
 
     // Apply duration and date filters
     filteredVideos = this._applyDurationAndDateFilters(filteredVideos, minDuration, maxDuration, dateFrom, dateTo);
+
+    // Apply protected filter
+    if (protectedFilter) {
+      filteredVideos = filteredVideos.filter(video => video.protected);
+    }
 
     // Apply sorting
     filteredVideos.sort((a, b) => {
@@ -1541,9 +1551,9 @@ class ChannelModule {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Object>} - Object with totalCount and oldestVideoDate
    */
-  async getChannelVideoStats(channelId, excludeDownloaded = false, searchQuery = '', mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null) {
+  async getChannelVideoStats(channelId, excludeDownloaded = false, searchQuery = '', mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = false) {
     // If we have search or filter, we need to get all videos
-    if (excludeDownloaded || searchQuery || minDuration !== null || maxDuration !== null || dateFrom || dateTo) {
+    if (excludeDownloaded || searchQuery || minDuration !== null || maxDuration !== null || dateFrom || dateTo || protectedFilter) {
       // Need to filter by download status and/or search
       const allChannelVideos = await ChannelVideo.findAll({
         where: {
@@ -1572,6 +1582,11 @@ class ChannelModule {
 
       // Apply duration and date filters
       filteredVideos = this._applyDurationAndDateFilters(filteredVideos, minDuration, maxDuration, dateFrom, dateTo);
+
+      // Apply protected filter
+      if (protectedFilter) {
+        filteredVideos = filteredVideos.filter(video => video.protected);
+      }
 
       return {
         totalCount: filteredVideos.length,
@@ -2080,7 +2095,7 @@ class ChannelModule {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Object>} - Response object with videos and metadata
    */
-  async getChannelVideos(channelId, page = 1, pageSize = 50, hideDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS, minDuration = null, maxDuration = null, dateFrom = null, dateTo = null) {
+  async getChannelVideos(channelId, page = 1, pageSize = 50, hideDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS, minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = false) {
     const channel = await Channel.findOne({
       where: { channel_id: channelId },
     });
@@ -2140,7 +2155,7 @@ class ChannelModule {
 
       // Now fetch the requested page of videos with file checking enabled
       const offset = (page - 1) * pageSize;
-      const paginatedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo);
+      const paginatedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter);
 
       // Check if videos still exist on YouTube and mark as removed if they don't
       const videoValidationModule = require('./videoValidationModule');
@@ -2210,15 +2225,15 @@ class ChannelModule {
       }
 
       // Get stats for the response
-      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo);
+      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter);
 
       return this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
 
     } catch (error) {
       logger.error({ err: error, channelId }, 'Error fetching channel videos');
       const offset = (page - 1) * pageSize;
-      const cachedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo);
-      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo);
+      const cachedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter);
+      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter);
       return this.buildChannelVideosResponse(cachedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
     }
   }

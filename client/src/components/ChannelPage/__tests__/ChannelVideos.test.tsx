@@ -532,6 +532,7 @@ describe('ChannelVideos Component', () => {
         maxDuration: null,
         dateFrom: null,
         dateTo: null,
+        protectedFilter: false,
       });
     });
 

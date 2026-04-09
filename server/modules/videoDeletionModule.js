@@ -290,6 +290,7 @@ class VideoDeletionModule {
         LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
         LEFT JOIN Jobs ON Jobs.id = JobVideos.job_id
         WHERE Videos.removed = 0
+          AND Videos.protected = 0
           AND COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) IS NOT NULL
           AND COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) < DATE_SUB(NOW(), INTERVAL :ageInDays DAY)
         ORDER BY timeCreated ASC
@@ -334,6 +335,7 @@ class VideoDeletionModule {
         LEFT JOIN JobVideos ON Videos.id = JobVideos.video_id
         LEFT JOIN Jobs ON Jobs.id = JobVideos.job_id
         WHERE Videos.removed = 0
+          AND Videos.protected = 0
           AND COALESCE(Videos.last_downloaded_at, Jobs.timeCreated, STR_TO_DATE(Videos.originalDate, '%Y%m%d')) IS NOT NULL
 ${excludeClause}        ORDER BY timeCreated ASC
         LIMIT :limit
