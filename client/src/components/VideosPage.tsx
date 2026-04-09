@@ -713,6 +713,7 @@ function VideosPage({ token }: VideosPageProps) {
                                 </IconButton>
                               )}
                               {/* Protection shield */}
+                              {!video.removed && (
                               <ProtectionShieldButton
                                 isProtected={video.protected || false}
                                 onClick={(e) => {
@@ -721,6 +722,7 @@ function VideosPage({ token }: VideosPageProps) {
                                 }}
                                 sx={{ position: 'absolute', bottom: 6, left: 6, zIndex: 3 }}
                               />
+                              )}
                             </Box>
                             <Typography variant='subtitle1' textAlign='center'>
                               {video.youTubeVideoName}
@@ -1010,11 +1012,13 @@ function VideosPage({ token }: VideosPageProps) {
                           </TableCell>
                           <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                              <ProtectionShieldButton
-                                isProtected={video.protected || false}
-                                onClick={() => handleToggleProtection(video.id)}
-                                variant="inline"
-                              />
+                              {!video.removed && (
+                                <ProtectionShieldButton
+                                  isProtected={video.protected || false}
+                                  onClick={() => handleToggleProtection(video.id)}
+                                  variant="inline"
+                                />
+                              )}
                               <Tooltip title="Delete video from disk">
                                 <span>
                                   <IconButton

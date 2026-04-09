@@ -36,7 +36,6 @@ export const useVideoProtection = (token: string | null): UseVideoProtectionRetu
         { headers: { 'x-access-token': token || '' } }
       );
 
-      setLoading(false);
       setSuccessMessage(
         newState
           ? 'Video protected from auto-deletion'
@@ -48,8 +47,9 @@ export const useVideoProtection = (token: string | null): UseVideoProtectionRetu
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
         (err instanceof Error ? err.message : 'Failed to update protection status');
       setError(errorMessage);
-      setLoading(false);
       return undefined;
+    } finally {
+      setLoading(false);
     }
   }, [token]);
 

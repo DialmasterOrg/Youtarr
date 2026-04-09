@@ -963,7 +963,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                 ))}
               </Grid>
             </Box>
-          ) : videos.length === 0 || paginatedVideos.length === 0 ? (
+          ) : videos.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <Typography variant="body1" color="text.secondary">
                 {hasAnyActiveFilter || searchQuery
