@@ -33,7 +33,6 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ShieldIcon from '@mui/icons-material/Shield';
-import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { formatDuration, formatYTDate } from '../utils';
@@ -54,6 +53,7 @@ import { useVideoProtection } from './shared/useVideoProtection';
 import RatingBadge from './shared/RatingBadge';
 import ChangeRatingDialog from './shared/ChangeRatingDialog';
 import VideoActionsDropdown from './shared/VideoActionsDropdown';
+import ProtectionShieldButton from './shared/ProtectionShieldButton';
 
 interface VideosPageProps {
   token: string | null;
@@ -707,32 +707,14 @@ function VideosPage({ token }: VideosPageProps) {
                                 </IconButton>
                               )}
                               {/* Protection shield */}
-                              <IconButton
-                                aria-label={video.protected ? 'Remove protection' : 'Protect from auto-deletion'}
+                              <ProtectionShieldButton
+                                isProtected={video.protected || false}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleToggleProtection(video.id);
                                 }}
-                                sx={{
-                                  position: 'absolute',
-                                  bottom: 6,
-                                  left: 6,
-                                  bgcolor: video.protected ? 'primary.main' : 'rgba(0,0,0,0.5)',
-                                  color: video.protected ? 'white' : 'grey.500',
-                                  padding: 0.5,
-                                  opacity: video.protected ? 1 : 0.6,
-                                  '&:hover': {
-                                    bgcolor: video.protected ? 'primary.dark' : 'rgba(0,0,0,0.8)',
-                                    opacity: 1,
-                                  },
-                                  transition: 'all 0.2s',
-                                  boxShadow: video.protected ? '0 0 4px rgba(25,118,210,0.5)' : 'none',
-                                  zIndex: 3,
-                                }}
-                                size="small"
-                              >
-                                {video.protected ? <ShieldIcon sx={{ fontSize: 16 }} /> : <ShieldOutlinedIcon sx={{ fontSize: 16 }} />}
-                              </IconButton>
+                                sx={{ position: 'absolute', bottom: 6, left: 6, zIndex: 3 }}
+                              />
                             </Box>
                             <Typography variant='subtitle1' textAlign='center'>
                               {video.youTubeVideoName}
@@ -1022,18 +1004,11 @@ function VideosPage({ token }: VideosPageProps) {
                           </TableCell>
                           <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                              <Tooltip title={video.protected ? 'Remove protection' : 'Protect from auto-deletion'}>
-                                <span>
-                                  <IconButton
-                                    color={video.protected ? 'primary' : 'default'}
-                                    size="small"
-                                    onClick={() => handleToggleProtection(video.id)}
-                                    sx={{ opacity: video.protected ? 1 : 0.5 }}
-                                  >
-                                    {video.protected ? <ShieldIcon /> : <ShieldOutlinedIcon />}
-                                  </IconButton>
-                                </span>
-                              </Tooltip>
+                              <ProtectionShieldButton
+                                isProtected={video.protected || false}
+                                onClick={() => handleToggleProtection(video.id)}
+                                variant="inline"
+                              />
                               <Tooltip title="Delete video from disk">
                                 <span>
                                   <IconButton

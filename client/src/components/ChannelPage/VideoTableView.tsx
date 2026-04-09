@@ -17,10 +17,8 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import ShieldIcon from '@mui/icons-material/Shield';
-import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
-import Tooltip from '@mui/material/Tooltip';
 import RatingBadge from '../shared/RatingBadge';
+import ProtectionShieldButton from '../shared/ProtectionShieldButton';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml } from '../../utils/formatters';
@@ -166,28 +164,14 @@ function VideoTableView({
                   )}
                   {/* Protection shield for downloaded videos */}
                   {video.added && !video.removed && (
-                    <Tooltip title={video.protected ? 'Remove protection' : 'Protect from auto-deletion'} arrow>
-                      <IconButton
-                        aria-label={video.protected ? 'Remove protection' : 'Protect from auto-deletion'}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleProtection(video.youtube_id);
-                        }}
-                        sx={{
-                          color: video.protected ? 'primary.main' : 'action.active',
-                          '&:hover': {
-                            color: 'primary.main',
-                            bgcolor: 'primary.light',
-                          },
-                        }}
-                        size="small"
-                      >
-                        {video.protected
-                          ? <ShieldIcon fontSize="small" />
-                          : <ShieldOutlinedIcon fontSize="small" />
-                        }
-                      </IconButton>
-                    </Tooltip>
+                    <ProtectionShieldButton
+                      isProtected={video.protected || false}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleProtection(video.youtube_id);
+                      }}
+                      variant="inline"
+                    />
                   )}
                   {/* Ignore/Unignore button - for videos not currently on disk (never downloaded or missing) */}
                   {!isStillLive && (!video.added || video.removed) && (

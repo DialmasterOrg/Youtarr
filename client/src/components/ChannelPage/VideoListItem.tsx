@@ -14,8 +14,6 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import ShieldIcon from '@mui/icons-material/Shield';
-import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import { useTheme } from '@mui/material/styles';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
@@ -24,6 +22,7 @@ import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMedia
 import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import RatingBadge from '../shared/RatingBadge';
+import ProtectionShieldButton from '../shared/ProtectionShieldButton';
 
 interface VideoListItemProps {
   video: ChannelVideo;
@@ -228,36 +227,15 @@ function VideoListItem({
 
           {/* Protection shield for downloaded videos */}
           {video.added && !video.removed && (
-            <Tooltip title={video.protected ? 'Remove protection' : 'Protect from auto-deletion'} arrow>
-              <IconButton
-                aria-label={video.protected ? 'Remove protection' : 'Protect from auto-deletion'}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleProtection(video.youtube_id);
-                }}
-                sx={{
-                  position: 'absolute',
-                  bottom: 3,
-                  left: 3,
-                  bgcolor: video.protected ? 'primary.main' : 'rgba(0,0,0,0.5)',
-                  color: video.protected ? 'white' : 'grey.500',
-                  padding: 0.3,
-                  opacity: video.protected ? 1 : 0.6,
-                  '&:hover': {
-                    bgcolor: video.protected ? 'primary.dark' : 'rgba(0,0,0,0.8)',
-                    opacity: 1,
-                  },
-                  transition: 'all 0.2s',
-                  boxShadow: video.protected ? '0 0 4px rgba(25,118,210,0.5)' : 'none',
-                }}
-                size="small"
-              >
-                {video.protected
-                  ? <ShieldIcon sx={{ fontSize: 14 }} />
-                  : <ShieldOutlinedIcon sx={{ fontSize: 14 }} />
-                }
-              </IconButton>
-            </Tooltip>
+            <ProtectionShieldButton
+              isProtected={video.protected || false}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleProtection(video.youtube_id);
+              }}
+              size="small"
+              sx={{ position: 'absolute', bottom: 3, left: 3 }}
+            />
           )}
         </Box>
 
