@@ -15,6 +15,7 @@ interface UseChannelVideosParams {
   maxDuration?: number | null;
   dateFrom?: Date | null;
   dateTo?: Date | null;
+  protectedFilter?: boolean;
 }
 
 interface UseChannelVideosResult {
@@ -43,6 +44,7 @@ export function useChannelVideos({
   maxDuration,
   dateFrom,
   dateTo,
+  protectedFilter,
 }: UseChannelVideosParams): UseChannelVideosResult {
   const [videos, setVideos] = useState<ChannelVideo[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
@@ -86,6 +88,9 @@ export function useChannelVideos({
       if (dateTo) {
         queryParams.append('dateTo', dateTo.toISOString().split('T')[0]);
       }
+      if (protectedFilter) {
+        queryParams.append('protectedFilter', 'true');
+      }
 
       const response = await fetch(`/getchannelvideos/${channelId}?${queryParams}`, {
         headers: {
@@ -114,7 +119,7 @@ export function useChannelVideos({
     } finally {
       setLoading(false);
     }
-  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, token, minDuration, maxDuration, dateFrom, dateTo]);
+  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, token, minDuration, maxDuration, dateFrom, dateTo, protectedFilter]);
 
   useEffect(() => {
     fetchVideos();

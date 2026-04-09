@@ -217,6 +217,6 @@ describe('PATCH /api/videos/:id/protected', () => {
     await handler(req, res);
 
     expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Database connection lost' });
+    expect(res.json).toHaveBeenCalledWith({ error: 'Failed to update protection status' });
   });
 });

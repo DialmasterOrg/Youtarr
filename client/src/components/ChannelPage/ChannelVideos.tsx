@@ -258,6 +258,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     maxDuration: filters.maxDuration,
     dateFrom: filters.dateFrom,
     dateTo: filters.dateTo,
+    protectedFilter,
   }), [
     channelId,
     page,
@@ -272,6 +273,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     filters.maxDuration,
     filters.dateFrom,
     filters.dateTo,
+    protectedFilter,
   ]);
 
   const {
@@ -361,11 +363,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     });
   }, [videos, localIgnoreStatus, localProtectedStatus]);
 
-  // Videos are already filtered, sorted, and paginated by the server
-  // Apply client-side protected filter (after optimistic overrides are applied)
-  const paginatedVideos = protectedFilter
-    ? videosWithOverrides.filter(v => v.protected)
-    : videosWithOverrides;
+  const paginatedVideos = videosWithOverrides;
 
   // Use server-provided total count for pagination
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
@@ -1028,7 +1026,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                   onSortChange={handleSortChange}
                   onToggleDeletion={toggleDeletionSelection}
                   onToggleIgnore={toggleIgnore}
-                  onToggleProtection={() => {}}
+                  onToggleProtection={handleToggleProtection}
                   onMobileTooltip={setMobileTooltip}
                 />
               )}

@@ -265,7 +265,7 @@ module.exports = function createVideoRoutes({ verifyToken, videosModule, downloa
         return res.status(404).json({ error: 'Video not found' });
       }
       req.log.error({ err: error }, 'Failed to update video protection status');
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: 'Failed to update protection status' });
     }
   });
 
