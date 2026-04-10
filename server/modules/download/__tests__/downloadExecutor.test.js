@@ -88,7 +88,14 @@ jest.mock('../../filesystem', () => ({
   isVideoDirectory: jest.fn(),
   isChannelDirectory: jest.fn(),
   isDirectoryEmpty: jest.fn(),
-  cleanupEmptyChannelDirectory: jest.fn().mockResolvedValue(false)
+  cleanupEmptyChannelDirectory: jest.fn().mockResolvedValue(false),
+  ROOT_SENTINEL: '##ROOT##',
+  GLOBAL_DEFAULT_SENTINEL: '##USE_GLOBAL_DEFAULT##',
+  resolveEffectiveSubfolder: jest.fn((subfolder) => {
+    if (subfolder === '##USE_GLOBAL_DEFAULT##') return null;
+    if (subfolder && subfolder.trim() !== '') return subfolder.trim();
+    return null;
+  }),
 }));
 
 const DownloadExecutor = require('../downloadExecutor');
@@ -826,6 +833,26 @@ describe('DownloadExecutor', () => {
       await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true, 'kids');
 
       expect(plexModule.refreshLibraryForSubfolder).not.toHaveBeenCalled();
+    });
+
+    it('should normalize ##ROOT## sentinel to null before Plex refresh', async () => {
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, '##ROOT##');
+
+      expect(plexModule.refreshLibraryForSubfolder).toHaveBeenCalledWith(null);
+    });
+
+    it('should normalize ##USE_GLOBAL_DEFAULT## sentinel before Plex refresh', async () => {
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, '##USE_GLOBAL_DEFAULT##');
+
+      expect(plexModule.refreshLibraryForSubfolder).toHaveBeenCalledWith(null);
     });
 
     it('should start next job after completion', async () => {
