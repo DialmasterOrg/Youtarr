@@ -38,7 +38,7 @@ jest.mock('../../configModule', () => ({
 
 jest.mock('../../plexModule', () => ({
   refreshLibrary: jest.fn().mockResolvedValue(),
-  refreshLibraryForSubfolder: jest.fn().mockResolvedValue(),
+  refreshLibrariesForSubfolders: jest.fn().mockResolvedValue(),
 }));
 
 jest.mock('../../jobModule', () => ({
@@ -83,21 +83,25 @@ jest.mock('../../../models/channel', () => ({
 }));
 
 // Mock filesystem module
-jest.mock('../../filesystem', () => ({
-  isMainVideoFile: jest.fn(),
-  isVideoDirectory: jest.fn(),
-  isChannelDirectory: jest.fn(),
-  isDirectoryEmpty: jest.fn(),
-  cleanupEmptyChannelDirectory: jest.fn().mockResolvedValue(false),
-  ROOT_SENTINEL: '##ROOT##',
-  GLOBAL_DEFAULT_SENTINEL: '##USE_GLOBAL_DEFAULT##',
-  resolveEffectiveSubfolder: jest.fn((subfolder) => {
-    if (subfolder === '##ROOT##') return null;
-    if (subfolder === '##USE_GLOBAL_DEFAULT##') return null;
-    if (subfolder && subfolder.trim() !== '') return subfolder.trim();
-    return null;
-  }),
-}));
+jest.mock('../../filesystem', () => {
+  const actualPathBuilder = jest.requireActual('../../filesystem/pathBuilder');
+  return {
+    isMainVideoFile: jest.fn(),
+    isVideoDirectory: jest.fn(),
+    isChannelDirectory: jest.fn(),
+    isDirectoryEmpty: jest.fn(),
+    cleanupEmptyChannelDirectory: jest.fn().mockResolvedValue(false),
+    ROOT_SENTINEL: '##ROOT##',
+    GLOBAL_DEFAULT_SENTINEL: '##USE_GLOBAL_DEFAULT##',
+    resolveEffectiveSubfolder: jest.fn((subfolder) => {
+      if (subfolder === '##ROOT##') return null;
+      if (subfolder === '##USE_GLOBAL_DEFAULT##') return null;
+      if (subfolder && subfolder.trim() !== '') return subfolder.trim();
+      return null;
+    }),
+    extractSubfolderFromAbsPath: jest.fn(actualPathBuilder.extractSubfolderFromAbsPath),
+  };
+});
 
 const DownloadExecutor = require('../downloadExecutor');
 const filesystem = require('../../filesystem');
@@ -805,27 +809,114 @@ describe('DownloadExecutor', () => {
       expect(archiveModule.addVideoToArchive).toHaveBeenCalledWith('abc123XYZ_d');
     });
 
-    it('should trigger Plex library refresh for the subfolder on completion', async () => {
-      setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
-      }, 10);
+    it('should refresh the Plex library for the subfolder extracted from the downloaded video path', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        {
+          youtubeId: 'abc123XYZ_d',
+          filePath: '/mock/output/__Adults/The Daily Show/The Daily Show - Video - abc123XYZ_d/The Daily Show - Video [abc123XYZ_d].mp4',
+          fileSize: '1024'
+        }
+      ]);
 
-      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, 'kids');
-
-      expect(plexModule.refreshLibraryForSubfolder).toHaveBeenCalledWith('kids');
-    });
-
-    it('should trigger Plex library refresh with null subfolder when none provided', async () => {
       setTimeout(() => {
         mockProcess.emit('exit', 0, null);
       }, 10);
 
       await executor.doDownload(mockArgs, mockJobId, mockJobType);
 
-      expect(plexModule.refreshLibraryForSubfolder).toHaveBeenCalledWith(null);
+      expect(plexModule.refreshLibrariesForSubfolders).toHaveBeenCalledTimes(1);
+      expect(plexModule.refreshLibrariesForSubfolders).toHaveBeenCalledWith(['Adults']);
+    });
+
+    it('should refresh with null when the downloaded video is in the root directory', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        {
+          youtubeId: 'abc123XYZ_d',
+          filePath: '/mock/output/ChannelName/ChannelName - Video - abc123XYZ_d/ChannelName - Video [abc123XYZ_d].mp4',
+          fileSize: '1024'
+        }
+      ]);
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(plexModule.refreshLibrariesForSubfolders).toHaveBeenCalledTimes(1);
+      expect(plexModule.refreshLibrariesForSubfolders).toHaveBeenCalledWith([null]);
+    });
+
+    it('should refresh every distinct library once when videos span multiple subfolders', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        {
+          youtubeId: 'adults_vid1',
+          filePath: '/mock/output/__Adults/The Daily Show/vid1 - adults_vid1/vid1 [adults_vid1].mp4',
+          fileSize: '1024'
+        },
+        {
+          youtubeId: 'adults_vid2',
+          filePath: '/mock/output/__Adults/The Daily Show/vid2 - adults_vid2/vid2 [adults_vid2].mp4',
+          fileSize: '1024'
+        },
+        {
+          youtubeId: 'kids_vid1',
+          filePath: '/mock/output/__Kids/Sesame Street/vid3 - kids_vid1/vid3 [kids_vid1].mp4',
+          fileSize: '1024'
+        }
+      ]);
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(plexModule.refreshLibrariesForSubfolders).toHaveBeenCalledTimes(1);
+      const call = plexModule.refreshLibrariesForSubfolders.mock.calls[0][0];
+      expect(call).toHaveLength(2);
+      expect(new Set(call)).toEqual(new Set(['Adults', 'Kids']));
+    });
+
+    it('should fall back to audioFilePath when filePath is not set (audio-only download)', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        {
+          youtubeId: 'abc123XYZ_d',
+          filePath: null,
+          audioFilePath: '/mock/output/__Podcasts/Podcast Channel/Podcast - abc123XYZ_d/Podcast [abc123XYZ_d].mp3',
+          audioFileSize: '512'
+        }
+      ]);
+
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(plexModule.refreshLibrariesForSubfolders).toHaveBeenCalledWith(['Podcasts']);
+    });
+
+    it('should NOT trigger Plex refresh when no videos were downloaded', async () => {
+      // Default mock returns [] - no videos
+      setTimeout(() => {
+        mockProcess.emit('exit', 0, null);
+      }, 10);
+
+      await executor.doDownload(mockArgs, mockJobId, mockJobType);
+
+      expect(plexModule.refreshLibrariesForSubfolders).not.toHaveBeenCalled();
     });
 
     it('should NOT trigger Plex refresh when skipJobTransition is true', async () => {
+      VideoMetadataProcessor.processVideoMetadata.mockResolvedValue([
+        {
+          youtubeId: 'abc123XYZ_d',
+          filePath: '/mock/output/__Adults/Channel/video - abc123XYZ_d/video [abc123XYZ_d].mp4',
+          fileSize: '1024'
+        }
+      ]);
+
       setTimeout(() => {
         mockProcess.emit('exit', 0, null);
       }, 10);
@@ -833,27 +924,7 @@ describe('DownloadExecutor', () => {
       // skipJobTransition=true (7th positional arg)
       await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, true, 'kids');
 
-      expect(plexModule.refreshLibraryForSubfolder).not.toHaveBeenCalled();
-    });
-
-    it('should normalize ##ROOT## sentinel to null before Plex refresh', async () => {
-      setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
-      }, 10);
-
-      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, '##ROOT##');
-
-      expect(plexModule.refreshLibraryForSubfolder).toHaveBeenCalledWith(null);
-    });
-
-    it('should normalize ##USE_GLOBAL_DEFAULT## sentinel before Plex refresh', async () => {
-      setTimeout(() => {
-        mockProcess.emit('exit', 0, null);
-      }, 10);
-
-      await executor.doDownload(mockArgs, mockJobId, mockJobType, 0, null, false, false, '##USE_GLOBAL_DEFAULT##');
-
-      expect(plexModule.refreshLibraryForSubfolder).toHaveBeenCalledWith(null);
+      expect(plexModule.refreshLibrariesForSubfolders).not.toHaveBeenCalled();
     });
 
     it('should start next job after completion', async () => {
