@@ -32,6 +32,10 @@ export const CONFIG_FIELDS = {
   // Plex integration
   plexApiKey: { default: '', trackChanges: true },
   plexYoutubeLibraryId: { default: '', trackChanges: true },
+  plexSubfolderLibraryMappings: {
+    default: [] as Array<{ subfolder: string | null; libraryId: string }>,
+    trackChanges: true,
+  },
   plexIP: { default: '', trackChanges: true },
   plexPort: { default: '32400', trackChanges: true },
   plexViaHttps: { default: false, trackChanges: true },
@@ -124,6 +128,7 @@ export const DEFAULT_CONFIG: ConfigState = {
   defaultSubfolder: CONFIG_FIELDS.defaultSubfolder.default,
   plexApiKey: CONFIG_FIELDS.plexApiKey.default,
   plexYoutubeLibraryId: CONFIG_FIELDS.plexYoutubeLibraryId.default,
+  plexSubfolderLibraryMappings: CONFIG_FIELDS.plexSubfolderLibraryMappings.default,
   plexIP: CONFIG_FIELDS.plexIP.default,
   plexPort: CONFIG_FIELDS.plexPort.default,
   plexViaHttps: CONFIG_FIELDS.plexViaHttps.default,

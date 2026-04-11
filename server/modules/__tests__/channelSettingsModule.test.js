@@ -41,7 +41,9 @@ jest.mock('../jobModule', () => ({
 }));
 
 jest.mock('../plexModule', () => ({
-  refreshLibrary: jest.fn().mockResolvedValue(true)
+  refreshLibrary: jest.fn().mockResolvedValue(true),
+  refreshLibraryForSubfolder: jest.fn().mockResolvedValue(true),
+  refreshLibrariesForSubfolders: jest.fn().mockResolvedValue(undefined),
 }));
 
 describe('ChannelSettingsModule', () => {
@@ -824,7 +826,7 @@ describe('ChannelSettingsModule', () => {
       });
     });
 
-    test('should trigger Plex library refresh asynchronously', async () => {
+    test('should trigger Plex library refresh for both old and new subfolders asynchronously', async () => {
       fs.existsSync
         .mockReturnValueOnce(true)
         .mockReturnValueOnce(false);
@@ -834,14 +836,14 @@ describe('ChannelSettingsModule', () => {
       // Plex refresh is called via setImmediate, so we need to flush the queue
       await new Promise(resolve => setImmediate(resolve));
 
-      expect(plexModule.refreshLibrary).toHaveBeenCalled();
+      expect(plexModule.refreshLibrariesForSubfolders).toHaveBeenCalledWith([null, 'Music']);
     });
 
     test('should not fail if Plex refresh fails', async () => {
       fs.existsSync
         .mockReturnValueOnce(true)
         .mockReturnValueOnce(false);
-      plexModule.refreshLibrary.mockRejectedValue(new Error('Plex error'));
+      plexModule.refreshLibrariesForSubfolders.mockRejectedValue(new Error('Plex error'));
 
       const result = await channelSettingsModule.moveChannelFolder(channel, null, 'Music');
 
@@ -851,7 +853,7 @@ describe('ChannelSettingsModule', () => {
       await new Promise(resolve => setImmediate(resolve));
 
       expect(logger.error).toHaveBeenCalledWith(
-        expect.objectContaining({ err: 'Plex error' }),
+        expect.objectContaining({ err: expect.any(Error) }),
         'Could not refresh Plex library'
       );
     });

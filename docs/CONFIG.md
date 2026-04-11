@@ -137,8 +137,25 @@ Configuration can be modified through:
 - **Config Key**: `plexYoutubeLibraryId`
 - **Type**: `string`
 - **Default**: `""` (empty)
-- **Description**: Plex library section ID for YouTube videos
+- **Description**: Default Plex library section ID for YouTube videos. Used for all downloads that do not match a per-subfolder mapping (see below).
 - **Note**: Library refresh is automatically triggered if configured when new videos are downloaded
+
+### Plex Subfolder Library Mappings
+- **Config Key**: `plexSubfolderLibraryMappings`
+- **Type**: `Array<{ subfolder: string | null, libraryId: string }>`
+- **Default**: `[]` (empty — all downloads use the default library above)
+- **Description**: Maps channel subfolders to specific Plex library IDs, enabling different subfolders to refresh different Plex libraries after a download.
+- **Usage**: Configured via the web UI under **Plex Media Server Integration → Per-Subfolder Library Mappings** once connected to Plex.
+- **Format**: Each entry specifies a `subfolder` (the clean name without the `__` filesystem prefix, or `null` for the root/no-subfolder case) and the target `libraryId`.
+- **Example**:
+  ```json
+  "plexSubfolderLibraryMappings": [
+    { "subfolder": "kids", "libraryId": "2" },
+    { "subfolder": "music", "libraryId": "3" },
+    { "subfolder": null, "libraryId": "1" }
+  ]
+  ```
+- **Fallback**: Any subfolder not listed here will fall back to `plexYoutubeLibraryId`.
 
 ### Plex IP
 - **Config Key**: `plexIP`
