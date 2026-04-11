@@ -165,35 +165,46 @@ The development setup is a "build-and-test-in-Docker" workflow that ensures your
 3. Builds a Docker image with the pre-built static files
 
 **Runtime Phase** (`./scripts/start-dev.sh`):
-- Runs the Node.js Express server with `node server/server.js` (no hot reload)
-- Serves the pre-built React static files from `/app/client/build`
+- Runs the Node.js Express server with `node --watch server/server.js` - backend code changes auto-restart the server without a rebuild
+- Serves the pre-built React static files from `/app/client/build` (frontend changes require a rebuild unless you are running the Vite dev server)
 - Application accessible at http://localhost:3087
 
 ### Volume Mounts
 
-The development setup mounts these directories only:
+The development setup (`docker-compose.dev.yml`) mounts these directories into the container:
 
 ```yaml
 volumes:
-  - ./server/images:/app/server/images          # Generated thumbnails
-  - ./config:/app/config                        # Configuration files
-  -  ./jobs:/app/jobs                           # Job state
+  - ${YOUTUBE_OUTPUT_DIR:-./downloads}:/usr/src/app/data  # Downloaded videos
+  - ./server/images:/app/server/images                     # Generated thumbnails
+  - ./config:/app/config                                   # Configuration files
+  - ./jobs:/app/jobs                                       # Job state
+  # Backend source and migrations for hot reload with --watch
+  - ./server:/app/server
+  - ./migrations:/app/migrations
+  - ./package.json:/app/package.json
+  - ./package-lock.json:/app/package-lock.json
 ```
 
-**Important:** Source code (client/src/, server/*.js) is NOT mounted. This means:
-- ❌ No hot reload or live reload
-- ❌ Code changes are NOT automatically reflected
-- ✅ You must rebuild after every code change
+**Backend hot reload:** `./server/` is mounted and the container runs `node --watch server/server.js`, so backend code changes auto-restart the server without a rebuild. Check the container logs to confirm the restart.
+
+**Frontend:** `client/src/` is NOT mounted. Frontend changes reach the running app one of two ways:
+- **Full rebuild**: `./scripts/build-dev.sh` rebuilds the static bundle that the app container serves at http://localhost:3087.
+- **Vite dev server (recommended)**: run `cd client && npm run dev` in a second terminal. Vite serves the frontend on http://localhost:3000 with HMR and proxies API/WebSocket calls to the backend on host port 3087 (which `docker-compose.dev.yml` forwards to container port 3011). Override with `VITE_BACKEND_PORT` if you have remapped the host port.
 
 ### When to Rebuild
 
 You **must** rebuild (`./scripts/build-dev.sh`) for:
-- **Any** frontend code changes (React components, styles, etc.)
-- **Any** backend code changes (server.js, modules, etc.)
-- Installing new npm dependencies (use `--install-deps` flag)
-- Updating system dependencies (yt-dlp, ffmpeg - use `--no-cache` flag)
-- Changing Dockerfile
-- First time setup
+- Frontend code changes when you are using the static-bundle workflow (not needed if you are using the Vite dev server).
+- Installing new npm dependencies (use `--install-deps` flag).
+- Updating system dependencies (yt-dlp, ffmpeg - use `--no-cache` flag).
+- Changing the Dockerfile.
+- First time setup.
+
+You **do not** need to rebuild for:
+- Backend code changes (server/*.js, modules, routes) - `node --watch` picks them up automatically.
+- New migration files - `./migrations/` is mounted, though you still need to restart the container for them to run.
+- Frontend changes while the Vite dev server is running - Vite HMR updates the browser.
 
 ### Benefits of This Approach
 
@@ -385,12 +396,17 @@ ports:
 command: node --inspect=0.0.0.0:9229 server/server.js
 ```
 
-**Option 2: Console Debugging**
+**Option 2: Logger Debugging**
+
+Use the project's Pino logger (not `console.log`) so output stays structured and log levels work:
 
 ```javascript
-console.log('Debug info:', variable);
+const logger = require('../logger'); // adjust relative path as needed
+logger.debug({ variable }, 'Debug info');
 debugger; // Breakpoint
 ```
+
+Set `LOG_LEVEL=debug` in your `.env` to surface `logger.debug(...)` output.
 
 **Option 3: Exec into Container**
 
@@ -408,13 +424,16 @@ docker compose exec youtarr bash
 
 ### Database Debugging
 
-Enable Sequelize logging in `db.js`:
+Enable Sequelize SQL logging in `db.js` by routing it through the Pino logger:
 ```javascript
+const logger = require('./logger');
 const sequelize = new Sequelize({
   // ... other config
-  logging: console.log  // Enable SQL logging
+  logging: (sql) => logger.debug({ sql }, 'sequelize query')
 });
 ```
+
+Then set `LOG_LEVEL=debug` in your `.env` to see the queries.
 
 ## API Development
 
@@ -645,15 +664,24 @@ docker compose down
 
 ### Code Changes Not Reflected
 
-Code changes **always** require a rebuild since source code is not mounted in the container:
+Backend and frontend reload differently in the dev setup.
+
+**Backend code changes** (`server/*.js`, `server/modules/`, `server/routes/`, `migrations/`):
+- `./server/` and `./migrations/` are volume-mounted into the container and the container runs `node --watch`.
+- Saves auto-restart the server within a few seconds; check the container logs to confirm the restart fired.
+- No rebuild required. (New migration files still require a container restart to actually run.)
+
+**Frontend code changes** (`client/src/`):
+- `client/src/` is NOT mounted into the app container; the static bundle is baked into the image at build time.
+- If you are running the Vite dev server (`cd client && npm run dev`), HMR updates the browser automatically on http://localhost:3000 - no rebuild.
+- Otherwise, rebuild the static bundle:
 
 ```bash
-# Rebuild and restart (start-dev.sh automatically stops first)
 ./scripts/build-dev.sh
-./scripts/start-dev.sh
+./scripts/start-dev.sh  # automatically stops and restarts containers
 ```
 
-**Note:** This is expected behavior - the development setup builds the code into the image, it doesn't use live file mounting for source code.
+If a backend change is not being picked up, verify the container is actually running `node --watch` (`docker compose -f docker-compose.dev.yml logs youtarr` should show restart messages when you save) and that you edited a file under `./server/`.
 
 ### Module Not Found Errors
 
@@ -690,12 +718,13 @@ cd client && npm audit
 
 ### Backend Profiling
 
-Add to `server.js` for request timing:
+Add to `server.js` for request timing (use the Pino logger, not `console.log`):
 ```javascript
+const logger = require('./logger');
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
-    console.log(`${req.method} ${req.path} - ${Date.now() - start}ms`);
+    logger.info({ method: req.method, path: req.path, durationMs: Date.now() - start }, 'request');
   });
   next();
 });

@@ -103,6 +103,7 @@ function Configuration({ token }: ConfigurationProps) {
   const {
     plexConnectionStatus,
     setPlexConnectionStatus,
+    plexLibraries,
     openPlexLibrarySelector,
     openPlexAuthDialog,
     setOpenPlexAuthDialog,
@@ -238,6 +239,7 @@ function Configuration({ token }: ConfigurationProps) {
         config={config}
         isPlatformManaged={isPlatformManaged}
         plexConnectionStatus={plexConnectionStatus}
+        plexLibraries={plexLibraries}
         hasPlexServerConfigured={hasPlexServerConfigured}
         onConfigChange={handleConfigChange}
         onTestConnection={testPlexConnection}
@@ -332,7 +334,8 @@ function Configuration({ token }: ConfigurationProps) {
         open={openPlexLibrarySelector}
         handleClose={closeLibrarySelector}
         setLibraryId={setLibraryId}
-        token={token}
+        libraries={plexLibraries}
+        currentLibraryId={config.plexYoutubeLibraryId}
       />
 
       <Snackbar

@@ -373,7 +373,16 @@ class ChannelSettingsModule {
 
   /**
    * Get all unique subfolders currently in use
-   * @returns {Promise<Array<string>>} - Array of unique subfolder names
+   *
+   * Includes:
+   * - Every explicit sub_folder value set on a channel (excluding the
+   *   ##USE_GLOBAL_DEFAULT## sentinel which is not a real folder name)
+   * - The configured global defaultSubfolder, if set. Channels on
+   *   ##USE_GLOBAL_DEFAULT## (and fresh installs with no channels at all)
+   *   still produce files under __{defaultSubfolder}/..., so the caller
+   *   must be able to see and map that folder.
+   *
+   * @returns {Promise<Array<string>>} - Array of unique subfolder names (with __ prefix)
    */
   async getAllSubFolders() {
     const channels = await Channel.findAll({
@@ -388,14 +397,22 @@ class ChannelSettingsModule {
       }
     });
 
-    const uniqueSubFolders = [...new Set(
+    const uniqueSubFolders = new Set(
       channels
         .map(ch => ch.sub_folder ? ch.sub_folder.trim() : null)
         .filter(folder => folder && folder !== GLOBAL_DEFAULT_SENTINEL)
-    )];
+    );
+
+    // Include the configured global default subfolder so the UI can map it
+    // even when no channels reference it explicitly. configModule already
+    // normalizes whitespace and returns null for empty values.
+    const globalDefault = configModule.getDefaultSubfolder();
+    if (globalDefault) {
+      uniqueSubFolders.add(globalDefault);
+    }
 
     // Add __ prefix for display (matches filesystem names)
-    return uniqueSubFolders.map(folder => buildSubfolderSegment(folder)).sort();
+    return [...uniqueSubFolders].map(folder => buildSubfolderSegment(folder)).sort();
   }
 
   /**

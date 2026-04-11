@@ -153,7 +153,8 @@ describe('plexModule', () => {
       const result = await plexModule.refreshLibrary();
 
       expect(axios.get).toHaveBeenCalledWith(
-        'http://127.0.0.1:32400/library/sections/1/refresh?X-Plex-Token=existing-token'
+        'http://127.0.0.1:32400/library/sections/1/refresh?X-Plex-Token=existing-token',
+        { timeout: 10000 }
       );
       expect(result).toBe(mockResponse);
       expect(logger.info).toHaveBeenCalledWith(
@@ -172,7 +173,8 @@ describe('plexModule', () => {
       await plexModule.refreshLibrary('5');
 
       expect(axios.get).toHaveBeenCalledWith(
-        'http://127.0.0.1:32400/library/sections/5/refresh?X-Plex-Token=existing-token'
+        'http://127.0.0.1:32400/library/sections/5/refresh?X-Plex-Token=existing-token',
+        { timeout: 10000 }
       );
     });
 
@@ -252,7 +254,8 @@ describe('plexModule', () => {
       await plexModule.refreshLibrary('42');
 
       expect(axios.get).toHaveBeenCalledWith(
-        'http://127.0.0.1:32400/library/sections/42/refresh?X-Plex-Token=existing-token'
+        'http://127.0.0.1:32400/library/sections/42/refresh?X-Plex-Token=existing-token',
+        { timeout: 10000 }
       );
     });
 
@@ -263,7 +266,8 @@ describe('plexModule', () => {
       await plexModule.refreshLibrary();
 
       expect(axios.get).toHaveBeenCalledWith(
-        'http://env-plex:8080/library/sections/1/refresh?X-Plex-Token=existing-token'
+        'http://env-plex:8080/library/sections/1/refresh?X-Plex-Token=existing-token',
+        { timeout: 10000 }
       );
     });
   });
@@ -325,7 +329,8 @@ describe('plexModule', () => {
       await plexModule.refreshLibraryForSubfolder('kids');
 
       expect(axios.get).toHaveBeenCalledWith(
-        expect.stringContaining('/library/sections/2/refresh')
+        expect.stringContaining('/library/sections/2/refresh'),
+        { timeout: 10000 }
       );
     });
 
@@ -336,7 +341,8 @@ describe('plexModule', () => {
       await plexModule.refreshLibraryForSubfolder('unknown');
 
       expect(axios.get).toHaveBeenCalledWith(
-        expect.stringContaining('/library/sections/1/refresh')
+        expect.stringContaining('/library/sections/1/refresh'),
+        { timeout: 10000 }
       );
     });
 
@@ -347,7 +353,8 @@ describe('plexModule', () => {
       await plexModule.refreshLibraryForSubfolder(null);
 
       expect(axios.get).toHaveBeenCalledWith(
-        expect.stringContaining('/library/sections/1/refresh')
+        expect.stringContaining('/library/sections/1/refresh'),
+        { timeout: 10000 }
       );
     });
   });
@@ -375,10 +382,11 @@ describe('plexModule', () => {
 
       await plexModule.refreshLibrariesForSubfolders(['kids', 'cartoons']);
 
-      // Both resolve to library '2' — only one HTTP call should be made
+      // Both resolve to library '2' - only one HTTP call should be made
       expect(axios.get).toHaveBeenCalledTimes(1);
       expect(axios.get).toHaveBeenCalledWith(
-        expect.stringContaining('/library/sections/2/refresh')
+        expect.stringContaining('/library/sections/2/refresh'),
+        { timeout: 10000 }
       );
     });
 
@@ -391,7 +399,8 @@ describe('plexModule', () => {
       // All three map to the global ID '1': deduplicated to one call
       expect(axios.get).toHaveBeenCalledTimes(1);
       expect(axios.get).toHaveBeenCalledWith(
-        expect.stringContaining('/library/sections/1/refresh')
+        expect.stringContaining('/library/sections/1/refresh'),
+        { timeout: 10000 }
       );
     });
 
@@ -451,7 +460,8 @@ describe('plexModule', () => {
       const result = await plexModule.getLibraries();
 
       expect(axios.get).toHaveBeenCalledWith(
-        'http://127.0.0.1:32400/library/sections?X-Plex-Token=existing-token'
+        'http://127.0.0.1:32400/library/sections?X-Plex-Token=existing-token',
+        { timeout: 10000 }
       );
       expect(result).toEqual([
         {
@@ -481,7 +491,8 @@ describe('plexModule', () => {
       const result = await plexModule.getLibraries();
 
       expect(axios.get).toHaveBeenCalledWith(
-        'https://127.0.0.1:32400/library/sections?X-Plex-Token=existing-token'
+        'https://127.0.0.1:32400/library/sections?X-Plex-Token=existing-token',
+        { timeout: 10000 }
       );
       expect(result).toEqual([
         {
@@ -541,7 +552,8 @@ describe('plexModule', () => {
         'Attempting to fetch Plex libraries via URL: http://192.168.1.10:8080'
       );
       expect(axios.get).toHaveBeenCalledWith(
-        'http://192.168.1.10:8080/library/sections?X-Plex-Token=token'
+        'http://192.168.1.10:8080/library/sections?X-Plex-Token=token',
+        { timeout: 10000 }
       );
       expect(result).toEqual([
         {
@@ -595,7 +607,8 @@ describe('plexModule', () => {
       await plexModule.getLibrariesWithParams(null, 'token', null);
 
       expect(axios.get).toHaveBeenCalledWith(
-        'http://env-plex:9999/library/sections?X-Plex-Token=token'
+        'http://env-plex:9999/library/sections?X-Plex-Token=token',
+        { timeout: 10000 }
       );
     });
 
@@ -634,7 +647,8 @@ describe('plexModule', () => {
         'Attempting to fetch Plex libraries via URL: https://192.168.1.10:8080'
       );
       expect(axios.get).toHaveBeenCalledWith(
-        'https://192.168.1.10:8080/library/sections?X-Plex-Token=token'
+        'https://192.168.1.10:8080/library/sections?X-Plex-Token=token',
+        { timeout: 10000 }
       );
       expect(result).toHaveLength(1);
     });
@@ -660,7 +674,8 @@ describe('plexModule', () => {
         'Attempting to fetch Plex libraries via URL: http://192.168.1.10:8080'
       );
       expect(axios.get).toHaveBeenCalledWith(
-        'http://192.168.1.10:8080/library/sections?X-Plex-Token=token'
+        'http://192.168.1.10:8080/library/sections?X-Plex-Token=token',
+        { timeout: 10000 }
       );
       expect(result).toHaveLength(1);
     });
@@ -687,7 +702,8 @@ describe('plexModule', () => {
         'Attempting to fetch Plex libraries via URL: https://192.168.1.10:8080'
       );
       expect(axios.get).toHaveBeenCalledWith(
-        'https://192.168.1.10:8080/library/sections?X-Plex-Token=token'
+        'https://192.168.1.10:8080/library/sections?X-Plex-Token=token',
+        { timeout: 10000 }
       );
       expect(result).toHaveLength(1);
     });

@@ -36,12 +36,12 @@ Configuration can be modified through:
 
 ## Core Settings
 
-### Youtube Output Directory
-- **Config Key**: *This can only be set via .env and is view only in the web UI*
+### Youtube Output Directory (env-only, not a config.json field)
+- **Set via**: `YOUTUBE_OUTPUT_DIR` environment variable in `.env` (see [ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md))
 - **Type**: `string`
 - **Default**: `"./downloads"`
-- **Description**: Directory path for downloaded videos
-- **Note**: Set during initial setup or via YOUTUBE_OUTPUT_DIR environment variable
+- **Description**: Directory path on the host where downloaded videos are stored
+- **Note**: This setting is **not** stored in `config/config.json`. It is displayed read-only in the web UI and can only be changed by editing `.env` and restarting. Legacy installs that had `youtubeOutputDirectory` in `config.json` are automatically migrated to `.env` during first-run `.env` bootstrap by `scripts/_create-env.sh` (i.e. the first time the start script runs with no existing `.env`).
 
 ### Enable Automatic Downloads
 - **Config Key**: `channelAutoDownload`

@@ -10,7 +10,8 @@ const {
   buildThumbnailTemplate,
   extractYoutubeIdFromPath,
   isValidYoutubeId,
-  calculateRelocatedPath
+  calculateRelocatedPath,
+  extractSubfolderFromAbsPath
 } = require('../pathBuilder');
 const { GLOBAL_DEFAULT_SENTINEL, ROOT_SENTINEL } = require('../constants');
 
@@ -240,6 +241,72 @@ describe('filesystem/pathBuilder', () => {
 
     it('should return null for null original', () => {
       expect(calculateRelocatedPath('/a', '/b', null)).toBeNull();
+    });
+  });
+
+  describe('extractSubfolderFromAbsPath', () => {
+    const baseDir = '/usr/src/app/data';
+
+    it('should return the subfolder name for a path inside a subfolder directory', () => {
+      const filePath = '/usr/src/app/data/__Adults/The Daily Show/The Daily Show - Video - abc12345678/The Daily Show - Video [abc12345678].mp4';
+      expect(extractSubfolderFromAbsPath(filePath, baseDir)).toBe('Adults');
+    });
+
+    it('should return null for a path directly under the base directory (root)', () => {
+      const filePath = '/usr/src/app/data/ChannelName/ChannelName - Video - abc12345678/ChannelName - Video [abc12345678].mp4';
+      expect(extractSubfolderFromAbsPath(filePath, baseDir)).toBeNull();
+    });
+
+    it('should handle subfolder names with spaces and special characters', () => {
+      const filePath = '/usr/src/app/data/__Kids Shows/Channel/Video - id12345678/Video [id12345678].mp4';
+      expect(extractSubfolderFromAbsPath(filePath, baseDir)).toBe('Kids Shows');
+    });
+
+    it('should work with audio (mp3) file paths', () => {
+      const filePath = '/usr/src/app/data/__Podcasts/Channel/Video - id12345678/Video [id12345678].mp3';
+      expect(extractSubfolderFromAbsPath(filePath, baseDir)).toBe('Podcasts');
+    });
+
+    it('should tolerate a trailing slash on the base directory', () => {
+      const filePath = '/usr/src/app/data/__Adults/Channel/Video - id12345678/Video [id12345678].mp4';
+      expect(extractSubfolderFromAbsPath(filePath, '/usr/src/app/data/')).toBe('Adults');
+    });
+
+    it('should return the subfolder for a flat-mode (skip_video_folder) layout with subfolder', () => {
+      // Flat mode: no per-video directory - video file lives directly in the channel dir
+      const filePath = '/usr/src/app/data/__Adults/Channel/Channel - Video [id12345678].mp4';
+      expect(extractSubfolderFromAbsPath(filePath, baseDir)).toBe('Adults');
+    });
+
+    it('should return null for a flat-mode (skip_video_folder) layout without subfolder', () => {
+      // Flat mode at root: channel dir directly under baseDir, file directly in channel dir
+      const filePath = '/usr/src/app/data/Channel/Channel - Video [id12345678].mp4';
+      expect(extractSubfolderFromAbsPath(filePath, baseDir)).toBeNull();
+    });
+
+    it('should return null when filePath is not under baseDir', () => {
+      expect(extractSubfolderFromAbsPath('/other/path/video.mp4', baseDir)).toBeNull();
+    });
+
+    it('should return null for null filePath', () => {
+      expect(extractSubfolderFromAbsPath(null, baseDir)).toBeNull();
+    });
+
+    it('should return null for undefined filePath', () => {
+      expect(extractSubfolderFromAbsPath(undefined, baseDir)).toBeNull();
+    });
+
+    it('should return null for empty filePath', () => {
+      expect(extractSubfolderFromAbsPath('', baseDir)).toBeNull();
+    });
+
+    it('should return null when baseDir is missing', () => {
+      expect(extractSubfolderFromAbsPath('/usr/src/app/data/__Adults/Channel/file.mp4', null)).toBeNull();
+    });
+
+    it('should return empty string for a bare __ subfolder segment', () => {
+      const filePath = '/usr/src/app/data/__/Channel/Video/Video [abc12345678].mp4';
+      expect(extractSubfolderFromAbsPath(filePath, baseDir)).toBe('');
     });
   });
 });

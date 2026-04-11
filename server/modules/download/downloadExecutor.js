@@ -1390,11 +1390,26 @@ class DownloadExecutor {
 
         // Only refresh Plex and start next job if not processing multiple groups
         if (!skipJobTransition) {
-          const resolvedSubfolder = filesystem.resolveEffectiveSubfolder(subfolderOverride, configModule.getConfig().defaultSubfolder || null);
-          // Defensive: refreshLibrary currently swallows errors internally
-          plexModule.refreshLibraryForSubfolder(resolvedSubfolder).catch(err => {
-            logger.error({ err }, 'Failed to refresh Plex library');
-          });
+          // Derive the set of subfolders from where each video actually ended up
+          // on disk. This mirrors reality (the post-processor may have placed
+          // each video under its channel-specific sub_folder) instead of relying
+          // on the job-level subfolderOverride, which is null for typical
+          // manual URL and non-grouped channel downloads.
+          const baseDir = configModule.directoryPath;
+          const subfoldersInUse = new Set();
+          for (const video of (videoData || [])) {
+            const mediaPath = video.filePath || video.audioFilePath;
+            if (!mediaPath) continue;
+            subfoldersInUse.add(filesystem.extractSubfolderFromAbsPath(mediaPath, baseDir));
+          }
+
+          if (subfoldersInUse.size > 0) {
+            // Defensive: refreshLibrary currently swallows errors internally
+            plexModule.refreshLibrariesForSubfolders([...subfoldersInUse]).catch(err => {
+              logger.error({ err }, 'Failed to refresh Plex libraries');
+            });
+          }
+
           jobModule.startNextJob().catch(err => {
             logger.error({ err }, 'Failed to start next job');
           });

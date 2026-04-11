@@ -27,6 +27,7 @@ const createSectionProps = (
   config: createConfig(),
   isPlatformManaged: createPlatformManagedState(),
   plexConnectionStatus: 'not_tested',
+  plexLibraries: [],
   hasPlexServerConfigured: false,
   onConfigChange: jest.fn(),
   onTestConnection: jest.fn(),
@@ -85,10 +86,10 @@ describe('PlexIntegrationSection Component', () => {
       expect(screen.getByText('Connected')).toBeInTheDocument();
     });
 
-    test('displays "Not Connected" chip when status is not_connected', () => {
+    test('displays "Unreachable" chip when status is not_connected', () => {
       const props = createSectionProps({ plexConnectionStatus: 'not_connected' });
       renderWithProviders(<PlexIntegrationSection {...props} />);
-      expect(screen.getByText('Not Connected')).toBeInTheDocument();
+      expect(screen.getByText('Unreachable')).toBeInTheDocument();
     });
 
     test('displays "Testing..." chip when status is testing', () => {
@@ -104,8 +105,10 @@ describe('PlexIntegrationSection Component', () => {
     test('shows warning when connection status is not_connected', () => {
       const props = createSectionProps({ plexConnectionStatus: 'not_connected' });
       renderWithProviders(<PlexIntegrationSection {...props} />);
-      expect(screen.getByText(/Unable to connect to Plex server/i)).toBeInTheDocument();
-      expect(screen.getByText(/check your IP and API key/i)).toBeInTheDocument();
+      expect(screen.getByText(/Plex is currently unreachable/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Verify your Plex server is running and that the IP, port, and API key/i)
+      ).toBeInTheDocument();
     });
 
     test('shows info when status is not_tested but has config', () => {
@@ -564,11 +567,12 @@ describe('PlexIntegrationSection Component', () => {
     });
   });
 
-  describe('Select Plex Library Button', () => {
-    test('renders Select Plex Library button', () => {
+  describe('Select Default Library Button', () => {
+    test('renders Select Default Library button', () => {
       const props = createSectionProps();
       renderWithProviders(<PlexIntegrationSection {...props} />);
       expect(screen.getByTestId('select-library-button')).toBeInTheDocument();
+      expect(screen.getByText('Select Default Library')).toBeInTheDocument();
     });
 
     test('calls onOpenLibrarySelector when clicked', async () => {
@@ -623,29 +627,162 @@ describe('PlexIntegrationSection Component', () => {
     });
   });
 
-  describe('Selected Library Display', () => {
-    test('displays selected library ID when present', () => {
+  describe('Default Library Display', () => {
+    test('shows "Library ID:" fallback when libraries have not been fetched yet', () => {
       const props = createSectionProps({
         config: createConfig({ plexYoutubeLibraryId: '12345' }),
+        plexLibraries: [],
       });
       renderWithProviders(<PlexIntegrationSection {...props} />);
-      expect(screen.getByText(/Selected Library ID: 12345/i)).toBeInTheDocument();
+      expect(screen.getByText('Default Plex Library:')).toBeInTheDocument();
+      expect(screen.getByText('Library ID: 12345')).toBeInTheDocument();
+      // No duplicated "(id: 12345)" suffix when the id is already the primary display
+      expect(screen.queryByText('(id: 12345)')).not.toBeInTheDocument();
     });
 
-    test('does not display library ID text when not set', () => {
+    test('shows the resolved library title with an "(id: X)" suffix when the id matches an entry', () => {
+      const props = createSectionProps({
+        config: createConfig({ plexYoutubeLibraryId: '31' }),
+        plexConnectionStatus: 'connected',
+        plexLibraries: [
+          { id: '1', title: 'Movies' },
+          { id: '31', title: 'Adults Library' },
+        ],
+      });
+      renderWithProviders(<PlexIntegrationSection {...props} />);
+      expect(screen.getByText('Default Plex Library:')).toBeInTheDocument();
+      expect(screen.getByText('Adults Library')).toBeInTheDocument();
+      expect(screen.getByText('(id: 31)')).toBeInTheDocument();
+    });
+
+    test('falls back to the raw id when libraries are loaded but no entry matches, without an "(id: X)" suffix', () => {
+      const props = createSectionProps({
+        config: createConfig({ plexYoutubeLibraryId: '999' }),
+        plexConnectionStatus: 'connected',
+        plexLibraries: [{ id: '1', title: 'Movies' }],
+      });
+      renderWithProviders(<PlexIntegrationSection {...props} />);
+      expect(screen.getByText('Default Plex Library:')).toBeInTheDocument();
+      expect(screen.getByText('999')).toBeInTheDocument();
+      expect(screen.queryByText('(id: 999)')).not.toBeInTheDocument();
+    });
+
+    test('does not render the default library line when plexYoutubeLibraryId is empty', () => {
       const props = createSectionProps({
         config: createConfig({ plexYoutubeLibraryId: '' }),
       });
       renderWithProviders(<PlexIntegrationSection {...props} />);
-      expect(screen.queryByText(/Selected Library ID:/i)).not.toBeInTheDocument();
+      expect(screen.queryByText('Default Plex Library:')).not.toBeInTheDocument();
     });
 
-    test('displays correct library ID value', () => {
+    test('handles alphanumeric library ids in the resolved case', () => {
       const props = createSectionProps({
         config: createConfig({ plexYoutubeLibraryId: 'my-custom-lib-99' }),
+        plexConnectionStatus: 'connected',
+        plexLibraries: [{ id: 'my-custom-lib-99', title: 'My Custom Library' }],
       });
       renderWithProviders(<PlexIntegrationSection {...props} />);
-      expect(screen.getByText(/Selected Library ID: my-custom-lib-99/i)).toBeInTheDocument();
+      expect(screen.getByText('Default Plex Library:')).toBeInTheDocument();
+      expect(screen.getByText('My Custom Library')).toBeInTheDocument();
+      expect(screen.getByText('(id: my-custom-lib-99)')).toBeInTheDocument();
+    });
+
+    test('shows a warning caption when Plex is unreachable and a default library is set', () => {
+      const props = createSectionProps({
+        config: createConfig({ plexYoutubeLibraryId: '31' }),
+        plexConnectionStatus: 'not_connected',
+        plexLibraries: [],
+      });
+      renderWithProviders(<PlexIntegrationSection {...props} />);
+      expect(screen.getByTestId('default-library-unreachable-warning')).toBeInTheDocument();
+      expect(
+        screen.getByText(/Cannot reach Plex; showing saved library ID/i)
+      ).toBeInTheDocument();
+    });
+
+    test('does not show the unreachable warning when Plex is connected', () => {
+      const props = createSectionProps({
+        config: createConfig({ plexYoutubeLibraryId: '31' }),
+        plexConnectionStatus: 'connected',
+        plexLibraries: [{ id: '31', title: 'Adults Library' }],
+      });
+      renderWithProviders(<PlexIntegrationSection {...props} />);
+      expect(
+        screen.queryByTestId('default-library-unreachable-warning')
+      ).not.toBeInTheDocument();
+    });
+
+    test('does not show the unreachable warning when no default library is configured', () => {
+      const props = createSectionProps({
+        config: createConfig({ plexYoutubeLibraryId: '' }),
+        plexConnectionStatus: 'not_connected',
+      });
+      renderWithProviders(<PlexIntegrationSection {...props} />);
+      expect(
+        screen.queryByTestId('default-library-unreachable-warning')
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  describe('No Default Library Warning', () => {
+    test('shows a warning when Plex is configured but no default library is set', () => {
+      const props = createSectionProps({
+        config: createConfig({
+          plexYoutubeLibraryId: '',
+          plexIP: '192.168.1.100',
+          plexApiKey: 'test-key',
+        }),
+        hasPlexServerConfigured: true,
+      });
+      renderWithProviders(<PlexIntegrationSection {...props} />);
+      expect(screen.getByTestId('no-default-library-warning')).toBeInTheDocument();
+      expect(screen.getByText('No Default Plex Library Configured')).toBeInTheDocument();
+    });
+
+    test('hides the warning when a default library is configured', () => {
+      const props = createSectionProps({
+        config: createConfig({
+          plexYoutubeLibraryId: '31',
+          plexIP: '192.168.1.100',
+          plexApiKey: 'test-key',
+        }),
+        hasPlexServerConfigured: true,
+        plexLibraries: [{ id: '31', title: 'Adults Library' }],
+      });
+      renderWithProviders(<PlexIntegrationSection {...props} />);
+      expect(
+        screen.queryByTestId('no-default-library-warning')
+      ).not.toBeInTheDocument();
+    });
+
+    test('hides the warning when Plex server is not configured at all', () => {
+      const props = createSectionProps({
+        config: createConfig({
+          plexYoutubeLibraryId: '',
+          plexIP: '',
+          plexApiKey: '',
+        }),
+        hasPlexServerConfigured: false,
+      });
+      renderWithProviders(<PlexIntegrationSection {...props} />);
+      expect(
+        screen.queryByTestId('no-default-library-warning')
+      ).not.toBeInTheDocument();
+    });
+
+    test('hides the warning when server IP is set but API key is missing', () => {
+      const props = createSectionProps({
+        config: createConfig({
+          plexYoutubeLibraryId: '',
+          plexIP: '192.168.1.100',
+          plexApiKey: '',
+        }),
+        hasPlexServerConfigured: true,
+      });
+      renderWithProviders(<PlexIntegrationSection {...props} />);
+      expect(
+        screen.queryByTestId('no-default-library-warning')
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -716,7 +853,7 @@ describe('PlexIntegrationSection Component', () => {
       expect(screen.getByText('Connected')).toBeInTheDocument();
 
       rerender(<PlexIntegrationSection {...props} plexConnectionStatus="not_connected" />);
-      expect(screen.getByText('Not Connected')).toBeInTheDocument();
+      expect(screen.getByText('Unreachable')).toBeInTheDocument();
     });
 
     test('handles platform managed configuration changes', () => {
@@ -824,7 +961,7 @@ describe('PlexIntegrationSection Component', () => {
       renderWithProviders(<PlexIntegrationSection {...props} />);
       const button = screen.getByTestId('select-library-button');
       expect(button).not.toBeDisabled();
-      expect(screen.queryByText(/Selected Library ID:/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Default Plex Library:/i)).not.toBeInTheDocument();
     });
 
     test('handles various port input values', async () => {
@@ -870,7 +1007,7 @@ describe('PlexIntegrationSection Component', () => {
 
       expect(screen.getByText('Get Key')).toBeInTheDocument();
       expect(screen.getByText('Test Connection')).toBeInTheDocument();
-      expect(screen.getByText('Select Plex Library')).toBeInTheDocument();
+      expect(screen.getByText('Select Default Library')).toBeInTheDocument();
     });
 
     test('alerts are displayed when appropriate', () => {
@@ -880,7 +1017,7 @@ describe('PlexIntegrationSection Component', () => {
       renderWithProviders(<PlexIntegrationSection {...props} />);
 
       // Check for specific alert content instead of role
-      expect(screen.getByText(/Unable to connect to Plex server/i)).toBeInTheDocument();
+      expect(screen.getByText(/Plex is currently unreachable/i)).toBeInTheDocument();
     });
 
     test('link has proper attributes for external navigation', () => {

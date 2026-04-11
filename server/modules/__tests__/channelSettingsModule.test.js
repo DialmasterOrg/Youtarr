@@ -446,6 +446,54 @@ describe('ChannelSettingsModule', () => {
       const result = await channelSettingsModule.getAllSubFolders();
       expect(result).toEqual(['__Alpha', '__Beta', '__Zulu']);
     });
+
+    test('should include the configured global default subfolder when no channels exist', async () => {
+      Channel.findAll.mockResolvedValue([]);
+      const configModule = require('../configModule');
+      configModule.getDefaultSubfolder.mockReturnValue('Adults');
+
+      const result = await channelSettingsModule.getAllSubFolders();
+
+      expect(result).toEqual(['__Adults']);
+    });
+
+    test('should include the global default subfolder alongside explicit channel subfolders', async () => {
+      Channel.findAll.mockResolvedValue([
+        { sub_folder: 'Kids' },
+        { sub_folder: 'Music' }
+      ]);
+      const configModule = require('../configModule');
+      configModule.getDefaultSubfolder.mockReturnValue('Adults');
+
+      const result = await channelSettingsModule.getAllSubFolders();
+
+      expect(result).toEqual(['__Adults', '__Kids', '__Music']);
+    });
+
+    test('should deduplicate when the global default matches an explicit channel subfolder', async () => {
+      Channel.findAll.mockResolvedValue([
+        { sub_folder: 'Music' },
+        { sub_folder: 'Adults' }
+      ]);
+      const configModule = require('../configModule');
+      configModule.getDefaultSubfolder.mockReturnValue('Adults');
+
+      const result = await channelSettingsModule.getAllSubFolders();
+
+      expect(result).toEqual(['__Adults', '__Music']);
+    });
+
+    test('should not add anything when the global default subfolder is null', async () => {
+      Channel.findAll.mockResolvedValue([
+        { sub_folder: 'Music' }
+      ]);
+      const configModule = require('../configModule');
+      configModule.getDefaultSubfolder.mockReturnValue(null);
+
+      const result = await channelSettingsModule.getAllSubFolders();
+
+      expect(result).toEqual(['__Music']);
+    });
   });
 
   describe('previewTitleFilter', () => {
