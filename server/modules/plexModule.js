@@ -2,6 +2,14 @@ const axios = require('axios');
 const configModule = require('./configModule');
 const logger = require('../logger');
 
+// Plex HTTP request timeout in milliseconds.
+// Any call to the local Plex server should complete within a few seconds on
+// a healthy LAN; anything longer almost certainly means Plex is unreachable.
+// Without this timeout, axios inherits the OS-level TCP retry timeouts which
+// can hang for 60+ seconds, leaving the Configuration UI stuck on "Testing..."
+// while the user waits for the initial connectivity check to resolve.
+const PLEX_REQUEST_TIMEOUT_MS = 10000;
+
 class PlexModule {
   constructor() {}
 
@@ -92,7 +100,8 @@ class PlexModule {
 
       logger.info({ libraryId: resolvedLibraryId }, 'Refreshing Plex library');
       const response = await axios.get(
-        `${baseUrl}/library/sections/${encodeURIComponent(resolvedLibraryId)}/refresh?X-Plex-Token=${config.plexApiKey}`
+        `${baseUrl}/library/sections/${encodeURIComponent(resolvedLibraryId)}/refresh?X-Plex-Token=${config.plexApiKey}`,
+        { timeout: PLEX_REQUEST_TIMEOUT_MS }
       );
       logger.info({ libraryId: resolvedLibraryId }, 'Plex library refresh initiated successfully');
       return response;
@@ -100,6 +109,8 @@ class PlexModule {
       logger.error({ err: error }, 'Failed to refresh Plex library');
       if (error.code === 'ECONNREFUSED') {
         logger.warn('Could not connect to Plex server - continuing without refresh');
+      } else if (error.code === 'ECONNABORTED') {
+        logger.warn('Plex request timed out - continuing without refresh');
       }
       // Return null or empty response to indicate failure, but don't throw
       return null;
@@ -129,7 +140,8 @@ class PlexModule {
       logger.info(`Attempting to fetch Plex libraries via URL: ${baseUrl}`);
 
       const response = await axios.get(
-        `${baseUrl}/library/sections?X-Plex-Token=${plexApiKey}`
+        `${baseUrl}/library/sections?X-Plex-Token=${plexApiKey}`,
+        { timeout: PLEX_REQUEST_TIMEOUT_MS }
       );
 
       const libraries = response.data.MediaContainer.Directory.map(
@@ -149,6 +161,8 @@ class PlexModule {
       logger.error({ err: error }, 'Failed to get Plex libraries');
       if (error.code === 'ECONNREFUSED') {
         logger.warn('Could not connect to Plex server - returning empty library list');
+      } else if (error.code === 'ECONNABORTED') {
+        logger.warn('Plex request timed out - returning empty library list');
       }
       // Return empty array instead of throwing to prevent frontend crashes
       return [];

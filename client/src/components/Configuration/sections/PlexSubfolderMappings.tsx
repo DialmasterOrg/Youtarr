@@ -23,15 +23,12 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { PlexConnectionStatus } from '../types';
+import { PlexLibrary, resolveLibraryDisplay } from '../../../utils/plexLibraries';
+import { PlexLibraryLabel } from './components/PlexLibraryLabel';
 
 export interface PlexSubfolderMapping {
   subfolder: string | null;
   libraryId: string;
-}
-
-interface PlexLibrary {
-  id: string;
-  title: string;
 }
 
 interface PlexSubfolderMappingsProps {
@@ -39,6 +36,7 @@ interface PlexSubfolderMappingsProps {
   onMappingsChange: (mappings: PlexSubfolderMapping[]) => void;
   token: string | null;
   plexConnectionStatus: PlexConnectionStatus;
+  plexLibraries: PlexLibrary[];
 }
 
 /**
@@ -66,8 +64,8 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
   onMappingsChange,
   token,
   plexConnectionStatus,
+  plexLibraries,
 }) => {
-  const [libraries, setLibraries] = useState<PlexLibrary[]>([]);
   const [subfolders, setSubfolders] = useState<string[]>([]);
   const [loadingData, setLoadingData] = useState(false);
   const [fetchError, setFetchError] = useState(false);
@@ -87,21 +85,15 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
     setLoadingData(true);
     setFetchError(false);
 
-    Promise.allSettled([
-      axios.get<unknown>('/getplexlibraries', { headers, signal })
-        .then((res) => (Array.isArray(res.data) ? (res.data as PlexLibrary[]) : [])),
-      axios.get<unknown>('/api/channels/subfolders', { headers, signal })
-        .then((res) => (Array.isArray(res.data) ? (res.data as string[]) : [])),
-    ])
-      .then(([libsResult, foldersResult]) => {
+    axios
+      .get<unknown>('/api/channels/subfolders', { headers, signal })
+      .then((res) => {
         if (signal.aborted) return;
-        const libs = libsResult.status === 'fulfilled' ? libsResult.value : [];
-        const folders = foldersResult.status === 'fulfilled' ? foldersResult.value : [];
-        setLibraries(libs);
-        setSubfolders(folders);
-        if (libsResult.status === 'rejected' || foldersResult.status === 'rejected') {
-          setFetchError(true);
-        }
+        setSubfolders(Array.isArray(res.data) ? (res.data as string[]) : []);
+      })
+      .catch(() => {
+        if (signal.aborted) return;
+        setFetchError(true);
       })
       .finally(() => {
         if (!signal.aborted) setLoadingData(false);
@@ -109,12 +101,6 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
 
     return () => controller.abort();
   }, [isConnected, token]);
-
-  const getLibraryTitle = (libraryId: string): string => {
-    const lib = libraries.find((l) => l.id === libraryId);
-    if (lib) return lib.title;
-    return libraries.length === 0 ? `Library ID: ${libraryId}` : libraryId;
-  };
 
   const isMappingDuplicate = (subfolder: string | null): boolean =>
     mappings.some((m) => m.subfolder === subfolder);
@@ -178,14 +164,14 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
           <CircularProgress size={16} />
           <Typography variant="caption" color="text.secondary">
-            Loading libraries and subfolders…
+            Loading subfolders...
           </Typography>
         </Box>
       )}
 
       {fetchError && (
         <Alert severity="warning" sx={{ mb: 1.5 }}>
-          Could not load Plex libraries or subfolders. Check your connection and try refreshing.
+          Could not load channel subfolders. Check your connection and try refreshing.
         </Alert>
       )}
 
@@ -199,30 +185,31 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
             </TableRow>
           </TableHead>
           <TableBody>
-            {mappings.map((mapping) => (
-              <TableRow key={`${mapping.subfolder === null ? '\x00root' : mapping.subfolder}-${mapping.libraryId}`}>
-                <TableCell>
-                  <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                    {formatMappingSubfolder(mapping.subfolder)}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2">
-                    {getLibraryTitle(mapping.libraryId)}
-                  </Typography>
-                </TableCell>
-                <TableCell padding="checkbox">
-                  <IconButton
-                    size="small"
-                    onClick={() => handleDeleteMapping(mapping.subfolder)}
-                    aria-label={`Remove mapping for ${formatMappingSubfolder(mapping.subfolder)}`}
-                    data-testid={`delete-mapping-${mapping.subfolder ?? 'root'}`}
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
+            {mappings.map((mapping) => {
+              const display = resolveLibraryDisplay(plexLibraries, mapping.libraryId);
+              return (
+                <TableRow key={`${mapping.subfolder === null ? '\x00root' : mapping.subfolder}-${mapping.libraryId}`}>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                      {formatMappingSubfolder(mapping.subfolder)}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <PlexLibraryLabel display={display} />
+                  </TableCell>
+                  <TableCell padding="checkbox">
+                    <IconButton
+                      size="small"
+                      onClick={() => handleDeleteMapping(mapping.subfolder)}
+                      aria-label={`Remove mapping for ${formatMappingSubfolder(mapping.subfolder)}`}
+                      data-testid={`delete-mapping-${mapping.subfolder ?? 'root'}`}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       )}
@@ -268,7 +255,7 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
               data-testid="new-mapping-library-select"
               disabled={loadingData}
             >
-              {libraries.map((lib) => (
+              {plexLibraries.map((lib) => (
                 <MenuItem key={lib.id} value={lib.id}>
                   {lib.title}
                 </MenuItem>

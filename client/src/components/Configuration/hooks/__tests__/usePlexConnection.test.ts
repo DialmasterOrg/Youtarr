@@ -210,6 +210,48 @@ describe('usePlexConnection', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
+
+    test('flips plexConnectionStatus to testing while the initial check is in flight', async () => {
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      // Keep the fetch pending so we can observe the intermediate state
+      let resolveFetch: (value: Response) => void = () => {};
+      mockFetch.mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveFetch = resolve;
+          })
+      );
+
+      const { result } = renderHook(() =>
+        usePlexConnection({
+          token: mockToken,
+          config: mockConfig,
+          setConfig: mockSetConfig,
+          setInitialConfig: mockSetInitialConfig,
+          setSnackbar: mockSetSnackbar,
+          hasPlexServerConfigured: true,
+        })
+      );
+
+      // While the fetch is pending, the status should read "testing" rather
+      // than the default "not_tested"
+      await waitFor(() => {
+        expect(result.current.plexConnectionStatus).toBe('testing');
+      });
+
+      // Resolve the fetch with a successful payload and verify the final state
+      await act(async () => {
+        resolveFetch({
+          ok: true,
+          status: 200,
+          json: jest.fn().mockResolvedValueOnce([{ id: '1', title: 'YouTube' }]),
+        } as unknown as Response);
+      });
+
+      await waitFor(() => {
+        expect(result.current.plexConnectionStatus).toBe('connected');
+      });
+    });
   });
 
   describe('checkPlexConnection Function', () => {
@@ -1478,6 +1520,173 @@ describe('usePlexConnection', () => {
       const url = callArgs[0] as string;
       const params = new URLSearchParams(url.split('?')[1]);
       expect(params.get('testIP')).toBe('10.0.0.1');
+    });
+  });
+
+  describe('plexLibraries state', () => {
+    test('starts as an empty array before any fetch', () => {
+      const { result } = renderHook(() =>
+        usePlexConnection({
+          token: mockToken,
+          config: mockConfig,
+          setConfig: mockSetConfig,
+          setInitialConfig: mockSetInitialConfig,
+          setSnackbar: mockSetSnackbar,
+          hasPlexServerConfigured: false,
+        })
+      );
+
+      expect(result.current.plexLibraries).toEqual([]);
+    });
+
+    test('populates plexLibraries after a successful initial check', async () => {
+      const libraries = [
+        { id: '1', title: 'YouTube' },
+        { id: '31', title: 'Adults Library' },
+      ];
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValueOnce(libraries),
+      } as any);
+
+      const { result } = renderHook(() =>
+        usePlexConnection({
+          token: mockToken,
+          config: mockConfig,
+          setConfig: mockSetConfig,
+          setInitialConfig: mockSetInitialConfig,
+          setSnackbar: mockSetSnackbar,
+          hasPlexServerConfigured: true,
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.plexLibraries).toEqual(libraries);
+      });
+    });
+
+    test('clears plexLibraries when the initial check returns an empty list', async () => {
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValueOnce([]),
+      } as any);
+
+      const { result } = renderHook(() =>
+        usePlexConnection({
+          token: mockToken,
+          config: mockConfig,
+          setConfig: mockSetConfig,
+          setInitialConfig: mockSetInitialConfig,
+          setSnackbar: mockSetSnackbar,
+          hasPlexServerConfigured: true,
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.plexConnectionStatus).toBe('not_connected');
+      });
+      expect(result.current.plexLibraries).toEqual([]);
+    });
+
+    test('clears plexLibraries when the initial check fails', async () => {
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      const { result } = renderHook(() =>
+        usePlexConnection({
+          token: mockToken,
+          config: mockConfig,
+          setConfig: mockSetConfig,
+          setInitialConfig: mockSetInitialConfig,
+          setSnackbar: mockSetSnackbar,
+          hasPlexServerConfigured: true,
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.plexConnectionStatus).toBe('not_connected');
+      });
+      expect(result.current.plexLibraries).toEqual([]);
+    });
+
+    test('populates plexLibraries after a successful testPlexConnection call', async () => {
+      const initialLibraries = [{ id: '1', title: 'YouTube' }];
+      const updatedLibraries = [
+        { id: '1', title: 'YouTube' },
+        { id: '42', title: 'Kids Shows' },
+      ];
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      // Initial mount check consumes the first response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValueOnce(initialLibraries),
+      } as any);
+      // testPlexConnection consumes the second response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValueOnce(updatedLibraries),
+      } as any);
+
+      const { result } = renderHook(() =>
+        usePlexConnection({
+          token: mockToken,
+          config: mockConfig,
+          setConfig: mockSetConfig,
+          setInitialConfig: mockSetInitialConfig,
+          setSnackbar: mockSetSnackbar,
+          hasPlexServerConfigured: true,
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.plexLibraries).toEqual(initialLibraries);
+      });
+
+      await act(async () => {
+        await result.current.testPlexConnection();
+      });
+
+      expect(result.current.plexLibraries).toEqual(updatedLibraries);
+    });
+
+    test('clears plexLibraries when testPlexConnection fails', async () => {
+      const initialLibraries = [{ id: '1', title: 'YouTube' }];
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      // Initial mount check succeeds and populates libraries
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValueOnce(initialLibraries),
+      } as any);
+      // testPlexConnection rejects
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      const { result } = renderHook(() =>
+        usePlexConnection({
+          token: mockToken,
+          config: mockConfig,
+          setConfig: mockSetConfig,
+          setInitialConfig: mockSetInitialConfig,
+          setSnackbar: mockSetSnackbar,
+          hasPlexServerConfigured: true,
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.plexLibraries).toEqual(initialLibraries);
+      });
+
+      await act(async () => {
+        await result.current.testPlexConnection();
+      });
+
+      expect(result.current.plexLibraries).toEqual([]);
     });
   });
 });

@@ -20,9 +20,7 @@ const MOCK_LIBRARIES = [
 const MOCK_SUBFOLDERS = ['__kids', '__music'];
 
 function setupAxiosMocks() {
-  axios.get
-    .mockResolvedValueOnce({ data: MOCK_LIBRARIES })
-    .mockResolvedValueOnce({ data: MOCK_SUBFOLDERS });
+  axios.get.mockResolvedValue({ data: MOCK_SUBFOLDERS });
 }
 
 const DEFAULT_PROPS = {
@@ -30,6 +28,7 @@ const DEFAULT_PROPS = {
   onMappingsChange: jest.fn(),
   token: 'test-token',
   plexConnectionStatus: 'connected' as PlexConnectionStatus,
+  plexLibraries: MOCK_LIBRARIES,
 };
 
 describe('PlexSubfolderMappings', () => {
@@ -65,7 +64,21 @@ describe('PlexSubfolderMappings', () => {
       expect(screen.getByTestId('delete-mapping-kids')).toBeInTheDocument();
     });
 
-    test('shows "Library ID:" fallback for library title when disconnected', () => {
+    test('shows "Library ID:" fallback for library title when disconnected and libraries are empty', () => {
+      renderWithProviders(
+        <PlexSubfolderMappings
+          {...DEFAULT_PROPS}
+          plexConnectionStatus="not_connected"
+          plexLibraries={[]}
+          mappings={[{ subfolder: 'kids', libraryId: '2' }]}
+        />
+      );
+      expect(screen.getByText('Library ID: 2')).toBeInTheDocument();
+      // No duplicated "(id: 2)" when id is already the primary display
+      expect(screen.queryByText('(id: 2)')).not.toBeInTheDocument();
+    });
+
+    test('still shows the resolved library title when disconnected if libraries prop was populated earlier', () => {
       renderWithProviders(
         <PlexSubfolderMappings
           {...DEFAULT_PROPS}
@@ -73,7 +86,8 @@ describe('PlexSubfolderMappings', () => {
           mappings={[{ subfolder: 'kids', libraryId: '2' }]}
         />
       );
-      expect(screen.getByText('Library ID: 2')).toBeInTheDocument();
+      expect(screen.getByText('Kids Shows')).toBeInTheDocument();
+      expect(screen.getByText('(id: 2)')).toBeInTheDocument();
     });
 
     test('Add Mapping button is disabled when disconnected with existing mappings', () => {
@@ -126,26 +140,24 @@ describe('PlexSubfolderMappings', () => {
   });
 
   describe('loading and error states', () => {
-    test('shows loading indicator while fetches are in progress', () => {
+    test('shows loading indicator while the subfolder fetch is in progress', () => {
       axios.get.mockReturnValue(new Promise(() => {}));
       renderWithProviders(<PlexSubfolderMappings {...DEFAULT_PROPS} />);
-      expect(screen.getByText(/Loading libraries and subfolders/)).toBeInTheDocument();
+      expect(screen.getByText(/Loading subfolders/)).toBeInTheDocument();
     });
 
-    test('shows error alert when fetch fails', async () => {
+    test('shows error alert when the subfolder fetch fails', async () => {
       axios.get.mockRejectedValue(new Error('Network error'));
       renderWithProviders(<PlexSubfolderMappings {...DEFAULT_PROPS} />);
       await waitFor(() => {
         expect(
-          screen.getByText(/Could not load Plex libraries or subfolders/)
+          screen.getByText(/Could not load channel subfolders/)
         ).toBeInTheDocument();
       });
     });
 
-    test('shows partial data and error alert when one endpoint fails', async () => {
-      axios.get
-        .mockResolvedValueOnce({ data: MOCK_LIBRARIES })
-        .mockRejectedValueOnce(new Error('Subfolders failed'));
+    test('still shows mapping rows with resolved library titles when the subfolder fetch fails', async () => {
+      axios.get.mockRejectedValue(new Error('Subfolders failed'));
       renderWithProviders(
         <PlexSubfolderMappings
           {...DEFAULT_PROPS}
@@ -153,11 +165,12 @@ describe('PlexSubfolderMappings', () => {
         />
       );
       await waitFor(() => {
-        expect(screen.getByText('Kids Shows')).toBeInTheDocument();
+        expect(
+          screen.getByText(/Could not load channel subfolders/)
+        ).toBeInTheDocument();
       });
-      expect(
-        screen.getByText(/Could not load Plex libraries or subfolders/)
-      ).toBeInTheDocument();
+      expect(screen.getByText('Kids Shows')).toBeInTheDocument();
+      expect(screen.getByText('(id: 2)')).toBeInTheDocument();
     });
   });
 
@@ -188,7 +201,7 @@ describe('PlexSubfolderMappings', () => {
       });
     });
 
-    test('renders the library title from the fetched libraries list', async () => {
+    test('renders the library title with an "(id: X)" suffix for resolved libraries', async () => {
       setupAxiosMocks();
       renderWithProviders(
         <PlexSubfolderMappings
@@ -199,6 +212,7 @@ describe('PlexSubfolderMappings', () => {
       await waitFor(() => {
         expect(screen.getByText('Kids Shows')).toBeInTheDocument();
       });
+      expect(screen.getByText('(id: 2)')).toBeInTheDocument();
     });
   });
 
@@ -257,7 +271,7 @@ describe('PlexSubfolderMappings', () => {
         expect(screen.getByTestId('add-mapping-button')).toBeInTheDocument();
       });
       await waitFor(() => {
-        expect(screen.queryByText(/Loading libraries/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Loading subfolders/)).not.toBeInTheDocument();
       });
 
       await user.click(screen.getByTestId('add-mapping-button'));
@@ -281,7 +295,7 @@ describe('PlexSubfolderMappings', () => {
         expect(screen.getByTestId('add-mapping-button')).toBeInTheDocument();
       });
       await waitFor(() => {
-        expect(screen.queryByText(/Loading libraries/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Loading subfolders/)).not.toBeInTheDocument();
       });
 
       await user.click(screen.getByTestId('add-mapping-button'));
@@ -303,7 +317,7 @@ describe('PlexSubfolderMappings', () => {
         expect(screen.getByTestId('add-mapping-button')).toBeInTheDocument();
       });
       await waitFor(() => {
-        expect(screen.queryByText(/Loading libraries/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Loading subfolders/)).not.toBeInTheDocument();
       });
 
       await user.click(screen.getByTestId('add-mapping-button'));
@@ -330,7 +344,7 @@ describe('PlexSubfolderMappings', () => {
         expect(screen.getByTestId('add-mapping-button')).toBeInTheDocument();
       });
       await waitFor(() => {
-        expect(screen.queryByText(/Loading libraries/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Loading subfolders/)).not.toBeInTheDocument();
       });
 
       await user.click(screen.getByTestId('add-mapping-button'));
@@ -357,7 +371,7 @@ describe('PlexSubfolderMappings', () => {
         expect(screen.getByTestId('add-mapping-button')).toBeInTheDocument();
       });
       await waitFor(() => {
-        expect(screen.queryByText(/Loading libraries/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Loading subfolders/)).not.toBeInTheDocument();
       });
 
       await user.click(screen.getByTestId('add-mapping-button'));
