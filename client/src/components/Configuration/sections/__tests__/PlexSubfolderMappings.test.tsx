@@ -65,6 +65,17 @@ describe('PlexSubfolderMappings', () => {
       expect(screen.getByTestId('delete-mapping-kids')).toBeInTheDocument();
     });
 
+    test('shows "Library ID:" fallback for library title when disconnected', () => {
+      renderWithProviders(
+        <PlexSubfolderMappings
+          {...DEFAULT_PROPS}
+          plexConnectionStatus="not_connected"
+          mappings={[{ subfolder: 'kids', libraryId: '2' }]}
+        />
+      );
+      expect(screen.getByText('Library ID: 2')).toBeInTheDocument();
+    });
+
     test('Add Mapping button is disabled when disconnected with existing mappings', () => {
       renderWithProviders(
         <PlexSubfolderMappings
@@ -129,6 +140,24 @@ describe('PlexSubfolderMappings', () => {
           screen.getByText(/Could not load Plex libraries or subfolders/)
         ).toBeInTheDocument();
       });
+    });
+
+    test('shows partial data and error alert when one endpoint fails', async () => {
+      axios.get
+        .mockResolvedValueOnce({ data: MOCK_LIBRARIES })
+        .mockRejectedValueOnce(new Error('Subfolders failed'));
+      renderWithProviders(
+        <PlexSubfolderMappings
+          {...DEFAULT_PROPS}
+          mappings={[{ subfolder: 'kids', libraryId: '2' }]}
+        />
+      );
+      await waitFor(() => {
+        expect(screen.getByText('Kids Shows')).toBeInTheDocument();
+      });
+      expect(
+        screen.getByText(/Could not load Plex libraries or subfolders/)
+      ).toBeInTheDocument();
     });
   });
 

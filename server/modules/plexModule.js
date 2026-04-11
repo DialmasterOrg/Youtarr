@@ -42,7 +42,9 @@ class PlexModule {
     const mappings = Array.isArray(raw) ? raw : [];
 
     const normalizedSubfolder = subfolder || null;
-    const match = mappings.find((m) => (m.subfolder || null) === normalizedSubfolder);
+    const match = mappings
+      .filter((m) => m && typeof m === 'object')
+      .find((m) => (m.subfolder || null) === normalizedSubfolder);
     return (match && match.libraryId) || config.plexYoutubeLibraryId || '';
   }
 
@@ -67,9 +69,7 @@ class PlexModule {
     const libraryIds = new Set(subfolders.map((sf) => this.getLibraryIdForSubfolder(sf)));
     await Promise.all(
       [...libraryIds].map((libraryId) =>
-        this.refreshLibrary(libraryId).catch((err) => {
-          logger.error({ err, libraryId }, 'Failed to refresh Plex library for subfolder');
-        })
+        this.refreshLibrary(libraryId)
       )
     );
   }
@@ -77,7 +77,6 @@ class PlexModule {
   async refreshLibrary(libraryId) {
     const config = configModule.getConfig();
     const resolvedLibraryId = libraryId || config.plexYoutubeLibraryId;
-    logger.info({ libraryId: resolvedLibraryId }, 'Refreshing Plex library');
     try {
       const baseUrl = this.getBaseUrl(config.plexIP, config, config.plexPort, config.plexViaHttps);
 
@@ -86,12 +85,12 @@ class PlexModule {
         return null;
       }
 
-      // Plex library IDs are always numeric; reject anything else to prevent path traversal
       if (!/^\d+$/.test(String(resolvedLibraryId))) {
         logger.warn({ libraryId: resolvedLibraryId }, 'Skipping Plex refresh - invalid non-numeric library ID');
         return null;
       }
 
+      logger.info({ libraryId: resolvedLibraryId }, 'Refreshing Plex library');
       const response = await axios.get(
         `${baseUrl}/library/sections/${encodeURIComponent(resolvedLibraryId)}/refresh?X-Plex-Token=${config.plexApiKey}`
       );

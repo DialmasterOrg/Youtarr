@@ -324,6 +324,7 @@ class DownloadModule {
     // Pre-condition: g.subFolder must already be a resolved effective subfolder
     // (clean name, no __ prefix, no ##USE_GLOBAL_DEFAULT## sentinel) as produced
     // by channelDownloadGrouper. null means root (no subfolder).
+    // Defensive: refreshLibrary currently swallows errors internally
     plexModule.refreshLibrariesForSubfolders(groups.map(g => g.subFolder ?? null)).catch(err => {
       logger.error({ err }, 'Failed to refresh Plex libraries after grouped download');
     });

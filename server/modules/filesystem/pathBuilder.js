@@ -7,6 +7,7 @@ const path = require('path');
 const {
   SUBFOLDER_PREFIX,
   GLOBAL_DEFAULT_SENTINEL,
+  ROOT_SENTINEL,
   CHANNEL_TEMPLATE,
   VIDEO_FOLDER_TEMPLATE,
   VIDEO_FILE_TEMPLATE,
@@ -53,7 +54,8 @@ function extractSubfolderName(dirName) {
 
 /**
  * Resolve the effective subfolder for a channel
- * Handles the three-state logic:
+ * Handles four-state logic:
+ * - ROOT_SENTINEL -> null (explicit root override, e.g. manual downloads)
  * - GLOBAL_DEFAULT_SENTINEL -> use global default
  * - non-empty string -> use that subfolder
  * - null/empty -> null (download to root, backwards compatible)
@@ -63,6 +65,11 @@ function extractSubfolderName(dirName) {
  * @returns {string|null} - The actual subfolder to use (without __ prefix), or null for root
  */
 function resolveEffectiveSubfolder(channelSubFolder, globalDefault = null) {
+  // Explicit "download to root" override
+  if (channelSubFolder === ROOT_SENTINEL) {
+    return null;
+  }
+
   // Explicit "use global default" setting
   if (channelSubFolder === GLOBAL_DEFAULT_SENTINEL) {
     return globalDefault || null;

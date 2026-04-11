@@ -87,19 +87,21 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
     setLoadingData(true);
     setFetchError(false);
 
-    Promise.all([
+    Promise.allSettled([
       axios.get<unknown>('/getplexlibraries', { headers, signal })
         .then((res) => (Array.isArray(res.data) ? (res.data as PlexLibrary[]) : [])),
       axios.get<unknown>('/api/channels/subfolders', { headers, signal })
         .then((res) => (Array.isArray(res.data) ? (res.data as string[]) : [])),
     ])
-      .then(([libs, folders]) => {
+      .then(([libsResult, foldersResult]) => {
         if (signal.aborted) return;
+        const libs = libsResult.status === 'fulfilled' ? libsResult.value : [];
+        const folders = foldersResult.status === 'fulfilled' ? foldersResult.value : [];
         setLibraries(libs);
         setSubfolders(folders);
-      })
-      .catch(() => {
-        if (!signal.aborted) setFetchError(true);
+        if (libsResult.status === 'rejected' || foldersResult.status === 'rejected') {
+          setFetchError(true);
+        }
       })
       .finally(() => {
         if (!signal.aborted) setLoadingData(false);
@@ -108,8 +110,11 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
     return () => controller.abort();
   }, [isConnected, token]);
 
-  const getLibraryTitle = (libraryId: string): string =>
-    libraries.find((lib) => lib.id === libraryId)?.title ?? libraryId;
+  const getLibraryTitle = (libraryId: string): string => {
+    const lib = libraries.find((l) => l.id === libraryId);
+    if (lib) return lib.title;
+    return libraries.length === 0 ? `Library ID: ${libraryId}` : libraryId;
+  };
 
   const isMappingDuplicate = (subfolder: string | null): boolean =>
     mappings.some((m) => m.subfolder === subfolder);

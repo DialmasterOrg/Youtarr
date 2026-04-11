@@ -12,7 +12,7 @@ const {
   isValidYoutubeId,
   calculateRelocatedPath
 } = require('../pathBuilder');
-const { GLOBAL_DEFAULT_SENTINEL } = require('../constants');
+const { GLOBAL_DEFAULT_SENTINEL, ROOT_SENTINEL } = require('../constants');
 
 describe('filesystem/pathBuilder', () => {
   describe('buildSubfolderSegment', () => {
@@ -69,6 +69,11 @@ describe('filesystem/pathBuilder', () => {
   });
 
   describe('resolveEffectiveSubfolder', () => {
+    it('should return null for ROOT_SENTINEL regardless of global default', () => {
+      expect(resolveEffectiveSubfolder(ROOT_SENTINEL, 'default')).toBeNull();
+      expect(resolveEffectiveSubfolder(ROOT_SENTINEL, null)).toBeNull();
+    });
+
     it('should return global default for GLOBAL_DEFAULT_SENTINEL', () => {
       expect(resolveEffectiveSubfolder(GLOBAL_DEFAULT_SENTINEL, 'default')).toBe('default');
     });

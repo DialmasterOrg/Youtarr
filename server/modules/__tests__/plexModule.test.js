@@ -302,6 +302,19 @@ describe('plexModule', () => {
 
       expect(plexModule.getLibraryIdForSubfolder('kids')).toBe('1');
     });
+
+    test('skips null and non-object entries in mappings array without throwing', () => {
+      config.plexSubfolderLibraryMappings = [
+        null,
+        undefined,
+        'bad-string',
+        42,
+        { subfolder: 'kids', libraryId: '2' },
+      ];
+
+      expect(plexModule.getLibraryIdForSubfolder('kids')).toBe('2');
+      expect(plexModule.getLibraryIdForSubfolder('unknown')).toBe('1');
+    });
   });
 
   describe('refreshLibraryForSubfolder', () => {
@@ -407,7 +420,7 @@ describe('plexModule', () => {
   });
 
   describe('refreshLibraryForSubfolder - error handling', () => {
-    test('propagates rejection when refreshLibrary throws unexpectedly', async () => {
+    test('resolves to null when the underlying refresh fails', async () => {
       config.plexSubfolderLibraryMappings = [{ subfolder: 'kids', libraryId: '2' }];
       // Force the axios call inside refreshLibrary to throw synchronously after try/catch
       // by making getBaseUrl produce a value but axios.get throwing past the catch

@@ -770,8 +770,8 @@ class ChannelSettingsModule {
             'Plex library refresh completed after folder move (source and destination libraries notified)'
           );
         } catch (plexError) {
+          // Defensive: refreshLibrary currently swallows errors internally
           logger.error({ err: plexError }, 'Could not refresh Plex library');
-          // Don't fail the whole operation if Plex refresh fails
         }
       });
       logger.info('Plex library refresh initiated asynchronously');

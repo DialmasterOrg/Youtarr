@@ -92,6 +92,7 @@ jest.mock('../../filesystem', () => ({
   ROOT_SENTINEL: '##ROOT##',
   GLOBAL_DEFAULT_SENTINEL: '##USE_GLOBAL_DEFAULT##',
   resolveEffectiveSubfolder: jest.fn((subfolder) => {
+    if (subfolder === '##ROOT##') return null;
     if (subfolder === '##USE_GLOBAL_DEFAULT##') return null;
     if (subfolder && subfolder.trim() !== '') return subfolder.trim();
     return null;

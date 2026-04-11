@@ -1390,10 +1390,8 @@ class DownloadExecutor {
 
         // Only refresh Plex and start next job if not processing multiple groups
         if (!skipJobTransition) {
-          // Normalize sentinel values before Plex lookup: ##ROOT## → null, ##USE_GLOBAL_DEFAULT## → resolved default
-          const resolvedSubfolder = subfolderOverride === filesystem.ROOT_SENTINEL
-            ? null
-            : filesystem.resolveEffectiveSubfolder(subfolderOverride, configModule.getConfig().defaultSubfolder || null);
+          const resolvedSubfolder = filesystem.resolveEffectiveSubfolder(subfolderOverride, configModule.getConfig().defaultSubfolder || null);
+          // Defensive: refreshLibrary currently swallows errors internally
           plexModule.refreshLibraryForSubfolder(resolvedSubfolder).catch(err => {
             logger.error({ err }, 'Failed to refresh Plex library');
           });
