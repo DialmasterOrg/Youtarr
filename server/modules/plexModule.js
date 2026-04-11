@@ -67,7 +67,7 @@ class PlexModule {
    */
   async refreshLibrariesForSubfolders(subfolders) {
     const libraryIds = new Set(subfolders.map((sf) => this.getLibraryIdForSubfolder(sf)));
-    await Promise.all(
+    await Promise.allSettled(
       [...libraryIds].map((libraryId) =>
         this.refreshLibrary(libraryId)
       )
