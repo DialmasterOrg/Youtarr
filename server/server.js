@@ -193,6 +193,9 @@ const initialize = async () => {
     const jobModule = require('./modules/jobModule');
     const videosModule = require('./modules/videosModule');
     const archiveModule = require('./modules/archiveModule');
+    const subscriptionImportModule = require('./modules/subscriptionImport');
+    const messageEmitter = require('./modules/messageEmitter');
+    const { Channel } = require('./models');
     const { registerRoutes } = require('./routes');
 
     // Cache yt-dlp version once during startup to keep the version endpoint fast
@@ -217,6 +220,13 @@ const initialize = async () => {
     }
 
     channelModule.subscribe();
+
+    subscriptionImportModule.init({
+      channelModule,
+      jobModule,
+      messageEmitter,
+      Channel,
+    });
 
     logger.info({ directoryPath: configModule.directoryPath }, 'YouTube downloads directory configured');
 
@@ -502,6 +512,7 @@ const initialize = async () => {
       jobModule,
       videosModule,
       archiveModule,
+      subscriptionImportModule,
       getCachedYtDlpVersion,
       refreshYtDlpVersionCache,
       validateEnvAuthCredentials,

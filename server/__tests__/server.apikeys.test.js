@@ -269,6 +269,17 @@ const createServerModule = ({
         jest.doMock('../modules/archiveModule', () => ({
           getAutoRemovalDryRun: jest.fn().mockResolvedValue({ videos: [], totalSize: 0 })
         }));
+        jest.doMock('../modules/subscriptionImport', () => ({
+          init: jest.fn(),
+          ImportInProgressError: class ImportInProgressError extends Error {}
+        }));
+        jest.doMock('../modules/messageEmitter', () => ({
+          emitMessage: jest.fn(),
+          getLastMessages: jest.fn(() => [])
+        }));
+        jest.doMock('../models', () => ({
+          Channel: { findAll: jest.fn().mockResolvedValue([]) }
+        }));
         jest.doMock('../modules/videoDeletionModule', () => ({
           deleteVideos: jest.fn().mockResolvedValue({ deleted: [], failed: [] }),
           deleteVideosByYoutubeIds: jest.fn().mockResolvedValue({ deleted: [], failed: [] })
@@ -295,7 +306,9 @@ const createServerModule = ({
           readFileSync: jest.fn(() => ''),
           unlink: jest.fn((path, cb) => cb(null))
         }));
-        jest.doMock('multer', () => jest.fn(() => ({ single: jest.fn(() => (req, res, next) => next()) })));
+        jest.doMock('multer', () => Object.assign(jest.fn(() => ({ single: jest.fn(() => (req, res, next) => next()) })), {
+          memoryStorage: jest.fn(() => ({})),
+        }));
         jest.doMock('bcrypt', () => ({
           compare: jest.fn().mockResolvedValue(true),
           hash: jest.fn().mockResolvedValue('new-hashed-password')

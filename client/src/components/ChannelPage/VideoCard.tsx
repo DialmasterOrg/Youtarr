@@ -22,6 +22,7 @@ import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMedia
 import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import RatingBadge from '../shared/RatingBadge';
+import ProtectionShieldButton from '../shared/ProtectionShieldButton';
 
 interface VideoCardProps {
   video: ChannelVideo;
@@ -33,6 +34,7 @@ interface VideoCardProps {
   onHoverChange: (videoId: string | null) => void;
   onToggleDeletion: (youtubeId: string) => void;
   onToggleIgnore: (youtubeId: string) => void;
+  onToggleProtection: (youtubeId: string) => void;
   onMobileTooltip?: (message: string) => void;
 }
 
@@ -46,6 +48,7 @@ function VideoCard({
   onHoverChange,
   onToggleDeletion,
   onToggleIgnore,
+  onToggleProtection,
   onMobileTooltip,
 }: VideoCardProps) {
   const theme = useTheme();
@@ -192,6 +195,7 @@ function VideoCard({
             {/* Delete icon for downloaded videos that exist on disk */}
             {video.added && !video.removed && (
               <IconButton
+                aria-label="Delete video"
                 onClick={(e) => {
                   e.stopPropagation();
                   onToggleDeletion(video.youtube_id);
@@ -243,6 +247,18 @@ function VideoCard({
                   {isIgnored ? <CheckCircleOutlineIcon fontSize="small" /> : <BlockIcon fontSize="small" />}
                 </IconButton>
               </Tooltip>
+            )}
+
+            {/* Protection shield for downloaded videos */}
+            {video.added && !video.removed && (
+              <ProtectionShieldButton
+                isProtected={video.protected || false}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleProtection(video.youtube_id);
+                }}
+                sx={{ position: 'absolute', bottom: 6, left: 6, zIndex: 2 }}
+              />
             )}
           </Box>
 

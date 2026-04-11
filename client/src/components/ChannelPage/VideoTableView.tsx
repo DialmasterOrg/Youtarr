@@ -18,6 +18,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import RatingBadge from '../shared/RatingBadge';
+import ProtectionShieldButton from '../shared/ProtectionShieldButton';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml } from '../../utils/formatters';
@@ -40,6 +41,7 @@ interface VideoTableViewProps {
   onSortChange: (newSortBy: SortBy) => void;
   onToggleDeletion: (youtubeId: string) => void;
   onToggleIgnore: (youtubeId: string) => void;
+  onToggleProtection: (youtubeId: string) => void;
   onMobileTooltip?: (message: string) => void;
 }
 
@@ -55,6 +57,7 @@ function VideoTableView({
   onSortChange,
   onToggleDeletion,
   onToggleIgnore,
+  onToggleProtection,
   onMobileTooltip,
 }: VideoTableViewProps) {
   return (
@@ -142,6 +145,7 @@ function VideoTableView({
                   {/* Delete icon for downloaded videos that exist on disk */}
                   {video.added && !video.removed && (
                     <IconButton
+                      aria-label="Delete video"
                       onClick={(e) => {
                         e.stopPropagation();
                         onToggleDeletion(video.youtube_id);
@@ -157,6 +161,17 @@ function VideoTableView({
                     >
                       <DeleteIcon fontSize="small" />
                     </IconButton>
+                  )}
+                  {/* Protection shield for downloaded videos */}
+                  {video.added && !video.removed && (
+                    <ProtectionShieldButton
+                      isProtected={video.protected || false}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleProtection(video.youtube_id);
+                      }}
+                      variant="inline"
+                    />
                   )}
                   {/* Ignore/Unignore button - for videos not currently on disk (never downloaded or missing) */}
                   {!isStillLive && (!video.added || video.removed) && (

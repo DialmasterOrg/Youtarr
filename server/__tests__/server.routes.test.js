@@ -315,7 +315,9 @@ const createServerModule = ({
           }
           next();
         });
-        const multerMock = jest.fn(() => ({ single: multerSingleMock }));
+        const multerMock = Object.assign(jest.fn(() => ({ single: multerSingleMock })), {
+          memoryStorage: jest.fn(() => ({})),
+        });
 
         jest.doMock('../logger', () => loggerMock);
         jest.doMock('../db', () => dbMock);
@@ -330,6 +332,17 @@ const createServerModule = ({
         jest.doMock('../modules/channelSettingsModule', () => channelSettingsModuleMock);
         jest.doMock('../modules/archiveModule', () => ({
           getAutoRemovalDryRun: jest.fn().mockResolvedValue({ videos: [], totalSize: 0 })
+        }));
+        jest.doMock('../modules/subscriptionImport', () => ({
+          init: jest.fn(),
+          ImportInProgressError: class ImportInProgressError extends Error {}
+        }));
+        jest.doMock('../modules/messageEmitter', () => ({
+          emitMessage: jest.fn(),
+          getLastMessages: jest.fn(() => [])
+        }));
+        jest.doMock('../models', () => ({
+          Channel: { findAll: jest.fn().mockResolvedValue([]) }
         }));
         jest.doMock('../modules/notificationModule', () => ({
           sendTestNotification: jest.fn().mockResolvedValue({ success: true })
@@ -818,7 +831,8 @@ describe('server routes - channels', () => {
         null, // default minDuration
         null, // default maxDuration
         null, // default dateFrom
-        null  // default dateTo
+        null, // default dateTo
+        false // default protectedFilter
       );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -884,7 +898,8 @@ describe('server routes - channels', () => {
         null, // default minDuration
         null, // default maxDuration
         null, // default dateFrom
-        null  // default dateTo
+        null, // default dateTo
+        false // default protectedFilter
       );
       expect(res.statusCode).toBe(200);
     });
@@ -923,7 +938,8 @@ describe('server routes - channels', () => {
         null, // default minDuration
         null, // default maxDuration
         null, // default dateFrom
-        null  // default dateTo
+        null, // default dateTo
+        false // default protectedFilter
       );
       expect(res.statusCode).toBe(200);
     });
@@ -1203,7 +1219,8 @@ describe('server routes - videos', () => {
         sortBy: 'added',
         sortOrder: 'desc',
         channelFilter: '',
-        hideMissing: false
+        hideMissing: false,
+        protectedFilter: false,
       });
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -1251,7 +1268,8 @@ describe('server routes - videos', () => {
         sortBy: 'title',
         sortOrder: 'asc',
         channelFilter: 'channel123',
-        hideMissing: false
+        hideMissing: false,
+        protectedFilter: false,
       });
       expect(res.statusCode).toBe(200);
     });

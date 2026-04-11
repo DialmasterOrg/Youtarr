@@ -3,10 +3,12 @@ import {
   Box,
   Button,
   Badge,
+  Chip,
   Collapse,
   Typography,
 } from '@mui/material';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import ShieldIcon from '@mui/icons-material/Shield';
 import DurationFilterInput from './DurationFilterInput';
 import DateRangeFilterInput from './DateRangeFilterInput';
 import FilterChips from './FilterChips';
@@ -27,6 +29,8 @@ interface ChannelVideosFiltersProps {
   activeFilterCount: number;
   hideDateFilter?: boolean;
   filtersExpanded?: boolean; // For desktop, controlled by parent
+  protectedFilter?: boolean;
+  onProtectedFilterChange?: (value: boolean) => void;
 }
 
 function ChannelVideosFilters({
@@ -43,6 +47,8 @@ function ChannelVideosFilters({
   activeFilterCount,
   hideDateFilter = false,
   filtersExpanded = false,
+  protectedFilter = false,
+  onProtectedFilterChange,
 }: ChannelVideosFiltersProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -98,6 +104,8 @@ function ChannelVideosFilters({
           onClearAll={onClearAll}
           hasActiveFilters={hasActiveFilters}
           hideDateFilter={hideDateFilter}
+          protectedFilter={protectedFilter}
+          onProtectedFilterChange={onProtectedFilterChange}
         />
       </Box>
     );
@@ -125,6 +133,17 @@ function ChannelVideosFilters({
             <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
               Shorts do not have date information
             </Typography>
+          )}
+          {onProtectedFilterChange && (
+            <Chip
+              icon={<ShieldIcon />}
+              label="Protected"
+              variant={protectedFilter ? 'filled' : 'outlined'}
+              color={protectedFilter ? 'primary' : 'default'}
+              size="small"
+              onClick={() => onProtectedFilterChange(!protectedFilter)}
+              sx={{ cursor: 'pointer' }}
+            />
           )}
           {hasActiveFilters && (
             <Button

@@ -11,6 +11,16 @@ Youtarr supports running against an existing MariaDB or MySQL instance. This gui
 
 > **Tip:** Keep the database and Youtarr container on the same Docker network or ensure routing/firewall rules allow traffic from Youtarr to the DB host/port.
 
+## Important: Updating Your Database Separately from Youtarr
+
+> **Warning:** If you manage your own MariaDB/MySQL instance, **never update your database server and Youtarr at the same time.** Update them one at a time with a full restart in between.
+>
+> When MariaDB upgrades to a new version, it performs internal data file upgrades on startup. If a Youtarr migration (which may alter tables) runs while the database is still completing its own upgrade, the combination can corrupt tables and cause data loss. This is a MariaDB/InnoDB limitation, not a Youtarr bug.
+>
+> **Safe update order:**
+> 1. Update your MariaDB/MySQL container and let it fully start (check its logs for "ready for connections")
+> 2. Then update and start Youtarr
+
 ## 1. Prepare the External Database
 
 Run the following SQL on your target database host (adjust usernames/passwords as needed to match your `.env`):

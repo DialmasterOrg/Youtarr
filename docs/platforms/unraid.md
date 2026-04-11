@@ -27,6 +27,8 @@ See [docs/platforms/external-db.md](external-db.md) for reference
 
 **NOTE**: Your MariaDB instance *must* be up and running before Youtarr starts!
 
+> **Warning: Do not update MariaDB and Youtarr at the same time.** If you update the MariaDB Official container and Youtarr together, MariaDB may still be upgrading its internal data files when Youtarr's migrations run, which can corrupt tables and cause data loss. Always update MariaDB first, confirm it's fully running (check its logs for "ready for connections"), then update Youtarr. See the [External Database Guide](external-db.md) for more details.
+
 ### Install and setup Youtarr
 
 The Unraid template for Youtarr `https://github.com/DialmasterOrg/unraid-templates/blob/main/Youtarr/Youtarr.xml`

@@ -33,6 +33,7 @@ describe('VideoListItem Component', () => {
     onCheckChange: jest.fn(),
     onToggleDeletion: jest.fn(),
     onToggleIgnore: jest.fn(),
+    onToggleProtection: jest.fn(),
   };
 
   beforeEach(() => {
@@ -435,7 +436,7 @@ describe('VideoListItem Component', () => {
         />
       );
 
-      const deleteButton = screen.getByRole('button');
+      const deleteButton = screen.getByLabelText('Delete video');
       await user.click(deleteButton);
 
       expect(onToggleDeletion).toHaveBeenCalledTimes(1);
@@ -457,7 +458,7 @@ describe('VideoListItem Component', () => {
         />
       );
 
-      const deleteButton = screen.getByRole('button');
+      const deleteButton = screen.getByLabelText('Delete video');
       await user.click(deleteButton);
 
       expect(onToggleDeletion).toHaveBeenCalledTimes(1);
@@ -759,6 +760,46 @@ describe('VideoListItem Component', () => {
       const ignoredVideo = { ...mockVideo, ignored: true };
       renderWithProviders(<VideoListItem {...defaultProps} video={ignoredVideo} />);
       expect(screen.getByText('Ignored')).toBeInTheDocument();
+    });
+  });
+
+  describe('Protection Shield', () => {
+    test('renders shield icon for downloaded video', () => {
+      const downloadedVideo = { ...mockVideo, added: true, removed: false };
+      renderWithProviders(<VideoListItem {...defaultProps} video={downloadedVideo} />);
+      expect(screen.getByLabelText('Protect from auto-deletion')).toBeInTheDocument();
+    });
+
+    test('renders active shield icon for protected video', () => {
+      const protectedVideo = { ...mockVideo, added: true, removed: false, protected: true };
+      renderWithProviders(<VideoListItem {...defaultProps} video={protectedVideo} />);
+      expect(screen.getByLabelText('Remove protection')).toBeInTheDocument();
+    });
+
+    test('does not render shield icon for non-downloaded video', () => {
+      renderWithProviders(<VideoListItem {...defaultProps} />);
+      expect(screen.queryByLabelText('Protect from auto-deletion')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Remove protection')).not.toBeInTheDocument();
+    });
+
+    test('calls onToggleProtection when shield icon is clicked', async () => {
+      const user = userEvent.setup();
+      const onToggleProtection = jest.fn();
+      const downloadedVideo = { ...mockVideo, added: true, removed: false };
+
+      renderWithProviders(
+        <VideoListItem
+          {...defaultProps}
+          video={downloadedVideo}
+          onToggleProtection={onToggleProtection}
+        />
+      );
+
+      const shieldButton = screen.getByLabelText('Protect from auto-deletion');
+      await user.click(shieldButton);
+
+      expect(onToggleProtection).toHaveBeenCalledTimes(1);
+      expect(onToggleProtection).toHaveBeenCalledWith('test123');
     });
   });
 });

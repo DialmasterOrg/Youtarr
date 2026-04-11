@@ -1390,7 +1390,9 @@ class DownloadExecutor {
 
         // Only refresh Plex and start next job if not processing multiple groups
         if (!skipJobTransition) {
-          plexModule.refreshLibrary().catch(err => {
+          const resolvedSubfolder = filesystem.resolveEffectiveSubfolder(subfolderOverride, configModule.getConfig().defaultSubfolder || null);
+          // Defensive: refreshLibrary currently swallows errors internally
+          plexModule.refreshLibraryForSubfolder(resolvedSubfolder).catch(err => {
             logger.error({ err }, 'Failed to refresh Plex library');
           });
           jobModule.startNextJob().catch(err => {

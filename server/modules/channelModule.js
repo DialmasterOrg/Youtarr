@@ -393,9 +393,10 @@ class ChannelModule {
    * @param {Object} channelData - Channel data to save
    * @param {boolean} enabled - Whether the channel should be enabled (default: false)
    * @param {string|null} autoDownloadEnabledTabs - Comma-separated list of enabled tabs (default: null, uses model default)
+   * @param {Object} initialSettings - Optional settings to apply only when creating a new channel (e.g., video_quality, sub_folder, default_rating)
    * @returns {Promise<Object>} - Saved channel record
    */
-  async upsertChannel(channelData, enabled = false, autoDownloadEnabledTabs = null) {
+  async upsertChannel(channelData, enabled = false, autoDownloadEnabledTabs = null, initialSettings = {}) {
     // First, try to find by channel_id (preferred)
     let channel = await Channel.findOne({
       where: { channel_id: channelData.id }
@@ -439,6 +440,11 @@ class ChannelModule {
 
     // Only create if not found by either method
     if (!channel) {
+      // Apply initial settings only for new channels
+      if (initialSettings.video_quality != null) updateData.video_quality = initialSettings.video_quality;
+      if (initialSettings.sub_folder != null) updateData.sub_folder = initialSettings.sub_folder;
+      if (initialSettings.default_rating != null) updateData.default_rating = initialSettings.default_rating;
+
       channel = await Channel.create(updateData);
     }
 
@@ -734,9 +740,10 @@ class ChannelModule {
    * @param {string} channelUrlOrId - YouTube channel URL or channel ID
    * @param {boolean} emitMessage - Whether to emit WebSocket update message
    * @param {boolean} enableChannel - Whether to enable the channel if it's new (default: false)
+   * @param {object} initialSettings - Optional per-channel settings (video_quality, sub_folder, default_rating) passed to upsertChannel
    * @returns {Promise<Object>} - Channel information object
    */
-  async getChannelInfo(channelUrlOrId, emitMessage = true, enableChannel = false) {
+  async getChannelInfo(channelUrlOrId, emitMessage = true, enableChannel = false, initialSettings = {}, { skipTabDetection = false } = {}) {
     const { foundChannel, channelUrl } = await this.findChannelByUrlOrId(channelUrlOrId);
 
     if (foundChannel) {
@@ -785,15 +792,20 @@ class ChannelModule {
       uploader: channelData.uploader,
       url: actualChannelUrl,  // Store the actual handle URL for display
       folder_name: folderName,
-    }, enableChannel);
+    }, enableChannel, null, initialSettings);
 
     // Now process thumbnail using the proper channel ID (uses metadata URL, falls back to yt-dlp)
     logger.info('Processing channel thumbnail');
     await this.processChannelThumbnail(channelData, properChannelId, channelUrl);
     logger.info('Channel thumbnail processed successfully');
 
-    // Detect available tabs (fast via RSS feeds)
-    const tabResult = await this.detectAndSaveChannelTabs(properChannelId);
+    // Detect available tabs (fast via RSS feeds).
+    // When skipTabDetection is true (e.g. bulk import), leave available_tabs as null
+    // so the frontend's lazy-load system detects tabs on first channel page visit.
+    let tabResult = null;
+    if (!skipTabDetection) {
+      tabResult = await this.detectAndSaveChannelTabs(properChannelId);
+    }
 
     if (emitMessage) {
       logger.debug('Channel data fetched, emitting update message');
@@ -1284,7 +1296,8 @@ class ChannelModule {
         'audioFilePath',
         'audioFileSize',
         'normalized_rating',
-        'rating_source'
+        'rating_source',
+        'protected'
       ]
     });
 
@@ -1301,7 +1314,8 @@ class ChannelModule {
         filePath: v.filePath,
         audioFilePath: v.audioFilePath,
         audioFileSize: v.audioFileSize,
-        normalized_rating: v.normalized_rating
+        normalized_rating: v.normalized_rating,
+        protected: v.protected
       });
 
       // Collect videos that need file checking (only if checkFiles is true and have any file path)
@@ -1346,6 +1360,8 @@ class ChannelModule {
         if (status.normalized_rating) {
           plainVideoObject.normalized_rating = status.normalized_rating;
         }
+        plainVideoObject.id = status.id;
+        plainVideoObject.protected = status.protected;
       } else {
         // Video never downloaded
         plainVideoObject.added = false;
@@ -1354,6 +1370,7 @@ class ChannelModule {
         plainVideoObject.filePath = null;
         plainVideoObject.audioFilePath = null;
         plainVideoObject.audioFileSize = null;
+        plainVideoObject.protected = false;
       }
 
       // Replace thumbnail with template format (unless video is removed from YouTube)
@@ -1422,7 +1439,7 @@ class ChannelModule {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Array>} - Array of video objects with download status
    */
-  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, excludeDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null) {
+  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, excludeDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = false) {
     // First get all videos to enrich with download status
     const allChannelVideos = await ChannelVideo.findAll({
       where: {
@@ -1452,6 +1469,11 @@ class ChannelModule {
 
     // Apply duration and date filters
     filteredVideos = this._applyDurationAndDateFilters(filteredVideos, minDuration, maxDuration, dateFrom, dateTo);
+
+    // Apply protected filter
+    if (protectedFilter) {
+      filteredVideos = filteredVideos.filter(video => video.protected);
+    }
 
     // Apply sorting
     filteredVideos.sort((a, b) => {
@@ -1529,9 +1551,9 @@ class ChannelModule {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Object>} - Object with totalCount and oldestVideoDate
    */
-  async getChannelVideoStats(channelId, excludeDownloaded = false, searchQuery = '', mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null) {
+  async getChannelVideoStats(channelId, excludeDownloaded = false, searchQuery = '', mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = false) {
     // If we have search or filter, we need to get all videos
-    if (excludeDownloaded || searchQuery || minDuration !== null || maxDuration !== null || dateFrom || dateTo) {
+    if (excludeDownloaded || searchQuery || minDuration !== null || maxDuration !== null || dateFrom || dateTo || protectedFilter) {
       // Need to filter by download status and/or search
       const allChannelVideos = await ChannelVideo.findAll({
         where: {
@@ -1560,6 +1582,11 @@ class ChannelModule {
 
       // Apply duration and date filters
       filteredVideos = this._applyDurationAndDateFilters(filteredVideos, minDuration, maxDuration, dateFrom, dateTo);
+
+      // Apply protected filter
+      if (protectedFilter) {
+        filteredVideos = filteredVideos.filter(video => video.protected);
+      }
 
       return {
         totalCount: filteredVideos.length,
@@ -1839,26 +1866,31 @@ class ChannelModule {
   }
 
   /**
-   * Check if a tab exists for a channel by testing its RSS feed.
-   * A non-404 response indicates the tab exists.
+   * Check if a tab exists for a channel by probing with yt-dlp.
+   * Attempts to fetch 1 entry from the tab URL. If entries exist, the tab is available.
    * @param {string} channelId - Channel ID
-   * @param {string} tabType - Tab type to check
+   * @param {string} tabType - Tab type to check ('videos', 'shorts', or 'streams')
    * @returns {Promise<boolean>} - True if tab exists
    */
-  async checkTabExistsViaRss(channelId, tabType) {
-    const rssUrl = this.buildRssFeedUrl(channelId, tabType);
+  async checkTabExistsViaYtdlp(channelId, tabType) {
+    const tabUrl = `${this.resolveChannelUrlFromId(channelId)}/${tabType}`;
 
     try {
-      const response = await fetch(rssUrl, {
-        method: 'GET',
-        signal: AbortSignal.timeout(10000), // 10 second timeout
+      const YtdlpCommandBuilder = require('./download/ytdlpCommandBuilder');
+      const result = await this.withTempFile(`tab-check-${tabType}`, async (outputFilePath) => {
+        const args = YtdlpCommandBuilder.buildMetadataFetchArgs(tabUrl, {
+          flatPlaylist: true,
+          playlistEnd: 1,
+          skipSleepRequests: true,
+        });
+        const content = await this.executeYtDlpCommand(args, outputFilePath);
+        const parsed = JSON.parse(content);
+        const entries = parsed.entries || [];
+        return entries.length > 0;
       });
-      // Any non-404 response means the tab exists
-      // (YouTube returns 404 for non-existent playlist feeds)
-      return response.status !== 404;
+      return result;
     } catch (error) {
-      // Network error or timeout - assume tab doesn't exist
-      logger.debug({ channelId, tabType, error: error.message }, 'RSS feed check failed');
+      logger.debug({ channelId, tabType, error: error.message }, 'yt-dlp tab check failed');
       return false;
     }
   }
@@ -1895,13 +1927,13 @@ class ChannelModule {
         };
       }
 
-      logger.info({ channelId, channelTitle: channel.title }, 'Starting tab detection for channel (via RSS)');
+      logger.info({ channelId, channelTitle: channel.title }, 'Starting tab detection for channel (via yt-dlp)');
 
-      // Check all tabs in parallel using RSS feeds - much faster than yt-dlp
+      // Check all tabs in parallel using yt-dlp probing
       const tabTypesToTest = [TAB_TYPES.VIDEOS, TAB_TYPES.SHORTS, TAB_TYPES.LIVE];
       const tabChecks = await Promise.all(
         tabTypesToTest.map(async (tabType) => {
-          const exists = await this.checkTabExistsViaRss(channelId, tabType);
+          const exists = await this.checkTabExistsViaYtdlp(channelId, tabType);
           if (exists) {
             logger.info({ channelId, tabType }, 'Tab exists for channel');
           } else {
@@ -1918,15 +1950,25 @@ class ChannelModule {
       // Fallback: if all RSS checks failed (e.g., network timeout), assume "videos" tab exists
       // This prevents channels from being added with no tabs, which would make them unusable
       if (availableTabs.length === 0) {
-        logger.warn({ channelId }, 'All RSS tab checks failed, defaulting to videos tab');
+        logger.warn({ channelId }, 'All tab checks failed, defaulting to videos tab');
         availableTabs = [TAB_TYPES.VIDEOS];
       }
 
-      // Determine smart default for auto_download_enabled_tabs
-      let autoDownloadEnabledTabs = 'video';
-      if (!availableTabs.includes(TAB_TYPES.VIDEOS) && availableTabs.length > 0) {
-        autoDownloadEnabledTabs = MEDIA_TAB_TYPE_MAP[availableTabs[0]] || 'video';
-        logger.info({ channelId, defaultTab: autoDownloadEnabledTabs }, 'Channel has no videos tab, using alternative default');
+      // Determine auto_download_enabled_tabs: preserve existing user choice if set,
+      // otherwise pick a smart default based on available tabs
+      const existingEnabledTabs = channel.auto_download_enabled_tabs;
+      const hasUserChoice = existingEnabledTabs !== null && existingEnabledTabs !== undefined;
+
+      let autoDownloadEnabledTabs;
+      if (hasUserChoice) {
+        // User already set a value (including empty string for "disabled") -- preserve it
+        autoDownloadEnabledTabs = existingEnabledTabs;
+      } else {
+        autoDownloadEnabledTabs = 'video';
+        if (!availableTabs.includes(TAB_TYPES.VIDEOS) && availableTabs.length > 0) {
+          autoDownloadEnabledTabs = MEDIA_TAB_TYPE_MAP[availableTabs[0]] || 'video';
+          logger.info({ channelId, defaultTab: autoDownloadEnabledTabs }, 'Channel has no videos tab, using alternative default');
+        }
       }
 
       // Update channel with detected tabs
@@ -2053,7 +2095,7 @@ class ChannelModule {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Object>} - Response object with videos and metadata
    */
-  async getChannelVideos(channelId, page = 1, pageSize = 50, hideDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS, minDuration = null, maxDuration = null, dateFrom = null, dateTo = null) {
+  async getChannelVideos(channelId, page = 1, pageSize = 50, hideDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS, minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = false) {
     const channel = await Channel.findOne({
       where: { channel_id: channelId },
     });
@@ -2113,7 +2155,7 @@ class ChannelModule {
 
       // Now fetch the requested page of videos with file checking enabled
       const offset = (page - 1) * pageSize;
-      const paginatedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo);
+      const paginatedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter);
 
       // Check if videos still exist on YouTube and mark as removed if they don't
       const videoValidationModule = require('./videoValidationModule');
@@ -2183,15 +2225,15 @@ class ChannelModule {
       }
 
       // Get stats for the response
-      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo);
+      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter);
 
       return this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
 
     } catch (error) {
       logger.error({ err: error, channelId }, 'Error fetching channel videos');
       const offset = (page - 1) * pageSize;
-      const cachedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo);
-      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo);
+      const cachedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter);
+      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter);
       return this.buildChannelVideosResponse(cachedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
     }
   }

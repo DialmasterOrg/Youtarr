@@ -15,6 +15,7 @@ import InfoIcon from '@mui/icons-material/Info';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { ConfigState, PlatformManagedState, PlexConnectionStatus } from '../types';
+import { PlexSubfolderMappings } from './PlexSubfolderMappings';
 
 interface PlexIntegrationSectionProps {
   config: ConfigState;
@@ -26,6 +27,7 @@ interface PlexIntegrationSectionProps {
   onOpenLibrarySelector: () => void;
   onOpenPlexAuthDialog: () => void;
   onMobileTooltipClick?: (text: string) => void;
+  token?: string | null;
 }
 
 export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
@@ -38,10 +40,11 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
   onOpenLibrarySelector,
   onOpenPlexAuthDialog,
   onMobileTooltipClick,
+  token = null,
 }) => {
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
-    let parsedValue: any = value;
+    let parsedValue: string = value;
 
     if (name === 'plexPort') {
       const digitsOnly = value.replace(/[^0-9]/g, '');
@@ -287,6 +290,15 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
               Selected Library ID: {config.plexYoutubeLibraryId}
             </Typography>
           )}
+        </Grid>
+
+        <Grid item xs={12}>
+          <PlexSubfolderMappings
+            mappings={config.plexSubfolderLibraryMappings ?? []}
+            onMappingsChange={(mappings) => onConfigChange({ plexSubfolderLibraryMappings: mappings })}
+            token={token}
+            plexConnectionStatus={plexConnectionStatus}
+          />
         </Grid>
       </Grid>
     </ConfigurationAccordion>

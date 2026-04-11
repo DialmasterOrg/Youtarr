@@ -841,6 +841,43 @@ describe('VideosModule', () => {
     });
   });
 
+  describe('setVideoProtection', () => {
+    test('sets protected to true for existing video', async () => {
+      const mockVideoRecord = {
+        id: 1,
+        protected: false,
+        update: jest.fn().mockResolvedValue(),
+      };
+      mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
+
+      const result = await VideosModule.setVideoProtection(1, true);
+
+      expect(mockVideo.findByPk).toHaveBeenCalledWith(1);
+      expect(mockVideoRecord.update).toHaveBeenCalledWith({ protected: true });
+      expect(result).toEqual({ id: 1, protected: true });
+    });
+
+    test('sets protected to false for existing video', async () => {
+      const mockVideoRecord = {
+        id: 1,
+        protected: true,
+        update: jest.fn().mockResolvedValue(),
+      };
+      mockVideo.findByPk.mockResolvedValue(mockVideoRecord);
+
+      const result = await VideosModule.setVideoProtection(1, false);
+
+      expect(mockVideoRecord.update).toHaveBeenCalledWith({ protected: false });
+      expect(result).toEqual({ id: 1, protected: false });
+    });
+
+    test('throws error when video not found', async () => {
+      mockVideo.findByPk.mockResolvedValue(null);
+
+      await expect(VideosModule.setVideoProtection(999, true)).rejects.toThrow('Video not found');
+    });
+  });
+
   describe('bulkUpdateVideoRatings', () => {
     test('clears metadata when null rating is applied and tracks missing videos', async () => {
       const existingId = 101;

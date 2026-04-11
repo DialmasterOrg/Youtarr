@@ -244,6 +244,7 @@ function Configuration({ token }: ConfigurationProps) {
         onOpenLibrarySelector={openLibrarySelector}
         onOpenPlexAuthDialog={() => setOpenPlexAuthDialog(true)}
         onMobileTooltipClick={setMobileTooltip}
+        token={token}
       />
 
       <SponsorBlockSection

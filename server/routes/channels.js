@@ -638,7 +638,8 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     const maxDuration = (parsedMaxDuration !== null && !isNaN(parsedMaxDuration)) ? parsedMaxDuration : null;
     const dateFrom = req.query.dateFrom || null;
     const dateTo = req.query.dateTo || null;
-    const result = await channelModule.getChannelVideos(channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo);
+    const protectedFilter = req.query.protectedFilter === 'true';
+    const result = await channelModule.getChannelVideos(channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter);
 
     if (Array.isArray(result)) {
       res.status(200).json({
