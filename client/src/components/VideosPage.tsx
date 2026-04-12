@@ -54,6 +54,34 @@ import RatingBadge from './shared/RatingBadge';
 import ChangeRatingDialog from './shared/ChangeRatingDialog';
 import VideoActionsDropdown from './shared/VideoActionsDropdown';
 import ProtectionShieldButton from './shared/ProtectionShieldButton';
+import VideoModal from './shared/VideoModal';
+import ThumbnailClickOverlay from './shared/ThumbnailClickOverlay';
+import { VideoModalData } from './shared/VideoModal/types';
+
+function videoDataToModalData(video: VideoData): VideoModalData {
+  return {
+    youtubeId: video.youtubeId,
+    title: video.youTubeVideoName,
+    channelName: video.youTubeChannelName,
+    thumbnailUrl: `/images/videothumb-${video.youtubeId}.jpg`,
+    duration: video.duration,
+    publishedAt: video.originalDate || null,
+    addedAt: video.timeCreated || null,
+    mediaType: video.media_type || 'video',
+    status: video.removed ? 'missing' : 'downloaded',
+    isDownloaded: !video.removed,
+    filePath: video.filePath || null,
+    fileSize: video.fileSize ? Number(video.fileSize) : null,
+    audioFilePath: video.audioFilePath || null,
+    audioFileSize: video.audioFileSize ? Number(video.audioFileSize) : null,
+    isProtected: video.protected || false,
+    isIgnored: false,
+    normalizedRating: video.normalized_rating || null,
+    ratingSource: video.rating_source || null,
+    databaseId: video.id,
+    channelId: video.channel_id || null,
+  };
+}
 
 interface VideosPageProps {
   token: string | null;
@@ -91,6 +119,7 @@ function VideosPage({ token }: VideosPageProps) {
   const { deleteVideos, loading: deleteLoading } = useVideoDeletion();
   const { toggleProtection, successMessage: protectionSuccess, error: protectionError, clearMessages: clearProtectionMessages } = useVideoProtection(token);
   const [protectedFilter, setProtectedFilter] = useState(false);
+  const [modalVideo, setModalVideo] = useState<VideoData | null>(null);
 
   const videosPerPage = isMobile ? 6 : 12;
 
@@ -645,6 +674,13 @@ function VideosPage({ token }: VideosPageProps) {
                                   }
                                 />
                               )}
+                              {/* Center hotspot for opening video modal */}
+                              <ThumbnailClickOverlay
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  setModalVideo(video);
+                                }}
+                              />
                               {video.youtube_removed ? (
                                 <Box
                                   style={{
@@ -724,7 +760,12 @@ function VideosPage({ token }: VideosPageProps) {
                               />
                               )}
                             </Box>
-                            <Typography variant='subtitle1' textAlign='center'>
+                            <Typography
+                              variant='subtitle1'
+                              textAlign='center'
+                              onClick={() => setModalVideo(video)}
+                              sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+                            >
                               {video.youTubeVideoName}
                               {video.duration && (
                                 <Typography
@@ -874,6 +915,13 @@ function VideosPage({ token }: VideosPageProps) {
                                   }
                                 />
                               )}
+                              {/* Center hotspot for opening video modal */}
+                              <ThumbnailClickOverlay
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  setModalVideo(video);
+                                }}
+                              />
                               {video.youtube_removed ? (
                                 <Box
                                   style={{
@@ -942,7 +990,11 @@ function VideosPage({ token }: VideosPageProps) {
                             })()}
                           </TableCell>
                           <TableCell style={{ fontSize: 'medium' }}>
-                            <Typography variant='subtitle1'>
+                            <Typography
+                              variant='subtitle1'
+                              onClick={() => setModalVideo(video)}
+                              sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+                            >
                               {video.youTubeVideoName}
                             </Typography>
                             {video.duration && (
@@ -1118,6 +1170,35 @@ function VideosPage({ token }: VideosPageProps) {
           {protectionError}
         </Alert>
       </Snackbar>
+
+      {modalVideo && (
+        <VideoModal
+          open
+          onClose={() => setModalVideo(null)}
+          video={videoDataToModalData(modalVideo)}
+          token={token}
+          onVideoDeleted={() => {
+            setModalVideo(null);
+            fetchVideos();
+          }}
+          onProtectionChanged={(youtubeId, isProtected) => {
+            setVideos((prev: VideoData[]) =>
+              prev.map((v: VideoData) =>
+                v.youtubeId === youtubeId ? { ...v, protected: isProtected } : v
+              )
+            );
+          }}
+          onRatingChanged={(youtubeId, rating) => {
+            setVideos((prev: VideoData[]) =>
+              prev.map((v: VideoData) =>
+                v.youtubeId === youtubeId
+                  ? { ...v, normalized_rating: rating, rating_source: rating ? 'Manual Override' : null }
+                  : v
+              )
+            );
+          }}
+        />
+      )}
     </Card>
   );
 }

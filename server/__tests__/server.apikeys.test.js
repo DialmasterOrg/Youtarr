@@ -261,6 +261,10 @@ const createServerModule = ({
           getRunningJobs: jest.fn(() => [])
         }));
         jest.doMock('../modules/videosModule', () => ({}));
+        jest.doMock('../modules/videoMetadataModule', () => ({
+          getVideoMetadata: jest.fn().mockResolvedValue(null),
+          getVideoStreamInfo: jest.fn().mockResolvedValue(null)
+        }));
         jest.doMock('../modules/channelSettingsModule', () => ({
           getChannelSettings: jest.fn(),
           updateChannelSettings: jest.fn(),

@@ -360,6 +360,7 @@ function ChannelPage({ token }: ChannelPageProps) {
         token={token}
         channelAutoDownloadTabs={channel?.auto_download_enabled_tabs}
         channelId={channel_id || undefined}
+        channelName={channel?.uploader || ''}
         channelVideoQuality={channel?.video_quality || null}
         channelAudioFormat={channel?.audio_format || null}
         channelAvailableTabs={channel?.available_tabs ?? null}

@@ -25,6 +25,7 @@ import { decodeHtml } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
+import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
@@ -43,6 +44,7 @@ interface VideoTableViewProps {
   onToggleIgnore: (youtubeId: string) => void;
   onToggleProtection: (youtubeId: string) => void;
   onMobileTooltip?: (message: string) => void;
+  onVideoClick?: (video: ChannelVideo) => void;
 }
 
 function VideoTableView({
@@ -59,6 +61,7 @@ function VideoTableView({
   onToggleIgnore,
   onToggleProtection,
   onMobileTooltip,
+  onVideoClick,
 }: VideoTableViewProps) {
   return (
     <TableContainer>
@@ -209,6 +212,15 @@ function VideoTableView({
                       }}
                       loading="lazy"
                     />
+                    {/* Center hotspot for opening video modal */}
+                    {onVideoClick && (
+                      <ThumbnailClickOverlay
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          onVideoClick(video);
+                        }}
+                      />
+                    )}
                     {video.youtube_removed && (
                       <Box
                         sx={{
@@ -232,7 +244,18 @@ function VideoTableView({
                   </Box>
                 </TableCell>
                 <TableCell>
-                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  <Typography
+                    variant="body2"
+                    onClick={onVideoClick ? (e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      onVideoClick(video);
+                    } : undefined}
+                    sx={{
+                      mb: 0.5,
+                      cursor: onVideoClick ? 'pointer' : 'default',
+                      '&:hover': onVideoClick ? { textDecoration: 'underline' } : {},
+                    }}
+                  >
                     {decodeHtml(video.title)}
                   </Typography>
                 </TableCell>

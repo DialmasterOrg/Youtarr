@@ -52,11 +52,15 @@ import { useChannelVideosPageSize, ALLOWED_PAGE_SIZES, type PageSize } from './h
 import ChannelVideosFilters from './components/ChannelVideosFilters';
 import { useConfig } from '../../hooks/useConfig';
 import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
+import VideoModal from '../shared/VideoModal';
+import { VideoModalData } from '../shared/VideoModal/types';
+import { ChannelVideo } from '../../types/ChannelVideo';
 
 interface ChannelVideosProps {
   token: string | null;
   channelAutoDownloadTabs?: string;
   channelId?: string;
+  channelName?: string;
   channelVideoQuality?: string | null;
   channelAudioFormat?: string | null;
   /**
@@ -72,7 +76,33 @@ type ViewMode = 'table' | 'grid' | 'list';
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
 
-function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelId, channelVideoQuality, channelAudioFormat, channelAvailableTabs }: ChannelVideosProps) {
+function channelVideoToModalData(video: ChannelVideo, channelName: string, channelId: string | undefined): VideoModalData {
+  const status = getVideoStatus(video);
+  return {
+    youtubeId: video.youtube_id,
+    title: video.title,
+    channelName,
+    thumbnailUrl: video.thumbnail,
+    duration: video.duration,
+    publishedAt: video.publishedAt || null,
+    addedAt: null,
+    mediaType: video.media_type || 'video',
+    status,
+    isDownloaded: video.added && !video.removed,
+    filePath: video.filePath || null,
+    fileSize: video.fileSize || null,
+    audioFilePath: video.audioFilePath || null,
+    audioFileSize: video.audioFileSize || null,
+    isProtected: video.protected || false,
+    isIgnored: video.ignored || false,
+    normalizedRating: video.normalized_rating || null,
+    ratingSource: video.rating_source || null,
+    databaseId: video.id || null,
+    channelId: channelId || null,
+  };
+}
+
+function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelId, channelName = '', channelVideoQuality, channelAudioFormat, channelAvailableTabs }: ChannelVideosProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -103,6 +133,9 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Modal state
+  const [modalVideo, setModalVideo] = useState<ChannelVideo | null>(null);
 
   // Local state to track ignore status changes without refetching
   const [localIgnoreStatus, setLocalIgnoreStatus] = useState<Record<string, boolean>>({});
@@ -1074,6 +1107,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                       onToggleIgnore={toggleIgnore}
                       onToggleProtection={handleToggleProtection}
                       onMobileTooltip={setMobileTooltip}
+                      onVideoClick={setModalVideo}
                     />
                   ))}
                 </Grid>
@@ -1092,6 +1126,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                       onToggleIgnore={toggleIgnore}
                       onToggleProtection={handleToggleProtection}
                       onMobileTooltip={setMobileTooltip}
+                      onVideoClick={setModalVideo}
                     />
                   ))}
                 </Box>
@@ -1112,6 +1147,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                   onToggleIgnore={toggleIgnore}
                   onToggleProtection={handleToggleProtection}
                   onMobileTooltip={setMobileTooltip}
+                  onVideoClick={setModalVideo}
                 />
               )}
 
@@ -1166,6 +1202,31 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         onSuccessMessageClose={() => setSuccessMessage(null)}
         onErrorMessageClose={() => setErrorMessage(null)}
       />
+
+      {modalVideo && (
+        <VideoModal
+          open
+          onClose={() => setModalVideo(null)}
+          video={channelVideoToModalData(modalVideo, channelName, channelId)}
+          token={token}
+          onVideoDeleted={() => {
+            setModalVideo(null);
+            refetchVideos();
+          }}
+          onProtectionChanged={(youtubeId, isProtected) => {
+            setLocalProtectedStatus(prev => ({ ...prev, [youtubeId]: isProtected }));
+          }}
+          onIgnoreChanged={(youtubeId, isIgnored) => {
+            setLocalIgnoreStatus(prev => ({ ...prev, [youtubeId]: isIgnored }));
+          }}
+          onDownloadQueued={() => {
+            setModalVideo(null);
+          }}
+          onRatingChanged={() => {
+            refetchVideos();
+          }}
+        />
+      )}
     </>
   );
 }

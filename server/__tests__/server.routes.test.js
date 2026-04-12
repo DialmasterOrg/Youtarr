@@ -336,6 +336,10 @@ const createServerModule = ({
         jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
         jest.doMock('../modules/videoValidationModule', () => videoValidationModuleMock);
         jest.doMock('../modules/channelSettingsModule', () => channelSettingsModuleMock);
+        jest.doMock('../modules/videoMetadataModule', () => ({
+          getVideoMetadata: jest.fn().mockResolvedValue(null),
+          getVideoStreamInfo: jest.fn().mockResolvedValue(null)
+        }));
         jest.doMock('../modules/archiveModule', () => ({
           getAutoRemovalDryRun: jest.fn().mockResolvedValue({ videos: [], totalSize: 0 })
         }));

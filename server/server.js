@@ -7,6 +7,20 @@ const { setupSwagger } = require('./swagger');
 const app = express();
 app.set('trust proxy', true); // Trust proxy headers for correct IP detection
 
+// Strip auth tokens from URLs before logging. The video streaming endpoint
+// passes the auth token as ?token=... because <video src> cannot set headers,
+// and pino-http otherwise logs the full URL.
+function redactUrl(url) {
+  if (typeof url !== 'string' || !url.includes('token=')) return url;
+  return url.replace(/([?&])token=[^&]*/g, '$1token=[REDACTED]');
+}
+
+function redactQuery(query) {
+  if (!query || typeof query !== 'object') return query;
+  if (!('token' in query)) return query;
+  return { ...query, token: '[REDACTED]' };
+}
+
 // Setup HTTP request logging with pino-http
 // This must come after trust proxy but before other middleware
 app.use(pinoHttp({
@@ -44,9 +58,9 @@ app.use(pinoHttp({
     req: (req) => ({
       id: req.id,
       method: req.method,
-      url: req.url,
+      url: redactUrl(req.url),
       // Only include query/params if they exist
-      ...(Object.keys(req.query || {}).length > 0 && { query: req.query }),
+      ...(Object.keys(req.query || {}).length > 0 && { query: redactQuery(req.query) }),
       ...(Object.keys(req.params || {}).length > 0 && { params: req.params }),
       remoteAddress: req.remoteAddress,
     }),
@@ -56,10 +70,10 @@ app.use(pinoHttp({
   },
   // Customize the success message to be more concise
   customSuccessMessage: (req, res) => {
-    return `${req.method} ${req.url} ${res.statusCode}`;
+    return `${req.method} ${redactUrl(req.url)} ${res.statusCode}`;
   },
   customErrorMessage: (req, res, err) => {
-    return `${req.method} ${req.url} ${res.statusCode} - ${err?.message || 'Error'}`;
+    return `${req.method} ${redactUrl(req.url)} ${res.statusCode} - ${err?.message || 'Error'}`;
   },
 }));
 
