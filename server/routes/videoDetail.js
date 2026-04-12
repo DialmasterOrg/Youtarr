@@ -1,5 +1,18 @@
 const express = require('express');
 const fs = require('fs');
+const rateLimit = require('express-rate-limit');
+
+// Metadata endpoint rate limiter. The endpoint may spawn yt-dlp on cache miss
+// (up to 60s per call), so we cap concurrent abuse. The limit is generous
+// enough for a user rapidly clicking through a video list.
+const metadataLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60, // 60 requests per minute per IP
+  message: { error: 'Too many metadata requests, please try again shortly' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false },
+});
 
 /**
  * Creates video detail routes for metadata and streaming
@@ -46,7 +59,7 @@ function createVideoDetailRoutes({ verifyToken, videoMetadataModule }) {
    *       500:
    *         description: Internal server error
    */
-  router.get('/api/videos/:youtubeId/metadata', verifyToken, async (req, res) => {
+  router.get('/api/videos/:youtubeId/metadata', metadataLimiter, verifyToken, async (req, res) => {
     const { youtubeId } = req.params;
 
     if (!youtubeId || !/^[A-Za-z0-9_-]{6,20}$/.test(youtubeId)) {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import {
   Dialog,
   DialogTitle,
@@ -83,11 +84,12 @@ function VideoModal({
   const { config } = useConfig(token);
 
   // Fetch channel-level download settings when modal opens
-  const [channelSettings, setChannelSettings] = useState<{
+  interface ChannelSettings {
     video_quality?: string | null;
     audio_format?: string | null;
     default_rating?: string | null;
-  }>({});
+  }
+  const [channelSettings, setChannelSettings] = useState<ChannelSettings>({});
 
   useEffect(() => {
     if (!open || !video.channelId || !token) {
@@ -97,14 +99,18 @@ function VideoModal({
     const controller = new AbortController();
     const fetchSettings = async () => {
       try {
-        const resp = await fetch(`/api/channels/${video.channelId}/settings`, {
-          headers: { 'x-access-token': token },
-          signal: controller.signal,
-        });
-        if (!resp.ok) return;
-        setChannelSettings(await resp.json());
-      } catch (err: unknown) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
+        const resp = await axios.get<ChannelSettings>(
+          `/api/channels/${video.channelId}/settings`,
+          {
+            headers: { 'x-access-token': token },
+            signal: controller.signal,
+          }
+        );
+        if (!controller.signal.aborted) {
+          setChannelSettings(resp.data);
+        }
+      } catch {
+        // Request failed or was aborted; leave channelSettings at its last value.
       }
     };
     fetchSettings();

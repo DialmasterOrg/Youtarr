@@ -1205,7 +1205,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
       {modalVideo && (
         <VideoModal
-          open={modalVideo !== null}
+          open
           onClose={() => setModalVideo(null)}
           video={channelVideoToModalData(modalVideo, channelName, channelId)}
           token={token}

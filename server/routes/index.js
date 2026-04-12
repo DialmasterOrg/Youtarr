@@ -9,6 +9,7 @@ const createPlexRoutes = require('./plex');
 const createApiKeyRoutes = require('./apikeys');
 const createSubscriptionRoutes = require('./subscriptions');
 const createVideoDetailRoutes = require('./videoDetail');
+const videoMetadataModule = require('../modules/videoMetadataModule');
 
 /**
  * Registers all route modules with the Express app
@@ -16,7 +17,6 @@ const createVideoDetailRoutes = require('./videoDetail');
  * @param {Object} deps - Dependencies to inject into route modules
  */
 function registerRoutes(app, deps) {
-  const videoMetadataModule = require('../modules/videoMetadataModule');
   const {
     verifyToken,
     loginLimiter,

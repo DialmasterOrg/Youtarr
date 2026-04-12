@@ -1,5 +1,4 @@
 const { Video } = require('../models');
-const fsSync = require('fs');
 const fs = require('fs').promises;
 const path = require('path');
 const configModule = require('./configModule');
@@ -39,9 +38,19 @@ const FILE_EXTENSION_CATEGORIES = {
   '.jpg': 'Thumbnail', '.jpeg': 'Thumbnail', '.png': 'Thumbnail', '.webp': 'Thumbnail',
   '.nfo': 'NFO Metadata',
   '.srt': 'Subtitles', '.vtt': 'Subtitles', '.ass': 'Subtitles',
-  '.info.json': 'Info JSON',
   '.json': 'Info JSON',
 };
+
+const STREAM_MIME_TYPES = {
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mkv': 'video/x-matroska',
+  '.mp3': 'audio/mpeg',
+  '.m4a': 'audio/mp4',
+  '.ogg': 'audio/ogg',
+};
+
+const DEFAULT_STREAM_MIME_TYPE = 'application/octet-stream';
 
 class VideoMetadataModule {
   constructor() {}
@@ -267,16 +276,6 @@ class VideoMetadataModule {
    *   Returns null if video not found; throws with a message property for specific error cases.
    */
   async getVideoStreamInfo(youtubeId, type) {
-    const MIME_TYPES = {
-      '.mp4': 'video/mp4',
-      '.webm': 'video/webm',
-      '.mkv': 'video/x-matroska',
-      '.mp3': 'audio/mpeg',
-      '.m4a': 'audio/mp4',
-      '.ogg': 'audio/ogg',
-    };
-    const DEFAULT_MIME_TYPE = 'application/octet-stream';
-
     const video = await Video.findOne({ where: { youtubeId } });
 
     if (!video) {
@@ -290,15 +289,16 @@ class VideoMetadataModule {
     }
 
     // Verify file exists on disk
+    let stat;
     try {
-      fsSync.accessSync(filePath, fsSync.constants.R_OK);
+      await fs.access(filePath);
+      stat = await fs.stat(filePath);
     } catch {
       return { error: 'file_missing', message: 'File not found on disk' };
     }
 
-    const stat = fsSync.statSync(filePath);
     const ext = path.extname(filePath).toLowerCase();
-    const contentType = MIME_TYPES[ext] || DEFAULT_MIME_TYPE;
+    const contentType = STREAM_MIME_TYPES[ext] || DEFAULT_STREAM_MIME_TYPE;
 
     return {
       filePath,

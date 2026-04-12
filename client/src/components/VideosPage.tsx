@@ -1173,7 +1173,7 @@ function VideosPage({ token }: VideosPageProps) {
 
       {modalVideo && (
         <VideoModal
-          open={modalVideo !== null}
+          open
           onClose={() => setModalVideo(null)}
           video={videoDataToModalData(modalVideo)}
           token={token}
