@@ -23,6 +23,7 @@ import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import RatingBadge from '../shared/RatingBadge';
 import ProtectionShieldButton from '../shared/ProtectionShieldButton';
+import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 
 interface VideoCardProps {
   video: ChannelVideo;
@@ -36,6 +37,7 @@ interface VideoCardProps {
   onToggleIgnore: (youtubeId: string) => void;
   onToggleProtection: (youtubeId: string) => void;
   onMobileTooltip?: (message: string) => void;
+  onVideoClick?: (video: ChannelVideo) => void;
 }
 
 function VideoCard({
@@ -50,6 +52,7 @@ function VideoCard({
   onToggleIgnore,
   onToggleProtection,
   onMobileTooltip,
+  onVideoClick,
 }: VideoCardProps) {
   const theme = useTheme();
   const status = getVideoStatus(video);
@@ -104,6 +107,16 @@ function VideoCard({
               }}
               loading="lazy"
             />
+
+            {/* Center hotspot for opening video modal */}
+            {onVideoClick && (
+              <ThumbnailClickOverlay
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  onVideoClick(video);
+                }}
+              />
+            )}
 
             {/* YouTube Removed Banner */}
             {video.youtube_removed ? (
@@ -266,6 +279,10 @@ function VideoCard({
           <Box sx={{ p: isMobile ? 1.5 : 2, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
             <Typography
               variant="body2"
+              onClick={onVideoClick ? (e: React.MouseEvent) => {
+                e.stopPropagation();
+                onVideoClick(video);
+              } : undefined}
               sx={{
                 mb: 1,
                 overflow: 'hidden',
@@ -275,6 +292,8 @@ function VideoCard({
                 WebkitBoxOrient: 'vertical',
                 lineHeight: 1.3,
                 minHeight: '2.6em',
+                cursor: onVideoClick ? 'pointer' : 'default',
+                '&:hover': onVideoClick ? { textDecoration: 'underline' } : {},
               }}
               title={decodeHtml(video.title)}
             >
