@@ -6,6 +6,7 @@ import {
   IconButton,
   Tooltip,
   Link,
+  ClickAwayListener,
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import CloudOffIcon from '@mui/icons-material/CloudOff';
@@ -33,10 +34,12 @@ const PLAYER_HEIGHT_MOBILE = '25vh';
 function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerProps) {
   const [playbackStarted, setPlaybackStarted] = useState(false);
   const [streamError, setStreamError] = useState(false);
+  const [infoTooltipOpen, setInfoTooltipOpen] = useState(false);
 
   useEffect(() => {
     setPlaybackStarted(false);
     setStreamError(false);
+    setInfoTooltipOpen(false);
   }, [video.youtubeId]);
 
   const canStream = video.isDownloaded && video.status !== 'missing';
@@ -235,24 +238,35 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
         </Tooltip>
       )}
 
-      {/* Playback info tooltip - shown when video can stream */}
+      {/* Playback info tooltip - shown when video can stream.
+          Controlled open state so a tap works on touch devices (hover doesn't exist on mobile).
+          ClickAwayListener dismisses the tooltip when tapping elsewhere. */}
       {canStream && !streamError && (
-        <Tooltip title="Video is served directly without transcoding. Playback may buffer on slow connections.">
-          <IconButton
-            size="small"
-            sx={{
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              color: 'common.white',
-              bgcolor: 'rgba(0,0,0,0.5)',
-              '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' },
-              zIndex: 2,
-            }}
+        <ClickAwayListener onClickAway={() => setInfoTooltipOpen(false)}>
+          <Tooltip
+            open={infoTooltipOpen}
+            onOpen={() => setInfoTooltipOpen(true)}
+            onClose={() => setInfoTooltipOpen(false)}
+            title="Video is served directly without transcoding. Playback may buffer on slow connections."
           >
-            <InfoOutlinedIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
+            <IconButton
+              size="small"
+              onClick={() => setInfoTooltipOpen((prev) => !prev)}
+              aria-label="Playback info"
+              sx={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                color: 'common.white',
+                bgcolor: 'rgba(0,0,0,0.5)',
+                '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' },
+                zIndex: 2,
+              }}
+            >
+              <InfoOutlinedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </ClickAwayListener>
       )}
     </Box>
   );
