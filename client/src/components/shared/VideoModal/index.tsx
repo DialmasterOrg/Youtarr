@@ -5,7 +5,6 @@ import {
   DialogContent,
   Box,
   Typography,
-  Chip,
   IconButton,
   Snackbar,
   Alert,
@@ -13,6 +12,7 @@ import {
   useTheme,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import VideoPlayer from './components/VideoPlayer';
 import VideoMetadata from './components/VideoMetadata';
 import VideoActions from './components/VideoActions';
@@ -23,7 +23,6 @@ import { VideoModalProps } from './types';
 import DeleteVideosDialog from '../DeleteVideosDialog';
 import ChangeRatingDialog from '../ChangeRatingDialog';
 import DownloadSettingsDialog from '../../DownloadManager/ManualDownload/DownloadSettingsDialog';
-import RatingBadge from '../RatingBadge';
 import { getStatusLabel, getStatusColor, getMediaTypeInfo } from '../../../utils/videoStatus';
 
 const SNACKBAR_AUTO_HIDE_MS = 4000;
@@ -85,15 +84,14 @@ function VideoModal({
         onClose={onClose}
         maxWidth="lg"
         fullWidth
+        fullScreen={isMobile}
         PaperProps={{
           sx: {
-            maxHeight: '92vh',
-            m: isMobile ? 0.5 : 1.5,
-            width: isMobile ? 'calc(100% - 8px)' : undefined,
+            ...(!isMobile && { maxHeight: '92vh', m: 1.5 }),
           },
         }}
       >
-        {/* Header bar */}
+        {/* Header bar - title + close */}
         <DialogTitle
           sx={{
             display: 'flex',
@@ -101,37 +99,48 @@ function VideoModal({
             gap: 1,
             py: 1.5,
             px: 2,
+            borderBottom: 1,
+            borderColor: 'divider',
           }}
         >
-          <Chip
-            label={getStatusLabel(localVideo.status)}
-            color={getStatusColor(localVideo.status)}
-            size="small"
-          />
-          {mediaTypeInfo && (
-            <Chip
-              label={mediaTypeInfo.label}
-              color={mediaTypeInfo.color}
+          {isMobile && (
+            <IconButton
+              onClick={onClose}
               size="small"
-              icon={mediaTypeInfo.icon}
-            />
+              aria-label="Close"
+              edge="start"
+              sx={{ mr: 0.5 }}
+            >
+              <ArrowBackIcon />
+            </IconButton>
           )}
-          {localVideo.normalizedRating && (
-            <RatingBadge
-              rating={localVideo.normalizedRating}
-              ratingSource={localVideo.ratingSource}
-              size="small"
-            />
-          )}
-          <Box sx={{ flex: 1 }} />
-          <IconButton
-            onClick={onClose}
-            size="small"
-            aria-label="Close"
-            edge="end"
+          <Typography
+            variant="h6"
+            component="span"
+            sx={{
+              flex: 1,
+              minWidth: 0,
+              fontSize: isMobile ? '1rem' : '1.15rem',
+              fontWeight: 600,
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              wordBreak: 'break-word',
+            }}
           >
-            <CloseIcon />
-          </IconButton>
+            {localVideo.title}
+          </Typography>
+          {!isMobile && (
+            <IconButton
+              onClick={onClose}
+              size="small"
+              aria-label="Close"
+              edge="end"
+            >
+              <CloseIcon />
+            </IconButton>
+          )}
         </DialogTitle>
 
         <DialogContent sx={{ p: isMobile ? 1.5 : 2 }}>
@@ -146,16 +155,16 @@ function VideoModal({
                 />
               </Box>
               <Box sx={{ minWidth: 0 }}>
-                <Typography variant="h6" sx={{ mb: 1, wordBreak: 'break-word' }}>
-                  {localVideo.title}
-                </Typography>
                 <VideoActions
                   video={localVideo}
+                  statusChip={{ label: getStatusLabel(localVideo.status), color: getStatusColor(localVideo.status) }}
+                  mediaTypeChip={mediaTypeInfo}
                   onDelete={() => setDeleteDialogOpen(true)}
                   onProtectionToggle={handleProtectionToggle}
                   onIgnoreToggle={handleIgnoreToggle}
                   onRatingChange={() => setRatingDialogOpen(true)}
                   protectionLoading={protectionLoading}
+                  isMobile={isMobile}
                 />
                 <Box sx={{ mt: 2 }}>
                   <VideoMetadata
@@ -179,17 +188,17 @@ function VideoModal({
                 onDownloadClick={() => setDownloadDialogOpen(true)}
                 isMobile={isMobile}
               />
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="h6" sx={{ mb: 1, wordBreak: 'break-word' }}>
-                  {localVideo.title}
-                </Typography>
+              <Box sx={{ mt: 1.5 }}>
                 <VideoActions
                   video={localVideo}
+                  statusChip={{ label: getStatusLabel(localVideo.status), color: getStatusColor(localVideo.status) }}
+                  mediaTypeChip={mediaTypeInfo}
                   onDelete={() => setDeleteDialogOpen(true)}
                   onProtectionToggle={handleProtectionToggle}
                   onIgnoreToggle={handleIgnoreToggle}
                   onRatingChange={() => setRatingDialogOpen(true)}
                   protectionLoading={protectionLoading}
+                  isMobile={isMobile}
                 />
               </Box>
               <Box sx={{ mt: 2 }}>

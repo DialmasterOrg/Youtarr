@@ -191,12 +191,13 @@ describe('VideoModal', () => {
     expect(screen.getByText('Downloaded')).toBeInTheDocument();
   });
 
-  test('renders rating badge when rating exists', () => {
+  test('renders rating in action button when rating exists', () => {
     renderModal({
       video: { ...baseVideo, normalizedRating: 'PG-13', ratingSource: 'manual' },
     });
-    expect(screen.getByTestId('rating-badge')).toBeInTheDocument();
-    expect(screen.getByTestId('rating-badge')).toHaveTextContent('PG-13');
+    const ratingButton = screen.getByRole('button', { name: /change rating/i });
+    expect(ratingButton).toBeInTheDocument();
+    expect(ratingButton).toHaveTextContent('PG-13');
   });
 
   test('renders delete button for downloaded videos', () => {
@@ -361,7 +362,7 @@ describe('VideoModal', () => {
       renderModal({ onRatingChanged });
 
       // Click the Rate button to open the rating dialog
-      const rateButton = screen.getByRole('button', { name: /rate/i });
+      const rateButton = screen.getByRole('button', { name: /change rating/i });
       await userEvent.click(rateButton);
 
       // Apply a rating
@@ -390,7 +391,7 @@ describe('VideoModal', () => {
 
       renderModal();
 
-      const rateButton = screen.getByRole('button', { name: /rate/i });
+      const rateButton = screen.getByRole('button', { name: /change rating/i });
       await userEvent.click(rateButton);
 
       const applyButton = screen.getByTestId('apply-rating');
@@ -407,7 +408,7 @@ describe('VideoModal', () => {
 
       renderModal({ video: videoWithoutDbId });
 
-      const rateButton = screen.getByRole('button', { name: /rate/i });
+      const rateButton = screen.getByRole('button', { name: /change rating/i });
       await userEvent.click(rateButton);
 
       const applyButton = screen.getByTestId('apply-rating');

@@ -91,24 +91,31 @@ function VideoMetadata({ video, metadata, loading }: VideoMetadataProps) {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      {/* Stats row */}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
+      {/* Channel and date */}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
         <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
           {video.channelName}
         </Typography>
-
         {publishDate && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <CalendarTodayIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-            <Typography variant="body2" color="text.secondary">
-              {publishDate}
+          <>
+            <Typography variant="body2" color="text.disabled" sx={{ lineHeight: 1 }}>
+              ·
             </Typography>
-          </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <CalendarTodayIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+              <Typography variant="body2" color="text.secondary">
+                {publishDate}
+              </Typography>
+            </Box>
+          </>
         )}
+      </Box>
 
+      {/* Stats row */}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
         {video.duration !== null && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <AccessTimeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+            <AccessTimeIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
             <Typography variant="body2" color="text.secondary">
               {formatDuration(video.duration)}
             </Typography>
@@ -119,13 +126,12 @@ function VideoMetadata({ video, metadata, loading }: VideoMetadataProps) {
           <>
             <Skeleton width={60} height={20} />
             <Skeleton width={60} height={20} />
-            <Skeleton width={60} height={20} />
           </>
         ) : (
           <>
             {metadata?.viewCount !== null && metadata?.viewCount !== undefined && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <VisibilityIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                <VisibilityIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
                 <Typography variant="body2" color="text.secondary">
                   {formatCount(metadata.viewCount)}
                 </Typography>
@@ -134,7 +140,7 @@ function VideoMetadata({ video, metadata, loading }: VideoMetadataProps) {
 
             {metadata?.likeCount !== null && metadata?.likeCount !== undefined && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <ThumbUpIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                <ThumbUpIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
                 <Typography variant="body2" color="text.secondary">
                   {formatCount(metadata.likeCount)}
                 </Typography>
@@ -143,7 +149,7 @@ function VideoMetadata({ video, metadata, loading }: VideoMetadataProps) {
 
             {metadata?.commentCount !== null && metadata?.commentCount !== undefined && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <ChatBubbleOutlineIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                <ChatBubbleOutlineIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
                 <Typography variant="body2" color="text.secondary">
                   {formatCount(metadata.commentCount)}
                 </Typography>
@@ -169,8 +175,9 @@ function VideoMetadata({ video, metadata, loading }: VideoMetadataProps) {
             <Chip
               label={`+${hiddenTagsCount} more`}
               size="small"
+              color="primary"
               onClick={() => setTagsExpanded(true)}
-              sx={{ cursor: 'pointer' }}
+              sx={{ cursor: 'pointer', fontWeight: 500 }}
             />
           )}
           {tagsExpanded && allTags.length > VISIBLE_TAGS_COUNT && (
@@ -193,25 +200,37 @@ function VideoMetadata({ video, metadata, loading }: VideoMetadataProps) {
         </Box>
       ) : description ? (
         <Box>
-          <Collapse in={descriptionExpanded} collapsedSize={60}>
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-            >
-              {descriptionExpanded
-                ? description
-                : needsTruncation
-                  ? `${description.substring(0, DESCRIPTION_PREVIEW_LENGTH)}...`
-                  : description}
-            </Typography>
-          </Collapse>
+          <Box sx={{ position: 'relative' }}>
+            <Collapse in={descriptionExpanded} collapsedSize={72}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+              >
+                {description}
+              </Typography>
+            </Collapse>
+            {!descriptionExpanded && needsTruncation && (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: 36,
+                  background: (theme) =>
+                    `linear-gradient(to bottom, transparent, ${theme.palette.background.paper})`,
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+          </Box>
           {needsTruncation && (
             <Button
               size="small"
               onClick={() => setDescriptionExpanded(!descriptionExpanded)}
               endIcon={descriptionExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-              sx={{ textTransform: 'none', mt: 0.5, p: 0, minWidth: 0 }}
+              sx={{ textTransform: 'none', mt: 0.5, fontWeight: 500 }}
             >
               {descriptionExpanded ? 'Show less' : 'Show more'}
             </Button>
@@ -230,9 +249,25 @@ function VideoMetadata({ video, metadata, loading }: VideoMetadataProps) {
           borderColor: 'divider',
         }}
       >
-        <Typography variant="caption" color="text.secondary">
-          ID: {video.youtubeId}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+          <Typography variant="caption" color="text.secondary">
+            YouTube ID
+          </Typography>
+          <Typography
+            variant="caption"
+            sx={{
+              fontFamily: 'monospace',
+              bgcolor: 'action.hover',
+              color: 'text.primary',
+              px: 0.75,
+              py: 0.25,
+              borderRadius: 0.5,
+              fontSize: '0.7rem',
+            }}
+          >
+            {video.youtubeId}
+          </Typography>
+        </Box>
         <Link
           href={`${YOUTUBE_URL_BASE}${video.youtubeId}`}
           target="_blank"

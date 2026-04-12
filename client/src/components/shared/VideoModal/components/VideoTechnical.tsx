@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, Skeleton, Card, CardContent, Tooltip, Chip } from '@mui/material';
+import { Box, Typography, Skeleton, Card, CardContent, Tooltip, Chip, useTheme, useMediaQuery } from '@mui/material';
 import { VideoModalData, VideoExtendedMetadata } from '../types';
 
 interface VideoTechnicalProps {
@@ -110,6 +110,9 @@ function FileRow({ label, filePath, fileSize }: FileRowProps) {
 }
 
 function VideoTechnical({ video, metadata, loading }: VideoTechnicalProps) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
@@ -166,14 +169,36 @@ function VideoTechnical({ video, metadata, loading }: VideoTechnicalProps) {
   return (
     <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
       {hasTechnical && (
-        <Card variant="outlined" sx={{ flex: 1 }}>
+        <Card
+          variant="outlined"
+          sx={{
+            flex: 1,
+            ...(isMobile && {
+              border: 'none',
+              borderTop: 1,
+              borderColor: 'divider',
+              borderRadius: 0,
+            }),
+          }}
+        >
           <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
             <Typography variant="subtitle2" color="text.primary" sx={{ mb: 1 }}>
               Technical
             </Typography>
-            {technicalDetails.map((detail) => (
-              <DetailRow key={detail.label} label={detail.label} value={detail.value} />
-            ))}
+            <Box
+              sx={{
+                '& > div:nth-of-type(even)': {
+                  bgcolor: 'action.hover',
+                  borderRadius: 0.5,
+                  mx: -0.5,
+                  px: 0.5,
+                },
+              }}
+            >
+              {technicalDetails.map((detail) => (
+                <DetailRow key={detail.label} label={detail.label} value={detail.value} />
+              ))}
+            </Box>
             {availableResolutions && (
               <Box sx={{ py: 0.5 }}>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
@@ -201,36 +226,58 @@ function VideoTechnical({ video, metadata, loading }: VideoTechnicalProps) {
       )}
 
       {hasFileInfo && (
-        <Card variant="outlined" sx={{ flex: 1 }}>
+        <Card
+          variant="outlined"
+          sx={{
+            flex: 1,
+            ...(isMobile && {
+              border: 'none',
+              borderTop: 1,
+              borderColor: 'divider',
+              borderRadius: 0,
+            }),
+          }}
+        >
           <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
             <Typography variant="subtitle2" color="text.primary" sx={{ mb: 1 }}>
               Files
             </Typography>
-            {hasVideoFile && (
-              <FileRow
-                label="Video"
-                filePath={video.filePath!}
-                fileSize={video.fileSize}
-              />
-            )}
-            {hasAudioFile && (
-              <FileRow
-                label="Audio"
-                filePath={video.audioFilePath!}
-                fileSize={video.audioFileSize}
-              />
-            )}
-            {relatedFiles && relatedFiles.map((file) => (
-              <FileRow
-                key={file.fileName}
-                label={file.type}
-                filePath={file.fileName}
-                fileSize={file.fileSize}
-              />
-            ))}
-            {addedDate && (
-              <DetailRow label="Added" value={addedDate} />
-            )}
+            <Box
+              sx={{
+                '& > div:nth-of-type(even)': {
+                  bgcolor: 'action.hover',
+                  borderRadius: 0.5,
+                  mx: -0.5,
+                  px: 0.5,
+                },
+              }}
+            >
+              {hasVideoFile && (
+                <FileRow
+                  label="Video"
+                  filePath={video.filePath!}
+                  fileSize={video.fileSize}
+                />
+              )}
+              {hasAudioFile && (
+                <FileRow
+                  label="Audio"
+                  filePath={video.audioFilePath!}
+                  fileSize={video.audioFileSize}
+                />
+              )}
+              {relatedFiles && relatedFiles.map((file) => (
+                <FileRow
+                  key={file.fileName}
+                  label={file.type}
+                  filePath={file.fileName}
+                  fileSize={file.fileSize}
+                />
+              ))}
+              {addedDate && (
+                <DetailRow label="Added" value={addedDate} />
+              )}
+            </Box>
           </CardContent>
         </Card>
       )}

@@ -70,9 +70,10 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
       sx={{
         position: 'relative',
         width: '100%',
-        // When playing, use fixed height for the video element.
-        // When showing thumbnail, let the image determine the height naturally.
-        ...(isPlaying && { height: playerHeight, bgcolor: 'black' }),
+        bgcolor: 'black',
+        border: 1,
+        borderColor: 'divider',
+        ...(isPlaying && { height: playerHeight }),
         overflow: 'hidden',
         borderRadius: 1,
       }}
@@ -125,7 +126,7 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            bgcolor: 'rgba(0,0,0,0.4)',
+            background: 'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.5) 100%)',
             gap: 1,
           }}
         >
@@ -151,14 +152,18 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
               onClick={handlePlay}
               aria-label="Play video"
               sx={{
-                bgcolor: 'rgba(0,0,0,0.6)',
+                bgcolor: 'rgba(0,0,0,0.7)',
                 color: 'common.white',
-                '&:hover': { bgcolor: 'rgba(0,0,0,0.8)' },
-                width: 64,
-                height: 64,
+                '&:hover': {
+                  bgcolor: 'rgba(0,0,0,0.85)',
+                  transform: 'scale(1.1)',
+                },
+                transition: 'transform 0.2s ease, background-color 0.2s ease',
+                width: 72,
+                height: 72,
               }}
             >
-              <PlayArrowIcon sx={{ fontSize: 40 }} />
+              <PlayArrowIcon sx={{ fontSize: 48 }} />
             </IconButton>
           ) : video.status === 'ignored' ? (
             <>
