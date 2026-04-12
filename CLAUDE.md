@@ -31,8 +31,8 @@ For multi-part requests (e.g., "review this PR AND explain WebSocket handling"),
 ### Backend (server/)
 - `server.js`: Express entry point. `db.js`: Sequelize setup. `logger.js`: Pino logger with request correlation.
 - `models/`: Sequelize models (channel, video, job, jobvideo, jobvideodownload, channelvideo, session, apikey). Associations: Channel hasMany Videos, Job hasMany JobVideos.
-- `routes/`: API handlers (auth, channels, videos, config, jobs, plex, setup, subscriptions, apikeys, health). All use the dependency injection factory pattern; wiring lives in `server/routes/index.js`.
-- `modules/`: class-based singletons holding business logic. Top-level modules include `channelModule`, `downloadModule`, `plexModule`, `jobModule`, `configModule`, `videosModule`, `webSocketServer`, `databaseHealthModule`, `notificationModule`, `channelSettingsModule`, `videoDeletionModule`, `nfoGenerator`, `cronJobs`, `apiKeyModule`, `ytdlpModule`, `messageEmitter`.
+- `routes/`: API handlers (auth, channels, videos, videoDetail, config, jobs, plex, setup, subscriptions, apikeys, health). All use the dependency injection factory pattern; wiring lives in `server/routes/index.js`.
+- `modules/`: class-based singletons holding business logic. Top-level modules include `channelModule`, `downloadModule`, `plexModule`, `jobModule`, `configModule`, `videosModule`, `videoMetadataModule`, `webSocketServer`, `databaseHealthModule`, `notificationModule`, `channelSettingsModule`, `videoDeletionModule`, `nfoGenerator`, `cronJobs`, `apiKeyModule`, `ytdlpModule`, `messageEmitter`.
 - `modules/download/`: download orchestration (`downloadExecutor`, `ytdlpCommandBuilder`, `DownloadProgressMonitor`, `tempPathManager`, `videoMetadataProcessor`).
 - `modules/filesystem/`: path/file abstraction (`pathBuilder`, `directoryManager`, `fileOperations`, `sanitizer`, `constants`). Good example of the sub-module aggregator pattern.
 - `modules/notifications/`: multi-service notifications via Apprise (`serviceRegistry`, `formatters/`, `senders/`). Good example of a pluggable service registry.
@@ -41,6 +41,7 @@ For multi-part requests (e.g., "review this PR AND explain WebSocket handling"),
 ### Frontend (client/src/)
 - `App.tsx`: app routing plus a global `fetch()` override that detects 503 `requiresDbFix` responses and surfaces the database error overlay. You can use normal `fetch()` anywhere; database errors are handled automatically.
 - `components/`: feature directories and pages. Complex features pair a top-level `FeatureName.tsx` with a same-named `FeatureName/` directory holding `components/`, `hooks/`, and `__tests__/`. Examples of this sibling-file layout: `ChannelManager.tsx` + `ChannelManager/`, `Configuration.tsx` + `Configuration/`, `ChannelPage.tsx` + `ChannelPage/`. Newer features (e.g. `SubscriptionImport/`) put the main component at `FeatureName/index.tsx` instead; either layout is acceptable for new features.
+- `components/shared/`: reusable components used across multiple features (e.g. `VideoModal/` for the video detail modal, `ThumbnailClickOverlay` for clickable thumbnail hotspots, `DeleteVideosDialog`).
 - `hooks/`: app-wide custom hooks for data fetching and state.
 - `contexts/` and `providers/`: React Context for cross-cutting concerns (auth token, WebSocket, theme).
 - `config/configSchema.ts`: the `CONFIG_FIELDS` registry. Use this pattern when adding new configuration fields; it auto-derives types, defaults, and change tracking.

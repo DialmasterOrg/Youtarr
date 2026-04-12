@@ -26,6 +26,7 @@ https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
 - **Smart Downloads**: Pre-validate manually pasted URLs with metadata preview before downloading
 - **Channel Subscriptions**: Subscribe to channels and auto-download new videos, shorts, and streams with per-tab controls
 - **Browse Channels**: View and search all videos from subscribed channels with advanced filtering, tabbed views for Videos/Shorts/Streams, and contextual publish date accuracy tips
+- **In-App Playback**: Click any thumbnail to open a detail modal with extended metadata and in-browser streaming of downloaded videos; no media server required
 - **Channel Grouping & Multi-Library Support**: Organize channels into custom subfolders (e.g., `__kids`, `__music`, `__news`) to create separate media server libraries
 - **Smart Organization**: Videos organized by channel with metadata and thumbnails
 - **SponsorBlock Integration**: Remove sponsored segments automatically
