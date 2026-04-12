@@ -28,6 +28,7 @@ const NULL_METADATA = {
   webpageUrl: null,
   relatedFiles: null,
   availableResolutions: null,
+  downloadedTier: null,
 };
 
 const YTDLP_FETCH_TIMEOUT_MS = 60000;
@@ -118,6 +119,11 @@ class VideoMetadataModule {
       // Extract available resolutions from the formats array
       const availableResolutions = this._extractAvailableResolutions(rawData.formats);
 
+      // Extract downloaded tier from top-level format_note (e.g. "1080p+medium" -> 1080).
+      // This is the YouTube quality tier, which differs from the actual pixel height
+      // for non-16:9 aspect ratios (e.g. a 2:1 video's "1080p" tier has 960 actual height).
+      const downloadedTier = this._extractTierFromFormatNote(rawData.format_note);
+
       return {
         description: rawData.description ?? null,
         viewCount: rawData.view_count ?? null,
@@ -140,6 +146,7 @@ class VideoMetadataModule {
         webpageUrl: rawData.webpage_url ?? null,
         relatedFiles,
         availableResolutions,
+        downloadedTier,
       };
     } catch (err) {
       logger.error({ err, youtubeId }, 'Unexpected error in getVideoMetadata');
@@ -206,21 +213,44 @@ class VideoMetadataModule {
   /**
    * Extract available download resolutions from the yt-dlp formats array.
    * Only returns resolutions we support downloading (360p-2160p).
+   *
+   * Prefers format_note (e.g. "1080p") over raw height because for non-16:9
+   * aspect ratios the actual pixel height differs from the quality tier label
+   * (e.g. a 2:1 video's "1080p" format has 960 actual height, not 1080).
+   * Falls back to height when format_note isn't present or parseable.
    */
   _extractAvailableResolutions(formats) {
     if (!Array.isArray(formats) || formats.length === 0) return null;
 
-    const availableHeights = new Set();
+    const availableTiers = new Set();
 
     for (const fmt of formats) {
-      if (fmt.height && fmt.vcodec && fmt.vcodec !== 'none' && SUPPORTED_HEIGHTS.includes(fmt.height)) {
-        availableHeights.add(fmt.height);
+      if (!fmt.vcodec || fmt.vcodec === 'none') continue;
+
+      let tier = this._extractTierFromFormatNote(fmt.format_note);
+      if (tier === null && fmt.height) {
+        tier = fmt.height;
+      }
+
+      if (tier !== null && SUPPORTED_HEIGHTS.includes(tier)) {
+        availableTiers.add(tier);
       }
     }
 
-    if (availableHeights.size === 0) return null;
+    if (availableTiers.size === 0) return null;
 
-    return [...availableHeights].sort((a, b) => a - b);
+    return [...availableTiers].sort((a, b) => a - b);
+  }
+
+  /**
+   * Parse a YouTube quality tier from a yt-dlp format_note string.
+   * Examples: "1080p" -> 1080, "1080p60" -> 1080, "1080p+medium" -> 1080.
+   * Returns null if the string isn't present or doesn't start with a tier.
+   */
+  _extractTierFromFormatNote(formatNote) {
+    if (!formatNote || typeof formatNote !== 'string') return null;
+    const match = formatNote.match(/^(\d+)p/);
+    return match ? parseInt(match[1], 10) : null;
   }
 
   _categorizeFileExtension(ext) {

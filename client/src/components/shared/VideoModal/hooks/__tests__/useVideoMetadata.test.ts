@@ -31,6 +31,7 @@ const mockMetadata: VideoExtendedMetadata = {
   webpageUrl: 'https://www.youtube.com/watch?v=testId123',
   relatedFiles: null,
   availableResolutions: null,
+  downloadedTier: null,
 };
 
 describe('useVideoMetadata', () => {

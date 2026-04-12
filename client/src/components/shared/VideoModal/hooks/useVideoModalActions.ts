@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { VideoModalData } from '../types';
 import { useVideoProtection } from '../../useVideoProtection';
 import { useVideoDeletion } from '../../useVideoDeletion';
+import { useTriggerDownloads } from '../../../../hooks/useTriggerDownloads';
+import { DownloadSettings } from '../../../DownloadManager/ManualDownload/types';
 
 interface SnackbarState {
   open: boolean;
@@ -38,7 +41,7 @@ interface UseVideoModalActionsReturn {
   handleProtectionToggle: () => Promise<void>;
   handleDeleteConfirm: () => Promise<void>;
   handleIgnoreToggle: () => Promise<void>;
-  handleDownloadConfirm: () => void;
+  handleDownloadConfirm: (settings: DownloadSettings | null) => Promise<void>;
   handleRatingApply: (rating: string | null) => Promise<void>;
   handleSnackbarClose: () => void;
 }
@@ -70,8 +73,10 @@ export function useVideoModalActions({
     severity: 'success',
   });
 
+  const navigate = useNavigate();
   const protection = useVideoProtection(token);
   const deletion = useVideoDeletion();
+  const { triggerDownloads } = useTriggerDownloads(token);
 
   // Reset local state when a different video is opened (not on every re-render).
   // The video prop is a new object on each parent render, so we track by youtubeId.
@@ -156,11 +161,35 @@ export function useVideoModalActions({
     }
   }, [localVideo.isIgnored, localVideo.youtubeId, token, showSnackbar, onIgnoreChanged]);
 
-  const handleDownloadConfirm = useCallback(() => {
+  const handleDownloadConfirm = useCallback(async (settings: DownloadSettings | null) => {
     setDownloadDialogOpen(false);
-    onDownloadQueued?.(localVideo.youtubeId);
-    showSnackbar('Video queued for download', 'success');
-  }, [localVideo.youtubeId, showSnackbar, onDownloadQueued]);
+
+    const url = `https://www.youtube.com/watch?v=${localVideo.youtubeId}`;
+    const overrideSettings = settings
+      ? {
+          resolution: settings.resolution,
+          allowRedownload: settings.allowRedownload,
+          subfolder: settings.subfolder,
+          audioFormat: settings.audioFormat,
+          rating: settings.rating,
+          skipVideoFolder: settings.skipVideoFolder,
+        }
+      : undefined;
+
+    const success = await triggerDownloads({
+      urls: [url],
+      overrideSettings,
+      channelId: localVideo.channelId,
+    });
+
+    if (success) {
+      onDownloadQueued?.(localVideo.youtubeId);
+      onClose();
+      navigate('/downloads');
+    } else {
+      showSnackbar('Failed to queue download', 'error');
+    }
+  }, [localVideo.youtubeId, localVideo.channelId, triggerDownloads, showSnackbar, onDownloadQueued, onClose, navigate]);
 
   const handleRatingApply = useCallback(async (rating: string | null) => {
     if (!localVideo.databaseId) {

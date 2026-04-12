@@ -51,6 +51,21 @@ function formatResolutionLabel(height: number | null): string | null {
   return `${height}p`;
 }
 
+function formatDownloadedResolution(
+  width: number | null,
+  height: number | null,
+  tier: number | null
+): string | null {
+  if (!height) return null;
+  const base = width ? `${width}x${height}` : `${height}p`;
+  // Show the tier label when it differs from the actual height (non-16:9 videos).
+  // For 16:9 videos the tier matches the height, so appending it would be redundant.
+  if (tier && tier !== height) {
+    return `${base} (${tier}p)`;
+  }
+  return base;
+}
+
 interface DetailRowProps {
   label: string;
   value: string;
@@ -132,7 +147,11 @@ function VideoTechnical({ video, metadata, loading }: VideoTechnicalProps) {
 
   // Download resolution - only for downloaded videos
   if (video.isDownloaded && metadata?.height) {
-    const downloadRes = formatResolutionLabel(metadata.height);
+    const downloadRes = formatDownloadedResolution(
+      metadata.width,
+      metadata.height,
+      metadata.downloadedTier
+    );
     if (downloadRes) {
       technicalDetails.push({ label: 'Downloaded', value: downloadRes });
     }
@@ -206,7 +225,10 @@ function VideoTechnical({ video, metadata, loading }: VideoTechnicalProps) {
                 </Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                   {availableResolutions.map((h) => {
-                    const isDownloaded = video.isDownloaded && metadata?.height === h;
+                    // Match by tier when available (handles non-16:9 videos correctly),
+                    // fall back to raw height for backward-compatible info.json files.
+                    const downloadedMarker = metadata?.downloadedTier ?? metadata?.height ?? null;
+                    const isDownloaded = video.isDownloaded && downloadedMarker === h;
                     return (
                       <Chip
                         key={h}

@@ -49,6 +49,23 @@ jest.mock('../../useVideoDeletion', () => ({
   useVideoDeletion: () => deletionReturn,
 }));
 
+// Mock useTriggerDownloads
+const mockTriggerDownloads = jest.fn();
+jest.mock('../../../../hooks/useTriggerDownloads', () => ({
+  useTriggerDownloads: () => ({
+    get triggerDownloads() { return mockTriggerDownloads; },
+    loading: false,
+    error: null,
+  }),
+}));
+
+// Mock react-router-dom useNavigate
+const mockNavigate = jest.fn();
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockNavigate,
+}));
+
 // Mock sub-components that don't need full rendering
 jest.mock('../components/VideoPlayer', () => ({
   __esModule: true,
@@ -88,11 +105,11 @@ jest.mock('../../DeleteVideosDialog', () => ({
 
 jest.mock('../../../DownloadManager/ManualDownload/DownloadSettingsDialog', () => ({
   __esModule: true,
-  default: function MockDownloadDialog(props: { open: boolean; onConfirm: () => void; onClose: () => void }) {
+  default: function MockDownloadDialog(props: { open: boolean; onConfirm: (settings: null) => void; onClose: () => void }) {
     const React = require('react');
     if (!props.open) return null;
     return React.createElement('div', { 'data-testid': 'download-dialog' },
-      React.createElement('button', { 'data-testid': 'confirm-download', onClick: props.onConfirm }, 'Confirm Download'),
+      React.createElement('button', { 'data-testid': 'confirm-download', onClick: () => props.onConfirm(null) }, 'Confirm Download'),
     );
   },
 }));
@@ -125,6 +142,7 @@ jest.mock('../../RatingBadge', () => ({
   },
 }));
 
+import { MemoryRouter } from 'react-router-dom';
 import VideoModal from '../index';
 
 const theme = createTheme();
@@ -169,9 +187,11 @@ function renderModal(props: Partial<React.ComponentProps<typeof VideoModal>> = {
   };
 
   return render(
-    <ThemeProvider theme={theme}>
-      <VideoModal {...defaultProps} {...props} />
-    </ThemeProvider>
+    <MemoryRouter>
+      <ThemeProvider theme={theme}>
+        <VideoModal {...defaultProps} {...props} />
+      </ThemeProvider>
+    </MemoryRouter>
   );
 }
 
@@ -179,6 +199,7 @@ describe('VideoModal', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     protectionReturn.error = null;
+    mockTriggerDownloads.mockResolvedValue(true);
   });
 
   test('renders video title when open', () => {

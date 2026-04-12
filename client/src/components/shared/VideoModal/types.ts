@@ -57,6 +57,7 @@ export interface VideoExtendedMetadata {
   webpageUrl: string | null;
   relatedFiles: VideoRelatedFile[] | null;
   availableResolutions: number[] | null;
+  downloadedTier: number | null;
 }
 
 export interface VideoRelatedFile {

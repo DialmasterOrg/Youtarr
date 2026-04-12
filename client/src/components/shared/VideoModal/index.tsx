@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -24,6 +24,7 @@ import DeleteVideosDialog from '../DeleteVideosDialog';
 import ChangeRatingDialog from '../ChangeRatingDialog';
 import DownloadSettingsDialog from '../../DownloadManager/ManualDownload/DownloadSettingsDialog';
 import { getStatusLabel, getStatusColor, getMediaTypeInfo } from '../../../utils/videoStatus';
+import { useConfig } from '../../../hooks/useConfig';
 
 const SNACKBAR_AUTO_HIDE_MS = 4000;
 
@@ -72,6 +73,44 @@ function VideoModal({
     open ? video.youtubeId : '',
     token
   );
+
+  const { config } = useConfig(token);
+
+  // Fetch channel-level download settings when modal opens
+  const [channelSettings, setChannelSettings] = useState<{
+    video_quality?: string | null;
+    audio_format?: string | null;
+    default_rating?: string | null;
+  }>({});
+
+  useEffect(() => {
+    if (!open || !video.channelId || !token) {
+      setChannelSettings({});
+      return;
+    }
+    const controller = new AbortController();
+    const fetchSettings = async () => {
+      try {
+        const resp = await fetch(`/api/channels/${video.channelId}/settings`, {
+          headers: { 'x-access-token': token },
+          signal: controller.signal,
+        });
+        if (!resp.ok) return;
+        setChannelSettings(await resp.json());
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+      }
+    };
+    fetchSettings();
+    return () => { controller.abort(); };
+  }, [open, video.channelId, token]);
+
+  const hasChannelQualityOverride = Boolean(channelSettings.video_quality);
+  const defaultResolution = channelSettings.video_quality || config.preferredResolution || '1080';
+  const defaultResolutionSource: 'channel' | 'global' = hasChannelQualityOverride ? 'channel' : 'global';
+  const hasChannelAudioOverride = Boolean(channelSettings.audio_format);
+  const defaultAudioFormat = channelSettings.audio_format || null;
+  const defaultAudioFormatSource: 'channel' | 'global' = hasChannelAudioOverride ? 'channel' : 'global';
 
   const isShort = localVideo.mediaType === 'short';
   const useSideBySide = isShort && !isMobile;
@@ -234,6 +273,11 @@ function VideoModal({
         videoCount={1}
         mode="manual"
         token={token}
+        defaultResolution={defaultResolution}
+        defaultResolutionSource={defaultResolutionSource}
+        defaultAudioFormat={defaultAudioFormat}
+        defaultAudioFormatSource={defaultAudioFormatSource}
+        defaultRating={channelSettings.default_rating ?? null}
       />
 
       <ChangeRatingDialog

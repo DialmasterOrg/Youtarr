@@ -350,6 +350,56 @@ describe('VideoMetadataModule', () => {
 
       expect(result).toEqual([360, 480, 1440, 2160]);
     });
+
+    test('uses format_note tier for non-16:9 videos (actual height differs from tier)', () => {
+      // 2:1 aspect video: actual heights are half the width, but tier labels match standard buckets
+      const formats = [
+        { height: 320, format_note: '360p', vcodec: 'avc1', acodec: 'mp4a' },
+        { height: 428, format_note: '480p', vcodec: 'avc1', acodec: 'mp4a' },
+        { height: 640, format_note: '720p', vcodec: 'avc1', acodec: 'mp4a' },
+        { height: 960, format_note: '1080p', vcodec: 'avc1', acodec: 'mp4a' },
+      ];
+
+      const result = videoMetadataModule._extractAvailableResolutions(formats);
+
+      expect(result).toEqual([360, 480, 720, 1080]);
+    });
+
+    test('format_note with framerate suffix still extracts base tier', () => {
+      const formats = [
+        { height: 1080, format_note: '1080p60', vcodec: 'avc1', acodec: 'mp4a' },
+        { height: 720, format_note: '720p60', vcodec: 'avc1', acodec: 'mp4a' },
+      ];
+
+      const result = videoMetadataModule._extractAvailableResolutions(formats);
+
+      expect(result).toEqual([720, 1080]);
+    });
+  });
+
+  describe('_extractTierFromFormatNote', () => {
+    test('parses plain tier like "1080p"', () => {
+      expect(videoMetadataModule._extractTierFromFormatNote('1080p')).toBe(1080);
+    });
+
+    test('parses tier with framerate like "1080p60"', () => {
+      expect(videoMetadataModule._extractTierFromFormatNote('1080p60')).toBe(1080);
+    });
+
+    test('parses tier with audio suffix like "1080p+medium"', () => {
+      expect(videoMetadataModule._extractTierFromFormatNote('1080p+medium')).toBe(1080);
+    });
+
+    test('returns null for null, undefined, or empty input', () => {
+      expect(videoMetadataModule._extractTierFromFormatNote(null)).toBeNull();
+      expect(videoMetadataModule._extractTierFromFormatNote(undefined)).toBeNull();
+      expect(videoMetadataModule._extractTierFromFormatNote('')).toBeNull();
+    });
+
+    test('returns null when string does not start with a tier', () => {
+      expect(videoMetadataModule._extractTierFromFormatNote('medium')).toBeNull();
+      expect(videoMetadataModule._extractTierFromFormatNote('high quality')).toBeNull();
+    });
   });
 
   describe('_getVideoRelatedFiles', () => {
