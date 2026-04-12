@@ -69,8 +69,14 @@ function VideoModal({
     onClose,
   });
 
+  // Skip metadata fetch for members-only videos that we haven't downloaded -
+  // yt-dlp cannot access them and the error just spams the server logs. For
+  // already-downloaded members-only videos, the backend still serves cached
+  // .info.json so we let the fetch proceed.
+  const skipMetadataFetch = video.status === 'members_only' && !video.isDownloaded;
+  const shouldFetchMetadata = open && !skipMetadataFetch;
   const { metadata, loading: metadataLoading } = useVideoMetadata(
-    open ? video.youtubeId : '',
+    shouldFetchMetadata ? video.youtubeId : '',
     token
   );
 

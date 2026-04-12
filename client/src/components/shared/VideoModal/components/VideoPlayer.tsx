@@ -14,6 +14,7 @@ import BlockIcon from '@mui/icons-material/Block';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import StopIcon from '@mui/icons-material/Stop';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import LockIcon from '@mui/icons-material/Lock';
 import { VideoModalData } from '../types';
 import { YOUTUBE_URL_BASE } from '../constants';
 
@@ -187,6 +188,16 @@ function VideoPlayer({ video, token, onDownloadClick, isMobile }: VideoPlayerPro
               >
                 Re-download Video
               </Button>
+            </>
+          ) : video.status === 'members_only' ? (
+            <>
+              <LockIcon sx={{ fontSize: 48, color: 'common.white' }} />
+              <Typography variant="body1" sx={{ color: 'common.white', fontWeight: 500 }}>
+                Members Only
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'common.white', opacity: 0.85, textAlign: 'center', px: 2 }}>
+                Youtarr cannot download this video or fetch its metadata
+              </Typography>
             </>
           ) : (
             <Button

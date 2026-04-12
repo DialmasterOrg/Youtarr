@@ -61,6 +61,14 @@ jest.mock('@mui/icons-material/WarningAmber', () => ({
   },
 }));
 
+jest.mock('@mui/icons-material/Lock', () => ({
+  __esModule: true,
+  default: function MockLockIcon() {
+    const React = require('react');
+    return React.createElement('span', { 'data-testid': 'LockIcon' });
+  },
+}));
+
 import VideoPlayer from '../VideoPlayer';
 
 const theme = createTheme();
@@ -161,6 +169,20 @@ describe('VideoPlayer', () => {
     expect(screen.getByText('File Missing')).toBeInTheDocument();
     expect(screen.getByTestId('WarningAmberIcon')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /re-download video/i })).toBeInTheDocument();
+  });
+
+  test('renders "members only" state with lock icon and no download button', () => {
+    renderPlayer({
+      status: 'members_only',
+      isDownloaded: false,
+      filePath: null,
+      fileSize: null,
+    });
+
+    expect(screen.getByText('Members Only')).toBeInTheDocument();
+    expect(screen.getByTestId('LockIcon')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /download video/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Play video' })).not.toBeInTheDocument();
   });
 
   test('clicking play enters playback mode with correct stream URL', async () => {
