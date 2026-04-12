@@ -56,13 +56,20 @@ interface ChannelVideosProps {
   channelId?: string;
   channelVideoQuality?: string | null;
   channelAudioFormat?: string | null;
+  /**
+   * Effective available_tabs for the channel (comma-separated, already
+   * filtered through hidden_tabs). When provided, takes precedence over
+   * the tabs fetched from /api/channels/:channelId/tabs so the strip
+   * updates immediately after the user changes hidden_tabs in settings.
+   */
+  channelAvailableTabs?: string | null;
 }
 
 type ViewMode = 'table' | 'grid' | 'list';
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
 
-function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelId, channelVideoQuality, channelAudioFormat }: ChannelVideosProps) {
+function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelId, channelVideoQuality, channelAudioFormat, channelAvailableTabs }: ChannelVideosProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -293,6 +300,24 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
       setAvailableTabs(availableTabsFromVideos);
     }
   }, [availableTabsFromVideos]);
+
+  // Sync from the parent-supplied channel.available_tabs when it changes
+  // (e.g. right after the user saves a hidden_tabs change in settings).
+  useEffect(() => {
+    if (channelAvailableTabs === undefined) return;
+
+    const nextTabs = channelAvailableTabs
+      ? channelAvailableTabs.split(',').map((tab) => tab.trim()).filter((tab) => tab.length > 0)
+      : [];
+
+    if (nextTabs.length === 0) return;
+
+    setAvailableTabs(nextTabs);
+    setSelectedTab((current) => {
+      if (current && nextTabs.includes(current)) return current;
+      return nextTabs.includes('videos') ? 'videos' : nextTabs[0];
+    });
+  }, [channelAvailableTabs]);
 
   // Clear local status overrides when videos are refetched (page change, tab change, etc)
   useEffect(() => {

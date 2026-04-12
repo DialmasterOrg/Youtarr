@@ -34,12 +34,14 @@ function ChannelPage({ token }: ChannelPageProps) {
     min_duration: number | null;
     max_duration: number | null;
     title_filter_regex: string | null;
+    hidden_tabs?: string[];
+    availableTabs?: string[];
   }) => {
     setChannel((prev) => {
       if (!prev) {
         return prev;
       }
-      return {
+      const next: Channel = {
         ...prev,
         sub_folder: updated.sub_folder,
         video_quality: updated.video_quality,
@@ -48,6 +50,17 @@ function ChannelPage({ token }: ChannelPageProps) {
         max_duration: updated.max_duration,
         title_filter_regex: updated.title_filter_regex,
       };
+      if (updated.availableTabs !== undefined) {
+        next.available_tabs = updated.availableTabs.length > 0
+          ? updated.availableTabs.join(',')
+          : null;
+      }
+      if (updated.hidden_tabs !== undefined) {
+        next.hidden_tabs = updated.hidden_tabs.length > 0
+          ? updated.hidden_tabs.join(',')
+          : null;
+      }
+      return next;
     });
   };
 
@@ -349,6 +362,7 @@ function ChannelPage({ token }: ChannelPageProps) {
         channelId={channel_id || undefined}
         channelVideoQuality={channel?.video_quality || null}
         channelAudioFormat={channel?.audio_format || null}
+        channelAvailableTabs={channel?.available_tabs ?? null}
       />
 
       {channel && channel_id && (
