@@ -20,6 +20,8 @@ import {
   Pagination,
   Tabs,
   Tab,
+  Select,
+  MenuItem,
 } from '@mui/material';
 
 import DownloadIcon from '@mui/icons-material/Download';
@@ -46,6 +48,7 @@ import { useChannelVideos } from './hooks/useChannelVideos';
 import { useRefreshChannelVideos } from './hooks/useRefreshChannelVideos';
 import { useChannelFetchStatus } from './hooks/useChannelFetchStatus';
 import { useChannelVideoFilters } from './hooks/useChannelVideoFilters';
+import { useChannelVideosPageSize, ALLOWED_PAGE_SIZES, type PageSize } from './hooks/useChannelVideosPageSize';
 import ChannelVideosFilters from './components/ChannelVideosFilters';
 import { useConfig } from '../../hooks/useConfig';
 import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
@@ -88,7 +91,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const [tabAutoDownloadStatus, setTabAutoDownloadStatus] = useState<Record<string, boolean>>({});
 
   // Data states
-  const pageSize = isMobile ? 8 : 16;
+  const [pageSize, setPageSize] = useChannelVideosPageSize();
   const [page, setPage] = useState(1);
   const [checkedBoxes, setCheckedBoxes] = useState<string[]>([]);
   const [hideDownloaded, setHideDownloaded] = useState(false);
@@ -693,6 +696,11 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     setPage(value);
   };
 
+  const handlePageSizeChange = (newSize: PageSize) => {
+    setPageSize(newSize);
+    setPage(1);
+  };
+
   const handleViewModeChange = (event: React.MouseEvent<HTMLElement>, newMode: ViewMode | null) => {
     if (newMode !== null) {
       setViewMode(newMode);
@@ -953,17 +961,68 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           </Box>
         )}
 
-        {/* Pagination - directly under tabs */}
-        {totalPages > 1 && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2, px: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-            <Pagination
-              count={totalPages}
-              page={page}
-              onChange={handlePageChange}
-              color="primary"
-              size={isMobile ? 'small' : 'medium'}
-              siblingCount={isMobile ? 0 : 1}
-            />
+        {/* Pagination and page size selector */}
+        {!videosLoading && totalCount > 0 && (
+          <Box sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 1,
+            py: 1.5,
+            px: 2,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            position: 'relative',
+            minHeight: 48,
+          }}>
+            {totalPages > 1 && (
+              <Pagination
+                count={totalPages}
+                page={page}
+                onChange={handlePageChange}
+                color="primary"
+                size={isMobile ? 'small' : 'medium'}
+                siblingCount={isMobile ? 0 : 1}
+              />
+            )}
+            <Box sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              position: { sm: 'absolute' },
+              right: { sm: 16 },
+            }}>
+              {!isMobile && (
+                <Typography variant="body2" color="text.secondary">
+                  Per page:
+                </Typography>
+              )}
+              <Select
+                size="small"
+                value={pageSize}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  if ((ALLOWED_PAGE_SIZES as readonly number[]).includes(val)) {
+                    handlePageSizeChange(val as PageSize);
+                  }
+                }}
+                aria-label="videos per page"
+                sx={{
+                  minWidth: 64,
+                  '& .MuiSelect-select': {
+                    py: 0.5,
+                    fontSize: '0.875rem',
+                  },
+                }}
+              >
+                {ALLOWED_PAGE_SIZES.map((size) => (
+                  <MenuItem key={size} value={size}>
+                    {size}
+                  </MenuItem>
+                ))}
+              </Select>
+            </Box>
           </Box>
         )}
 

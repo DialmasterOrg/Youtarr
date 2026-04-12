@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -174,6 +174,7 @@ describe('ChannelVideos Component', () => {
     mockFetch.mockReset();
     (useMediaQuery as jest.Mock).mockReturnValue(false);
     mockNavigate.mockClear();
+    localStorage.removeItem('youtarr.channelVideos.pageSize');
 
     // Default mock responses
     useChannelVideos.mockReturnValue({
@@ -434,6 +435,180 @@ describe('ChannelVideos Component', () => {
     });
   });
 
+  describe('Page Size Selector', () => {
+    test('renders page size selector when videos exist', () => {
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 3,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      expect(screen.getByLabelText('videos per page')).toBeInTheDocument();
+    });
+
+    test('does not render page size selector when no videos', () => {
+      useChannelVideos.mockReturnValue({
+        videos: [],
+        totalCount: 0,
+        oldestVideoDate: null,
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      expect(screen.queryByLabelText('videos per page')).not.toBeInTheDocument();
+    });
+
+    test('does not render page size selector while loading', () => {
+      useChannelVideos.mockReturnValue({
+        videos: [],
+        totalCount: 0,
+        oldestVideoDate: null,
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: true,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      expect(screen.queryByLabelText('videos per page')).not.toBeInTheDocument();
+    });
+
+    test('selector shows default value of 16', () => {
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 3,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      const select = screen.getByLabelText('videos per page');
+      expect(select).toHaveTextContent('16');
+    });
+
+    test('selector reads stored value from localStorage', () => {
+      localStorage.setItem('youtarr.channelVideos.pageSize', '32');
+
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 3,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      expect(useChannelVideos).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pageSize: 32,
+        })
+      );
+    });
+
+    test('changing page size updates fetch params and writes to localStorage', async () => {
+      const user = userEvent.setup();
+
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 48, // enough for multiple pages at size 16
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      // Navigate to page 2 first so we can verify page resets to 1
+      await waitFor(() => {
+        expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
+      });
+      const page2Buttons = screen.getAllByRole('button', { name: 'Go to page 2' });
+      await user.click(page2Buttons[0]);
+
+      expect(useChannelVideos).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 2 })
+      );
+
+      // Open the MUI Select dropdown by clicking its displayed value text.
+      // MUI Select (non-native) opens on mouseDown on the inner trigger div.
+      // The "Per page:" label precedes the Select, and the Select displays "16".
+      // Use within() on the labeled container to find the trigger by its text content.
+      const selectContainer = screen.getByLabelText('videos per page');
+      const trigger = within(selectContainer).getByText('16');
+      fireEvent.mouseDown(trigger);
+
+      // Choose 32
+      const option = await screen.findByRole('option', { name: '32' });
+      await user.click(option);
+
+      expect(localStorage.getItem('youtarr.channelVideos.pageSize')).toBe('32');
+      expect(useChannelVideos).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          pageSize: 32,
+          page: 1,
+        })
+      );
+    });
+
+    test('renders selector without pagination buttons when only one page', () => {
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 3,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      // Selector should be present
+      expect(screen.getByLabelText('videos per page')).toBeInTheDocument();
+
+      // Only 1 page total (3 videos < 16 per page), so no page 2 button should exist
+      expect(screen.queryByRole('button', { name: 'Go to page 2' })).not.toBeInTheDocument();
+    });
+
+    test('renders both selector and pagination when multiple pages', () => {
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 32,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      // Both should be present
+      expect(screen.getByLabelText('videos per page')).toBeInTheDocument();
+      expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
+    });
+  });
+
   describe('Error Handling', () => {
     test('handles tab fetch error gracefully', async () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -679,12 +854,12 @@ describe('ChannelVideos Component', () => {
       (useMediaQuery as jest.Mock).mockReturnValue(true);
     });
 
-    test('uses mobile page size', () => {
+    test('uses same page size on mobile as desktop (unified setting)', () => {
       renderChannelVideos();
 
       expect(useChannelVideos).toHaveBeenCalledWith(
         expect.objectContaining({
-          pageSize: 8, // Mobile page size
+          pageSize: 16,
         })
       );
     });
