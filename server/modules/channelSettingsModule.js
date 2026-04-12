@@ -6,6 +6,8 @@ const plexModule = require('./plexModule');
 const { Op } = require('sequelize');
 const logger = require('../logger');
 const ratingMapper = require('./ratingMapper');
+
+const { MEDIA_TAB_TYPE_MAP, VALID_TAB_TYPES, parseTabCsv } = require('./tabsUtils');
 const {
   GLOBAL_DEFAULT_SENTINEL,
   ROOT_SENTINEL,
@@ -517,6 +519,10 @@ class ChannelSettingsModule {
       throw new Error('Channel not found');
     }
 
+    const detectedTabs = parseTabCsv(channel.available_tabs);
+    const hiddenTabsSet = new Set(parseTabCsv(channel.hidden_tabs));
+    const availableTabs = detectedTabs.filter((tab) => !hiddenTabsSet.has(tab));
+
     return {
       channel_id: channel.channel_id,
       uploader: channel.uploader,
@@ -528,7 +534,51 @@ class ChannelSettingsModule {
       audio_format: channel.audio_format,
       default_rating: channel.default_rating,
       skip_video_folder: channel.skip_video_folder,
+      detected_tabs: detectedTabs,
+      hidden_tabs: Array.from(hiddenTabsSet),
+      available_tabs: availableTabs,
     };
+  }
+
+  /**
+   * Validate a hidden_tabs array from a user request.
+   * @param {any} hiddenTabs - The value provided in the update payload
+   * @param {string|null} detectedTabsCsv - The channel's current available_tabs (detected)
+   * @returns {{ valid: boolean, error?: string, normalized?: string[] }}
+   */
+  validateHiddenTabs(hiddenTabs, detectedTabsCsv) {
+    if (hiddenTabs === null || hiddenTabs === undefined) {
+      return { valid: true, normalized: [] };
+    }
+    if (!Array.isArray(hiddenTabs)) {
+      return { valid: false, error: 'Invalid hidden_tabs: must be an array of tab types' };
+    }
+
+    const normalized = [];
+    for (const entry of hiddenTabs) {
+      if (typeof entry !== 'string' || !VALID_TAB_TYPES.has(entry)) {
+        return {
+          valid: false,
+          error: `Invalid hidden_tabs entry: ${entry}. Allowed values: videos, shorts, streams`
+        };
+      }
+      if (!normalized.includes(entry)) {
+        normalized.push(entry);
+      }
+    }
+
+    const detected = parseTabCsv(detectedTabsCsv);
+    if (detected.length > 0) {
+      const remaining = detected.filter((tab) => !normalized.includes(tab));
+      if (remaining.length === 0) {
+        return {
+          valid: false,
+          error: 'At least one tab must remain visible'
+        };
+      }
+    }
+
+    return { valid: true, normalized };
   }
 
   /**
@@ -624,6 +674,16 @@ class ChannelSettingsModule {
       }
     }
 
+    // Validate hidden_tabs if provided
+    let normalizedHiddenTabs = null;
+    if (settings.hidden_tabs !== undefined) {
+      const validation = this.validateHiddenTabs(settings.hidden_tabs, channel.available_tabs);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+      normalizedHiddenTabs = validation.normalized;
+    }
+
     // Store old subfolder for potential move
     const oldSubFolder = channel.sub_folder;
     const newSubFolder = settings.sub_folder !== undefined ?
@@ -663,6 +723,25 @@ class ChannelSettingsModule {
     if (settings.skip_video_folder !== undefined) {
       updateData.skip_video_folder = settings.skip_video_folder;
     }
+    if (normalizedHiddenTabs !== null) {
+      updateData.hidden_tabs = normalizedHiddenTabs.length > 0
+        ? normalizedHiddenTabs.join(',')
+        : null;
+
+      // When a tab is hidden, strip its corresponding media type from
+      // auto_download_enabled_tabs so we don't auto-download something the
+      // user has hidden from view.
+      const hiddenMediaTypes = new Set(
+        normalizedHiddenTabs
+          .map((tabType) => MEDIA_TAB_TYPE_MAP[tabType])
+          .filter(Boolean)
+      );
+      const currentAuto = parseTabCsv(channel.auto_download_enabled_tabs);
+      const filteredAuto = currentAuto.filter((mt) => !hiddenMediaTypes.has(mt));
+      if (filteredAuto.length !== currentAuto.length) {
+        updateData.auto_download_enabled_tabs = filteredAuto.join(',');
+      }
+    }
 
     // Update database FIRST to ensure changes are persisted before slow file operations
     // This prevents issues where HTTP requests timeout during file operations
@@ -698,6 +777,11 @@ class ChannelSettingsModule {
       }
     }
 
+    const detectedTabsAfter = parseTabCsv(updatedChannel.available_tabs);
+    const hiddenTabsAfter = parseTabCsv(updatedChannel.hidden_tabs);
+    const hiddenSetAfter = new Set(hiddenTabsAfter);
+    const availableTabsAfter = detectedTabsAfter.filter((tab) => !hiddenSetAfter.has(tab));
+
     return {
       settings: {
         channel_id: updatedChannel.channel_id,
@@ -710,6 +794,9 @@ class ChannelSettingsModule {
         audio_format: updatedChannel.audio_format,
         default_rating: updatedChannel.default_rating,
         skip_video_folder: updatedChannel.skip_video_folder,
+        detected_tabs: detectedTabsAfter,
+        hidden_tabs: hiddenTabsAfter,
+        available_tabs: availableTabsAfter,
       },
       folderMoved: subFolderChanged,
       moveResult

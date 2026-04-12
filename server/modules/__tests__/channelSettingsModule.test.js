@@ -588,7 +588,7 @@ describe('ChannelSettingsModule', () => {
       Channel.findOne.mockResolvedValue(channel);
 
       const result = await channelSettingsModule.getChannelSettings('UC123456');
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         channel_id: 'UC123456',
         uploader: 'Test Channel',
         sub_folder: 'Music',
@@ -604,6 +604,32 @@ describe('ChannelSettingsModule', () => {
       await expect(
         channelSettingsModule.getChannelSettings('UC999999')
       ).rejects.toThrow('Channel not found');
+    });
+
+    test('includes detected_tabs, hidden_tabs, and effective available_tabs', async () => {
+      const channel = {
+        ...mockChannel,
+        available_tabs: 'videos,shorts,streams',
+        hidden_tabs: 'shorts'
+      };
+      Channel.findOne.mockResolvedValue(channel);
+
+      const result = await channelSettingsModule.getChannelSettings('UC123456');
+
+      expect(result.detected_tabs).toEqual(['videos', 'shorts', 'streams']);
+      expect(result.hidden_tabs).toEqual(['shorts']);
+      expect(result.available_tabs).toEqual(['videos', 'streams']);
+    });
+
+    test('returns empty arrays for detected_tabs/hidden_tabs when channel has no tab data', async () => {
+      const channel = { ...mockChannel };
+      Channel.findOne.mockResolvedValue(channel);
+
+      const result = await channelSettingsModule.getChannelSettings('UC123456');
+
+      expect(result.detected_tabs).toEqual([]);
+      expect(result.hidden_tabs).toEqual([]);
+      expect(result.available_tabs).toEqual([]);
     });
   });
 
@@ -743,6 +769,108 @@ describe('ChannelSettingsModule', () => {
       ).rejects.toThrow('Failed to move channel folder');
 
       expect(channel.update).toHaveBeenCalledWith({ sub_folder: null });
+    });
+
+    describe('hidden_tabs', () => {
+      test('persists hidden_tabs as comma-separated string', async () => {
+        const channel = {
+          ...mockChannel,
+          available_tabs: 'videos,shorts,streams',
+          hidden_tabs: null,
+          auto_download_enabled_tabs: 'video',
+          update: jest.fn().mockImplementation(function (data) {
+            Object.assign(this, data);
+            return Promise.resolve(this);
+          })
+        };
+        Channel.findOne.mockResolvedValue(channel);
+
+        const result = await channelSettingsModule.updateChannelSettings('UC123456', {
+          hidden_tabs: ['shorts']
+        });
+
+        expect(channel.update).toHaveBeenCalledWith(
+          expect.objectContaining({ hidden_tabs: 'shorts' })
+        );
+        expect(result.settings.hidden_tabs).toEqual(['shorts']);
+        expect(result.settings.available_tabs).toEqual(['videos', 'streams']);
+      });
+
+      test('clears hidden_tabs when passed an empty array', async () => {
+        const channel = {
+          ...mockChannel,
+          available_tabs: 'videos,shorts',
+          hidden_tabs: 'shorts',
+          auto_download_enabled_tabs: 'video',
+          update: jest.fn().mockImplementation(function (data) {
+            Object.assign(this, data);
+            return Promise.resolve(this);
+          })
+        };
+        Channel.findOne.mockResolvedValue(channel);
+
+        await channelSettingsModule.updateChannelSettings('UC123456', {
+          hidden_tabs: []
+        });
+
+        expect(channel.update).toHaveBeenCalledWith(
+          expect.objectContaining({ hidden_tabs: null })
+        );
+      });
+
+      test('rejects invalid tab type values', async () => {
+        const channel = {
+          ...mockChannel,
+          available_tabs: 'videos,shorts',
+          update: jest.fn()
+        };
+        Channel.findOne.mockResolvedValue(channel);
+
+        await expect(
+          channelSettingsModule.updateChannelSettings('UC123456', {
+            hidden_tabs: ['bogus']
+          })
+        ).rejects.toThrow('Invalid hidden_tabs');
+      });
+
+      test('rejects hiding every detected tab', async () => {
+        const channel = {
+          ...mockChannel,
+          available_tabs: 'videos,shorts',
+          update: jest.fn()
+        };
+        Channel.findOne.mockResolvedValue(channel);
+
+        await expect(
+          channelSettingsModule.updateChannelSettings('UC123456', {
+            hidden_tabs: ['videos', 'shorts']
+          })
+        ).rejects.toThrow('At least one tab must remain visible');
+      });
+
+      test('strips auto_download_enabled_tabs entries that map to a hidden tab', async () => {
+        const channel = {
+          ...mockChannel,
+          available_tabs: 'videos,shorts',
+          hidden_tabs: null,
+          auto_download_enabled_tabs: 'video,short',
+          update: jest.fn().mockImplementation(function (data) {
+            Object.assign(this, data);
+            return Promise.resolve(this);
+          })
+        };
+        Channel.findOne.mockResolvedValue(channel);
+
+        await channelSettingsModule.updateChannelSettings('UC123456', {
+          hidden_tabs: ['shorts']
+        });
+
+        const updateCall = channel.update.mock.calls.find(
+          (call) => 'auto_download_enabled_tabs' in (call[0] || {})
+        );
+        expect(updateCall).toBeDefined();
+        expect(updateCall[0].auto_download_enabled_tabs).toBe('video');
+      });
     });
   });
 

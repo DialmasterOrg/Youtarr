@@ -32,6 +32,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import RatingBadge from '../shared/RatingBadge';
 import { useConfig } from '../../hooks/useConfig';
 import { SubfolderAutocomplete } from '../shared/SubfolderAutocomplete';
+import TabsEditor, { TabsEditorRefreshResult } from './components/TabsEditor';
 
 interface ChannelSettings {
   sub_folder: string | null;
@@ -42,6 +43,12 @@ interface ChannelSettings {
   audio_format: string | null;
   default_rating: string | null;
   skip_video_folder: boolean | null;
+  hidden_tabs: string[];
+}
+
+interface ChannelTabsState {
+  detectedTabs: string[];
+  availableTabs: string[];
 }
 
 interface FilterPreviewVideo {
@@ -63,7 +70,7 @@ interface ChannelSettingsDialogProps {
   channelId: string;
   channelName: string;
   token: string | null;
-  onSettingsSaved?: (settings: ChannelSettings) => void;
+  onSettingsSaved?: (settings: ChannelSettings & ChannelTabsState) => void;
 }
 
 const regexExamples = [
@@ -100,7 +107,8 @@ function ChannelSettingsDialog({
     title_filter_regex: null,
     audio_format: null,
     default_rating: null,
-    skip_video_folder: null
+    skip_video_folder: null,
+    hidden_tabs: []
   });
   const [originalSettings, setOriginalSettings] = useState<ChannelSettings>({
     sub_folder: null,
@@ -110,8 +118,10 @@ function ChannelSettingsDialog({
     title_filter_regex: null,
     audio_format: null,
     default_rating: null,
-    skip_video_folder: null
+    skip_video_folder: null,
+    hidden_tabs: []
   });
+  const [detectedTabs, setDetectedTabs] = useState<string[]>([]);
   const [subfolders, setSubfolders] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -194,9 +204,11 @@ function ChannelSettingsDialog({
           skip_video_folder: Object.prototype.hasOwnProperty.call(settingsData, 'skip_video_folder')
             ? settingsData.skip_video_folder
             : null,
+          hidden_tabs: Array.isArray(settingsData.hidden_tabs) ? settingsData.hidden_tabs : [],
         };
         setSettings(loadedSettings);
         setOriginalSettings(loadedSettings);
+        setDetectedTabs(Array.isArray(settingsData.detected_tabs) ? settingsData.detected_tabs : []);
 
         // Convert seconds to minutes for UI
         if (settingsData.min_duration) {
@@ -251,7 +263,8 @@ function ChannelSettingsDialog({
           title_filter_regex: settings.title_filter_regex || null,
           audio_format: settings.audio_format || null,
           default_rating: settings.default_rating || null,
-          skip_video_folder: settings.skip_video_folder
+          skip_video_folder: settings.skip_video_folder,
+          hidden_tabs: settings.hidden_tabs
         })
       });
 
@@ -273,6 +286,16 @@ function ChannelSettingsDialog({
       }
 
       const result = await response.json();
+      const resultHiddenTabs: string[] = Array.isArray(result?.settings?.hidden_tabs)
+        ? result.settings.hidden_tabs
+        : settings.hidden_tabs;
+      const resultDetectedTabs: string[] = Array.isArray(result?.settings?.detected_tabs)
+        ? result.settings.detected_tabs
+        : detectedTabs;
+      const resultAvailableTabs: string[] = Array.isArray(result?.settings?.available_tabs)
+        ? result.settings.available_tabs
+        : resultDetectedTabs.filter((tab) => !resultHiddenTabs.includes(tab));
+
       const updatedSettings: ChannelSettings = {
         sub_folder: result?.settings?.sub_folder ?? settings.sub_folder ?? null,
         video_quality: result?.settings?.video_quality ?? settings.video_quality ?? null,
@@ -286,14 +309,20 @@ function ChannelSettingsDialog({
         skip_video_folder: result?.settings && Object.prototype.hasOwnProperty.call(result.settings, 'skip_video_folder')
           ? result.settings.skip_video_folder
           : settings.skip_video_folder ?? null,
+        hidden_tabs: resultHiddenTabs,
       };
 
       setSettings(updatedSettings);
       setOriginalSettings(updatedSettings);
+      setDetectedTabs(resultDetectedTabs);
       setSuccess(true);
 
       if (onSettingsSaved) {
-        onSettingsSaved(updatedSettings);
+        onSettingsSaved({
+          ...updatedSettings,
+          detectedTabs: resultDetectedTabs,
+          availableTabs: resultAvailableTabs,
+        });
       }
 
       // Show success message briefly then close
@@ -319,6 +348,9 @@ function ChannelSettingsDialog({
   };
 
   const hasChanges = () => {
+    const tabsChanged =
+      settings.hidden_tabs.length !== originalSettings.hidden_tabs.length ||
+      settings.hidden_tabs.some((tab) => !originalSettings.hidden_tabs.includes(tab));
     return settings.sub_folder !== originalSettings.sub_folder ||
            settings.video_quality !== originalSettings.video_quality ||
            settings.min_duration !== originalSettings.min_duration ||
@@ -326,7 +358,23 @@ function ChannelSettingsDialog({
            settings.title_filter_regex !== originalSettings.title_filter_regex ||
           settings.audio_format !== originalSettings.audio_format ||
           settings.default_rating !== originalSettings.default_rating ||
-          settings.skip_video_folder !== originalSettings.skip_video_folder;
+          settings.skip_video_folder !== originalSettings.skip_video_folder ||
+          tabsChanged;
+  };
+
+  const allTabsHidden = detectedTabs.length > 0 &&
+    detectedTabs.every((tab) => settings.hidden_tabs.includes(tab));
+
+  const handleHiddenTabsChange = (nextHidden: string[]) => {
+    setSettings((prev) => ({ ...prev, hidden_tabs: nextHidden }));
+  };
+
+  const handleTabsRefresh = (result: TabsEditorRefreshResult) => {
+    setDetectedTabs(result.detectedTabs);
+    setSettings((prev) => ({ ...prev, hidden_tabs: result.hiddenTabs }));
+    setOriginalSettings((prev) => ({ ...prev, hidden_tabs: result.hiddenTabs }));
+    // The backend also updates available_tabs/auto_download_enabled_tabs on refresh,
+    // but the dialog will reflect those the next time the parent reloads channel info.
   };
 
   const handlePreviewFilter = async () => {
@@ -418,6 +466,18 @@ function ChannelSettingsDialog({
                 Settings saved successfully!
               </Alert>
             )}
+
+            <TabsEditor
+              channelId={channelId}
+              token={token}
+              detectedTabs={detectedTabs}
+              hiddenTabs={settings.hidden_tabs}
+              onHiddenTabsChange={handleHiddenTabsChange}
+              onRefresh={handleTabsRefresh}
+              disabled={saving}
+            />
+
+            <Divider sx={{ my: 0 }} />
 
             <FormControl fullWidth>
               <InputLabel id="video-quality-label" shrink>Channel Video Quality Override</InputLabel>
@@ -752,7 +812,7 @@ function ChannelSettingsDialog({
         <Button
           onClick={handleSave}
           variant="contained"
-          disabled={saving || loading || !hasChanges()}
+          disabled={saving || loading || !hasChanges() || allTabsHidden}
         >
           {saving ? <CircularProgress size={24} /> : 'Save'}
         </Button>

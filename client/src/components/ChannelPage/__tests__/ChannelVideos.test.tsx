@@ -1,4 +1,5 @@
-import { screen, waitFor } from '@testing-library/react';
+import React, { useState } from 'react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -953,6 +954,167 @@ describe('ChannelVideos Component', () => {
       expect(screen.getByTestId('video-card-video1')).toBeInTheDocument();
       expect(screen.getByTestId('video-card-ignored1')).toBeInTheDocument();
       expect(screen.getByTestId('video-card-video2')).toBeInTheDocument();
+    });
+  });
+
+  describe('channelAvailableTabs prop sync', () => {
+    // Controlled harness: holds channelAvailableTabs in state and exposes a
+    // setter that tests call to simulate the parent passing a new value.
+    // This avoids interactions with RTL's `rerender` + wrapper option.
+    //
+    // Both the sync effect AND the internal tabs-fetch effect write to
+    // availableTabs state. To make these tests deterministic regardless of
+    // unrelated prior tests' scheduling, we ALSO mock the tabs fetch to
+    // return the same data the sync effect would produce so whichever effect
+    // "wins" the race yields an equivalent result. For tests that need the
+    // sync-effect state to be visible after a prop change, we seed the
+    // initial prop and let the sync effect establish state on mount.
+    let setTabsProp: ((val: string | null | undefined) => void) | null = null;
+
+    const Harness = ({ initial }: { initial?: string | null }) => {
+      const [prop, setProp] = useState<string | null | undefined>(initial);
+      setTabsProp = setProp;
+      return <ChannelVideos token={mockToken} channelAvailableTabs={prop} />;
+    };
+
+    // Build a fetch mock that always returns the same availableTabs the
+    // sync effect would set, so the fetch effect never introduces a
+    // different state into the race.
+    const mockTabsFetch = (tabs: string[]) => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ availableTabs: tabs }),
+      });
+    };
+
+    beforeEach(() => {
+      setTabsProp = null;
+    });
+
+    test('updates the rendered tab strip when parent passes a new channelAvailableTabs value', async () => {
+      // Both the fetch effect and the sync effect would set 3 tabs on mount
+      mockTabsFetch(['videos', 'shorts', 'streams']);
+
+      renderWithProviders(<Harness initial="videos,shorts,streams" />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
+      });
+      expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
+
+      // Parent now passes a filtered list down (shorts hidden)
+      act(() => {
+        setTabsProp?.('videos,streams');
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByRole('tab', { name: /Shorts/i })).not.toBeInTheDocument();
+      });
+      expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Videos/i })).toBeInTheDocument();
+    });
+
+    test('preserves the current selected tab when it remains in the new list', async () => {
+      const user = userEvent.setup();
+      mockTabsFetch(['videos', 'shorts', 'streams']);
+
+      renderWithProviders(<Harness initial="videos,shorts,streams" />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('tab', { name: /Shorts/i }));
+
+      await waitFor(() => {
+        expect(useChannelVideos).toHaveBeenLastCalledWith(
+          expect.objectContaining({ tabType: 'shorts' })
+        );
+      });
+
+      // Parent passes [videos, shorts] (streams hidden, shorts still present)
+      act(() => {
+        setTabsProp?.('videos,shorts');
+      });
+
+      // Selected tab should still be shorts
+      await waitFor(() => {
+        expect(useChannelVideos).toHaveBeenLastCalledWith(
+          expect.objectContaining({ tabType: 'shorts' })
+        );
+      });
+      expect(screen.queryByRole('tab', { name: /Live/i })).not.toBeInTheDocument();
+    });
+
+    test('falls back to videos when the current tab is dropped from the new list', async () => {
+      const user = userEvent.setup();
+      mockTabsFetch(['videos', 'shorts', 'streams']);
+
+      renderWithProviders(<Harness initial="videos,shorts,streams" />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
+      });
+
+      // Select the shorts tab
+      await user.click(screen.getByRole('tab', { name: /Shorts/i }));
+
+      await waitFor(() => {
+        expect(useChannelVideos).toHaveBeenLastCalledWith(
+          expect.objectContaining({ tabType: 'shorts' })
+        );
+      });
+
+      // Parent hides shorts; new list = [videos, streams], current 'shorts' is gone
+      act(() => {
+        setTabsProp?.('videos,streams');
+      });
+
+      // Selected tab should fall back to 'videos' (preferred fallback)
+      await waitFor(() => {
+        expect(useChannelVideos).toHaveBeenLastCalledWith(
+          expect.objectContaining({ tabType: 'videos' })
+        );
+      });
+    });
+
+    test('leaves the tab strip alone when channelAvailableTabs is undefined', async () => {
+      // Fetch and sync effect agree on 3 tabs from mount
+      mockTabsFetch(['videos', 'shorts', 'streams']);
+
+      renderWithProviders(<Harness initial="videos,shorts,streams" />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
+      });
+
+      // Explicit undefined: the sync effect must early-return and leave state alone
+      act(() => {
+        setTabsProp?.(undefined);
+      });
+
+      expect(screen.getByRole('tab', { name: /Videos/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
+    });
+
+    test('leaves the tab strip alone when channelAvailableTabs is an empty string', async () => {
+      mockTabsFetch(['videos', 'shorts', 'streams']);
+
+      renderWithProviders(<Harness initial="videos,shorts,streams" />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
+      });
+
+      // Empty string parses to empty array, so the sync effect should early-return
+      act(() => {
+        setTabsProp?.('');
+      });
+
+      expect(screen.getByRole('tab', { name: /Videos/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
     });
   });
 
