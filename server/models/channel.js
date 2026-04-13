@@ -51,6 +51,11 @@ Channel.init(
       allowNull: true,
       defaultValue: null,
     },
+    hidden_tabs: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      defaultValue: null,
+    },
     auto_download_enabled_tabs: {
       type: DataTypes.TEXT,
       allowNull: false,

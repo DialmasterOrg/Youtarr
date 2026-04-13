@@ -18,12 +18,14 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import RatingBadge from '../shared/RatingBadge';
+import ProtectionShieldButton from '../shared/ProtectionShieldButton';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml } from '../../utils/formatters';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
+import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
@@ -40,7 +42,9 @@ interface VideoTableViewProps {
   onSortChange: (newSortBy: SortBy) => void;
   onToggleDeletion: (youtubeId: string) => void;
   onToggleIgnore: (youtubeId: string) => void;
+  onToggleProtection: (youtubeId: string) => void;
   onMobileTooltip?: (message: string) => void;
+  onVideoClick?: (video: ChannelVideo) => void;
 }
 
 function VideoTableView({
@@ -55,7 +59,9 @@ function VideoTableView({
   onSortChange,
   onToggleDeletion,
   onToggleIgnore,
+  onToggleProtection,
   onMobileTooltip,
+  onVideoClick,
 }: VideoTableViewProps) {
   return (
     <TableContainer>
@@ -142,6 +148,7 @@ function VideoTableView({
                   {/* Delete icon for downloaded videos that exist on disk */}
                   {video.added && !video.removed && (
                     <IconButton
+                      aria-label="Delete video"
                       onClick={(e) => {
                         e.stopPropagation();
                         onToggleDeletion(video.youtube_id);
@@ -157,6 +164,17 @@ function VideoTableView({
                     >
                       <DeleteIcon fontSize="small" />
                     </IconButton>
+                  )}
+                  {/* Protection shield for downloaded videos */}
+                  {video.added && !video.removed && (
+                    <ProtectionShieldButton
+                      isProtected={video.protected || false}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleProtection(video.youtube_id);
+                      }}
+                      variant="inline"
+                    />
                   )}
                   {/* Ignore/Unignore button - for videos not currently on disk (never downloaded or missing) */}
                   {!isStillLive && (!video.added || video.removed) && (
@@ -194,6 +212,15 @@ function VideoTableView({
                       }}
                       loading="lazy"
                     />
+                    {/* Center hotspot for opening video modal */}
+                    {onVideoClick && (
+                      <ThumbnailClickOverlay
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          onVideoClick(video);
+                        }}
+                      />
+                    )}
                     {video.youtube_removed && (
                       <Box
                         sx={{
@@ -217,7 +244,18 @@ function VideoTableView({
                   </Box>
                 </TableCell>
                 <TableCell>
-                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  <Typography
+                    variant="body2"
+                    onClick={onVideoClick ? (e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      onVideoClick(video);
+                    } : undefined}
+                    sx={{
+                      mb: 0.5,
+                      cursor: onVideoClick ? 'pointer' : 'default',
+                      '&:hover': onVideoClick ? { textDecoration: 'underline' } : {},
+                    }}
+                  >
                     {decodeHtml(video.title)}
                   </Typography>
                 </TableCell>

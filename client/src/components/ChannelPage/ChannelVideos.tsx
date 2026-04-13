@@ -20,6 +20,8 @@ import {
   Pagination,
   Tabs,
   Tab,
+  Select,
+  MenuItem,
 } from '@mui/material';
 
 import DownloadIcon from '@mui/icons-material/Download';
@@ -35,6 +37,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSwipeable } from 'react-swipeable';
 import { DownloadSettings } from '../DownloadManager/ManualDownload/types';
 import { useVideoDeletion } from '../shared/useVideoDeletion';
+import { useVideoProtection } from '../shared/useVideoProtection';
 import { getVideoStatus } from '../../utils/videoStatus';
 import VideoCard from './VideoCard';
 import VideoListItem from './VideoListItem';
@@ -45,23 +48,61 @@ import { useChannelVideos } from './hooks/useChannelVideos';
 import { useRefreshChannelVideos } from './hooks/useRefreshChannelVideos';
 import { useChannelFetchStatus } from './hooks/useChannelFetchStatus';
 import { useChannelVideoFilters } from './hooks/useChannelVideoFilters';
+import { useChannelVideosPageSize, ALLOWED_PAGE_SIZES, type PageSize } from './hooks/useChannelVideosPageSize';
 import ChannelVideosFilters from './components/ChannelVideosFilters';
 import { useConfig } from '../../hooks/useConfig';
 import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
+import VideoModal from '../shared/VideoModal';
+import { VideoModalData } from '../shared/VideoModal/types';
+import { ChannelVideo } from '../../types/ChannelVideo';
 
 interface ChannelVideosProps {
   token: string | null;
   channelAutoDownloadTabs?: string;
   channelId?: string;
+  channelName?: string;
   channelVideoQuality?: string | null;
   channelAudioFormat?: string | null;
+  /**
+   * Effective available_tabs for the channel (comma-separated, already
+   * filtered through hidden_tabs). When provided, takes precedence over
+   * the tabs fetched from /api/channels/:channelId/tabs so the strip
+   * updates immediately after the user changes hidden_tabs in settings.
+   */
+  channelAvailableTabs?: string | null;
 }
 
 type ViewMode = 'table' | 'grid' | 'list';
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
 
-function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelId, channelVideoQuality, channelAudioFormat }: ChannelVideosProps) {
+function channelVideoToModalData(video: ChannelVideo, channelName: string, channelId: string | undefined): VideoModalData {
+  const status = getVideoStatus(video);
+  return {
+    youtubeId: video.youtube_id,
+    title: video.title,
+    channelName,
+    thumbnailUrl: video.thumbnail,
+    duration: video.duration,
+    publishedAt: video.publishedAt || null,
+    addedAt: null,
+    mediaType: video.media_type || 'video',
+    status,
+    isDownloaded: video.added && !video.removed,
+    filePath: video.filePath || null,
+    fileSize: video.fileSize || null,
+    audioFilePath: video.audioFilePath || null,
+    audioFileSize: video.audioFileSize || null,
+    isProtected: video.protected || false,
+    isIgnored: video.ignored || false,
+    normalizedRating: video.normalized_rating || null,
+    ratingSource: video.rating_source || null,
+    databaseId: video.id || null,
+    channelId: channelId || null,
+  };
+}
+
+function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelId, channelName = '', channelVideoQuality, channelAudioFormat, channelAvailableTabs }: ChannelVideosProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -80,7 +121,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const [tabAutoDownloadStatus, setTabAutoDownloadStatus] = useState<Record<string, boolean>>({});
 
   // Data states
-  const pageSize = isMobile ? 8 : 16;
+  const [pageSize, setPageSize] = useChannelVideosPageSize();
   const [page, setPage] = useState(1);
   const [checkedBoxes, setCheckedBoxes] = useState<string[]>([]);
   const [hideDownloaded, setHideDownloaded] = useState(false);
@@ -93,8 +134,17 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Modal state
+  const [modalVideo, setModalVideo] = useState<ChannelVideo | null>(null);
+
   // Local state to track ignore status changes without refetching
   const [localIgnoreStatus, setLocalIgnoreStatus] = useState<Record<string, boolean>>({});
+
+  // Local state to track protection status changes without refetching
+  const [localProtectedStatus, setLocalProtectedStatus] = useState<Record<string, boolean>>({});
+
+  // Protected filter state
+  const [protectedFilter, setProtectedFilter] = useState(false);
 
   // Filter state
   const {
@@ -107,10 +157,15 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     setDateTo,
     clearAllFilters,
     hasActiveFilters,
-    activeFilterCount,
+    activeFilterCount: baseActiveFilterCount,
   } = useChannelVideoFilters();
 
+  // Include protectedFilter in the active filter count and hasActiveFilters
+  const activeFilterCount = baseActiveFilterCount + (protectedFilter ? 1 : 0);
+  const hasAnyActiveFilter = hasActiveFilters || protectedFilter;
+
   const { deleteVideosByYoutubeIds, loading: deleteLoading } = useVideoDeletion();
+  const { toggleProtection, successMessage: protectionSuccess, error: protectionError, clearMessages: clearProtectionMessages } = useVideoProtection(token);
 
   const { channel_id: routeChannelId } = useParams();
   const channelId = propChannelId ?? routeChannelId ?? undefined;
@@ -246,6 +301,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     maxDuration: filters.maxDuration,
     dateFrom: filters.dateFrom,
     dateTo: filters.dateTo,
+    protectedFilter,
   }), [
     channelId,
     page,
@@ -260,6 +316,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     filters.maxDuration,
     filters.dateFrom,
     filters.dateTo,
+    protectedFilter,
   ]);
 
   const {
@@ -280,9 +337,28 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     }
   }, [availableTabsFromVideos]);
 
-  // Clear local ignore status overrides when videos are refetched (page change, tab change, etc)
+  // Sync from the parent-supplied channel.available_tabs when it changes
+  // (e.g. right after the user saves a hidden_tabs change in settings).
+  useEffect(() => {
+    if (channelAvailableTabs === undefined) return;
+
+    const nextTabs = channelAvailableTabs
+      ? channelAvailableTabs.split(',').map((tab) => tab.trim()).filter((tab) => tab.length > 0)
+      : [];
+
+    if (nextTabs.length === 0) return;
+
+    setAvailableTabs(nextTabs);
+    setSelectedTab((current) => {
+      if (current && nextTabs.includes(current)) return current;
+      return nextTabs.includes('videos') ? 'videos' : nextTabs[0];
+    });
+  }, [channelAvailableTabs]);
+
+  // Clear local status overrides when videos are refetched (page change, tab change, etc)
   useEffect(() => {
     setLocalIgnoreStatus({});
+    setLocalProtectedStatus({});
   }, [page, selectedTab, hideDownloaded, searchQuery, sortBy, sortOrder, filters]);
 
   // Reset page to 1 when filters change
@@ -327,22 +403,27 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
   const navigate = useNavigate();
 
-  // Apply local ignore status overrides to videos (for optimistic updates)
+  // Apply local ignore and protection status overrides to videos (for optimistic updates)
   const videosWithOverrides = useMemo(() => {
     return videos.map(video => {
-      // If we have a local override for this video, use it
-      if (video.youtube_id in localIgnoreStatus) {
-        return {
-          ...video,
+      const hasIgnoreOverride = video.youtube_id in localIgnoreStatus;
+      const hasProtectedOverride = video.youtube_id in localProtectedStatus;
+
+      if (!hasIgnoreOverride && !hasProtectedOverride) return video;
+
+      return {
+        ...video,
+        ...(hasIgnoreOverride ? {
           ignored: localIgnoreStatus[video.youtube_id],
           ignored_at: localIgnoreStatus[video.youtube_id] ? new Date().toISOString() : null,
-        };
-      }
-      return video;
+        } : {}),
+        ...(hasProtectedOverride ? {
+          protected: localProtectedStatus[video.youtube_id],
+        } : {}),
+      };
     });
-  }, [videos, localIgnoreStatus]);
+  }, [videos, localIgnoreStatus, localProtectedStatus]);
 
-  // Videos are already filtered, sorted, and paginated by the server
   const paginatedVideos = videosWithOverrides;
 
   // Use server-provided total count for pagination
@@ -416,6 +497,35 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
   const handleRefreshCancel = () => {
     setRefreshConfirmOpen(false);
+  };
+
+  // Forward protection hook messages to the shared success/error state
+  useEffect(() => {
+    if (protectionSuccess) {
+      setSuccessMessage(protectionSuccess);
+      clearProtectionMessages();
+    }
+  }, [protectionSuccess, clearProtectionMessages]);
+
+  useEffect(() => {
+    if (protectionError) {
+      setErrorMessage(protectionError);
+      clearProtectionMessages();
+    }
+  }, [protectionError, clearProtectionMessages]);
+
+  const handleToggleProtection = async (youtubeId: string) => {
+    const video = paginatedVideos.find(v => v.youtube_id === youtubeId);
+    if (!video || !video.id) return;
+
+    const currentState = video.protected || false;
+    const newState = await toggleProtection(video.id, currentState);
+    if (newState !== undefined) {
+      setLocalProtectedStatus(prev => ({
+        ...prev,
+        [youtubeId]: newState,
+      }));
+    }
   };
 
   const toggleDeletionSelection = (youtubeId: string) => {
@@ -576,7 +686,13 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     setCheckedBoxes([]); // Clear selections when changing tabs
     setSelectedForDeletion([]); // Clear deletion selections when changing tabs
     clearAllFilters(); // Clear filters when changing tabs
+    setProtectedFilter(false); // Clear protected filter when changing tabs
   };
+
+  const handleClearAllFilters = useCallback(() => {
+    clearAllFilters();
+    setProtectedFilter(false);
+  }, [clearAllFilters]);
 
   const handleAutoDownloadChange = async (enabled: boolean) => {
     if (!channelId || !token || !selectedTab) return;
@@ -611,6 +727,11 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
   const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
     setPage(value);
+  };
+
+  const handlePageSizeChange = (newSize: PageSize) => {
+    setPageSize(newSize);
+    setPage(1);
   };
 
   const handleViewModeChange = (event: React.MouseEvent<HTMLElement>, newMode: ViewMode | null) => {
@@ -847,11 +968,13 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           onMaxDurationChange={setMaxDuration}
           onDateFromChange={setDateFrom}
           onDateToChange={setDateTo}
-          onClearAll={clearAllFilters}
-          hasActiveFilters={hasActiveFilters}
+          onClearAll={handleClearAllFilters}
+          hasActiveFilters={hasAnyActiveFilter}
           activeFilterCount={activeFilterCount}
           hideDateFilter={selectedTab === 'shorts'}
           filtersExpanded={filtersExpanded}
+          protectedFilter={protectedFilter}
+          onProtectedFilterChange={setProtectedFilter}
         />
 
         {/* Tabs */}
@@ -871,23 +994,74 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           </Box>
         )}
 
-        {/* Pagination - directly under tabs */}
-        {totalPages > 1 && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2, px: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-            <Pagination
-              count={totalPages}
-              page={page}
-              onChange={handlePageChange}
-              color="primary"
-              size={isMobile ? 'small' : 'medium'}
-              siblingCount={isMobile ? 0 : 1}
-            />
+        {/* Pagination and page size selector */}
+        {!videosLoading && totalCount > 0 && (
+          <Box sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 1,
+            py: 1.5,
+            px: 2,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            position: 'relative',
+            minHeight: 48,
+          }}>
+            {totalPages > 1 && (
+              <Pagination
+                count={totalPages}
+                page={page}
+                onChange={handlePageChange}
+                color="primary"
+                size={isMobile ? 'small' : 'medium'}
+                siblingCount={isMobile ? 0 : 1}
+              />
+            )}
+            <Box sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              position: { sm: 'absolute' },
+              right: { sm: 16 },
+            }}>
+              {!isMobile && (
+                <Typography variant="body2" color="text.secondary">
+                  Per page:
+                </Typography>
+              )}
+              <Select
+                size="small"
+                value={pageSize}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  if ((ALLOWED_PAGE_SIZES as readonly number[]).includes(val)) {
+                    handlePageSizeChange(val as PageSize);
+                  }
+                }}
+                aria-label="videos per page"
+                sx={{
+                  minWidth: 64,
+                  '& .MuiSelect-select': {
+                    py: 0.5,
+                    fontSize: '0.875rem',
+                  },
+                }}
+              >
+                {ALLOWED_PAGE_SIZES.map((size) => (
+                  <MenuItem key={size} value={size}>
+                    {size}
+                  </MenuItem>
+                ))}
+              </Select>
+            </Box>
           </Box>
         )}
 
         {/* Content area */}
         <Box sx={{ p: 2 }} {...(isMobile ? handlers : {})}>
-          {videoFailed && videos.length === 0 && !hasActiveFilters && !searchQuery ? (
+          {videoFailed && videos.length === 0 && !hasAnyActiveFilter && !searchQuery ? (
             <Alert severity="error">
               Failed to fetch channel videos. Please try again later.
             </Alert>
@@ -909,7 +1083,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           ) : videos.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <Typography variant="body1" color="text.secondary">
-                {hasActiveFilters || searchQuery
+                {hasAnyActiveFilter || searchQuery
                   ? 'No videos found matching your search and filter criteria'
                   : 'No videos found'}
               </Typography>
@@ -931,7 +1105,9 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                       onHoverChange={setHoveredVideo}
                       onToggleDeletion={toggleDeletionSelection}
                       onToggleIgnore={toggleIgnore}
+                      onToggleProtection={handleToggleProtection}
                       onMobileTooltip={setMobileTooltip}
+                      onVideoClick={setModalVideo}
                     />
                   ))}
                 </Grid>
@@ -948,7 +1124,9 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                       onCheckChange={handleCheckChange}
                       onToggleDeletion={toggleDeletionSelection}
                       onToggleIgnore={toggleIgnore}
+                      onToggleProtection={handleToggleProtection}
                       onMobileTooltip={setMobileTooltip}
+                      onVideoClick={setModalVideo}
                     />
                   ))}
                 </Box>
@@ -967,7 +1145,9 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                   onSortChange={handleSortChange}
                   onToggleDeletion={toggleDeletionSelection}
                   onToggleIgnore={toggleIgnore}
+                  onToggleProtection={handleToggleProtection}
                   onMobileTooltip={setMobileTooltip}
+                  onVideoClick={setModalVideo}
                 />
               )}
 
@@ -1022,6 +1202,31 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         onSuccessMessageClose={() => setSuccessMessage(null)}
         onErrorMessageClose={() => setErrorMessage(null)}
       />
+
+      {modalVideo && (
+        <VideoModal
+          open
+          onClose={() => setModalVideo(null)}
+          video={channelVideoToModalData(modalVideo, channelName, channelId)}
+          token={token}
+          onVideoDeleted={() => {
+            setModalVideo(null);
+            refetchVideos();
+          }}
+          onProtectionChanged={(youtubeId, isProtected) => {
+            setLocalProtectedStatus(prev => ({ ...prev, [youtubeId]: isProtected }));
+          }}
+          onIgnoreChanged={(youtubeId, isIgnored) => {
+            setLocalIgnoreStatus(prev => ({ ...prev, [youtubeId]: isIgnored }));
+          }}
+          onDownloadQueued={() => {
+            setModalVideo(null);
+          }}
+          onRatingChanged={() => {
+            refetchVideos();
+          }}
+        />
+      )}
     </>
   );
 }

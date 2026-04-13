@@ -32,6 +32,7 @@ import Pagination from '@mui/material/Pagination';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import DeleteIcon from '@mui/icons-material/Delete';
+import ShieldIcon from '@mui/icons-material/Shield';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { formatDuration, formatYTDate } from '../utils';
@@ -48,9 +49,39 @@ import ScheduleIcon from '@mui/icons-material/Schedule';
 import DeleteVideosDialog from './shared/DeleteVideosDialog';
 import { useVideoDeletion } from './shared/useVideoDeletion';
 import DownloadFormatIndicator from './shared/DownloadFormatIndicator';
+import { useVideoProtection } from './shared/useVideoProtection';
 import RatingBadge from './shared/RatingBadge';
 import ChangeRatingDialog from './shared/ChangeRatingDialog';
 import VideoActionsDropdown from './shared/VideoActionsDropdown';
+import ProtectionShieldButton from './shared/ProtectionShieldButton';
+import VideoModal from './shared/VideoModal';
+import ThumbnailClickOverlay from './shared/ThumbnailClickOverlay';
+import { VideoModalData } from './shared/VideoModal/types';
+
+function videoDataToModalData(video: VideoData): VideoModalData {
+  return {
+    youtubeId: video.youtubeId,
+    title: video.youTubeVideoName,
+    channelName: video.youTubeChannelName,
+    thumbnailUrl: `/images/videothumb-${video.youtubeId}.jpg`,
+    duration: video.duration,
+    publishedAt: video.originalDate || null,
+    addedAt: video.timeCreated || null,
+    mediaType: video.media_type || 'video',
+    status: video.removed ? 'missing' : 'downloaded',
+    isDownloaded: !video.removed,
+    filePath: video.filePath || null,
+    fileSize: video.fileSize ? Number(video.fileSize) : null,
+    audioFilePath: video.audioFilePath || null,
+    audioFileSize: video.audioFileSize ? Number(video.audioFileSize) : null,
+    isProtected: video.protected || false,
+    isIgnored: false,
+    normalizedRating: video.normalized_rating || null,
+    ratingSource: video.rating_source || null,
+    databaseId: video.id,
+    channelId: video.channel_id || null,
+  };
+}
 
 interface VideosPageProps {
   token: string | null;
@@ -86,6 +117,9 @@ function VideosPage({ token }: VideosPageProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const { deleteVideos, loading: deleteLoading } = useVideoDeletion();
+  const { toggleProtection, successMessage: protectionSuccess, error: protectionError, clearMessages: clearProtectionMessages } = useVideoProtection(token);
+  const [protectedFilter, setProtectedFilter] = useState(false);
+  const [modalVideo, setModalVideo] = useState<VideoData | null>(null);
 
   const videosPerPage = isMobile ? 6 : 12;
 
@@ -119,6 +153,7 @@ function VideosPage({ token }: VideosPageProps) {
     if (filter) params.append('channelFilter', filter);
     if (dateFrom) params.append('dateFrom', dateFrom.toISOString().split('T')[0]);
     if (dateTo) params.append('dateTo', dateTo.toISOString().split('T')[0]);
+    if (protectedFilter) params.append('protectedFilter', 'true');
 
     try {
       const response = await axios.get<PaginatedVideosResponse>(`/getVideos?${params.toString()}`, {
@@ -146,7 +181,7 @@ function VideosPage({ token }: VideosPageProps) {
     } finally {
       setLoading(false);
     }
-  }, [token, page, videosPerPage, orderBy, sortOrder, search, filter, dateFrom, dateTo]);
+  }, [token, page, videosPerPage, orderBy, sortOrder, search, filter, dateFrom, dateTo, protectedFilter]);
 
   useEffect(() => {
     fetchVideos();
@@ -315,6 +350,21 @@ function VideosPage({ token }: VideosPageProps) {
     setDeleteDialogOpen(true);
   };
 
+  const handleToggleProtection = async (videoId: number) => {
+    const video = videos.find((v: VideoData) => v.id === videoId);
+    if (!video) return;
+
+    const currentState = video.protected || false;
+    const newState = await toggleProtection(video.id, currentState);
+    if (newState !== undefined) {
+      setVideos((prev: VideoData[]) =>
+        prev.map((v: VideoData) =>
+          v.id === videoId ? { ...v, protected: newState } : v
+        )
+      );
+    }
+  };
+
   const handlers = useSwipeable({
     onSwipedLeft: () => {
       if (page < totalPages) {
@@ -365,7 +415,7 @@ function VideosPage({ token }: VideosPageProps) {
 
           {!isMobile && (
             <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <Stack direction="row" spacing={2}>
+              <Stack direction="row" spacing={2} alignItems="center">
                 <DatePicker
                   label="From Date"
                   value={dateFrom}
@@ -383,6 +433,15 @@ function VideosPage({ token }: VideosPageProps) {
                     setPage(1);
                   }}
                   renderInput={(params) => <TextField {...params} variant="outlined" fullWidth />}
+                />
+                <Chip
+                  icon={<ShieldIcon />}
+                  label={protectedFilter ? 'Protected Only' : 'Protected'}
+                  variant={protectedFilter ? 'filled' : 'outlined'}
+                  color={protectedFilter ? 'primary' : 'default'}
+                  onClick={() => setProtectedFilter(!protectedFilter)}
+                  onDelete={protectedFilter ? () => setProtectedFilter(false) : undefined}
+                  sx={{ cursor: 'pointer', height: 36 }}
                 />
                 {(dateFrom || dateTo) && (
                   <Button
@@ -422,7 +481,7 @@ function VideosPage({ token }: VideosPageProps) {
         </Stack>
 
         {isMobile && (
-          <Box display='flex' justifyContent='center' mb={2}>
+          <Box display='flex' justifyContent='center' gap={1} mb={2}>
             <Button
               variant='outlined'
               startIcon={<FilterListIcon />}
@@ -430,6 +489,15 @@ function VideosPage({ token }: VideosPageProps) {
             >
               Filter by Channel
             </Button>
+            <Chip
+              icon={<ShieldIcon />}
+              label={protectedFilter ? 'Protected Only' : 'Protected'}
+              variant={protectedFilter ? 'filled' : 'outlined'}
+              color={protectedFilter ? 'primary' : 'default'}
+              onClick={() => setProtectedFilter(!protectedFilter)}
+              onDelete={protectedFilter ? () => setProtectedFilter(false) : undefined}
+              sx={{ cursor: 'pointer', height: 36 }}
+            />
             <FilterMenu
               anchorEl={anchorEl}
               handleClose={handleClose}
@@ -606,6 +674,13 @@ function VideosPage({ token }: VideosPageProps) {
                                   }
                                 />
                               )}
+                              {/* Center hotspot for opening video modal */}
+                              <ThumbnailClickOverlay
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  setModalVideo(video);
+                                }}
+                              />
                               {video.youtube_removed ? (
                                 <Box
                                   style={{
@@ -673,8 +748,24 @@ function VideosPage({ token }: VideosPageProps) {
                                   <DeleteIcon fontSize="small" />
                                 </IconButton>
                               )}
+                              {/* Protection shield */}
+                              {!video.removed && (
+                              <ProtectionShieldButton
+                                isProtected={video.protected || false}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleProtection(video.id);
+                                }}
+                                sx={{ position: 'absolute', bottom: 6, left: 6, zIndex: 3 }}
+                              />
+                              )}
                             </Box>
-                            <Typography variant='subtitle1' textAlign='center'>
+                            <Typography
+                              variant='subtitle1'
+                              textAlign='center'
+                              onClick={() => setModalVideo(video)}
+                              sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+                            >
                               {video.youTubeVideoName}
                               {video.duration && (
                                 <Typography
@@ -824,6 +915,13 @@ function VideosPage({ token }: VideosPageProps) {
                                   }
                                 />
                               )}
+                              {/* Center hotspot for opening video modal */}
+                              <ThumbnailClickOverlay
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  setModalVideo(video);
+                                }}
+                              />
                               {video.youtube_removed ? (
                                 <Box
                                   style={{
@@ -892,7 +990,11 @@ function VideosPage({ token }: VideosPageProps) {
                             })()}
                           </TableCell>
                           <TableCell style={{ fontSize: 'medium' }}>
-                            <Typography variant='subtitle1'>
+                            <Typography
+                              variant='subtitle1'
+                              onClick={() => setModalVideo(video)}
+                              sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+                            >
                               {video.youTubeVideoName}
                             </Typography>
                             {video.duration && (
@@ -961,18 +1063,27 @@ function VideosPage({ token }: VideosPageProps) {
                             </Stack>
                           </TableCell>
                           <TableCell>
-                            <Tooltip title="Delete video from disk">
-                              <span>
-                                <IconButton
-                                  color="error"
-                                  size="small"
-                                  onClick={() => handleDeleteSingleVideo(video.id)}
-                                  disabled={video.removed || deleteLoading}
-                                >
-                                  <DeleteIcon />
-                                </IconButton>
-                              </span>
-                            </Tooltip>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              {!video.removed && (
+                                <ProtectionShieldButton
+                                  isProtected={video.protected || false}
+                                  onClick={() => handleToggleProtection(video.id)}
+                                  variant="inline"
+                                />
+                              )}
+                              <Tooltip title="Delete video from disk">
+                                <span>
+                                  <IconButton
+                                    color="error"
+                                    size="small"
+                                    onClick={() => handleDeleteSingleVideo(video.id)}
+                                    disabled={video.removed || deleteLoading}
+                                  >
+                                    <DeleteIcon />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            </Box>
                           </TableCell>
                         </>
                       )}
@@ -1040,6 +1151,54 @@ function VideosPage({ token }: VideosPageProps) {
           {errorMessage}
         </Alert>
       </Snackbar>
+
+      <Snackbar
+        open={protectionSuccess !== null}
+        autoHideDuration={4000}
+        onClose={clearProtectionMessages}
+      >
+        <Alert onClose={clearProtectionMessages} severity="success">
+          {protectionSuccess}
+        </Alert>
+      </Snackbar>
+      <Snackbar
+        open={protectionError !== null}
+        autoHideDuration={4000}
+        onClose={clearProtectionMessages}
+      >
+        <Alert onClose={clearProtectionMessages} severity="error">
+          {protectionError}
+        </Alert>
+      </Snackbar>
+
+      {modalVideo && (
+        <VideoModal
+          open
+          onClose={() => setModalVideo(null)}
+          video={videoDataToModalData(modalVideo)}
+          token={token}
+          onVideoDeleted={() => {
+            setModalVideo(null);
+            fetchVideos();
+          }}
+          onProtectionChanged={(youtubeId, isProtected) => {
+            setVideos((prev: VideoData[]) =>
+              prev.map((v: VideoData) =>
+                v.youtubeId === youtubeId ? { ...v, protected: isProtected } : v
+              )
+            );
+          }}
+          onRatingChanged={(youtubeId, rating) => {
+            setVideos((prev: VideoData[]) =>
+              prev.map((v: VideoData) =>
+                v.youtubeId === youtubeId
+                  ? { ...v, normalized_rating: rating, rating_source: rating ? 'Manual Override' : null }
+                  : v
+              )
+            );
+          }}
+        />
+      )}
     </Card>
   );
 }

@@ -8,6 +8,8 @@ const createJobRoutes = require('./jobs');
 const createPlexRoutes = require('./plex');
 const createApiKeyRoutes = require('./apikeys');
 const createSubscriptionRoutes = require('./subscriptions');
+const createVideoDetailRoutes = require('./videoDetail');
+const videoMetadataModule = require('../modules/videoMetadataModule');
 
 /**
  * Registers all route modules with the Express app
@@ -62,6 +64,9 @@ function registerRoutes(app, deps) {
 
   // Subscription import routes
   app.use(createSubscriptionRoutes({ verifyToken, subscriptionImportModule }));
+
+  // Video detail routes (metadata and streaming)
+  app.use(createVideoDetailRoutes({ verifyToken, videoMetadataModule }));
 }
 
 module.exports = { registerRoutes };

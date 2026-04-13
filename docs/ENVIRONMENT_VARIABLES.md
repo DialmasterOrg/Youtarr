@@ -40,9 +40,9 @@ When using the bundled MariaDB container, these variables typically use their de
 
 ### DB_PORT
 **Required**: No
-**Default**: `3321`
+**Default**: `3321` for the internal database (docker-compose.yml), `3306` for external databases (docker-compose.external-db.yml)
 **Description**: Database port number
-**Note**: Both internal and external databases use port 3321 as the default for Youtarr
+**Note**: The bundled MariaDB container listens on 3321 (both inside the container and on the host). When pointing Youtarr at an external MariaDB/MySQL instance, the default drops to the standard 3306; override it in `.env` if your external database listens elsewhere.
 
 ### DB_USER
 **Required**: No

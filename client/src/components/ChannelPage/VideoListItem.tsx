@@ -22,6 +22,8 @@ import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMedia
 import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import RatingBadge from '../shared/RatingBadge';
+import ProtectionShieldButton from '../shared/ProtectionShieldButton';
+import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 
 interface VideoListItemProps {
   video: ChannelVideo;
@@ -30,7 +32,9 @@ interface VideoListItemProps {
   onCheckChange: (videoId: string, isChecked: boolean) => void;
   onToggleDeletion: (youtubeId: string) => void;
   onToggleIgnore: (youtubeId: string) => void;
+  onToggleProtection: (youtubeId: string) => void;
   onMobileTooltip?: (message: string) => void;
+  onVideoClick?: (video: ChannelVideo) => void;
 }
 
 function VideoListItem({
@@ -40,7 +44,9 @@ function VideoListItem({
   onCheckChange,
   onToggleDeletion,
   onToggleIgnore,
+  onToggleProtection,
   onMobileTooltip,
+  onVideoClick,
 }: VideoListItemProps) {
   const theme = useTheme();
   const status = getVideoStatus(video);
@@ -89,6 +95,16 @@ function VideoListItem({
             }}
             loading="lazy"
           />
+
+          {/* Center hotspot for opening video modal */}
+          {onVideoClick && (
+            <ThumbnailClickOverlay
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                onVideoClick(video);
+              }}
+            />
+          )}
 
           {/* YouTube Removed Banner */}
           {video.youtube_removed ? (
@@ -168,6 +184,7 @@ function VideoListItem({
           {/* Delete icon for downloaded videos that exist on disk */}
           {video.added && !video.removed && (
             <IconButton
+              aria-label="Delete video"
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleDeletion(video.youtube_id);
@@ -220,6 +237,19 @@ function VideoListItem({
               </IconButton>
             </Tooltip>
           )}
+
+          {/* Protection shield for downloaded videos */}
+          {video.added && !video.removed && (
+            <ProtectionShieldButton
+              isProtected={video.protected || false}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleProtection(video.youtube_id);
+              }}
+              size="small"
+              sx={{ position: 'absolute', bottom: 3, left: 3 }}
+            />
+          )}
         </Box>
 
         {/* Content */}
@@ -227,6 +257,10 @@ function VideoListItem({
           {/* Title */}
           <Typography
             variant="body2"
+            onClick={onVideoClick ? (e: React.MouseEvent) => {
+              e.stopPropagation();
+              onVideoClick(video);
+            } : undefined}
             sx={{
               mb: 0.5,
               overflow: 'hidden',
@@ -236,6 +270,8 @@ function VideoListItem({
               WebkitBoxOrient: 'vertical',
               lineHeight: 1.3,
               fontSize: '0.875rem',
+              cursor: onVideoClick ? 'pointer' : 'default',
+              '&:hover': onVideoClick ? { textDecoration: 'underline' } : {},
             }}
             title={decodeHtml(video.title)}
           >

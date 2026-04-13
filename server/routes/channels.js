@@ -394,6 +394,73 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
 
   /**
    * @swagger
+   * /api/channels/{channelId}/tabs/redetect:
+   *   post:
+   *     summary: Force re-detection of a channel's available tabs
+   *     description: >
+   *       Bypasses the cached `available_tabs` value and re-probes the
+   *       channel's tabs via yt-dlp. Preserves `hidden_tabs` and
+   *       rewrites `auto_download_enabled_tabs` to drop entries whose
+   *       tab is no longer detected or is currently hidden. Use this
+   *       when a channel's cached tab list is known to be wrong.
+   *     tags: [Channels]
+   *     parameters:
+   *       - in: path
+   *         name: channelId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: YouTube channel ID
+   *     responses:
+   *       200:
+   *         description: Tabs re-detected successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 availableTabs:
+   *                   type: array
+   *                   description: Effective tabs (detected minus hidden)
+   *                   items:
+   *                     type: string
+   *                     enum: [videos, shorts, streams]
+   *                 detectedTabs:
+   *                   type: array
+   *                   description: Raw tabs found by yt-dlp
+   *                   items:
+   *                     type: string
+   *                     enum: [videos, shorts, streams]
+   *                 hiddenTabs:
+   *                   type: array
+   *                   items:
+   *                     type: string
+   *                     enum: [videos, shorts, streams]
+   *                 autoDownloadEnabledTabs:
+   *                   type: string
+   *       404:
+   *         description: Channel not found
+   *       500:
+   *         description: Failed to re-detect tabs
+   */
+  router.post('/api/channels/:channelId/tabs/redetect', verifyToken, async (req, res) => {
+    const { channelId } = req.params;
+    req.log.info({ channelId }, 'Forcing re-detection of available tabs for channel');
+
+    try {
+      const result = await channelModule.redetectChannelTabs(channelId);
+      res.status(200).json(result);
+    } catch (error) {
+      if (error.message === 'Channel not found in database') {
+        return res.status(404).json({ error: 'Channel not found in database' });
+      }
+      req.log.error({ err: error, channelId }, 'Failed to re-detect available tabs');
+      res.status(500).json({ error: 'Failed to re-detect available tabs' });
+    }
+  });
+
+  /**
+   * @swagger
    * /api/channels/{channelId}/settings:
    *   get:
    *     summary: Get channel settings
@@ -638,7 +705,8 @@ module.exports = function createChannelRoutes({ verifyToken, channelModule, arch
     const maxDuration = (parsedMaxDuration !== null && !isNaN(parsedMaxDuration)) ? parsedMaxDuration : null;
     const dateFrom = req.query.dateFrom || null;
     const dateTo = req.query.dateTo || null;
-    const result = await channelModule.getChannelVideos(channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo);
+    const protectedFilter = req.query.protectedFilter === 'true';
+    const result = await channelModule.getChannelVideos(channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter);
 
     if (Array.isArray(result)) {
       res.status(200).json({

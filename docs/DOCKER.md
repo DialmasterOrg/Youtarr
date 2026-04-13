@@ -6,6 +6,17 @@ Youtarr uses Docker Compose with two containers:
 - **youtarr**: Main application container (Node.js/React)
 - **youtarr-db**: MariaDB database container
 
+### Compose Files
+
+Youtarr ships four Compose files so each supported runtime can layer the right overrides:
+
+| File | Purpose |
+|------|---------|
+| `docker-compose.yml` | Production defaults with the bundled MariaDB container. Used by `./start.sh`. |
+| `docker-compose.dev.yml` | Development mode: mounts `./server/` and migrations into the container, runs the backend with `node --watch` for hot reload, and uses a separate `youtarr-db-dev` database with its own named volume. Used by `./scripts/start-dev.sh`. See [DEVELOPMENT.md](DEVELOPMENT.md). |
+| `docker-compose.arm.yml` | ARM override (Apple Silicon, Raspberry Pi) that switches the MariaDB data directory to a named volume to avoid virtiofs issues. Layered on top of `docker-compose.yml` via `-f`. |
+| `docker-compose.external-db.yml` | Runs Youtarr against an external MariaDB/MySQL instance instead of the bundled database. Used by `./start-with-external-db.sh`. |
+
 ## Container Details
 
 ### Application Container (youtarr)
@@ -150,6 +161,8 @@ This section covers setting up Youtarr when you cannot (or prefer not to) clone 
 
 **We strongly recommend cloning the repository if possible.** If you must proceed, follow these steps carefully.
 
+> **Critical - read this first if you use automation**: If you are templating `docker-compose.yml` via Ansible, Terraform, Kubernetes, Helm, or any tool that auto-creates empty directories for every listed volume, read [Do Not Mount the Migrations Directory](#-important-do-not-mount-the-migrations-directory) at the top of this document before continuing. Auto-creating an empty `./migrations` directory will overwrite the packaged migrations and break the database bootstrap in a way that is hard to diagnose.
+
 ### Prerequisites
 
 - Docker and Docker Compose installed
@@ -178,6 +191,14 @@ wget https://raw.githubusercontent.com/DialmasterOrg/Youtarr/main/.env.example -
 - Manually copy `docker-compose.yml` from [GitHub](https://github.com/DialmasterOrg/Youtarr/blob/main/docker-compose.yml)
 - Manually copy `.env.example` from [GitHub](https://github.com/DialmasterOrg/Youtarr/blob/main/.env.example)
 
+**Using an external MariaDB/MySQL instance?** Download [`docker-compose.external-db.yml`](https://raw.githubusercontent.com/DialmasterOrg/Youtarr/main/docker-compose.external-db.yml) instead of `docker-compose.yml` and rename it to `docker-compose.yml` locally so the rest of this guide works unchanged:
+
+```bash
+wget https://raw.githubusercontent.com/DialmasterOrg/Youtarr/main/docker-compose.external-db.yml -O docker-compose.yml
+```
+
+You will also need to set `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME` in your `.env` (see [External Database Setup](#using-an-external-database) earlier in this document). Skip the bundled-database permission steps below if you go this route.
+
 #### 3. Configure Environment
 
 ```bash
@@ -190,44 +211,72 @@ vim .env  # or nano, or your preferred editor
 
 **Required settings:**
 - `YOUTUBE_OUTPUT_DIR` - Must be set to your video storage path
-- `TZ` - Your timezone (e.g., `America/New_York`, `Europe/London`)
 
 **Optional settings:**
-- `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` - For headless setups
-- See [ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md) for full reference
+- `TZ` - Your timezone (e.g., `America/New_York`, `Europe/London`). Defaults to `UTC`. Set this if scheduled downloads and nightly cleanup should run in your local time.
+- `AUTH_PRESET_USERNAME` and `AUTH_PRESET_PASSWORD` - For headless setups where you cannot reach the initial-setup wizard via localhost.
+- `YOUTARR_UID` / `YOUTARR_GID` - Run the container as a non-root user (recommended for security, see step 5 below).
+- **Changing bundled-database credentials?** If you want to customize the MariaDB password, set BOTH `DB_PASSWORD` **and** `DB_ROOT_PASSWORD` to the same value. Setting only one of them will cause the app to fail to connect because the app uses `DB_PASSWORD` while MariaDB's root account is initialized from `DB_ROOT_PASSWORD`. This only applies to the bundled database; external-DB users set `DB_PASSWORD` to match their existing database.
+- See [ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md) for the full reference.
 
 #### 4. Create Required Directories
 
 Youtarr needs these directories to exist before first start:
 
 ```bash
-# Create all required directories
+# Youtarr app directories (always required)
 mkdir -p config jobs server/images
 
-# Create your download directory (adjust path to match YOUTUBE_OUTPUT_DIR in .env)
+# Your download directory (adjust path to match YOUTUBE_OUTPUT_DIR in .env)
 mkdir -p downloads  # If using default ./downloads
 # OR
 mkdir -p /path/to/your/custom/location  # If using custom path
 ```
 
+**Bundled database only** (skip if you are using an external database):
+
+```bash
+# MariaDB data directory for the bundled youtarr-db container
+mkdir -p database
+```
+
+On most Linux hosts, Docker will auto-create `./database` on first run and MariaDB's entrypoint will chown it to UID 999 (the `mysql` user inside the `mariadb:10.3` image). On Synology, QNAP, and some other NAS platforms with strict UID enforcement you may need to pre-create and chown the directory yourself:
+
+```bash
+sudo chown -R 999:999 database
+```
+
+If you hit `InnoDB: Operating system error number 13` at startup, you have hit this case - see [Switching to Named Volume](DATABASE.md#switching-to-named-volume) in the database docs for an alternative that sidesteps bind-mount permission issues entirely.
+
 #### 5. Set Permissions
 
-**If using UID/GID (1000:1000):**
-```bash
-sudo chown -R 1000:1000 config jobs server/images downloads
-```
+**By default, the container runs as root (UID 0).** If you leave `YOUTARR_UID` and `YOUTARR_GID` unset in `.env`, you can skip this entire step: the container manages file ownership itself.
 
-**If you configured custom YOUTARR_UID and YOUTARR_GID in .env:**
-```bash
-# Replace 1001:1001 with your configured UID:GID
-sudo chown -R 1001:1001 config jobs server/images downloads
-```
+**Recommended (non-root)**: run the container as a non-root user so files on the host are owned by a regular account. This requires both an `.env` change and a `chown` on the host, in this order:
 
-**Permission verification:**
-```bash
-ls -la config jobs server/images downloads
-# All directories should show ownership matching your configured UID:GID
-```
+1. Add your target UID/GID to `.env` (1000:1000 is the typical first user on Linux, but use whatever matches your host account):
+
+   ```bash
+   YOUTARR_UID=1000
+   YOUTARR_GID=1000
+   ```
+
+2. Change ownership of the Youtarr directories on the host to match:
+
+   ```bash
+   sudo chown -R 1000:1000 config jobs server/images downloads
+   ```
+
+   Replace `1000:1000` with whatever you put in `.env`. If you use a custom download path, `chown` that path instead of `downloads`.
+
+3. Verify:
+
+   ```bash
+   ls -la config jobs server/images downloads
+   # All directories should show ownership matching YOUTARR_UID:YOUTARR_GID
+   ```
+
+> **Important**: The `chown` must run **after** setting `YOUTARR_UID/GID` in `.env`, and the numeric IDs must match. Running `chown 1000:1000` without setting `YOUTARR_UID=1000` leaves the container running as root, which will then either overwrite your host-side ownership or fail to write into the chown'd directories depending on your filesystem. If you are already running as root and want to switch to non-root, stop the container first, chown everything (including your `YOUTUBE_OUTPUT_DIR`), then update `.env` and start again.
 
 #### 6. Start Containers
 
@@ -271,7 +320,7 @@ docker compose down
 # 2. Backup your configuration (recommended)
 tar -czf backup-$(date +%Y%m%d).tar.gz config jobs
 
-# 3. Download updated docker-compose.yml
+# 3. Download updated compose file
 wget https://raw.githubusercontent.com/DialmasterOrg/Youtarr/main/docker-compose.yml -O docker-compose.yml
 
 # 4. Pull latest images
@@ -284,7 +333,9 @@ docker compose up -d
 docker compose logs -f
 ```
 
-**Note**: Check [.env.example](https://github.com/DialmasterOrg/Youtarr/blob/main/.env.example) for new variables after major updates.
+**Notes**:
+- Check [.env.example](https://github.com/DialmasterOrg/Youtarr/blob/main/.env.example) for new variables after major updates.
+- If you originally downloaded `docker-compose.external-db.yml` for an external database setup, swap step 3 above for `wget https://raw.githubusercontent.com/DialmasterOrg/Youtarr/main/docker-compose.external-db.yml -O docker-compose.yml`. Mixing compose files across updates will silently switch you between bundled and external database modes.
 
 ### Platform-Specific Notes
 

@@ -5,9 +5,11 @@ import {
   Typography,
   IconButton,
   Button,
+  Chip,
   Divider,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import ShieldIcon from '@mui/icons-material/Shield';
 import DurationFilterInput from './DurationFilterInput';
 import DateRangeFilterInput from './DateRangeFilterInput';
 import { VideoFilters } from '../hooks/useChannelVideoFilters';
@@ -25,6 +27,8 @@ interface MobileFilterDrawerProps {
   onClearAll: () => void;
   hasActiveFilters: boolean;
   hideDateFilter?: boolean;
+  protectedFilter?: boolean;
+  onProtectedFilterChange?: (value: boolean) => void;
 }
 
 function MobileFilterDrawer({
@@ -40,6 +44,8 @@ function MobileFilterDrawer({
   onClearAll,
   hasActiveFilters,
   hideDateFilter = false,
+  protectedFilter = false,
+  onProtectedFilterChange,
 }: MobileFilterDrawerProps) {
   return (
     <Drawer
@@ -98,6 +104,24 @@ function MobileFilterDrawer({
             <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
               Shorts do not have date information
             </Typography>
+          </Box>
+        )}
+
+        {/* Protected Filter */}
+        {onProtectedFilterChange && (
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Status
+            </Typography>
+            <Chip
+              icon={<ShieldIcon />}
+              label="Protected"
+              variant={protectedFilter ? 'filled' : 'outlined'}
+              color={protectedFilter ? 'primary' : 'default'}
+              size="small"
+              onClick={() => onProtectedFilterChange(!protectedFilter)}
+              sx={{ cursor: 'pointer' }}
+            />
           </Box>
         )}
 

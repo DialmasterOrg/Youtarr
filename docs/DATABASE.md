@@ -28,6 +28,7 @@ Youtarr uses MariaDB/MySQL for storing:
 | `JobVideos`        | `JobVideo`        | Job <-> video associations        |
 | `JobVideoDownloads`| `JobVideoDownload`| Download progress tracking        |
 | `Sessions`         | `Session`         | User authentication sessions      |
+| `ApiKeys`          | `ApiKey`          | API key credentials for external integrations (bookmarklets, shortcuts, automation) |
 | `SequelizeMeta`    | NA                | Sequelize ORM migration tracking  |
 
 ## Internal Database (Default)

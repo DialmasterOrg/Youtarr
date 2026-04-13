@@ -94,6 +94,19 @@ Using the start script:
 
 For deployments behind external authentication or not exposed to the internet:
 
+1. Set in `.env`:
+   ```bash
+   AUTH_ENABLED=false
+   ```
+
+2. Youtarr bypasses internal authentication, no auth will be required to access Youtarr.
+
+**Warning**: Only disable when using:
+- VPN access
+- Reverse proxy with authentication
+- Platform auth (Cloudflare Access, Authelia, etc.)
+- Never expose to internet without protection!
+
 ## API Keys
 
 API Keys provide persistent authentication for external integrations like bookmarklets, mobile shortcuts, and automation tools.
@@ -159,19 +172,6 @@ UPDATE ApiKeys SET is_active = 0 WHERE id = 1;
 ```
 
 For detailed API documentation and examples (bookmarklets, mobile shortcuts, Python, cURL, etc.), see [API Integration Guide](API_INTEGRATION.md).
-
-1. Set in `.env`:
-   ```bash
-   AUTH_ENABLED=false
-   ```
-
-2. Youtarr bypasses internal authentication, no auth will be required to access Youtarr.
-
-**Warning**: Only disable when using:
-- VPN access
-- Reverse proxy with authentication
-- Platform auth (Cloudflare Access, Authelia, etc.)
-- Never expose to internet without protection!
 
 ## Session Management
 

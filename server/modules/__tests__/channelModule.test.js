@@ -956,7 +956,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2', 'video3']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -985,7 +985,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -1042,7 +1042,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -1071,7 +1071,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2', 'video3']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
         });
 
         // Video1 - not downloaded
@@ -1099,7 +1099,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: []
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
         });
         expect(result).toEqual([]);
       });
@@ -1205,7 +1205,7 @@ describe('ChannelModule', () => {
           where: {
             youtubeId: ['video1', 'video2']
           },
-          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source']
+          attributes: ['id', 'youtubeId', 'removed', 'fileSize', 'filePath', 'audioFilePath', 'audioFileSize', 'normalized_rating', 'rating_source', 'protected']
         });
         expect(result[0].added).toBe(true);
         expect(result[0].removed).toBe(false);
@@ -2835,6 +2835,278 @@ describe('ChannelModule', () => {
 
         expect(mockChannel.auto_download_enabled_tabs).toBe('');
         expect(mockChannel.save).toHaveBeenCalled();
+      });
+    });
+
+    describe('hidden_tabs filtering', () => {
+      describe('computeEffectiveTabs', () => {
+        test('returns detected tabs when nothing hidden', () => {
+          const result = ChannelModule.computeEffectiveTabs('videos,shorts,streams', null);
+          expect(result).toEqual(['videos', 'shorts', 'streams']);
+        });
+
+        test('filters out hidden tabs', () => {
+          const result = ChannelModule.computeEffectiveTabs('videos,shorts,streams', 'shorts');
+          expect(result).toEqual(['videos', 'streams']);
+        });
+
+        test('filters multiple hidden tabs', () => {
+          const result = ChannelModule.computeEffectiveTabs('videos,shorts,streams', 'shorts,streams');
+          expect(result).toEqual(['videos']);
+        });
+
+        test('returns empty array when all detected are hidden', () => {
+          const result = ChannelModule.computeEffectiveTabs('videos,shorts', 'videos,shorts');
+          expect(result).toEqual([]);
+        });
+
+        test('returns empty array when available_tabs is null', () => {
+          const result = ChannelModule.computeEffectiveTabs(null, null);
+          expect(result).toEqual([]);
+        });
+
+        test('ignores hidden entries that are not in detected set', () => {
+          const result = ChannelModule.computeEffectiveTabs('videos', 'shorts,streams');
+          expect(result).toEqual(['videos']);
+        });
+
+        test('trims whitespace in both lists', () => {
+          const result = ChannelModule.computeEffectiveTabs(' videos , shorts ', ' shorts ');
+          expect(result).toEqual(['videos']);
+        });
+      });
+
+      describe('mapChannelToResponse with hidden_tabs', () => {
+        test('returns effective available_tabs excluding hidden tabs', () => {
+          const channel = {
+            channel_id: 'UC123',
+            uploader: 'Test',
+            uploader_id: 'UC123',
+            title: 'Test',
+            description: 'Test',
+            url: 'https://youtube.com/@test',
+            auto_download_enabled_tabs: 'video',
+            available_tabs: 'videos,shorts,streams',
+            hidden_tabs: 'shorts'
+          };
+
+          const result = ChannelModule.mapChannelToResponse(channel);
+
+          expect(result.available_tabs).toBe('videos,streams');
+        });
+
+        test('leaves available_tabs unchanged when hidden_tabs is null', () => {
+          const channel = {
+            channel_id: 'UC123',
+            uploader: 'Test',
+            uploader_id: 'UC123',
+            title: 'Test',
+            description: 'Test',
+            url: 'https://youtube.com/@test',
+            auto_download_enabled_tabs: 'video',
+            available_tabs: 'videos,shorts',
+            hidden_tabs: null
+          };
+
+          const result = ChannelModule.mapChannelToResponse(channel);
+
+          expect(result.available_tabs).toBe('videos,shorts');
+        });
+
+        test('returns null available_tabs when all detected are hidden', () => {
+          const channel = {
+            channel_id: 'UC123',
+            uploader: 'Test',
+            uploader_id: 'UC123',
+            title: 'Test',
+            description: 'Test',
+            url: 'https://youtube.com/@test',
+            auto_download_enabled_tabs: 'video',
+            available_tabs: 'videos',
+            hidden_tabs: 'videos'
+          };
+
+          const result = ChannelModule.mapChannelToResponse(channel);
+
+          expect(result.available_tabs).toBeNull();
+        });
+      });
+
+      describe('mapChannelListEntry with hidden_tabs', () => {
+        test('returns effective available_tabs excluding hidden tabs', () => {
+          const channel = {
+            url: 'https://youtube.com/@test',
+            uploader: 'Test',
+            channel_id: 'UC123',
+            auto_download_enabled_tabs: 'video',
+            available_tabs: 'videos,shorts,streams',
+            hidden_tabs: 'shorts,streams'
+          };
+
+          const result = ChannelModule.mapChannelListEntry(channel);
+
+          expect(result.available_tabs).toBe('videos');
+        });
+      });
+
+      describe('buildChannelVideosResponse with hidden_tabs', () => {
+        test('returns effective availableTabs excluding hidden tabs', () => {
+          const channel = {
+            ...mockChannelData,
+            available_tabs: 'videos,shorts,streams',
+            hidden_tabs: 'shorts'
+          };
+
+          const result = ChannelModule.buildChannelVideosResponse([mockVideoData], channel, 'cache', null, false, 'video');
+
+          expect(result.availableTabs).toEqual(['videos', 'streams']);
+        });
+      });
+
+      describe('getChannelAvailableTabs with hidden_tabs', () => {
+        test('returns effective tabs (detected minus hidden)', async () => {
+          const mockChannel = {
+            ...mockChannelData,
+            available_tabs: 'videos,shorts,streams',
+            hidden_tabs: 'shorts'
+          };
+          Channel.findOne.mockResolvedValue(mockChannel);
+
+          const result = await ChannelModule.getChannelAvailableTabs('UC123');
+
+          expect(result).toEqual({ availableTabs: ['videos', 'streams'] });
+        });
+      });
+    });
+
+    describe('redetectChannelTabs', () => {
+      test('probes tabs via yt-dlp even when available_tabs is cached', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          available_tabs: 'shorts', // Pretend RSS era gave us only shorts
+          hidden_tabs: null,
+          auto_download_enabled_tabs: 'short'
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+        Channel.update.mockResolvedValue([1]);
+
+        ChannelModule.checkTabExistsViaYtdlp = jest.fn()
+          .mockImplementation(async (chId, tabType) => {
+            if (tabType === 'videos') return true;
+            if (tabType === 'shorts') return true;
+            if (tabType === 'streams') return true;
+            return false;
+          });
+
+        const result = await ChannelModule.redetectChannelTabs('UC123');
+
+        expect(ChannelModule.checkTabExistsViaYtdlp).toHaveBeenCalledWith('UC123', 'videos');
+        expect(ChannelModule.checkTabExistsViaYtdlp).toHaveBeenCalledWith('UC123', 'shorts');
+        expect(ChannelModule.checkTabExistsViaYtdlp).toHaveBeenCalledWith('UC123', 'streams');
+        expect(Channel.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            available_tabs: 'videos,shorts,streams'
+          }),
+          { where: { channel_id: 'UC123' } }
+        );
+        expect(result.availableTabs).toEqual(['videos', 'shorts', 'streams']);
+        expect(result.detectedTabs).toEqual(['videos', 'shorts', 'streams']);
+      });
+
+      test('preserves hidden_tabs when re-detecting', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          available_tabs: 'videos',
+          hidden_tabs: 'shorts',
+          auto_download_enabled_tabs: 'video'
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+        Channel.update.mockResolvedValue([1]);
+
+        ChannelModule.checkTabExistsViaYtdlp = jest.fn()
+          .mockImplementation(async (chId, tabType) => {
+            return tabType === 'videos' || tabType === 'shorts';
+          });
+
+        const result = await ChannelModule.redetectChannelTabs('UC123');
+
+        // The update call should NOT overwrite hidden_tabs
+        const updateCall = Channel.update.mock.calls[0][0];
+        expect(updateCall).not.toHaveProperty('hidden_tabs');
+
+        // Effective available_tabs = detected - hidden = [videos, shorts] - [shorts] = [videos]
+        expect(result.availableTabs).toEqual(['videos']);
+        // detectedTabs shows the raw detection
+        expect(result.detectedTabs).toEqual(['videos', 'shorts']);
+        expect(result.hiddenTabs).toEqual(['shorts']);
+      });
+
+      test('drops auto_download_enabled_tabs entries that are no longer detected', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          available_tabs: 'videos,shorts,streams',
+          hidden_tabs: null,
+          auto_download_enabled_tabs: 'video,short,livestream'
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+        Channel.update.mockResolvedValue([1]);
+
+        // Shorts no longer exists
+        ChannelModule.checkTabExistsViaYtdlp = jest.fn()
+          .mockImplementation(async (chId, tabType) => {
+            return tabType === 'videos' || tabType === 'streams';
+          });
+
+        await ChannelModule.redetectChannelTabs('UC123');
+
+        const updateCall = Channel.update.mock.calls[0][0];
+        expect(updateCall.auto_download_enabled_tabs.split(',').sort())
+          .toEqual(['livestream', 'video'].sort());
+      });
+
+      test('drops auto_download_enabled_tabs entries that are hidden', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          available_tabs: 'videos',
+          hidden_tabs: 'shorts',
+          auto_download_enabled_tabs: 'video,short'
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+        Channel.update.mockResolvedValue([1]);
+
+        ChannelModule.checkTabExistsViaYtdlp = jest.fn()
+          .mockImplementation(async (chId, tabType) => {
+            return tabType === 'videos' || tabType === 'shorts';
+          });
+
+        await ChannelModule.redetectChannelTabs('UC123');
+
+        const updateCall = Channel.update.mock.calls[0][0];
+        // short should have been stripped because shorts is in hidden_tabs
+        expect(updateCall.auto_download_enabled_tabs.split(',')).toEqual(['video']);
+      });
+
+      test('throws error when channel not found', async () => {
+        Channel.findOne.mockResolvedValue(null);
+        await expect(ChannelModule.redetectChannelTabs('UC999'))
+          .rejects.toThrow('Channel not found in database');
+      });
+
+      test('falls back to videos tab when all yt-dlp probes fail', async () => {
+        const mockChannel = {
+          ...mockChannelData,
+          available_tabs: 'shorts',
+          hidden_tabs: null,
+          auto_download_enabled_tabs: 'short'
+        };
+        Channel.findOne.mockResolvedValue(mockChannel);
+        Channel.update.mockResolvedValue([1]);
+
+        ChannelModule.checkTabExistsViaYtdlp = jest.fn().mockResolvedValue(false);
+
+        const result = await ChannelModule.redetectChannelTabs('UC123');
+
+        expect(result.detectedTabs).toEqual(['videos']);
       });
     });
   });

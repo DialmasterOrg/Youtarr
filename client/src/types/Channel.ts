@@ -5,7 +5,10 @@ export interface Channel {
   description?: string;
   title?: string;
   auto_download_enabled_tabs?: string;
+  // Effective (detected minus user-hidden) tab list, comma-separated.
   available_tabs?: string | null;
+  // User-hidden tabs, comma-separated. Only present on the settings endpoint.
+  hidden_tabs?: string | null;
   sub_folder?: string | null;
   video_quality?: string | null;
   min_duration?: number | null;

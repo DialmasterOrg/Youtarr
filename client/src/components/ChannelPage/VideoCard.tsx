@@ -22,6 +22,8 @@ import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMedia
 import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import RatingBadge from '../shared/RatingBadge';
+import ProtectionShieldButton from '../shared/ProtectionShieldButton';
+import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 
 interface VideoCardProps {
   video: ChannelVideo;
@@ -33,7 +35,9 @@ interface VideoCardProps {
   onHoverChange: (videoId: string | null) => void;
   onToggleDeletion: (youtubeId: string) => void;
   onToggleIgnore: (youtubeId: string) => void;
+  onToggleProtection: (youtubeId: string) => void;
   onMobileTooltip?: (message: string) => void;
+  onVideoClick?: (video: ChannelVideo) => void;
 }
 
 function VideoCard({
@@ -46,7 +50,9 @@ function VideoCard({
   onHoverChange,
   onToggleDeletion,
   onToggleIgnore,
+  onToggleProtection,
   onMobileTooltip,
+  onVideoClick,
 }: VideoCardProps) {
   const theme = useTheme();
   const status = getVideoStatus(video);
@@ -101,6 +107,16 @@ function VideoCard({
               }}
               loading="lazy"
             />
+
+            {/* Center hotspot for opening video modal */}
+            {onVideoClick && (
+              <ThumbnailClickOverlay
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  onVideoClick(video);
+                }}
+              />
+            )}
 
             {/* YouTube Removed Banner */}
             {video.youtube_removed ? (
@@ -192,6 +208,7 @@ function VideoCard({
             {/* Delete icon for downloaded videos that exist on disk */}
             {video.added && !video.removed && (
               <IconButton
+                aria-label="Delete video"
                 onClick={(e) => {
                   e.stopPropagation();
                   onToggleDeletion(video.youtube_id);
@@ -244,12 +261,28 @@ function VideoCard({
                 </IconButton>
               </Tooltip>
             )}
+
+            {/* Protection shield for downloaded videos */}
+            {video.added && !video.removed && (
+              <ProtectionShieldButton
+                isProtected={video.protected || false}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleProtection(video.youtube_id);
+                }}
+                sx={{ position: 'absolute', bottom: 6, left: 6, zIndex: 2 }}
+              />
+            )}
           </Box>
 
           {/* Card content */}
           <Box sx={{ p: isMobile ? 1.5 : 2, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
             <Typography
               variant="body2"
+              onClick={onVideoClick ? (e: React.MouseEvent) => {
+                e.stopPropagation();
+                onVideoClick(video);
+              } : undefined}
               sx={{
                 mb: 1,
                 overflow: 'hidden',
@@ -259,6 +292,8 @@ function VideoCard({
                 WebkitBoxOrient: 'vertical',
                 lineHeight: 1.3,
                 minHeight: '2.6em',
+                cursor: onVideoClick ? 'pointer' : 'default',
+                '&:hover': onVideoClick ? { textDecoration: 'underline' } : {},
               }}
               title={decodeHtml(video.title)}
             >

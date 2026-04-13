@@ -7,6 +7,7 @@
 },*/
 
 export interface ChannelVideo {
+  id?: number;
   title: string;
   youtube_id: string;
   publishedAt: string | null | undefined;
@@ -26,4 +27,5 @@ export interface ChannelVideo {
   ignored_at?: string | null;
   normalized_rating?: string | null;
   rating_source?: string | null;
+  protected?: boolean;
 }
