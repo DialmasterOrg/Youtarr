@@ -1,7 +1,7 @@
 # Youtarr
 
-![Backend Coverage](https://img.shields.io/badge/Backend_Coverage-80%25-yellow)
-![Frontend Coverage](https://img.shields.io/badge/Frontend_Coverage-85%25-brightgreen)
+![Backend Coverage](https://img.shields.io/badge/Backend_Coverage-80%25-brightgreen)
+![Frontend Coverage](https://img.shields.io/badge/Frontend_Coverage-83%25-brightgreen)
 ![CI Status](https://github.com/DialmasterOrg/Youtarr/workflows/CI%20-%20Lint%20and%20Test/badge.svg)
 
 Youtarr is a self-hosted YouTube downloader that automatically downloads videos from your favorite channels. It provides metadata for multiple media servers and offers optional Plex integration for automatic library refreshes.
@@ -43,6 +43,12 @@ https://github.com/user-attachments/assets/34e5b50b-1a38-4f0b-9f84-bd47cefe4348
 - **Unraid Ready**: Community Applications template (via DialmasterOrg repo) with headless-friendly credential presets
 - **Powered by yt-dlp**: Uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) under the hood for YouTube integration and downloads
 - **Content Ratings**: Add per-video and per-channel content ratings (normalized to common media-server values like `G`, `PG`, `PG-13`, `R`, `NC-17`, `TV-*`). Ratings can be set per-download, via channel defaults, or derived from yt-dlp metadata; they show up as badges and can be used for automated policies.
+
+## How Youtarr compares to Pinchflat
+
+Youtarr and [Pinchflat](https://github.com/kieraneglin/pinchflat) solve the same core problem — automated, yt-dlp-powered YouTube archiving for Plex, Jellyfin, Kodi, and Emby — and the two tools overlap heavily. SponsorBlock, NFO metadata, cookies, Apprise notifications, per-channel quality/duration/date filters, and ARM-friendly Docker deployment are all supported on both.
+
+Youtarr predates Pinchflat (first commit May 2023 vs. January 2024); the two projects arrived at similar solutions independently and have evolved in parallel. For a side-by-side of where they actually differ — Plex integration, in-app playback, content ratings, REST API, RSS feeds, indexing strategy — see [Youtarr vs Pinchflat](docs/YOUTARR_VS_PINCHFLAT.md).
 
 ## Prerequisites
 - Docker & Docker Compose
