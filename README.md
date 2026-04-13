@@ -136,16 +136,21 @@ Interested in contributing to Youtarr? We welcome contributions of all kinds!
 <summary>Click to view screenshots</summary>
 
 ### Channel Management
-<img width="1888" height="1072" alt="Channel Management" src="https://github.com/user-attachments/assets/a4e8172c-eb7f-44bb-a891-a9d436ee9b73" />
+![ChannelsPage](https://github.com/user-attachments/assets/75adf139-f202-499d-9eee-1c81b71a4355)
 
 ### Video Browser
-<img width="1489" height="976" alt="Video Browser" src="https://github.com/user-attachments/assets/cbf765c6-67d1-431b-a393-0ac0c4e2f7e2" />
+![ChannelPage](https://github.com/user-attachments/assets/f658c97b-3898-477c-82d1-4a15d6b34207)
+
 
 ### Configuration
-<img width="1890" height="1383" alt="Configuration" src="https://github.com/user-attachments/assets/b8d586b1-fe5b-4cb4-a61a-79d1905cc44e" />
+![ConfigurationPage](https://github.com/user-attachments/assets/9aba2e17-9d53-4adb-9c05-c6f9dc926dcf)
+
 
 ### Download Manager
-<img width="1472" height="1236" alt="Download Manager" src="https://github.com/user-attachments/assets/cd71937b-8423-42b3-9ddd-070f69c80662" />
+![DownloadsPage](https://github.com/user-attachments/assets/5aa84c3c-6bc7-478b-b97d-c8f1e46e8ca2)
+
+### Individual Video Modal
+![VideoModal](https://github.com/user-attachments/assets/e27f8adb-73fc-4cc8-826e-bec1ac505b18)
 
 ### SponsorBlock Settings
 <img width="1476" height="1186" alt="SponsorBlock Settings" src="https://github.com/user-attachments/assets/86fb9b48-2284-4ef9-a76b-e083a2d70584" />
