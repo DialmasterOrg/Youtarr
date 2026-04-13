@@ -153,10 +153,8 @@ Interested in contributing to Youtarr? We welcome contributions of all kinds!
 ![VideoModal](https://github.com/user-attachments/assets/e27f8adb-73fc-4cc8-826e-bec1ac505b18)
 
 ### SponsorBlock Settings
-<img width="1476" height="1186" alt="SponsorBlock Settings" src="https://github.com/user-attachments/assets/86fb9b48-2284-4ef9-a76b-e083a2d70584" />
+![SponsorBlock](https://github.com/user-attachments/assets/0bcf1d1a-2d8c-4dff-9e67-abbe369e64d5)
 
-### Auto-Removal Preview
-<img width="1466" height="1227" alt="Auto-Removal Preview" src="https://github.com/user-attachments/assets/12629a9f-56be-4c71-8c43-e6673504f388" />
 </details>
 
 ## Legal Disclaimer
