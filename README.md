@@ -10,7 +10,7 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 
 > **Like Youtarr?** Consider [supporting the project on Patreon](https://www.patreon.com/c/ChrisDial) to help keep it free and actively developed!
 
-https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
+https://github.com/user-attachments/assets/34e5b50b-1a38-4f0b-9f84-bd47cefe4348
 
 ## Why Youtarr?
 
