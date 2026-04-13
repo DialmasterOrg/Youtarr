@@ -1,5 +1,74 @@
 # Changelog
 
+## [v1.65.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.65.0) - 2026-04-13
+
+## [1.65.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.64.0...v1.65.0) (2026-04-13)
+
+
+### Features
+
+* **api:** add PATCH /api/videos/:id/protected endpoint ([#505](https://github.com/DialmasterOrg/Youtarr/issues/505)) ([ad2c493](https://github.com/DialmasterOrg/Youtarr/commit/ad2c493cb845a125a41aa7f6a2d0d60c14af881e))
+* **backend:** add setVideoProtection method to videosModule ([#505](https://github.com/DialmasterOrg/Youtarr/issues/505)) ([2a499ec](https://github.com/DialmasterOrg/Youtarr/commit/2a499eca005873cb58d9570bc7b4bf85c40f354c))
+* **backend:** exclude protected videos from auto-deletion ([#505](https://github.com/DialmasterOrg/Youtarr/issues/505)) ([cc617aa](https://github.com/DialmasterOrg/Youtarr/commit/cc617aa9d5e235a666719178c36f81a8cf5345a8))
+* **channels:** add manual tab override with yt-dlp redetect ([89fb2ec](https://github.com/DialmasterOrg/Youtarr/commit/89fb2ec6c9c30f0a7f3e5f29ce7e44f82010a0ac))
+* **channels:** add selectable page size for channel videos ([#288](https://github.com/DialmasterOrg/Youtarr/issues/288)) ([8c4007a](https://github.com/DialmasterOrg/Youtarr/commit/8c4007a50d3b9822862974ee0457b9565621a1f9))
+* **db:** add protected column to Videos table ([#505](https://github.com/DialmasterOrg/Youtarr/issues/505)) ([c9f7009](https://github.com/DialmasterOrg/Youtarr/commit/c9f7009d48f9eb2048da2bd07c7f35967297438a))
+* **frontend:** add useVideoProtection shared hook ([#505](https://github.com/DialmasterOrg/Youtarr/issues/505)) ([7c87eb8](https://github.com/DialmasterOrg/Youtarr/commit/7c87eb877a34ca995d5242bae683827dac08f9b1))
+* **plex:** add per-subfolder library mapping to plexModule ([5dbccea](https://github.com/DialmasterOrg/Youtarr/commit/5dbccea42e09b46297b7809e2ad85bdaab0ae46d)), closes [#310](https://github.com/DialmasterOrg/Youtarr/issues/310)
+* **plex:** add PlexSubfolderMappings UI component ([80619cb](https://github.com/DialmasterOrg/Youtarr/commit/80619cb36f4bed3b3575eaa98502475e9351636e))
+* **plex:** wire subfolder-aware refresh into download and channel settings ([a82afb8](https://github.com/DialmasterOrg/Youtarr/commit/a82afb8f536d3535a24a134d08b328adb725e3ed))
+* **types:** add protected field to VideoData and ChannelVideo ([#505](https://github.com/DialmasterOrg/Youtarr/issues/505)) ([88ef370](https://github.com/DialmasterOrg/Youtarr/commit/88ef37068f29beaa55a7daa2c907fffadc8c5421))
+* **ui:** add protected filter chip to ChannelPage ([#505](https://github.com/DialmasterOrg/Youtarr/issues/505)) ([55d00c0](https://github.com/DialmasterOrg/Youtarr/commit/55d00c02820c1046cef3b85234c71c03287c73c7))
+* **ui:** add shield icon and protected filter to VideosPage ([#505](https://github.com/DialmasterOrg/Youtarr/issues/505)) ([4c4194e](https://github.com/DialmasterOrg/Youtarr/commit/4c4194ecc24595836007f47807b9805aecde64ac))
+* **ui:** add shield icon to VideoCard ([#505](https://github.com/DialmasterOrg/Youtarr/issues/505)) ([fa40cbe](https://github.com/DialmasterOrg/Youtarr/commit/fa40cbe13505e3b24170e9685e940fc1af622f4c))
+* **ui:** add shield icon to VideoListItem and VideoTableView ([#505](https://github.com/DialmasterOrg/Youtarr/issues/505)) ([079007e](https://github.com/DialmasterOrg/Youtarr/commit/079007e14f0d7e8ad63dd945a775b137c3a5d7d5))
+* **ui:** wire up video protection toggle in ChannelVideos ([#505](https://github.com/DialmasterOrg/Youtarr/issues/505)) ([e9792c1](https://github.com/DialmasterOrg/Youtarr/commit/e9792c13dedd9b19dfa59b9f53558aa8b542cd97))
+* **videos:** add video modal with detail view and streaming ([#522](https://github.com/DialmasterOrg/Youtarr/issues/522)) ([58290cb](https://github.com/DialmasterOrg/Youtarr/commit/58290cb5036a4504201c7e3c075c18b79fcb4f18))
+* **videos:** polish video modal UI/UX ([0339f85](https://github.com/DialmasterOrg/Youtarr/commit/0339f8524ea32e4a68e621d009a16df08aec4985))
+
+
+### Bug Fixes
+
+* **db:** correct helpers require path in migration ([#505](https://github.com/DialmasterOrg/Youtarr/issues/505)) ([4411e25](https://github.com/DialmasterOrg/Youtarr/commit/4411e25d72ae85919738ecd7c2d8ac2ddaed1ae3))
+* **ui:** improve protected filter chip placement on VideosPage ([#505](https://github.com/DialmasterOrg/Youtarr/issues/505)) ([85f8c19](https://github.com/DialmasterOrg/Youtarr/commit/85f8c192dec5e4afb82c0517b7c19d8b06c7f790))
+* address PR review - table handler, error leak, server-side filter ([#505](https://github.com/DialmasterOrg/Youtarr/issues/505)) ([fb4f311](https://github.com/DialmasterOrg/Youtarr/commit/fb4f3114a37eb4ff1d73ba32aa5991b98703f8d6))
+* guard shield on removed videos, clean up redundant check and loading state ([#505](https://github.com/DialmasterOrg/Youtarr/issues/505)) ([a53b046](https://github.com/DialmasterOrg/Youtarr/commit/a53b0469dfed8bc7973f5e77dabfde0be62e7c13))
+* **plex:** normalize subfolder sentinels before Plex library refresh ([83cc231](https://github.com/DialmasterOrg/Youtarr/commit/83cc231d87be52b70f9137882c26c2a38e294fa3))
+* address PR review feedback for plex subfolder mappings ([9fbcd6c](https://github.com/DialmasterOrg/Youtarr/commit/9fbcd6c08f9076fc6a8dd12e2bd543f543e51405))
+* **deps:** patch critical axios and vite vulnerabilities ([671a936](https://github.com/DialmasterOrg/Youtarr/commit/671a936c0a37e62101035f23e9ef2160c895b360))
+* **plex:** subfolder mappings honor per-channel and default subfolders ([aed5f6b](https://github.com/DialmasterOrg/Youtarr/commit/aed5f6bc287a345539d7f095952251c7bc3cc4a3))
+* **plex:** use Promise.allSettled in refreshLibrariesForSubfolders ([fc69cf8](https://github.com/DialmasterOrg/Youtarr/commit/fc69cf838f2ac5e222e6e03cb92e53c9f213ddfc))
+* **scripts:** reset-server-data also clears dev and arm db volumes ([7bc28a5](https://github.com/DialmasterOrg/Youtarr/commit/7bc28a529ea616763a891177416a749510f9aa4a))
+* **videos:** address PR review feedback on video modal ([3a74331](https://github.com/DialmasterOrg/Youtarr/commit/3a743314c59911bf6d52ff217d1dadcbacbbdebc))
+* **videos:** video modal behaved poorly for members-only videos ([777fc99](https://github.com/DialmasterOrg/Youtarr/commit/777fc9989b77f7eb7b55c6e95a53a22ce54fbbeb))
+* **videos:** video modal download flow was broken and metadata displayed incorrectly ([67efb46](https://github.com/DialmasterOrg/Youtarr/commit/67efb46256cb9ca6d532f44880a2cfae3eb4a3a9))
+* **videos:** video player info tooltip was not reachable on mobile ([0c29fc5](https://github.com/DialmasterOrg/Youtarr/commit/0c29fc546aaf01070202a6bad2481638a3ab3de2))
+
+
+### Code Refactoring
+
+* **plex:** cache library list and decompose display rendering ([cc66880](https://github.com/DialmasterOrg/Youtarr/commit/cc668801a9372dcb0d3b8ecb4182a79d096bbd91))
+* **ui:** extract ProtectionShieldButton shared component ([#505](https://github.com/DialmasterOrg/Youtarr/issues/505)) ([79faba1](https://github.com/DialmasterOrg/Youtarr/commit/79faba121ce7803ba40ec2d817d614d68a1ea279))
+
+
+### Tests
+
+* **plex:** add PlexSubfolderMappings component tests ([243f1bf](https://github.com/DialmasterOrg/Youtarr/commit/243f1bfeaea9e994440797b383c1000ab352f41e))
+* **plex:** add tests for per-subfolder library refresh methods ([dfd7f19](https://github.com/DialmasterOrg/Youtarr/commit/dfd7f1903e98b0a8ca3a4b586092a7916506df69))
+
+
+### Documentation
+
+* add plexSubfolderLibraryMappings configuration documentation ([fad0ed8](https://github.com/DialmasterOrg/Youtarr/commit/fad0ed8651fbc1c1828ee5f09a30d8f0937a0bfa))
+* Add warnings about external DB restarts ([131b2e4](https://github.com/DialmasterOrg/Youtarr/commit/131b2e4233f3c1466f7d6df6468d6a3c0f3c9822))
+* document video detail modal and in-app playback ([270fadf](https://github.com/DialmasterOrg/Youtarr/commit/270fadf2adec97c51a1e40a75b8872637088efc5))
+* refine project guidelines and dev workflow documentation ([1d51772](https://github.com/DialmasterOrg/Youtarr/commit/1d5177273b3d6f789d6e9777d15b846df0b44778))
+* update CHANGELOG for v1.64.0 [skip ci] ([9f3cb9e](https://github.com/DialmasterOrg/Youtarr/commit/9f3cb9e394160775b30494710a70f5c7fe3067c7))
+
+
+
+
+
 ## [v1.64.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.64.0) - 2026-04-08
 
 ## [1.64.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.63.0...v1.64.0) (2026-04-08)
