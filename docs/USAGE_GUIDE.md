@@ -13,6 +13,7 @@ This guide provides step-by-step instructions for common tasks in Youtarr. After
 - [Re-download Missing Videos](#re-download-missing-videos)
 - [Organize Channels with Multi-Library Support](#organize-channels-with-multi-library-support)
 - [Browse and Filter Channel Videos](#browse-and-filter-channel-videos)
+- [Preview and Play Videos](#preview-and-play-videos)
 - [External Access with API Keys](#external-access-with-api-keys)
 - [Content Ratings](#content-ratings)
 
@@ -343,6 +344,27 @@ Mark specific videos to exclude them from automatic channel downloads.
    - Ignored videos are tracked in `config/complete.list`
    - They won't appear in download recommendations
    - You can still manually download them if you change your mind
+
+## Preview and Play Videos
+
+Click any thumbnail on the Videos page or a channel page to open a video detail modal with extended metadata and in-browser playback.
+
+1. **Open the modal**
+   - Click the thumbnail of any video in the Videos page, a channel's video list, or the channel page's grid/list/table views
+   - On mobile, the modal opens fullscreen with a back arrow; on desktop it opens as a centered dialog
+
+2. **Extended metadata**
+   - Description, tags, view count, likes, resolution, fps, file sizes, and related file paths
+   - For downloaded videos, data is served from the cached `.info.json`
+   - For videos not yet downloaded, Youtarr fetches metadata on demand via yt-dlp (this can take a few seconds on the first open)
+
+3. **In-browser playback**
+   - Downloaded videos stream directly from Youtarr through the built-in player; no media server required
+   - Playback is authenticated via your existing session
+
+4. **Actions from the modal**
+   - Download, protect, delete, ignore, and rate actions are all available inside the modal
+   - Changes sync back to the source page when the modal closes
 
 ## Common tasks
 
