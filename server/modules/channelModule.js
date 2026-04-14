@@ -463,6 +463,10 @@ class ChannelModule {
       if (initialSettings.video_quality != null) updateData.video_quality = initialSettings.video_quality;
       if (initialSettings.sub_folder != null) updateData.sub_folder = initialSettings.sub_folder;
       if (initialSettings.default_rating != null) updateData.default_rating = initialSettings.default_rating;
+      if (initialSettings.min_duration != null) updateData.min_duration = initialSettings.min_duration;
+      if (initialSettings.max_duration != null) updateData.max_duration = initialSettings.max_duration;
+      if (initialSettings.title_filter_regex != null) updateData.title_filter_regex = initialSettings.title_filter_regex;
+      if (initialSettings.audio_format != null) updateData.audio_format = initialSettings.audio_format;
 
       channel = await Channel.create(updateData);
     }
