@@ -1412,6 +1412,264 @@ describe('DownloadModule', () => {
     });
   });
 
+  describe('doPlaylistDownloads', () => {
+    let PlaylistVideoMock;
+    let VideoMock;
+    let ChannelMock;
+    let playlistModuleMock;
+
+    const mockPlaylist = {
+      playlist_id: 'PLtest123',
+      title: 'Test Playlist',
+      video_quality: null,
+      audio_format: null,
+      default_sub_folder: null,
+    };
+
+    beforeEach(() => {
+      jest.doMock('../../models/playlistvideo', () => ({
+        findAll: jest.fn(),
+      }));
+      jest.doMock('../../models/video', () => ({
+        findOne: jest.fn(),
+      }));
+      jest.doMock('../../models/channel', () => ({
+        findOne: jest.fn(),
+      }));
+      jest.doMock('../playlistModule', () => ({
+        ensureSourceChannel: jest.fn().mockResolvedValue({}),
+      }));
+
+      PlaylistVideoMock = require('../../models/playlistvideo');
+      VideoMock = require('../../models/video');
+      ChannelMock = require('../../models/channel');
+      playlistModuleMock = require('../playlistModule');
+    });
+
+    it('returns without calling download machinery when no playlist videos exist', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([]);
+      const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist);
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('returns without calling download machinery when all videos are already downloaded', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { youtube_id: 'vid001', channel_id: 'UC1' },
+        { youtube_id: 'vid002', channel_id: 'UC1' },
+      ]);
+      VideoMock.findOne.mockResolvedValue({ youtubeId: 'vid001' });
+      const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist);
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('calls ensureSourceChannel for videos whose source channel is missing', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { youtube_id: 'vid001', channel_id: 'UCmissing' },
+        { youtube_id: 'vid002', channel_id: 'UCpresent' },
+      ]);
+      // vid001 not downloaded, vid002 not downloaded
+      VideoMock.findOne.mockResolvedValue(null);
+      // UCmissing not in DB, UCpresent is in DB
+      ChannelMock.findOne
+        .mockResolvedValueOnce(null)   // UCmissing -> missing
+        .mockResolvedValueOnce({ channel_id: 'UCpresent' }); // UCpresent -> exists
+      jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist);
+
+      expect(playlistModuleMock.ensureSourceChannel).toHaveBeenCalledTimes(1);
+      expect(playlistModuleMock.ensureSourceChannel).toHaveBeenCalledWith(
+        { channel_id: 'UCmissing' },
+        mockPlaylist
+      );
+    });
+
+    it('does not call ensureSourceChannel when all source channels exist', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { youtube_id: 'vid001', channel_id: 'UCknown' },
+      ]);
+      VideoMock.findOne.mockResolvedValue(null);
+      ChannelMock.findOne.mockResolvedValue({ channel_id: 'UCknown' });
+      jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist);
+
+      expect(playlistModuleMock.ensureSourceChannel).not.toHaveBeenCalled();
+    });
+
+    it('invokes download machinery with the correct youtube_ids', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { youtube_id: 'vid001', channel_id: 'UC1' },
+        { youtube_id: 'vid002', channel_id: 'UC1' },
+        { youtube_id: 'vid003', channel_id: 'UC1' },
+      ]);
+      // vid002 already downloaded, vid001 and vid003 are not
+      VideoMock.findOne
+        .mockResolvedValueOnce(null)                       // vid001 not downloaded
+        .mockResolvedValueOnce({ youtubeId: 'vid002' })   // vid002 already downloaded
+        .mockResolvedValueOnce(null);                       // vid003 not downloaded
+      ChannelMock.findOne.mockResolvedValue({ channel_id: 'UC1' });
+      const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist);
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      const callArg = spy.mock.calls[0][0];
+      expect(callArg.urls).toEqual([
+        'https://www.youtube.com/watch?v=vid001',
+        'https://www.youtube.com/watch?v=vid003',
+      ]);
+    });
+
+    it('filters out already-downloaded videos before invoking download machinery', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { youtube_id: 'alreadyDone', channel_id: 'UC1' },
+      ]);
+      VideoMock.findOne.mockResolvedValue({ youtubeId: 'alreadyDone' });
+      const spy = jest.spyOn(downloadModule, 'doSpecificDownloads').mockResolvedValue();
+
+      await downloadModule.doPlaylistDownloads(mockPlaylist);
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('afterDownloadHook', () => {
+    let PlaylistVideoMock;
+    let PlaylistMock;
+    let m3uGeneratorMock;
+    let mediaServerSyncMock;
+
+    beforeEach(() => {
+      jest.doMock('../../models/playlistvideo', () => ({
+        findAll: jest.fn(),
+      }));
+      jest.doMock('../../models/playlist', () => ({
+        findAll: jest.fn(),
+      }));
+      jest.doMock('../m3uGenerator', () => ({
+        generatePlaylistM3U: jest.fn().mockResolvedValue(true),
+      }));
+      jest.doMock('../mediaServers', () => ({
+        mediaServerSync: {
+          syncPlaylist: jest.fn().mockResolvedValue(),
+        },
+      }));
+
+      PlaylistVideoMock = require('../../models/playlistvideo');
+      PlaylistMock = require('../../models/playlist');
+      m3uGeneratorMock = require('../m3uGenerator');
+      const mediaServers = require('../mediaServers');
+      mediaServerSyncMock = mediaServers.mediaServerSync;
+    });
+
+    it('is a no-op when given an empty list', async () => {
+      await downloadModule.afterDownloadHook([]);
+
+      expect(PlaylistVideoMock.findAll).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op when given null or undefined', async () => {
+      await downloadModule.afterDownloadHook(null);
+      await downloadModule.afterDownloadHook(undefined);
+
+      expect(PlaylistVideoMock.findAll).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op when no playlists contain the downloaded videos', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([]);
+
+      await downloadModule.afterDownloadHook(['vid001', 'vid002']);
+
+      expect(PlaylistMock.findAll).not.toHaveBeenCalled();
+      expect(m3uGeneratorMock.generatePlaylistM3U).not.toHaveBeenCalled();
+    });
+
+    it('calls syncPlaylist and generatePlaylistM3U exactly once per affected enabled playlist', async () => {
+      // 3 youtube_ids: vid001 and vid002 belong to playlist A, vid003 to playlist B
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { playlist_id: 'PLA' },
+        { playlist_id: 'PLA' },
+        { playlist_id: 'PLB' },
+      ]);
+      PlaylistMock.findAll.mockResolvedValue([
+        { id: 10, playlist_id: 'PLA' },
+        { id: 20, playlist_id: 'PLB' },
+      ]);
+
+      await downloadModule.afterDownloadHook(['vid001', 'vid002', 'vid003']);
+
+      expect(m3uGeneratorMock.generatePlaylistM3U).toHaveBeenCalledTimes(2);
+      expect(m3uGeneratorMock.generatePlaylistM3U).toHaveBeenCalledWith(10);
+      expect(m3uGeneratorMock.generatePlaylistM3U).toHaveBeenCalledWith(20);
+      expect(mediaServerSyncMock.syncPlaylist).toHaveBeenCalledTimes(2);
+      expect(mediaServerSyncMock.syncPlaylist).toHaveBeenCalledWith(10);
+      expect(mediaServerSyncMock.syncPlaylist).toHaveBeenCalledWith(20);
+    });
+
+    it('deduplicates playlist_ids before querying playlists', async () => {
+      // Two rows for the same playlist
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { playlist_id: 'PLA' },
+        { playlist_id: 'PLA' },
+      ]);
+      PlaylistMock.findAll.mockResolvedValue([
+        { id: 10, playlist_id: 'PLA' },
+      ]);
+
+      await downloadModule.afterDownloadHook(['vid001', 'vid002']);
+
+      expect(m3uGeneratorMock.generatePlaylistM3U).toHaveBeenCalledTimes(1);
+      expect(mediaServerSyncMock.syncPlaylist).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes enabled:true filter so disabled playlists are excluded', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { playlist_id: 'PLA' },
+        { playlist_id: 'PLB' },
+      ]);
+      // Only playlist A is returned (B is disabled, filtered by the query)
+      PlaylistMock.findAll.mockResolvedValue([
+        { id: 10, playlist_id: 'PLA' },
+      ]);
+
+      await downloadModule.afterDownloadHook(['vid001', 'vid002']);
+
+      expect(PlaylistMock.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ enabled: true }),
+        })
+      );
+      expect(m3uGeneratorMock.generatePlaylistM3U).toHaveBeenCalledTimes(1);
+      expect(mediaServerSyncMock.syncPlaylist).toHaveBeenCalledTimes(1);
+    });
+
+    it('continues processing other playlists when one sync fails', async () => {
+      PlaylistVideoMock.findAll.mockResolvedValue([
+        { playlist_id: 'PLA' },
+        { playlist_id: 'PLB' },
+      ]);
+      PlaylistMock.findAll.mockResolvedValue([
+        { id: 10, playlist_id: 'PLA' },
+        { id: 20, playlist_id: 'PLB' },
+      ]);
+      m3uGeneratorMock.generatePlaylistM3U
+        .mockRejectedValueOnce(new Error('M3U generation failed'))
+        .mockResolvedValueOnce(true);
+
+      await expect(downloadModule.afterDownloadHook(['vid001', 'vid002'])).resolves.toBeUndefined();
+
+      expect(m3uGeneratorMock.generatePlaylistM3U).toHaveBeenCalledTimes(2);
+      expect(mediaServerSyncMock.syncPlaylist).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('event listener binding', () => {
     it('should properly bind handleConfigChange to this context', () => {
       // Clear module cache and re-require to capture the constructor behavior
