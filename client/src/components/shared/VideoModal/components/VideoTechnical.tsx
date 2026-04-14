@@ -1,6 +1,5 @@
 import React from 'react';
-import { Box, Typography, Skeleton, Card, CardContent, Tooltip, Chip } from '../../../ui';
-import useMediaQuery from '../../../../hooks/useMediaQuery';
+import { Box, Typography, Skeleton, Tooltip, Chip, Accordion, AccordionSummary, AccordionDetails } from '../../../ui';
 import { VideoModalData, VideoExtendedMetadata } from '../types';
 
 interface VideoTechnicalProps {
@@ -47,11 +46,6 @@ function formatAddedDate(dateStr: string | null): string | null {
   return isNaN(date.getTime()) ? null : date.toLocaleDateString();
 }
 
-function formatResolutionLabel(height: number | null): string | null {
-  if (!height) return null;
-  return `${height}p`;
-}
-
 function formatDownloadedResolution(
   width: number | null,
   height: number | null,
@@ -74,11 +68,11 @@ interface DetailRowProps {
 
 function DetailRow({ label, value }: DetailRowProps) {
   return (
-    <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
+    <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, paddingTop: 4, paddingBottom: 4 }}>
       <Typography variant="body2" color="text.secondary">
         {label}
       </Typography>
-      <Typography variant="body2" color="text.primary" sx={{ fontWeight: 500 }}>
+      <Typography variant="body2" color="text.primary" sx={{ fontWeight: 500, textAlign: 'right', wordBreak: 'break-word' }}>
         {value}
       </Typography>
     </Box>
@@ -96,124 +90,96 @@ function FileRow({ label, filePath, fileSize }: FileRowProps) {
   const sizeLabel = fileSize ? formatFileSize(fileSize) : 'Unknown size';
 
   return (
-    <Box sx={{ py: 0.75 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Box style={{ paddingTop: 6, paddingBottom: 6 }}>
+      <Box style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
         <Typography variant="body2" color="text.secondary">
           {label}
         </Typography>
-        <Typography variant="body2" color="text.primary" sx={{ fontWeight: 500 }}>
+        <Typography variant="body2" color="text.primary" sx={{ fontWeight: 500, marginLeft: 1, flexShrink: 0 }}>
           {sizeLabel}
         </Typography>
       </Box>
-      <Tooltip title={displayPath} arrow placement="bottom-start" enterTouchDelay={0}>
-        <Typography
-          variant="caption"
-          color="text.disabled"
-          sx={{
-            display: 'block',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            maxWidth: '100%',
-            marginTop: 2,
-          }}
-        >
-          {displayPath}
-        </Typography>
-      </Tooltip>
+      <Typography
+        variant="caption"
+        color="text.disabled"
+        sx={{
+          display: 'block',
+          wordBreak: 'break-word',
+          overflowWrap: 'anywhere',
+          maxWidth: '100%',
+          marginTop: 0.25,
+        }}
+      >
+        {displayPath}
+      </Typography>
     </Box>
   );
 }
 
 function VideoTechnical({ video, metadata, loading }: VideoTechnicalProps) {
-  const isMobile = useMediaQuery('(max-width: 599px)');
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', gap: 2, flexDirection: isMobile ? 'column' : 'row' }}>
-        <Box sx={{ flex: 1 }}>
-          <Skeleton variant="rounded" height={120} />
-        </Box>
-        <Box sx={{ flex: 1 }}>
-          <Skeleton variant="rounded" height={120} />
-        </Box>
-      </Box>
-    );
-  }
-
-  // Build technical details
-  const technicalDetails: DetailRowProps[] = [];
+  // Build metadata-dependent technical details (YouTube ID always shown first)
+  const metaTechDetails: DetailRowProps[] = [];
   const availableResolutions = metadata?.availableResolutions ?? null;
 
-  // Download resolution - only for downloaded videos
-  if (video.isDownloaded && metadata?.height) {
-    const downloadRes = formatDownloadedResolution(
-      metadata.width,
-      metadata.height,
-      metadata.downloadedTier
-    );
-    if (downloadRes) {
-      technicalDetails.push({ label: 'Downloaded', value: downloadRes });
+  if (!loading) {
+    if (video.isDownloaded && metadata?.height) {
+      const downloadRes = formatDownloadedResolution(
+        metadata.width,
+        metadata.height,
+        metadata.downloadedTier
+      );
+      if (downloadRes) {
+        metaTechDetails.push({ label: 'Downloaded', value: downloadRes });
+      }
+    }
+    if (metadata?.fps != null) {
+      metaTechDetails.push({ label: 'FPS', value: `${metadata.fps}` });
+    }
+    if (metadata?.aspectRatio != null && typeof metadata.aspectRatio === 'number') {
+      const orientation = getOrientationLabel(metadata.aspectRatio);
+      metaTechDetails.push({
+        label: 'Aspect Ratio',
+        value: `${metadata.aspectRatio.toFixed(2)} (${orientation})`,
+      });
+    }
+    if (metadata?.language) {
+      metaTechDetails.push({ label: 'Language', value: metadata.language });
     }
   }
 
-  if (metadata?.fps !== null && metadata?.fps !== undefined) {
-    technicalDetails.push({ label: 'FPS', value: `${metadata.fps}` });
-  }
-  if (metadata?.aspectRatio !== null && metadata?.aspectRatio !== undefined && typeof metadata.aspectRatio === 'number') {
-    const orientation = getOrientationLabel(metadata.aspectRatio);
-    technicalDetails.push({
-      label: 'Aspect Ratio',
-      value: `${metadata.aspectRatio.toFixed(2)} (${orientation})`,
-    });
-  }
-  if (metadata?.language) {
-    technicalDetails.push({ label: 'Language', value: metadata.language });
-  }
-
-  // Build file info
+  // File info — most fields come from video props (always available)
   const hasVideoFile = video.filePath !== null;
   const hasAudioFile = video.audioFilePath !== null;
-  const relatedFiles = metadata?.relatedFiles ?? null;
+  const relatedFiles = !loading ? (metadata?.relatedFiles ?? null) : null;
   const addedDate = formatAddedDate(video.addedAt);
-  const hasFileInfo = hasVideoFile || hasAudioFile || relatedFiles || addedDate;
-
-  const hasTechnical = technicalDetails.length > 0 || availableResolutions;
-
-  // Return null if nothing to show
-  if (!hasTechnical && !hasFileInfo) {
-    return null;
-  }
+  const showFileDetails = video.isDownloaded || video.status === 'missing';
 
   return (
-    <Box sx={{ display: 'flex', gap: 2, flexDirection: isMobile ? 'column' : 'row' }}>
-      {hasTechnical && (
-        <Card
-          variant="outlined"
-          style={{
-            flex: 1,
-            ...(isMobile && {
-              border: 'none',
-              borderTop: '1px solid var(--border)',
-              borderRadius: 0,
-            }),
-          }}
-        >
-          <CardContent style={{ paddingTop: 12, paddingBottom: 12, paddingLeft: 16, paddingRight: 16 }}>
-            <Typography variant="subtitle2" color="text.primary" sx={{ mb: 1 }}>
-              Technical
-            </Typography>
-            <Box>
-              {technicalDetails.map((detail) => (
-                <DetailRow key={detail.label} label={detail.label} value={detail.value} />
-              ))}
-            </Box>
-            {availableResolutions && (
-              <Box sx={{ py: 0.5 }}>
+    <Box style={{ display: 'flex', flexDirection: 'column', gap: 'var(--video-modal-section-gap, 12px)' }}>
+      {/* Video Details — always rendered; YouTube ID never requires metadata */}
+      <Accordion defaultExpanded style={{ width: '100%' }}>
+        <AccordionSummary>Video Details</AccordionSummary>
+        <AccordionDetails>
+          <Box>
+            <DetailRow label="Video ID" value={video.youtubeId} />
+            {loading ? (
+              <Box style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 4 }}>
+                <Skeleton variant="rounded" height={20} />
+                <Skeleton variant="rounded" height={20} />
+              </Box>
+            ) : (
+              <>
+                {metaTechDetails.map((detail) => (
+                  <DetailRow key={detail.label} label={detail.label} value={detail.value} />
+                ))}
+              </>
+            )}
+            {!loading && availableResolutions && (
+              <Box style={{ paddingTop: 4, paddingBottom: 4 }}>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
                   Available Resolutions
                 </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                <Box style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                   {availableResolutions.map((h) => {
                     // Match by tier when available (handles non-16:9 videos correctly),
                     // fall back to raw height for backward-compatible info.json files.
@@ -226,33 +192,20 @@ function VideoTechnical({ video, metadata, loading }: VideoTechnicalProps) {
                         size="small"
                         color={isDownloaded ? 'primary' : 'default'}
                         variant={isDownloaded ? 'filled' : 'outlined'}
-                        sx={{ fontSize: '0.75rem', height: 24 }}
                       />
                     );
                   })}
                 </Box>
               </Box>
             )}
-          </CardContent>
-        </Card>
-      )}
+          </Box>
+        </AccordionDetails>
+      </Accordion>
 
-      {hasFileInfo && (
-        <Card
-          variant="outlined"
-          style={{
-            flex: 1,
-            ...(isMobile && {
-              border: 'none',
-              borderTop: '1px solid var(--border)',
-              borderRadius: 0,
-            }),
-          }}
-        >
-          <CardContent style={{ paddingTop: 12, paddingBottom: 12, paddingLeft: 16, paddingRight: 16 }}>
-            <Typography variant="subtitle2" color="text.primary" sx={{ mb: 1 }}>
-              Files
-            </Typography>
+      {showFileDetails && (
+        <Accordion defaultExpanded style={{ width: '100%' }}>
+          <AccordionSummary>File Details</AccordionSummary>
+          <AccordionDetails>
             <Box>
               {hasVideoFile && (
                 <FileRow
@@ -279,9 +232,14 @@ function VideoTechnical({ video, metadata, loading }: VideoTechnicalProps) {
               {addedDate && (
                 <DetailRow label="Added" value={addedDate} />
               )}
+              {!hasVideoFile && !hasAudioFile && !relatedFiles && !addedDate && (
+                <Typography variant="body2" color="text.secondary">
+                  No file details available
+                </Typography>
+              )}
             </Box>
-          </CardContent>
-        </Card>
+          </AccordionDetails>
+        </Accordion>
       )}
     </Box>
   );

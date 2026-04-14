@@ -106,7 +106,15 @@ const Dialog: React.FC<DialogProps> = ({
             className
           )}
           style={{
-            maxHeight: 'calc(100dvh - var(--mobile-nav-total-offset, 0px) - 80px)',
+            ...(fullScreen
+              ? {
+                height: '100dvh',
+                minHeight: '100dvh',
+                maxHeight: '100dvh',
+              }
+              : {
+                maxHeight: 'calc(100dvh - var(--mobile-nav-total-offset, 0px) - 80px)',
+              }),
           }}
           onEscapeKeyDown={(e) => { if (disableEscapeKeyDown) e.preventDefault(); else onClose?.({}, 'escapeKeyDown'); }}
           onInteractOutside={(e) => { e.preventDefault(); }}

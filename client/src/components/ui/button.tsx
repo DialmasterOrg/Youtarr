@@ -17,15 +17,14 @@ const buttonVariants = cva(
     variants: {
       variant: {
         contained: [
-          'bg-primary text-primary-foreground',
           'border-0',
           'hover:opacity-90 active:opacity-80',
           'shadow-sm',
         ],
         outlined: [
-          'bg-transparent text-primary',
-          'border-2 border-primary',
-          'hover:bg-primary hover:text-primary-foreground active:opacity-80',
+          'bg-transparent',
+          'border-[length:var(--border-weight)]',
+          'active:opacity-80',
         ],
         text: [
           'bg-transparent text-primary border-0',
@@ -56,14 +55,47 @@ const buttonVariants = cva(
         icon: 'p-2 h-10 w-10',
         'icon-sm': 'p-1.5 h-8 w-8',
       },
+      color: {
+        primary: '',
+        secondary: '',
+        error: '',
+        warning: '',
+        info: '',
+        success: '',
+        inherit: '',
+      },
       fullWidth: {
         true: 'w-full',
         false: '',
       },
     },
+    compoundVariants: [
+      { variant: 'contained', color: 'primary', class: 'bg-primary text-primary-foreground' },
+      { variant: 'contained', color: 'secondary', class: 'bg-secondary text-secondary-foreground' },
+      { variant: 'contained', color: 'error', class: 'bg-destructive text-destructive-foreground' },
+      { variant: 'contained', color: 'warning', class: 'bg-warning text-warning-foreground' },
+      { variant: 'contained', color: 'success', class: 'bg-success text-success-foreground' },
+      { variant: 'contained', color: 'info', class: 'bg-info text-info-foreground' },
+      { variant: 'contained', color: 'inherit', class: 'bg-muted text-foreground' },
+      { variant: 'outlined', color: 'primary', class: 'border-primary text-primary hover:bg-primary hover:text-primary-foreground' },
+      { variant: 'outlined', color: 'secondary', class: 'border-secondary text-secondary hover:bg-secondary hover:text-secondary-foreground' },
+      { variant: 'outlined', color: 'error', class: 'border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground' },
+      { variant: 'outlined', color: 'warning', class: 'border-warning text-warning hover:bg-warning hover:text-warning-foreground' },
+      { variant: 'outlined', color: 'success', class: 'border-success text-success hover:bg-success hover:text-success-foreground' },
+      { variant: 'outlined', color: 'info', class: 'border-info text-info hover:bg-info hover:text-info-foreground' },
+      { variant: 'outlined', color: 'inherit', class: 'border-border text-foreground hover:bg-muted hover:text-foreground' },
+      { variant: 'text', color: 'primary', class: 'text-primary hover:bg-primary/10 hover:text-primary' },
+      { variant: 'text', color: 'secondary', class: 'text-secondary hover:bg-secondary/10 hover:text-secondary' },
+      { variant: 'text', color: 'error', class: 'text-destructive hover:bg-destructive/10 hover:text-destructive' },
+      { variant: 'text', color: 'warning', class: 'text-warning hover:bg-warning/10 hover:text-warning' },
+      { variant: 'text', color: 'success', class: 'text-success hover:bg-success/10 hover:text-success' },
+      { variant: 'text', color: 'info', class: 'text-info hover:bg-info/10 hover:text-info' },
+      { variant: 'text', color: 'inherit', class: 'text-foreground hover:bg-muted hover:text-foreground' },
+    ],
     defaultVariants: {
       variant: 'text',
       size: 'md',
+      color: 'primary',
       fullWidth: false,
     },
   }
@@ -97,7 +129,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           disabled={disabled || loading}
           data-btn
           className={cn(
-            buttonVariants({ variant, size: normalizedSize, fullWidth, className }),
+            buttonVariants({ variant, size: normalizedSize, color, fullWidth, className }),
             variant === 'contained' && 'btn-contained',
             variant === 'outlined' && 'btn-outlined',
             variant === 'text' && 'btn-text',
@@ -127,7 +159,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled || loading}
         data-btn
         className={cn(
-          buttonVariants({ variant, size: normalizedSize, fullWidth, className }),
+            buttonVariants({ variant, size: normalizedSize, color, fullWidth, className }),
           variant === 'contained' && 'btn-contained',
           variant === 'outlined' && 'btn-outlined',
           variant === 'text' && 'btn-text',

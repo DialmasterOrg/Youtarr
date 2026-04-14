@@ -8,7 +8,7 @@ const chipVariants = cva(
     'inline-flex items-center justify-center gap-1',
     'font-sans font-medium leading-none select-none',
     'transition-all duration-[var(--transition-base)]',
-    'rounded-full border',
+    '[border-radius:var(--ui-chip-radius,var(--radius-ui))] border',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
   ],
   {
@@ -115,7 +115,7 @@ const Chip = React.forwardRef<HTMLDivElement, ChipProps>(
           key="delete"
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
           aria-label="Remove"
-          className="shrink-0 ml-0.5 -mr-1 rounded-full p-0.5 hover:bg-black/10 focus-visible:outline-none"
+          className="shrink-0 ml-0.5 -mr-1 [border-radius:var(--ui-chip-radius,var(--radius-ui))] p-0.5 hover:bg-black/10 focus-visible:outline-none"
         >
           {deleteIcon ?? <X className="h-3 w-3" />}
         </span>
