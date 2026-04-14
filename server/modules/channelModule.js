@@ -607,6 +607,15 @@ class ChannelModule {
     }
 
     downloadModule.doChannelDownloads();
+
+    try {
+      const playlistModule = require('./playlistModule');
+      playlistModule.playlistAutoDownload().catch(err => {
+        logger.error({ err }, 'playlistAutoDownload failed in cron');
+      });
+    } catch (err) {
+      logger.error({ err }, 'playlistAutoDownload failed in cron');
+    }
   }
 
   /**
