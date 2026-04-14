@@ -323,7 +323,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doChannelDownloads();
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('Using grouped downloads: 2 group(s) with resolved settings');
+      expect(logger.info).toHaveBeenCalledWith({ groupCount: 2 }, 'Using grouped downloads with resolved settings');
       expect(spy).toHaveBeenCalledWith({}, groups, false);
     });
 
@@ -588,7 +588,7 @@ describe('DownloadModule', () => {
 
       await downloadModule.doGroupedChannelDownloads({}, groups);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith('Processing 2 channel download groups in a single job');
+      expect(logger.info).toHaveBeenCalledWith({ groupCount: 2 }, 'Processing channel download groups in a single job');
       expect(jobModuleMock.addOrUpdateJob).toHaveBeenCalledTimes(1);
       expect(jobModuleMock.addOrUpdateJob).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -666,17 +666,30 @@ describe('DownloadModule', () => {
       });
     });
 
-    it('should refresh Plex and start next job after all groups complete', async () => {
+    it('should refresh Plex libraries for each group subfolder after all groups complete', async () => {
       const groups = [
         { quality: '1080', subFolder: null, channels: [{ channel_id: 'UC1' }] }
       ];
       const plexModuleMock = require('../plexModule');
-      plexModuleMock.refreshLibrary = jest.fn().mockReturnValue(Promise.resolve());
+      plexModuleMock.refreshLibrariesForSubfolders = jest.fn().mockReturnValue(Promise.resolve());
 
       await downloadModule.doGroupedChannelDownloads({}, groups);
 
-      expect(plexModuleMock.refreshLibrary).toHaveBeenCalled();
+      expect(plexModuleMock.refreshLibrariesForSubfolders).toHaveBeenCalledWith([null]);
       expect(jobModuleMock.startNextJob).toHaveBeenCalled();
+    });
+
+    it('should pass all group subfolders to refreshLibrariesForSubfolders', async () => {
+      const groups = [
+        { quality: '1080', subFolder: 'kids', channels: [{ channel_id: 'UC1' }] },
+        { quality: '720', subFolder: 'music', channels: [{ channel_id: 'UC2' }] },
+      ];
+      const plexModuleMock = require('../plexModule');
+      plexModuleMock.refreshLibrariesForSubfolders = jest.fn().mockReturnValue(Promise.resolve());
+
+      await downloadModule.doGroupedChannelDownloads({}, groups);
+
+      expect(plexModuleMock.refreshLibrariesForSubfolders).toHaveBeenCalledWith(['kids', 'music']);
     });
 
     it('should stop processing groups if job is terminated', async () => {
@@ -686,7 +699,7 @@ describe('DownloadModule', () => {
         { quality: '480', subFolder: null, channels: [{ channel_id: 'UC3' }] }
       ];
       const plexModuleMock = require('../plexModule');
-      plexModuleMock.refreshLibrary = jest.fn().mockReturnValue(Promise.resolve());
+      plexModuleMock.refreshLibrariesForSubfolders = jest.fn().mockReturnValue(Promise.resolve());
 
       // Mock executeGroupDownload to simulate the first group completing
       const executeSpy = jest.spyOn(downloadModule, 'executeGroupDownload').mockResolvedValue();
@@ -701,7 +714,7 @@ describe('DownloadModule', () => {
 
       // Should only execute first group, then stop when it detects termination
       expect(executeSpy).toHaveBeenCalledTimes(1);
-      expect(plexModuleMock.refreshLibrary).not.toHaveBeenCalled();
+      expect(plexModuleMock.refreshLibrariesForSubfolders).not.toHaveBeenCalled();
       expect(jobModuleMock.startNextJob).not.toHaveBeenCalled();
     });
   });

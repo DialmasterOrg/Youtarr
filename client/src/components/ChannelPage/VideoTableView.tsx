@@ -5,6 +5,7 @@ import {
   Chip,
 } from '../ui';
 import { ArrowUpward as ArrowUpwardIcon, ArrowDownward as ArrowDownwardIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon, Delete as DeleteIcon } from '../../lib/icons';
+import ProtectionShieldButton from '../shared/ProtectionShieldButton';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml } from '../../utils/formatters';
@@ -13,6 +14,7 @@ import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
+import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
@@ -30,7 +32,9 @@ interface VideoTableViewProps {
   onSortChange: (newSortBy: SortBy) => void;
   onDeletionChange: (videoId: string, isChecked: boolean) => void;
   onToggleIgnore: (youtubeId: string) => void;
+  onToggleProtection: (youtubeId: string) => void;
   onMobileTooltip?: (message: string) => void;
+  onVideoClick?: (video: ChannelVideo) => void;
 }
 
 function VideoTableView({
@@ -46,7 +50,9 @@ function VideoTableView({
   onSortChange,
   onDeletionChange,
   onToggleIgnore,
+  onToggleProtection,
   onMobileTooltip,
+  onVideoClick,
 }: VideoTableViewProps) {
   const isDeleteMode = selectionMode === 'delete';
   const effectiveSelection = isDeleteMode ? selectedForDeletion : checkedBoxes;
@@ -206,6 +212,17 @@ function VideoTableView({
                         {status === 'ignored' ? <CheckCircleOutlineIcon size={16} /> : <BlockIcon size={16} />}
                       </button>
                     )}
+                    {/* Protection shield for downloaded videos */}
+                    {video.added && !video.removed && (
+                      <ProtectionShieldButton
+                        isProtected={video.protected || false}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleProtection(video.youtube_id);
+                        }}
+                        variant="inline"
+                      />
+                    )}
                   </div>
                 </td>
                 <td style={{ width: 140, padding: '8px 4px' }}>
@@ -222,6 +239,15 @@ function VideoTableView({
                       }}
                       loading="lazy"
                     />
+                    {/* Center hotspot for opening video modal */}
+                    {onVideoClick && (
+                      <ThumbnailClickOverlay
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          onVideoClick(video);
+                        }}
+                      />
+                    )}
                     {video.youtube_removed && (
                       <div
                         style={{
@@ -247,13 +273,19 @@ function VideoTableView({
                 <td style={{ width: '36%', padding: '8px 4px' }}>
                   <Typography
                     variant="body2"
-                    style={{
-                      marginBottom: 4,
+                    onClick={onVideoClick ? (e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      onVideoClick(video);
+                    } : undefined}
+                    sx={{
+                      mb: 0.5,
                       whiteSpace: 'normal',
                       overflow: 'hidden',
                       display: '-webkit-box',
                       WebkitLineClamp: 2,
                       WebkitBoxOrient: 'vertical',
+                      cursor: onVideoClick ? 'pointer' : 'default',
+
                     }}
                   >
                     {decodeHtml(video.title)}

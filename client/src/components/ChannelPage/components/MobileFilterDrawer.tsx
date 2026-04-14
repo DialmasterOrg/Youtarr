@@ -1,6 +1,6 @@
 import React from 'react';
-import { Typography, Button, Divider } from '../../ui';
-import { Close as CloseIcon } from '../../../lib/icons';
+import { Typography, Button, Chip, Divider } from '../../ui';
+import { Close as CloseIcon, Shield as ShieldIcon } from '../../../lib/icons';
 import DurationFilterInput from './DurationFilterInput';
 import DateRangeFilterInput from './DateRangeFilterInput';
 import { VideoFilters } from '../hooks/useChannelVideoFilters';
@@ -18,6 +18,8 @@ interface MobileFilterDrawerProps {
   onClearAll: () => void;
   hasActiveFilters: boolean;
   hideDateFilter?: boolean;
+  protectedFilter?: boolean;
+  onProtectedFilterChange?: (value: boolean) => void;
 }
 
 function MobileFilterDrawer({
@@ -33,6 +35,8 @@ function MobileFilterDrawer({
   onClearAll,
   hasActiveFilters,
   hideDateFilter = false,
+  protectedFilter = false,
+  onProtectedFilterChange,
 }: MobileFilterDrawerProps) {
   const panelRef = React.useRef<HTMLDivElement | null>(null);
   const closeButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -164,6 +168,24 @@ function MobileFilterDrawer({
               <Typography variant="body2" color="text.secondary" style={{ fontStyle: 'italic' }}>
                 Shorts do not have date information
               </Typography>
+            </div>
+          )}
+
+          {/* Protected Filter */}
+          {onProtectedFilterChange && (
+            <div style={{ marginBottom: 24 }}>
+              <Typography variant="subtitle2" style={{ marginBottom: 8 }}>
+                Status
+              </Typography>
+              <Chip
+                icon={<ShieldIcon size={16} />}
+                label="Protected"
+                variant={protectedFilter ? 'filled' : 'outlined'}
+                color={protectedFilter ? 'primary' : 'default'}
+                size="small"
+                onClick={() => onProtectedFilterChange(!protectedFilter)}
+                sx={{ cursor: 'pointer' }}
+              />
             </div>
           )}
 

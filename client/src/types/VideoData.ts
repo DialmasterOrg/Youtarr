@@ -24,6 +24,7 @@ export interface VideoData {
   media_type?: string;
   normalized_rating?: string | null;
   rating_source?: string | null;
+  protected?: boolean;
 }
 
 export interface EnabledChannel {

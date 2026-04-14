@@ -25,6 +25,7 @@ const meta: Meta<typeof PlexIntegrationSection> = {
   },
   args: {
     plexConnectionStatus: 'not_tested',
+    plexLibraries: [],
     hasPlexServerConfigured: true,
     isPlatformManaged: { plexUrl: false, authEnabled: true, useTmpForDownloads: false } as PlatformManagedState,
     onTestConnection: fn(),

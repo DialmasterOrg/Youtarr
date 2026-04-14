@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   SelectChangeEvent,
+  FormControl,
   InputLabel,
   Select,
   MenuItem,
@@ -11,6 +12,7 @@ import {
 } from "./ui";
 import { Close as CloseIcon } from "../lib/icons";
 import useMediaQuery from "../hooks/useMediaQuery";
+import { PlexLibrary } from "../utils/plexLibraries";
 
 interface PlexLibrarySelectorProps {
   open: boolean;
@@ -19,64 +21,39 @@ interface PlexLibrarySelectorProps {
     libraryId: string;
     libraryTitle: string;
   }) => void;
-  token: string | null;
-}
-
-interface PlexLibrary {
-  id: string;
-  title: string;
+  libraries: PlexLibrary[];
+  currentLibraryId?: string;
 }
 
 function PlexLibrarySelector({
   open,
   handleClose,
   setLibraryId,
-  token,
+  libraries,
+  currentLibraryId,
 }: PlexLibrarySelectorProps) {
-  const [libraries, setLibraries] = useState<PlexLibrary[]>([]);
   const [selectedLibrary, setSelectedLibrary] = useState<string>("");
-  const [plexError, setPlexError] = useState<boolean>(false);
   const isMobile = useMediaQuery('(max-width: 599px)');
 
-  useEffect(() => {
-    if (!open) return;
+  const plexError = libraries.length === 0;
 
-    setPlexError(false);
-    fetch(`/getplexlibraries`, {
-      headers: {
-        "x-access-token": token || "",
-      },
-    })
-      .then((response) => {
-        if (!response.ok) {
-          console.error("Failed to fetch Plex libraries");
-          setLibraries([]);
-          setPlexError(true);
-          return [];
-        }
-        return response.json();
-      })
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setLibraries(data);
-          setPlexError(false);
-        } else {
-          setLibraries([]);
-          setPlexError(true);
-        }
-      })
-      .catch((error) => {
-        console.error("Error fetching Plex libraries:", error);
-        setLibraries([]);
-        setPlexError(true);
-      });
-  }, [open, token]);
-
+  // Reset selection when the modal closes so the next open starts clean.
   useEffect(() => {
     if (!open) {
       setSelectedLibrary("");
     }
   }, [open]);
+
+  // Pre-select the currently configured library once libraries are available.
+  // The `prev || currentLibraryId` guard ensures we do not clobber a user's
+  // manual pick if this effect re-fires (e.g. libraries reference changes)
+  // while the modal is still open.
+  useEffect(() => {
+    if (!open || !currentLibraryId) return;
+    if (libraries.some((lib) => lib.id === currentLibraryId)) {
+      setSelectedLibrary((prev) => prev || currentLibraryId);
+    }
+  }, [open, currentLibraryId, libraries]);
 
   const handleLibraryChange = (event: SelectChangeEvent<string>) => {
     const libraryId = event.target.value as string;
@@ -91,6 +68,9 @@ function PlexLibrarySelector({
     });
     setSelectedLibrary("");
   };
+
+  const isSaveDisabled =
+    selectedLibrary === "" || selectedLibrary === currentLibraryId;
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
@@ -126,39 +106,30 @@ function PlexLibrarySelector({
               <p>Note: Without connecting to Plex, downloading videos will still work, but you will not be able to refresh the library in Plex.</p>
             </div>
           ) : (
-            <>
-              <InputLabel id="select-plex-library">
-                Select a Plex Library
-              </InputLabel>
+            <FormControl fullWidth>
+              <InputLabel id="select-plex-library">Plex Library</InputLabel>
               <Select
-                fullWidth
                 value={selectedLibrary}
                 onChange={handleLibraryChange}
-                label="Select a Plex Library"
+                label="Plex Library"
                 labelId="select-plex-library"
               >
-                {libraries.length === 0 ? (
-                  <MenuItem value="" disabled>
-                    No libraries available
+                {libraries.map((library) => (
+                  <MenuItem value={library.id} key={library.id}>
+                    {library.title}
                   </MenuItem>
-                ) : (
-                  libraries.map((library) => (
-                    <MenuItem value={library.id} key={library.id}>
-                      {library.title}
-                    </MenuItem>
-                  ))
-                )}
+                ))}
               </Select>
-            </>
+            </FormControl>
           )}
           {!plexError && (
-            <>
+          <>
               <div style={{ marginTop: '16px' }}>
                 <Button
                   variant="contained"
                   color="primary"
                   onClick={handleSaveSelection}
-                  disabled={selectedLibrary === ""}
+                  disabled={isSaveDisabled}
                 >
                   Save Selection
                 </Button>

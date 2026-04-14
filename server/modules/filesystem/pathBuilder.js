@@ -7,6 +7,7 @@ const path = require('path');
 const {
   SUBFOLDER_PREFIX,
   GLOBAL_DEFAULT_SENTINEL,
+  ROOT_SENTINEL,
   CHANNEL_TEMPLATE,
   VIDEO_FOLDER_TEMPLATE,
   VIDEO_FILE_TEMPLATE,
@@ -53,7 +54,8 @@ function extractSubfolderName(dirName) {
 
 /**
  * Resolve the effective subfolder for a channel
- * Handles the three-state logic:
+ * Handles four-state logic:
+ * - ROOT_SENTINEL -> null (explicit root override, e.g. manual downloads)
  * - GLOBAL_DEFAULT_SENTINEL -> use global default
  * - non-empty string -> use that subfolder
  * - null/empty -> null (download to root, backwards compatible)
@@ -63,6 +65,11 @@ function extractSubfolderName(dirName) {
  * @returns {string|null} - The actual subfolder to use (without __ prefix), or null for root
  */
 function resolveEffectiveSubfolder(channelSubFolder, globalDefault = null) {
+  // Explicit "download to root" override
+  if (channelSubFolder === ROOT_SENTINEL) {
+    return null;
+  }
+
   // Explicit "use global default" setting
   if (channelSubFolder === GLOBAL_DEFAULT_SENTINEL) {
     return globalDefault || null;
@@ -197,6 +204,45 @@ function calculateRelocatedPath(oldBasePath, newBasePath, originalPath) {
   return newBasePath + relativePath;
 }
 
+/**
+ * Extract the effective subfolder from an absolute media file path
+ * Given a video or audio file path produced by the post-processor, return the
+ * subfolder name (without the __ prefix) that contains it, or null if the file
+ * is directly under the base directory (root, no subfolder).
+ *
+ * This is used to determine which Plex library to refresh for a downloaded
+ * video, based on where the file actually ended up on disk rather than
+ * re-running subfolder resolution logic.
+ *
+ * @param {string} filePath - Absolute path to the downloaded media file
+ * @param {string} baseDir - The base output directory (configModule.directoryPath)
+ * @returns {string|null} - The subfolder name (without __ prefix), or null for root
+ */
+function extractSubfolderFromAbsPath(filePath, baseDir) {
+  if (!filePath || !baseDir) {
+    return null;
+  }
+
+  const relativePath = path.relative(baseDir, filePath);
+
+  // path.relative returns a path starting with '..' when filePath is not under baseDir
+  if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    return null;
+  }
+
+  const firstSegment = relativePath.split(path.sep)[0];
+  if (!firstSegment) {
+    return null;
+  }
+
+  if (isSubfolderDirectory(firstSegment)) {
+    return extractSubfolderName(firstSegment);
+  }
+
+  // First segment is the channel directory, meaning the file is in root (no subfolder)
+  return null;
+}
+
 module.exports = {
   buildSubfolderSegment,
   isSubfolderDirectory,
@@ -209,5 +255,6 @@ module.exports = {
   buildThumbnailTemplate,
   extractYoutubeIdFromPath,
   isValidYoutubeId,
-  calculateRelocatedPath
+  calculateRelocatedPath,
+  extractSubfolderFromAbsPath
 };

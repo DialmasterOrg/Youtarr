@@ -248,6 +248,10 @@ const createServerModule = ({
         jest.doMock('../modules/downloadModule', () => downloadModuleMock);
         jest.doMock('../modules/jobModule', () => jobModuleMock);
         jest.doMock('../modules/videosModule', () => videosModuleMock);
+        jest.doMock('../modules/videoMetadataModule', () => ({
+          getVideoMetadata: jest.fn().mockResolvedValue(null),
+          getVideoStreamInfo: jest.fn().mockResolvedValue(null)
+        }));
         jest.doMock('../modules/channelSettingsModule', () => ({
           getChannelSettings: jest.fn(),
           updateChannelSettings: jest.fn(),

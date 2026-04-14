@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ConfigState, PlexConnectionStatus, SnackbarState } from '../types';
+import { PlexLibrary } from '../../../utils/plexLibraries';
 
 interface UsePlexConnectionParams {
   token: string | null;
@@ -19,12 +20,18 @@ export const usePlexConnection = ({
   hasPlexServerConfigured,
 }: UsePlexConnectionParams) => {
   const [plexConnectionStatus, setPlexConnectionStatus] = useState<PlexConnectionStatus>('not_tested');
+  const [plexLibraries, setPlexLibraries] = useState<PlexLibrary[]>([]);
   const [openPlexLibrarySelector, setOpenPlexLibrarySelector] = useState(false);
   const [openPlexAuthDialog, setOpenPlexAuthDialog] = useState(false);
   const [didInitialPlexCheck, setDidInitialPlexCheck] = useState(false);
 
   const checkPlexConnection = useCallback(() => {
     if (hasPlexServerConfigured) {
+      // Flip to "testing" up front so the chip reads "Testing..." during the
+      // in-flight request. Without this, a slow failing fetch (e.g. Plex is
+      // unreachable) would leave the chip stuck on "Not Tested" for the whole
+      // fetch window, misleading the user into thinking nothing is happening.
+      setPlexConnectionStatus('testing');
       fetch('/getplexlibraries', {
         headers: {
           'x-access-token': token || '',
@@ -32,10 +39,17 @@ export const usePlexConnection = ({
       })
         .then((response) => response.json())
         .then((data) => {
-          setPlexConnectionStatus(Array.isArray(data) && data.length > 0 ? 'connected' : 'not_connected');
+          if (Array.isArray(data) && data.length > 0) {
+            setPlexConnectionStatus('connected');
+            setPlexLibraries(data as PlexLibrary[]);
+          } else {
+            setPlexConnectionStatus('not_connected');
+            setPlexLibraries([]);
+          }
         })
         .catch(() => {
           setPlexConnectionStatus('not_connected');
+          setPlexLibraries([]);
         });
     }
   }, [hasPlexServerConfigured, token]);
@@ -110,6 +124,7 @@ export const usePlexConnection = ({
 
       if (Array.isArray(data) && data.length > 0) {
         setPlexConnectionStatus('connected');
+        setPlexLibraries(data as PlexLibrary[]);
         // Plex credentials are auto-saved. Update initial snapshot for those fields.
         setInitialConfig((prev) => (
           prev
@@ -123,6 +138,7 @@ export const usePlexConnection = ({
         });
       } else {
         setPlexConnectionStatus('not_connected');
+        setPlexLibraries([]);
         setSnackbar({
           open: true,
           message: 'Could not retrieve Plex libraries. Check your settings.',
@@ -132,6 +148,7 @@ export const usePlexConnection = ({
     } catch (error) {
       console.error('Error testing Plex connection:', error);
       setPlexConnectionStatus('not_connected');
+      setPlexLibraries([]);
       setSnackbar({
         open: true,
         message: 'Failed to connect to Plex server. Check IP and API key.',
@@ -178,6 +195,7 @@ export const usePlexConnection = ({
   return {
     plexConnectionStatus,
     setPlexConnectionStatus,
+    plexLibraries,
     openPlexLibrarySelector,
     openPlexAuthDialog,
     setOpenPlexAuthDialog,

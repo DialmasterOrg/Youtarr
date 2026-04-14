@@ -36,12 +36,12 @@ Configuration can be modified through:
 
 ## Core Settings
 
-### Youtube Output Directory
-- **Config Key**: *This can only be set via .env and is view only in the web UI*
+### Youtube Output Directory (env-only, not a config.json field)
+- **Set via**: `YOUTUBE_OUTPUT_DIR` environment variable in `.env` (see [ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md))
 - **Type**: `string`
 - **Default**: `"./downloads"`
-- **Description**: Directory path for downloaded videos
-- **Note**: Set during initial setup or via YOUTUBE_OUTPUT_DIR environment variable
+- **Description**: Directory path on the host where downloaded videos are stored
+- **Note**: This setting is **not** stored in `config/config.json`. It is displayed read-only in the web UI and can only be changed by editing `.env` and restarting. Legacy installs that had `youtubeOutputDirectory` in `config.json` are automatically migrated to `.env` during first-run `.env` bootstrap by `scripts/_create-env.sh` (i.e. the first time the start script runs with no existing `.env`).
 
 ### Enable Automatic Downloads
 - **Config Key**: `channelAutoDownload`
@@ -137,8 +137,25 @@ Configuration can be modified through:
 - **Config Key**: `plexYoutubeLibraryId`
 - **Type**: `string`
 - **Default**: `""` (empty)
-- **Description**: Plex library section ID for YouTube videos
+- **Description**: Default Plex library section ID for YouTube videos. Used for all downloads that do not match a per-subfolder mapping (see below).
 - **Note**: Library refresh is automatically triggered if configured when new videos are downloaded
+
+### Plex Subfolder Library Mappings
+- **Config Key**: `plexSubfolderLibraryMappings`
+- **Type**: `Array<{ subfolder: string | null, libraryId: string }>`
+- **Default**: `[]` (empty — all downloads use the default library above)
+- **Description**: Maps channel subfolders to specific Plex library IDs, enabling different subfolders to refresh different Plex libraries after a download.
+- **Usage**: Configured via the web UI under **Plex Media Server Integration → Per-Subfolder Library Mappings** once connected to Plex.
+- **Format**: Each entry specifies a `subfolder` (the clean name without the `__` filesystem prefix, or `null` for the root/no-subfolder case) and the target `libraryId`.
+- **Example**:
+  ```json
+  "plexSubfolderLibraryMappings": [
+    { "subfolder": "kids", "libraryId": "2" },
+    { "subfolder": "music", "libraryId": "3" },
+    { "subfolder": null, "libraryId": "1" }
+  ]
+  ```
+- **Fallback**: Any subfolder not listed here will fall back to `plexYoutubeLibraryId`.
 
 ### Plex IP
 - **Config Key**: `plexIP`

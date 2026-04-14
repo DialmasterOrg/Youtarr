@@ -1,4 +1,5 @@
-import { screen, waitFor } from '@testing-library/react';
+import React, { useState } from 'react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import useMediaQuery from '../../../hooks/useMediaQuery';
@@ -166,6 +167,7 @@ describe('ChannelVideos Component', () => {
     mockFetch.mockReset();
     (useMediaQuery as jest.Mock).mockReturnValue(false);
     mockNavigate.mockClear();
+    localStorage.removeItem('youtarr.channelVideos.pageSize');
 
     // Default mock responses
     useChannelVideos.mockReturnValue({
@@ -426,6 +428,180 @@ describe('ChannelVideos Component', () => {
     });
   });
 
+  describe('Page Size Selector', () => {
+    test('renders page size selector when videos exist', () => {
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 3,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      expect(screen.getByLabelText('videos per page')).toBeInTheDocument();
+    });
+
+    test('does not render page size selector when no videos', () => {
+      useChannelVideos.mockReturnValue({
+        videos: [],
+        totalCount: 0,
+        oldestVideoDate: null,
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      expect(screen.queryByLabelText('videos per page')).not.toBeInTheDocument();
+    });
+
+    test('does not render page size selector while loading', () => {
+      useChannelVideos.mockReturnValue({
+        videos: [],
+        totalCount: 0,
+        oldestVideoDate: null,
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: true,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      expect(screen.queryByLabelText('videos per page')).not.toBeInTheDocument();
+    });
+
+    test('selector shows default value of 16', () => {
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 3,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      const select = screen.getByLabelText('videos per page');
+      expect(select).toHaveTextContent('16');
+    });
+
+    test('selector reads stored value from localStorage', () => {
+      localStorage.setItem('youtarr.channelVideos.pageSize', '32');
+
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 3,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      expect(useChannelVideos).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pageSize: 32,
+        })
+      );
+    });
+
+    test('changing page size updates fetch params and writes to localStorage', async () => {
+      const user = userEvent.setup();
+
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 48, // enough for multiple pages at size 16
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      // Navigate to page 2 first so we can verify page resets to 1
+      await waitFor(() => {
+        expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
+      });
+      const page2Buttons = screen.getAllByRole('button', { name: 'Go to page 2' });
+      await user.click(page2Buttons[0]);
+
+      expect(useChannelVideos).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 2 })
+      );
+
+      // Open the MUI Select dropdown by clicking its displayed value text.
+      // MUI Select (non-native) opens on mouseDown on the inner trigger div.
+      // The "Per page:" label precedes the Select, and the Select displays "16".
+      // Use within() on the labeled container to find the trigger by its text content.
+      const selectContainer = screen.getByLabelText('videos per page');
+      const trigger = within(selectContainer).getByText('16');
+      fireEvent.mouseDown(trigger);
+
+      // Choose 32
+      const option = await screen.findByRole('option', { name: '32' });
+      await user.click(option);
+
+      expect(localStorage.getItem('youtarr.channelVideos.pageSize')).toBe('32');
+      expect(useChannelVideos).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          pageSize: 32,
+          page: 1,
+        })
+      );
+    });
+
+    test('renders selector without pagination buttons when only one page', () => {
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 3,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      // Selector should be present
+      expect(screen.getByLabelText('videos per page')).toBeInTheDocument();
+
+      // Only 1 page total (3 videos < 16 per page), so no page 2 button should exist
+      expect(screen.queryByRole('button', { name: 'Go to page 2' })).not.toBeInTheDocument();
+    });
+
+    test('renders both selector and pagination when multiple pages', () => {
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 32,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      // Both should be present
+      expect(screen.getByLabelText('videos per page')).toBeInTheDocument();
+      expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
+    });
+  });
+
   describe('Error Handling', () => {
     test('handles tab fetch error gracefully', async () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -528,6 +704,7 @@ describe('ChannelVideos Component', () => {
         maxRating: '',
         append: false,
         resetKey: expect.any(String),
+        protectedFilter: false,
       }));
     });
 
@@ -672,12 +849,12 @@ describe('ChannelVideos Component', () => {
       (useMediaQuery as jest.Mock).mockReturnValue(true);
     });
 
-    test('uses mobile page size', () => {
+    test('uses same page size on mobile as desktop (unified setting)', () => {
       renderChannelVideos();
 
       expect(useChannelVideos).toHaveBeenCalledWith(
         expect.objectContaining({
-          pageSize: 8, // Mobile page size
+          pageSize: 16,
         })
       );
     });
@@ -947,6 +1124,167 @@ describe('ChannelVideos Component', () => {
       expect(screen.getByTestId('video-card-video1')).toBeInTheDocument();
       expect(screen.getByTestId('video-card-ignored1')).toBeInTheDocument();
       expect(screen.getByTestId('video-card-video2')).toBeInTheDocument();
+    });
+  });
+
+  describe('channelAvailableTabs prop sync', () => {
+    // Controlled harness: holds channelAvailableTabs in state and exposes a
+    // setter that tests call to simulate the parent passing a new value.
+    // This avoids interactions with RTL's `rerender` + wrapper option.
+    //
+    // Both the sync effect AND the internal tabs-fetch effect write to
+    // availableTabs state. To make these tests deterministic regardless of
+    // unrelated prior tests' scheduling, we ALSO mock the tabs fetch to
+    // return the same data the sync effect would produce so whichever effect
+    // "wins" the race yields an equivalent result. For tests that need the
+    // sync-effect state to be visible after a prop change, we seed the
+    // initial prop and let the sync effect establish state on mount.
+    let setTabsProp: ((val: string | null | undefined) => void) | null = null;
+
+    const Harness = ({ initial }: { initial?: string | null }) => {
+      const [prop, setProp] = useState<string | null | undefined>(initial);
+      setTabsProp = setProp;
+      return <ChannelVideos token={mockToken} channelAvailableTabs={prop} />;
+    };
+
+    // Build a fetch mock that always returns the same availableTabs the
+    // sync effect would set, so the fetch effect never introduces a
+    // different state into the race.
+    const mockTabsFetch = (tabs: string[]) => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ availableTabs: tabs }),
+      });
+    };
+
+    beforeEach(() => {
+      setTabsProp = null;
+    });
+
+    test('updates the rendered tab strip when parent passes a new channelAvailableTabs value', async () => {
+      // Both the fetch effect and the sync effect would set 3 tabs on mount
+      mockTabsFetch(['videos', 'shorts', 'streams']);
+
+      renderWithProviders(<Harness initial="videos,shorts,streams" />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
+      });
+      expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
+
+      // Parent now passes a filtered list down (shorts hidden)
+      act(() => {
+        setTabsProp?.('videos,streams');
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByRole('tab', { name: /Shorts/i })).not.toBeInTheDocument();
+      });
+      expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Videos/i })).toBeInTheDocument();
+    });
+
+    test('preserves the current selected tab when it remains in the new list', async () => {
+      const user = userEvent.setup();
+      mockTabsFetch(['videos', 'shorts', 'streams']);
+
+      renderWithProviders(<Harness initial="videos,shorts,streams" />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('tab', { name: /Shorts/i }));
+
+      await waitFor(() => {
+        expect(useChannelVideos).toHaveBeenLastCalledWith(
+          expect.objectContaining({ tabType: 'shorts' })
+        );
+      });
+
+      // Parent passes [videos, shorts] (streams hidden, shorts still present)
+      act(() => {
+        setTabsProp?.('videos,shorts');
+      });
+
+      // Selected tab should still be shorts
+      await waitFor(() => {
+        expect(useChannelVideos).toHaveBeenLastCalledWith(
+          expect.objectContaining({ tabType: 'shorts' })
+        );
+      });
+      expect(screen.queryByRole('tab', { name: /Live/i })).not.toBeInTheDocument();
+    });
+
+    test('falls back to videos when the current tab is dropped from the new list', async () => {
+      const user = userEvent.setup();
+      mockTabsFetch(['videos', 'shorts', 'streams']);
+
+      renderWithProviders(<Harness initial="videos,shorts,streams" />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
+      });
+
+      // Select the shorts tab
+      await user.click(screen.getByRole('tab', { name: /Shorts/i }));
+
+      await waitFor(() => {
+        expect(useChannelVideos).toHaveBeenLastCalledWith(
+          expect.objectContaining({ tabType: 'shorts' })
+        );
+      });
+
+      // Parent hides shorts; new list = [videos, streams], current 'shorts' is gone
+      act(() => {
+        setTabsProp?.('videos,streams');
+      });
+
+      // Selected tab should fall back to 'videos' (preferred fallback)
+      await waitFor(() => {
+        expect(useChannelVideos).toHaveBeenLastCalledWith(
+          expect.objectContaining({ tabType: 'videos' })
+        );
+      });
+    });
+
+    test('leaves the tab strip alone when channelAvailableTabs is undefined', async () => {
+      // Fetch and sync effect agree on 3 tabs from mount
+      mockTabsFetch(['videos', 'shorts', 'streams']);
+
+      renderWithProviders(<Harness initial="videos,shorts,streams" />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
+      });
+
+      // Explicit undefined: the sync effect must early-return and leave state alone
+      act(() => {
+        setTabsProp?.(undefined);
+      });
+
+      expect(screen.getByRole('tab', { name: /Videos/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
+    });
+
+    test('leaves the tab strip alone when channelAvailableTabs is an empty string', async () => {
+      mockTabsFetch(['videos', 'shorts', 'streams']);
+
+      renderWithProviders(<Harness initial="videos,shorts,streams" />);
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
+      });
+
+      // Empty string parses to empty array, so the sync effect should early-return
+      act(() => {
+        setTabsProp?.('');
+      });
+
+      expect(screen.getByRole('tab', { name: /Videos/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Shorts/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Live/i })).toBeInTheDocument();
     });
   });
 

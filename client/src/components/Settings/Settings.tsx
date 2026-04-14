@@ -63,6 +63,7 @@ export function Settings({ token }: SettingsProps) {
   const {
     plexConnectionStatus,
     setPlexConnectionStatus,
+    plexLibraries,
     openPlexLibrarySelector,
     openPlexAuthDialog,
     setOpenPlexAuthDialog,
@@ -199,6 +200,7 @@ export function Settings({ token }: SettingsProps) {
                 config={config}
                 isPlatformManaged={isPlatformManaged}
                 plexConnectionStatus={plexConnectionStatus}
+                plexLibraries={plexLibraries}
                 hasPlexServerConfigured={hasPlexServerConfigured}
                 onConfigChange={handleConfigChange}
                 onTestConnection={testPlexConnection}
@@ -297,7 +299,7 @@ export function Settings({ token }: SettingsProps) {
         open={openPlexLibrarySelector}
         handleClose={closeLibrarySelector}
         setLibraryId={setLibraryId}
-        token={token}
+        libraries={plexLibraries}
       />
 
       <PlexAuthDialog

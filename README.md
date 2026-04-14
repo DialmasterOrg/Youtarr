@@ -1,7 +1,7 @@
 # Youtarr
 
-![Backend Coverage](https://img.shields.io/badge/Backend_Coverage-80%25-yellow)
-![Frontend Coverage](https://img.shields.io/badge/Frontend_Coverage-85%25-brightgreen)
+![Backend Coverage](https://img.shields.io/badge/Backend_Coverage-80%25-brightgreen)
+![Frontend Coverage](https://img.shields.io/badge/Frontend_Coverage-83%25-brightgreen)
 ![CI Status](https://github.com/DialmasterOrg/Youtarr/workflows/CI%20-%20Lint%20and%20Test/badge.svg)
 
 Youtarr is a self-hosted YouTube downloader that automatically downloads videos from your favorite channels. It provides metadata for multiple media servers and offers optional Plex integration for automatic library refreshes.
@@ -10,7 +10,7 @@ Youtarr is a self-hosted YouTube downloader that automatically downloads videos 
 
 > **Like Youtarr?** Consider [supporting the project on Patreon](https://www.patreon.com/c/ChrisDial) to help keep it free and actively developed!
 
-https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
+https://github.com/user-attachments/assets/34e5b50b-1a38-4f0b-9f84-bd47cefe4348
 
 ## Why Youtarr?
 
@@ -26,6 +26,7 @@ https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
 - **Smart Downloads**: Pre-validate manually pasted URLs with metadata preview before downloading
 - **Channel Subscriptions**: Subscribe to channels and auto-download new videos, shorts, and streams with per-tab controls
 - **Browse Channels**: View and search all videos from subscribed channels with advanced filtering, tabbed views for Videos/Shorts/Streams, and contextual publish date accuracy tips
+- **In-App Playback**: Click any thumbnail to open a detail modal with extended metadata and in-browser streaming of downloaded videos; no media server required
 - **Channel Grouping & Multi-Library Support**: Organize channels into custom subfolders (e.g., `__kids`, `__music`, `__news`) to create separate media server libraries
 - **Smart Organization**: Videos organized by channel with metadata and thumbnails
 - **SponsorBlock Integration**: Remove sponsored segments automatically
@@ -42,6 +43,12 @@ https://github.com/user-attachments/assets/cc153624-c905-42c2-8ee9-9c213816be3a
 - **Unraid Ready**: Community Applications template (via DialmasterOrg repo) with headless-friendly credential presets
 - **Powered by yt-dlp**: Uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) under the hood for YouTube integration and downloads
 - **Content Ratings**: Add per-video and per-channel content ratings (normalized to common media-server values like `G`, `PG`, `PG-13`, `R`, `NC-17`, `TV-*`). Ratings can be set per-download, via channel defaults, or derived from yt-dlp metadata; they show up as badges and can be used for automated policies.
+
+## How Youtarr compares to Pinchflat
+
+Youtarr and [Pinchflat](https://github.com/kieraneglin/pinchflat) solve the same core problem — automated, yt-dlp-powered YouTube archiving for Plex, Jellyfin, Kodi, and Emby — and the two tools overlap heavily. SponsorBlock, NFO metadata, cookies, Apprise notifications, per-channel quality/duration/date filters, and ARM-friendly Docker deployment are all supported on both.
+
+Youtarr predates Pinchflat (first commit May 2023 vs. January 2024); the two projects arrived at similar solutions independently and have evolved in parallel. For a side-by-side of where they actually differ — Plex integration, in-app playback, content ratings, REST API, RSS feeds, indexing strategy — see [Youtarr vs Pinchflat](docs/YOUTARR_VS_PINCHFLAT.md).
 
 ## Prerequisites
 - Docker & Docker Compose
@@ -135,22 +142,25 @@ Interested in contributing to Youtarr? We welcome contributions of all kinds!
 <summary>Click to view screenshots</summary>
 
 ### Channel Management
-<img width="1888" height="1072" alt="Channel Management" src="https://github.com/user-attachments/assets/a4e8172c-eb7f-44bb-a891-a9d436ee9b73" />
+![ChannelsPage](https://github.com/user-attachments/assets/75adf139-f202-499d-9eee-1c81b71a4355)
 
 ### Video Browser
-<img width="1489" height="976" alt="Video Browser" src="https://github.com/user-attachments/assets/cbf765c6-67d1-431b-a393-0ac0c4e2f7e2" />
+![ChannelPage](https://github.com/user-attachments/assets/f658c97b-3898-477c-82d1-4a15d6b34207)
+
 
 ### Configuration
-<img width="1890" height="1383" alt="Configuration" src="https://github.com/user-attachments/assets/b8d586b1-fe5b-4cb4-a61a-79d1905cc44e" />
+![ConfigurationPage](https://github.com/user-attachments/assets/9aba2e17-9d53-4adb-9c05-c6f9dc926dcf)
+
 
 ### Download Manager
-<img width="1472" height="1236" alt="Download Manager" src="https://github.com/user-attachments/assets/cd71937b-8423-42b3-9ddd-070f69c80662" />
+![DownloadsPage](https://github.com/user-attachments/assets/5aa84c3c-6bc7-478b-b97d-c8f1e46e8ca2)
+
+### Individual Video Modal
+![VideoModal](https://github.com/user-attachments/assets/e27f8adb-73fc-4cc8-826e-bec1ac505b18)
 
 ### SponsorBlock Settings
-<img width="1476" height="1186" alt="SponsorBlock Settings" src="https://github.com/user-attachments/assets/86fb9b48-2284-4ef9-a76b-e083a2d70584" />
+![SponsorBlock](https://github.com/user-attachments/assets/0bcf1d1a-2d8c-4dff-9e67-abbe369e64d5)
 
-### Auto-Removal Preview
-<img width="1466" height="1227" alt="Auto-Removal Preview" src="https://github.com/user-attachments/assets/12629a9f-56be-4c71-8c43-e6673504f388" />
 </details>
 
 ## Legal Disclaimer

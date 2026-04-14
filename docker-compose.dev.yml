@@ -17,7 +17,8 @@ services:
       dockerfile: Dockerfile
     image: ${YOUTARR_IMAGE:-youtarr-dev:latest}
     container_name: youtarr-dev
-    # Map 3011:3011 in dev so Vite proxy can reach backend at localhost:3011
+    # Expose backend on host port 3087 (container still listens on 3011).
+    # The Vite dev server proxies to http://127.0.0.1:3087 by default.
     ports:
       - "3087:3011"
     volumes:

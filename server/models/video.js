@@ -101,6 +101,11 @@ Video.init(
       allowNull: true,
       comment: 'Source of the rating',
     },
+    protected: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
   },
   {
     sequelize,

@@ -190,7 +190,13 @@ const createServerModule = ({
           }),
           deleteChannel: jest.fn().mockResolvedValue({ success: true }),
           getChannelAvailableTabs: jest.fn().mockResolvedValue({ availableTabs: ['videos', 'shorts', 'streams']}),
-          updateAutoDownloadForTab: jest.fn().mockResolvedValue()
+          updateAutoDownloadForTab: jest.fn().mockResolvedValue(),
+          redetectChannelTabs: jest.fn().mockResolvedValue({
+            availableTabs: ['videos', 'shorts', 'streams'],
+            detectedTabs: ['videos', 'shorts', 'streams'],
+            hiddenTabs: [],
+            autoDownloadEnabledTabs: 'video'
+          })
         };
 
         const plexModuleMock = {
@@ -330,6 +336,10 @@ const createServerModule = ({
         jest.doMock('../modules/videoDeletionModule', () => videoDeletionModuleMock);
         jest.doMock('../modules/videoValidationModule', () => videoValidationModuleMock);
         jest.doMock('../modules/channelSettingsModule', () => channelSettingsModuleMock);
+        jest.doMock('../modules/videoMetadataModule', () => ({
+          getVideoMetadata: jest.fn().mockResolvedValue(null),
+          getVideoStreamInfo: jest.fn().mockResolvedValue(null)
+        }));
         jest.doMock('../modules/archiveModule', () => ({
           getAutoRemovalDryRun: jest.fn().mockResolvedValue({ videos: [], totalSize: 0 })
         }));
@@ -804,6 +814,72 @@ describe('server routes - channels', () => {
     });
   });
 
+  describe('POST /api/channels/:channelId/tabs/redetect', () => {
+    test('forces re-detection and returns the refreshed tabs', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      channelModuleMock.redetectChannelTabs.mockResolvedValueOnce({
+        availableTabs: ['videos', 'streams'],
+        detectedTabs: ['videos', 'shorts', 'streams'],
+        hiddenTabs: ['shorts'],
+        autoDownloadEnabledTabs: 'video'
+      });
+
+      const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/tabs/redetect');
+      expect(handlers.length).toBeGreaterThan(0);
+      const redetectHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ params: { channelId: 'channel-1' } });
+      const res = createMockResponse();
+
+      await redetectHandler(req, res);
+
+      expect(channelModuleMock.redetectChannelTabs).toHaveBeenCalledWith('channel-1');
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toEqual({
+        availableTabs: ['videos', 'streams'],
+        detectedTabs: ['videos', 'shorts', 'streams'],
+        hiddenTabs: ['shorts'],
+        autoDownloadEnabledTabs: 'video'
+      });
+    });
+
+    test('returns 404 when channel is not found', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      channelModuleMock.redetectChannelTabs.mockRejectedValueOnce(
+        new Error('Channel not found in database')
+      );
+
+      const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/tabs/redetect');
+      const redetectHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ params: { channelId: 'missing' } });
+      const res = createMockResponse();
+
+      await redetectHandler(req, res);
+
+      expect(res.statusCode).toBe(404);
+      expect(res.body).toEqual({ error: 'Channel not found in database' });
+    });
+
+    test('returns 500 on unexpected error', async () => {
+      const { app, channelModuleMock } = await createServerModule();
+      channelModuleMock.redetectChannelTabs.mockRejectedValueOnce(
+        new Error('yt-dlp crashed')
+      );
+
+      const handlers = findRouteHandlers(app, 'post', '/api/channels/:channelId/tabs/redetect');
+      const redetectHandler = handlers[handlers.length - 1];
+
+      const req = createMockRequest({ params: { channelId: 'channel-1' } });
+      const res = createMockResponse();
+
+      await redetectHandler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to re-detect available tabs' });
+    });
+  });
+
   describe('GET /getchannelvideos/:channelId', () => {
     test('returns channel videos successfully with default parameters', async () => {
       const { app, channelModuleMock } = await createServerModule();
@@ -831,7 +907,8 @@ describe('server routes - channels', () => {
         null, // default minDuration
         null, // default maxDuration
         null, // default dateFrom
-        null  // default dateTo
+        null, // default dateTo
+        false // default protectedFilter
       );
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -897,7 +974,8 @@ describe('server routes - channels', () => {
         null, // default minDuration
         null, // default maxDuration
         null, // default dateFrom
-        null  // default dateTo
+        null, // default dateTo
+        false // default protectedFilter
       );
       expect(res.statusCode).toBe(200);
     });
@@ -936,7 +1014,8 @@ describe('server routes - channels', () => {
         null, // default minDuration
         null, // default maxDuration
         null, // default dateFrom
-        null  // default dateTo
+        null, // default dateTo
+        false // default protectedFilter
       );
       expect(res.statusCode).toBe(200);
     });
@@ -1215,7 +1294,8 @@ describe('server routes - videos', () => {
         dateTo: null,
         sortBy: 'added',
         sortOrder: 'desc',
-        channelFilter: ''
+        channelFilter: '',
+        protectedFilter: false,
       });
       expect(res.statusCode).toBe(200);
       expect(res.body).toEqual({
@@ -1262,7 +1342,8 @@ describe('server routes - videos', () => {
         dateTo: '2024-12-31',
         sortBy: 'title',
         sortOrder: 'asc',
-        channelFilter: 'channel123'
+        channelFilter: 'channel123',
+        protectedFilter: false,
       });
       expect(res.statusCode).toBe(200);
     });

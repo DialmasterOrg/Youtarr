@@ -37,12 +37,14 @@ function ChannelPage({ token }: ChannelPageProps) {
     title_filter_regex: string | null;
     default_rating: string | null;
     auto_download_enabled_tabs: string | null;
+    hidden_tabs?: string[];
+    availableTabs?: string[];
   }) => {
     setChannel((prev) => {
       if (!prev) {
         return prev;
       }
-      return {
+      const next: Channel = {
         ...prev,
         sub_folder: updated.sub_folder,
         video_quality: updated.video_quality,
@@ -53,6 +55,17 @@ function ChannelPage({ token }: ChannelPageProps) {
         default_rating: updated.default_rating,
         auto_download_enabled_tabs: updated.auto_download_enabled_tabs || undefined,
       };
+      if (updated.availableTabs !== undefined) {
+        next.available_tabs = updated.availableTabs.length > 0
+          ? updated.availableTabs.join(',')
+          : null;
+      }
+      if (updated.hidden_tabs !== undefined) {
+        next.hidden_tabs = updated.hidden_tabs.length > 0
+          ? updated.hidden_tabs.join(',')
+          : null;
+      }
+      return next;
     });
   };
 
@@ -486,8 +499,10 @@ function ChannelPage({ token }: ChannelPageProps) {
         token={token}
         channelAutoDownloadTabs={channel?.auto_download_enabled_tabs}
         channelId={channel_id || undefined}
+        channelName={channel?.uploader || ''}
         channelVideoQuality={channel?.video_quality || null}
         channelAudioFormat={channel?.audio_format || null}
+        channelAvailableTabs={channel?.available_tabs ?? null}
       />
 
       {channel && channel_id && (

@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { http, HttpResponse } from 'msw';
 import PlexLibrarySelector from '../PlexLibrarySelector';
 
 const meta: Meta<typeof PlexLibrarySelector> = {
@@ -10,19 +9,10 @@ const meta: Meta<typeof PlexLibrarySelector> = {
     open: true,
     handleClose: fn(),
     setLibraryId: fn(),
-    token: 'storybook-token',
-  },
-  parameters: {
-    msw: {
-      handlers: [
-        http.get('/getplexlibraries', () =>
-          HttpResponse.json([
-            { id: '1', title: 'Movies' },
-            { id: '2', title: 'TV Shows' },
-          ])
-        ),
-      ],
-    },
+    libraries: [
+      { id: '1', title: 'Movies' },
+      { id: '2', title: 'TV Shows' },
+    ],
   },
 };
 
@@ -32,7 +22,7 @@ type Story = StoryObj<typeof PlexLibrarySelector>;
 export const SelectLibrary: Story = {
   play: async ({ canvasElement, args }) => {
     const body = within(canvasElement.ownerDocument.body);
-    await userEvent.click(body.getByLabelText('Select a Plex Library'));
+    await userEvent.click(body.getByLabelText('Plex Library'));
     await userEvent.click(await body.findByText('Movies'));
 
     await userEvent.click(body.getByRole('button', { name: 'Save Selection' }));

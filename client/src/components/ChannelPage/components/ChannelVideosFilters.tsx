@@ -1,8 +1,10 @@
 import React from 'react';
 import {
   Button,
+  Chip,
   Typography,
 } from '../../ui';
+import { Shield as ShieldIcon } from '../../../lib/icons';
 import DurationFilterInput from './DurationFilterInput';
 import DateRangeFilterInput from './DateRangeFilterInput';
 import FilterChips from './FilterChips';
@@ -25,6 +27,8 @@ interface ChannelVideosFiltersProps {
   filtersExpanded?: boolean; // For desktop, controlled by parent
   mobileDrawerOpen?: boolean;
   onMobileDrawerClose?: () => void;
+  protectedFilter?: boolean;
+  onProtectedFilterChange?: (value: boolean) => void;
 }
 
 function ChannelVideosFilters({
@@ -42,6 +46,8 @@ function ChannelVideosFilters({
   filtersExpanded = false,
   mobileDrawerOpen = false,
   onMobileDrawerClose,
+  protectedFilter = false,
+  onProtectedFilterChange,
 }: ChannelVideosFiltersProps) {
   const handleClearDuration = () => {
     onMinDurationChange(null);
@@ -77,6 +83,8 @@ function ChannelVideosFilters({
           onClearAll={onClearAll}
           hasActiveFilters={hasActiveFilters}
           hideDateFilter={hideDateFilter}
+          protectedFilter={protectedFilter}
+          onProtectedFilterChange={onProtectedFilterChange}
         />
       </div>
     );
@@ -104,6 +112,17 @@ function ChannelVideosFilters({
             <Typography variant="body2" color="text.secondary" style={{ fontStyle: 'italic' }}>
                 Shorts do not have date information
               </Typography>
+          )}
+          {onProtectedFilterChange && (
+            <Chip
+              icon={<ShieldIcon />}
+              label="Protected"
+              variant={protectedFilter ? 'filled' : 'outlined'}
+              color={protectedFilter ? 'primary' : 'default'}
+              size="small"
+              onClick={() => onProtectedFilterChange(!protectedFilter)}
+              sx={{ cursor: 'pointer' }}
+            />
           )}
           {hasActiveFilters && (
             <Button

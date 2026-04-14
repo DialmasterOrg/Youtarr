@@ -16,6 +16,8 @@ import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMedia
 import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
+import ProtectionShieldButton from '../shared/ProtectionShieldButton';
+import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 
 interface VideoCardProps {
@@ -29,8 +31,10 @@ interface VideoCardProps {
   onHoverChange: (videoId: string | null) => void;
   onDeletionChange: (videoId: string, isChecked: boolean) => void;
   onToggleIgnore: (youtubeId: string) => void;
+  onToggleProtection: (youtubeId: string) => void;
   onMobileTooltip?: (message: string) => void;
   isInteractive?: boolean;
+  onVideoClick?: (video: ChannelVideo) => void;
 }
 
 function VideoCard({
@@ -44,8 +48,10 @@ function VideoCard({
   onHoverChange,
   onDeletionChange,
   onToggleIgnore,
+  onToggleProtection,
   onMobileTooltip,
   isInteractive = false,
+  onVideoClick,
 }: VideoCardProps) {
   const status = getVideoStatus(video);
   // Check if video is still live (not "was_live" and not null/undefined)
@@ -117,6 +123,16 @@ function VideoCard({
               }}
               loading="lazy"
             />
+
+            {/* Center hotspot for opening video modal */}
+            {onVideoClick && (
+              <ThumbnailClickOverlay
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  onVideoClick(video);
+                }}
+              />
+            )}
 
             {/* YouTube Removed Banner */}
             {video.youtube_removed ? (
@@ -281,14 +297,30 @@ function VideoCard({
                 </button>
               </Tooltip>
             )}
+
+            {/* Protection shield for downloaded videos */}
+            {video.added && !video.removed && (
+              <ProtectionShieldButton
+                isProtected={video.protected || false}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleProtection(video.youtube_id);
+                }}
+                style={{ position: 'absolute', bottom: 6, left: 6, zIndex: 2 }}
+              />
+            )}
           </div>
 
           {/* Card content */}
           <div style={{ padding: isMobile ? 12 : 16, flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
             <Typography
               variant="body2"
-              style={{
-                marginBottom: 8,
+              onClick={onVideoClick ? (e: React.MouseEvent) => {
+                e.stopPropagation();
+                onVideoClick(video);
+              } : undefined}
+              sx={{
+                mb: 1,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 display: '-webkit-box',
@@ -296,6 +328,8 @@ function VideoCard({
                 WebkitBoxOrient: 'vertical',
                 lineHeight: 1.3,
                 minHeight: '2.6em',
+                cursor: onVideoClick ? 'pointer' : 'default',
+
               }}
               title={decodeHtml(video.title)}
             >

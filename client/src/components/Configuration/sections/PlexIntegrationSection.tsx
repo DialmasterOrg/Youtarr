@@ -15,33 +15,40 @@ import { Info as InfoIcon } from 'lucide-react';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { ConfigState, PlatformManagedState, PlexConnectionStatus } from '../types';
+import { PlexSubfolderMappings } from './PlexSubfolderMappings';
+import { PlexLibrary } from '../../../utils/plexLibraries';
+import { DefaultPlexLibraryDisplay } from './components/DefaultPlexLibraryDisplay';
 
 interface PlexIntegrationSectionProps {
   config: ConfigState;
   isPlatformManaged: PlatformManagedState;
   plexConnectionStatus: PlexConnectionStatus;
+  plexLibraries: PlexLibrary[];
   hasPlexServerConfigured: boolean;
   onConfigChange: (updates: Partial<ConfigState>) => void;
   onTestConnection: () => void;
   onOpenLibrarySelector: () => void;
   onOpenPlexAuthDialog: () => void;
   onMobileTooltipClick?: (text: string) => void;
+  token?: string | null;
 }
 
 export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
   config,
   isPlatformManaged,
   plexConnectionStatus,
+  plexLibraries,
   hasPlexServerConfigured,
   onConfigChange,
   onTestConnection,
   onOpenLibrarySelector,
   onOpenPlexAuthDialog,
   onMobileTooltipClick,
+  token = null,
 }) => {
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
-    let parsedValue: any = value;
+    let parsedValue: string = value;
 
     if (name === 'plexPort') {
       const digitsOnly = value.replace(/[^0-9]/g, '');
@@ -66,7 +73,7 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
       case 'connected':
         return 'Connected';
       case 'not_connected':
-        return 'Not Connected';
+        return 'Unreachable';
       case 'testing':
         return 'Testing...';
       default:
@@ -113,9 +120,9 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
       </Alert>
 
       {plexConnectionStatus === 'not_connected' && (
-        <Alert severity="warning" className="mb-4">
-          Unable to connect to Plex server. Library refresh will not work.
-          Please check your IP and API key, then click "Test Connection".
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Plex is currently unreachable. Verify your Plex server is running and
+          that the IP, port, and API key above are correct, then click "Test Connection".
         </Alert>
       )}
 
@@ -282,18 +289,31 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
               disabled={plexConnectionStatus !== 'connected'}
               data-testid="select-library-button"
             >
-              Select Plex Library
+              Select Default Library
             </Button>
             <InfoTooltip
               text="Test Connection will verify and auto-save your Plex credentials if successful."
               onMobileClick={onMobileTooltipClick}
             />
           </Box>
-          {config.plexYoutubeLibraryId && (
-            <Typography variant="body2" className="mt-2">
-              Selected Library ID: {config.plexYoutubeLibraryId}
-            </Typography>
-          )}
+          <DefaultPlexLibraryDisplay
+            libraries={plexLibraries}
+            libraryId={config.plexYoutubeLibraryId}
+            plexConnectionStatus={plexConnectionStatus}
+            hasPlexServerConfigured={hasPlexServerConfigured}
+            hasPlexApiKey={Boolean(config.plexApiKey)}
+            onMobileTooltipClick={onMobileTooltipClick}
+          />
+        </Grid>
+
+        <Grid item xs={12}>
+          <PlexSubfolderMappings
+            mappings={config.plexSubfolderLibraryMappings ?? []}
+            onMappingsChange={(mappings) => onConfigChange({ plexSubfolderLibraryMappings: mappings })}
+            token={token}
+            plexConnectionStatus={plexConnectionStatus}
+            plexLibraries={plexLibraries}
+          />
         </Grid>
       </Grid>
     </ConfigurationAccordion>

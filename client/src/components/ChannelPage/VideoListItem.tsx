@@ -12,12 +12,13 @@ import { CalendarToday as CalendarTodayIcon, Block as BlockIcon, CheckCircleOutl
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml } from '../../utils/formatters';
+import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
-
+import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
+import ProtectionShieldButton from '../shared/ProtectionShieldButton';
 import RatingBadge from '../shared/RatingBadge';
-import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 interface VideoListItemProps {
   video: ChannelVideo;
   checkedBoxes: string[];
@@ -26,7 +27,9 @@ interface VideoListItemProps {
   onCheckChange: (videoId: string, isChecked: boolean) => void;
   onDeletionChange: (videoId: string, isChecked: boolean) => void;
   onToggleIgnore: (youtubeId: string) => void;
+  onToggleProtection: (youtubeId: string) => void;
   onMobileTooltip?: (message: string) => void;
+  onVideoClick?: (video: ChannelVideo) => void;
 }
 
 function VideoListItem({
@@ -37,7 +40,9 @@ function VideoListItem({
   onCheckChange,
   onDeletionChange,
   onToggleIgnore,
+  onToggleProtection,
   onMobileTooltip,
+  onVideoClick,
 }: VideoListItemProps) {
   const status = getVideoStatus(video);
   // Check if video is still live (not "was_live" and not null/undefined)
@@ -102,6 +107,16 @@ function VideoListItem({
             }}
             loading="lazy"
           />
+
+          {/* Center hotspot for opening video modal */}
+          {onVideoClick && (
+            <ThumbnailClickOverlay
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                onVideoClick(video);
+              }}
+            />
+          )}
 
           {/* YouTube Removed Banner */}
           {video.youtube_removed ? (
@@ -269,6 +284,19 @@ function VideoListItem({
               </button>
             </Tooltip>
           )}
+
+          {/* Protection shield for downloaded videos */}
+          {video.added && !video.removed && (
+            <ProtectionShieldButton
+              isProtected={video.protected || false}
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                onToggleProtection(video.youtube_id);
+              }}
+              size="small"
+              style={{ position: 'absolute', bottom: 3, left: 3 }}
+            />
+          )}
         </div>
 
         {/* Content */}
@@ -276,8 +304,12 @@ function VideoListItem({
           {/* Title */}
           <Typography
             variant="body2"
-            style={{
-              marginBottom: 4,
+            onClick={onVideoClick ? (e: React.MouseEvent) => {
+              e.stopPropagation();
+              onVideoClick(video);
+            } : undefined}
+            sx={{
+              mb: 0.5,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               display: '-webkit-box',
@@ -285,7 +317,9 @@ function VideoListItem({
               WebkitBoxOrient: 'vertical',
               lineHeight: 1.3,
               fontSize: '0.875rem',
+              cursor: onVideoClick ? 'pointer' : 'default',
             }}
+            className={onVideoClick ? 'hover:underline' : ''}
             title={decodeHtml(video.title)}
           >
             {decodeHtml(video.title)}

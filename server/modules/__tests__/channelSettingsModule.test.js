@@ -41,7 +41,9 @@ jest.mock('../jobModule', () => ({
 }));
 
 jest.mock('../plexModule', () => ({
-  refreshLibrary: jest.fn().mockResolvedValue(true)
+  refreshLibrary: jest.fn().mockResolvedValue(true),
+  refreshLibraryForSubfolder: jest.fn().mockResolvedValue(true),
+  refreshLibrariesForSubfolders: jest.fn().mockResolvedValue(undefined),
 }));
 
 describe('ChannelSettingsModule', () => {
@@ -444,6 +446,54 @@ describe('ChannelSettingsModule', () => {
       const result = await channelSettingsModule.getAllSubFolders();
       expect(result).toEqual(['__Alpha', '__Beta', '__Zulu']);
     });
+
+    test('should include the configured global default subfolder when no channels exist', async () => {
+      Channel.findAll.mockResolvedValue([]);
+      const configModule = require('../configModule');
+      configModule.getDefaultSubfolder.mockReturnValue('Adults');
+
+      const result = await channelSettingsModule.getAllSubFolders();
+
+      expect(result).toEqual(['__Adults']);
+    });
+
+    test('should include the global default subfolder alongside explicit channel subfolders', async () => {
+      Channel.findAll.mockResolvedValue([
+        { sub_folder: 'Kids' },
+        { sub_folder: 'Music' }
+      ]);
+      const configModule = require('../configModule');
+      configModule.getDefaultSubfolder.mockReturnValue('Adults');
+
+      const result = await channelSettingsModule.getAllSubFolders();
+
+      expect(result).toEqual(['__Adults', '__Kids', '__Music']);
+    });
+
+    test('should deduplicate when the global default matches an explicit channel subfolder', async () => {
+      Channel.findAll.mockResolvedValue([
+        { sub_folder: 'Music' },
+        { sub_folder: 'Adults' }
+      ]);
+      const configModule = require('../configModule');
+      configModule.getDefaultSubfolder.mockReturnValue('Adults');
+
+      const result = await channelSettingsModule.getAllSubFolders();
+
+      expect(result).toEqual(['__Adults', '__Music']);
+    });
+
+    test('should not add anything when the global default subfolder is null', async () => {
+      Channel.findAll.mockResolvedValue([
+        { sub_folder: 'Music' }
+      ]);
+      const configModule = require('../configModule');
+      configModule.getDefaultSubfolder.mockReturnValue(null);
+
+      const result = await channelSettingsModule.getAllSubFolders();
+
+      expect(result).toEqual(['__Music']);
+    });
   });
 
   describe('previewTitleFilter', () => {
@@ -538,7 +588,7 @@ describe('ChannelSettingsModule', () => {
       Channel.findOne.mockResolvedValue(channel);
 
       const result = await channelSettingsModule.getChannelSettings('UC123456');
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         channel_id: 'UC123456',
         uploader: 'Test Channel',
         sub_folder: 'Music',
@@ -554,6 +604,32 @@ describe('ChannelSettingsModule', () => {
       await expect(
         channelSettingsModule.getChannelSettings('UC999999')
       ).rejects.toThrow('Channel not found');
+    });
+
+    test('includes detected_tabs, hidden_tabs, and effective available_tabs', async () => {
+      const channel = {
+        ...mockChannel,
+        available_tabs: 'videos,shorts,streams',
+        hidden_tabs: 'shorts'
+      };
+      Channel.findOne.mockResolvedValue(channel);
+
+      const result = await channelSettingsModule.getChannelSettings('UC123456');
+
+      expect(result.detected_tabs).toEqual(['videos', 'shorts', 'streams']);
+      expect(result.hidden_tabs).toEqual(['shorts']);
+      expect(result.available_tabs).toEqual(['videos', 'streams']);
+    });
+
+    test('returns empty arrays for detected_tabs/hidden_tabs when channel has no tab data', async () => {
+      const channel = { ...mockChannel };
+      Channel.findOne.mockResolvedValue(channel);
+
+      const result = await channelSettingsModule.getChannelSettings('UC123456');
+
+      expect(result.detected_tabs).toEqual([]);
+      expect(result.hidden_tabs).toEqual([]);
+      expect(result.available_tabs).toEqual([]);
     });
   });
 
@@ -694,6 +770,108 @@ describe('ChannelSettingsModule', () => {
 
       expect(channel.update).toHaveBeenCalledWith({ sub_folder: null });
     });
+
+    describe('hidden_tabs', () => {
+      test('persists hidden_tabs as comma-separated string', async () => {
+        const channel = {
+          ...mockChannel,
+          available_tabs: 'videos,shorts,streams',
+          hidden_tabs: null,
+          auto_download_enabled_tabs: 'video',
+          update: jest.fn().mockImplementation(function (data) {
+            Object.assign(this, data);
+            return Promise.resolve(this);
+          })
+        };
+        Channel.findOne.mockResolvedValue(channel);
+
+        const result = await channelSettingsModule.updateChannelSettings('UC123456', {
+          hidden_tabs: ['shorts']
+        });
+
+        expect(channel.update).toHaveBeenCalledWith(
+          expect.objectContaining({ hidden_tabs: 'shorts' })
+        );
+        expect(result.settings.hidden_tabs).toEqual(['shorts']);
+        expect(result.settings.available_tabs).toEqual(['videos', 'streams']);
+      });
+
+      test('clears hidden_tabs when passed an empty array', async () => {
+        const channel = {
+          ...mockChannel,
+          available_tabs: 'videos,shorts',
+          hidden_tabs: 'shorts',
+          auto_download_enabled_tabs: 'video',
+          update: jest.fn().mockImplementation(function (data) {
+            Object.assign(this, data);
+            return Promise.resolve(this);
+          })
+        };
+        Channel.findOne.mockResolvedValue(channel);
+
+        await channelSettingsModule.updateChannelSettings('UC123456', {
+          hidden_tabs: []
+        });
+
+        expect(channel.update).toHaveBeenCalledWith(
+          expect.objectContaining({ hidden_tabs: null })
+        );
+      });
+
+      test('rejects invalid tab type values', async () => {
+        const channel = {
+          ...mockChannel,
+          available_tabs: 'videos,shorts',
+          update: jest.fn()
+        };
+        Channel.findOne.mockResolvedValue(channel);
+
+        await expect(
+          channelSettingsModule.updateChannelSettings('UC123456', {
+            hidden_tabs: ['bogus']
+          })
+        ).rejects.toThrow('Invalid hidden_tabs');
+      });
+
+      test('rejects hiding every detected tab', async () => {
+        const channel = {
+          ...mockChannel,
+          available_tabs: 'videos,shorts',
+          update: jest.fn()
+        };
+        Channel.findOne.mockResolvedValue(channel);
+
+        await expect(
+          channelSettingsModule.updateChannelSettings('UC123456', {
+            hidden_tabs: ['videos', 'shorts']
+          })
+        ).rejects.toThrow('At least one tab must remain visible');
+      });
+
+      test('strips auto_download_enabled_tabs entries that map to a hidden tab', async () => {
+        const channel = {
+          ...mockChannel,
+          available_tabs: 'videos,shorts',
+          hidden_tabs: null,
+          auto_download_enabled_tabs: 'video,short',
+          update: jest.fn().mockImplementation(function (data) {
+            Object.assign(this, data);
+            return Promise.resolve(this);
+          })
+        };
+        Channel.findOne.mockResolvedValue(channel);
+
+        await channelSettingsModule.updateChannelSettings('UC123456', {
+          hidden_tabs: ['shorts']
+        });
+
+        const updateCall = channel.update.mock.calls.find(
+          (call) => 'auto_download_enabled_tabs' in (call[0] || {})
+        );
+        expect(updateCall).toBeDefined();
+        expect(updateCall[0].auto_download_enabled_tabs).toBe('video');
+      });
+    });
   });
 
   describe('moveChannelFolder', () => {
@@ -824,7 +1002,7 @@ describe('ChannelSettingsModule', () => {
       });
     });
 
-    test('should trigger Plex library refresh asynchronously', async () => {
+    test('should trigger Plex library refresh for both old and new subfolders asynchronously', async () => {
       fs.existsSync
         .mockReturnValueOnce(true)
         .mockReturnValueOnce(false);
@@ -834,14 +1012,14 @@ describe('ChannelSettingsModule', () => {
       // Plex refresh is called via setImmediate, so we need to flush the queue
       await new Promise(resolve => setImmediate(resolve));
 
-      expect(plexModule.refreshLibrary).toHaveBeenCalled();
+      expect(plexModule.refreshLibrariesForSubfolders).toHaveBeenCalledWith([null, 'Music']);
     });
 
     test('should not fail if Plex refresh fails', async () => {
       fs.existsSync
         .mockReturnValueOnce(true)
         .mockReturnValueOnce(false);
-      plexModule.refreshLibrary.mockRejectedValue(new Error('Plex error'));
+      plexModule.refreshLibrariesForSubfolders.mockRejectedValue(new Error('Plex error'));
 
       const result = await channelSettingsModule.moveChannelFolder(channel, null, 'Music');
 
@@ -851,7 +1029,7 @@ describe('ChannelSettingsModule', () => {
       await new Promise(resolve => setImmediate(resolve));
 
       expect(logger.error).toHaveBeenCalledWith(
-        expect.objectContaining({ err: 'Plex error' }),
+        expect.objectContaining({ err: expect.any(Error) }),
         'Could not refresh Plex library'
       );
     });

@@ -40,6 +40,7 @@ describe('VideoTableView Component', () => {
     onSortChange: jest.fn(),
     onToggleIgnore: jest.fn(),
     onDeletionChange: jest.fn(),
+    onToggleProtection: jest.fn(),
   };
 
   beforeEach(() => {
@@ -944,6 +945,46 @@ describe('VideoTableView Component', () => {
       expect(checkboxes[0]).toBeChecked();
       expect(checkboxes[1]).toBeChecked();
       expect(checkboxes[2]).toBeChecked();
+    });
+  });
+
+  describe('Protection Shield', () => {
+    test('renders shield icon for downloaded video', () => {
+      const downloadedVideo = { ...mockVideo, added: true, removed: false };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[downloadedVideo]} />);
+      expect(screen.getByLabelText('Protect from auto-deletion')).toBeInTheDocument();
+    });
+
+    test('renders active shield icon for protected video', () => {
+      const protectedVideo = { ...mockVideo, added: true, removed: false, protected: true };
+      renderWithProviders(<VideoTableView {...defaultProps} videos={[protectedVideo]} />);
+      expect(screen.getByLabelText('Remove protection')).toBeInTheDocument();
+    });
+
+    test('does not render shield icon for non-downloaded video', () => {
+      renderWithProviders(<VideoTableView {...defaultProps} />);
+      expect(screen.queryByLabelText('Protect from auto-deletion')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Remove protection')).not.toBeInTheDocument();
+    });
+
+    test('calls onToggleProtection when shield icon is clicked', async () => {
+      const user = userEvent.setup();
+      const onToggleProtection = jest.fn();
+      const downloadedVideo = { ...mockVideo, added: true, removed: false };
+
+      renderWithProviders(
+        <VideoTableView
+          {...defaultProps}
+          videos={[downloadedVideo]}
+          onToggleProtection={onToggleProtection}
+        />
+      );
+
+      const shieldButton = screen.getByLabelText('Protect from auto-deletion');
+      await user.click(shieldButton);
+
+      expect(onToggleProtection).toHaveBeenCalledTimes(1);
+      expect(onToggleProtection).toHaveBeenCalledWith('test123');
     });
   });
 });

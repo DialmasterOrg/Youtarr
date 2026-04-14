@@ -146,20 +146,35 @@ describe('plexModule', () => {
   });
 
   describe('refreshLibrary', () => {
-    test('successfully refreshes library', async () => {
+    test('successfully refreshes library using global config ID', async () => {
       const mockResponse = { status: 200, data: 'success' };
       axios.get.mockResolvedValue(mockResponse);
 
       const result = await plexModule.refreshLibrary();
 
       expect(axios.get).toHaveBeenCalledWith(
-        'http://127.0.0.1:32400/library/sections/1/refresh?X-Plex-Token=existing-token'
+        'http://127.0.0.1:32400/library/sections/1/refresh?X-Plex-Token=existing-token',
+        { timeout: 10000 }
       );
       expect(result).toBe(mockResponse);
-      expect(logger.info).toHaveBeenCalledWith('Refreshing Plex library');
+      expect(logger.info).toHaveBeenCalledWith(
+        { libraryId: '1' },
+        'Refreshing Plex library'
+      );
       expect(logger.info).toHaveBeenCalledWith(
         { libraryId: '1' },
         'Plex library refresh initiated successfully'
+      );
+    });
+
+    test('uses explicit libraryId argument when provided', async () => {
+      axios.get.mockResolvedValue({ status: 200 });
+
+      await plexModule.refreshLibrary('5');
+
+      expect(axios.get).toHaveBeenCalledWith(
+        'http://127.0.0.1:32400/library/sections/5/refresh?X-Plex-Token=existing-token',
+        { timeout: 10000 }
       );
     });
 
@@ -215,6 +230,35 @@ describe('plexModule', () => {
       expect(logger.error).toHaveBeenCalledWith({ err: error }, 'Failed to refresh Plex library');
     });
 
+    test('skips refresh when libraryId is non-numeric', async () => {
+      const result = await plexModule.refreshLibrary('../../admin');
+
+      expect(axios.get).not.toHaveBeenCalled();
+      expect(result).toBeNull();
+      expect(logger.warn).toHaveBeenCalledWith(
+        { libraryId: '../../admin' },
+        'Skipping Plex refresh - invalid non-numeric library ID'
+      );
+    });
+
+    test('skips refresh when libraryId contains letters', async () => {
+      const result = await plexModule.refreshLibrary('abc');
+
+      expect(axios.get).not.toHaveBeenCalled();
+      expect(result).toBeNull();
+    });
+
+    test('allows valid numeric libraryId', async () => {
+      axios.get.mockResolvedValue({ status: 200 });
+
+      await plexModule.refreshLibrary('42');
+
+      expect(axios.get).toHaveBeenCalledWith(
+        'http://127.0.0.1:32400/library/sections/42/refresh?X-Plex-Token=existing-token',
+        { timeout: 10000 }
+      );
+    });
+
     test('uses PLEX_URL from environment when available', async () => {
       process.env.PLEX_URL = 'http://env-plex:8080';
       axios.get.mockResolvedValue({ status: 200 });
@@ -222,8 +266,178 @@ describe('plexModule', () => {
       await plexModule.refreshLibrary();
 
       expect(axios.get).toHaveBeenCalledWith(
-        'http://env-plex:8080/library/sections/1/refresh?X-Plex-Token=existing-token'
+        'http://env-plex:8080/library/sections/1/refresh?X-Plex-Token=existing-token',
+        { timeout: 10000 }
       );
+    });
+  });
+
+  describe('getLibraryIdForSubfolder', () => {
+    test('returns matching libraryId when a mapping exists for the subfolder', () => {
+      config.plexSubfolderLibraryMappings = [
+        { subfolder: 'kids', libraryId: '2' },
+        { subfolder: 'music', libraryId: '3' },
+      ];
+
+      expect(plexModule.getLibraryIdForSubfolder('kids')).toBe('2');
+      expect(plexModule.getLibraryIdForSubfolder('music')).toBe('3');
+    });
+
+    test('returns global plexYoutubeLibraryId when no mapping matches', () => {
+      config.plexSubfolderLibraryMappings = [{ subfolder: 'kids', libraryId: '2' }];
+
+      expect(plexModule.getLibraryIdForSubfolder('unknown')).toBe('1');
+    });
+
+    test('returns mapping for root (null) subfolder', () => {
+      config.plexSubfolderLibraryMappings = [{ subfolder: null, libraryId: '4' }];
+
+      expect(plexModule.getLibraryIdForSubfolder(null)).toBe('4');
+    });
+
+    test('falls back to global ID when mappings array is empty', () => {
+      config.plexSubfolderLibraryMappings = [];
+
+      expect(plexModule.getLibraryIdForSubfolder('anything')).toBe('1');
+    });
+
+    test('falls back to global ID when plexSubfolderLibraryMappings is undefined', () => {
+      delete config.plexSubfolderLibraryMappings;
+
+      expect(plexModule.getLibraryIdForSubfolder('kids')).toBe('1');
+    });
+
+    test('skips null and non-object entries in mappings array without throwing', () => {
+      config.plexSubfolderLibraryMappings = [
+        null,
+        undefined,
+        'bad-string',
+        42,
+        { subfolder: 'kids', libraryId: '2' },
+      ];
+
+      expect(plexModule.getLibraryIdForSubfolder('kids')).toBe('2');
+      expect(plexModule.getLibraryIdForSubfolder('unknown')).toBe('1');
+    });
+  });
+
+  describe('refreshLibraryForSubfolder', () => {
+    test('refreshes the library mapped to the given subfolder', async () => {
+      config.plexSubfolderLibraryMappings = [{ subfolder: 'kids', libraryId: '2' }];
+      axios.get.mockResolvedValue({ status: 200 });
+
+      await plexModule.refreshLibraryForSubfolder('kids');
+
+      expect(axios.get).toHaveBeenCalledWith(
+        expect.stringContaining('/library/sections/2/refresh'),
+        { timeout: 10000 }
+      );
+    });
+
+    test('falls back to global library when no mapping for subfolder', async () => {
+      config.plexSubfolderLibraryMappings = [];
+      axios.get.mockResolvedValue({ status: 200 });
+
+      await plexModule.refreshLibraryForSubfolder('unknown');
+
+      expect(axios.get).toHaveBeenCalledWith(
+        expect.stringContaining('/library/sections/1/refresh'),
+        { timeout: 10000 }
+      );
+    });
+
+    test('uses global library for null (root) subfolder when no root mapping', async () => {
+      config.plexSubfolderLibraryMappings = [];
+      axios.get.mockResolvedValue({ status: 200 });
+
+      await plexModule.refreshLibraryForSubfolder(null);
+
+      expect(axios.get).toHaveBeenCalledWith(
+        expect.stringContaining('/library/sections/1/refresh'),
+        { timeout: 10000 }
+      );
+    });
+  });
+
+  describe('refreshLibrariesForSubfolders', () => {
+    test('refreshes each distinct library once', async () => {
+      config.plexSubfolderLibraryMappings = [
+        { subfolder: 'kids', libraryId: '2' },
+        { subfolder: 'music', libraryId: '3' },
+      ];
+      axios.get.mockResolvedValue({ status: 200 });
+
+      await plexModule.refreshLibrariesForSubfolders(['kids', 'music', null]);
+
+      // kids -> 2, music -> 3, null -> 1 (fallback): 3 distinct IDs → 3 calls
+      expect(axios.get).toHaveBeenCalledTimes(3);
+    });
+
+    test('deduplicates when two different subfolders map to the same library ID', async () => {
+      config.plexSubfolderLibraryMappings = [
+        { subfolder: 'kids', libraryId: '2' },
+        { subfolder: 'cartoons', libraryId: '2' }, // same target library as kids
+      ];
+      axios.get.mockResolvedValue({ status: 200 });
+
+      await plexModule.refreshLibrariesForSubfolders(['kids', 'cartoons']);
+
+      // Both resolve to library '2' - only one HTTP call should be made
+      expect(axios.get).toHaveBeenCalledTimes(1);
+      expect(axios.get).toHaveBeenCalledWith(
+        expect.stringContaining('/library/sections/2/refresh'),
+        { timeout: 10000 }
+      );
+    });
+
+    test('refreshes global fallback library when all subfolders are unmapped', async () => {
+      config.plexSubfolderLibraryMappings = [];
+      axios.get.mockResolvedValue({ status: 200 });
+
+      await plexModule.refreshLibrariesForSubfolders([null, 'foo', 'bar']);
+
+      // All three map to the global ID '1': deduplicated to one call
+      expect(axios.get).toHaveBeenCalledTimes(1);
+      expect(axios.get).toHaveBeenCalledWith(
+        expect.stringContaining('/library/sections/1/refresh'),
+        { timeout: 10000 }
+      );
+    });
+
+    test('handles empty subfolders array without making any calls', async () => {
+      await plexModule.refreshLibrariesForSubfolders([]);
+
+      expect(axios.get).not.toHaveBeenCalled();
+    });
+
+    test('continues refreshing remaining libraries when one fails', async () => {
+      config.plexSubfolderLibraryMappings = [
+        { subfolder: 'kids', libraryId: '2' },
+        { subfolder: 'music', libraryId: '3' },
+      ];
+      // Library '2' fails; library '3' must still be called and the promise must resolve
+      axios.get
+        .mockRejectedValueOnce(new Error('Network error'))
+        .mockResolvedValueOnce({ status: 200 });
+
+      await expect(
+        plexModule.refreshLibrariesForSubfolders(['kids', 'music'])
+      ).resolves.toBeUndefined();
+
+      expect(axios.get).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('refreshLibraryForSubfolder - error handling', () => {
+    test('resolves to null when the underlying refresh fails', async () => {
+      config.plexSubfolderLibraryMappings = [{ subfolder: 'kids', libraryId: '2' }];
+      // Force the axios call inside refreshLibrary to throw synchronously after try/catch
+      // by making getBaseUrl produce a value but axios.get throwing past the catch
+      // In practice refreshLibrary catches all errors and returns null, so this confirms
+      // that the method resolves (does not throw) even when the underlying call fails.
+      axios.get.mockRejectedValue(new Error('Unexpected'));
+
+      await expect(plexModule.refreshLibraryForSubfolder('kids')).resolves.toBeNull();
     });
   });
 
@@ -246,7 +460,8 @@ describe('plexModule', () => {
       const result = await plexModule.getLibraries();
 
       expect(axios.get).toHaveBeenCalledWith(
-        'http://127.0.0.1:32400/library/sections?X-Plex-Token=existing-token'
+        'http://127.0.0.1:32400/library/sections?X-Plex-Token=existing-token',
+        { timeout: 10000 }
       );
       expect(result).toEqual([
         {
@@ -276,7 +491,8 @@ describe('plexModule', () => {
       const result = await plexModule.getLibraries();
 
       expect(axios.get).toHaveBeenCalledWith(
-        'https://127.0.0.1:32400/library/sections?X-Plex-Token=existing-token'
+        'https://127.0.0.1:32400/library/sections?X-Plex-Token=existing-token',
+        { timeout: 10000 }
       );
       expect(result).toEqual([
         {
@@ -336,7 +552,8 @@ describe('plexModule', () => {
         'Attempting to fetch Plex libraries via URL: http://192.168.1.10:8080'
       );
       expect(axios.get).toHaveBeenCalledWith(
-        'http://192.168.1.10:8080/library/sections?X-Plex-Token=token'
+        'http://192.168.1.10:8080/library/sections?X-Plex-Token=token',
+        { timeout: 10000 }
       );
       expect(result).toEqual([
         {
@@ -390,7 +607,8 @@ describe('plexModule', () => {
       await plexModule.getLibrariesWithParams(null, 'token', null);
 
       expect(axios.get).toHaveBeenCalledWith(
-        'http://env-plex:9999/library/sections?X-Plex-Token=token'
+        'http://env-plex:9999/library/sections?X-Plex-Token=token',
+        { timeout: 10000 }
       );
     });
 
@@ -429,7 +647,8 @@ describe('plexModule', () => {
         'Attempting to fetch Plex libraries via URL: https://192.168.1.10:8080'
       );
       expect(axios.get).toHaveBeenCalledWith(
-        'https://192.168.1.10:8080/library/sections?X-Plex-Token=token'
+        'https://192.168.1.10:8080/library/sections?X-Plex-Token=token',
+        { timeout: 10000 }
       );
       expect(result).toHaveLength(1);
     });
@@ -455,7 +674,8 @@ describe('plexModule', () => {
         'Attempting to fetch Plex libraries via URL: http://192.168.1.10:8080'
       );
       expect(axios.get).toHaveBeenCalledWith(
-        'http://192.168.1.10:8080/library/sections?X-Plex-Token=token'
+        'http://192.168.1.10:8080/library/sections?X-Plex-Token=token',
+        { timeout: 10000 }
       );
       expect(result).toHaveLength(1);
     });
@@ -482,7 +702,8 @@ describe('plexModule', () => {
         'Attempting to fetch Plex libraries via URL: https://192.168.1.10:8080'
       );
       expect(axios.get).toHaveBeenCalledWith(
-        'https://192.168.1.10:8080/library/sections?X-Plex-Token=token'
+        'https://192.168.1.10:8080/library/sections?X-Plex-Token=token',
+        { timeout: 10000 }
       );
       expect(result).toHaveLength(1);
     });

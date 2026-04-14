@@ -13,6 +13,17 @@ jest.mock('../../../hooks/useConfig', () => ({
   useConfig: jest.fn(),
 }));
 
+// Mock axios because TabsEditor (rendered inside the dialog) uses axios.post
+// for the refresh button. Existing dialog tests do not click refresh so the
+// mock is passive for them; it's only exercised by the refresh-path test.
+jest.mock('axios', () => ({
+  post: jest.fn(),
+  isAxiosError: jest.fn(() => false),
+}));
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const mockAxios = require('axios');
+
 const mockUseConfig = useConfig as jest.MockedFunction<typeof useConfig>;
 
 describe('ChannelSettingsDialog', () => {
@@ -46,6 +57,8 @@ describe('ChannelSettingsDialog', () => {
     jest.clearAllMocks();
     mockFetch = jest.fn();
     global.fetch = mockFetch;
+    mockAxios.post.mockReset();
+    mockAxios.isAxiosError.mockReturnValue(false);
     mockRefetchConfig.mockResolvedValue(undefined);
     // Reset mockUseConfig to default
     mockUseConfig.mockReturnValue({
@@ -1022,15 +1035,12 @@ describe('ChannelSettingsDialog', () => {
       await user.click(saveButton);
 
       await waitFor(() => {
-        expect(mockOnSettingsSaved).toHaveBeenCalledWith({
-          sub_folder: null,
-          video_quality: '720',
-          min_duration: null,
-          max_duration: null,
-          title_filter_regex: null,
-          audio_format: null,
-          default_rating: null,
-        });
+        expect(mockOnSettingsSaved).toHaveBeenCalledWith(
+          expect.objectContaining({
+            ...mockChannelSettings,
+            video_quality: '720',
+          })
+        );
       });
     });
 
@@ -1614,6 +1624,186 @@ describe('ChannelSettingsDialog', () => {
       });
 
       consoleSpy.mockRestore();
+    });
+  });
+
+  describe('Channel Tabs integration', () => {
+    test('loads detected_tabs and hidden_tabs from settings and reflects them in TabsEditor', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            ...mockChannelSettings,
+            detected_tabs: ['videos', 'shorts', 'streams'],
+            hidden_tabs: ['shorts'],
+            available_tabs: ['videos', 'streams'],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+        });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+
+      expect(screen.getByTestId('tabs-editor-checkbox-videos')).toBeChecked();
+      expect(screen.getByTestId('tabs-editor-checkbox-shorts')).not.toBeChecked();
+      expect(screen.getByTestId('tabs-editor-checkbox-streams')).toBeChecked();
+    });
+
+    test('save request includes hidden_tabs in the PUT body', async () => {
+      const user = userEvent.setup();
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            ...mockChannelSettings,
+            detected_tabs: ['videos', 'shorts', 'streams'],
+            hidden_tabs: [],
+            available_tabs: ['videos', 'shorts', 'streams'],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            settings: {
+              ...mockChannelSettings,
+              hidden_tabs: ['shorts'],
+              detected_tabs: ['videos', 'shorts', 'streams'],
+              available_tabs: ['videos', 'streams'],
+            },
+          }),
+        });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId('tabs-editor-checkbox-shorts'));
+
+      const saveButton = screen.getByRole('button', { name: 'Save' });
+      await user.click(saveButton);
+
+      await waitFor(() => {
+        const saveCall = mockFetch.mock.calls.find(
+          ([url, init]) =>
+            url === '/api/channels/channel123/settings' && init?.method === 'PUT'
+        );
+        expect(saveCall).toBeDefined();
+      });
+
+      const saveCall = mockFetch.mock.calls.find(
+        ([url, init]) =>
+          url === '/api/channels/channel123/settings' && init?.method === 'PUT'
+      )!;
+      const body = JSON.parse(saveCall[1].body as string);
+      expect(body.hidden_tabs).toEqual(['shorts']);
+    });
+
+    test('save button is disabled when every detected tab is hidden', async () => {
+      const user = userEvent.setup();
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            ...mockChannelSettings,
+            detected_tabs: ['videos', 'shorts'],
+            hidden_tabs: [],
+            available_tabs: ['videos', 'shorts'],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+        });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+
+      await user.click(screen.getByTestId('tabs-editor-checkbox-videos'));
+      await user.click(screen.getByTestId('tabs-editor-checkbox-shorts'));
+
+      expect(screen.getByText('At least one tab must remain visible.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    });
+
+    test('refresh updates detected tabs and resets originalSettings so Save stays disabled', async () => {
+      const user = userEvent.setup();
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            ...mockChannelSettings,
+            detected_tabs: ['videos', 'shorts'],
+            hidden_tabs: ['shorts'],
+            available_tabs: ['videos'],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+        });
+
+      // Backend's redetect probe now also finds 'streams' and keeps 'shorts' hidden
+      mockAxios.post.mockResolvedValueOnce({
+        data: {
+          availableTabs: ['videos', 'streams'],
+          detectedTabs: ['videos', 'shorts', 'streams'],
+          hiddenTabs: ['shorts'],
+        },
+      });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+
+      // Initial state: only videos + shorts detected, streams not yet present
+      expect(screen.getByTestId('tabs-editor-checkbox-videos')).toBeChecked();
+      expect(screen.getByTestId('tabs-editor-checkbox-shorts')).not.toBeChecked();
+      expect(screen.queryByTestId('tabs-editor-checkbox-streams')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+      // Click refresh; TabsEditor posts via axios and receives the new state
+      await user.click(screen.getByTestId('tabs-editor-refresh'));
+
+      await waitFor(() => {
+        expect(mockAxios.post).toHaveBeenCalledWith(
+          '/api/channels/channel123/tabs/redetect',
+          null,
+          { headers: { 'x-access-token': 'test-token' } }
+        );
+      });
+
+      // After refresh: streams now rendered; videos + streams checked, shorts still hidden
+      await waitFor(() => {
+        expect(screen.getByTestId('tabs-editor-checkbox-streams')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('tabs-editor-checkbox-videos')).toBeChecked();
+      expect(screen.getByTestId('tabs-editor-checkbox-shorts')).not.toBeChecked();
+      expect(screen.getByTestId('tabs-editor-checkbox-streams')).toBeChecked();
+
+      // Critical invariant: handleTabsRefresh resets originalSettings.hidden_tabs
+      // to the refresh result, so hasChanges() is false and Save stays disabled.
+      // If that reset is broken, Save would be ENABLED here.
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     });
   });
 });

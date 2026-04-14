@@ -20,17 +20,7 @@ const { spawn, execSync } = require('child_process');
 
 const SUB_FOLDER_DEFAULT_KEY = '__default__';
 
-const TAB_TYPES = {
-  VIDEOS: 'videos',
-  SHORTS: 'shorts',
-  LIVE: 'streams',
-};
-
-const MEDIA_TAB_TYPE_MAP = {
-  'videos': 'video',
-  'shorts': 'short',
-  'streams': 'livestream',
-};
+const { TAB_TYPES, MEDIA_TAB_TYPE_MAP, parseTabCsv } = require('./tabsUtils');
 
 // Maximum number of videos to load when user clicks "Load More"
 // Limit set here because some channels have tens or hundreds of thousands of videos...
@@ -68,6 +58,33 @@ class ChannelModule {
       logger.error({ err: error, channelId: channel?.channel_id, mediaType }, 'Error parsing lastFetchedByTab');
       return null;
     }
+  }
+
+  /**
+   * Compute the "effective" available tabs for a channel by removing any
+   * user-hidden tabs from the detected list.
+   * @param {string|null} availableTabsCsv - Comma-separated list of detected tab types
+   * @param {string|null} hiddenTabsCsv - Comma-separated list of user-hidden tab types
+   * @returns {string[]} - Effective (detected minus hidden) tab types
+   */
+  computeEffectiveTabs(availableTabsCsv, hiddenTabsCsv) {
+    if (!availableTabsCsv) return [];
+
+    const detected = availableTabsCsv
+      .split(',')
+      .map((tab) => tab.trim())
+      .filter((tab) => tab.length > 0);
+
+    if (!hiddenTabsCsv) return detected;
+
+    const hidden = new Set(
+      hiddenTabsCsv
+        .split(',')
+        .map((tab) => tab.trim())
+        .filter((tab) => tab.length > 0)
+    );
+
+    return detected.filter((tab) => !hidden.has(tab));
   }
 
   /**
@@ -286,6 +303,7 @@ class ChannelModule {
    * @returns {Object} - Formatted channel response
    */
   mapChannelToResponse(channel) {
+    const effectiveTabs = this.computeEffectiveTabs(channel.available_tabs, channel.hidden_tabs);
     const out = {
       id: channel.channel_id,
       uploader: channel.uploader,
@@ -294,7 +312,7 @@ class ChannelModule {
       description: channel.description,
       url: channel.url,
       auto_download_enabled_tabs: channel.auto_download_enabled_tabs ?? 'video',
-      available_tabs: channel.available_tabs || null,
+      available_tabs: effectiveTabs.length > 0 ? effectiveTabs.join(',') : null,
       sub_folder: channel.sub_folder || null,
       video_quality: channel.video_quality || null,
       audio_format: channel.audio_format || null,
@@ -316,12 +334,13 @@ class ChannelModule {
    * @returns {Object} - Simplified channel representation
    */
   mapChannelListEntry(channel) {
+    const effectiveTabs = this.computeEffectiveTabs(channel.available_tabs, channel.hidden_tabs);
     const out = {
       url: channel.url,
       uploader: channel.uploader || '',
       channel_id: channel.channel_id || '',
       auto_download_enabled_tabs: channel.auto_download_enabled_tabs ?? 'video',
-      available_tabs: channel.available_tabs || null,
+      available_tabs: effectiveTabs.length > 0 ? effectiveTabs.join(',') : null,
       sub_folder: channel.sub_folder || null,
       video_quality: channel.video_quality || null,
       min_duration: channel.min_duration || null,
@@ -1296,7 +1315,8 @@ class ChannelModule {
         'audioFilePath',
         'audioFileSize',
         'normalized_rating',
-        'rating_source'
+        'rating_source',
+        'protected'
       ]
     });
 
@@ -1313,7 +1333,8 @@ class ChannelModule {
         filePath: v.filePath,
         audioFilePath: v.audioFilePath,
         audioFileSize: v.audioFileSize,
-        normalized_rating: v.normalized_rating
+        normalized_rating: v.normalized_rating,
+        protected: v.protected
       });
 
       // Collect videos that need file checking (only if checkFiles is true and have any file path)
@@ -1358,6 +1379,8 @@ class ChannelModule {
         if (status.normalized_rating) {
           plainVideoObject.normalized_rating = status.normalized_rating;
         }
+        plainVideoObject.id = status.id;
+        plainVideoObject.protected = status.protected;
       } else {
         // Video never downloaded
         plainVideoObject.added = false;
@@ -1366,6 +1389,7 @@ class ChannelModule {
         plainVideoObject.filePath = null;
         plainVideoObject.audioFilePath = null;
         plainVideoObject.audioFileSize = null;
+        plainVideoObject.protected = false;
       }
 
       // Replace thumbnail with template format (unless video is removed from YouTube)
@@ -1434,7 +1458,7 @@ class ChannelModule {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Array>} - Array of video objects with download status
    */
-  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, excludeDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null) {
+  async fetchNewestVideosFromDb(channelId, limit = 50, offset = 0, excludeDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', checkFiles = false, mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = false) {
     // First get all videos to enrich with download status
     const allChannelVideos = await ChannelVideo.findAll({
       where: {
@@ -1464,6 +1488,11 @@ class ChannelModule {
 
     // Apply duration and date filters
     filteredVideos = this._applyDurationAndDateFilters(filteredVideos, minDuration, maxDuration, dateFrom, dateTo);
+
+    // Apply protected filter
+    if (protectedFilter) {
+      filteredVideos = filteredVideos.filter(video => video.protected);
+    }
 
     // Apply sorting
     filteredVideos.sort((a, b) => {
@@ -1541,9 +1570,9 @@ class ChannelModule {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Object>} - Object with totalCount and oldestVideoDate
    */
-  async getChannelVideoStats(channelId, excludeDownloaded = false, searchQuery = '', mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null) {
+  async getChannelVideoStats(channelId, excludeDownloaded = false, searchQuery = '', mediaType = 'video', minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = false) {
     // If we have search or filter, we need to get all videos
-    if (excludeDownloaded || searchQuery || minDuration !== null || maxDuration !== null || dateFrom || dateTo) {
+    if (excludeDownloaded || searchQuery || minDuration !== null || maxDuration !== null || dateFrom || dateTo || protectedFilter) {
       // Need to filter by download status and/or search
       const allChannelVideos = await ChannelVideo.findAll({
         where: {
@@ -1572,6 +1601,11 @@ class ChannelModule {
 
       // Apply duration and date filters
       filteredVideos = this._applyDurationAndDateFilters(filteredVideos, minDuration, maxDuration, dateFrom, dateTo);
+
+      // Apply protected filter
+      if (protectedFilter) {
+        filteredVideos = filteredVideos.filter(video => video.protected);
+      }
 
       return {
         totalCount: filteredVideos.length,
@@ -1802,8 +1836,10 @@ class ChannelModule {
    * @returns {Object} - Formatted response
    */
   buildChannelVideosResponse(videos, channel, dataSource = 'cache', stats = null, autoDownloadsEnabled = false, mediaType = 'video') {
-    // Parse available tabs if present
-    const availableTabs = channel && channel.available_tabs ? channel.available_tabs.split(',') : [];
+    // Parse available tabs if present (filters out user-hidden tabs)
+    const availableTabs = channel
+      ? this.computeEffectiveTabs(channel.available_tabs, channel.hidden_tabs)
+      : [];
 
     // Get the last fetched timestamp for this specific tab
     const lastFetched = channel ? this.getLastFetchedForTab(channel, mediaType) : null;
@@ -1881,9 +1917,46 @@ class ChannelModule {
   }
 
   /**
+   * Probe yt-dlp for each known tab type in parallel and return the list
+   * of detected tabs. Falls back to [TAB_TYPES.VIDEOS] if all probes fail
+   * so the channel stays usable. Shared by detectAndSaveChannelTabs and
+   * redetectChannelTabs to avoid drift between the two probe paths.
+   * @param {string} channelId - Channel ID to probe
+   * @returns {Promise<string[]>} - Detected tab types
+   * @private
+   */
+  async _probeTabsViaYtdlp(channelId) {
+    const tabTypesToTest = [TAB_TYPES.VIDEOS, TAB_TYPES.SHORTS, TAB_TYPES.LIVE];
+    const tabChecks = await Promise.all(
+      tabTypesToTest.map(async (tabType) => {
+        const exists = await this.checkTabExistsViaYtdlp(channelId, tabType);
+        if (exists) {
+          logger.info({ channelId, tabType }, 'Tab exists for channel');
+        } else {
+          logger.debug({ channelId, tabType }, 'Tab not available for channel');
+        }
+        return { tabType, exists };
+      })
+    );
+
+    const detected = tabChecks
+      .filter((result) => result.exists)
+      .map((result) => result.tabType);
+
+    if (detected.length === 0) {
+      logger.warn({ channelId }, 'All tab probes failed, defaulting to videos tab');
+      return [TAB_TYPES.VIDEOS];
+    }
+
+    return detected;
+  }
+
+  /**
    * Detect and save available tabs for a channel.
-   * Uses RSS feed checks for fast detection instead of yt-dlp.
-   * Uses activeFetches map to prevent concurrent detection for the same channel.
+   * Probes each tab type in parallel via yt-dlp. Short-circuits if
+   * the channel already has cached tabs (use redetectChannelTabs to
+   * force a fresh probe). Uses activeFetches map to prevent
+   * concurrent detection for the same channel.
    * @param {string} channelId - Channel ID to detect tabs for
    * @returns {Promise<{availableTabs: string[], autoDownloadEnabledTabs: string}|null>} - Detected tabs or null if skipped/failed
    */
@@ -1914,30 +1987,9 @@ class ChannelModule {
 
       logger.info({ channelId, channelTitle: channel.title }, 'Starting tab detection for channel (via yt-dlp)');
 
-      // Check all tabs in parallel using yt-dlp probing
-      const tabTypesToTest = [TAB_TYPES.VIDEOS, TAB_TYPES.SHORTS, TAB_TYPES.LIVE];
-      const tabChecks = await Promise.all(
-        tabTypesToTest.map(async (tabType) => {
-          const exists = await this.checkTabExistsViaYtdlp(channelId, tabType);
-          if (exists) {
-            logger.info({ channelId, tabType }, 'Tab exists for channel');
-          } else {
-            logger.debug({ channelId, tabType }, 'Tab not available for channel');
-          }
-          return { tabType, exists };
-        })
-      );
-
-      let availableTabs = tabChecks
-        .filter(result => result.exists)
-        .map(result => result.tabType);
-
-      // Fallback: if all RSS checks failed (e.g., network timeout), assume "videos" tab exists
-      // This prevents channels from being added with no tabs, which would make them unusable
-      if (availableTabs.length === 0) {
-        logger.warn({ channelId }, 'All tab checks failed, defaulting to videos tab');
-        availableTabs = [TAB_TYPES.VIDEOS];
-      }
+      // Probe every tab type in parallel via yt-dlp. Helper handles the
+      // fallback-to-videos behavior if all probes fail.
+      const availableTabs = await this._probeTabsViaYtdlp(channelId);
 
       // Determine auto_download_enabled_tabs: preserve existing user choice if set,
       // otherwise pick a smart default based on available tabs
@@ -1984,10 +2036,107 @@ class ChannelModule {
   }
 
   /**
+   * Force a fresh yt-dlp probe of a channel's tabs, bypassing any cached
+   * available_tabs value. Preserves the user's hidden_tabs selection and
+   * rewrites auto_download_enabled_tabs to drop any tabs that are no
+   * longer detected or are currently hidden.
+   *
+   * Concurrent calls for the same channel collapse to a single yt-dlp
+   * burst via the activeFetches map: a second caller receives the
+   * existing in-flight promise instead of spawning its own probe. This
+   * bounds at most one probe burst per channel in flight at any time.
+   *
+   * Use this when a channel's cached available_tabs is known to be stale
+   * (e.g. the RSS-era detection wrote a wrong value) and the user wants
+   * to re-run detection from the UI.
+   *
+   * @param {string} channelId - Channel ID to re-detect
+   * @returns {Promise<{availableTabs: string[], detectedTabs: string[], hiddenTabs: string[], autoDownloadEnabledTabs: string}>}
+   */
+  async redetectChannelTabs(channelId) {
+    const fetchKey = `redetect-tabs-${channelId}`;
+    const existing = this.activeFetches.get(fetchKey);
+    if (existing && existing.promise) {
+      logger.debug({ channelId }, 'redetectChannelTabs already running, awaiting in-flight probe');
+      return existing.promise;
+    }
+
+    const promise = this._redetectChannelTabsInner(channelId);
+    this.activeFetches.set(fetchKey, {
+      startTime: new Date().toISOString(),
+      type: 'tabRedetection',
+      promise,
+    });
+
+    try {
+      return await promise;
+    } finally {
+      this.activeFetches.delete(fetchKey);
+    }
+  }
+
+  /**
+   * Inner implementation of the redetect flow. Always executes a yt-dlp
+   * probe and database update. Do not call directly; go through
+   * redetectChannelTabs so the concurrency guard applies.
+   * @param {string} channelId - Channel ID to re-detect
+   * @returns {Promise<{availableTabs: string[], detectedTabs: string[], hiddenTabs: string[], autoDownloadEnabledTabs: string}>}
+   * @private
+   */
+  async _redetectChannelTabsInner(channelId) {
+    const channel = await Channel.findOne({ where: { channel_id: channelId } });
+    if (!channel) {
+      throw new Error('Channel not found in database');
+    }
+
+    logger.info({ channelId, channelTitle: channel.title }, 'Forcing tab re-detection for channel (via yt-dlp)');
+
+    const detectedTabs = await this._probeTabsViaYtdlp(channelId);
+    const hiddenTabs = parseTabCsv(channel.hidden_tabs);
+
+    // Compute effective tabs (what the user actually sees)
+    const effectiveTabs = this.computeEffectiveTabs(detectedTabs.join(','), channel.hidden_tabs);
+
+    // Rewrite auto_download_enabled_tabs: keep only entries whose
+    // corresponding tabType is both detected AND not hidden.
+    const validMediaTypes = new Set(effectiveTabs.map((tabType) => MEDIA_TAB_TYPE_MAP[tabType]).filter(Boolean));
+    const existingAutoTabs = parseTabCsv(channel.auto_download_enabled_tabs);
+    const filteredAutoTabs = existingAutoTabs.filter((mt) => validMediaTypes.has(mt));
+    const newAutoDownloadEnabledTabs = filteredAutoTabs.join(',');
+
+    await Channel.update(
+      {
+        available_tabs: detectedTabs.join(','),
+        auto_download_enabled_tabs: newAutoDownloadEnabledTabs
+      },
+      { where: { channel_id: channelId } }
+    );
+
+    logger.info(
+      { channelId, detectedTabs, hiddenTabs, effectiveTabs, autoDownloadEnabledTabs: newAutoDownloadEnabledTabs },
+      'Tab re-detection completed'
+    );
+
+    MessageEmitter.emitMessage('broadcast', null, 'channel', 'channelTabsDetected', {
+      channelId,
+      availableTabs: effectiveTabs,
+      autoDownloadEnabledTabs: newAutoDownloadEnabledTabs
+    });
+
+    return {
+      availableTabs: effectiveTabs,
+      detectedTabs,
+      hiddenTabs,
+      autoDownloadEnabledTabs: newAutoDownloadEnabledTabs
+    };
+  }
+
+  /**
    * Get available tabs for a channel.
-   * Returns cached result if available, otherwise detects tabs via RSS feeds.
+   * Returns cached result if available (filtered through hidden_tabs),
+   * otherwise detects tabs now via yt-dlp probing.
    * @param {string} channelId - Channel ID to get tabs for
-   * @returns {Promise<Object>} - Object with availableTabs array
+   * @returns {Promise<Object>} - Object with availableTabs array (effective set)
    */
   async getChannelAvailableTabs(channelId) {
     const channel = await Channel.findOne({
@@ -1998,18 +2147,20 @@ class ChannelModule {
       throw new Error('Channel not found in database');
     }
 
-    // Fast path: return cached tabs
+    // Fast path: return cached tabs (filtered through hidden_tabs)
     if (channel.available_tabs) {
       return {
-        availableTabs: channel.available_tabs.split(','),
+        availableTabs: this.computeEffectiveTabs(channel.available_tabs, channel.hidden_tabs),
       };
     }
 
-    // No tabs cached - detect them now (fast via RSS feeds)
+    // No tabs cached - detect them now via yt-dlp probing
     const result = await this.detectAndSaveChannelTabs(channelId);
+    const detectedTabs = result?.availableTabs || [];
+    const hiddenTabsCsv = channel.hidden_tabs || null;
 
     return {
-      availableTabs: result?.availableTabs || [],
+      availableTabs: this.computeEffectiveTabs(detectedTabs.join(','), hiddenTabsCsv),
     };
   }
 
@@ -2080,7 +2231,7 @@ class ChannelModule {
    * @param {string|null} dateTo - Filter videos to this date (ISO string, default null)
    * @returns {Promise<Object>} - Response object with videos and metadata
    */
-  async getChannelVideos(channelId, page = 1, pageSize = 50, hideDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS, minDuration = null, maxDuration = null, dateFrom = null, dateTo = null) {
+  async getChannelVideos(channelId, page = 1, pageSize = 50, hideDownloaded = false, searchQuery = '', sortBy = 'date', sortOrder = 'desc', tabType = TAB_TYPES.VIDEOS, minDuration = null, maxDuration = null, dateFrom = null, dateTo = null, protectedFilter = false) {
     const channel = await Channel.findOne({
       where: { channel_id: channelId },
     });
@@ -2140,7 +2291,7 @@ class ChannelModule {
 
       // Now fetch the requested page of videos with file checking enabled
       const offset = (page - 1) * pageSize;
-      const paginatedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo);
+      const paginatedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter);
 
       // Check if videos still exist on YouTube and mark as removed if they don't
       const videoValidationModule = require('./videoValidationModule');
@@ -2210,15 +2361,15 @@ class ChannelModule {
       }
 
       // Get stats for the response
-      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo);
+      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter);
 
       return this.buildChannelVideosResponse(paginatedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
 
     } catch (error) {
       logger.error({ err: error, channelId }, 'Error fetching channel videos');
       const offset = (page - 1) * pageSize;
-      const cachedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo);
-      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo);
+      const cachedVideos = await this.fetchNewestVideosFromDb(channelId, pageSize, offset, hideDownloaded, searchQuery, sortBy, sortOrder, true, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter);
+      const stats = await this.getChannelVideoStats(channelId, hideDownloaded, searchQuery, mediaType, minDuration, maxDuration, dateFrom, dateTo, protectedFilter);
       return this.buildChannelVideosResponse(cachedVideos, channel, 'cache', stats, autoDownloadsEnabled, mediaType);
     }
   }
