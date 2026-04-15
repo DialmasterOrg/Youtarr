@@ -62,16 +62,6 @@ export function useChannelVideos({
   const [availableTabs, setAvailableTabs] = useState<string[]>([]);
   const resetKeyRef = useRef<string | undefined>(resetKey);
 
-  useEffect(() => {
-    if (resetKeyRef.current !== resetKey) {
-      resetKeyRef.current = resetKey;
-      setVideos([]);
-      setTotalCount(0);
-      setOldestVideoDate(null);
-      setVideoFailed(false);
-    }
-  }, [resetKey]);
-
   const fetchVideos = useCallback(async () => {
     if (!channelId || !token || !tabType) return;
 
@@ -123,8 +113,13 @@ export function useChannelVideos({
       const data = await response.json();
 
       const incomingVideos: ChannelVideo[] = data.videos || [];
+      const isReset = resetKeyRef.current !== resetKey;
+      if (isReset) {
+        resetKeyRef.current = resetKey;
+      }
+
       if (data.videos !== undefined) {
-        if (append && page > 1) {
+        if (!isReset && append && page > 1) {
           setVideos((prev) => {
             const combined = [...prev, ...incomingVideos];
             const seen = new Set<string>();
@@ -137,6 +132,8 @@ export function useChannelVideos({
         } else {
           setVideos(incomingVideos);
         }
+      } else if (isReset) {
+        setVideos([]);
       }
       setVideoFailed(data.videoFail || false);
       setTotalCount(data.totalCount || 0);
@@ -149,7 +146,7 @@ export function useChannelVideos({
     } finally {
       setLoading(false);
     }
-  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, maxRating, token, append, minDuration, maxDuration, dateFrom, dateTo, protectedFilter]);
+  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, maxRating, token, append, resetKey, minDuration, maxDuration, dateFrom, dateTo, protectedFilter]);
 
   useEffect(() => {
     fetchVideos();

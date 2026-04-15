@@ -6,6 +6,7 @@ import {
 } from '../ui';
 import { ArrowUpward as ArrowUpwardIcon, ArrowDownward as ArrowDownwardIcon, Block as BlockIcon, CheckCircleOutline as CheckCircleOutlineIcon, Delete as DeleteIcon } from '../../lib/icons';
 import ProtectionShieldButton from '../shared/ProtectionShieldButton';
+import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 import { formatDuration } from '../../utils';
 import { ChannelVideo } from '../../types/ChannelVideo';
 import { decodeHtml } from '../../utils/formatters';
@@ -238,6 +239,14 @@ function VideoTableView({
                       }}
                       loading="lazy"
                     />
+                    {onVideoClick && (
+                      <ThumbnailClickOverlay
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          onVideoClick(video);
+                        }}
+                      />
+                    )}
                     {video.youtube_removed && (
                       <div
                         style={{

@@ -18,6 +18,7 @@ import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import ProtectionShieldButton from '../shared/ProtectionShieldButton';
 import RatingBadge from '../shared/RatingBadge';
+import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 interface VideoListItemProps {
   video: ChannelVideo;
   checkedBoxes: string[];
@@ -106,6 +107,14 @@ function VideoListItem({
             }}
             loading="lazy"
           />
+          {onVideoClick && (
+            <ThumbnailClickOverlay
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                onVideoClick(video);
+              }}
+            />
+          )}
           {/* YouTube Removed Banner */}
           {video.youtube_removed ? (
             <div

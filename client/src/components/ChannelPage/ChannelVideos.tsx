@@ -300,6 +300,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
       filters.maxDuration,
       filters.dateFrom ? filters.dateFrom.toISOString() : '',
       filters.dateTo ? filters.dateTo.toISOString() : '',
+      protectedFilter,
       useInfiniteScroll,
     ].join('|'),
     [
@@ -314,6 +315,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
       filters.maxDuration,
       filters.dateFrom,
       filters.dateTo,
+      protectedFilter,
       useInfiniteScroll,
     ]
   );

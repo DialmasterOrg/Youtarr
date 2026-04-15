@@ -17,6 +17,7 @@ import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import ProtectionShieldButton from '../shared/ProtectionShieldButton';
+import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
 
 interface VideoCardProps {
@@ -122,6 +123,14 @@ function VideoCard({
               }}
               loading="lazy"
             />
+            {onVideoClick && (
+              <ThumbnailClickOverlay
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  onVideoClick(video);
+                }}
+              />
+            )}
             {/* YouTube Removed Banner */}
             {video.youtube_removed ? (
               <div

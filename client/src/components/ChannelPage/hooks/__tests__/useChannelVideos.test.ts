@@ -699,6 +699,178 @@ describe('useChannelVideos', () => {
     });
   });
 
+  describe('Append Mode (Infinite Scroll)', () => {
+    const pageOneVideos: ChannelVideo[] = [
+      {
+        title: 'Page 1 Video A',
+        youtube_id: 'p1a',
+        publishedAt: '2023-03-01T00:00:00Z',
+        thumbnail: 'https://i.ytimg.com/vi/p1a/mqdefault.jpg',
+        added: false,
+        duration: 100,
+        media_type: 'video',
+        live_status: null,
+      },
+      {
+        title: 'Page 1 Video B',
+        youtube_id: 'p1b',
+        publishedAt: '2023-03-02T00:00:00Z',
+        thumbnail: 'https://i.ytimg.com/vi/p1b/mqdefault.jpg',
+        added: false,
+        duration: 200,
+        media_type: 'video',
+        live_status: null,
+      },
+    ];
+
+    const pageTwoVideos: ChannelVideo[] = [
+      {
+        title: 'Page 2 Video A',
+        youtube_id: 'p2a',
+        publishedAt: '2023-03-03T00:00:00Z',
+        thumbnail: 'https://i.ytimg.com/vi/p2a/mqdefault.jpg',
+        added: false,
+        duration: 300,
+        media_type: 'video',
+        live_status: null,
+      },
+    ];
+
+    test('concatenates page 2 onto page 1 when append=true', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          videos: pageOneVideos,
+          totalCount: 3,
+          oldestVideoDate: '2023-03-01T00:00:00Z',
+          videoFail: false,
+          autoDownloadsEnabled: false,
+        }),
+      });
+
+      const { result, rerender } = renderHook(
+        ({ params }: { params: Parameters<typeof useChannelVideos>[0] }) =>
+          useChannelVideos(params),
+        {
+          initialProps: {
+            params: { ...defaultParams, append: true, resetKey: 'key-A', page: 1 },
+          },
+        }
+      );
+
+      await waitFor(() => {
+        expect(result.current.videos).toEqual(pageOneVideos);
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          videos: pageTwoVideos,
+          totalCount: 3,
+          oldestVideoDate: '2023-03-01T00:00:00Z',
+          videoFail: false,
+          autoDownloadsEnabled: false,
+        }),
+      });
+
+      rerender({
+        params: { ...defaultParams, append: true, resetKey: 'key-A', page: 2 },
+      });
+
+      await waitFor(() => {
+        expect(result.current.videos).toHaveLength(3);
+      });
+
+      expect(result.current.videos).toEqual([...pageOneVideos, ...pageTwoVideos]);
+    });
+
+    test('resets accumulated list and replaces (not appends) when resetKey changes at page > 1', async () => {
+      // Initial page 1 with append=true
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          videos: pageOneVideos,
+          totalCount: 3,
+          oldestVideoDate: '2023-03-01T00:00:00Z',
+          videoFail: false,
+          autoDownloadsEnabled: false,
+        }),
+      });
+
+      const { result, rerender } = renderHook(
+        ({ params }: { params: Parameters<typeof useChannelVideos>[0] }) =>
+          useChannelVideos(params),
+        {
+          initialProps: {
+            params: { ...defaultParams, append: true, resetKey: 'key-A', page: 1 },
+          },
+        }
+      );
+
+      await waitFor(() => {
+        expect(result.current.videos).toEqual(pageOneVideos);
+      });
+
+      // Accumulate page 2
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          videos: pageTwoVideos,
+          totalCount: 3,
+          oldestVideoDate: '2023-03-01T00:00:00Z',
+          videoFail: false,
+          autoDownloadsEnabled: false,
+        }),
+      });
+
+      rerender({
+        params: { ...defaultParams, append: true, resetKey: 'key-A', page: 2 },
+      });
+
+      await waitFor(() => {
+        expect(result.current.videos).toHaveLength(3);
+      });
+
+      // Now resetKey changes while page stays at 2. The next response should REPLACE,
+      // not append onto the accumulated list (regression guard for M12).
+      const afterResetVideos: ChannelVideo[] = [
+        {
+          title: 'Filtered Only',
+          youtube_id: 'filtered1',
+          publishedAt: '2023-04-01T00:00:00Z',
+          thumbnail: 'https://i.ytimg.com/vi/filtered1/mqdefault.jpg',
+          added: false,
+          duration: 400,
+          media_type: 'video',
+          live_status: null,
+        },
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValueOnce({
+          videos: afterResetVideos,
+          totalCount: 1,
+          oldestVideoDate: '2023-04-01T00:00:00Z',
+          videoFail: false,
+          autoDownloadsEnabled: false,
+        }),
+      });
+
+      rerender({
+        params: { ...defaultParams, append: true, resetKey: 'key-B', page: 2 },
+      });
+
+      await waitFor(() => {
+        expect(result.current.videos).toEqual(afterResetVideos);
+      });
+
+      // Must not contain any prior page's videos.
+      expect(result.current.videos).toHaveLength(1);
+      expect(result.current.totalCount).toBe(1);
+    });
+  });
+
   describe('VideoFailed Flag', () => {
     test('sets videoFailed to true when response indicates failure', async () => {
       mockFetch.mockResolvedValueOnce({
