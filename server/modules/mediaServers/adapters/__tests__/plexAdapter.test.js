@@ -97,7 +97,23 @@ describe('PlexAdapter', () => {
       expect(params['X-Plex-Token']).toBe('TOKEN');
     });
 
-    test('uses override token when plexPlaylistToken is a non-empty string', async () => {
+    test('uses plexApiKey when plexPlaylistToken is null', async () => {
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      const adapter = new PlexAdapter({ ...cfg, plexPlaylistToken: null });
+      await adapter.resolveItemIdByFilepath('/path/v1.mp4');
+      const params = axios.get.mock.calls[0][1].params;
+      expect(params['X-Plex-Token']).toBe('TOKEN');
+    });
+
+    test('uses plexApiKey when plexPlaylistToken is empty string (treated as unset)', async () => {
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      const adapter = new PlexAdapter({ ...cfg, plexPlaylistToken: '' });
+      await adapter.resolveItemIdByFilepath('/path/v1.mp4');
+      const params = axios.get.mock.calls[0][1].params;
+      expect(params['X-Plex-Token']).toBe('TOKEN');
+    });
+
+    test('uses override token when plexPlaylistToken is a non-empty, non-sentinel string', async () => {
       axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
       const adapter = new PlexAdapter({ ...cfg, plexPlaylistToken: 'USER-TOKEN' });
       await adapter.resolveItemIdByFilepath('/path/v1.mp4');
@@ -105,9 +121,9 @@ describe('PlexAdapter', () => {
       expect(params['X-Plex-Token']).toBe('USER-TOKEN');
     });
 
-    test('omits X-Plex-Token entirely when plexPlaylistToken is empty string (unauth mode)', async () => {
+    test('omits X-Plex-Token entirely when plexPlaylistToken is the UNCLAIMED_SERVER sentinel', async () => {
       axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
-      const adapter = new PlexAdapter({ ...cfg, plexPlaylistToken: '' });
+      const adapter = new PlexAdapter({ ...cfg, plexPlaylistToken: 'UNCLAIMED_SERVER' });
       await adapter.resolveItemIdByFilepath('/path/v1.mp4');
       const params = axios.get.mock.calls[0][1].params;
       expect('X-Plex-Token' in params).toBe(false);
@@ -125,7 +141,7 @@ describe('PlexAdapter', () => {
 
     test('testConnection always uses plexApiKey regardless of override', async () => {
       axios.get.mockResolvedValueOnce({ data: {} });
-      const adapter = new PlexAdapter({ ...cfg, plexPlaylistToken: '' });
+      const adapter = new PlexAdapter({ ...cfg, plexPlaylistToken: 'UNCLAIMED_SERVER' });
       await adapter.testConnection();
       const params = axios.get.mock.calls[0][1].params;
       expect(params['X-Plex-Token']).toBe('TOKEN');

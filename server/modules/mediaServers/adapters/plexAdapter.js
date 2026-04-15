@@ -4,6 +4,12 @@ const { extractBasename } = require('./baseAdapter');
 const logger = require('../../../logger');
 const plexModule = require('../../plexModule');
 
+// Sentinel value for config.plexPlaylistToken that tells the adapter to make
+// playlist-scoped requests WITHOUT any X-Plex-Token, matching the anonymous
+// session used by Plex Web on unclaimed servers that allow unauthenticated
+// LAN access. Deliberately distinctive so no real token could collide.
+const UNCLAIMED_SERVER_SENTINEL = 'UNCLAIMED_SERVER';
+
 class PlexAdapter extends BaseAdapter {
   constructor(config) {
     super(config);
@@ -12,18 +18,23 @@ class PlexAdapter extends BaseAdapter {
     this.libraryId = config.plexYoutubeLibraryId;
     // Optional override for playlist-scoped operations. Useful when the admin
     // token belongs to a different Plex account than the one used by the Plex
-    // Web session (e.g., unclaimed dev servers where Plex Web uses no token).
-    // - undefined/null -> fall back to plexApiKey (standard case)
-    // - "" (empty string) -> send requests with NO token (anonymous access on
-    //   servers that allow unauthenticated LAN access)
-    // - "some-token" -> use that token for playlist scope
+    // Web session.
+    //   - null / "" / undefined  -> fall back to plexApiKey (standard case)
+    //   - "UNCLAIMED_SERVER"     -> send requests with NO token (anonymous;
+    //                                for unclaimed dev servers with unauth-LAN)
+    //   - any other string       -> use that token for playlist scope
     const override = config.plexPlaylistToken;
-    this.playlistToken = (override === undefined || override === null) ? this.token : override;
+    if (override === UNCLAIMED_SERVER_SENTINEL) {
+      this.playlistToken = null; // marker: no token
+    } else if (override && String(override).trim() !== '') {
+      this.playlistToken = override;
+    } else {
+      this.playlistToken = this.token;
+    }
   }
 
   // Build params for playlist-scoped requests. Conditionally omits X-Plex-Token
-  // when the resolved playlistToken is empty, so Plex treats the call as
-  // anonymous (works when the server is set up for unauthenticated LAN access).
+  // when playlistToken is null (UNCLAIMED_SERVER sentinel was configured).
   _plParams(extra = {}) {
     const params = { ...extra };
     if (this.playlistToken) params['X-Plex-Token'] = this.playlistToken;
