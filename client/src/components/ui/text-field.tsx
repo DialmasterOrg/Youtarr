@@ -92,7 +92,7 @@ const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
       'peer-focus:text-primary',
       error && 'peer-focus:text-destructive',
       // When input is empty and unfocused, label goes to mid-height
-    'peer-placeholder-shown:top-[calc(50%-3px)] peer-placeholder-shown:-translate-y-1/2',
+      'peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2',
       'peer-placeholder-shown:text-base peer-placeholder-shown:font-normal',
       isSmall && 'peer-placeholder-shown:text-sm',
       // Transition
@@ -129,7 +129,7 @@ const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
               className={cn(
                 baseInputClass,
                 'resize-y min-h-[80px]',
-                'peer-placeholder-shown:top-[calc(50%-3px)] peer-placeholder-shown:-translate-y-1/2',
+                'peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2',
               )}
               {...(inputPropsExtra as React.TextareaHTMLAttributes<HTMLTextAreaElement>)}
             />

@@ -140,7 +140,7 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
               style={AUTH_SUBTITLE_STYLE}
               color="text.secondary"
             >
-              Login below
+              Enter your username and password below
             </Typography>
           </div>
 
@@ -153,9 +153,8 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
               onChange={(e) => setUsername(e.target.value)}
               margin="normal"
               required
-              autoFocus
               inputProps={{ autoCapitalize: 'off' }}
-              style={{ marginBottom: '16px' }}
+              className="mb-4"
             />
             <TextField
               fullWidth
