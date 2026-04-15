@@ -36,6 +36,10 @@ const buildDeps = (overrides = {}) => ({
     generatePlaylistM3U: jest.fn().mockResolvedValue(true),
     ...overrides.m3uGenerator,
   },
+  downloadModule: {
+    doPlaylistDownloads: jest.fn().mockResolvedValue(undefined),
+    ...overrides.downloadModule,
+  },
   mediaServers: {
     mediaServerSync: {
       syncPlaylist: jest.fn().mockResolvedValue(undefined),
@@ -589,6 +593,55 @@ describe('POST /api/playlists/:playlistId/sync', () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ error: 'Sync failed' });
+  });
+});
+
+describe('POST /api/playlists/:playlistId/download', () => {
+  test('returns 202 and fires doPlaylistDownloads', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/download', deps);
+    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(deps.downloadModule.doPlaylistDownloads).toHaveBeenCalledWith(p);
+    expect(res.status).toHaveBeenCalledWith(202);
+    expect(res.json).toHaveBeenCalledWith({ status: 'accepted', message: 'Playlist download started' });
+  });
+
+  test('returns 404 when playlist not found', async () => {
+    const deps = buildDeps();
+    deps.models.Playlist.findOne.mockResolvedValue(null);
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/download', deps);
+    const req = { params: { playlistId: 'nope' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Playlist not found' });
+    expect(deps.downloadModule.doPlaylistDownloads).not.toHaveBeenCalled();
+  });
+
+  test('does not reject the response when doPlaylistDownloads rejects (fire-and-forget)', async () => {
+    const deps = buildDeps();
+    const p = makePlaylist();
+    deps.models.Playlist.findOne.mockResolvedValue(p);
+    deps.downloadModule.doPlaylistDownloads.mockRejectedValue(new Error('yt-dlp missing'));
+
+    const handler = getHandler('post', '/api/playlists/:playlistId/download', deps);
+    const req = { params: { playlistId: 'PLtest123' }, log: loggerMock };
+    const res = createResponse();
+
+    await handler(req, res);
+
+    // Response is 202 regardless — error is logged asynchronously
+    expect(res.status).toHaveBeenCalledWith(202);
   });
 });
 

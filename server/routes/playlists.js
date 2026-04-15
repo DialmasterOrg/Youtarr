@@ -1,6 +1,6 @@
 const express = require('express');
 
-function createPlaylistRoutes({ verifyToken, playlistModule, m3uGenerator, mediaServers, models }) {
+function createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models }) {
   const router = express.Router();
   const { Playlist, PlaylistVideo } = models;
 
@@ -154,6 +154,23 @@ function createPlaylistRoutes({ verifyToken, playlistModule, m3uGenerator, media
     } catch (err) {
       req.log.error({ err }, 'sync failed');
       res.status(500).json({ error: 'Sync failed' });
+    }
+  });
+
+  // Manually trigger download of all not-yet-downloaded videos for this playlist.
+  // Fire-and-forget; downloads are long-running. Returns 202 immediately. The
+  // post-download hook (in downloadModule) handles playlist sync + M3U regen.
+  router.post('/api/playlists/:playlistId/download', verifyToken, async (req, res) => {
+    try {
+      const p = await Playlist.findOne({ where: { playlist_id: req.params.playlistId } });
+      if (!p) return res.status(404).json({ error: 'Playlist not found' });
+      downloadModule.doPlaylistDownloads(p).catch((err) => {
+        req.log.error({ err, playlist_id: p.playlist_id }, 'doPlaylistDownloads failed');
+      });
+      res.status(202).json({ status: 'accepted', message: 'Playlist download started' });
+    } catch (err) {
+      req.log.error({ err }, 'trigger playlist download failed');
+      res.status(500).json({ error: 'Failed to start playlist download' });
     }
   });
 

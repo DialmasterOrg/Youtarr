@@ -81,7 +81,7 @@ function registerRoutes(app, deps) {
   app.use(createVideoDetailRoutes({ verifyToken, videoMetadataModule }));
 
   // Playlist routes
-  app.use(createPlaylistRoutes({ verifyToken, playlistModule, m3uGenerator, mediaServers, models }));
+  app.use(createPlaylistRoutes({ verifyToken, playlistModule, downloadModule, m3uGenerator, mediaServers, models }));
 
   // Media server routes
   app.use(createMediaServerRoutes({ verifyToken, configModule, mediaServers }));
