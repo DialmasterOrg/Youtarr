@@ -1521,7 +1521,9 @@ describe('DownloadModule', () => {
 
       expect(spy).toHaveBeenCalledTimes(1);
       const callArg = spy.mock.calls[0][0];
-      expect(callArg.urls).toEqual([
+      // doSpecificDownloads expects the Express-request shape (`body.urls`) —
+      // passing a bare `{ urls }` crashes at runtime when it tries to read `.body.urls`.
+      expect(callArg.body.urls).toEqual([
         'https://www.youtube.com/watch?v=vid001',
         'https://www.youtube.com/watch?v=vid003',
       ]);

@@ -589,7 +589,9 @@ class DownloadModule {
     if (!toDownload.length) return;
 
     const urls = toDownload.map((id) => `https://www.youtube.com/watch?v=${id}`);
-    await this.doSpecificDownloads({ urls });
+    // doSpecificDownloads expects either an Express request (with .body) or a job-data
+    // object (with .data). Wrap urls under .body to match the Express-request shape.
+    await this.doSpecificDownloads({ body: { urls } });
   }
 
   async afterDownloadHook(downloadedYoutubeIds) {
