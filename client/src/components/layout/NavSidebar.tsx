@@ -18,6 +18,8 @@ import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { NavItem, isNavItemExpanded, isNavPathActive } from './navigation';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import {
+  HEADER_HEIGHT_DESKTOP,
+  HEADER_HEIGHT_MOBILE,
   MOBILE_NAV_PRIMARY_HEIGHT,
   MOBILE_NAV_SAFE_GAP,
   MOBILE_NAV_SECONDARY_HEIGHT,
@@ -45,11 +47,11 @@ const NAV_SUB_HIGHLIGHT_LEFT_PADDING = 1.25;
 const NAV_SUB_FONT_SIZE = '0.8rem';
 const NAV_SUB_LINE_HEIGHT = 1.2;
 const NAV_DRAWER_BORDER_RADIUS = 'var(--nav-radius)';
-const NAV_DRAWER_DESKTOP_TOP_OFFSET = 'calc(80px + var(--shell-gap))';
-const NAV_DRAWER_DESKTOP_MAX_HEIGHT = 'calc(100vh - (80px + var(--shell-gap)) - (var(--shell-gap) * 2))';
-const NAV_DRAWER_MOBILE_TOP_OFFSET = 'calc(60px + var(--shell-gap))';
+const NAV_DRAWER_DESKTOP_TOP_OFFSET = `calc(${HEADER_HEIGHT_DESKTOP}px + var(--shell-gap))`;
+const NAV_DRAWER_DESKTOP_MAX_HEIGHT = `calc(100vh - (${HEADER_HEIGHT_DESKTOP}px + var(--shell-gap)) - (var(--shell-gap) * 2))`;
+const NAV_DRAWER_MOBILE_TOP_OFFSET = `calc(${HEADER_HEIGHT_MOBILE}px + var(--shell-gap))`;
 const NAV_DRAWER_MOBILE_BOTTOM_GAP = 'var(--shell-gap)';
-const NAV_DRAWER_MOBILE_MAX_HEIGHT = 'calc(100vh - (60px + (var(--shell-gap) * 2)))';
+const NAV_DRAWER_MOBILE_MAX_HEIGHT = `calc(100vh - (${HEADER_HEIGHT_MOBILE}px + (var(--shell-gap) * 2)))`;
 
 // Spacing helper: 1 unit = 8px
 const sp = (n: number) => `${n * 8}px`;

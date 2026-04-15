@@ -2,6 +2,8 @@ import React from 'react';
 import { Card, CardActionArea, CardContent, Grid, Typography } from '../ui';
 import { Link as RouterLink } from 'react-router-dom';
 
+const SETTINGS_CARD_CONTENT_HEIGHT = 72;
+
 export const SETTINGS_PAGES = [
   { key: 'core', title: 'Core', description: 'Downloads folder, quality, defaults, and core behavior.' },
   { key: 'downloading', title: 'YT-DLP', description: 'yt-dlp backend settings for downloads and reliability.' },
@@ -41,7 +43,7 @@ export function SettingsIndex() {
                 <CardContent
                   style={{
                     flex: 1,
-                    height: 72,
+                    height: SETTINGS_CARD_CONTENT_HEIGHT,
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'flex-start',

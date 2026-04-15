@@ -19,7 +19,7 @@ import { getThemeById, getThemeLayoutCssVars, ThemeLayoutPolicy } from '../../th
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { StorageHeaderWidget } from './StorageHeaderWidget';
-import { NAV_DRAWER_SECTION_BUTTON_GUTTER } from './navLayoutConstants';
+import { HEADER_HEIGHT_DESKTOP, NAV_DRAWER_SECTION_BUTTON_GUTTER } from './navLayoutConstants';
 import { NavItem, isNavItemExpanded, isNavPathActive } from './navigation';
 import youtarrWordmark from '../../Youtarr_text.png';
 import './layoutFallback.css';
@@ -150,7 +150,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   const menuPaperStyle: React.CSSProperties = {
     overflowX: 'hidden',
     overflowY: 'auto',
-    maxHeight: 'calc(100dvh - 80px)',
+    maxHeight: `calc(100dvh - ${HEADER_HEIGHT_DESKTOP}px)`,
     width: 'max-content',
     minWidth: 180,
     borderRadius: 'var(--layout-header-menu-radius)',

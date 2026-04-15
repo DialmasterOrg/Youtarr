@@ -110,6 +110,8 @@ Then access:
 
 The Vite dev server will proxy API and WebSocket requests to the backend at port `3011` so API calls work the same as the full-stack run.
 
+The dev server binds to all interfaces (`0.0.0.0`) by default so workflows that reach the host from another network namespace (Docker, WSL2, remote dev containers) work without extra configuration. Override with the `VITE_HOST` env var (e.g. `VITE_HOST=localhost npm run dev`) if you want to bind to loopback only.
+
 ### 5. Storybook (Component Development)
 
 Use Storybook to develop and document components in isolation.

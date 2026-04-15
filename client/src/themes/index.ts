@@ -29,8 +29,3 @@ export type { ThemeBreakpoint, ThemeLayoutPolicy, ThemeMode } from './types';
 export const getThemeById = (id: ThemeMode): ThemeDefinition => {
   return ALL_THEMES[id] || playfulTheme;
 };
-
-// createAppTheme is kept as a no-op stub so any remaining import sites don't
-// cause compile errors during migration.  Delete callers, then delete this.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const createAppTheme = (_mode: 'light' | 'dark', _themeId: ThemeMode): any => ({});

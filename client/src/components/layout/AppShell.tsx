@@ -8,7 +8,7 @@ import { BackgroundDecorations } from './BackgroundDecorations';
 import { NavItem } from './navigation';
 import { getThemeById, getThemeLayoutCssVars, resolveThemeLayoutPolicy } from '../../themes';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { NAV_SIDEBAR_COLLAPSED_WIDTH, NAV_SIDEBAR_EXPANDED_WIDTH } from './navLayoutConstants';
+import { HEADER_HEIGHT_DESKTOP, HEADER_HEIGHT_MOBILE, NAV_SIDEBAR_COLLAPSED_WIDTH, NAV_SIDEBAR_EXPANDED_WIDTH } from './navLayoutConstants';
 import './layoutFallback.css';
 
 import { Tv as SubscriptionsIcon, Library as VideoLibraryIcon } from 'lucide-react';
@@ -69,7 +69,7 @@ export function AppShell({
 
   useEffect(() => {
     const root = document.documentElement;
-    const overlayTopOffset = isMobile ? 60 : 80;
+    const overlayTopOffset = isMobile ? HEADER_HEIGHT_MOBILE : HEADER_HEIGHT_DESKTOP;
     root.style.setProperty('--app-shell-overlay-top-offset', `${overlayTopOffset}px`);
     root.style.setProperty('--app-shell-overlay-top-offset-px', String(overlayTopOffset));
 
