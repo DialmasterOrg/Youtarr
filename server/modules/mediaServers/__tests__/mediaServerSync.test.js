@@ -113,4 +113,45 @@ describe('mediaServerSync', () => {
     expect(plexAdapter.createPlaylist).not.toHaveBeenCalled();
     expect(jellyfinAdapter.createPlaylist).toHaveBeenCalled();
   });
+
+  test('skips playlist creation when no items resolve yet (first-time sync, videos not downloaded)', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([
+      { youtube_id: 'v1', position: 1, ignored: false },
+      { youtube_id: 'v2', position: 2, ignored: false },
+    ]);
+    Video.findOne.mockResolvedValue(null); // No videos downloaded yet
+    PlaylistSyncState.findOne.mockResolvedValue(null); // No prior sync state
+
+    const plexAdapter = makeAdapter('PlexAdapter');
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(plexAdapter.createPlaylist).not.toHaveBeenCalled();
+    expect(plexAdapter.replacePlaylistItems).not.toHaveBeenCalled();
+    expect(PlaylistSyncState.create).not.toHaveBeenCalled();
+  });
+
+  test('still replaces items with empty list when sync state exists (user ignored all videos)', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([]);
+    const updateMock = jest.fn();
+    PlaylistSyncState.findOne.mockResolvedValue({ server_playlist_id: 'existingid', update: updateMock });
+
+    const plexAdapter = makeAdapter('PlexAdapter');
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(plexAdapter.replacePlaylistItems).toHaveBeenCalledWith('existingid', []);
+  });
 });

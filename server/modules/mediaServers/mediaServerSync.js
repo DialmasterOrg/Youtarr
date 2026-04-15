@@ -67,6 +67,17 @@ class MediaServerSync {
       where: { playlist_id: playlist.id, server_type: serverType },
     });
 
+    // Skip create when no items resolved. Plex/Jellyfin/Emby reject empty playlist creation,
+    // and the normal flow (subscribe → videos download later → post-download hook re-syncs)
+    // will create the playlist on the next sync once items exist.
+    if (!state?.server_playlist_id && itemIds.length === 0) {
+      logger.info(
+        { playlist_id: playlist.playlist_id, serverType },
+        'sync: no resolvable items yet, deferring playlist creation until videos are downloaded'
+      );
+      return;
+    }
+
     if (state?.server_playlist_id) {
       await adapter.replacePlaylistItems(state.server_playlist_id, itemIds);
       if (state.update) await state.update({ last_synced_at: new Date(), last_error: null });
