@@ -49,5 +49,15 @@
   "subtitleLanguage": "en",
   "darkModeEnabled": false,
   "uuid": "",
-  "apiKeyRateLimit": 10
+  "apiKeyRateLimit": 10,
+  "jellyfinEnabled": false,
+  "jellyfinUrl": "",
+  "jellyfinApiKey": "",
+  "jellyfinUserId": "",
+  "jellyfinVideoLibraryIds": "",
+  "embyEnabled": false,
+  "embyUrl": "",
+  "embyApiKey": "",
+  "embyUserId": "",
+  "embyVideoLibraryIds": ""
 }
