@@ -165,15 +165,16 @@ describe('PlexAdapter', () => {
     );
   });
 
-  test('replacePlaylistItems deletes then PUTs', async () => {
+  test('replacePlaylistItems deletes then PUTs and returns the same id (in-place replace)', async () => {
     axios.delete.mockResolvedValueOnce({});
     axios.get.mockResolvedValueOnce({
       data: { MediaContainer: { machineIdentifier: 'MACHINE123' } },
     });
     axios.put.mockResolvedValueOnce({});
     const adapter = new PlexAdapter(cfg);
-    await adapter.replacePlaylistItems('100', ['42', '43']);
+    const result = await adapter.replacePlaylistItems('100', ['42', '43']);
     expect(axios.delete).toHaveBeenCalled();
     expect(axios.put).toHaveBeenCalled();
+    expect(result).toEqual({ id: '100' });
   });
 });

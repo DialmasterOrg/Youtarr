@@ -83,11 +83,16 @@ describe('mediaServerSync', () => {
 
     const plexAdapter = makeAdapter('PlexAdapter', {
       resolveItemIdByFilepath: jest.fn().mockResolvedValue('rk1'),
+      replacePlaylistItems: jest.fn().mockResolvedValue({ id: 'existingid' }),
     });
     serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
 
     await mediaServerSync.syncPlaylist(1);
-    expect(plexAdapter.replacePlaylistItems).toHaveBeenCalledWith('existingid', ['rk1']);
+    expect(plexAdapter.replacePlaylistItems).toHaveBeenCalledWith(
+      'existingid',
+      ['rk1'],
+      expect.objectContaining({ name: 'YT: PL', public: true }),
+    );
     expect(plexAdapter.createPlaylist).not.toHaveBeenCalled();
   });
 
@@ -147,12 +152,42 @@ describe('mediaServerSync', () => {
     const updateMock = jest.fn();
     PlaylistSyncState.findOne.mockResolvedValue({ server_playlist_id: 'existingid', update: updateMock });
 
-    const plexAdapter = makeAdapter('PlexAdapter');
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      replacePlaylistItems: jest.fn().mockResolvedValue({ id: 'existingid' }),
+    });
     serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
 
     await mediaServerSync.syncPlaylist(1);
 
-    expect(plexAdapter.replacePlaylistItems).toHaveBeenCalledWith('existingid', []);
+    expect(plexAdapter.replacePlaylistItems).toHaveBeenCalledWith(
+      'existingid',
+      [],
+      expect.any(Object),
+    );
+  });
+
+  test('updates sync_state with new id when adapter delete-and-recreates (Jellyfin/Emby)', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'PL',
+      sync_to_plex: false, sync_to_jellyfin: true, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
+    Video.findOne.mockResolvedValue({ filePath: '/youtube/v1.mp4' });
+    const updateMock = jest.fn();
+    PlaylistSyncState.findOne.mockResolvedValue({ server_playlist_id: 'old-id', update: updateMock });
+
+    const jellyfinAdapter = makeAdapter('JellyfinAdapter', {
+      resolveItemIdByFilepath: jest.fn().mockResolvedValue('jf1'),
+      replacePlaylistItems: jest.fn().mockResolvedValue({ id: 'new-id' }),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([jellyfinAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ server_playlist_id: 'new-id', last_error: null }),
+    );
   });
 
   test('recovers from prior-failure state row (last_error set, no server_playlist_id) by updating in place', async () => {

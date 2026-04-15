@@ -72,4 +72,27 @@ describe('EmbyAdapter', () => {
     );
     expect(id).toBe('Y');
   });
+
+  test('replacePlaylistItems deletes old playlist and recreates, returning the new id', async () => {
+    axios.delete.mockResolvedValueOnce({});
+    axios.post.mockResolvedValueOnce({ data: { Id: 'new-pl-id' } });
+    const adapter = new EmbyAdapter(cfg);
+
+    const result = await adapter.replacePlaylistItems('old-pl-id', ['i1', 'i2'], {
+      name: 'YT: Something', public: false,
+    });
+
+    expect(axios.delete).toHaveBeenCalledWith(
+      expect.stringContaining('/Items/old-pl-id'),
+      expect.any(Object),
+    );
+    expect(axios.post).toHaveBeenCalledWith(
+      expect.stringContaining('/Playlists'),
+      null,
+      expect.objectContaining({
+        params: expect.objectContaining({ Name: 'YT: Something', Ids: 'i1,i2' }),
+      }),
+    );
+    expect(result).toEqual({ id: 'new-pl-id' });
+  });
 });

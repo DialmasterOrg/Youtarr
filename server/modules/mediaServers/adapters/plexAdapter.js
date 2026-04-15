@@ -110,7 +110,7 @@ class PlexAdapter extends BaseAdapter {
     return { id: res.data?.MediaContainer?.Metadata?.[0]?.ratingKey };
   }
 
-  async replacePlaylistItems(playlistId, itemIds) {
+  async replacePlaylistItems(playlistId, itemIds /*, opts */) {
     await axios.delete(`${this.url}/playlists/${playlistId}/items`, {
       params: this._plParams(),
     });
@@ -119,6 +119,9 @@ class PlexAdapter extends BaseAdapter {
     await axios.put(`${this.url}/playlists/${playlistId}/items`, null, {
       params: this._plParams({ uri }),
     });
+    // Plex replaces in place — returns the same id for consistency with the
+    // Jellyfin/Emby adapters which delete + recreate and return a new id.
+    return { id: playlistId };
   }
 }
 

@@ -79,8 +79,19 @@ class MediaServerSync {
     }
 
     if (state?.server_playlist_id) {
-      await adapter.replacePlaylistItems(state.server_playlist_id, itemIds);
-      if (state.update) await state.update({ last_synced_at: new Date(), last_error: null });
+      // Pass name+public so adapters that implement replace as delete+recreate
+      // (Jellyfin, Emby) can construct the new playlist. Plex replaces in place
+      // and ignores opts. Capture the returned id in case the adapter recreated
+      // — the sync-state row must track the new id.
+      const replaced = await adapter.replacePlaylistItems(state.server_playlist_id, itemIds, {
+        name, public: !!playlist.public_on_servers,
+      });
+      const effectiveId = replaced?.id || state.server_playlist_id;
+      if (state.update) await state.update({
+        server_playlist_id: effectiveId,
+        last_synced_at: new Date(),
+        last_error: null,
+      });
     } else {
       const created = await adapter.createPlaylist(name, itemIds, { public: !!playlist.public_on_servers });
       if (state) {

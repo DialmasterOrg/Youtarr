@@ -92,23 +92,15 @@ class EmbyAdapter extends BaseAdapter {
     return { id: res.data?.Id };
   }
 
-  async replacePlaylistItems(playlistId, itemIds) {
-    const existing = await axios.get(`${this.url}/Playlists/${playlistId}/Items`, {
-      headers: this._headers(), params: { userId: this.userId },
-    });
-    const entryIds = (existing.data?.Items || []).map((i) => i.PlaylistItemId).filter(Boolean);
-    if (entryIds.length > 0) {
-      await axios.delete(`${this.url}/Playlists/${playlistId}/Items`, {
-        headers: this._headers(),
-        params: { EntryIds: entryIds.join(',') },
-      });
+  async replacePlaylistItems(playlistId, itemIds, opts = {}) {
+    // Mirrors jellyfinAdapter: delete the whole playlist and recreate, since
+    // the per-item delete endpoint is version-flaky. Returns the new id so
+    // the caller can update sync_state.
+    await axios.delete(`${this.url}/Items/${playlistId}`, { headers: this._headers() });
+    if (!opts.name) {
+      throw new Error('replacePlaylistItems requires opts.name to recreate the playlist');
     }
-    if (itemIds.length > 0) {
-      await axios.post(`${this.url}/Playlists/${playlistId}/Items`, null, {
-        headers: this._headers(),
-        params: { Ids: itemIds.join(','), UserId: this.userId },
-      });
-    }
+    return this.createPlaylist(opts.name, itemIds, { public: !!opts.public });
   }
 }
 
