@@ -25,21 +25,24 @@ describe('EmbyAdapter', () => {
     expect(users).toEqual([{ id: 'u1', name: 'Alice' }, { id: 'u2', name: 'Bob' }]);
   });
 
-  test('createPlaylist POSTs with Name/Ids/UserId/MediaType/IsPublic', async () => {
+  test('createPlaylist POSTs with query params and CSV Ids (Emby-style)', async () => {
     axios.post.mockResolvedValueOnce({ data: { Id: 'newplaylistid' } });
     const adapter = new EmbyAdapter(cfg);
-    const result = await adapter.createPlaylist('My PL', ['item1', 'item2'], { public: true });
+    const result = await adapter.createPlaylist('My PL', ['item1', 'item2']);
     expect(result.id).toBe('newplaylistid');
+    // Emby expects the body to be null and the data in query params with Ids
+    // joined by commas. Sending a JSON body (as Jellyfin accepts) yields a 500.
     expect(axios.post).toHaveBeenCalledWith(
       expect.stringContaining('/Playlists'),
+      null,
       expect.objectContaining({
-        Name: 'My PL',
-        Ids: ['item1', 'item2'],
-        UserId: 'USR',
-        MediaType: 'Video',
-        IsPublic: true,
-      }),
-      expect.any(Object)
+        params: expect.objectContaining({
+          Name: 'My PL',
+          Ids: 'item1,item2',
+          UserId: 'USR',
+          MediaType: 'Video',
+        }),
+      })
     );
   });
 

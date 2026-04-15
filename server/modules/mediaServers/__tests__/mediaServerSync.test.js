@@ -154,4 +154,37 @@ describe('mediaServerSync', () => {
 
     expect(plexAdapter.replacePlaylistItems).toHaveBeenCalledWith('existingid', []);
   });
+
+  test('recovers from prior-failure state row (last_error set, no server_playlist_id) by updating in place', async () => {
+    Playlist.findByPk.mockResolvedValue({
+      id: 1, playlist_id: 'PL1', title: 'PL',
+      sync_to_plex: true, sync_to_jellyfin: false, sync_to_emby: false,
+      public_on_servers: false,
+    });
+    PlaylistVideo.findAll.mockResolvedValue([{ youtube_id: 'v1', position: 1, ignored: false }]);
+    Video.findOne.mockResolvedValue({ filePath: '/a.mp4' });
+    const updateMock = jest.fn();
+    // Prior failure left a row with null server_playlist_id and last_error set.
+    PlaylistSyncState.findOne.mockResolvedValue({
+      server_playlist_id: null,
+      last_error: 'Request failed with status code 500',
+      update: updateMock,
+    });
+
+    const plexAdapter = makeAdapter('PlexAdapter', {
+      resolveItemIdByFilepath: jest.fn().mockResolvedValue('rk1'),
+      createPlaylist: jest.fn().mockResolvedValue({ id: 'newpid' }),
+    });
+    serverRegistry.getEnabledAdapters.mockReturnValue([plexAdapter]);
+
+    await mediaServerSync.syncPlaylist(1);
+
+    expect(plexAdapter.createPlaylist).toHaveBeenCalledWith('YT: PL', ['rk1'], { public: false });
+    // Must UPDATE the existing row (unique constraint would reject a duplicate create)
+    expect(PlaylistSyncState.create).not.toHaveBeenCalled();
+    expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({
+      server_playlist_id: 'newpid',
+      last_error: null,
+    }));
+  });
 });

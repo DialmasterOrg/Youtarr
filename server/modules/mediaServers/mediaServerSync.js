@@ -83,12 +83,23 @@ class MediaServerSync {
       if (state.update) await state.update({ last_synced_at: new Date(), last_error: null });
     } else {
       const created = await adapter.createPlaylist(name, itemIds, { public: !!playlist.public_on_servers });
-      await PlaylistSyncState.create({
-        playlist_id: playlist.id,
-        server_type: serverType,
-        server_playlist_id: created.id,
-        last_synced_at: new Date(),
-      });
+      if (state) {
+        // State row exists from a prior failure (last_error set, server_playlist_id null).
+        // Update it in place rather than creating a duplicate — the unique constraint
+        // (playlist_id, server_type) would reject a second create.
+        if (state.update) await state.update({
+          server_playlist_id: created.id,
+          last_synced_at: new Date(),
+          last_error: null,
+        });
+      } else {
+        await PlaylistSyncState.create({
+          playlist_id: playlist.id,
+          server_type: serverType,
+          server_playlist_id: created.id,
+          last_synced_at: new Date(),
+        });
+      }
     }
   }
 
