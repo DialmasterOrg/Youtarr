@@ -53,6 +53,41 @@ describe('PlexAdapter', () => {
     expect(id).toBe('99');
   });
 
+  test('resolveItemIdByFilepath matches Windows-style paths from Plex running on Windows', async () => {
+    // Plex on Windows reports file with backslashes; Youtarr in a Linux container sees forward slashes.
+    axios.get.mockResolvedValueOnce({
+      data: {
+        MediaContainer: {
+          Metadata: [
+            { ratingKey: '77', Media: [{ Part: [{ file: 'Q:\\Youtube_test\\__Default\\Creator\\Video Title [abc123].mp4' }] }] },
+          ],
+        },
+      },
+    });
+    const adapter = new PlexAdapter(cfg);
+    const id = await adapter.resolveItemIdByFilepath(
+      '/usr/src/app/data/__Default/Creator/Video Title [abc123] - abc123/Video Title [abc123].mp4'
+    );
+    expect(id).toBe('77');
+  });
+
+  test('resolveItemIdByFilepath works symmetrically — Linux Plex with Windows Youtarr path', async () => {
+    axios.get.mockResolvedValueOnce({
+      data: {
+        MediaContainer: {
+          Metadata: [
+            { ratingKey: '55', Media: [{ Part: [{ file: '/mnt/media/Creator/Video Title [xyz789].mp4' }] }] },
+          ],
+        },
+      },
+    });
+    const adapter = new PlexAdapter(cfg);
+    const id = await adapter.resolveItemIdByFilepath(
+      'C:\\Youtube\\Creator\\Video Title [xyz789].mp4'
+    );
+    expect(id).toBe('55');
+  });
+
   test('createPlaylist POSTs with ratingKey URI', async () => {
     axios.get.mockResolvedValueOnce({
       data: { MediaContainer: { machineIdentifier: 'MACHINE123' } },

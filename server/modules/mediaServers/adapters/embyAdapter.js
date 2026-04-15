@@ -1,6 +1,6 @@
 const axios = require('axios');
-const path = require('path');
 const BaseAdapter = require('./baseAdapter');
+const { extractBasename } = require('./baseAdapter');
 const logger = require('../../../logger');
 
 class EmbyAdapter extends BaseAdapter {
@@ -41,8 +41,8 @@ class EmbyAdapter extends BaseAdapter {
   }
 
   async resolveItemIdByFilepath(filepath) {
-    // Match by filename, not full path — see plexAdapter/jellyfinAdapter for rationale.
-    const target = path.basename(filepath);
+    // Match by filename across different mount views — see plexAdapter/jellyfinAdapter.
+    const target = extractBasename(filepath);
     try {
       const params = {
         userId: this.userId,
@@ -52,7 +52,7 @@ class EmbyAdapter extends BaseAdapter {
       };
       const res = await axios.get(`${this.url}/Items`, { headers: this._headers(), params });
       const items = res.data?.Items || [];
-      const match = items.find((i) => i.Path && path.basename(i.Path) === target);
+      const match = items.find((i) => i.Path && extractBasename(i.Path) === target);
       return match ? match.Id : null;
     } catch (err) {
       logger.error({ err, filepath }, 'emby resolveItemIdByFilepath failed');
