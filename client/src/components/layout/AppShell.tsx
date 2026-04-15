@@ -203,11 +203,9 @@ export function AppShell({
         token={token}
         isMobile={isMobile}
         isTopNav={isTopNav}
-        drawerOpenMobile={drawerOpenMobile}
         collapsed={collapsed}
         navItems={navItems}
         versionLabel={versionLabel}
-        onCloseMobile={() => setDrawerOpenMobile(false)}
       />
 
       <main

@@ -68,11 +68,9 @@ const meta: Meta<typeof NavSidebar> = {
     token: 'storybook-token',
     isMobile: false,
     isTopNav: false,
-    drawerOpenMobile: false,
     collapsed: false,
     navItems,
     versionLabel: 'v1.60.0 • yt-dlp: 2026.03.01',
-    onCloseMobile: () => {},
   },
 };
 
@@ -93,10 +91,9 @@ export const CollapsedDesktop: Story = {
   },
 };
 
-export const MobileDrawer: Story = {
+export const MobileBottomNav: Story = {
   args: {
     isMobile: true,
-    drawerOpenMobile: true,
   },
 };
 

@@ -25,9 +25,9 @@ jest.mock('../NavHeader', () => ({
 }));
 
 jest.mock('../NavSidebar', () => ({
-  NavSidebar: ({ collapsed, isTopNav, drawerOpenMobile }: { collapsed: boolean; isTopNav: boolean; drawerOpenMobile: boolean }) => (
+  NavSidebar: ({ collapsed, isTopNav }: { collapsed: boolean; isTopNav: boolean }) => (
     <div data-testid="nav-sidebar">
-      collapsed:{String(collapsed)}|topnav:{String(isTopNav)}|mobileopen:{String(drawerOpenMobile)}
+      collapsed:{String(collapsed)}|topnav:{String(isTopNav)}
     </div>
   ),
 }));
@@ -95,7 +95,7 @@ describe('AppShell', () => {
       expect(document.documentElement.style.getPropertyValue('--nav-width')).toBe('65px');
     });
 
-    expect(screen.getByTestId('nav-sidebar')).toHaveTextContent('collapsed:true|topnav:false|mobileopen:false');
+    expect(screen.getByTestId('nav-sidebar')).toHaveTextContent('collapsed:true|topnav:false');
     expect(screen.getByText('Shell content')).toBeInTheDocument();
   }, 10000);
 
@@ -106,7 +106,7 @@ describe('AppShell', () => {
       expect(document.documentElement.style.getPropertyValue('--nav-width')).toBe('0px');
     });
 
-    expect(screen.getByTestId('nav-sidebar')).toHaveTextContent('collapsed:false|topnav:true|mobileopen:false');
+    expect(screen.getByTestId('nav-sidebar')).toHaveTextContent('collapsed:false|topnav:true');
     expect(screen.queryByRole('button', { name: /toggle:flat:true/i })).not.toBeInTheDocument();
   });
 
@@ -118,7 +118,7 @@ describe('AppShell', () => {
     });
 
     expect(screen.queryByRole('button', { name: /toggle:sidebar:mobile/i })).not.toBeInTheDocument();
-    expect(screen.getByTestId('nav-sidebar')).toHaveTextContent('collapsed:false|topnav:false|mobileopen:false');
+    expect(screen.getByTestId('nav-sidebar')).toHaveTextContent('collapsed:false|topnav:false');
   });
 
   it('keeps the playful desktop outer frame gutter while using tighter inner frame padding', () => {
