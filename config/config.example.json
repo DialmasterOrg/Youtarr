@@ -10,6 +10,7 @@
   "plexPort": "32400",
   "plexViaHttps": false,
   "plexApiKey": "",
+  "plexPlaylistToken": null,
   "plexYoutubeLibraryId": "",
   "plexSubfolderLibraryMappings": [],
   "plexUrl": "",

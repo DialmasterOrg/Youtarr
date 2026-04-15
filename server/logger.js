@@ -43,6 +43,7 @@ const pinoConfig = {
       'plexAuthToken',
       'session_token',
       'plexApiKey',
+      'plexPlaylistToken',
       'jellyfinApiKey',
       'embyApiKey',
       'req.headers.authorization',

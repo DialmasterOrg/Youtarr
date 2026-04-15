@@ -88,6 +88,50 @@ describe('PlexAdapter', () => {
     expect(id).toBe('55');
   });
 
+  describe('plexPlaylistToken override', () => {
+    test('uses plexApiKey by default (no override set)', async () => {
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      const adapter = new PlexAdapter(cfg);
+      await adapter.resolveItemIdByFilepath('/path/v1.mp4');
+      const params = axios.get.mock.calls[0][1].params;
+      expect(params['X-Plex-Token']).toBe('TOKEN');
+    });
+
+    test('uses override token when plexPlaylistToken is a non-empty string', async () => {
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      const adapter = new PlexAdapter({ ...cfg, plexPlaylistToken: 'USER-TOKEN' });
+      await adapter.resolveItemIdByFilepath('/path/v1.mp4');
+      const params = axios.get.mock.calls[0][1].params;
+      expect(params['X-Plex-Token']).toBe('USER-TOKEN');
+    });
+
+    test('omits X-Plex-Token entirely when plexPlaylistToken is empty string (unauth mode)', async () => {
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [] } } });
+      const adapter = new PlexAdapter({ ...cfg, plexPlaylistToken: '' });
+      await adapter.resolveItemIdByFilepath('/path/v1.mp4');
+      const params = axios.get.mock.calls[0][1].params;
+      expect('X-Plex-Token' in params).toBe(false);
+    });
+
+    test('createPlaylist respects the override token', async () => {
+      // _getMachineId still uses plexApiKey (admin) — first GET returns identity
+      axios.get.mockResolvedValueOnce({ data: { MediaContainer: { machineIdentifier: 'MID' } } });
+      axios.post.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [{ ratingKey: '1' }] } } });
+      const adapter = new PlexAdapter({ ...cfg, plexPlaylistToken: 'USER-TOKEN' });
+      await adapter.createPlaylist('PL', ['1', '2']);
+      const postParams = axios.post.mock.calls[0][2].params;
+      expect(postParams['X-Plex-Token']).toBe('USER-TOKEN');
+    });
+
+    test('testConnection always uses plexApiKey regardless of override', async () => {
+      axios.get.mockResolvedValueOnce({ data: {} });
+      const adapter = new PlexAdapter({ ...cfg, plexPlaylistToken: '' });
+      await adapter.testConnection();
+      const params = axios.get.mock.calls[0][1].params;
+      expect(params['X-Plex-Token']).toBe('TOKEN');
+    });
+  });
+
   test('createPlaylist POSTs with ratingKey URI', async () => {
     axios.get.mockResolvedValueOnce({
       data: { MediaContainer: { machineIdentifier: 'MACHINE123' } },

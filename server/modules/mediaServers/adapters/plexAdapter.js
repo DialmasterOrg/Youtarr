@@ -10,6 +10,24 @@ class PlexAdapter extends BaseAdapter {
     this.url = config.plexUrl;
     this.token = config.plexApiKey;
     this.libraryId = config.plexYoutubeLibraryId;
+    // Optional override for playlist-scoped operations. Useful when the admin
+    // token belongs to a different Plex account than the one used by the Plex
+    // Web session (e.g., unclaimed dev servers where Plex Web uses no token).
+    // - undefined/null -> fall back to plexApiKey (standard case)
+    // - "" (empty string) -> send requests with NO token (anonymous access on
+    //   servers that allow unauthenticated LAN access)
+    // - "some-token" -> use that token for playlist scope
+    const override = config.plexPlaylistToken;
+    this.playlistToken = (override === undefined || override === null) ? this.token : override;
+  }
+
+  // Build params for playlist-scoped requests. Conditionally omits X-Plex-Token
+  // when the resolved playlistToken is empty, so Plex treats the call as
+  // anonymous (works when the server is set up for unauthenticated LAN access).
+  _plParams(extra = {}) {
+    const params = { ...extra };
+    if (this.playlistToken) params['X-Plex-Token'] = this.playlistToken;
+    return params;
   }
 
   async testConnection() {
@@ -35,7 +53,7 @@ class PlexAdapter extends BaseAdapter {
     const target = extractBasename(filepath);
     try {
       const res = await axios.get(`${this.url}/library/sections/${this.libraryId}/all`, {
-        params: { 'X-Plex-Token': this.token },
+        params: this._plParams(),
       });
       const items = res.data?.MediaContainer?.Metadata || [];
       for (const item of items) {
@@ -55,7 +73,7 @@ class PlexAdapter extends BaseAdapter {
   async getPlaylistByName(name) {
     try {
       const res = await axios.get(`${this.url}/playlists`, {
-        params: { 'X-Plex-Token': this.token, playlistType: 'video' },
+        params: this._plParams({ playlistType: 'video' }),
       });
       const found = (res.data?.MediaContainer?.Metadata || []).find((p) => p.title === name);
       if (!found) return null;
@@ -67,6 +85,7 @@ class PlexAdapter extends BaseAdapter {
   }
 
   async _getMachineId() {
+    // /identity is server-wide info; use the admin token which is always valid.
     const res = await axios.get(`${this.url}/identity`, { params: { 'X-Plex-Token': this.token } });
     return res.data?.MediaContainer?.machineIdentifier;
   }
@@ -75,19 +94,19 @@ class PlexAdapter extends BaseAdapter {
     const machineId = await this._getMachineId();
     const uri = `server://${machineId}/com.plexapp.plugins.library/library/metadata/${itemIds.join(',')}`;
     const res = await axios.post(`${this.url}/playlists`, null, {
-      params: { 'X-Plex-Token': this.token, type: 'video', title: name, smart: 0, uri },
+      params: this._plParams({ type: 'video', title: name, smart: 0, uri }),
     });
     return { id: res.data?.MediaContainer?.Metadata?.[0]?.ratingKey };
   }
 
   async replacePlaylistItems(playlistId, itemIds) {
     await axios.delete(`${this.url}/playlists/${playlistId}/items`, {
-      params: { 'X-Plex-Token': this.token },
+      params: this._plParams(),
     });
     const machineId = await this._getMachineId();
     const uri = `server://${machineId}/com.plexapp.plugins.library/library/metadata/${itemIds.join(',')}`;
     await axios.put(`${this.url}/playlists/${playlistId}/items`, null, {
-      params: { 'X-Plex-Token': this.token, uri },
+      params: this._plParams({ uri }),
     });
   }
 }
