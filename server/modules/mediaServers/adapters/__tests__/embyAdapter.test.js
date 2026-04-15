@@ -95,4 +95,13 @@ describe('EmbyAdapter', () => {
     );
     expect(result).toEqual({ id: 'new-pl-id' });
   });
+
+  test('replacePlaylistItems still creates a fresh playlist when DELETE of stored id fails', async () => {
+    axios.delete.mockRejectedValueOnce({ response: { status: 400 } });
+    axios.post.mockResolvedValueOnce({ data: { Id: 'new-pl-id' } });
+    const adapter = new EmbyAdapter(cfg);
+    const result = await adapter.replacePlaylistItems('stale-id', ['i1'], { name: 'PL' });
+    expect(axios.post).toHaveBeenCalled();
+    expect(result).toEqual({ id: 'new-pl-id' });
+  });
 });

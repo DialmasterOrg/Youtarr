@@ -172,9 +172,20 @@ describe('PlexAdapter', () => {
     });
     axios.put.mockResolvedValueOnce({});
     const adapter = new PlexAdapter(cfg);
-    const result = await adapter.replacePlaylistItems('100', ['42', '43']);
+    const result = await adapter.replacePlaylistItems('100', ['42', '43'], { name: 'PL' });
     expect(axios.delete).toHaveBeenCalled();
     expect(axios.put).toHaveBeenCalled();
     expect(result).toEqual({ id: '100' });
+  });
+
+  test('replacePlaylistItems falls back to create-fresh when stored id returns 404', async () => {
+    // DELETE returns 404 — stale id
+    axios.delete.mockRejectedValueOnce({ response: { status: 404 } });
+    // Fresh create path: identity + POST
+    axios.get.mockResolvedValueOnce({ data: { MediaContainer: { machineIdentifier: 'MID' } } });
+    axios.post.mockResolvedValueOnce({ data: { MediaContainer: { Metadata: [{ ratingKey: 'new-id' }] } } });
+    const adapter = new PlexAdapter(cfg);
+    const result = await adapter.replacePlaylistItems('stale-id', ['42'], { name: 'PL' });
+    expect(result).toEqual({ id: 'new-id' });
   });
 });

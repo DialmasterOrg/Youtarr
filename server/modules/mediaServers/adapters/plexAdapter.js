@@ -110,18 +110,31 @@ class PlexAdapter extends BaseAdapter {
     return { id: res.data?.MediaContainer?.Metadata?.[0]?.ratingKey };
   }
 
-  async replacePlaylistItems(playlistId, itemIds /*, opts */) {
-    await axios.delete(`${this.url}/playlists/${playlistId}/items`, {
-      params: this._plParams(),
-    });
-    const machineId = await this._getMachineId();
-    const uri = `server://${machineId}/com.plexapp.plugins.library/library/metadata/${itemIds.join(',')}`;
-    await axios.put(`${this.url}/playlists/${playlistId}/items`, null, {
-      params: this._plParams({ uri }),
-    });
-    // Plex replaces in place — returns the same id for consistency with the
-    // Jellyfin/Emby adapters which delete + recreate and return a new id.
-    return { id: playlistId };
+  async replacePlaylistItems(playlistId, itemIds, opts = {}) {
+    // Try in-place replace (delete items + PUT items). If the stored playlistId
+    // no longer exists on the server (manually deleted, created under a
+    // different account/token, server state drifted), the DELETE returns 404;
+    // fall back to creating a fresh playlist.
+    try {
+      await axios.delete(`${this.url}/playlists/${playlistId}/items`, {
+        params: this._plParams(),
+      });
+      const machineId = await this._getMachineId();
+      const uri = `server://${machineId}/com.plexapp.plugins.library/library/metadata/${itemIds.join(',')}`;
+      await axios.put(`${this.url}/playlists/${playlistId}/items`, null, {
+        params: this._plParams({ uri }),
+      });
+      // In-place success — return the same id.
+      return { id: playlistId };
+    } catch (err) {
+      const status = err.response?.status;
+      if (status === 404 || status === 403) {
+        logger.warn({ status, playlistId }, 'plex replacePlaylistItems: stored id unreachable, creating fresh');
+        if (!opts.name) throw err;
+        return this.createPlaylist(opts.name, itemIds, { public: !!opts.public });
+      }
+      throw err;
+    }
   }
 }
 

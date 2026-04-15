@@ -87,13 +87,19 @@ class JellyfinAdapter extends BaseAdapter {
   }
 
   async replacePlaylistItems(playlistId, itemIds, opts = {}) {
-    // Jellyfin's DELETE /Playlists/{id}/Items has version-specific quirks that
-    // return 400 on current versions (`Error processing request.`). Simpler and
-    // more reliable: delete the whole playlist and recreate. Returns the new
-    // server-side id so the caller can update sync_state.
-    await axios.delete(`${this.url}/Items/${playlistId}`, { headers: this._headers() });
     if (!opts.name) {
       throw new Error('replacePlaylistItems requires opts.name to recreate the playlist');
+    }
+    // Jellyfin's DELETE /Playlists/{id}/Items has version-specific quirks that
+    // return 400 on current versions. Simpler and more reliable: delete the
+    // whole playlist via DELETE /Items/{id} and recreate.
+    // Tolerate a stale playlistId (e.g. user deleted the playlist manually or
+    // the server state drifted) — log and fall through to create-fresh.
+    try {
+      await axios.delete(`${this.url}/Items/${playlistId}`, { headers: this._headers() });
+    } catch (err) {
+      const status = err.response?.status;
+      logger.warn({ status, playlistId }, 'jellyfin replacePlaylistItems: delete failed, creating fresh');
     }
     return this.createPlaylist(opts.name, itemIds, { public: !!opts.public });
   }

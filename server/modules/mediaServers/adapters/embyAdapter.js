@@ -93,12 +93,18 @@ class EmbyAdapter extends BaseAdapter {
   }
 
   async replacePlaylistItems(playlistId, itemIds, opts = {}) {
-    // Mirrors jellyfinAdapter: delete the whole playlist and recreate, since
-    // the per-item delete endpoint is version-flaky. Returns the new id so
-    // the caller can update sync_state.
-    await axios.delete(`${this.url}/Items/${playlistId}`, { headers: this._headers() });
     if (!opts.name) {
       throw new Error('replacePlaylistItems requires opts.name to recreate the playlist');
+    }
+    // Mirrors jellyfinAdapter: delete the whole playlist and recreate, since
+    // the per-item delete endpoint is version-flaky. Tolerate a stale
+    // playlistId (manually deleted or server state drifted) — log and
+    // fall through to create-fresh.
+    try {
+      await axios.delete(`${this.url}/Items/${playlistId}`, { headers: this._headers() });
+    } catch (err) {
+      const status = err.response?.status;
+      logger.warn({ status, playlistId }, 'emby replacePlaylistItems: delete failed, creating fresh');
     }
     return this.createPlaylist(opts.name, itemIds, { public: !!opts.public });
   }

@@ -92,8 +92,16 @@ describe('JellyfinAdapter', () => {
   });
 
   test('replacePlaylistItems throws when opts.name is missing', async () => {
-    axios.delete.mockResolvedValueOnce({});
     const adapter = new JellyfinAdapter(cfg);
     await expect(adapter.replacePlaylistItems('old', ['i1'], {})).rejects.toThrow(/opts\.name/);
+  });
+
+  test('replacePlaylistItems still creates a fresh playlist when DELETE of stored id fails', async () => {
+    axios.delete.mockRejectedValueOnce({ response: { status: 404 } });
+    axios.post.mockResolvedValueOnce({ data: { Id: 'new-pl-id' } });
+    const adapter = new JellyfinAdapter(cfg);
+    const result = await adapter.replacePlaylistItems('stale-id', ['i1'], { name: 'PL' });
+    expect(axios.post).toHaveBeenCalled();
+    expect(result).toEqual({ id: 'new-pl-id' });
   });
 });
