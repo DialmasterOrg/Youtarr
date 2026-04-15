@@ -56,4 +56,17 @@ describe('JellyfinAdapter', () => {
     const id = await adapter.resolveItemIdByFilepath('/youtube/ChanB/Video 2/v2.mp4');
     expect(id).toBe('B');
   });
+
+  test('resolveItemIdByFilepath matches by basename across different mount prefixes', async () => {
+    axios.get.mockResolvedValueOnce({
+      data: {
+        Items: [{ Id: 'X', Path: '/mnt/media/youtube/Creator/Video Title [abc123].mp4' }],
+      },
+    });
+    const adapter = new JellyfinAdapter(cfg);
+    const id = await adapter.resolveItemIdByFilepath(
+      '/usr/src/app/data/Creator/Video Title [abc123] - abc123/Video Title [abc123].mp4'
+    );
+    expect(id).toBe('X');
+  });
 });

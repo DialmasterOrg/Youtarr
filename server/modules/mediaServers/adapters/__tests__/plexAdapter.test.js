@@ -34,6 +34,25 @@ describe('PlexAdapter', () => {
     expect(id).toBeNull();
   });
 
+  test('resolveItemIdByFilepath matches by basename across different mount prefixes', async () => {
+    // Youtarr sees /usr/src/app/data/...; Plex sees /mnt/media/youtube/...
+    // Same file, same basename. Must still resolve.
+    axios.get.mockResolvedValueOnce({
+      data: {
+        MediaContainer: {
+          Metadata: [
+            { ratingKey: '99', Media: [{ Part: [{ file: '/mnt/media/youtube/Creator/Video Title [abc123].mp4' }] }] },
+          ],
+        },
+      },
+    });
+    const adapter = new PlexAdapter(cfg);
+    const id = await adapter.resolveItemIdByFilepath(
+      '/usr/src/app/data/Creator/Video Title [abc123] - abc123/Video Title [abc123].mp4'
+    );
+    expect(id).toBe('99');
+  });
+
   test('createPlaylist POSTs with ratingKey URI', async () => {
     axios.get.mockResolvedValueOnce({
       data: { MediaContainer: { machineIdentifier: 'MACHINE123' } },

@@ -1,4 +1,5 @@
 const axios = require('axios');
+const path = require('path');
 const BaseAdapter = require('./baseAdapter');
 const logger = require('../../../logger');
 
@@ -40,6 +41,10 @@ class JellyfinAdapter extends BaseAdapter {
   }
 
   async resolveItemIdByFilepath(filepath) {
+    // Match by filename, not full path — Jellyfin likely mounts the media at a
+    // different host path than Youtarr sees inside its container. YouTube video
+    // IDs embedded in filenames (e.g. "Title [abc123].mp4") are globally unique.
+    const target = path.basename(filepath);
     try {
       const params = {
         userId: this.userId,
@@ -49,7 +54,7 @@ class JellyfinAdapter extends BaseAdapter {
       };
       const res = await axios.get(`${this.url}/Items`, { headers: this._headers(), params });
       const items = res.data?.Items || [];
-      const match = items.find((i) => i.Path === filepath);
+      const match = items.find((i) => i.Path && path.basename(i.Path) === target);
       return match ? match.Id : null;
     } catch (err) {
       logger.error({ err, filepath }, 'jellyfin resolveItemIdByFilepath failed');

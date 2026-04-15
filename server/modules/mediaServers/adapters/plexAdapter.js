@@ -1,4 +1,5 @@
 const axios = require('axios');
+const path = require('path');
 const BaseAdapter = require('./baseAdapter');
 const logger = require('../../../logger');
 const plexModule = require('../../plexModule');
@@ -27,6 +28,11 @@ class PlexAdapter extends BaseAdapter {
   }
 
   async resolveItemIdByFilepath(filepath) {
+    // Match by filename (basename), not full path. Youtarr sees the file inside
+    // its Docker container (e.g. /usr/src/app/data/...), Plex sees it on the host
+    // (e.g. /mnt/media/...), so the prefix always differs. Filenames include the
+    // YouTube video ID (e.g. "Title [abc123].mp4") which is globally unique.
+    const target = path.basename(filepath);
     try {
       const res = await axios.get(`${this.url}/library/sections/${this.libraryId}/all`, {
         params: { 'X-Plex-Token': this.token },
@@ -35,7 +41,7 @@ class PlexAdapter extends BaseAdapter {
       for (const item of items) {
         for (const media of item.Media || []) {
           for (const part of media.Part || []) {
-            if (part.file === filepath) return item.ratingKey;
+            if (part.file && path.basename(part.file) === target) return item.ratingKey;
           }
         }
       }
