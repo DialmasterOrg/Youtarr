@@ -123,7 +123,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
         wasNumericRef.current && normalizedValue !== '' && !isNaN(Number(normalizedValue))
           ? Number(normalizedValue)
           : normalizedValue;
-      onChange?.({ target: { value: outputValue as any, name } });
+      onChange?.({ target: { value: outputValue, name } } as unknown as SelectChangeEvent<string>);
     };
 
     return (
@@ -217,7 +217,7 @@ const MenuItem = React.forwardRef<HTMLDivElement, MenuItemProps>(
   ({ value, selected, dense, disableGutters, divider, className, children, onClick, disabled, ...props }, ref) => {
     if (value !== undefined) {
       // Render as Radix SelectItem when inside a Select
-      const normalizedValue = toPrimitiveValue(value);
+      const normalizedValue = toPrimitiveValue(value) as string;
       return (
         <SelectPrimitive.Item
           value={normalizedValue}
@@ -232,7 +232,7 @@ const MenuItem = React.forwardRef<HTMLDivElement, MenuItemProps>(
             divider && 'border-b border-border mb-1',
             className
           )}
-          {...(props as any)}
+          {...(props as Omit<React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>, 'value'>)}
         >
           <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
           <SelectPrimitive.ItemIndicator className="ml-auto">
@@ -265,7 +265,7 @@ const MenuItem = React.forwardRef<HTMLDivElement, MenuItemProps>(
           }
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            onClick?.(e as any);
+            onClick?.(e as unknown as React.MouseEvent<HTMLDivElement>);
           }
         }}
         className={cn(

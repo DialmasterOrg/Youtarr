@@ -37,7 +37,7 @@ const BoxWithRef = React.forwardRef(Box) as <C extends React.ElementType = 'div'
   props: BoxProps<C>
 ) => React.ReactElement | null;
 
-(BoxWithRef as any).displayName = 'Box';
+(BoxWithRef as { displayName?: string }).displayName = 'Box';
 
 export { BoxWithRef as Box };
 export type { BoxProps };

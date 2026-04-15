@@ -54,18 +54,15 @@ const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.C
 DialogContent.displayName = 'DialogContent';
 
 /* ─── Dialog wrapper ──────────────────────────────────── */
-export interface DialogProps {
+export interface DialogProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onClose'> {
   open: boolean;
   onClose?: (event: {}, reason?: 'backdropClick' | 'escapeKeyDown') => void;
   maxWidth?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | false;
   fullWidth?: boolean;
   fullScreen?: boolean;
   PaperProps?: { sx?: Record<string, unknown>; className?: string };
-  BackdropProps?: Record<string, any>;
-  children?: React.ReactNode;
-  className?: string;
+  BackdropProps?: Record<string, unknown>;
   disableEscapeKeyDown?: boolean;
-  [key: string]: any;
 }
 
 const Dialog: React.FC<DialogProps> = ({

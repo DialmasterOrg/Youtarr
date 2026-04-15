@@ -118,7 +118,7 @@ export interface FormControlLabelProps extends Omit<React.LabelHTMLAttributes<HT
 const FormControlLabel = React.forwardRef<HTMLLabelElement, FormControlLabelProps>(
   ({ control, label, labelPlacement = 'end', disabled, className, ...props }, ref) => {
     const generatedId = React.useId();
-    const controlId = (control.props as any).id ?? generatedId;
+    const controlId = (control.props as { id?: string; disabled?: boolean }).id ?? generatedId;
     return (
       <label
         ref={ref}
@@ -133,7 +133,7 @@ const FormControlLabel = React.forwardRef<HTMLLabelElement, FormControlLabelProp
         )}
         {...props}
       >
-        {React.cloneElement(control, { id: controlId, disabled: disabled ?? (control.props as any).disabled })}
+        {React.cloneElement(control, { id: controlId, disabled: disabled ?? (control.props as { id?: string; disabled?: boolean }).disabled })}
         <span>{label}</span>
       </label>
     );

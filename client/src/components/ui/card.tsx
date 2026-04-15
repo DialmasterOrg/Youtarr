@@ -50,7 +50,7 @@ const CardActionArea = React.forwardRef<HTMLElement, CardActionAreaProps>(
         onClick: disabled ? undefined : onClick,
         ...(isDiv && {
           onKeyDown: (e: React.KeyboardEvent) => {
-            if (!disabled && (e.key === 'Enter' || e.key === ' ')) onClick?.(e as any);
+            if (!disabled && (e.key === 'Enter' || e.key === ' ')) onClick?.(e as unknown as React.MouseEvent<HTMLElement>);
           },
         }),
         className: cn(
