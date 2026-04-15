@@ -1,8 +1,19 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, within } from 'storybook/test';
 import { MemoryRouter } from 'react-router-dom';
 import { NavSidebar } from './NavSidebar';
+import { useThemeEngine } from '../../contexts/ThemeEngineContext';
+
+function SectionIconsController({ visible }: { visible: boolean }) {
+  const { setShowSectionIcons } = useThemeEngine();
+
+  useEffect(() => {
+    setShowSectionIcons(visible);
+  }, [setShowSectionIcons, visible]);
+
+  return null;
+}
 
 const navItems = [
   {
@@ -105,5 +116,26 @@ export const PlayfulCenteredButtons: Story = {
       const buttonStyles = window.getComputedStyle(navItems[0]);
       await expect(buttonStyles).toBeDefined();
     }
+  },
+};
+
+export const ExpandedDesktopWithoutIcons: Story = {
+  decorators: [
+    (Story) => (
+      <>
+        <SectionIconsController visible={false} />
+        <Story />
+      </>
+    ),
+  ],
+  parameters: {
+    globals: {
+      themeMode: 'playful',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Channels')).toBeInTheDocument();
+    await expect(canvas.queryByText('C')).not.toBeInTheDocument();
   },
 };

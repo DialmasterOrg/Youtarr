@@ -77,7 +77,7 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { themeMode } = useThemeEngine();
+  const { themeMode, showSectionIcons } = useThemeEngine();
   const sidebarBehavior = getThemeById(themeMode).sidebarBehavior;
   const isCompactHeight = useMediaQuery('(max-height: 500px)');
   const isCompactStorage = false;
@@ -251,22 +251,24 @@ export const NavSidebar: React.FC<NavSidebarProps> = ({
                     cursor: 'pointer',
                   }}
                 >
-                  <ListItemIcon
-                    style={{
-                      minWidth: iconBoxSize,
-                      width: iconBoxSize,
-                      height: iconBoxSize,
-                      flex: `0 0 ${iconBoxSize}px`,
-                      display: 'flex',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      color: selected ? 'var(--nav-item-text-selected)' : 'inherit',
-                      flexShrink: 0,
-                      marginRight: isNavCollapsed ? 0 : NAV_ICON_MARGIN * 8,
-                    }}
-                  >
-                    {item.icon}
-                  </ListItemIcon>
+                  {showSectionIcons && (
+                    <ListItemIcon
+                      style={{
+                        minWidth: iconBoxSize,
+                        width: iconBoxSize,
+                        height: iconBoxSize,
+                        flex: `0 0 ${iconBoxSize}px`,
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        color: selected ? 'var(--nav-item-text-selected)' : 'inherit',
+                        flexShrink: 0,
+                        marginRight: isNavCollapsed ? 0 : NAV_ICON_MARGIN * 8,
+                      }}
+                    >
+                      {item.icon}
+                    </ListItemIcon>
+                  )}
                   <ListItemText
                     primary={item.label}
                     secondary={item.oldLabel}

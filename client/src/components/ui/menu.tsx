@@ -16,6 +16,107 @@ function getOverlayInsets() {
   return { top: topInset + 12, bottom: bottomInset + 16 };
 }
 
+type OverlayOrigin = {
+  vertical: 'top' | 'bottom' | 'center';
+  horizontal: 'left' | 'right' | 'center';
+};
+
+type MenuSize = {
+  width: number;
+  height: number;
+};
+
+type MenuPlacement = {
+  top: number;
+  left: number;
+  maxHeight: number;
+};
+
+const MENU_GAP = 4;
+const VIEWPORT_GUTTER = 12;
+
+function flipVerticalOrigin(origin: OverlayOrigin['vertical']) {
+  if (origin === 'top') return 'bottom';
+  if (origin === 'bottom') return 'top';
+  return 'center';
+}
+
+function flipHorizontalOrigin(origin: OverlayOrigin['horizontal']) {
+  if (origin === 'left') return 'right';
+  if (origin === 'right') return 'left';
+  return 'center';
+}
+
+function getAnchorPoint(rect: DOMRect, origin: OverlayOrigin) {
+  const top =
+    origin.vertical === 'top'
+      ? rect.top
+      : origin.vertical === 'center'
+        ? rect.top + rect.height / 2
+        : rect.bottom;
+  const left =
+    origin.horizontal === 'left'
+      ? rect.left
+      : origin.horizontal === 'center'
+        ? rect.left + rect.width / 2
+        : rect.right;
+
+  return { top, left };
+}
+
+function getMenuSize(menuElement: HTMLElement | null): MenuSize {
+  if (!menuElement || typeof window === 'undefined') {
+    return { width: 0, height: 0 };
+  }
+
+  const rect = menuElement.getBoundingClientRect();
+  const computedStyle = window.getComputedStyle(menuElement);
+  const width = rect.width || Number.parseFloat(computedStyle.width) || menuElement.scrollWidth || 0;
+  const height = rect.height || Number.parseFloat(computedStyle.height) || menuElement.scrollHeight || 0;
+
+  return { width, height };
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function buildPlacement(
+  anchorRect: DOMRect,
+  menuSize: MenuSize,
+  anchorOrigin: OverlayOrigin,
+  transformOrigin: OverlayOrigin,
+  overlayInsets: { top: number; bottom: number }
+): MenuPlacement {
+  const anchorPoint = getAnchorPoint(anchorRect, anchorOrigin);
+  const top =
+    transformOrigin.vertical === 'top'
+      ? anchorPoint.top + MENU_GAP
+      : transformOrigin.vertical === 'center'
+        ? anchorPoint.top - menuSize.height / 2
+        : anchorPoint.top - menuSize.height - MENU_GAP;
+  const left =
+    transformOrigin.horizontal === 'left'
+      ? anchorPoint.left
+      : transformOrigin.horizontal === 'center'
+        ? anchorPoint.left - menuSize.width / 2
+        : anchorPoint.left - menuSize.width;
+
+  const viewportTop = overlayInsets.top;
+  const viewportBottom = window.innerHeight - overlayInsets.bottom;
+  const viewportLeft = VIEWPORT_GUTTER;
+  const viewportRight = window.innerWidth - VIEWPORT_GUTTER;
+
+  const availableHeight = transformOrigin.vertical === 'bottom' ? top - viewportTop : viewportBottom - top;
+  const maxHeight = Math.max(availableHeight, 0);
+
+  return {
+    top,
+    left,
+    maxHeight,
+  };
+}
+
 /* ─── Menu ────────────────────────────────────────────── */
 export interface MenuProps {
   open: boolean;
@@ -34,45 +135,118 @@ export interface MenuProps {
 /**
  * Menu anchored to a trigger element using fixed positioning.
  */
-const Menu: React.FC<MenuProps> = ({
-  open,
-  anchorEl,
-  onClose,
-  children,
-  className,
-  PaperProps,
-  keepMounted = false,
-  anchorOrigin = { vertical: 'bottom', horizontal: 'left' },
-  transformOrigin = { vertical: 'top', horizontal: 'left' },
-}) => {
-  const [pos, setPos] = React.useState<{ top: number; left: number } | null>(null);
+const Menu: React.FC<MenuProps> = (props) => {
+  const {
+    open,
+    anchorEl,
+    onClose,
+    children,
+    className,
+    PaperProps,
+    anchorOrigin = { vertical: 'bottom', horizontal: 'left' },
+    transformOrigin = { vertical: 'top', horizontal: 'left' },
+    keepMounted = false,
+  } = props;
+
+  const [pos, setPos] = React.useState<MenuPlacement | null>(null);
+  const menuRef = React.useRef<HTMLDivElement | null>(null);
   const overlayInsets = getOverlayInsets();
 
-  const getAnchorOffset = React.useCallback((rect: DOMRect) => {
-    const vertical =
-      anchorOrigin.vertical === 'top'
-        ? rect.top
-        : anchorOrigin.vertical === 'center'
-          ? rect.top + rect.height / 2
-          : rect.bottom;
-    const horizontal =
-      anchorOrigin.horizontal === 'left'
-        ? rect.left
-        : anchorOrigin.horizontal === 'center'
-          ? rect.left + rect.width / 2
-          : rect.right;
-    return { top: vertical + 4, left: horizontal };
-  }, []);
-
   const updatePosition = React.useCallback(() => {
-    if (!open || !anchorEl) return;
-    const rect = anchorEl.getBoundingClientRect();
-    setPos(getAnchorOffset(rect));
-  }, [open, anchorEl, getAnchorOffset]);
+    if (!open || !anchorEl || !menuRef.current || typeof window === 'undefined') return;
 
-  React.useEffect(() => {
-    updatePosition();
+    const anchorRect = anchorEl.getBoundingClientRect();
+    const menuSize = getMenuSize(menuRef.current);
+
+    const originVariants: Array<{ anchorOrigin: OverlayOrigin; transformOrigin: OverlayOrigin; flipCount: number }> = [
+      { anchorOrigin, transformOrigin, flipCount: 0 },
+      {
+        anchorOrigin: {
+          vertical: flipVerticalOrigin(anchorOrigin.vertical),
+          horizontal: anchorOrigin.horizontal,
+        },
+        transformOrigin: {
+          vertical: flipVerticalOrigin(transformOrigin.vertical),
+          horizontal: transformOrigin.horizontal,
+        },
+        flipCount: 1,
+      },
+      {
+        anchorOrigin: {
+          vertical: anchorOrigin.vertical,
+          horizontal: flipHorizontalOrigin(anchorOrigin.horizontal),
+        },
+        transformOrigin: {
+          vertical: transformOrigin.vertical,
+          horizontal: flipHorizontalOrigin(transformOrigin.horizontal),
+        },
+        flipCount: 1,
+      },
+      {
+        anchorOrigin: {
+          vertical: flipVerticalOrigin(anchorOrigin.vertical),
+          horizontal: flipHorizontalOrigin(anchorOrigin.horizontal),
+        },
+        transformOrigin: {
+          vertical: flipVerticalOrigin(transformOrigin.vertical),
+          horizontal: flipHorizontalOrigin(transformOrigin.horizontal),
+        },
+        flipCount: 2,
+      },
+    ];
+
+    const viewportTop = overlayInsets.top;
+    const viewportBottom = window.innerHeight - overlayInsets.bottom;
+    const viewportLeft = VIEWPORT_GUTTER;
+    const viewportRight = window.innerWidth - VIEWPORT_GUTTER;
+
+    const scoredPlacements = originVariants.map(({ anchorOrigin: candidateAnchorOrigin, transformOrigin: candidateTransformOrigin, flipCount }) => {
+      const placement = buildPlacement(anchorRect, menuSize, candidateAnchorOrigin, candidateTransformOrigin, overlayInsets);
+
+      const overflowTop = Math.max(viewportTop - placement.top, 0);
+      const overflowBottom = Math.max(placement.top + menuSize.height - viewportBottom, 0);
+      const overflowLeft = Math.max(viewportLeft - placement.left, 0);
+      const overflowRight = Math.max(placement.left + menuSize.width - viewportRight, 0);
+
+      return {
+        ...placement,
+        flipCount,
+        score: overflowTop + overflowBottom + overflowLeft + overflowRight,
+      };
+    });
+
+    const bestPlacement = scoredPlacements.reduce((best, current) => {
+      if (current.score < best.score) return current;
+      if (current.score > best.score) return best;
+      return current.flipCount < best.flipCount ? current : best;
+    });
+
+    const clampedTop = clamp(bestPlacement.top, viewportTop, Math.max(viewportBottom - menuSize.height, viewportTop));
+    const clampedLeft = clamp(bestPlacement.left, viewportLeft, Math.max(viewportRight - menuSize.width, viewportLeft));
+    const nextPlacement = {
+      ...bestPlacement,
+      top: clampedTop,
+      left: clampedLeft,
+    };
+
+    setPos((current) => {
+      if (
+        current
+        && current.top === nextPlacement.top
+        && current.left === nextPlacement.left
+        && current.maxHeight === nextPlacement.maxHeight
+      ) {
+        return current;
+      }
+
+      return nextPlacement;
+    });
+  }, [anchorEl, anchorOrigin, open, overlayInsets.bottom, overlayInsets.top, transformOrigin]);
+
+  React.useLayoutEffect(() => {
     if (!open) return;
+
+    updatePosition();
     window.addEventListener('resize', updatePosition);
     window.addEventListener('scroll', updatePosition, true);
     return () => {
@@ -81,29 +255,10 @@ const Menu: React.FC<MenuProps> = ({
     };
   }, [open, updatePosition]);
 
-  const transformX =
-    transformOrigin.horizontal === 'left'
-      ? '0%'
-      : transformOrigin.horizontal === 'center'
-        ? '-50%'
-        : '-100%';
-  const transformY =
-    transformOrigin.vertical === 'top'
-      ? '0%'
-      : transformOrigin.vertical === 'center'
-        ? '-50%'
-        : '-100%';
-
   if (!open && !keepMounted) return null;
 
-  // Compute a viewport-safe maxHeight so the menu never extends off-screen.
-  // For menus that open downward (transformY '0%') we measure from pos.top to the
-  // bottom of the viewport; for upward menus ('-100%') we measure from pos.top to
-  // the top of the viewport.
   const viewportMax = pos
-    ? transformY === '-100%'
-      ? pos.top - overlayInsets.top
-      : window.innerHeight - pos.top - overlayInsets.bottom
+    ? pos.maxHeight
     : undefined;
   const paperPropsMax =
     typeof PaperProps?.style?.maxHeight === 'number' ? PaperProps.style.maxHeight : undefined;
@@ -122,30 +277,22 @@ const Menu: React.FC<MenuProps> = ({
       {open && <div data-testid="menu-backdrop" className="fixed inset-0 z-40" onClick={onClose} />}
       {/* Menu panel */}
       <div
+        ref={menuRef}
         role="menu"
         onKeyDown={(e) => {
           if (e.key === 'Escape') onClose?.();
         }}
-        style={pos
-          ? {
-              position: 'fixed',
-              top: pos.top,
-              left: pos.left,
-              transform: `translate(${transformX}, ${transformY})`,
-              zIndex: 1300,
-              maxWidth: 'min(28rem, calc(100vw - 24px))',
-              ...(resolvedMaxHeight !== undefined ? { maxHeight: resolvedMaxHeight } : {}),
-              overflowY: 'auto',
-              ...paperStyleRest,
-            }
-          : {
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              zIndex: 1300,
-              overflowY: 'auto',
-              ...paperStyleRest,
-            }}
+        style={{
+          position: 'fixed',
+          top: pos?.top ?? 0,
+          left: pos?.left ?? 0,
+          zIndex: 1300,
+          maxWidth: 'min(28rem, calc(100vw - 24px))',
+          ...(resolvedMaxHeight !== undefined ? { maxHeight: resolvedMaxHeight } : {}),
+          overflowY: 'auto',
+          visibility: pos ? 'visible' : 'hidden',
+          ...paperStyleRest,
+        }}
         hidden={!open}
         aria-hidden={!open}
         className={cn(

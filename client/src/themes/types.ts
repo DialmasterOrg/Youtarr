@@ -159,6 +159,18 @@ export const REQUIRED_THEME_TOKEN_KEYS = [
   'channel-meta-chip-border',
   'channel-meta-chip-shadow',
   'channel-meta-chip-icon',
+  'selection-fab-size',
+  'selection-fab-radius',
+  'selection-fab-border',
+  'selection-fab-shadow',
+  'selection-fab-shadow-hover',
+  'selection-fab-shadow-active',
+  'selection-fab-icon-size',
+  'selection-fab-badge-background',
+  'selection-fab-badge-foreground',
+  'selection-fab-badge-border',
+  'selection-fab-badge-shadow',
+  'selection-fab-badge-radius',
 ] as const;
 
 export type RequiredThemeTokenKey = (typeof REQUIRED_THEME_TOKEN_KEYS)[number];

@@ -15,6 +15,45 @@ jest.mock('../StillLiveDot', () => ({
 }));
 
 describe('VideoTableView Component', () => {
+  describe('Click Targets', () => {
+    test('clicking the title opens the video modal instead of selecting the row', async () => {
+      const user = userEvent.setup();
+      const onCheckChange = jest.fn();
+      const onVideoClick = jest.fn();
+
+      renderWithProviders(
+        <VideoTableView
+          {...defaultProps}
+          onCheckChange={onCheckChange}
+          onVideoClick={onVideoClick}
+        />
+      );
+
+      await user.click(screen.getByText('Test Video Title'));
+
+      expect(onVideoClick).toHaveBeenCalledWith(mockVideo);
+      expect(onCheckChange).not.toHaveBeenCalled();
+    });
+
+    test('clicking the thumbnail selects the row instead of opening the video modal', async () => {
+      const user = userEvent.setup();
+      const onCheckChange = jest.fn();
+      const onVideoClick = jest.fn();
+
+      renderWithProviders(
+        <VideoTableView
+          {...defaultProps}
+          onCheckChange={onCheckChange}
+          onVideoClick={onVideoClick}
+        />
+      );
+
+      await user.click(screen.getByAltText('Test Video Title'));
+
+      expect(onCheckChange).toHaveBeenCalledWith('test123', true);
+      expect(onVideoClick).not.toHaveBeenCalled();
+    });
+  });
   const mockVideo: ChannelVideo = {
     title: 'Test Video Title',
     youtube_id: 'test123',

@@ -27,11 +27,33 @@ jest.mock('react-swipeable', () => ({
 // Mock child components
 jest.mock('../VideoCard', () => ({
   __esModule: true,
-  default: function MockVideoCard({ video }: any) {
+  default: function MockVideoCard({ video, onCheckChange, onVideoClick }: any) {
     const React = require('react');
-    return React.createElement('div', {
-      'data-testid': `video-card-${video.youtube_id}`
-    }, video.title);
+    return React.createElement(
+      'div',
+      {
+        'data-testid': `video-card-${video.youtube_id}`
+      },
+      React.createElement('span', null, video.title),
+      React.createElement(
+        'button',
+        {
+          type: 'button',
+          'data-testid': `select-video-${video.youtube_id}`,
+          onClick: () => onCheckChange?.(video.youtube_id, true),
+        },
+        'Select'
+      ),
+      React.createElement(
+        'button',
+        {
+          type: 'button',
+          'data-testid': `open-video-${video.youtube_id}`,
+          onClick: () => onVideoClick?.(video),
+        },
+        'Open'
+      )
+    );
   }
 }));
 
@@ -407,6 +429,37 @@ describe('ChannelVideos Component', () => {
 
       expect(screen.getByTestId('video-list-item-video1')).toBeInTheDocument();
     });
+
+    test('shows a desktop floating selection action button when a video is selected', async () => {
+      const user = userEvent.setup();
+
+      useChannelVideos.mockReturnValue({
+        videos: [mockVideos[0]],
+        totalCount: 1,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      await user.click(screen.getByTestId('select-video-video1'));
+
+      const floatingAction = await screen.findByRole('button', {
+        name: /Actions for 1 selected video/i,
+      });
+
+      expect(floatingAction).toBeInTheDocument();
+      expect(screen.getByTestId('selection-action-count')).toHaveTextContent('1');
+
+      await user.click(floatingAction);
+
+      expect(screen.getByRole('menuitem', { name: /Download Selected/i })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: /Ignore Selected/i })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: /Clear Selection/i })).toBeInTheDocument();
+    });
   });
 
   describe('Pagination', () => {
@@ -442,7 +495,7 @@ describe('ChannelVideos Component', () => {
 
       renderChannelVideos();
 
-      expect(screen.getByLabelText('videos per page')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '16' })).toBeInTheDocument();
     });
 
     test('does not render page size selector when no videos', () => {
@@ -490,7 +543,7 @@ describe('ChannelVideos Component', () => {
 
       renderChannelVideos();
 
-      const select = screen.getByLabelText('videos per page');
+      const select = screen.getByRole('button', { name: '16' });
       expect(select).toHaveTextContent('16');
     });
 
@@ -535,7 +588,7 @@ describe('ChannelVideos Component', () => {
       await waitFor(() => {
         expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
       });
-      const page2Buttons = screen.getAllByRole('button', { name: 'Go to page 2' });
+      const page2Buttons = screen.getAllByRole('button', { name: 'go to page 2' });
       await user.click(page2Buttons[0]);
 
       expect(useChannelVideos).toHaveBeenLastCalledWith(
@@ -546,7 +599,7 @@ describe('ChannelVideos Component', () => {
       // MUI Select (non-native) opens on mouseDown on the inner trigger div.
       // The "Per page:" label precedes the Select, and the Select displays "16".
       // Use within() on the labeled container to find the trigger by its text content.
-      const selectContainer = screen.getByLabelText('videos per page');
+      const selectContainer = screen.getByRole('button', { name: '16' });
       const trigger = within(selectContainer).getByText('16');
       fireEvent.mouseDown(trigger);
 
@@ -577,10 +630,10 @@ describe('ChannelVideos Component', () => {
       renderChannelVideos();
 
       // Selector should be present
-      expect(screen.getByLabelText('videos per page')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '16' })).toBeInTheDocument();
 
       // Only 1 page total (3 videos < 16 per page), so no page 2 button should exist
-      expect(screen.queryByRole('button', { name: 'Go to page 2' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'go to page 2' })).not.toBeInTheDocument();
     });
 
     test('renders both selector and pagination when multiple pages', () => {
@@ -597,7 +650,7 @@ describe('ChannelVideos Component', () => {
       renderChannelVideos();
 
       // Both should be present
-      expect(screen.getByLabelText('videos per page')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '16' })).toBeInTheDocument();
       expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
     });
   });

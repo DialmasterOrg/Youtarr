@@ -247,4 +247,22 @@ describe('NavSidebar – collapsed state', () => {
 
     expect(screen.queryByLabelText(/yt-dlp update available/i)).not.toBeInTheDocument();
   });
+
+  it('shows section icons when the preference is enabled', () => {
+    localStorage.setItem('uiThemeMode', 'playful');
+    localStorage.setItem('uiSectionIconsVisible:playful', 'true');
+
+    renderSidebar('/channels');
+
+    expect(screen.getByText('ChannelsIcon')).toBeInTheDocument();
+  });
+
+  it('hides section icons when the preference is disabled', () => {
+    localStorage.setItem('uiThemeMode', 'playful');
+    localStorage.setItem('uiSectionIconsVisible:playful', 'false');
+
+    renderSidebar('/channels');
+
+    expect(screen.queryByText('ChannelsIcon')).not.toBeInTheDocument();
+  });
 });

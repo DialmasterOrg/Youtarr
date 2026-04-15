@@ -63,3 +63,15 @@ export const AllRatings: Story = {
     </div>
   ),
 };
+
+// ─── Clickable (used in VideoActions action row) ──────────────────────────────
+export const Clickable: Story = {
+  args: {
+    rating: 'PG-13',
+    ratingSource: 'manual',
+    showNA: true,
+    ariaLabel: 'Change rating',
+    onClick: () => {},
+    size: 'small',
+  },
+};

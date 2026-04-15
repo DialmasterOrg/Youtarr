@@ -3,70 +3,25 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { VideoModalData } from '../../types';
 
-// Mock MUI icons to lightweight spans
-jest.mock('@mui/icons-material/PlayArrow', () => ({
-  __esModule: true,
-  default: function MockPlayArrowIcon() {
-    const React = require('react');
-    return React.createElement('span', { 'data-testid': 'PlayArrowIcon' });
-  },
-}));
+jest.mock('../../../../../lib/icons', () => {
+  const React = require('react');
 
-jest.mock('@mui/icons-material/CloudOff', () => ({
-  __esModule: true,
-  default: function MockCloudOffIcon() {
-    const React = require('react');
-    return React.createElement('span', { 'data-testid': 'CloudOffIcon' });
-  },
-}));
+  const createIcon = (testId: string) => function MockIcon() {
+    return React.createElement('span', { 'data-testid': testId });
+  };
 
-jest.mock('@mui/icons-material/Download', () => ({
-  __esModule: true,
-  default: function MockDownloadIcon() {
-    const React = require('react');
-    return React.createElement('span', { 'data-testid': 'DownloadIcon' });
-  },
-}));
-
-jest.mock('@mui/icons-material/Block', () => ({
-  __esModule: true,
-  default: function MockBlockIcon() {
-    const React = require('react');
-    return React.createElement('span', { 'data-testid': 'BlockIcon' });
-  },
-}));
-
-jest.mock('@mui/icons-material/InfoOutlined', () => ({
-  __esModule: true,
-  default: function MockInfoOutlinedIcon() {
-    const React = require('react');
-    return React.createElement('span', { 'data-testid': 'InfoOutlinedIcon' });
-  },
-}));
-
-jest.mock('@mui/icons-material/Stop', () => ({
-  __esModule: true,
-  default: function MockStopIcon() {
-    const React = require('react');
-    return React.createElement('span', { 'data-testid': 'StopIcon' });
-  },
-}));
-
-jest.mock('@mui/icons-material/WarningAmber', () => ({
-  __esModule: true,
-  default: function MockWarningAmberIcon() {
-    const React = require('react');
-    return React.createElement('span', { 'data-testid': 'WarningAmberIcon' });
-  },
-}));
-
-jest.mock('@mui/icons-material/Lock', () => ({
-  __esModule: true,
-  default: function MockLockIcon() {
-    const React = require('react');
-    return React.createElement('span', { 'data-testid': 'LockIcon' });
-  },
-}));
+  return {
+    __esModule: true,
+    Play: createIcon('PlayArrowIcon'),
+    CloudOff: createIcon('CloudOffIcon'),
+    Download: createIcon('DownloadIcon'),
+    Block: createIcon('BlockIcon'),
+    Info: createIcon('InfoOutlinedIcon'),
+    Close: createIcon('CloseIcon'),
+    WarningAmber: createIcon('WarningAmberIcon'),
+    Lock: createIcon('LockIcon'),
+  };
+});
 
 import VideoPlayer from '../VideoPlayer';
 
@@ -215,7 +170,7 @@ describe('VideoPlayer', () => {
       expect(screen.getByText('Unable to stream video')).toBeInTheDocument();
     });
 
-    const youtubeLink = screen.getByRole('link', { name: 'Open on YouTube' });
+    const youtubeLink = screen.getByRole('link', { name: 'Open in YouTube' });
     expect(youtubeLink).toHaveAttribute(
       'href',
       'https://www.youtube.com/watch?v=abc123'

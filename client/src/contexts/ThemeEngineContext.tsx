@@ -10,11 +10,13 @@ interface ThemeEngineState {
   motionEnabled: boolean;
   showHeaderLogo: boolean;
   showHeaderWordmark: boolean;
+  showSectionIcons: boolean;
   setThemeMode: (mode: ThemeMode) => void;
   setColorMode: (mode: 'light' | 'dark') => void;
   setMotionEnabled: (enabled: boolean) => void;
   setShowHeaderLogo: (enabled: boolean) => void;
   setShowHeaderWordmark: (enabled: boolean) => void;
+  setShowSectionIcons: (enabled: boolean) => void;
 }
 
 const THEME_STORAGE_KEY = 'uiThemeMode';
@@ -22,6 +24,7 @@ const COLOR_MODE_STORAGE_KEY = 'uiColorMode';
 const MOTION_STORAGE_KEY = 'uiMotionEnabled';
 const HEADER_LOGO_STORAGE_KEY = 'uiHeaderLogoVisible';
 const HEADER_WORDMARK_STORAGE_KEY = 'uiHeaderWordmarkVisible';
+const SECTION_ICONS_STORAGE_KEY = 'uiSectionIconsVisible';
 
 const ThemeEngineContext = createContext<ThemeEngineState | undefined>(undefined);
 
@@ -31,11 +34,13 @@ const FALLBACK_THEME_ENGINE: ThemeEngineState = {
   motionEnabled: false,
   showHeaderLogo: true,
   showHeaderWordmark: true,
+  showSectionIcons: true,
   setThemeMode: () => {},
   setColorMode: () => {},
   setMotionEnabled: () => {},
   setShowHeaderLogo: () => {},
   setShowHeaderWordmark: () => {},
+  setShowSectionIcons: () => {},
 };
 
 const isThemeMode = (value: string | null): value is ThemeMode => {
@@ -106,6 +111,10 @@ export function ThemeEngineProvider({ children }: { children: React.ReactNode })
     );
   });
 
+  const [showSectionIcons, setShowSectionIcons] = useState<boolean>(() => {
+    return readThemeScopedPreference(themeMode, SECTION_ICONS_STORAGE_KEY, true);
+  });
+
   useEffect(() => {
     const theme = getThemeById(themeMode);
     setShowHeaderLogo(
@@ -122,6 +131,7 @@ export function ThemeEngineProvider({ children }: { children: React.ReactNode })
         theme.headerPreferences.showWordmarkDefault
       )
     );
+    setShowSectionIcons(readThemeScopedPreference(themeMode, SECTION_ICONS_STORAGE_KEY, true));
   }, [themeMode]);
 
   useEffect(() => {
@@ -192,6 +202,14 @@ export function ThemeEngineProvider({ children }: { children: React.ReactNode })
       String(showHeaderWordmark)
     );
   }, [showHeaderWordmark, themeMode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(
+      getScopedPreferenceStorageKey(SECTION_ICONS_STORAGE_KEY, themeMode),
+      String(showSectionIcons)
+    );
+  }, [showSectionIcons, themeMode]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -296,13 +314,15 @@ export function ThemeEngineProvider({ children }: { children: React.ReactNode })
       motionEnabled,
       showHeaderLogo,
       showHeaderWordmark,
+      showSectionIcons,
       setThemeMode,
       setColorMode,
       setMotionEnabled,
       setShowHeaderLogo,
       setShowHeaderWordmark,
+      setShowSectionIcons,
     }),
-    [themeMode, colorMode, motionEnabled, showHeaderLogo, showHeaderWordmark]
+    [themeMode, colorMode, motionEnabled, showHeaderLogo, showHeaderWordmark, showSectionIcons]
   );
 
   return <ThemeEngineContext.Provider value={value}>{children}</ThemeEngineContext.Provider>;

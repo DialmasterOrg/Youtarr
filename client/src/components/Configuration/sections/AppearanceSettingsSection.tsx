@@ -34,6 +34,8 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
     setShowHeaderLogo,
     showHeaderWordmark,
     setShowHeaderWordmark,
+    showSectionIcons,
+    setShowSectionIcons,
   } = useThemeEngine();
 
   const stopThemeSelection = (event: React.SyntheticEvent) => {
@@ -189,6 +191,23 @@ export const AppearanceSettingsSection: React.FC<AppearanceSettingsSectionProps>
                     />
                     <InfoTooltip
                       text="Show the Youtarr wordmark image in the header"
+                      onMobileClick={onMobileTooltipClick}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 -ml-2">
+                    <FormControlLabel
+                      onClick={stopThemeSelection}
+                      control={
+                        <Switch
+                          checked={showSectionIcons}
+                          onChange={(event) => setShowSectionIcons(event.target.checked)}
+                          size="small"
+                        />
+                      }
+                      label={<span className="text-xs">Section Icons</span>}
+                    />
+                    <InfoTooltip
+                      text="Show icons next to the main navigation and section buttons"
                       onMobileClick={onMobileTooltipClick}
                     />
                   </div>

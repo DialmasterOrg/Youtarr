@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Button, Chip, Tooltip } from '../../../ui';
+import RatingBadge from '../../../shared/RatingBadge';
 import {
   Delete as DeleteIcon,
   Download as DownloadIcon,
@@ -27,6 +28,7 @@ interface VideoActionsProps {
   onProtectionToggle: () => void;
   onIgnoreToggle: () => void;
   onDownloadClick: () => void;
+  onRatingClick: () => void;
   protectionLoading: boolean;
   isMobile: boolean;
 }
@@ -37,6 +39,7 @@ function VideoActions({
   onProtectionToggle,
   onIgnoreToggle,
   onDownloadClick,
+  onRatingClick,
   protectionLoading,
   isMobile,
 }: VideoActionsProps) {
@@ -126,6 +129,19 @@ function VideoActions({
           marginLeft: 1,
           marginRight: 1,
           flexShrink: 0,
+        }}
+      />
+
+      <RatingBadge
+        rating={video.normalizedRating}
+        ratingSource={video.ratingSource}
+        showNA
+        ariaLabel="Change rating"
+        onClick={onRatingClick}
+        size="small"
+        style={{
+          height: 'var(--video-modal-action-control-height, 28px)',
+          boxSizing: 'border-box',
         }}
       />
 

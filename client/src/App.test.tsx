@@ -609,7 +609,7 @@ describe('App Component', () => {
       render(<App />);
 
       await waitFor(() => {
-        expect(screen.getByText('Youtarr')).toBeInTheDocument();
+        expect(screen.getByAltText('Youtarr')).toBeInTheDocument();
       });
 
       expect(screen.queryByTestId('database-error-overlay')).not.toBeInTheDocument();
@@ -750,7 +750,7 @@ describe('App Component', () => {
       render(<App />);
 
       await waitFor(() => {
-        expect(screen.getByText('Youtarr')).toBeInTheDocument();
+        expect(screen.getByAltText('Youtarr')).toBeInTheDocument();
       });
 
       expect(screen.queryByTestId('database-error-overlay')).not.toBeInTheDocument();
@@ -878,7 +878,7 @@ describe('App Component', () => {
 
       // Wait for app to load
       await waitFor(() => {
-        expect(screen.getByText('Youtarr')).toBeInTheDocument();
+        expect(screen.getByAltText('Youtarr')).toBeInTheDocument();
       });
 
       // Verify interceptor was registered

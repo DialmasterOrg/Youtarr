@@ -346,6 +346,44 @@ describe('VideoCard Component', () => {
       expect(onCheckChange).toHaveBeenCalledWith('test123', true);
     });
 
+    test('clicking the title opens the video modal instead of selecting the card', async () => {
+      const user = userEvent.setup();
+      const onCheckChange = jest.fn();
+      const onVideoClick = jest.fn();
+
+      renderWithProviders(
+        <VideoCard
+          {...defaultProps}
+          onCheckChange={onCheckChange}
+          onVideoClick={onVideoClick}
+        />
+      );
+
+      await user.click(screen.getByText('Test Video Title'));
+
+      expect(onVideoClick).toHaveBeenCalledWith(mockVideo);
+      expect(onCheckChange).not.toHaveBeenCalled();
+    });
+
+    test('clicking the thumbnail selects the card instead of opening the video modal', async () => {
+      const user = userEvent.setup();
+      const onCheckChange = jest.fn();
+      const onVideoClick = jest.fn();
+
+      renderWithProviders(
+        <VideoCard
+          {...defaultProps}
+          onCheckChange={onCheckChange}
+          onVideoClick={onVideoClick}
+        />
+      );
+
+      await user.click(screen.getByAltText('Test Video Title'));
+
+      expect(onCheckChange).toHaveBeenCalledWith('test123', true);
+      expect(onVideoClick).not.toHaveBeenCalled();
+    });
+
     test('clicking card does not select downloaded videos', async () => {
       const user = userEvent.setup();
       const onCheckChange = jest.fn();

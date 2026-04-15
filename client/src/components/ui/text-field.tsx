@@ -23,7 +23,7 @@ export interface TextFieldProps extends Omit<React.InputHTMLAttributes<HTMLInput
   type?: string;
   onChange?: React.ChangeEventHandler<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>;
   margin?: string;
-  InputLabelProps?: { shrink?: boolean; [key: string]: any };
+  InputLabelProps?: React.LabelHTMLAttributes<HTMLLabelElement> & { shrink?: boolean };
 }
 
 /**
@@ -53,7 +53,7 @@ const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
       placeholder,
       onChange,
       margin: _margin,
-      InputLabelProps: _inputLabelProps,
+      InputLabelProps: inputLabelProps,
       ...rest
     },
     ref
@@ -63,6 +63,11 @@ const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
     const isSmall = size === 'small';
     const hasStartAdornment = !!InputProps?.startAdornment;
     const hasEndAdornment = !!InputProps?.endAdornment;
+    const labelStyle = {
+      backgroundColor: 'var(--field-label-background, var(--card))',
+      lineHeight: 1,
+      ...inputLabelProps?.style,
+    };
 
     const baseInputClass = cn(
       'peer w-full bg-transparent text-foreground outline-none placeholder-transparent',
@@ -80,14 +85,14 @@ const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
 
     const labelClass = cn(
       // Base: label floated (above border)
-      'absolute left-3 -top-2.5 text-xs font-medium px-1',
-      'bg-card rounded',
+      'absolute left-3 -top-2.5 inline-flex items-center text-xs font-medium px-1',
+      'rounded',
       // Text colors
       error ? 'text-destructive' : 'text-muted-foreground',
       'peer-focus:text-primary',
       error && 'peer-focus:text-destructive',
       // When input is empty and unfocused, label goes to mid-height
-      'peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2',
+    'peer-placeholder-shown:top-[calc(50%-3px)] peer-placeholder-shown:-translate-y-1/2',
       'peer-placeholder-shown:text-base peer-placeholder-shown:font-normal',
       isSmall && 'peer-placeholder-shown:text-sm',
       // Transition
@@ -95,6 +100,7 @@ const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
       // When focused, go back to floated
       'peer-focus:-top-2.5 peer-focus:translate-y-0 peer-focus:text-xs peer-focus:font-medium',
       disabled && 'opacity-50',
+      inputLabelProps?.className,
     );
 
     const wrapperClass = cn(
@@ -123,12 +129,12 @@ const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
               className={cn(
                 baseInputClass,
                 'resize-y min-h-[80px]',
-                'peer-placeholder-shown:top-2',
+                'peer-placeholder-shown:top-[calc(50%-3px)] peer-placeholder-shown:-translate-y-1/2',
               )}
               {...(inputPropsExtra as React.TextareaHTMLAttributes<HTMLTextAreaElement>)}
             />
             {label && (
-              <label htmlFor={id} className={labelClass}>
+              <label htmlFor={id} className={labelClass} style={labelStyle}>
                 {label}{required && <span className="ml-0.5 text-destructive">*</span>}
               </label>
             )}
@@ -169,7 +175,7 @@ const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(
             {...rest}
           />
           {label && (
-            <label htmlFor={id} className={labelClass}>
+            <label htmlFor={id} className={labelClass} style={labelStyle}>
               {label}{required && <span className="ml-0.5 text-destructive">*</span>}
             </label>
           )}

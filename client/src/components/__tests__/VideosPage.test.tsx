@@ -1,6 +1,7 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import VideosPage from '../VideosPage';
 import { VideoData } from '../../types/VideoData';
 
@@ -59,6 +60,22 @@ jest.mock('../shared/useVideoDeletion', () => ({
   useVideoDeletion: jest.fn()
 }));
 
+jest.mock('../shared/VideoModal', () => ({
+  __esModule: true,
+  default: function MockVideoModal(props: any) {
+    const React = require('react');
+
+    if (!props.open) {
+      return null;
+    }
+
+    return React.createElement('div', {
+      'data-testid': 'video-modal',
+      'data-video-title': props.video?.title,
+    }, props.video?.title);
+  }
+}));
+
 const mockVideos: VideoData[] = [
   {
     id: 1,
@@ -112,8 +129,22 @@ const mockPaginatedResponse = (videos: VideoData[], page = 1, limit = 12) => {
   };
 };
 
+const mockPaginatedResponseWithEnabledChannels = (videos: VideoData[], page = 1, limit = 12) => ({
+  ...mockPaginatedResponse(videos, page, limit),
+  enabledChannels: [
+    { channel_id: 'UC1', uploader: 'Tech Channel', enabled: true },
+    { channel_id: 'UC2', uploader: 'Gaming Channel', enabled: true },
+  ],
+});
+
 // Use delay: null to prevent timer-related flakiness when running with other tests
 const setupUser = () => userEvent.setup({ delay: null });
+
+function LocationDisplay() {
+  const location = useLocation();
+
+  return <div data-testid="location-path">{location.pathname}</div>;
+}
 
 describe('VideosPage Component', () => {
   const mockToken = 'test-token';
@@ -171,6 +202,59 @@ describe('VideosPage Component', () => {
       });
       expect(screen.getByText('Game Review')).toBeInTheDocument();
       expect(screen.getByText('React Tutorial')).toBeInTheDocument();
+    });
+
+    test('opens the video modal when the thumbnail is clicked', async () => {
+      const user = setupUser();
+      axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[0]]) });
+
+      render(<VideosPage token={mockToken} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('How to Code')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByAltText('thumbnail'));
+
+      expect(screen.getByTestId('video-modal')).toHaveAttribute('data-video-title', 'How to Code');
+    });
+
+    test('opens the video modal when the title is clicked', async () => {
+      const user = setupUser();
+      axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse([mockVideos[0]]) });
+
+      render(<VideosPage token={mockToken} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('How to Code')).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole('button', { name: 'How to Code' }));
+
+      expect(screen.getByTestId('video-modal')).toHaveAttribute('data-video-title', 'How to Code');
+    });
+
+    test('renders the channel name as a link to the channel page', async () => {
+      const user = setupUser();
+      axios.get.mockResolvedValueOnce({ data: mockPaginatedResponseWithEnabledChannels([mockVideos[0]]) });
+
+      render(
+        <MemoryRouter>
+          <LocationDisplay />
+          <VideosPage token={mockToken} />
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('How to Code')).toBeInTheDocument();
+      });
+
+      const channelLink = screen.getByRole('link', { name: 'Tech Channel' });
+      await user.click(channelLink);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('location-path')).toHaveTextContent('/channel/UC1');
+      });
     });
 
     test('does not fetch videos when token is null', () => {

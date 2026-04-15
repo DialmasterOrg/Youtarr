@@ -193,6 +193,7 @@ function VideoModal({
               onProtectionToggle={handleProtectionToggle}
               onIgnoreToggle={handleIgnoreToggle}
               onDownloadClick={() => setDownloadDialogOpen(true)}
+              onRatingClick={() => setRatingDialogOpen(true)}
               protectionLoading={protectionLoading}
               isMobile={isMobile}
             />

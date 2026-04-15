@@ -383,6 +383,11 @@ function VideosPage({ token }: VideosPageProps) {
     setDeleteDialogOpen(true);
   };
 
+  const handleOpenVideoModal = (event: React.MouseEvent, video: VideoData) => {
+    event.stopPropagation();
+    setModalVideo(video);
+  };
+
   const renderMobileActionBar = () => {
     if (!isMobile || selectedVideos.length === 0 || typeof window === 'undefined') {
       return null;
@@ -720,7 +725,16 @@ function VideosPage({ token }: VideosPageProps) {
                               <Typography 
                                 variant='subtitle2' 
                                 className="font-semibold mb-1"
-                                style={{ lineHeight: 1.3 }}
+                                style={{ lineHeight: 1.3, cursor: 'pointer' }}
+                                onClick={(event) => handleOpenVideoModal(event, video)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    setModalVideo(video);
+                                  }
+                                }}
+                                role="button"
+                                tabIndex={0}
                               >
                                 {video.youTubeVideoName}
                               </Typography>
@@ -758,7 +772,9 @@ function VideosPage({ token }: VideosPageProps) {
                                 overflow: 'hidden',
                                 backgroundColor: 'var(--media-placeholder-background)',
                                 border: 'var(--media-placeholder-border)',
+                                cursor: 'pointer',
                               }}
+                              onClick={(event) => handleOpenVideoModal(event, video)}
                             >
                               {imageErrors[video.youtubeId] ? (
                                 <Box
@@ -991,7 +1007,9 @@ function VideosPage({ token }: VideosPageProps) {
                                 position: 'relative',
                                 overflow: 'hidden',
                                 backgroundColor: 'var(--media-placeholder-background)',
+                                cursor: 'pointer',
                               }}
+                              onClick={(event) => handleOpenVideoModal(event, video)}
                             >
                               {imageErrors[video.youtubeId] ? (
                                 <Typography
@@ -1102,7 +1120,20 @@ function VideosPage({ token }: VideosPageProps) {
                             </Box>
                             <Box className="flex-1 min-w-0 flex flex-col gap-4">
                               <Box className="min-w-0">
-                                <Typography variant='subtitle1' className="font-bold" style={{ lineHeight: 1.3 }}>
+                                <Typography
+                                  variant='subtitle1'
+                                  className="font-bold"
+                                  style={{ lineHeight: 1.3, cursor: 'pointer' }}
+                                  onClick={(event) => handleOpenVideoModal(event, video)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter' || event.key === ' ') {
+                                      event.preventDefault();
+                                      setModalVideo(video);
+                                    }
+                                  }}
+                                  role="button"
+                                  tabIndex={0}
+                                >
                                   {video.youTubeVideoName}
                                 </Typography>
                                 {video.duration && (

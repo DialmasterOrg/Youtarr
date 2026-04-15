@@ -12,6 +12,8 @@ interface RatingBadgeProps {
   className?: string;
   style?: React.CSSProperties;
   sx?: Record<string, unknown>;
+  onClick?: React.MouseEventHandler<HTMLElement>;
+  ariaLabel?: string;
 }
 
 /**
@@ -28,6 +30,8 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
   className,
   style,
   sx,
+  onClick,
+  ariaLabel,
 }) => {
   if (!rating && !showNA) {
     return null;
@@ -41,6 +45,8 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
         size={size}
         color="default"
         variant="outlined"
+        onClick={onClick}
+        aria-label={ariaLabel}
         style={{
           ...(size === 'small'
             ? SHARED_RATING_CHIP_SMALL_STYLE
@@ -141,6 +147,8 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
         color={chipColor}
         icon={<EighteenUpRatingIcon size={size === 'small' ? 12 : 16} data-testid="EighteenUpRatingIcon" />}
         className={className}
+        onClick={onClick}
+        aria-label={ariaLabel}
         style={{
           ...(size === 'small' ? SHARED_RATING_CHIP_SMALL_STYLE : SHARED_RATING_CHIP_STYLE),
           ...(chipStyleByColor[chipColor] || chipStyleByColor.default),

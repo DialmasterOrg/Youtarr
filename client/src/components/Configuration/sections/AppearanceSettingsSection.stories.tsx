@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import type { StoryObj } from '@storybook/react';
+import { expect, userEvent, within } from 'storybook/test';
 import { ThemeEngineProvider, useThemeEngine } from '../../../contexts/ThemeEngineContext';
 import { AppearanceSettingsSection } from './AppearanceSettingsSection';
 
@@ -32,3 +33,14 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const ThemeAndMotionControls: Story = {};
+
+export const ThemeCardSectionControls: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.click(canvas.getByRole('button', { name: /appearance/i }));
+
+    await expect(canvas.getByText('Section Icons')).toBeInTheDocument();
+    await expect(canvas.getByText('Text Image')).toBeInTheDocument();
+  },
+};

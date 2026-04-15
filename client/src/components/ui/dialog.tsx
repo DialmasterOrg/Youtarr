@@ -17,7 +17,7 @@ const DialogOverlay = React.forwardRef<
     ref={ref}
     className={cn(
       'fixed inset-0 z-[1450] bg-black/50 backdrop-blur-sm',
-      'data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-in',
+      'data-[state=open]:animate-fade-in',
       className
     )}
     {...props}
@@ -98,7 +98,7 @@ const Dialog: React.FC<DialogProps> = ({
             'shadow-2xl',
             'flex flex-col overflow-hidden',
             'focus-visible:outline-none',
-            'data-[state=open]:animate-slide-up',
+            'data-[state=open]:animate-fade-in',
             !fullScreen && maxWidth && maxWidthMap[maxWidth],
             !fullScreen && fullWidth && 'w-[calc(100vw-48px)]',
             fullScreen && 'inset-0 translate-x-0 translate-y-0 w-screen h-screen max-w-none rounded-none',

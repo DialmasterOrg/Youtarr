@@ -60,7 +60,7 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
   const location = useLocation();
   const navigate = useNavigate();
   const layoutCssVars = getThemeLayoutCssVars(layoutPolicy);
-  const { themeMode, showHeaderLogo, showHeaderWordmark } = useThemeEngine();
+  const { themeMode, showHeaderLogo, showHeaderWordmark, showSectionIcons } = useThemeEngine();
   const currentTheme = getThemeById(themeMode);
 
   const isMobile = layoutPolicy.breakpoint === 'mobile';
@@ -220,7 +220,6 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
             <Button
               asChild
               variant="text"
-              startIcon={showLandscapeNavItems ? undefined : item.icon}
               style={{
                 ...getButtonStyle(isParentActive),
                 padding: showLandscapeNavItems ? '5px 10px' : '8px 12px',
@@ -228,7 +227,14 @@ export const NavHeader: React.FC<NavHeaderProps> = ({
                 whiteSpace: 'nowrap',
               }}
             >
-              <RouterLink to={item.to}>{item.label}</RouterLink>
+              <RouterLink to={item.to}>
+                {showSectionIcons && !showLandscapeNavItems && (
+                  <span aria-hidden="true" className="inline-flex shrink-0 items-center justify-center [&>svg]:h-[1.25em] [&>svg]:w-[1.25em]">
+                    {item.icon}
+                  </span>
+                )}
+                <span>{item.label}</span>
+              </RouterLink>
             </Button>
 
             {hasSubItems && isOpen && !showLandscapeNavItems && (

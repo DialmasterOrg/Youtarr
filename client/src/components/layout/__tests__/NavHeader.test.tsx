@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
@@ -103,6 +103,22 @@ describe('NavHeader shared update indicator', () => {
     const titleLink = screen.getByRole('link', { name: /youtarr logo youtarr/i });
     expect(header.style.getPropertyValue('--layout-header-title-inset')).toBe('12px');
     expect(titleLink).toHaveStyle({ marginLeft: 'var(--layout-header-title-inset)' });
+  });
+
+  it('renders section icons in top-nav theme buttons when enabled', () => {
+    renderHeader({ layoutPolicy: resolveThemeLayoutPolicy(getThemeById('flat'), 'desktop') });
+
+    const channelsLink = screen.getByRole('link', { name: 'Channels' });
+    expect(within(channelsLink).getByText('ChannelsIcon')).toBeInTheDocument();
+  });
+
+  it('hides section icons in top-nav theme buttons when disabled', () => {
+    localStorage.setItem('uiSectionIconsVisible:linear', 'false');
+
+    renderHeader();
+
+    const channelsLink = screen.getByRole('link', { name: 'Channels' });
+    expect(within(channelsLink).queryByText('ChannelsIcon')).not.toBeInTheDocument();
   });
 
   it('uses the shared indicator for a yt-dlp-only update on the playful theme', () => {

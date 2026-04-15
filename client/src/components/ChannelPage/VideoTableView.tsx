@@ -14,7 +14,6 @@ import StillLiveDot from './StillLiveDot';
 import RatingBadge from '../shared/RatingBadge';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
 import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '../shared/chipStyles';
-import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 
 type SortBy = 'date' | 'title' | 'duration' | 'size';
 type SortOrder = 'asc' | 'desc';
@@ -239,15 +238,6 @@ function VideoTableView({
                       }}
                       loading="lazy"
                     />
-                    {/* Center hotspot for opening video modal */}
-                    {onVideoClick && (
-                      <ThumbnailClickOverlay
-                        onClick={(e: React.MouseEvent) => {
-                          e.stopPropagation();
-                          onVideoClick(video);
-                        }}
-                      />
-                    )}
                     {video.youtube_removed && (
                       <div
                         style={{

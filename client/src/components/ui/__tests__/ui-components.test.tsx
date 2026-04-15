@@ -70,6 +70,21 @@ describe('Dialog', () => {
     expect(screen.getByText('FullScreen')).toBeInTheDocument();
   });
 
+  it('uses fade-only dialog entrance styling', () => {
+    render(
+      <Dialog open onClose={jest.fn()}>
+        <DialogTitle>Animated Title</DialogTitle>
+        <DialogContent>
+          <p>Animated body</p>
+        </DialogContent>
+      </Dialog>
+    );
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.className).toContain('data-[state=open]:animate-fade-in');
+    expect(dialog.className).not.toContain('data-[state=open]:animate-slide-up');
+  });
+
   it('calls onClose via backdrop click', async () => {
     const onClose = jest.fn();
     render(
@@ -134,6 +149,7 @@ describe('DialogActions', () => {
 
 // ─── label.tsx ───────────────────────────────────────────────────────────────
 import { Label } from '../label';
+import { TextField } from '../text-field';
 
 describe('Label', () => {
   it('renders basic label', () => {
@@ -151,6 +167,27 @@ describe('Label', () => {
     render(<Label disabled data-testid="lbl">Password</Label>);
     const el = screen.getByTestId('lbl');
     expect(el).toHaveClass('opacity-50');
+  });
+});
+
+describe('TextField', () => {
+  it('applies the shared centered floating-label classes', () => {
+    render(<TextField label="Username" defaultValue="" />);
+    const label = screen.getByText('Username');
+
+    expect(label).toHaveClass('inline-flex');
+    expect(label).toHaveStyle({ lineHeight: '1' });
+  });
+
+  it('allows callers to override the floating-label background color', () => {
+    render(
+      <TextField
+        label="Password"
+        InputLabelProps={{ style: { backgroundColor: 'rgb(18, 18, 20)' } }}
+      />
+    );
+
+    expect(screen.getByText('Password')).toHaveStyle({ backgroundColor: 'rgb(18, 18, 20)' });
   });
 });
 

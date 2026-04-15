@@ -221,6 +221,7 @@ const MenuItem = React.forwardRef<HTMLDivElement, MenuItemProps>(
       return (
         <SelectPrimitive.Item
           value={normalizedValue}
+          disabled={disabled}
           className={cn(
             'relative flex items-center gap-2 rounded-md cursor-default select-none outline-none',
             'text-sm font-sans text-foreground whitespace-nowrap',

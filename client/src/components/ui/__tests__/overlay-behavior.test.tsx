@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Menu, MenuItem as PlainMenuItem } from '../menu';
 import { Select, MenuItem } from '../select';
@@ -46,6 +46,35 @@ describe('overlay positioning guards', () => {
     expect(screen.getByRole('menu').style.maxHeight).toBe('468px');
   });
 
+  test('menu flips above the anchor before it would render off screen', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 800 });
+
+    const anchor = document.createElement('button');
+    document.body.appendChild(anchor);
+    anchor.getBoundingClientRect = jest.fn(() => mockAnchorRect({ top: 660, left: 700, right: 760, bottom: 700, width: 60, height: 40 }));
+
+    render(
+      <Menu
+        open
+        anchorEl={anchor}
+        onClose={jest.fn()}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        PaperProps={{ style: { width: '240px', height: '180px' } }}
+      >
+        <PlainMenuItem>First</PlainMenuItem>
+      </Menu>
+    );
+
+    const menu = screen.getByRole('menu');
+
+    await waitFor(() => {
+      expect(menu).toHaveStyle({ top: '476px', left: '520px' });
+    });
+
+    expect(menu).toHaveStyle({ visibility: 'visible' });
+  });
+
   test('menu opening upward clamps height below the header area', () => {
     const anchor = document.createElement('button');
     document.body.appendChild(anchor);
@@ -63,7 +92,7 @@ describe('overlay positioning guards', () => {
       </Menu>
     );
 
-    expect(screen.getByRole('menu').style.maxHeight).toBe('552px');
+    expect(screen.getByRole('menu').style.maxHeight).toBe('544px');
   });
 
   test('select content uses trigger min width and viewport-safe max height', async () => {

@@ -164,6 +164,23 @@
   --channel-meta-chip-border: 1px solid var(--border);
   --channel-meta-chip-shadow: none;
   --channel-meta-chip-icon: var(--muted-foreground);
+
+  /* Selection action FAB tokens */
+  --selection-fab-size: 56px;
+  --selection-fab-radius: 14px;
+  --selection-fab-border: 1px solid transparent;
+  --selection-fab-shadow: var(--shadow-hard);
+  --selection-fab-shadow-hover: var(--shadow-hard-hover);
+  --selection-fab-shadow-active: var(--selection-fab-shadow);
+  --selection-fab-icon-size: 22px;
+  --selection-fab-badge-background: var(--card);
+  --selection-fab-badge-foreground: var(--foreground);
+  --selection-fab-badge-border: 1px solid var(--border);
+  --selection-fab-badge-shadow: var(--shadow-soft);
+  --selection-fab-badge-radius: 999px;
+  --selection-fab-badge-min-size: 24px;
+  --selection-fab-badge-padding-inline: 6px;
+  --selection-fab-badge-font-size: 0.75rem;
 } 
 
 
@@ -287,4 +304,82 @@
   background-color: var(--destructive);
   color: var(--destructive-foreground);
   border: var(--border-weight) solid var(--destructive);
+}
+
+.selection-action-fab-shell {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 1399;
+}
+
+.selection-action-fab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--selection-fab-size);
+  height: var(--selection-fab-size);
+  border-radius: var(--selection-fab-radius);
+  border: var(--selection-fab-border);
+  background: var(--selection-action-fab-bg);
+  color: var(--selection-action-fab-fg);
+  box-shadow: var(--selection-fab-shadow);
+  transition:
+    transform var(--transition-base) ease,
+    background-color var(--transition-base) ease,
+    color var(--transition-base) ease,
+    box-shadow var(--transition-base) ease;
+}
+
+.selection-action-fab svg {
+  width: var(--selection-fab-icon-size);
+  height: var(--selection-fab-icon-size);
+}
+
+.selection-action-fab--download {
+  --selection-action-fab-bg: var(--fab-primary-bg);
+  --selection-action-fab-fg: var(--fab-primary-fg);
+  --selection-action-fab-hover-bg: var(--fab-primary-hover-bg);
+  --selection-action-fab-hover-fg: var(--fab-primary-hover-fg);
+}
+
+.selection-action-fab--delete {
+  --selection-action-fab-bg: var(--fab-error-bg);
+  --selection-action-fab-fg: var(--fab-error-fg);
+  --selection-action-fab-hover-bg: var(--fab-error-hover-bg);
+  --selection-action-fab-hover-fg: var(--fab-error-hover-fg);
+}
+
+.selection-action-fab:hover {
+  background: var(--selection-action-fab-hover-bg);
+  color: var(--selection-action-fab-hover-fg);
+  box-shadow: var(--selection-fab-shadow-hover);
+  transform: translate3d(0, -1px, 0);
+}
+
+.selection-action-fab:active,
+.selection-action-fab--open {
+  box-shadow: var(--selection-fab-shadow-active);
+  transform: translate3d(0, 1px, 0);
+}
+
+.selection-action-fab__badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: var(--selection-fab-badge-min-size);
+  height: var(--selection-fab-badge-min-size);
+  padding: 0;
+  border-radius: var(--selection-fab-badge-radius);
+  border: var(--selection-fab-badge-border);
+  background: var(--selection-fab-badge-background);
+  color: var(--selection-fab-badge-foreground);
+  box-shadow: var(--selection-fab-badge-shadow);
+  display: grid;
+  place-items: center;
+  font-size: var(--selection-fab-badge-font-size);
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
 }

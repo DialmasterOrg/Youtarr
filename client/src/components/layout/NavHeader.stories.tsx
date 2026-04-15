@@ -1,9 +1,20 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { expect, userEvent, within } from 'storybook/test';
 import { MemoryRouter } from 'react-router-dom';
 import { NavHeader } from './NavHeader';
+import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { getThemeById, resolveThemeLayoutPolicy } from '../../themes';
+
+function SectionIconsController({ visible }: { visible: boolean }) {
+  const { setShowSectionIcons } = useThemeEngine();
+
+  useEffect(() => {
+    setShowSectionIcons(visible);
+  }, [setShowSectionIcons, visible]);
+
+  return null;
+}
 
 const navItems = [
   { key: 'channels', label: 'Channels', oldLabel: 'Your Channels', icon: <span>C</span>, to: '/channels' },
@@ -104,3 +115,22 @@ export const LinearDesktop = makeStory('linear', 'desktop');
 export const LinearMobile = makeStory('linear', 'mobile');
 export const FlatDesktop = makeStory('flat', 'desktop');
 export const FlatMobile = makeStory('flat', 'mobile');
+
+export const FlatDesktopWithoutSectionIcons: Story = {
+  ...makeStory('flat', 'desktop'),
+  decorators: [
+    (Story) => (
+      <>
+        <SectionIconsController visible={false} />
+        <Story />
+      </>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole('link', { name: /youtarr logo youtarr/i })).toBeInTheDocument();
+
+    const channelsLink = canvas.getByRole('link', { name: 'Channels' });
+    await expect(within(channelsLink).queryByText('C')).not.toBeInTheDocument();
+  },
+};

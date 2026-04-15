@@ -10,6 +10,7 @@ import {
   Tabs,
   Tab,
   Button,
+  Menu,
   Select,
   MenuItem,
 } from '../ui';
@@ -32,6 +33,7 @@ import { useChannelFetchStatus } from './hooks/useChannelFetchStatus';
 import { useChannelVideoFilters } from './hooks/useChannelVideoFilters';
 import { useChannelVideosPageSize, ALLOWED_PAGE_SIZES, type PageSize } from './hooks/useChannelVideosPageSize';
 import ChannelVideosFilters from './components/ChannelVideosFilters';
+import SelectionActionFab from './components/SelectionActionFab';
 import { useConfig } from '../../hooks/useConfig';
 import { useThemeEngine } from '../../contexts/ThemeEngineContext';
 import { useTriggerDownloads } from '../../hooks/useTriggerDownloads';
@@ -118,6 +120,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const [refreshConfirmOpen, setRefreshConfirmOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
+  const [desktopSelectionAnchorEl, setDesktopSelectionAnchorEl] = useState<HTMLElement | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -478,6 +481,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
   const selectionMode = checkedBoxes.length > 0 ? 'download' : selectedForDeletion.length > 0 ? 'delete' : null;
   const canSelectDownload = selectionMode !== 'delete';
   const canSelectDeletion = selectionMode !== 'download';
+  const desktopSelectionMenuOpen = Boolean(desktopSelectionAnchorEl);
 
   useEffect(() => {
     if (!isMobile) {
@@ -488,6 +492,12 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
 
     if (selectionMode) {
       setMobileActionsOpen(false);
+    }
+  }, [isMobile, selectionMode]);
+
+  useEffect(() => {
+    if (isMobile || !selectionMode) {
+      setDesktopSelectionAnchorEl(null);
     }
   }, [isMobile, selectionMode]);
 
@@ -1027,6 +1037,83 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
     );
   };
 
+  const renderDesktopSelectionAction = () => {
+    if (isMobile || !selectionMode || typeof window === 'undefined') return null;
+
+    const isDownloadAction = selectionMode === 'download';
+    const count = isDownloadAction ? checkedBoxes.length : selectedForDeletion.length;
+
+    return createPortal(
+      <>
+        <SelectionActionFab
+          count={count}
+          intent={isDownloadAction ? 'download' : 'delete'}
+          menuOpen={desktopSelectionMenuOpen}
+          ariaControls="channel-selection-actions-menu"
+          onClick={(event) => {
+            setDesktopSelectionAnchorEl((prev) => (prev ? null : event.currentTarget));
+          }}
+        />
+
+        <Menu
+          id="channel-selection-actions-menu"
+          anchorEl={desktopSelectionAnchorEl}
+          open={desktopSelectionMenuOpen}
+          onClose={() => setDesktopSelectionAnchorEl(null)}
+          anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        >
+          {isDownloadAction && (
+            <>
+              <MenuItem
+                onClick={() => {
+                  handleDownloadClick();
+                  setDesktopSelectionAnchorEl(null);
+                }}
+              >
+                <DownloadIcon size={14} />
+                <span>Download Selected</span>
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  handleBulkIgnore();
+                  setDesktopSelectionAnchorEl(null);
+                }}
+              >
+                <BlockIcon size={14} />
+                <span>Ignore Selected</span>
+              </MenuItem>
+            </>
+          )}
+
+          {!isDownloadAction && (
+            <MenuItem
+              onClick={() => {
+                handleDeleteClick();
+                setDesktopSelectionAnchorEl(null);
+              }}
+              disabled={selectedForDeletion.length === 0 || deleteLoading}
+            >
+              <DeleteIcon size={14} />
+              <span>Delete Selected</span>
+            </MenuItem>
+          )}
+
+          <MenuItem
+            onClick={() => {
+              handleClearSelection();
+              setDesktopSelectionAnchorEl(null);
+            }}
+          >
+            <ClearIcon size={14} />
+            <span>Clear Selection</span>
+          </MenuItem>
+        </Menu>
+      </>,
+      document.body
+    );
+  };
+
   const renderMobileActionsTray = () => {
     if (!isMobile || selectionMode || !mobileActionsOpen || typeof window === 'undefined') return null;
 
@@ -1351,6 +1438,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
           )}
 
           {renderSelectionAction()}
+          {renderDesktopSelectionAction()}
           {renderMobileActionsTray()}
 
           {useInfiniteScroll && (

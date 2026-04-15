@@ -303,7 +303,7 @@ describe('PlexSubfolderMappings', () => {
       await user.click(screen.getByRole('button', { name: 'Subfolder' }));
 
       const kidsOption = screen.getByRole('option', { name: '__kids' });
-      expect(kidsOption).toHaveAttribute('aria-disabled', 'true');
+      expect(kidsOption).toHaveAttribute('data-disabled');
     });
 
     test('selecting a subfolder and library and clicking "Add" calls onMappingsChange with the new mapping appended', async () => {

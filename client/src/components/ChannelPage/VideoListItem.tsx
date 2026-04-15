@@ -16,7 +16,6 @@ import { SHARED_STATUS_CHIP_SMALL_STYLE, SHARED_THEMED_CHIP_SMALL_STYLE } from '
 import { getVideoStatus, getStatusColor, getStatusIcon, getStatusLabel, getMediaTypeInfo, getStatusChipVariant, getStatusChipStyle } from '../../utils/videoStatus';
 import StillLiveDot from './StillLiveDot';
 import DownloadFormatIndicator from '../shared/DownloadFormatIndicator';
-import ThumbnailClickOverlay from '../shared/ThumbnailClickOverlay';
 import ProtectionShieldButton from '../shared/ProtectionShieldButton';
 import RatingBadge from '../shared/RatingBadge';
 interface VideoListItemProps {
@@ -107,17 +106,6 @@ function VideoListItem({
             }}
             loading="lazy"
           />
-
-          {/* Center hotspot for opening video modal */}
-          {onVideoClick && (
-            <ThumbnailClickOverlay
-              onClick={(e: React.MouseEvent) => {
-                e.stopPropagation();
-                onVideoClick(video);
-              }}
-            />
-          )}
-
           {/* YouTube Removed Banner */}
           {video.youtube_removed ? (
             <div

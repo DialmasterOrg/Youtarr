@@ -21,9 +21,11 @@
     "storybook": "cd client && npm run storybook"
   },
   "lint-staged": {
-    "./client/src/*.{ts,tsx},./server/*.js": [
-      "eslint --fix",
-      "git add"
+    "client/src/**/*.{ts,tsx}": [
+      "eslint --fix"
+    ],
+    "server/**/*.js": [
+      "eslint --fix"
     ]
   },
   "devDependencies": {

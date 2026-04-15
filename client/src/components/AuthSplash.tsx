@@ -18,6 +18,8 @@ import {
   AUTH_TITLE_STYLE,
   AUTH_VIEWPORT_STYLE,
 } from './authSurfaceStyles';
+import { useThemeEngine } from '../contexts/ThemeEngineContext';
+import youtarrWordmark from '../Youtarr_text.png';
 
 const getAxiosErrorMessage = (error: unknown) => {
   if (!axios.isAxiosError(error)) {
@@ -51,10 +53,12 @@ interface AuthSplashProps {
 }
 
 export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
+  const { showHeaderLogo, showHeaderWordmark } = useThemeEngine();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const showPlainTitle = !showHeaderWordmark;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,13 +91,50 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
         <Paper elevation={0} style={AUTH_SURFACE_STYLE}>
           {/* Logo/Branding */}
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
-            <Typography
-              variant="h3"
-              component="h1"
+            <div
               style={AUTH_TITLE_STYLE}
+              aria-label="Youtarr brand"
             >
-              Youtarr
-            </Typography>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: showHeaderLogo ? 12 : 0,
+                  flexWrap: 'wrap',
+                  minHeight: 'var(--auth-title-font-size)',
+                }}
+              >
+                {showHeaderLogo && (
+                  <img
+                    src="/logo192.png"
+                    alt="Youtarr logo"
+                    style={{
+                      width: 52,
+                      height: 52,
+                      objectFit: 'contain',
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+                {showHeaderWordmark ? (
+                  <img
+                    src={youtarrWordmark}
+                    alt="Youtarr"
+                    style={{
+                      height: 'calc(var(--auth-title-font-size) + 0.15rem)',
+                      maxWidth: 'min(100%, 260px)',
+                      objectFit: 'contain',
+                      display: 'block',
+                    }}
+                  />
+                ) : showPlainTitle ? (
+                  <Typography variant="h3" component="h1" style={AUTH_TITLE_STYLE}>
+                    Youtarr
+                  </Typography>
+                ) : null}
+              </div>
+            </div>
             <Typography
               variant="subtitle1"
               style={AUTH_SUBTITLE_STYLE}
@@ -104,7 +145,7 @@ export const AuthSplash: React.FC<AuthSplashProps> = ({ setToken }) => {
           </div>
 
           {/* Login Form */}
-          <form onSubmit={handleLogin}>
+          <form onSubmit={handleLogin} style={{ ['--field-label-background' as string]: 'var(--auth-surface-background)' }}>
             <TextField
               fullWidth
               label="Username"
