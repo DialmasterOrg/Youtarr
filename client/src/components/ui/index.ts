@@ -2,6 +2,7 @@
 export * from './accordion';
 export * from './alert';
 export * from './avatar';
+export * from './badge';
 export * from './box';
 export * from './button';
 export * from './card';
@@ -11,7 +12,9 @@ export * from './form';
 export * from './grid';
 export * from './label';
 export * from './layout';
+export * from './list';
 export * from './menu';
+export * from './pagination';
 export * from './paper';
 export * from './progress';
 export * from './select';
