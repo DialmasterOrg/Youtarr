@@ -1,6 +1,7 @@
 const { spawn } = require('child_process');
 const logger = require('../logger');
 const { Playlist, PlaylistVideo } = require('../models');
+const { GLOBAL_DEFAULT_SENTINEL } = require('./filesystem/constants');
 
 class PlaylistModule {
   async getPlaylistInfo(url) {
@@ -128,8 +129,13 @@ class PlaylistModule {
 
   async ensureSourceChannel(uploaderInfo, playlist) {
     const channelModule = require('./channelModule');
+    // When the playlist itself doesn't specify a default_sub_folder, seed the
+    // auto-created channel with GLOBAL_DEFAULT_SENTINEL so downloads land in
+    // the configured global default subfolder — users who have a media-server
+    // library pointed at that subfolder will see the videos. A bare null
+    // would route to the filesystem root, which is rarely what the user wants.
     const seed = {
-      sub_folder: playlist.default_sub_folder,
+      sub_folder: playlist.default_sub_folder || GLOBAL_DEFAULT_SENTINEL,
       video_quality: playlist.video_quality,
       min_duration: playlist.min_duration,
       max_duration: playlist.max_duration,

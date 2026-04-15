@@ -235,6 +235,39 @@ describe('playlistModule', () => {
         expect.any(Object)
       );
     });
+
+    test('seeds GLOBAL_DEFAULT_SENTINEL when playlist has no default_sub_folder', async () => {
+      const { GLOBAL_DEFAULT_SENTINEL } = require('../filesystem/constants');
+      channelModule.upsertChannel.mockResolvedValue({ id: 9, channel_id: 'UCabc' });
+
+      await playlistModule.ensureSourceChannel(
+        { channel_id: 'UCabc' },
+        { default_sub_folder: null }
+      );
+
+      expect(channelModule.upsertChannel).toHaveBeenCalledWith(
+        expect.any(Object),
+        false,
+        null,
+        expect.objectContaining({ sub_folder: GLOBAL_DEFAULT_SENTINEL })
+      );
+    });
+
+    test('uses playlist default_sub_folder when set', async () => {
+      channelModule.upsertChannel.mockResolvedValue({ id: 9, channel_id: 'UCabc' });
+
+      await playlistModule.ensureSourceChannel(
+        { channel_id: 'UCabc' },
+        { default_sub_folder: 'Learning' }
+      );
+
+      expect(channelModule.upsertChannel).toHaveBeenCalledWith(
+        expect.any(Object),
+        false,
+        null,
+        expect.objectContaining({ sub_folder: 'Learning' })
+      );
+    });
   });
 
   describe('playlistAutoDownload', () => {
