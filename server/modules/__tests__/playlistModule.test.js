@@ -207,7 +207,7 @@ describe('playlistModule', () => {
       );
 
       expect(channelModule.upsertChannel).toHaveBeenCalledWith(
-        expect.objectContaining({ channel_id: 'UC9', uploader: 'Creator X' }),
+        expect.objectContaining({ id: 'UC9', uploader: 'Creator X', url: 'https://www.youtube.com/channel/UC9' }),
         false,
         null,
         expect.objectContaining({
@@ -216,6 +216,23 @@ describe('playlistModule', () => {
           min_duration: 60,
           default_rating: 'PG-13',
         })
+      );
+    });
+
+    test('synthesizes a channel URL when only channel_id is provided', async () => {
+      channelModule.upsertChannel.mockResolvedValue({ id: 9, channel_id: 'UCabc' });
+
+      await playlistModule.ensureSourceChannel({ channel_id: 'UCabc' }, {});
+
+      expect(channelModule.upsertChannel).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'UCabc',
+          url: 'https://www.youtube.com/channel/UCabc',
+          uploader: null,
+        }),
+        false,
+        null,
+        expect.any(Object)
       );
     });
   });

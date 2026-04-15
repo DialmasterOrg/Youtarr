@@ -137,8 +137,15 @@ class PlaylistModule {
       audio_format: playlist.audio_format,
       default_rating: playlist.default_rating,
     };
+    // upsertChannel expects the YouTube channel ID under `id` (matches yt-dlp's
+    // metadata shape). When the caller only has a channel_id (as in
+    // doPlaylistDownloads), synthesize a canonical channel URL — yt-dlp resolves
+    // `https://www.youtube.com/channel/<UCxxx>` correctly, and uploader is
+    // populated later when the user activates or refreshes the channel.
+    const channelId = uploaderInfo.id || uploaderInfo.channel_id;
+    const url = uploaderInfo.url || (channelId ? `https://www.youtube.com/channel/${channelId}` : null);
     return channelModule.upsertChannel(
-      { channel_id: uploaderInfo.channel_id, uploader: uploaderInfo.uploader, url: uploaderInfo.url },
+      { id: channelId, uploader: uploaderInfo.uploader || null, url },
       false,
       null,
       seed
