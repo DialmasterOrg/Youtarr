@@ -69,7 +69,7 @@ function renderShell(themeMode: 'playful' | 'linear' | 'flat', isMobile = false,
 }
 
 function getLayoutRoot() {
-  return document.querySelector('[data-layout-contract-root]') as HTMLElement;
+  return screen.getByTestId('layout-contract-root');
 }
 
 function getContentFrame() {

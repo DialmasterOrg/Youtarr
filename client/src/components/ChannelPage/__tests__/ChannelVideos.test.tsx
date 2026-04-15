@@ -27,12 +27,18 @@ jest.mock('react-swipeable', () => ({
 // Mock child components
 jest.mock('../VideoCard', () => ({
   __esModule: true,
-  default: function MockVideoCard({ video, onCheckChange, onVideoClick }: any) {
+  default: function MockVideoCard({ video, onCheckChange, onVideoClick, onDeletionChange, selectionMode }: any) {
     const React = require('react');
+    // Mirror the real VideoCard's gating: when the other mode is active,
+    // the corresponding selection affordance is disabled so the parent's
+    // canSelectDownload / canSelectDeletion contract is observable here.
+    const downloadDisabled = selectionMode === 'delete';
+    const deleteDisabled = selectionMode === 'download';
     return React.createElement(
       'div',
       {
-        'data-testid': `video-card-${video.youtube_id}`
+        'data-testid': `video-card-${video.youtube_id}`,
+        'data-selection-mode': selectionMode ?? 'null',
       },
       React.createElement('span', null, video.title),
       React.createElement(
@@ -40,9 +46,38 @@ jest.mock('../VideoCard', () => ({
         {
           type: 'button',
           'data-testid': `select-video-${video.youtube_id}`,
-          onClick: () => onCheckChange?.(video.youtube_id, true),
+          disabled: downloadDisabled,
+          onClick: () => {
+            if (downloadDisabled) return;
+            onCheckChange?.(video.youtube_id, true);
+          },
         },
         'Select'
+      ),
+      React.createElement(
+        'button',
+        {
+          type: 'button',
+          'data-testid': `select-delete-${video.youtube_id}`,
+          disabled: deleteDisabled,
+          onClick: () => {
+            if (deleteDisabled) return;
+            onDeletionChange?.(video.youtube_id, true);
+          },
+        },
+        'Select for delete'
+      ),
+      // Ungated delete affordance -- used only to simulate a hypothetical broken
+      // child-level gate so the parent's ternary-order invariant can be tested
+      // when both checkedBoxes and selectedForDeletion would coexist.
+      React.createElement(
+        'button',
+        {
+          type: 'button',
+          'data-testid': `force-select-delete-${video.youtube_id}`,
+          onClick: () => onDeletionChange?.(video.youtube_id, true),
+        },
+        'Force select for delete'
       ),
       React.createElement(
         'button',
@@ -459,6 +494,113 @@ describe('ChannelVideos Component', () => {
       expect(screen.getByRole('menuitem', { name: /Download Selected/i })).toBeInTheDocument();
       expect(screen.getByRole('menuitem', { name: /Ignore Selected/i })).toBeInTheDocument();
       expect(screen.getByRole('menuitem', { name: /Clear Selection/i })).toBeInTheDocument();
+    });
+  });
+
+  describe('Selection mode mutual exclusion', () => {
+    test('selecting a video for download locks all rows into download selectionMode', async () => {
+      const user = userEvent.setup();
+
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 3,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      await user.click(screen.getByTestId('select-video-video1'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'download');
+      });
+      expect(screen.getByTestId('video-card-video2')).toHaveAttribute('data-selection-mode', 'download');
+      expect(screen.getByTestId('video-card-short1')).toHaveAttribute('data-selection-mode', 'download');
+
+      const floatingAction = await screen.findByRole('button', {
+        name: /Actions for 1 selected video/i,
+      });
+      await user.click(floatingAction);
+      expect(screen.getByRole('menuitem', { name: /Download Selected/i })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /Delete Selected/i })).not.toBeInTheDocument();
+    });
+
+    test('selecting a video for deletion locks all rows into delete selectionMode', async () => {
+      const user = userEvent.setup();
+
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 3,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      await user.click(screen.getByTestId('select-delete-video2'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('video-card-video2')).toHaveAttribute('data-selection-mode', 'delete');
+      });
+      expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'delete');
+      expect(screen.getByTestId('video-card-short1')).toHaveAttribute('data-selection-mode', 'delete');
+
+      const floatingAction = await screen.findByRole('button', {
+        name: /Actions for 1 selected video/i,
+      });
+      await user.click(floatingAction);
+      expect(screen.getByRole('menuitem', { name: /Delete Selected/i })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /Download Selected/i })).not.toBeInTheDocument();
+    });
+
+    test('prefers download mode when both selections would coexist (ternary order)', async () => {
+      const user = userEvent.setup();
+
+      useChannelVideos.mockReturnValue({
+        videos: mockVideos,
+        totalCount: 3,
+        oldestVideoDate: '2023-01-01',
+        videoFailed: false,
+        autoDownloadsEnabled: false,
+        loading: false,
+        refetch: mockRefetchVideos,
+      });
+
+      renderChannelVideos();
+
+      // Enter download mode first by selecting a downloadable row.
+      await user.click(screen.getByTestId('select-video-video1'));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'download');
+      });
+
+      // Child-level gating contract: with download mode active, every row's
+      // normal delete affordance is disabled, mirroring the real VideoCard.
+      expect(screen.getByTestId('select-delete-video2')).toBeDisabled();
+
+      // Simulate a state where the child-level gate failed and both arrays
+      // end up populated simultaneously. The parent's ternary must still
+      // pick 'download' as the active mode (first branch wins).
+      await user.click(screen.getByTestId('force-select-delete-video2'));
+
+      expect(screen.getByTestId('video-card-video1')).toHaveAttribute('data-selection-mode', 'download');
+      expect(screen.getByTestId('video-card-video2')).toHaveAttribute('data-selection-mode', 'download');
+      expect(screen.getByTestId('video-card-short1')).toHaveAttribute('data-selection-mode', 'download');
+
+      const floatingAction = await screen.findByRole('button', {
+        name: /Actions for 1 selected video/i,
+      });
+      await user.click(floatingAction);
+      expect(screen.getByRole('menuitem', { name: /Download Selected/i })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /Delete Selected/i })).not.toBeInTheDocument();
     });
   });
 

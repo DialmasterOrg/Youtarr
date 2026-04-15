@@ -155,6 +155,7 @@ export function AppShell({
   return (
     <div
       data-layout-contract-root
+      data-testid="layout-contract-root"
       data-layout-breakpoint={layoutPolicy.breakpoint}
       data-nav-placement={layoutPolicy.navPlacement}
       style={{

@@ -324,3 +324,404 @@ describe('ChannelVideosHeader actions menu', () => {
     expect(switchEl).toBeChecked();
   });
 });
+
+// Note: prior tests targeting standalone toolbar buttons (Download Selected,
+// Select All This Page, Clear, Ignore Selected, Delete Selected) and the
+// desktop auto-download InfoIcon were intentionally dropped because those UI
+// affordances no longer exist -- selection actions now live inside the Actions
+// menu, and the auto-download toggle no longer renders its own InfoIcon on
+// desktop. The menu-based equivalents are covered by the "actions menu" suite
+// above.
+
+describe('ChannelVideosHeader rendering', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (useMediaQuery as jest.Mock).mockReturnValue(false);
+  });
+
+  test('renders the header container', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} totalCount={0} />);
+    expect(screen.getByTestId('channel-videos-header')).toBeInTheDocument();
+  });
+});
+
+describe('ChannelVideosHeader video count display', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (useMediaQuery as jest.Mock).mockReturnValue(false);
+  });
+
+  test('displays video count chip when totalCount > 0', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} totalCount={42} />);
+    expect(screen.getByText('42 items')).toBeInTheDocument();
+  });
+
+  test('displays singular item label for one video', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} totalCount={1} />);
+    expect(screen.getByText('1 item')).toBeInTheDocument();
+  });
+
+  test('does not display count chip when totalCount is 0', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} totalCount={0} />);
+    expect(screen.queryByText(/\d+ items?/)).not.toBeInTheDocument();
+  });
+
+  test('displays oldest video date on desktop for videos tab', () => {
+    renderWithProviders(
+      <ChannelVideosHeader
+        {...getDefaultProps()}
+        oldestVideoDate="2023-01-15T00:00:00Z"
+        selectedTab="videos"
+      />
+    );
+    expect(screen.getByText(/Oldest:/)).toBeInTheDocument();
+  });
+
+  test('does not display oldest video date when null', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} oldestVideoDate={null} />);
+    expect(screen.queryByText(/Oldest:/)).not.toBeInTheDocument();
+  });
+
+  test('does not display oldest video date on mobile', () => {
+    renderWithProviders(
+      <ChannelVideosHeader
+        {...getDefaultProps()}
+        isMobile
+        oldestVideoDate="2023-01-15T00:00:00Z"
+      />
+    );
+    expect(screen.queryByText(/Oldest:/)).not.toBeInTheDocument();
+  });
+
+  test('handles large video counts', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} totalCount={9999} />);
+    expect(screen.getByText('9999 items')).toBeInTheDocument();
+  });
+});
+
+describe('ChannelVideosHeader load more button', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (useMediaQuery as jest.Mock).mockReturnValue(false);
+  });
+
+  test('renders load more button', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} />);
+    expect(screen.getByRole('button', { name: /Load More/i })).toBeInTheDocument();
+  });
+
+  test('calls onRefreshClick when load more button is clicked', async () => {
+    const user = userEvent.setup();
+    const props = getDefaultProps();
+
+    renderWithProviders(<ChannelVideosHeader {...props} />);
+
+    await user.click(screen.getByRole('button', { name: /Load More/i }));
+    expect(props.onRefreshClick).toHaveBeenCalledTimes(1);
+  });
+
+  test('disables load more button when fetching', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} fetchingAllVideos />);
+    expect(screen.getByRole('button', { name: /Loading\.\.\./i })).toBeDisabled();
+  });
+
+  test('shows Loading text when fetching videos', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} fetchingAllVideos />);
+    expect(screen.getByText('Loading...')).toBeInTheDocument();
+  });
+
+  test('shows Load More text when not fetching', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} fetchingAllVideos={false} />);
+    expect(screen.getByText('Load More')).toBeInTheDocument();
+  });
+});
+
+describe('ChannelVideosHeader auto-download toggle', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (useMediaQuery as jest.Mock).mockReturnValue(false);
+  });
+
+  test('auto-download switch reflects disabled state', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} autoDownloadsEnabled={false} />);
+    const checkbox = screen.getByRole('checkbox', { name: /Enable Channel Downloads/i });
+    expect(checkbox).not.toBeChecked();
+  });
+});
+
+describe('ChannelVideosHeader search functionality', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (useMediaQuery as jest.Mock).mockReturnValue(false);
+  });
+
+  test('renders search input', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} />);
+    expect(screen.getByPlaceholderText('Search videos...')).toBeInTheDocument();
+  });
+
+  test('displays current search query', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} searchQuery="test query" />);
+    const input = screen.getByPlaceholderText<HTMLInputElement>('Search videos...');
+    expect(input.value).toBe('test query');
+  });
+
+  test('calls onSearchChange when typing in search input', async () => {
+    const user = userEvent.setup();
+    const props = getDefaultProps();
+
+    renderWithProviders(<ChannelVideosHeader {...props} />);
+
+    const input = screen.getByPlaceholderText('Search videos...');
+    await user.type(input, 'a');
+
+    expect(props.onSearchChange).toHaveBeenCalledWith('a');
+  });
+
+  test('displays search icon', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} />);
+    expect(screen.getByTestId('SearchIcon')).toBeInTheDocument();
+  });
+});
+
+describe('ChannelVideosHeader view mode toggle - desktop', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (useMediaQuery as jest.Mock).mockReturnValue(false);
+  });
+
+  test('renders table and grid buttons on desktop', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} />);
+    expect(screen.getByRole('button', { name: /Table View/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Grid View/i })).toBeInTheDocument();
+  });
+
+  test('does not render list view button on desktop', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} />);
+    expect(screen.queryByRole('button', { name: /List View/i })).not.toBeInTheDocument();
+  });
+
+  test('calls onViewModeChange when table view is clicked', async () => {
+    const user = userEvent.setup();
+    const props = { ...getDefaultProps(), viewMode: 'grid' as const };
+
+    renderWithProviders(<ChannelVideosHeader {...props} />);
+
+    await user.click(screen.getByRole('button', { name: /Table View/i }));
+    expect(props.onViewModeChange).toHaveBeenCalled();
+  });
+});
+
+describe('ChannelVideosHeader view mode toggle - mobile', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (useMediaQuery as jest.Mock).mockReturnValue(false);
+  });
+
+  test('renders grid and list buttons on mobile', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} isMobile />);
+    expect(screen.getByRole('button', { name: /Grid View/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /List View/i })).toBeInTheDocument();
+  });
+
+  test('does not render table view button on mobile', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} isMobile />);
+    expect(screen.queryByRole('button', { name: /Table View/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('ChannelVideosHeader hide downloaded toggle - desktop only', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (useMediaQuery as jest.Mock).mockReturnValue(false);
+  });
+
+  test('renders hide downloaded switch on desktop', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} />);
+    expect(screen.getByRole('checkbox', { name: /Hide Downloaded/i })).toBeInTheDocument();
+  });
+
+  test('does not render hide downloaded switch on mobile', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} isMobile />);
+    expect(screen.queryByRole('checkbox', { name: /Hide Downloaded/i })).not.toBeInTheDocument();
+  });
+
+  test('hide downloaded switch reflects checked state', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} hideDownloaded />);
+    expect(screen.getByRole('checkbox', { name: /Hide Downloaded/i })).toBeChecked();
+  });
+
+  test('hide downloaded switch reflects unchecked state', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} hideDownloaded={false} />);
+    expect(screen.getByRole('checkbox', { name: /Hide Downloaded/i })).not.toBeChecked();
+  });
+
+  test('calls onHideDownloadedChange when toggled', async () => {
+    const user = userEvent.setup();
+    const props = getDefaultProps();
+
+    renderWithProviders(<ChannelVideosHeader {...props} />);
+
+    await user.click(screen.getByRole('checkbox', { name: /Hide Downloaded/i }));
+    expect(props.onHideDownloadedChange).toHaveBeenCalledWith(true);
+  });
+});
+
+describe('ChannelVideosHeader large selection counts', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (useMediaQuery as jest.Mock).mockReturnValue(false);
+  });
+
+  test('shows selection count in the Actions button when many videos are selected', () => {
+    const largeSelection = Array.from({ length: 100 }, (_, i) => `video${i}`);
+    renderWithProviders(
+      <ChannelVideosHeader
+        {...getDefaultProps()}
+        checkedBoxes={largeSelection}
+        selectionMode="download"
+      />
+    );
+    expect(screen.getByRole('button', { name: /Actions \(100\)/i })).toBeInTheDocument();
+  });
+
+  test('download menu item shows selection count', async () => {
+    const user = userEvent.setup();
+    const largeSelection = Array.from({ length: 100 }, (_, i) => `video${i}`);
+
+    renderWithProviders(
+      <ChannelVideosHeader
+        {...getDefaultProps()}
+        checkedBoxes={largeSelection}
+        selectionMode="download"
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: /Actions \(100\)/i }));
+    expect(screen.getByRole('menuitem', { name: /Download Selected \(100\)/i })).toBeInTheDocument();
+  });
+
+  test('delete menu item shows selection count', async () => {
+    const user = userEvent.setup();
+    const largeSelection = Array.from({ length: 100 }, (_, i) => `video${i}`);
+
+    renderWithProviders(
+      <ChannelVideosHeader
+        {...getDefaultProps()}
+        selectedForDeletion={largeSelection}
+        selectionMode="delete"
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: /Actions \(100\)/i }));
+    expect(screen.getByRole('menuitem', { name: /Delete Selected \(100\)/i })).toBeInTheDocument();
+  });
+});
+
+describe('ChannelVideosHeader select-all disabling', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (useMediaQuery as jest.Mock).mockReturnValue(false);
+  });
+
+  test('disables Select All (Downloaded) when all paginated videos are not yet downloaded', async () => {
+    const user = userEvent.setup();
+    const notDownloaded: ChannelVideo[] = [
+      { ...mockVideos[0], youtube_id: 'v-a', added: false, removed: false },
+      { ...mockVideos[0], youtube_id: 'v-b', added: false, removed: false },
+    ];
+
+    renderWithProviders(
+      <ChannelVideosHeader {...getDefaultProps()} paginatedVideos={notDownloaded} />
+    );
+
+    await user.click(screen.getByRole('button', { name: /Actions/i }));
+    expect(screen.getByRole('menuitem', { name: /Select All \(Downloaded\)/i })).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  test('disables Select All (Not Downloaded) when every paginated video is already downloaded', async () => {
+    const user = userEvent.setup();
+    const allDownloaded: ChannelVideo[] = [
+      { ...mockVideos[1], youtube_id: 'v-c', added: true, removed: false },
+      { ...mockVideos[1], youtube_id: 'v-d', added: true, removed: false },
+    ];
+
+    renderWithProviders(
+      <ChannelVideosHeader {...getDefaultProps()} paginatedVideos={allDownloaded} />
+    );
+
+    await user.click(screen.getByRole('button', { name: /Actions/i }));
+    expect(screen.getByRole('menuitem', { name: /Select All \(Not Downloaded\)/i })).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  test('disables Select All (Not Downloaded) when paginated videos are members-only', async () => {
+    const user = userEvent.setup();
+    const membersOnly: ChannelVideo[] = [
+      { ...mockVideos[0], youtube_id: 'v-e', added: false, removed: false, availability: 'subscriber_only' },
+    ];
+
+    renderWithProviders(
+      <ChannelVideosHeader {...getDefaultProps()} paginatedVideos={membersOnly} />
+    );
+
+    await user.click(screen.getByRole('button', { name: /Actions/i }));
+    expect(screen.getByRole('menuitem', { name: /Select All \(Not Downloaded\)/i })).toHaveAttribute('aria-disabled', 'true');
+  });
+});
+
+describe('ChannelVideosHeader progress bar', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (useMediaQuery as jest.Mock).mockReturnValue(false);
+  });
+
+  test('shows progress bar when fetching all videos', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} fetchingAllVideos />);
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+  });
+
+  test('does not show progress bar when not fetching', () => {
+    renderWithProviders(<ChannelVideosHeader {...getDefaultProps()} fetchingAllVideos={false} />);
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+});
+
+describe('ChannelVideosHeader tab-specific oldest date behavior', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (useMediaQuery as jest.Mock).mockReturnValue(false);
+  });
+
+  test('hides oldest video date for shorts tab', () => {
+    renderWithProviders(
+      <ChannelVideosHeader
+        {...getDefaultProps()}
+        selectedTab="shorts"
+        oldestVideoDate="2023-01-15T00:00:00Z"
+      />
+    );
+    expect(screen.queryByText(/Oldest:/)).not.toBeInTheDocument();
+  });
+
+  test('shows oldest video date for videos tab', () => {
+    renderWithProviders(
+      <ChannelVideosHeader
+        {...getDefaultProps()}
+        selectedTab="videos"
+        oldestVideoDate="2023-01-15T00:00:00Z"
+      />
+    );
+    expect(screen.getByText(/Oldest:/)).toBeInTheDocument();
+  });
+
+  test('shows oldest video date for streams tab', () => {
+    renderWithProviders(
+      <ChannelVideosHeader
+        {...getDefaultProps()}
+        selectedTab="streams"
+        oldestVideoDate="2023-01-15T00:00:00Z"
+      />
+    );
+    expect(screen.getByText(/Oldest:/)).toBeInTheDocument();
+  });
+});

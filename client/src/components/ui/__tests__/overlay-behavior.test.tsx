@@ -21,6 +21,8 @@ function mockAnchorRect(rect: Partial<DOMRect>) {
 }
 
 describe('overlay positioning guards', () => {
+  let anchor: HTMLButtonElement | null = null;
+
   beforeEach(() => {
     document.documentElement.style.setProperty('--app-shell-overlay-top-offset-px', '60');
     document.documentElement.style.setProperty('--mobile-nav-total-offset-px', '112');
@@ -30,10 +32,12 @@ describe('overlay positioning guards', () => {
   afterEach(() => {
     document.documentElement.style.removeProperty('--app-shell-overlay-top-offset-px');
     document.documentElement.style.removeProperty('--mobile-nav-total-offset-px');
+    anchor?.remove();
+    anchor = null;
   });
 
   test('menu opening downward clamps height above the bottom nav area', () => {
-    const anchor = document.createElement('button');
+    anchor = document.createElement('button');
     document.body.appendChild(anchor);
     anchor.getBoundingClientRect = jest.fn(() => mockAnchorRect({ left: 40, right: 160, bottom: 300, width: 120, height: 40 }));
 
@@ -49,7 +53,7 @@ describe('overlay positioning guards', () => {
   test('menu flips above the anchor before it would render off screen', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 800 });
 
-    const anchor = document.createElement('button');
+    anchor = document.createElement('button');
     document.body.appendChild(anchor);
     anchor.getBoundingClientRect = jest.fn(() => mockAnchorRect({ top: 660, left: 700, right: 760, bottom: 700, width: 60, height: 40 }));
 
@@ -76,7 +80,7 @@ describe('overlay positioning guards', () => {
   });
 
   test('menu opening upward clamps height below the header area', () => {
-    const anchor = document.createElement('button');
+    anchor = document.createElement('button');
     document.body.appendChild(anchor);
     anchor.getBoundingClientRect = jest.fn(() => mockAnchorRect({ top: 620, left: 40, right: 160, width: 120, height: 40 }));
 
