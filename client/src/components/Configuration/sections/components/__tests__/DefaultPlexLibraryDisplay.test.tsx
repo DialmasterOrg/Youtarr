@@ -20,7 +20,7 @@ describe('DefaultPlexLibraryDisplay', () => {
         hasPlexApiKey
       />
     );
-    expect(screen.getByText('Default Plex Library:')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Default Plex Library' })).toBeInTheDocument();
     expect(screen.getByText('YouTube')).toBeInTheDocument();
     expect(screen.getByText('(id: 7)')).toBeInTheDocument();
   });
@@ -95,7 +95,7 @@ describe('DefaultPlexLibraryDisplay', () => {
       />
     );
     expect(screen.queryByTestId('no-default-library-warning')).not.toBeInTheDocument();
-    expect(screen.queryByText('Default Plex Library:')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Default Plex Library' })).not.toBeInTheDocument();
     expect(container).toBeEmptyDOMElement();
   });
 

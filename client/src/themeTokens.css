@@ -105,6 +105,11 @@
   --video-modal-info-bubble-border: 1px solid var(--border);
   --video-modal-info-bubble-shadow: var(--shadow-soft);
 
+  /* Snackbar surface tokens */
+  --snackbar-surface-background: rgba(17, 24, 39, 0.96);
+  --snackbar-surface-border: rgba(255, 255, 255, 0.16);
+  --snackbar-surface-foreground: #ffffff;
+
   /* Auth and setup surface tokens */
   --auth-splash-background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   --auth-surface-background: var(--card);

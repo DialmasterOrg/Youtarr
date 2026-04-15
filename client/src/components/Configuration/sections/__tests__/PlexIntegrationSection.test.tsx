@@ -1,5 +1,5 @@
 import React from 'react';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { PlexIntegrationSection } from '../PlexIntegrationSection';
@@ -455,7 +455,19 @@ describe('PlexIntegrationSection Component', () => {
     test('renders Get Key button', () => {
       const props = createSectionProps();
       renderWithProviders(<PlexIntegrationSection {...props} />);
-      expect(screen.getByTestId('get-key-button')).toBeInTheDocument();
+      const button = screen.getByTestId('get-key-button');
+      expect(button).toBeInTheDocument();
+      expect(button).toHaveClass('bg-success', 'h-10', 'min-w-[150px]');
+    });
+
+    test('keeps the Plex API key actions grouped together', () => {
+      const props = createSectionProps();
+      renderWithProviders(<PlexIntegrationSection {...props} />);
+
+      const actions = screen.getByTestId('plex-api-key-actions');
+      expect(within(actions).getByTestId('get-key-button')).toBeInTheDocument();
+      expect(within(actions).getByLabelText('More information')).toBeInTheDocument();
+      expect(within(actions).getByTestId('manual-instructions-link')).toBeInTheDocument();
     });
 
     test('Get Key button calls onOpenPlexAuthDialog', async () => {
@@ -634,7 +646,7 @@ describe('PlexIntegrationSection Component', () => {
         plexLibraries: [],
       });
       renderWithProviders(<PlexIntegrationSection {...props} />);
-      expect(screen.getByText('Default Plex Library:')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Default Plex Library' })).toBeInTheDocument();
       expect(screen.getByText('Library ID: 12345')).toBeInTheDocument();
       // No duplicated "(id: 12345)" suffix when the id is already the primary display
       expect(screen.queryByText('(id: 12345)')).not.toBeInTheDocument();
@@ -650,7 +662,7 @@ describe('PlexIntegrationSection Component', () => {
         ],
       });
       renderWithProviders(<PlexIntegrationSection {...props} />);
-      expect(screen.getByText('Default Plex Library:')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Default Plex Library' })).toBeInTheDocument();
       expect(screen.getByText('Adults Library')).toBeInTheDocument();
       expect(screen.getByText('(id: 31)')).toBeInTheDocument();
     });
@@ -662,7 +674,7 @@ describe('PlexIntegrationSection Component', () => {
         plexLibraries: [{ id: '1', title: 'Movies' }],
       });
       renderWithProviders(<PlexIntegrationSection {...props} />);
-      expect(screen.getByText('Default Plex Library:')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Default Plex Library' })).toBeInTheDocument();
       expect(screen.getByText('999')).toBeInTheDocument();
       expect(screen.queryByText('(id: 999)')).not.toBeInTheDocument();
     });
@@ -672,7 +684,7 @@ describe('PlexIntegrationSection Component', () => {
         config: createConfig({ plexYoutubeLibraryId: '' }),
       });
       renderWithProviders(<PlexIntegrationSection {...props} />);
-      expect(screen.queryByText('Default Plex Library:')).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Default Plex Library' })).not.toBeInTheDocument();
     });
 
     test('handles alphanumeric library ids in the resolved case', () => {
@@ -682,7 +694,7 @@ describe('PlexIntegrationSection Component', () => {
         plexLibraries: [{ id: 'my-custom-lib-99', title: 'My Custom Library' }],
       });
       renderWithProviders(<PlexIntegrationSection {...props} />);
-      expect(screen.getByText('Default Plex Library:')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Default Plex Library' })).toBeInTheDocument();
       expect(screen.getByText('My Custom Library')).toBeInTheDocument();
       expect(screen.getByText('(id: my-custom-lib-99)')).toBeInTheDocument();
     });
@@ -961,7 +973,7 @@ describe('PlexIntegrationSection Component', () => {
       renderWithProviders(<PlexIntegrationSection {...props} />);
       const button = screen.getByTestId('select-library-button');
       expect(button).not.toBeDisabled();
-      expect(screen.queryByText(/Default Plex Library:/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: /Default Plex Library/i })).not.toBeInTheDocument();
     });
 
     test('handles various port input values', async () => {

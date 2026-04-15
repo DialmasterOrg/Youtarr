@@ -20,6 +20,22 @@ const ToastViewport = React.forwardRef<
 ));
 ToastViewport.displayName = 'ToastViewport';
 
+const enhanceSnackbarChildren = (children: React.ReactNode) => {
+  if (!React.isValidElement(children)) {
+    return children;
+  }
+
+  const existingClassName = (children.props as { className?: string }).className;
+
+  return React.cloneElement(children, {
+    className: cn(
+      'bg-[var(--snackbar-surface-background)] text-[var(--snackbar-surface-foreground)]',
+      'border-[var(--snackbar-surface-border)] shadow-hard backdrop-blur-md',
+      existingClassName
+    ),
+  });
+};
+
 /* ─── Snackbar ───────────────────────────── */
 export interface SnackbarProps {
   open?: boolean;
@@ -71,8 +87,8 @@ const Snackbar: React.FC<SnackbarProps> = ({
       className={cn(posClass, 'animate-slide-up', className)}
       style={style}
     >
-      {children ?? (
-        <div className="flex items-center gap-3 px-4 py-3 bg-foreground text-background rounded-[var(--radius-ui)] shadow-hard min-w-[280px] max-w-[400px]">
+      {children ? enhanceSnackbarChildren(children) : (
+        <div className="flex items-center gap-3 px-4 py-3 bg-[var(--snackbar-surface-background)] text-[var(--snackbar-surface-foreground)] border border-[var(--snackbar-surface-border)] rounded-[var(--radius-ui)] shadow-hard backdrop-blur-md min-w-[280px] max-w-[400px]">
           <span className="flex-1 text-sm font-sans">{message}</span>
           {action && <div className="shrink-0">{action}</div>}
           <button

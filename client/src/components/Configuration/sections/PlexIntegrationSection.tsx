@@ -11,7 +11,6 @@ import {
   AlertTitle,
   Typography,
 } from '../../ui';
-import { Info as InfoIcon } from 'lucide-react';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { ConfigState, PlatformManagedState, PlexConnectionStatus } from '../types';
@@ -120,7 +119,7 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
       </Alert>
 
       {plexConnectionStatus === 'not_connected' && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
+        <Alert severity="warning" className="mb-6">
           Plex is currently unreachable. Verify your Plex server is running and
           that the IP, port, and API key above are correct, then click "Test Connection".
         </Alert>
@@ -226,9 +225,9 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
           </Typography>
         </Grid>
 
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} lg={6}>
           <Box>
-            <Box className="flex gap-2 items-start">
+            <Box className="flex flex-col gap-2 md:flex-row md:items-start">
               <TextField
                 fullWidth
                 label="Plex API Key"
@@ -237,37 +236,32 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
                 onChange={handleInputChange}
                 inputProps={{ 'data-testid': 'plex-api-key-input' }}
               />
-              <Button
-                variant="contained"
-                color="secondary"
-                onClick={onOpenPlexAuthDialog}
-                style={{
-                  minWidth: '120px',
-                  height: '56px',
-                  fontWeight: 'bold'
-                }}
-                startIcon={<InfoIcon />}
-                data-testid="get-key-button"
-              >
-                Get Key
-              </Button>
-            </Box>
-            <Box className="flex items-center mt-1">
-              <InfoTooltip
-                text="Click 'Get Key' to automatically obtain your Plex API key by logging into Plex, or enter it manually."
-                onMobileClick={onMobileTooltipClick}
-              />
-              <Typography variant="caption" color="secondary" className="ml-2">
-                <a
-                  href="https://www.plexopedia.com/plex-media-server/general/plex-token/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: 'inherit' }}
-                  data-testid="manual-instructions-link"
+              <Box className="flex flex-wrap items-center gap-2 self-start md:flex-nowrap md:pt-0.5" data-testid="plex-api-key-actions">
+                <Button
+                  variant="contained"
+                  color="success"
+                  onClick={onOpenPlexAuthDialog}
+                  className="h-10 min-w-[150px] whitespace-nowrap"
+                  data-testid="get-key-button"
                 >
-                  Manual instructions
-                </a>
-              </Typography>
+                  Get Key
+                </Button>
+                <InfoTooltip
+                  text="Click 'Get Key' to automatically obtain your Plex API key by logging into Plex, or enter it manually."
+                  onMobileClick={onMobileTooltipClick}
+                />
+                <Typography variant="caption" color="secondary">
+                  <a
+                    href="https://www.plexopedia.com/plex-media-server/general/plex-token/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: 'inherit' }}
+                    data-testid="manual-instructions-link"
+                  >
+                    Manual instructions
+                  </a>
+                </Typography>
+              </Box>
             </Box>
           </Box>
         </Grid>
@@ -279,6 +273,7 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
               onClick={onTestConnection}
               disabled={!hasPlexServerConfigured || !config.plexApiKey || plexConnectionStatus === 'testing'}
               color={plexConnectionStatus === 'connected' ? 'success' : 'primary'}
+              className="h-10 min-w-[150px] whitespace-nowrap"
               data-testid="test-connection-button"
             >
               {plexConnectionStatus === 'testing' ? 'Testing...' : 'Test Connection'}
