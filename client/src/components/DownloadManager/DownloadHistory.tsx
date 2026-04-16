@@ -247,7 +247,9 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                       >
                         <Box className="flex items-start justify-between gap-2">
                           <Typography variant="subtitle2" className="font-semibold">
-                            {singleVideo ? (
+                            {hasMultiple ? (
+                              `Multiple (${videos.length})`
+                            ) : singleVideo ? (
                               <Link
                                 component="button"
                                 type="button"
