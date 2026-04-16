@@ -1008,6 +1008,46 @@ class JobModule {
     return jobsArray.slice(0, 240);
   }
 
+  // The in-memory job snapshot only refreshes at job completion or server
+  // startup, so per-video fields (removed, protected, normalized_rating, etc.)
+  // go stale after the user mutates a video. Re-read fresh rows from the
+  // Videos table and substitute them in before returning to the client.
+  async getRunningJobsWithFreshVideos() {
+    const jobs = this.getRunningJobs();
+
+    const videoIds = new Set();
+    for (const job of jobs) {
+      const videos = job.data?.videos;
+      if (!Array.isArray(videos)) continue;
+      for (const video of videos) {
+        if (typeof video?.id === 'number') {
+          videoIds.add(video.id);
+        }
+      }
+    }
+
+    if (videoIds.size === 0) {
+      return jobs;
+    }
+
+    const freshVideos = await Video.findAll({
+      where: { id: Array.from(videoIds) }
+    });
+    const freshById = new Map(freshVideos.map(v => [v.id, v.dataValues]));
+
+    return jobs.map(job => {
+      const videos = job.data?.videos;
+      if (!Array.isArray(videos)) return job;
+      return {
+        ...job,
+        data: {
+          ...job.data,
+          videos: videos.map(video => freshById.get(video?.id) || video),
+        },
+      };
+    });
+  }
+
   getAllJobs() {
     return this.jobs;
   }

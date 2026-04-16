@@ -1376,6 +1376,100 @@ describe('JobModule', () => {
     });
   });
 
+  describe('getRunningJobsWithFreshVideos', () => {
+    beforeEach(() => {
+      fs.existsSync.mockReturnValue(false);
+      fs.readFileSync.mockReturnValue(JSON.stringify({ plexApiKey: 'test-key' }));
+      JobModule = require('../jobModule');
+    });
+
+    test('replaces snapshot videos with fresh rows from the Videos table', async () => {
+      const now = Date.now();
+      JobModule.jobs = {
+        'job-1': {
+          timeCreated: now,
+          status: 'Complete',
+          data: {
+            videos: [
+              { id: 1, youtubeId: 'a', removed: false, protected: false, normalized_rating: null },
+              { id: 2, youtubeId: 'b', removed: false, protected: false, normalized_rating: null }
+            ]
+          }
+        }
+      };
+
+      Video.findAll.mockResolvedValueOnce([
+        { id: 1, dataValues: { id: 1, youtubeId: 'a', removed: true, protected: false, normalized_rating: null } },
+        { id: 2, dataValues: { id: 2, youtubeId: 'b', removed: false, protected: true, normalized_rating: 'PG-13' } }
+      ]);
+
+      const result = await JobModule.getRunningJobsWithFreshVideos();
+
+      expect(Video.findAll).toHaveBeenCalledWith({ where: { id: [1, 2] } });
+      expect(result[0].data.videos[0]).toMatchObject({ id: 1, removed: true });
+      expect(result[0].data.videos[1]).toMatchObject({ id: 2, protected: true, normalized_rating: 'PG-13' });
+    });
+
+    test('falls back to snapshot when a video row is missing from the DB', async () => {
+      const now = Date.now();
+      JobModule.jobs = {
+        'job-1': {
+          timeCreated: now,
+          status: 'Complete',
+          data: {
+            videos: [
+              { id: 1, youtubeId: 'a', removed: false },
+              { id: 99, youtubeId: 'gone', removed: false }
+            ]
+          }
+        }
+      };
+
+      Video.findAll.mockResolvedValueOnce([
+        { id: 1, dataValues: { id: 1, youtubeId: 'a', removed: true } }
+      ]);
+
+      const result = await JobModule.getRunningJobsWithFreshVideos();
+
+      expect(result[0].data.videos[0]).toMatchObject({ id: 1, removed: true });
+      expect(result[0].data.videos[1]).toMatchObject({ id: 99, youtubeId: 'gone', removed: false });
+    });
+
+    test('skips DB query when no videos have ids', async () => {
+      const now = Date.now();
+      JobModule.jobs = {
+        'job-1': { timeCreated: now, status: 'Complete', data: { videos: [] } },
+        'job-2': { timeCreated: now, status: 'Complete' }
+      };
+
+      const result = await JobModule.getRunningJobsWithFreshVideos();
+
+      expect(Video.findAll).not.toHaveBeenCalled();
+      expect(result).toHaveLength(2);
+    });
+
+    test('does not mutate the in-memory jobs structure', async () => {
+      const now = Date.now();
+      const originalVideo = { id: 1, youtubeId: 'a', removed: false };
+      JobModule.jobs = {
+        'job-1': {
+          timeCreated: now,
+          status: 'Complete',
+          data: { videos: [originalVideo] }
+        }
+      };
+
+      Video.findAll.mockResolvedValueOnce([
+        { id: 1, dataValues: { id: 1, youtubeId: 'a', removed: true } }
+      ]);
+
+      await JobModule.getRunningJobsWithFreshVideos();
+
+      expect(JobModule.jobs['job-1'].data.videos[0]).toBe(originalVideo);
+      expect(JobModule.jobs['job-1'].data.videos[0].removed).toBe(false);
+    });
+  });
+
   describe('saveJobOnly', () => {
     beforeEach(() => {
       fs.existsSync.mockReturnValue(false);

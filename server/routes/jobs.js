@@ -80,9 +80,14 @@ module.exports = function createJobRoutes({ verifyToken, jobModule, downloadModu
    *                   progress:
    *                     type: number
    */
-  router.get('/runningjobs', verifyToken, (req, res) => {
-    const runningJobs = jobModule.getRunningJobs();
-    res.json(runningJobs);
+  router.get('/runningjobs', verifyToken, async (req, res) => {
+    try {
+      const runningJobs = await jobModule.getRunningJobsWithFreshVideos();
+      res.json(runningJobs);
+    } catch (error) {
+      req.log.error({ err: error }, 'Failed to get running jobs');
+      res.status(500).json({ error: 'Failed to get running jobs' });
+    }
   });
 
   /**

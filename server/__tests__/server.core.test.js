@@ -169,7 +169,8 @@ const createServerModule = ({
 
         const jobModuleMock = {
           getJob: jest.fn(),
-          getRunningJobs: jest.fn(() => [])
+          getRunningJobs: jest.fn(() => []),
+          getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([])
         };
 
         const videosModuleMock = {

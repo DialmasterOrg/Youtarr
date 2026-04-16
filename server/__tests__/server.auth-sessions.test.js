@@ -212,7 +212,8 @@ const createServerModule = ({
         jest.doMock('../modules/plexModule', () => ({}));
         jest.doMock('../modules/downloadModule', () => ({}));
         jest.doMock('../modules/jobModule', () => ({
-          getRunningJobs: jest.fn(() => [])
+          getRunningJobs: jest.fn(() => []),
+          getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([])
         }));
         jest.doMock('../modules/videosModule', () => ({}));
         jest.doMock('../modules/videoMetadataModule', () => ({

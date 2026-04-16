@@ -1330,7 +1330,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         <div
           style={{
             padding: isMobile ? 10 : 12,
-            paddingBottom: isMobile ? 'calc(var(--mobile-nav-total-offset, 0px) + 96px)' : 16,
+            paddingBottom: isMobile && (selectionMode || mobileActionsOpen) ? 96 : 16,
             position: 'relative',
             minHeight: '100vh',
             overflowX: 'clip',

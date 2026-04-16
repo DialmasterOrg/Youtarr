@@ -258,7 +258,8 @@ const createServerModule = ({
           doSpecificDownloads: jest.fn().mockResolvedValue({ success: true })
         }));
         jest.doMock('../modules/jobModule', () => ({
-          getRunningJobs: jest.fn(() => [])
+          getRunningJobs: jest.fn(() => []),
+          getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([])
         }));
         jest.doMock('../modules/videosModule', () => ({}));
         jest.doMock('../modules/videoMetadataModule', () => ({
