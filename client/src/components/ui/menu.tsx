@@ -124,7 +124,7 @@ export interface MenuProps {
   onClose?: () => void;
   children?: React.ReactNode;
   className?: string;
-  PaperProps?: { sx?: Record<string, unknown>; className?: string; elevation?: number; style?: React.CSSProperties };
+  PaperProps?: { className?: string; elevation?: number; style?: React.CSSProperties };
   anchorOrigin?: { vertical: 'top' | 'bottom' | 'center'; horizontal: 'left' | 'right' | 'center' };
   transformOrigin?: { vertical: 'top' | 'bottom' | 'center'; horizontal: 'left' | 'right' | 'center' };
   keepMounted?: boolean;

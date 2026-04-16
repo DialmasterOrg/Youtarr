@@ -17,7 +17,6 @@ export interface TooltipProps {
   enterTouchDelay?: number;
   leaveTouchDelay?: number;
   className?: string;
-  sx?: Record<string, unknown>;
   open?: boolean;
   onClose?: () => void;
 }

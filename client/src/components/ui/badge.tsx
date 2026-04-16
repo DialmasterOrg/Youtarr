@@ -11,7 +11,6 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   invisible?: boolean;
   overlap?: 'rectangular' | 'circular';
   anchorOrigin?: { vertical: 'top' | 'bottom'; horizontal: 'left' | 'right' };
-  sx?: Record<string, unknown>;
 }
 
 const badgeColorMap: Record<string, string> = {
@@ -37,7 +36,6 @@ const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
       anchorOrigin: _anchorOrigin,
       className,
       children,
-      sx: _sx,
       ...props
     },
     ref
@@ -75,7 +73,6 @@ export interface SkeletonProps extends React.HTMLAttributes<HTMLSpanElement> {
   width?: number | string;
   height?: number | string;
   animation?: 'pulse' | 'wave' | false;
-  sx?: Record<string, unknown>;
 }
 
 const Skeleton = React.forwardRef<HTMLSpanElement, SkeletonProps>(
@@ -86,7 +83,6 @@ const Skeleton = React.forwardRef<HTMLSpanElement, SkeletonProps>(
       height,
       animation = 'pulse',
       className,
-      sx: _sx,
       style,
       ...props
     },

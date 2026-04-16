@@ -5,8 +5,6 @@ type AsProp<C extends React.ElementType> = { as?: C };
 type BoxOwnProps<C extends React.ElementType = 'div'> = AsProp<C> & {
   className?: string;
   children?: React.ReactNode;
-  /** sx is accepted but ignored – convert to className when migrating */
-  sx?: Record<string, unknown>;
   component?: C;
   display?: string;
   width?: string | number;
@@ -18,11 +16,10 @@ type BoxProps<C extends React.ElementType = 'div'> = BoxOwnProps<C> &
   Omit<React.ComponentPropsWithRef<C>, keyof BoxOwnProps<C>>;
 
 /**
- * Box – polymorphic layout primitive.
- * `sx` prop is accepted but intentionally dropped; use `className` with Tailwind instead.
+ * Box – polymorphic layout primitive. Use `className` with Tailwind for styling.
  */
 function Box<C extends React.ElementType = 'div'>(
-  { as, component, className, sx: _sx, display: _display, width: _width, fontWeight: _fw, paddingBottom: _pb, children, ...rest }: BoxProps<C>,
+  { as, component, className, display: _display, width: _width, fontWeight: _fw, paddingBottom: _pb, children, ...rest }: BoxProps<C>,
   ref: React.ForwardedRef<React.ElementRef<C>>
 ) {
   const Tag: React.ElementType = as ?? component ?? 'div';

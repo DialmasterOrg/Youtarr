@@ -163,7 +163,6 @@ function VideoMetadata({ video, metadata, loading }: VideoMetadataProps) {
               size="small"
               color="primary"
               onClick={() => setTagsExpanded(true)}
-              sx={{ cursor: 'pointer', fontWeight: 500 }}
             />
           )}
           {tagsExpanded && allTags.length > VISIBLE_TAGS_COUNT && (
@@ -171,7 +170,6 @@ function VideoMetadata({ video, metadata, loading }: VideoMetadataProps) {
               label="Show less"
               size="small"
               onClick={() => setTagsExpanded(false)}
-              sx={{ cursor: 'pointer' }}
             />
           )}
         </Box>

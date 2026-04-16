@@ -13,11 +13,10 @@ export interface LinearProgressProps extends React.HTMLAttributes<HTMLDivElement
   barColor?: string;
   /** Additional className for the progress bar indicator */
   barClassName?: string;
-  sx?: Record<string, unknown>;
 }
 
 const LinearProgress = React.forwardRef<HTMLDivElement, LinearProgressProps>(
-  ({ value, variant = 'indeterminate', color = 'primary', height, barColor, barClassName, className, style, sx: _sx, ...props }, ref) => {
+  ({ value, variant = 'indeterminate', color = 'primary', height, barColor, barClassName, className, style, ...props }, ref) => {
     const colorClass: Record<string, string> = {
       primary: 'bg-primary',
       secondary: 'bg-secondary',

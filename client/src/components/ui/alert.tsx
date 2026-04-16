@@ -17,11 +17,10 @@ export interface AlertProps extends React.HTMLAttributes<HTMLDivElement> {
   onClose?: () => void;
   icon?: React.ReactNode | false;
   action?: React.ReactNode;
-  sx?: Record<string, unknown>;
 }
 
 const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
-  ({ severity = 'info', variant = 'standard', onClose, icon, action, className, children, sx: _sx, ...props }, ref) => {
+  ({ severity = 'info', variant = 'standard', onClose, icon, action, className, children, ...props }, ref) => {
     const config = severityConfig[severity];
     const showIcon = icon !== false;
 

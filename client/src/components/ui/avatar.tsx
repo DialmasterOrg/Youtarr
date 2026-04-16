@@ -31,14 +31,13 @@ export interface AvatarProps
   src?: string;
   alt?: string;
   children?: React.ReactNode;
-  sx?: Record<string, unknown>;
   imgProps?: { onError?: React.ReactEventHandler<HTMLImageElement>; [key: string]: any };
 }
 
 const Avatar = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Root>,
   AvatarProps
->(({ className, size, variant, src, alt, children, sx: _sx, imgProps, ...props }, ref) => {
+>(({ className, size, variant, src, alt, children, imgProps, ...props }, ref) => {
   const [imgError, setImgError] = React.useState(false);
   const showImage = !!src && !imgError;
 

@@ -184,7 +184,6 @@ function MobileFilterDrawer({
                 color={protectedFilter ? 'primary' : 'default'}
                 size="small"
                 onClick={() => onProtectedFilterChange(!protectedFilter)}
-                sx={{ cursor: 'pointer' }}
               />
             </div>
           )}

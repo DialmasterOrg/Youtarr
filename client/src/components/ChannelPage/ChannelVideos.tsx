@@ -1314,13 +1314,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                   }
                 }}
                 aria-label="videos per page"
-                sx={{
-                  minWidth: 64,
-                  '& .MuiSelect-select': {
-                    py: 0.5,
-                    fontSize: '0.875rem',
-                  },
-                }}
+                className="min-w-[64px]"
               >
                 {ALLOWED_PAGE_SIZES.map((size) => (
                   <MenuItem key={size} value={size}>

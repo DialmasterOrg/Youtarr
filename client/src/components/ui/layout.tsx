@@ -18,7 +18,6 @@ export interface ContainerProps extends React.HTMLAttributes<HTMLDivElement> {
   disableGutters?: boolean;
   fixed?: boolean;
   component?: React.ElementType;
-  sx?: Record<string, unknown>;
 }
 
 const Container = React.forwardRef<HTMLDivElement, ContainerProps>(
@@ -28,7 +27,6 @@ const Container = React.forwardRef<HTMLDivElement, ContainerProps>(
       disableGutters = false,
       className,
       children,
-      sx: _sx,
       component: Component = 'div',
       ...props
     },
@@ -60,7 +58,6 @@ export interface DividerProps extends React.HTMLAttributes<HTMLHRElement> {
   flexItem?: boolean;
   light?: boolean;
   component?: React.ElementType;
-  sx?: Record<string, unknown>;
   textAlign?: 'center' | 'left' | 'right';
 }
 
@@ -74,7 +71,6 @@ const Divider = React.forwardRef<HTMLHRElement, DividerProps>(
       component: Component = 'hr',
       className,
       children,
-      sx: _sx,
       textAlign,
       ...props
     },
@@ -132,7 +128,6 @@ export interface StackProps extends React.HTMLAttributes<HTMLDivElement> {
   divider?: React.ReactNode;
   useFlexGap?: boolean;
   component?: React.ElementType;
-  sx?: Record<string, unknown>;
 }
 
 const Stack = React.forwardRef<HTMLDivElement, StackProps>(
@@ -146,7 +141,6 @@ const Stack = React.forwardRef<HTMLDivElement, StackProps>(
       divider,
       className,
       children,
-      sx: _sx,
       component: Component = 'div',
       ...props
     },
@@ -199,11 +193,10 @@ export interface LinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement>
   color?: string;
   variant?: string;
   component?: React.ElementType;
-  sx?: Record<string, unknown>;
 }
 
 const Link = React.forwardRef<HTMLAnchorElement, LinkProps>(
-  ({ underline = 'hover', className, children, sx: _sx, component: Component = 'a', color: _color, variant: _variant, ...props }, ref) =>
+  ({ underline = 'hover', className, children, component: Component = 'a', color: _color, variant: _variant, ...props }, ref) =>
     React.createElement(
       Component as string,
       {
@@ -232,10 +225,9 @@ export interface ToolbarProps extends React.HTMLAttributes<HTMLDivElement> {
   disableGutters?: boolean;
   dense?: boolean;
   variant?: 'regular' | 'dense';
-  sx?: Record<string, unknown>;
 }
 const Toolbar = React.forwardRef<HTMLDivElement, ToolbarProps>(
-  ({ disableGutters = false, dense = false, variant: _v, className, children, sx: _sx, ...props }, ref) => (
+  ({ disableGutters = false, dense = false, variant: _v, className, children, ...props }, ref) => (
     <div
       ref={ref}
       className={cn(

@@ -6,11 +6,10 @@ export interface ListProps extends React.HTMLAttributes<HTMLUListElement> {
   dense?: boolean;
   disablePadding?: boolean;
   subheader?: React.ReactNode;
-  sx?: Record<string, unknown>;
 }
 
 const List = React.forwardRef<HTMLUListElement, ListProps>(
-  ({ dense, disablePadding, subheader, className, children, sx: _sx, ...props }, ref) => (
+  ({ dense, disablePadding, subheader, className, children, ...props }, ref) => (
     <ul
       ref={ref}
       className={cn(
@@ -36,7 +35,6 @@ export interface ListItemProps extends React.HTMLAttributes<HTMLLIElement> {
   selected?: boolean;
   alignItems?: 'flex-start' | 'center';
   secondaryAction?: React.ReactNode;
-  sx?: Record<string, unknown>;
   component?: React.ElementType;
   disabled?: boolean;
 }
@@ -53,7 +51,6 @@ const ListItem = React.forwardRef<HTMLLIElement, ListItemProps>(
       secondaryAction,
       className,
       children,
-      sx: _sx,
       component: Component = 'li',
       disabled,
       ...props
@@ -89,14 +86,13 @@ export interface ListItemButtonProps extends React.ButtonHTMLAttributes<HTMLButt
   disableGutters?: boolean;
   selected?: boolean;
   alignItems?: 'flex-start' | 'center';
-  sx?: Record<string, unknown>;
   component?: React.ElementType;
   to?: string;
 }
 
 const ListItemButton = React.forwardRef<HTMLButtonElement, ListItemButtonProps>(
   (
-    { dense, disableGutters, selected, alignItems = 'center', className, children, sx: _sx, component: Component = 'button', to, ...props },
+    { dense, disableGutters, selected, alignItems = 'center', className, children, component: Component = 'button', to, ...props },
     ref
   ) =>
     React.createElement(
@@ -126,13 +122,12 @@ export interface ListItemTextProps extends React.HTMLAttributes<HTMLDivElement> 
   secondary?: React.ReactNode;
   disableTypography?: boolean;
   inset?: boolean;
-  sx?: Record<string, unknown>;
   primaryTypographyProps?: Record<string, any>;
   secondaryTypographyProps?: Record<string, any>;
 }
 
 const ListItemText = React.forwardRef<HTMLDivElement, ListItemTextProps>(
-  ({ primary, secondary, inset, className, children, sx: _sx, primaryTypographyProps, secondaryTypographyProps, ...props }, ref) => (
+  ({ primary, secondary, inset, className, children, primaryTypographyProps, secondaryTypographyProps, ...props }, ref) => (
     <div
       ref={ref}
       className={cn('flex-1 min-w-0', inset && 'pl-14', className)}
@@ -156,12 +151,10 @@ const ListItemText = React.forwardRef<HTMLDivElement, ListItemTextProps>(
 );
 ListItemText.displayName = 'ListItemText';
 
-export interface ListItemIconProps extends React.HTMLAttributes<HTMLDivElement> {
-  sx?: Record<string, unknown>;
-}
+export type ListItemIconProps = React.HTMLAttributes<HTMLDivElement>;
 
 const ListItemIcon = React.forwardRef<HTMLDivElement, ListItemIconProps>(
-  ({ className, children, sx: _sx, ...props }, ref) => (
+  ({ className, children, ...props }, ref) => (
     <div
       ref={ref}
       className={cn('shrink-0 flex items-center justify-center min-w-[40px] text-muted-foreground [&>svg]:h-5 [&>svg]:w-5', className)}

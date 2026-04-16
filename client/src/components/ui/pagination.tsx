@@ -11,7 +11,6 @@ export interface PaginationProps {
   color?: 'primary' | 'secondary' | 'standard';
   shape?: 'circular' | 'rounded';
   className?: string;
-  sx?: Record<string, unknown>;
 }
 const Pagination: React.FC<PaginationProps> = ({ count, page, onChange, size = 'medium', className }) => {
   const pages = Array.from({ length: count }, (_, i) => i + 1);

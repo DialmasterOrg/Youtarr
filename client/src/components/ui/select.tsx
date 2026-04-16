@@ -48,7 +48,6 @@ export interface SelectProps {
   className?: string;
   children?: React.ReactNode;
   placeholder?: string;
-  sx?: Record<string, unknown>;
   displayEmpty?: boolean;
   open?: boolean;
   onOpen?: () => void;
@@ -80,7 +79,6 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
     children,
     placeholder,
     displayEmpty: _displayEmpty,
-    sx: _sx,
     variant: _variant,
     autoWidth: _autoWidth,
     native: _native,

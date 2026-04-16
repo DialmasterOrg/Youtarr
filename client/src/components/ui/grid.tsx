@@ -15,7 +15,6 @@ export interface GridProps extends React.HTMLAttributes<HTMLDivElement> {
   wrap?: 'nowrap' | 'wrap' | 'wrap-reverse';
   alignItems?: 'flex-start' | 'center' | 'flex-end' | 'stretch' | 'baseline';
   justifyContent?: 'flex-start' | 'center' | 'flex-end' | 'space-between' | 'space-around' | 'space-evenly';
-  sx?: Record<string, unknown>;
   component?: React.ElementType;
   paddingBottom?: string | number;
 }
@@ -61,7 +60,6 @@ const Grid = React.forwardRef<HTMLDivElement, GridProps>(
       justifyContent,
       className,
       children,
-      sx: _sx,
       component: Component = 'div',
       paddingBottom,
       style,

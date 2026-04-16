@@ -128,11 +128,6 @@ function VideoModal({
         maxWidth="lg"
         fullWidth
         fullScreen={isMobile}
-        PaperProps={{
-          sx: {
-            ...(!isMobile && { maxHeight: '92vh', m: 1.5 }),
-          },
-        }}
       >
         {/* Header bar - title + close */}
         <DialogTitle onClose={!isMobile ? onClose : undefined}>
@@ -249,7 +244,7 @@ function VideoModal({
           onClose={handleSnackbarClose}
           severity={snackbar.severity}
           variant="filled"
-          sx={{ width: '100%' }}
+          className="w-full"
         >
           {snackbar.message}
         </Alert>

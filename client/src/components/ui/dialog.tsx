@@ -29,7 +29,7 @@ export interface DialogContentProps extends React.ComponentPropsWithoutRef<typeo
   maxWidth?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | false;
   fullWidth?: boolean;
   fullScreen?: boolean;
-  PaperProps?: { sx?: Record<string, unknown>; className?: string };
+  PaperProps?: { className?: string };
 }
 
 const maxWidthMap: Record<string, string> = {
@@ -60,7 +60,7 @@ export interface DialogProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
   maxWidth?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | false;
   fullWidth?: boolean;
   fullScreen?: boolean;
-  PaperProps?: { sx?: Record<string, unknown>; className?: string };
+  PaperProps?: { className?: string };
   BackdropProps?: Record<string, unknown>;
   disableEscapeKeyDown?: boolean;
 }
