@@ -623,6 +623,7 @@ function VideosPage({ token }: VideosPageProps) {
               page={page}
               totalPages={totalPages}
               onPageChange={(newPage) => setPage(newPage)}
+              compact={isMobile}
             />
           </Grid>
         )}
@@ -676,12 +677,6 @@ function VideosPage({ token }: VideosPageProps) {
                             Added
                           </TableSortLabel>
                         </Stack>
-                      </Box>
-                      <Box style={{ display: 'flex', gap: 16, marginTop: 8 }}>
-                        <Typography variant="caption">Thumbnail</Typography>
-                        <Typography variant="caption">Channel</Typography>
-                        <Typography variant="caption">Video Information</Typography>
-                        <Typography variant="caption">File Info</Typography>
                       </Box>
                     </TableCell>
                   </TableRow>

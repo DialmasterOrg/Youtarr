@@ -59,10 +59,12 @@ function PageControls({
   );
 
   return (
-    <nav role="navigation" aria-label="pagination" className={cn('flex justify-center items-center gap-1.5 flex-wrap', className)}>
-      <button aria-label="go to first page" type="button" onClick={() => onPageChange(1)} disabled={page <= 1} className={navBtnClass}>
-        <ChevronsLeft size={16} />
-      </button>
+    <nav role="navigation" aria-label="pagination" className={cn('flex justify-center items-center flex-wrap', compact ? 'gap-1' : 'gap-1.5', className)}>
+      {!compact && (
+        <button aria-label="go to first page" type="button" onClick={() => onPageChange(1)} disabled={page <= 1} className={navBtnClass}>
+          <ChevronsLeft size={16} />
+        </button>
+      )}
 
       <button aria-label="go to previous page" type="button" onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page <= 1} className={navBtnClass}>
         <ChevronLeft size={16} />
@@ -104,9 +106,11 @@ function PageControls({
         <ChevronRight size={16} />
       </button>
 
-      <button aria-label="go to last page" type="button" onClick={() => onPageChange(totalPages)} disabled={page >= totalPages} className={navBtnClass}>
-        <ChevronsRight size={16} />
-      </button>
+      {!compact && (
+        <button aria-label="go to last page" type="button" onClick={() => onPageChange(totalPages)} disabled={page >= totalPages} className={navBtnClass}>
+          <ChevronsRight size={16} />
+        </button>
+      )}
     </nav>
   );
 }
