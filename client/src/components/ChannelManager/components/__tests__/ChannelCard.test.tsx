@@ -228,8 +228,7 @@ describe('ChannelCard Component', () => {
       );
 
       const card = screen.getByTestId('channel-card-UC1234567890');
-      // Check that the button is disabled
-      expect(card).toHaveAttribute('disabled');
+      expect(card).toHaveAttribute('aria-disabled', 'true');
     });
 
     test('allows navigation when isPendingAddition is false', async () => {

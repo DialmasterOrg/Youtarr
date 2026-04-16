@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from "react";
 import {
   SelectChangeEvent,
+  Alert,
+  Box,
   FormControl,
   InputLabel,
-  Modal,
   Select,
   MenuItem,
   Button,
-  Card,
-  Box,
-  IconButton,
-} from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import useMediaQuery from "@mui/material/useMediaQuery";
-import { useTheme } from "@mui/material/styles";
+  Dialog,
+  DialogActions,
+  DialogContentBody,
+  DialogTitle,
+  Typography,
+} from "./ui";
+import useMediaQuery from "../hooks/useMediaQuery";
 import { PlexLibrary } from "../utils/plexLibraries";
 
 interface PlexLibrarySelectorProps {
@@ -35,8 +36,7 @@ function PlexLibrarySelector({
   currentLibraryId,
 }: PlexLibrarySelectorProps) {
   const [selectedLibrary, setSelectedLibrary] = useState<string>("");
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const isMobile = useMediaQuery('(max-width: 599px)');
 
   const plexError = libraries.length === 0;
 
@@ -76,74 +76,62 @@ function PlexLibrarySelector({
     selectedLibrary === "" || selectedLibrary === currentLibraryId;
 
   return (
-    <Modal open={open} onClose={handleClose} onBackdropClick={handleClose}>
-      <Box
-        sx={{
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          width: isMobile ? "85vw" : 400,
-          bgcolor: "background.paper",
-          boxShadow: 24,
-          p: 4,
-        }}
-      >
-        <Card elevation={0}>
-          <IconButton
-            aria-label="close"
-            onClick={handleClose}
-            sx={{
-              position: "absolute",
-              right: 8,
-              top: 8,
-            }}
-          >
-            <CloseIcon />
-          </IconButton>
-          <h2>Select a Plex Library</h2>
-          {plexError ? (
-            <Box sx={{ color: 'error.main', mb: 2 }}>
-              <p>Unable to connect to Plex server. Please check:</p>
-              <ul style={{ fontSize: 'small' }}>
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      maxWidth="sm"
+      fullWidth
+      className={isMobile ? 'w-[85vw]' : undefined}
+    >
+      <DialogTitle onClose={handleClose}>Select a Plex Library</DialogTitle>
+      <DialogContentBody>
+        {plexError ? (
+          <Alert severity="warning">
+            <Box>
+              <Typography variant="body2" className="mb-2">
+                Unable to connect to Plex server. Please check:
+              </Typography>
+              <ul className="list-disc pl-5 text-sm">
                 <li>Plex server is running</li>
                 <li>Plex IP address is correct in configuration</li>
                 <li>Plex API key is valid</li>
               </ul>
-              <p>Note: Without connecting to Plex, downloading videos will still work, but you will not be able to refresh the library in Plex.</p>
+              <Typography variant="body2" className="mt-3">
+                Without connecting to Plex, downloading videos will still work, but you will not be able to refresh the library in Plex.
+              </Typography>
             </Box>
-          ) : (
-            <FormControl fullWidth>
-              <InputLabel id="select-plex-library">Plex Library</InputLabel>
-              <Select
-                value={selectedLibrary}
-                onChange={handleLibraryChange}
-                label="Plex Library"
-                labelId="select-plex-library"
-              >
-                {libraries.map((library) => (
-                  <MenuItem value={library.id} key={library.id}>
-                    {library.title}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
-          {!plexError && (
-            <Box sx={{ mt: 2 }}>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleSaveSelection}
-                disabled={isSaveDisabled}
-              >
-                Save Selection
-              </Button>
-            </Box>
-          )}
-        </Card>
-      </Box>
-    </Modal>
+          </Alert>
+        ) : (
+          <FormControl fullWidth>
+            <InputLabel id="select-plex-library">Plex Library</InputLabel>
+            <Select
+              value={selectedLibrary}
+              onChange={handleLibraryChange}
+              label="Plex Library"
+              labelId="select-plex-library"
+            >
+              {libraries.map((library) => (
+                <MenuItem value={library.id} key={library.id}>
+                  {library.title}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
+      </DialogContentBody>
+      {!plexError && (
+        <DialogActions>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleSaveSelection}
+            disabled={isSaveDisabled}
+          >
+            Save Selection
+          </Button>
+        </DialogActions>
+      )}
+    </Dialog>
   );
 }
 

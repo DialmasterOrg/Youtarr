@@ -38,6 +38,7 @@ describe('LocalLogin Component', () => {
     expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /login/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /login/i })).toHaveClass('bg-[var(--app-primary-main)]');
   });
 
   test('updates input values when user types', async () => {
@@ -81,7 +82,7 @@ describe('LocalLogin Component', () => {
     
     expect(localStorageMock.setItem).toHaveBeenCalledWith('authToken', mockToken);
     expect(mockSetToken).toHaveBeenCalledWith(mockToken);
-    expect(_testLocationHelpers.getMocks()?.assign).toHaveBeenCalledWith('/configuration');
+    expect(_testLocationHelpers.getMocks()?.assign).toHaveBeenCalledWith('/settings');
   });
 
   test('displays error for invalid credentials (401)', async () => {

@@ -32,10 +32,11 @@ describe('VideoCard Component', () => {
     checkedBoxes: [],
     hoveredVideo: null,
     selectedForDeletion: [],
+    selectionMode: null as 'download' | 'delete' | null,
     onCheckChange: jest.fn(),
     onHoverChange: jest.fn(),
-    onToggleDeletion: jest.fn(),
     onToggleIgnore: jest.fn(),
+    onDeletionChange: jest.fn(),
     onToggleProtection: jest.fn(),
   };
 
@@ -105,10 +106,10 @@ describe('VideoCard Component', () => {
       expect(screen.getByText('Not Downloaded')).toBeInTheDocument();
     });
 
-    test('renders "Downloaded" status for downloaded video', () => {
+    test('renders "Available" status for downloaded video', () => {
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
       renderWithProviders(<VideoCard {...defaultProps} video={downloadedVideo} />);
-      expect(screen.getByText('Downloaded')).toBeInTheDocument();
+      expect(screen.getByText('Available')).toBeInTheDocument();
     });
 
     test('renders "Missing" status for removed video', () => {
@@ -162,12 +163,12 @@ describe('VideoCard Component', () => {
       renderWithProviders(<VideoCard {...defaultProps} video={videoWithFile} />);
       // File size shown in format indicator chip
       expect(screen.getByText(/50/)).toBeInTheDocument();
-      expect(screen.getByTestId('MovieOutlinedIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
     });
 
     test('does not render format indicator when no file path exists', () => {
       renderWithProviders(<VideoCard {...defaultProps} />);
-      const movieIcons = screen.queryAllByTestId('MovieOutlinedIcon');
+      const movieIcons = screen.queryAllByTestId('StorageIcon');
       expect(movieIcons.length).toBe(0);
     });
   });
@@ -234,9 +235,24 @@ describe('VideoCard Component', () => {
       expect(screen.getByRole('checkbox')).toBeInTheDocument();
     });
 
-    test('does not render checkbox for downloaded videos', () => {
+    test('renders delete checkbox for downloaded videos when no active selection mode', () => {
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
       renderWithProviders(<VideoCard {...defaultProps} video={downloadedVideo} />);
+      // Downloaded videos now show a delete checkbox when no download selection is active
+      expect(screen.getByRole('checkbox')).toBeInTheDocument();
+    });
+
+    test('does not render delete checkbox for downloaded videos when download mode is active', () => {
+      const downloadedVideo = { ...mockVideo, added: true, removed: false };
+      renderWithProviders(
+        <VideoCard
+          {...defaultProps}
+          video={downloadedVideo}
+          selectionMode="download"
+          checkedBoxes={['other-video-id']}
+        />
+      );
+      // When download mode is active, hide delete checkbox to avoid confusion
       expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     });
 
@@ -330,6 +346,44 @@ describe('VideoCard Component', () => {
       expect(onCheckChange).toHaveBeenCalledWith('test123', true);
     });
 
+    test('clicking the title opens the video modal instead of selecting the card', async () => {
+      const user = userEvent.setup();
+      const onCheckChange = jest.fn();
+      const onVideoClick = jest.fn();
+
+      renderWithProviders(
+        <VideoCard
+          {...defaultProps}
+          onCheckChange={onCheckChange}
+          onVideoClick={onVideoClick}
+        />
+      );
+
+      await user.click(screen.getByText('Test Video Title'));
+
+      expect(onVideoClick).toHaveBeenCalledWith(mockVideo);
+      expect(onCheckChange).not.toHaveBeenCalled();
+    });
+
+    test('clicking the thumbnail selects the card instead of opening the video modal', async () => {
+      const user = userEvent.setup();
+      const onCheckChange = jest.fn();
+      const onVideoClick = jest.fn();
+
+      renderWithProviders(
+        <VideoCard
+          {...defaultProps}
+          onCheckChange={onCheckChange}
+          onVideoClick={onVideoClick}
+        />
+      );
+
+      await user.click(screen.getByAltText('Test Video Title'));
+
+      expect(onCheckChange).toHaveBeenCalledWith('test123', true);
+      expect(onVideoClick).not.toHaveBeenCalled();
+    });
+
     test('clicking card does not select downloaded videos', async () => {
       const user = userEvent.setup();
       const onCheckChange = jest.fn();
@@ -361,64 +415,44 @@ describe('VideoCard Component', () => {
     });
   });
 
-  describe('Delete Button', () => {
-    test('renders delete button for downloaded videos', () => {
+  describe('Delete Mode', () => {
+    test('renders delete checkbox for downloaded videos in delete mode', () => {
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
-      renderWithProviders(<VideoCard {...defaultProps} video={downloadedVideo} />);
-      expect(screen.getByTestId('DeleteIcon')).toBeInTheDocument();
+      renderWithProviders(
+        <VideoCard {...defaultProps} video={downloadedVideo} selectionMode="delete" />
+      );
+      expect(screen.getByRole('checkbox')).toBeInTheDocument();
     });
 
-    test('does not render delete button for never downloaded videos', () => {
-      renderWithProviders(<VideoCard {...defaultProps} />);
-      expect(screen.queryByTestId('DeleteIcon')).not.toBeInTheDocument();
+    test('does not render delete checkbox for never downloaded videos', () => {
+      renderWithProviders(<VideoCard {...defaultProps} selectionMode="delete" />);
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     });
 
-    test('does not render delete button for missing videos', () => {
+    test('does not render delete checkbox for missing videos', () => {
       const missingVideo = { ...mockVideo, added: true, removed: true };
-      renderWithProviders(<VideoCard {...defaultProps} video={missingVideo} />);
-      expect(screen.queryByTestId('DeleteIcon')).not.toBeInTheDocument();
+      renderWithProviders(<VideoCard {...defaultProps} video={missingVideo} selectionMode="delete" />);
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     });
 
-    test('calls onToggleDeletion when delete button is clicked', async () => {
+    test('calls onDeletionChange when card is clicked in delete mode', async () => {
       const user = userEvent.setup();
-      const onToggleDeletion = jest.fn();
+      const onDeletionChange = jest.fn();
       const downloadedVideo = { ...mockVideo, added: true, removed: false };
 
       renderWithProviders(
         <VideoCard
           {...defaultProps}
           video={downloadedVideo}
-          onToggleDeletion={onToggleDeletion}
+          selectionMode="delete"
+          onDeletionChange={onDeletionChange}
         />
       );
 
-      const deleteButton = screen.getByLabelText('Delete video');
-      await user.click(deleteButton);
+      await user.click(screen.getByRole('checkbox'));
 
-      expect(onToggleDeletion).toHaveBeenCalledTimes(1);
-      expect(onToggleDeletion).toHaveBeenCalledWith('test123');
-    });
-
-    test('delete button click stops propagation', async () => {
-      const user = userEvent.setup();
-      const onToggleDeletion = jest.fn();
-      const onCheckChange = jest.fn();
-      const downloadedVideo = { ...mockVideo, added: true, removed: false };
-
-      renderWithProviders(
-        <VideoCard
-          {...defaultProps}
-          video={downloadedVideo}
-          onToggleDeletion={onToggleDeletion}
-          onCheckChange={onCheckChange}
-        />
-      );
-
-      const deleteButton = screen.getByLabelText('Delete video');
-      await user.click(deleteButton);
-
-      expect(onToggleDeletion).toHaveBeenCalledTimes(1);
-      expect(onCheckChange).not.toHaveBeenCalled();
+      expect(onDeletionChange).toHaveBeenCalledTimes(1);
+      expect(onDeletionChange).toHaveBeenCalledWith('test123', true);
     });
   });
 
@@ -546,8 +580,7 @@ describe('VideoCard Component', () => {
         <VideoCard {...defaultProps} onHoverChange={onHoverChange} />
       );
 
-      // eslint-disable-next-line testing-library/no-container, testing-library/no-node-access
-      const card = container.querySelector('.MuiCard-root');
+      const card = screen.getByTestId('video-card');
       expect(card).toBeTruthy();
       if (card) {
         await user.hover(card);
@@ -559,12 +592,11 @@ describe('VideoCard Component', () => {
       const user = userEvent.setup();
       const onHoverChange = jest.fn();
 
-      const { container } = renderWithProviders(
+      renderWithProviders(
         <VideoCard {...defaultProps} onHoverChange={onHoverChange} />
       );
 
-      // eslint-disable-next-line testing-library/no-container, testing-library/no-node-access
-      const card = container.querySelector('.MuiCard-root');
+      const card = screen.getByTestId('video-card');
       expect(card).toBeTruthy();
       if (card) {
         await user.hover(card);
@@ -656,7 +688,7 @@ describe('VideoCard Component', () => {
       renderWithProviders(<VideoCard {...defaultProps} video={largeVideo} />);
       // Check for file size presence in format indicator chip
       expect(screen.getByText(/GB/)).toBeInTheDocument();
-      expect(screen.getByTestId('MovieOutlinedIcon')).toBeInTheDocument();
+      expect(screen.getByTestId('StorageIcon')).toBeInTheDocument();
     });
 
     test('handles video in both selectedForDeletion and checkedBoxes', () => {
@@ -669,10 +701,12 @@ describe('VideoCard Component', () => {
           checkedBoxes={['test123']}
         />
       );
-      // Should show delete button since it's downloaded
-      expect(screen.getByTestId('DeleteIcon')).toBeInTheDocument();
-      // Should not show checkbox since it's downloaded
-      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+      // selectionMode=null (from defaultProps): downloaded video shows a delete checkbox (checked)
+      const checkbox = screen.getByRole('checkbox');
+      expect(checkbox).toBeInTheDocument();
+      expect(checkbox).toBeChecked();
+      // DeleteIcon (visual indicator for pending deletion) does NOT show in null mode
+      expect(screen.queryByTestId('DeleteIcon')).not.toBeInTheDocument();
     });
 
     test('renders ignored video with reduced opacity', () => {
@@ -680,8 +714,7 @@ describe('VideoCard Component', () => {
       const { container } = renderWithProviders(
         <VideoCard {...defaultProps} video={ignoredVideo} />
       );
-      // eslint-disable-next-line testing-library/no-container, testing-library/no-node-access
-      const card = container.querySelector('.MuiCard-root');
+      const card = screen.getByTestId('video-card');
       expect(card).toHaveStyle({ opacity: 0.7 });
     });
 

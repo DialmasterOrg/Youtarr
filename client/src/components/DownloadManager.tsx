@@ -5,13 +5,13 @@ import React, {
   useRef,
   useCallback,
 } from 'react';
-import { Grid } from '@mui/material';
-import useMediaQuery from '@mui/material/useMediaQuery';
-import { useTheme } from '@mui/material/styles';
+import { Grid } from './ui';
+import useMediaQuery from '../hooks/useMediaQuery';
 import axios from 'axios';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import DownloadNew from './DownloadManager/DownloadNew';
 import DownloadProgress from './DownloadManager/DownloadProgress';
 import DownloadHistory from './DownloadManager/DownloadHistory';
-import DownloadNew from './DownloadManager/DownloadNew';
 import WebSocketContext from '../contexts/WebSocketContext';
 import { Job } from '../types/Job';
 
@@ -24,9 +24,6 @@ function DownloadManager({ token }: DownloadManagerProps) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [anchorEl, setAnchorEl] = useState<
-    Record<string, null | HTMLButtonElement>
-  >({});
   const downloadInitiatedRef = useRef(false);
   const downloadProgressRef = useRef<{ index: number | null; message: string }>(
     { index: null, message: '' }
@@ -36,8 +33,7 @@ function DownloadManager({ token }: DownloadManagerProps) {
     throw new Error('WebSocketContext not found');
   }
 
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery('(max-width: 599px)');
 
   const { subscribe, unsubscribe } = wsContext;
 
@@ -76,7 +72,6 @@ function DownloadManager({ token }: DownloadManagerProps) {
     return () => {
       unsubscribe(processMessagesCallback);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subscribe, unsubscribe, filter, processMessagesCallback]);
 
   useEffect(() => {
@@ -98,30 +93,52 @@ function DownloadManager({ token }: DownloadManagerProps) {
   const pendingJobs = jobs.filter(job => job.status === 'Pending');
 
   return (
-    <Grid container spacing={2}>
-      <DownloadNew
-        videoUrls={videoUrls}
-        setVideoUrls={setVideoUrls}
-        token={token}
-        fetchRunningJobs={fetchRunningJobs}
-        downloadInitiatedRef={downloadInitiatedRef}
+    <Routes>
+      <Route index element={<Navigate to="manual" replace />} />
+      <Route
+        path="manual"
+        element={
+          <Grid container spacing={2}>
+            <DownloadNew
+              videoUrls={videoUrls}
+              setVideoUrls={setVideoUrls}
+              token={token}
+              fetchRunningJobs={fetchRunningJobs}
+              downloadInitiatedRef={downloadInitiatedRef}
+            />
+          </Grid>
+        }
       />
-      <DownloadProgress
-        downloadProgressRef={downloadProgressRef}
-        downloadInitiatedRef={downloadInitiatedRef}
-        pendingJobs={pendingJobs}
-        token={token}
+      <Route
+        path="activity"
+        element={
+          <Grid container spacing={2}>
+            <DownloadProgress
+              downloadProgressRef={downloadProgressRef}
+              downloadInitiatedRef={downloadInitiatedRef}
+              pendingJobs={pendingJobs}
+              token={token}
+            />
+          </Grid>
+        }
       />
-      <DownloadHistory
-        jobs={jobs}
-        expanded={expanded}
-        handleExpandCell={handleExpandCell}
-        anchorEl={anchorEl}
-        setAnchorEl={setAnchorEl}
-        currentTime={currentTime}
-        isMobile={isMobile}
+      <Route
+        path="history"
+        element={
+          <Grid container spacing={2}>
+            <DownloadHistory
+              jobs={jobs}
+              expanded={expanded}
+              handleExpandCell={handleExpandCell}
+              currentTime={currentTime}
+              isMobile={isMobile}
+              token={token}
+            />
+          </Grid>
+        }
       />
-    </Grid>
+      <Route path="*" element={<Navigate to="manual" replace />} />
+    </Routes>
   );
 }
 

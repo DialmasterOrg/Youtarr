@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { Chip, Tooltip, Box, Grow, Popover, Typography, IconButton } from '@mui/material';
-import { Close as CloseIcon, History as HistoryIcon, Lock, Link as LinkIcon } from '@mui/icons-material';
+import { Chip, Tooltip, Box, Grow, Popover, Typography, IconButton } from '../../ui';
+import { Close as CloseIcon, Lock, Link as LinkIcon } from '../../../lib/icons';
+import { History as HistoryIcon } from 'lucide-react';
 import { VideoInfo } from './types';
+import { useThemeEngine } from '../../../contexts/ThemeEngineContext';
 
 interface VideoChipProps {
   video: VideoInfo;
@@ -23,26 +25,27 @@ const getMediaTypeInfo = (mediaType?: string) => {
 
   switch (normalized) {
     case 'short':
-      return { label: 'Short', color: 'secondary.main' } as const;
+      return { label: 'Short', color: 'var(--muted-foreground)' };
     case 'livestream':
-      return { label: 'Live', color: 'error.main' } as const;
+      return { label: 'Live', color: 'var(--destructive)' };
     default:
-      return { label: formatMediaTypeLabel(normalized), color: 'info.main' } as const;
+      return { label: formatMediaTypeLabel(normalized), color: 'var(--primary)' };
   }
 };
 
 const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [tooltipOpen, setTooltipOpen] = useState(false);
 
   if (video.isBulkImport) {
     const bulkLabel = (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <LinkIcon sx={{ fontSize: '0.9rem', color: 'text.secondary', flexShrink: 0 }} />
+      <Box className="flex items-center gap-2">
+        <LinkIcon size={14} data-testid="LinkIcon" style={{ color: 'var(--muted-foreground)', flexShrink: 0 }} />
         <Box>
-          <Box sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>
+          <Box className="text-xs font-bold">
             {video.youtubeId}
           </Box>
-          <Box sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
+          <Box className="text-[0.7rem] text-muted-foreground">
             URL-only import
           </Box>
         </Box>
@@ -50,27 +53,25 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
     );
 
     return (
-      <Grow in timeout={300}>
-        <Tooltip title={video.url}>
+      <Grow in={true} timeout={300}>
+        <Tooltip title={video.url} open={tooltipOpen}>
           <Chip
+            onMouseOver={() => setTooltipOpen(true)}
+            onMouseOut={() => setTooltipOpen(false)}
+            onClick={() => {}}
+            aria-label={video.url}
             label={bulkLabel}
             onDelete={() => onDelete(video.youtubeId)}
-            deleteIcon={<CloseIcon />}
+            deleteIcon={<CloseIcon size={14} data-testid="CloseIcon" />}
             color="info"
             variant="filled"
-            sx={{
+            style={{
               height: 'auto',
-              py: 1,
-              '& .MuiChip-label': {
-                display: 'block',
-                whiteSpace: 'normal'
-              },
+              paddingTop: 8,
+              paddingBottom: 8,
               width: '100%',
               transition: 'all 0.2s ease',
-              '&:hover': {
-                transform: 'scale(1.02)',
-                boxShadow: 2
-              }
+              boxShadow: 'var(--chip-shadow)',
             }}
           />
         </Tooltip>
@@ -89,6 +90,7 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
 
   const open = Boolean(anchorEl);
   const mediaTypeInfo = getMediaTypeInfo(video.media_type);
+  const { themeMode } = useThemeEngine();
 
   const formatDuration = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
@@ -113,67 +115,56 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
   };
 
   const chipLabel = (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-      <Box>
-        <Box sx={{ fontWeight: 'bold', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 0.3 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <div>
+        <div style={{ fontWeight: 'bold', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 3 }}>
           {truncateText(video.channelName, 20)}
           {video.isAlreadyDownloaded && (
             <IconButton
               size="small"
               aria-label="Download history"
               onClick={handlePopoverOpen}
-              sx={{
-                p: 0,
-                ml: 0.5,
-                '&:hover': { backgroundColor: 'transparent' }
-              }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: 0, marginLeft: 4 }}
             >
-              <HistoryIcon sx={{ fontSize: '0.9rem', color: 'text.secondary' }} />
+              <HistoryIcon size={14} data-testid="HistoryIcon" style={{ color: 'var(--muted-foreground)' }} />
             </IconButton>
           )}
-        </Box>
-        <Box sx={{ fontSize: '0.7rem' }}>
+        </div>
+        <div style={{ fontSize: '0.7rem' }}>
           {truncateText(video.videoTitle, 40)}
-        </Box>
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 1 }}>
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8 }}>
         {mediaTypeInfo && (
-          <Box
-            component="span"
-            sx={{
+          <span
+            style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 0.4,
+              gap: 3,
               fontSize: '0.65rem',
               fontWeight: 600,
-              color: 'text.secondary',
+              color: 'var(--muted-foreground)',
             }}
           >
-            <Box
-              component="span"
-              sx={{
+            <span
+              style={{
                 width: 8,
                 height: 8,
                 borderRadius: '50%',
-                bgcolor: mediaTypeInfo.color,
-                flexShrink: 0
+                backgroundColor: mediaTypeInfo.color,
+                flexShrink: 0,
+                display: 'inline-block',
               }}
             />
             {mediaTypeInfo.label}
-          </Box>
+          </span>
         )}
-        <Box sx={{
-          fontSize: '0.65rem',
-          bgcolor: 'action.selected',
-          px: 0.5,
-          py: 0.25,
-          borderRadius: 1
-        }}>
+        <span style={{ fontSize: '0.65rem', backgroundColor: 'rgba(0,0,0,0.1)', padding: '2px 4px', borderRadius: 'var(--radius-ui)' }}>
           {formatDuration(video.duration)}
-        </Box>
-      </Box>
-      {video.isMembersOnly && <Lock fontSize="small" sx={{ ml: 0.5 }} />}
-    </Box>
+        </span>
+      </div>
+      {video.isMembersOnly && <Lock size={16} data-testid="LockIcon" style={{ marginLeft: 4 }} />}
+    </div>
   );
 
   const getTooltipTitle = () => {
@@ -189,27 +180,26 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
   return (
     <>
       <Grow in={true} timeout={300}>
-        <Tooltip title={getTooltipTitle()}>
+        <Tooltip title={getTooltipTitle()} open={tooltipOpen}>
           <Chip
+            onMouseOver={() => setTooltipOpen(true)}
+            onMouseOut={() => setTooltipOpen(false)}
+            onClick={() => {}}
+            aria-label={getTooltipTitle()}
             label={chipLabel}
             onDelete={() => onDelete(video.youtubeId)}
-            deleteIcon={<CloseIcon />}
+            deleteIcon={<CloseIcon size={14} data-testid="CloseIcon" />}
             color={getChipColor()}
             variant="filled"
-            sx={{
+            style={{
               height: 'auto',
-              py: 1,
-              '& .MuiChip-label': {
-                display: 'block',
-                whiteSpace: 'normal'
-              },
+              paddingTop: 8,
+              paddingBottom: 8,
               width: '100%',
               transition: 'all 0.2s ease',
-              '&:hover': {
-                transform: 'scale(1.02)',
-                boxShadow: 2
-              }
+              boxShadow: 'var(--chip-shadow)',
             }}
+
           />
         </Tooltip>
       </Grow>
@@ -226,11 +216,11 @@ const VideoChip: React.FC<VideoChipProps> = ({ video, onDelete }) => {
           horizontal: 'left',
         }}
       >
-        <Box sx={{ p: 1.5, maxWidth: 200 }}>
+        <div style={{ padding: '12px 16px', maxWidth: 200 }}>
           <Typography variant="body2">
             This video was previously downloaded
           </Typography>
-        </Box>
+        </div>
       </Popover>
     </>
   );

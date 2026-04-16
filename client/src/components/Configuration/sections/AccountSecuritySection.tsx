@@ -1,11 +1,10 @@
 import React from 'react';
 import {
-  Box,
   Button,
   TextField,
   Alert,
   Typography,
-} from '@mui/material';
+} from '../../ui';
 import { ConfigurationCard } from '../common/ConfigurationCard';
 import { usePasswordChange } from '../hooks/usePasswordChange';
 import { SnackbarState } from '../types';
@@ -38,7 +37,7 @@ export const AccountSecuritySection: React.FC<AccountSecuritySectionProps> = ({
   if (!showAccountSection) {
     return (
       <ConfigurationCard title="Account & Security">
-        <Alert severity="info" sx={{ mt: 2 }}>
+        <Alert severity="info" style={{ marginTop: 16 }}>
           <Typography variant="body2">
             Username and password authentication is managed by your platform deployment or environment configuration.
             To change your login credentials, update the authentication settings in your platform's configuration or .env file.
@@ -50,7 +49,7 @@ export const AccountSecuritySection: React.FC<AccountSecuritySectionProps> = ({
 
   return (
     <ConfigurationCard title="Account & Security">
-      <Box sx={{ mt: 2 }}>
+      <div style={{ marginTop: 16 }}>
         <Typography variant="subtitle1" gutterBottom>
           Change Password
         </Typography>
@@ -63,7 +62,7 @@ export const AccountSecuritySection: React.FC<AccountSecuritySectionProps> = ({
             Change Password
           </Button>
         ) : (
-          <Box component="form" onSubmit={handlePasswordSubmit}>
+          <form onSubmit={handlePasswordSubmit}>
             <TextField
               fullWidth
               type="password"
@@ -98,8 +97,8 @@ export const AccountSecuritySection: React.FC<AccountSecuritySectionProps> = ({
                   : ''
               }
             />
-            <Box sx={{ mt: 2 }}>
-              <Button type="submit" variant="contained" sx={{ mr: 1 }}>
+            <div style={{ marginTop: 16 }}>
+              <Button type="submit" variant="contained" style={{ marginRight: 8 }}>
                 Update Password
               </Button>
               <Button
@@ -113,10 +112,10 @@ export const AccountSecuritySection: React.FC<AccountSecuritySectionProps> = ({
               >
                 Cancel
               </Button>
-            </Box>
-          </Box>
+            </div>
+          </form>
         )}
-      </Box>
+      </div>
     </ConfigurationCard>
   );
 };

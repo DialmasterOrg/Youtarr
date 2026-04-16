@@ -343,7 +343,7 @@ describe('DownloadProgress', () => {
     expect(screen.getByRole('button', { name: 'Go to Settings' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Go to Settings' }));
-    expect(mockNavigate).toHaveBeenCalledWith('/configuration');
+    expect(mockNavigate).toHaveBeenCalledWith('/settings/integrations');
   });
 
   test('displays generic error without settings button', async () => {

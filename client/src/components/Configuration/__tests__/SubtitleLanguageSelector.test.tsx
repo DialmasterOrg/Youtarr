@@ -370,7 +370,7 @@ describe('SubtitleLanguageSelector Component', () => {
     });
   });
 
-  describe('Integration with MUI Select', () => {
+  describe('Select Integration', () => {
     test('multiple select works correctly', async () => {
       const user = userEvent.setup();
       renderWithProviders(<SubtitleLanguageSelector {...defaultProps} value="en" />);

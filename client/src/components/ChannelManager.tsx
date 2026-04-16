@@ -1,9 +1,7 @@
-import React, { useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Alert,
-  Box,
   Button,
-  Card,
   CardHeader,
   CircularProgress,
   Dialog,
@@ -11,37 +9,33 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  Fab,
   Grid,
-  IconButton,
   List,
   Menu,
   MenuItem,
-  Pagination,
   Popover,
-  Stack,
   TextField,
-  ToggleButton,
-  ToggleButtonGroup,
   Tooltip,
   Typography,
-  Zoom,
   ListItemText,
-} from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import FileUploadIcon from '@mui/icons-material/FileUpload';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
-import FilterAltIcon from '@mui/icons-material/FilterAlt';
-import SortByAlphaIcon from '@mui/icons-material/SortByAlpha';
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
-import TableChartIcon from '@mui/icons-material/TableChart';
-import ViewListIcon from '@mui/icons-material/ViewList';
-import SaveIcon from '@mui/icons-material/Save';
-import UndoIcon from '@mui/icons-material/Undo';
-import FolderSpecialIcon from '@mui/icons-material/FolderSpecial';
-import { useTheme } from '@mui/material/styles';
-import useMediaQuery from '@mui/material/useMediaQuery';
+  Grow,
+  IconButton,
+} from './ui';
+import {
+  Add as AddIcon,
+  HelpOutline as HelpOutlineIcon,
+  FilterAlt as FilterAltIcon,
+  SortByAlpha as SortByAlphaIcon,
+  ArrowUpward as ArrowUpwardIcon,
+  ArrowDownward as ArrowDownwardIcon,
+  TableChart as TableChartIcon,
+  ViewList as ViewListIcon,
+  Save as SaveIcon,
+  MoreVert as MoreVertIcon,
+  Upload as UploadIcon,
+} from '../lib/icons';
+import { Undo2 as UndoIcon, FolderOpen as FolderSpecialIcon } from 'lucide-react';
+import useMediaQuery from '../hooks/useMediaQuery';
 import { useNavigate } from 'react-router-dom';
 import WebSocketContext, { Message } from '../contexts/WebSocketContext';
 import { useConfig } from '../hooks/useConfig';
@@ -58,6 +52,7 @@ import {
 } from '../utils/channelHelpers';
 import HelpDialog from './ChannelManager/HelpDialog';
 import PendingSaveBanner from './ChannelManager/components/PendingSaveBanner';
+import PageControls from './shared/PageControls';
 import ActiveImportBanner from './ChannelManager/components/ActiveImportBanner';
 import { useActiveImport } from '../hooks/useActiveImport';
 
@@ -75,11 +70,12 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   }
 
   const navigate = useNavigate();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const { config } = useConfig(token);
+  const useInfiniteScroll = config.channelVideosHotLoad ?? false;
   const globalPreferredResolution = config.preferredResolution || '1080';
   const { activeImport } = useActiveImport(token);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
   const [newChannelUrl, setNewChannelUrl] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -95,6 +91,9 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
   const [regexPopoverAnchor, setRegexPopoverAnchor] = useState<{ el: HTMLElement; regex: string } | null>(null);
   const [folderMenuAnchor, setFolderMenuAnchor] = useState<null | HTMLElement>(null);
+  const [mobileActionsAnchorEl, setMobileActionsAnchorEl] = useState<null | HTMLElement>(null);
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const channelsContainerRef = useRef<HTMLDivElement | null>(null);
 
   const pageSize = useMemo(() => {
     if (isMobile) {
@@ -111,7 +110,8 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
     searchTerm: filterValue,
     sortOrder,
     subFolder: selectedSubFolder || undefined,
-  }), [token, page, pageSize, filterValue, sortOrder, selectedSubFolder]);
+    append: useInfiniteScroll,
+  }), [token, page, pageSize, filterValue, sortOrder, selectedSubFolder, useInfiniteScroll]);
 
   const {
     channels: serverChannels,
@@ -177,6 +177,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const hasPendingAdditions = pendingAdditions.length > 0;
 
   const pageCount = Math.max(totalPages, 1);
+  const hasNextPage = page < pageCount;
 
   const showDesktopListColumns = !isMobile && viewMode === 'list';
   const listColumnLabels = ['Channel', 'Quality / Folder', 'Auto downloads', 'Filters'];
@@ -205,6 +206,46 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
       setPage(pageCount);
     }
   }, [page, pageCount]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [useInfiniteScroll]);
+
+  // Scroll to channels container when page changes (from pagination controls)
+  useEffect(() => {
+    if (page > 1 && channelsContainerRef.current && !useInfiniteScroll) {
+      channelsContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [page, useInfiniteScroll]);
+
+  useEffect(() => {
+    if (!useInfiniteScroll) {
+      return;
+    }
+    if (!loadMoreRef.current || loading || !hasNextPage) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting) {
+          setPage((prev) => prev + 1);
+        }
+      },
+      {
+        root: null,
+        rootMargin: '0px 0px 240px 0px',
+        threshold: 0,
+      }
+    );
+
+    observer.observe(loadMoreRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [loading, hasNextPage, useInfiniteScroll]);
 
   const handleMessage = useCallback(() => {
     if (!hasPendingChanges) {
@@ -274,7 +315,14 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   };
 
   const handleFilterIconClick = (event: React.MouseEvent<HTMLElement>) => {
-      setFilterAnchorEl(event.currentTarget);
+    if (isMobile) {
+      setMobileActionsAnchorEl(null);
+      setMobileFilterOpen((prev) => !prev);
+      return;
+    }
+
+    const anchorEl = event.currentTarget;
+    setFilterAnchorEl((prev) => (prev ? null : anchorEl));
   };
 
   const handleFilterChange = (value: string) => {
@@ -284,10 +332,11 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   const clearFilter = () => {
     setFilterValue('');
     setFilterAnchorEl(null);
+    setMobileFilterOpen(false);
   };
 
   const handleViewChange = (_: React.MouseEvent<HTMLElement>, next: ViewMode | null) => {
-    if (next && (!isMobile || next === 'list')) {
+    if (next) {
       setViewMode(next);
     }
   };
@@ -309,53 +358,56 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
     setFolderMenuAnchor(null);
   };
 
+  const handleMobileActionsOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setMobileFilterOpen(false);
+    setMobileActionsAnchorEl(event.currentTarget);
+  };
+  const handleMobileActionsClose = () => setMobileActionsAnchorEl(null);
+
   const handleNavigate = (channel: Channel) => {
     if (!channel.channel_id) return;
     navigate(`/channel/${channel.channel_id}`);
   };
 
+  const handleOpenSubscriptions = () => {
+    navigate('/channels/imports');
+  };
+
   return (
     <>
-      <Card sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: 'auto', minHeight: 0 }}>
         <CardHeader
-          title="Your Channels"
+          title="Channels"
           action={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Button
-                size="small"
-                startIcon={<FileUploadIcon />}
-                onClick={() => navigate('/channels/import')}
-              >
-                Import Channels
-              </Button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Tooltip title="Learn how channel downloads work">
-                <IconButton onClick={() => setHelpDialogOpen(true)}>
-                  <HelpOutlineIcon />
+                <IconButton aria-label="Learn how channel downloads work" onClick={() => setHelpDialogOpen(true)}>
+                  <HelpOutlineIcon size={18} />
                 </IconButton>
               </Tooltip>
-            </Box>
+            </div>
           }
+          className="px-0 pt-0"
         />
         <Divider />
-        <Box
-          sx={{
-            p: { xs: 2, md: 3 },
+        <div
+          style={{
+            padding: '8px 0 0',
             display: 'flex',
             flexDirection: 'column',
-            flexGrow: 1,
-            overflow: 'hidden',
+            gap: 8,
           }}
         >
           <ActiveImportBanner activeImport={activeImport} />
 
           {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert severity="error" style={{ marginBottom: 16 }}>
               {error}
             </Alert>
           )}
 
-          <Grid container spacing={2} alignItems="center" sx={{ mb: isMobile ? 1 : 2 }}>
-            <Grid item xs={12} md={9}>
+          <Grid container spacing={2} alignItems="center" style={{ marginBottom: isMobile ? 8 : 16 }}>
+            <Grid item xs={12} md={8}>
               <TextField
                 fullWidth
                 size="small"
@@ -374,118 +426,216 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
                 disabled={isAddingChannel}
               />
             </Grid>
-            <Grid item xs={12} md={3}>
-              <Button
-                fullWidth
-                variant="contained"
-                startIcon={isAddingChannel ? <CircularProgress size={16} color="inherit" /> : <AddIcon />}
-                onClick={handleAddChannel}
-                disabled={isAddingChannel || !newChannelUrl.trim()}
-              >
-                {isAddingChannel ? 'Adding…' : 'Add Channel'}
-              </Button>
+            <Grid item xs={12} md={4}>
+              <Grid container spacing={1.5}>
+                <Grid item xs={6}>
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    startIcon={isAddingChannel ? <CircularProgress size={16} color="inherit" /> : <AddIcon />}
+                    onClick={handleAddChannel}
+                    disabled={isAddingChannel || !newChannelUrl.trim()}
+                  >
+                    {isAddingChannel ? 'Adding…' : 'Channel'}
+                  </Button>
+                </Grid>
+                <Grid item xs={6}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<UploadIcon />}
+                    onClick={handleOpenSubscriptions}
+                  >
+                    Import
+                  </Button>
+                </Grid>
+              </Grid>
             </Grid>
           </Grid>
 
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              mb: 2,
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              {!isMobile && (
-                <ToggleButtonGroup
-                  exclusive
-                  size="small"
-                  value={viewMode}
-                  onChange={handleViewChange}
-                  aria-label="Channel view mode"
+          {/* ── Mobile toolbar: view toggle + filter + actions ── */}
+          {isMobile && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              {/* Grid / List view toggle */}
+              <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 'var(--radius-ui)', overflow: 'hidden', flexShrink: 0 }}>
+                <Button
+                  variant={viewMode === 'list' ? 'contained' : 'ghost'}
+                  size="sm"
+                  aria-label="List view"
+                  style={{ borderRadius: 0, borderRight: '1px solid var(--border)', padding: '5px 10px' }}
+                  onClick={() => handleViewChange(null as any, 'list')}
                 >
-                  <ToggleButton value="list" aria-label="List view">
-                    <ViewListIcon fontSize="small" />
-                  </ToggleButton>
-                  <ToggleButton value="grid" aria-label="Grid view">
-                    <TableChartIcon fontSize="small" />
-                  </ToggleButton>
-                </ToggleButtonGroup>
-              )}
+                  <ViewListIcon size={18} />
+                </Button>
+                <Button
+                  variant={viewMode === 'grid' ? 'contained' : 'ghost'}
+                  size="sm"
+                  aria-label="Grid view"
+                  style={{ borderRadius: 0, padding: '5px 10px' }}
+                  onClick={() => handleViewChange(null as any, 'grid')}
+                >
+                  <TableChartIcon size={18} />
+                </Button>
+              </div>
+
+              {/* Filter button */}
+              <Button
+                variant={filterValue ? 'contained' : 'outlined'}
+                size="sm"
+                startIcon={<FilterAltIcon size={16} />}
+                onClick={handleFilterIconClick}
+                className="intent-base"
+              >
+                Filters{filterValue ? ' •' : ''}
+              </Button>
+
+              {/* Actions button */}
+              <Button
+                variant="outlined"
+                size="sm"
+                endIcon={<MoreVertIcon size={16} />}
+                onClick={handleMobileActionsOpen}
+                className="intent-base"
+                style={{ marginLeft: 'auto' }}
+              >
+                Actions
+              </Button>
+
+              {/* Mobile actions menu — opens upward above nav bar */}
+              <Menu
+                anchorEl={mobileActionsAnchorEl}
+                open={Boolean(mobileActionsAnchorEl)}
+                onClose={handleMobileActionsClose}
+                anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              >
+                <MenuItem onClick={() => { handleSortToggle(); handleMobileActionsClose(); }}>
+                  <ListItemText
+                    primary={sortOrder === 'asc' ? 'Sort Z → A' : 'Sort A → Z'}
+                    secondary={sortOrder === 'asc' ? 'Currently A → Z' : 'Currently Z → A'}
+                  />
+                </MenuItem>
+                {availableFolderOptions.length > 1 && [
+                  <Divider key="folder-divider" style={{ margin: '4px 0' }} />,
+                  <MenuItem key="folder-all" selected={!selectedSubFolder} onClick={() => { handleSubFolderSelect(null); handleMobileActionsClose(); }}>
+                    <ListItemText primary="All folders" secondary="Show every channel" />
+                  </MenuItem>,
+                  ...availableFolderOptions.map((folder) => (
+                    <MenuItem
+                      key={folder}
+                      selected={selectedSubFolder === folder}
+                      onClick={() => { handleSubFolderSelect(folder); handleMobileActionsClose(); }}
+                    >
+                      <ListItemText primary={formatSubFolderLabel(folder)} />
+                    </MenuItem>
+                  )),
+                ]}
+              </Menu>
+            </div>
+          )}
+
+          {/* ── Desktop toolbar ── */}
+          {!isMobile && (
+          <div
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+                <button
+                  type="button"
+                  onClick={() => handleViewChange(null as any, 'list')}
+                  aria-label="List view"
+                  style={{ background: viewMode === 'list' ? 'var(--primary)' : 'transparent', color: viewMode === 'list' ? 'var(--primary-foreground)' : 'inherit', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: '4px 8px' }}
+                >
+                  <ViewListIcon size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleViewChange(null as any, 'grid')}
+                  aria-label="Grid view"
+                  style={{ background: viewMode === 'grid' ? 'var(--primary)' : 'transparent', color: viewMode === 'grid' ? 'var(--primary-foreground)' : 'inherit', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', padding: '4px 8px' }}
+                >
+                  <TableChartIcon size={18} />
+                </button>
+              </div>
 
               <Tooltip title={`Sort alphabetically (${sortOrder === 'asc' ? 'A → Z' : 'Z → A'})`}>
-                <IconButton onClick={handleSortToggle} color="primary" size="small">
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <SortByAlphaIcon />
+                <button aria-label={`Sort alphabetically (${sortOrder === 'asc' ? 'A → Z' : 'Z → A'})`} className="icon-btn" type="button" onClick={handleSortToggle} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', padding: 4, borderRadius: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <SortByAlphaIcon size={18} />
                     {sortOrder === 'asc' ?
-                      <ArrowUpwardIcon style={{ transform: 'scale(0.75,1)', marginLeft: -8 }} fontSize="small" /> :
-                      <ArrowDownwardIcon style={{ transform: 'scale(0.75,1)', marginLeft: -8 }} fontSize="small" />}
-                  </Box>
-                </IconButton>
+                      <ArrowUpwardIcon size={14} style={{ transform: 'scale(0.75,1)', marginLeft: -8 }} /> :
+                      <ArrowDownwardIcon size={14} style={{ transform: 'scale(0.75,1)', marginLeft: -8 }} />}
+                  </div>
+                </button>
               </Tooltip>
 
               <Tooltip title="Filter by channel name">
-                <IconButton
+                <button
+                  aria-label="Filter by channel name"
+                  className={`icon-btn${filterValue ? ' icon-btn-primary' : ''}`}
+                  type="button"
                   onClick={handleFilterIconClick}
-                  color={filterValue ? 'primary' : 'default'}
-                  size="small"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: filterValue ? 'var(--primary)' : 'inherit', display: 'inline-flex', alignItems: 'center', padding: 4, borderRadius: 4 }}
                 >
-                  <FilterAltIcon />
-                </IconButton>
+                  <FilterAltIcon size={18} />
+                </button>
               </Tooltip>
 
               <Tooltip title={folderTooltip}>
-                <IconButton
+                <button
+                  aria-label={folderTooltip}
+                  className={`icon-btn${folderControlActive ? ' icon-btn-primary' : ''}`}
+                  type="button"
                   onClick={handleFolderMenuOpen}
-                  color={folderControlActive ? 'primary' : 'default'}
-                  size="small"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: folderControlActive ? 'var(--primary)' : 'inherit', display: 'inline-flex', alignItems: 'center', padding: 4, borderRadius: 4 }}
                 >
-                  <FolderSpecialIcon fontSize="small" />
-                </IconButton>
+                  <FolderSpecialIcon size={18} />
+                </button>
               </Tooltip>
-            </Box>
+            </div>
 
             <Typography variant="body2" color="text.secondary">
               {(folderControlActive && filterValue) ? `Total matching channels: ${total}` : `Total channels: ${total}`}
             </Typography>
-          </Box>
+          </div>
+          )}
 
-          <Divider sx={{ mb: 2 }} />
+          <Divider style={{ marginBottom: 8 }} />
 
-          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} ref={channelsContainerRef}>
             {loading ? (
-              <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', paddingTop: 24, paddingBottom: 24 }}>
                 <CircularProgress />
-              </Box>
+              </div>
             ) : displayChannels.length === 0 ? (
-              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 24, paddingBottom: 24 }}>
                 <Typography color="text.secondary">No channels found. Try adjusting your filter.</Typography>
-              </Box>
+              </div>
             ) : (
-              <Box sx={{ flex: 1, overflowY: 'auto', pr: { md: 1 }, pb: 2 }}>
+              <div style={{ paddingBottom: useInfiniteScroll ? 8 : 0 }}>
                 {viewMode === 'list' ? (
                   <List disablePadding>
                     {showDesktopListColumns && (
-                      <Box
-                        sx={{
+                      <div
+                        style={{
                           display: 'grid',
                           gridTemplateColumns: CHANNEL_LIST_DESKTOP_TEMPLATE,
-                          columnGap: 2,
-                          px: { xs: 1, md: 2 },
-                          py: 1,
-                          color: 'text.secondary',
+                          columnGap: 16,
+                          padding: '4px 16px',
+                          color: 'var(--muted-foreground)',
                           textTransform: 'uppercase',
-                          letterSpacing: 0.4,
+                          letterSpacing: '0.4px',
                           fontSize: '0.75rem',
                         }}
                       >
                         {listColumnLabels.map((label) => (
-                          <Typography key={label} variant="caption" sx={{ fontWeight: 600 }}>
+                          <Typography key={label} variant="caption" style={{ fontWeight: 600 }}>
                             {label}
                           </Typography>
                         ))}
-                        <Box />
-                      </Box>
+                        <div />
+                      </div>
                     )}
                     {displayChannels.map((channel) => {
                       const rowIndex = listRowIndex;
@@ -506,8 +656,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
                     })}
                   </List>
                 ) : (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                    <Grid container spacing={2}>
+                  <Grid container spacing={2}>
                       {displayChannels.map((channel) => (
                         <Grid item xs={12} sm={6} md={4} key={channel.channel_id || channel.url}>
                           <ChannelCard
@@ -522,43 +671,49 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
                         </Grid>
                       ))}
                     </Grid>
-                  </Box>
                 )}
-              </Box>
+              </div>
             )}
 
-            <Box
-              sx={{
-                position: 'sticky',
-                bottom: 0,
-                borderTop: '1px solid',
-                borderColor: 'divider',
-                pt: isMobile ? 1 : 1.5,
-                pb: isMobile ? 1 : 1.5,
-                bgcolor: 'background.paper',
-                display: 'flex',
-                justifyContent: 'center',
-                zIndex: 1,
-              }}
-            >
-              <Pagination
-                count={pageCount}
-                page={page}
-                color="primary"
-                onChange={(_, value) => setPage(value)}
-                showFirstButton
-                showLastButton
-              />
-            </Box>
-          </Box>
-        </Box>
-      </Card>
+            {useInfiniteScroll ? (
+              <>
+                <div
+                  ref={loadMoreRef}
+                  style={{
+                    height: 24,
+                    width: '100%',
+                  }}
+                />
+                {loading && hasNextPage && (
+                  <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 12 }}>
+                    <CircularProgress size={20} />
+                  </div>
+                )}
+              </>
+            ) : (
+              <div
+                style={{
+                  paddingTop: isMobile ? 4 : 8,
+                  paddingBottom: 0,
+                }}
+              >
+                <PageControls
+                  page={page}
+                  totalPages={pageCount}
+                  onPageChange={setPage}
+                  compact={isMobile}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       <Menu anchorEl={folderMenuAnchor} open={Boolean(folderMenuAnchor)} onClose={handleFolderMenuClose}>
         <MenuItem selected={!selectedSubFolder} onClick={() => handleSubFolderSelect(null)}>
           <ListItemText primary="All folders" secondary="Show every channel" />
         </MenuItem>
-        <Divider sx={{ my: 0.5 }} />
+        <Divider style={{ margin: '4px 0' }} />
         {availableFolderOptions.length === 0 ? (
           <MenuItem disabled>
             <ListItemText primary="No folders available" />
@@ -577,13 +732,13 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
       </Menu>
 
       <Popover
-        open={Boolean(filterAnchorEl)}
+        open={!isMobile && Boolean(filterAnchorEl)}
         anchorEl={filterAnchorEl}
         onClose={() => setFilterAnchorEl(null)}
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
         transformOrigin={{vertical: 'bottom', horizontal: 'center'}}
       >
-        <Box sx={{ p: 2, minWidth: 240 }}>
+        <div style={{ padding: 16, minWidth: 240 }}>
           <TextField
             label="Filter channels"
             value={filterValue}
@@ -592,12 +747,63 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
             autoFocus
           />
           {filterValue && (
-            <Button size="small" onClick={clearFilter} sx={{ mt: 1 }}>
+            <Button size="small" onClick={clearFilter} style={{ marginTop: 8 }}>
               Clear filter
             </Button>
           )}
-        </Box>
+        </div>
       </Popover>
+
+      {isMobile && mobileFilterOpen && (
+        <>
+          <div
+            aria-hidden="true"
+            onClick={() => setMobileFilterOpen(false)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 1299,
+              backgroundColor: 'var(--overlay-backdrop-background)',
+            }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="channel-filter-sheet-title"
+            style={{
+              position: 'fixed',
+              left: 8,
+              right: 8,
+              bottom: 'calc(var(--mobile-nav-total-offset, 0px) + 8px)',
+              zIndex: 1300,
+              backgroundColor: 'var(--card)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-ui)',
+              boxShadow: 'var(--shadow-hard)',
+              padding: 12,
+            }}
+          >
+            <Typography id="channel-filter-sheet-title" variant="subtitle2" style={{ fontWeight: 700, marginBottom: 8 }}>
+              Filter channels
+            </Typography>
+            <TextField
+              label="Filter channels"
+              value={filterValue}
+              onChange={(e) => handleFilterChange(e.target.value)}
+              fullWidth
+              autoFocus
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 8 }}>
+              <Button size="small" variant="outlined" onClick={clearFilter} disabled={!filterValue}>
+                Clear filter
+              </Button>
+              <Button size="small" onClick={() => setMobileFilterOpen(false)}>
+                Done
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
 
       <Dialog open={dialogOpen} onClose={() => { setDialogOpen(false); setDialogMessage(null); }}>
         <DialogContent>
@@ -617,42 +823,40 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
 
       <PendingSaveBanner show={hasPendingAdditions} />
 
-      <Zoom in={hasPendingChanges}>
-        <Box
-          sx={{
+      <Grow in={hasPendingChanges}>
+        <div
+          style={{
             position: 'fixed',
             bottom: 72,
             right: isMobile ? 16 : 32,
-            zIndex: (theme) => theme.zIndex.snackbar + 1,
-            pointerEvents: 'none',
+            zIndex: 1401,
+            pointerEvents: hasPendingChanges ? 'auto' : 'none',
           }}
         >
-          <Stack spacing={1} alignItems="flex-end" sx={{ pointerEvents: 'auto' }}>
-            <Fab
-              variant="extended"
-              color="default"
-              size={isMobile ? 'medium' : 'large'}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+            <button
+              type="button"
               onClick={undoChanges}
               disabled={isSaving}
               aria-label="Undo changes"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: isMobile ? '6px 16px' : '8px 20px', borderRadius: 28, background: 'var(--card)', border: '1px solid var(--border)', cursor: 'pointer', fontWeight: 600, color: 'var(--foreground)', boxShadow: 'var(--shadow-hard, 0 4px 12px rgba(0,0,0,0.2))' }}
             >
-              <UndoIcon sx={{ mr: 1 }} />
+              <UndoIcon size={18} />
               Undo
-            </Fab>
-            <Fab
-              variant="extended"
-              color="primary"
-              size={isMobile ? 'medium' : 'large'}
+            </button>
+            <button
+              type="button"
               onClick={handleSaveChanges}
               disabled={isSaving}
               aria-label="Save changes"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: isMobile ? '6px 16px' : '8px 20px', borderRadius: 28, background: 'var(--primary)', border: 'none', cursor: 'pointer', fontWeight: 600, color: 'var(--primary-foreground)', boxShadow: 'var(--shadow-hard, 0 4px 12px rgba(0,0,0,0.2))' }}
             >
-              {isSaving ? <CircularProgress size={20} color="inherit" sx={{ mr: 1 }} /> : <SaveIcon sx={{ mr: 1 }} />}
+              {isSaving ? <CircularProgress size={18} color="inherit" style={{ marginRight: 4 }} /> : <SaveIcon size={18} style={{ marginRight: 4 }} />}
               {isSaving ? 'Saving…' : 'Save'}
-            </Fab>
-          </Stack>
-        </Box>
-      </Zoom>
+            </button>
+          </div>
+        </div>
+      </Grow>
 
       <Dialog
         open={deleteConfirmOpen}
@@ -681,26 +885,26 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
         transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Box sx={{ p: 2, maxWidth: 400 }}>
-          <Typography variant="subtitle2" sx={{ mb: 0 }}>
+        <div style={{ padding: 16, maxWidth: 400 }}>
+          <Typography variant="subtitle2" style={{ marginBottom: 0 }}>
             Title Filter Regex
           </Typography>
-          <Typography variant="caption" sx={{ mt: 0, fontStyle: 'italic' }}>
+          <Typography variant="caption" style={{ marginTop: 0, fontStyle: 'italic' }}>
             Filters videos downloaded for channel downloads.
           </Typography>
           <Typography
             variant="body2"
-            sx={{
+            style={{
               fontFamily: 'monospace',
-              bgcolor: 'action.hover',
-              p: 1,
-              borderRadius: 1,
+              backgroundColor: 'var(--muted)',
+              padding: 8,
+              borderRadius: 4,
               wordBreak: 'break-all',
             }}
           >
             {regexPopoverAnchor?.regex}
           </Typography>
-        </Box>
+        </div>
       </Popover>
     </>
   );

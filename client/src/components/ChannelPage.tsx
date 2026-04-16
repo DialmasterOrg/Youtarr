@@ -1,31 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Card, CardContent, Grid, Typography, Box, IconButton, Tooltip, Chip, Popover, Dialog, DialogTitle, DialogContent } from '@mui/material';
-import SettingsIcon from '@mui/icons-material/Settings';
-import FolderIcon from '@mui/icons-material/Folder';
-import VideocamIcon from '@mui/icons-material/Videocam';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import FilterAltIcon from '@mui/icons-material/FilterAlt';
-import RatingBadge from './shared/RatingBadge';
-import useMediaQuery from '@mui/material/useMediaQuery';
-import { useTheme } from '@mui/material/styles';
+import { Card, CardContent, Grid, Typography, Box, Tooltip, Chip, Popover, Dialog, DialogTitle, DialogContent, Button } from './ui';
+import { Settings as SettingsIcon, Clock as AccessTimeIcon, Filter as FilterAltIcon } from 'lucide-react';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { Channel } from '../types/Channel';
+import RatingBadge from './shared/RatingBadge';
 import ChannelVideos from './ChannelPage/ChannelVideos';
 import ChannelSettingsDialog from './ChannelPage/ChannelSettingsDialog';
-import { isUsingDefaultSubfolder, isExplicitlyNoSubfolder } from '../utils/channelHelpers';
+import { useConfig } from '../hooks/useConfig';
+import SubFolderChip from './ChannelManager/components/chips/SubFolderChip';
+import QualityChip from './ChannelManager/components/chips/QualityChip';
+import AutoDownloadChips from './ChannelManager/components/chips/AutoDownloadChips';
+import { SHARED_CHANNEL_META_CHIP_STYLE, SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE } from './shared/chipStyles';
 
 interface ChannelPageProps {
   token: string | null;
 }
 
 function ChannelPage({ token }: ChannelPageProps) {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const [channel, setChannel] = useState<Channel | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [regexAnchorEl, setRegexAnchorEl] = useState<HTMLElement | null>(null);
   const [regexDialogOpen, setRegexDialogOpen] = useState(false);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const { channel_id } = useParams();
+  const { config } = useConfig(token);
+  const globalPreferredResolution = config.preferredResolution || '1080';
 
   const handleSettingsSaved = (updated: {
     sub_folder: string | null;
@@ -34,6 +35,8 @@ function ChannelPage({ token }: ChannelPageProps) {
     min_duration: number | null;
     max_duration: number | null;
     title_filter_regex: string | null;
+    default_rating: string | null;
+    auto_download_enabled_tabs: string | null;
     hidden_tabs?: string[];
     availableTabs?: string[];
   }) => {
@@ -49,6 +52,8 @@ function ChannelPage({ token }: ChannelPageProps) {
         min_duration: updated.min_duration,
         max_duration: updated.max_duration,
         title_filter_regex: updated.title_filter_regex,
+        default_rating: updated.default_rating,
+        auto_download_enabled_tabs: updated.auto_download_enabled_tabs || undefined,
       };
       if (updated.availableTabs !== undefined) {
         next.available_tabs = updated.availableTabs.length > 0
@@ -80,6 +85,10 @@ function ChannelPage({ token }: ChannelPageProps) {
       .catch((error) => console.error(error));
   }, [token, channel_id]);
 
+  useEffect(() => {
+    setDescriptionExpanded(false);
+  }, [channel?.description]);
+
   function textToHTML(text: string) {
     return text
 
@@ -87,30 +96,33 @@ function ChannelPage({ token }: ChannelPageProps) {
       .replace(/(?:\r\n|\r|\n)/g, '<br />'); // replace newlines with <br />
   }
 
-  const renderSubFolder = (subFolder: string | null | undefined) => {
-    let displayText: string;
-    let isSpecial = false;
+  const chipHeight = isMobile ? 22 : 26;
+  const chipFontSize = isMobile ? '0.65rem' : '0.75rem';
+  const channelChipSx: React.CSSProperties = {
+    ...SHARED_CHANNEL_META_CHIP_STYLE,
+    ...SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE,
+    height: chipHeight,
+    fontSize: chipFontSize,
+    textTransform: 'none',
+    paddingLeft: '10px',
+    paddingRight: '10px',
+  };
 
-    if (isExplicitlyNoSubfolder(subFolder)) {
-      // null/empty = root (backwards compatible)
-      displayText = 'root';
-      isSpecial = true;
-    } else if (isUsingDefaultSubfolder(subFolder)) {
-      // ##USE_GLOBAL_DEFAULT## = use global default
-      displayText = 'global default';
-      isSpecial = true;
-    } else {
-      // Specific subfolder
-      displayText = `__${subFolder}/`;
+  const renderSubFolder = () => {
+    if (!channel) {
+      return null;
     }
+    return <SubFolderChip subFolder={channel.sub_folder} />;
+  };
 
+  const renderAutoDownloadChips = () => {
+    if (!channel) return null;
     return (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <FolderIcon sx={{ fontSize: isMobile ? '0.75rem' : '0.85rem', color: 'text.secondary' }} />
-        <Typography sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem', color: 'text.secondary', fontStyle: isSpecial ? 'italic' : 'normal' }}>
-          {displayText}
-        </Typography>
-      </Box>
+      <AutoDownloadChips
+        availableTabs={channel.available_tabs || 'videos,shorts,streams'}
+        autoDownloadTabs={channel.auto_download_enabled_tabs || undefined}
+        isMobile={isMobile}
+      />
     );
   };
 
@@ -141,55 +153,40 @@ function ChannelPage({ token }: ChannelPageProps) {
     return '';
   };
 
-  const renderFilterIndicators = () => {
+  const renderFilterIndicators = ({ includeRating = true } = {}) => {
     if (!channel) return null;
 
     const hasQualityOverride = channel.video_quality;
     const hasDurationFilter = channel.min_duration || channel.max_duration;
     const hasRegexFilter = channel.title_filter_regex;
-    const hasDefaultRating = channel.default_rating && channel.default_rating !== 'NR';
+    const hasDefaultRating = channel.default_rating;
 
     if (!hasQualityOverride && !hasDurationFilter && !hasRegexFilter && !hasDefaultRating) {
       return null;
     }
 
     return (
-      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', marginBottom: 0.5, alignItems: 'center' }}>
-        {hasDefaultRating && (
-          <RatingBadge
-            rating={channel.default_rating}
-            ratingSource="Channel Setting"
-            size="small"
-            sx={{
-              fontWeight: 'bold',
-              fontSize: isMobile ? '0.65rem' : '0.75rem',
-              height: isMobile ? '20px' : '24px'
-            }}
-          />
-        )}
-
+      <Box className="flex gap-1 flex-wrap items-center">
         {hasQualityOverride && (
           <Tooltip title={`Auto-download quality override: ${channel.video_quality}p`}>
-            <Chip
-              icon={<VideocamIcon />}
-              label={`${channel.video_quality}p`}
-              size="small"
-              variant="outlined"
-              color="primary"
-              sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem', height: isMobile ? '20px' : '24px' }}
-            />
+            <div>
+              <QualityChip
+                videoQuality={channel.video_quality}
+                globalPreferredResolution={globalPreferredResolution}
+              />
+            </div>
           </Tooltip>
         )}
 
         {hasDurationFilter && (
           <Tooltip title={`Duration filter: ${formatDuration(channel.min_duration, channel.max_duration)}`}>
             <Chip
-              icon={<AccessTimeIcon />}
+              icon={<AccessTimeIcon size={14} />}
               label={formatDuration(channel.min_duration, channel.max_duration)}
               size="small"
               variant="outlined"
               color="primary"
-              sx={{ fontSize: isMobile ? '0.65rem' : '0.75rem', height: isMobile ? '20px' : '24px' }}
+              style={{ ...channelChipSx }}
             />
           </Tooltip>
         )}
@@ -197,22 +194,23 @@ function ChannelPage({ token }: ChannelPageProps) {
         {hasRegexFilter && (
           <Tooltip title="Title regex filter (click to view pattern)">
             <Chip
-              icon={<FilterAltIcon />}
+              icon={<FilterAltIcon size={14} />}
               label="Title Filter"
               size="small"
               variant="outlined"
               color="primary"
               onClick={handleRegexClick}
-              sx={{
-                fontSize: isMobile ? '0.65rem' : '0.75rem',
-                height: isMobile ? '20px' : '24px',
-                cursor: 'pointer',
-                '&:hover': {
-                  backgroundColor: 'rgba(25, 118, 210, 0.08)',
-                }
-              }}
+              style={{ ...channelChipSx, cursor: 'pointer' }}
             />
           </Tooltip>
+        )}
+
+        {includeRating && hasDefaultRating && (
+          <RatingBadge
+            rating={channel.default_rating}
+            ratingSource="Channel Default"
+            size="small"
+          />
         )}
 
         {/* Popover for desktop */}
@@ -230,19 +228,14 @@ function ChannelPage({ token }: ChannelPageProps) {
               horizontal: 'left',
             }}
           >
-            <Box sx={{ p: 2, maxWidth: 400 }}>
+            <Box className="p-4" style={{ maxWidth: 400 }}>
               <Typography variant="subtitle2" gutterBottom>
                 Title Filter Regex Pattern:
               </Typography>
               <Typography
                 variant="body2"
-                sx={{
-                  fontFamily: 'monospace',
-                  bgcolor: 'action.hover',
-                  p: 1,
-                  borderRadius: 1,
-                  wordBreak: 'break-all',
-                }}
+                className="bg-muted/50 p-2 rounded-[var(--radius-ui)] break-all"
+                style={{ fontFamily: 'var(--font-body)' }}
               >
                 {channel.title_filter_regex}
               </Typography>
@@ -257,14 +250,8 @@ function ChannelPage({ token }: ChannelPageProps) {
             <DialogContent>
               <Typography
                 variant="body2"
-                sx={{
-                  fontFamily: 'monospace',
-                  bgcolor: 'action.hover',
-                  p: 1,
-                  borderRadius: 1,
-                  wordBreak: 'break-all',
-                  mt: 1,
-                }}
+                className="bg-muted/50 p-2 rounded-[var(--radius-ui)] break-all mt-2"
+                style={{ fontFamily: 'var(--font-body)' }}
               >
                 {channel.title_filter_regex}
               </Typography>
@@ -275,84 +262,236 @@ function ChannelPage({ token }: ChannelPageProps) {
     );
   };
 
+  const descriptionLimit = isMobile ? 320 : 600;
+  const descriptionCollapsedHeight = isMobile ? 150 : 200;
+  const trimmedDescription = channel?.description?.trim();
+  const descriptionText = channel
+    ? trimmedDescription || '** No description available **'
+    : 'Loading...';
+  const descriptionIsLong = Boolean(trimmedDescription && trimmedDescription.length > descriptionLimit);
+  const allowDescriptionCollapse = true;
+  const displayedDescription =
+    !allowDescriptionCollapse || descriptionExpanded || !descriptionIsLong
+      ? descriptionText
+      : `${descriptionText.slice(0, descriptionLimit)}...`;
+  const shouldShowExpandButton = Boolean(channel && descriptionIsLong && allowDescriptionCollapse);
+
   return (
     <>
-      <Card elevation={8} style={{ marginBottom: '16px' }}>
-        <CardContent>
-          <Grid container spacing={3} justifyContent='center'>
-            <Grid item xs={12} sm={4}
-              display="flex" alignItems="center"
-              marginLeft={isMobile ? 'auto' : '-32px'}>
+      <Card elevation={8} className="mb-4" style={{ borderRadius: 'var(--radius-ui)', overflow: 'hidden' }}>
+        <CardContent style={{ paddingLeft: isMobile ? 10 : 16, paddingRight: isMobile ? 10 : 16, paddingTop: isMobile ? 12 : 16, paddingBottom: isMobile ? 12 : 16 }}>
+          <Grid container spacing={2} alignItems="stretch">
+            <Grid item xs={12} sm={4}>
               <Box
-                paddingX={isMobile ? '0px' : 3}
-                maxWidth={isMobile ? '75%' : 'auto'}
-                marginX={isMobile ? 'auto' : 3}>
-                <Box
-                  component="img"
-                  src={channel ? `/images/channelthumb-${channel_id}.jpg` : ''}
-                  alt='Channel thumbnail'
-                  width={isMobile ? '100%' : 'auto'}
-                  height={isMobile ? 'auto' : '285px'}
-                  sx={{ border: 1, borderColor: 'divider' }}
-                />
-              </Box>
+                component="img"
+                src={channel ? `/images/channelthumb-${channel_id}.jpg` : ''}
+                alt="Channel thumbnail"
+                className="w-full h-full object-cover rounded-xl bg-muted block"
+                style={{ border: '1px solid' }}
+              />
             </Grid>
-            <Grid item xs={12} sm={8} marginTop={isMobile ? '-16px' : '0px'}>
-              <Box display="flex" justifyContent="center" alignItems="center" gap={1}>
+            <Grid
+              item
+              xs={12}
+              sm={8}
+              className="flex flex-col gap-5"
+            >
+              <Box className="flex flex-col gap-3">
                 <Typography
                   variant={isMobile ? 'h5' : 'h4'}
-                  component='h2'
+                  component="h2"
                   gutterBottom
-                  align='center'
-                  sx={{ mb: 0 }}
+                  className="mb-0"
                 >
                   {channel ? channel.uploader : 'Loading...'}
                 </Typography>
                 {channel && (
-                  <Tooltip title="Channel Settings">
-                    <IconButton
-                      onClick={() => setSettingsOpen(true)}
-                      size={isMobile ? 'small' : 'medium'}
-                      sx={{ mb: 1 }}
-                    >
-                      <SettingsIcon />
-                    </IconButton>
-                  </Tooltip>
+                  <Box className="flex flex-wrap gap-1 items-center">
+                    {renderFilterIndicators({ includeRating: false })}
+                  </Box>
                 )}
               </Box>
-              {channel && (
-                <Box display="flex" justifyContent="center" flexDirection="column" alignItems="center">
-                  <Box display="flex" gap={0.5} flexWrap="wrap" justifyContent="center" alignItems="center">
-                    {renderSubFolder(channel.sub_folder)}
-                    {renderFilterIndicators()}
-                  </Box>
-                </Box>
-              )}
-              <Box
-                sx={{
-                  maxHeight: isMobile ? '84px' : '172px',
-                  minHeight: isMobile ? '16px' : '172px',
-                  overflowY: 'scroll',
-                  border: 1,
-                  borderColor: 'divider',
-                  padding: isMobile ? '12px' : '24px',
-                  borderRadius: 1
-                }}
-              >
-                <Typography variant={isMobile ? 'body2' : 'body1'} align='center' color='text.secondary'>
-                  {channel ? (
-                    <span
-                      dangerouslySetInnerHTML={{
-                        __html: textToHTML(channel.description || '** No description available **'),
-                      }}
-                    />
-                  ) : (
-                    'Loading...'
-                  )}
+              <Box className="flex flex-col flex-grow min-h-0 gap-0">
+                <Typography variant="subtitle1" className="font-bold mb-0">
+                  Description
                 </Typography>
+                <Box
+                  className="rounded-[var(--radius-ui)] bg-card overflow-hidden"
+                  style={{
+                    paddingLeft: 0,
+                    paddingRight: isMobile ? 16 : 24,
+                    paddingTop: isMobile ? 12 : 18,
+                    paddingBottom: isMobile ? 12 : 18,
+                    flexGrow: 1,
+                    minHeight: 0,
+                    maxHeight: allowDescriptionCollapse && !descriptionExpanded ? descriptionCollapsedHeight : 'none',
+                  }}
+                >
+                  <Typography
+                    variant={isMobile ? 'body2' : 'body1'}
+                    component="span"
+                    align="left"
+                    color="text.secondary"
+                    style={{ lineHeight: 1.6 }}
+                    dangerouslySetInnerHTML={{ __html: textToHTML(displayedDescription) }}
+                  />
+                </Box>
+                {shouldShowExpandButton && (
+                  <Button
+                    size="small"
+                    onClick={() => setDescriptionExpanded((prev) => !prev)}
+                    className="self-start mt-1"
+                  >
+                    {descriptionExpanded ? 'Show less' : 'Read more'}
+                  </Button>
+                )}
               </Box>
             </Grid>
           </Grid>
+        </CardContent>
+      </Card>
+
+      <Card elevation={3} className="mb-4 flex flex-col justify-center">
+        <CardContent
+          style={{
+            paddingLeft: isMobile ? 10 : 16,
+            paddingRight: isMobile ? 10 : 16,
+            paddingTop: isMobile ? 10 : 10,
+            paddingBottom: '10px',
+            opacity: channel ? 1 : 0.5,
+            transition: 'opacity 200ms ease-in-out'
+          }}
+          className="flex flex-col gap-4 justify-center"
+        >
+          {isMobile ? (
+            // Mobile: Compact layout with title and settings in a grid
+            <Box className="flex flex-col gap-4">
+              {/* Title */}
+              <Typography variant="h6" className="font-bold text-base">
+                Channel Settings
+              </Typography>
+
+              {/* Compact grid layout */}
+              <Box className="grid grid-cols-2 gap-3 text-sm">
+                {/* Auto Download */}
+                <Box className="flex flex-col gap-1">
+                  <Typography variant="caption" color="text.secondary" className="font-semibold uppercase" style={{ fontSize: '0.65rem' }}>
+                    Auto Download
+                  </Typography>
+                  <Box className="flex gap-1 flex-wrap">
+                    {channel ? renderAutoDownloadChips() : <span className="text-xs text-muted">Loading...</span>}
+                  </Box>
+                </Box>
+
+                {/* Rating */}
+                <Box className="flex flex-col gap-1">
+                  <Typography variant="caption" color="text.secondary" className="font-semibold uppercase" style={{ fontSize: '0.65rem' }}>
+                    Rating
+                  </Typography>
+                  {channel ? (
+                    <RatingBadge
+                      rating={channel.default_rating}
+                      ratingSource="Channel Default"
+                      size="small"
+                    />
+                  ) : (
+                    <span className="text-xs text-muted">Loading...</span>
+                  )}
+                </Box>
+
+                {/* Folder */}
+                <Box className="flex flex-col gap-1">
+                  <Typography variant="caption" color="text.secondary" className="font-semibold uppercase" style={{ fontSize: '0.65rem' }}>
+                    Folder
+                  </Typography>
+                  {channel ? renderSubFolder() : <span className="text-xs text-muted">Loading...</span>}
+                </Box>
+
+                {/* Edit Button */}
+                <Box className="flex flex-col gap-1">
+                  <Typography variant="caption" color="text.secondary" className="font-semibold uppercase" style={{ fontSize: '0.65rem', visibility: 'hidden', height: '0.7rem' }}>
+                    Edit
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => setSettingsOpen(true)}
+                    aria-label="Edit settings"
+                    disabled={!channel}
+                    className="text-foreground border-border hover:bg-muted hover:border-foreground hover:text-foreground disabled:opacity-50"
+                    style={{ textTransform: 'none', minWidth: 0, paddingLeft: 12, paddingRight: 12, fontSize: '0.8rem', height: 28 }}
+                  >
+                    Edit
+                  </Button>
+                </Box>
+              </Box>
+            </Box>
+          ) : (
+            // Desktop: Original layout
+            <Box className="flex flex-row items-center justify-between gap-8 m-0">
+              <Box className="min-w-0 flex flex-row items-center gap-6 flex-wrap">
+                <Typography variant="h6" className="font-bold mr-2">
+                  Channel Settings
+                </Typography>
+                <Box className="flex items-center gap-2 flex-wrap">
+                  <Typography
+                    variant="body2"
+                    component="span"
+                    color="text.secondary"
+                    className="whitespace-nowrap inline-flex items-center"
+                    style={{ lineHeight: 1.2 }}
+                  >
+                    Auto Download:
+                  </Typography>
+                  {channel ? renderAutoDownloadChips() : <span className="text-xs text-muted">Loading...</span>}
+                </Box>
+                <Box className="flex items-center gap-2 flex-wrap">
+                  <Typography
+                    variant="body2"
+                    component="span"
+                    color="text.secondary"
+                    className="whitespace-nowrap inline-flex items-center"
+                    style={{ lineHeight: 1.2 }}
+                  >
+                    Rating:
+                  </Typography>
+                  {channel ? (
+                    <RatingBadge
+                      rating={channel.default_rating}
+                      ratingSource="Channel Default"
+                      size="small"
+                    />
+                  ) : (
+                    <span className="text-xs text-muted">Loading...</span>
+                  )}
+                </Box>
+                <Box className="flex items-center gap-2 flex-wrap">
+                  <Typography
+                    variant="body2"
+                    component="span"
+                    color="text.secondary"
+                    className="whitespace-nowrap inline-flex items-center"
+                    style={{ lineHeight: 1.2 }}
+                  >
+                    Folder:
+                  </Typography>
+                  {channel ? renderSubFolder() : <span className="text-xs text-muted">Loading...</span>}
+                </Box>
+              </Box>
+              <Button
+                variant="outlined"
+                startIcon={<SettingsIcon size={16} />}
+                onClick={() => setSettingsOpen(true)}
+                size="small"
+                aria-label="Edit settings"
+                disabled={!channel}
+                className="text-foreground border-border hover:bg-muted hover:border-foreground hover:text-foreground ml-auto disabled:opacity-50"
+                style={{ textTransform: 'none', minWidth: 0, padding: '6px 16px' }}
+              >
+                Edit
+              </Button>
+            </Box>
+          )}
         </CardContent>
       </Card>
 

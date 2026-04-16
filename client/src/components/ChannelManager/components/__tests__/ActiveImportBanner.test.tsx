@@ -38,7 +38,7 @@ describe('ActiveImportBanner', () => {
 
     const link = screen.getByRole('link', { name: 'View details' });
     expect(link).toBeInTheDocument();
-    expect(link).toHaveAttribute('href', '/channels/import');
+    expect(link).toHaveAttribute('href', '/channels/imports');
   });
 
   test('shows success message when import is complete', () => {
@@ -72,7 +72,7 @@ describe('ActiveImportBanner', () => {
 
     expect(screen.getByText('Import cancelled (4 of 10 processed).')).toBeInTheDocument();
     const alert = screen.getByRole('alert');
-    expect(alert).toHaveClass('MuiAlert-standardWarning');
+    expect(alert).toHaveClass('alert-standard-warning');
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   });
 
@@ -83,7 +83,7 @@ describe('ActiveImportBanner', () => {
 
     expect(screen.getByText('Import failed (2 of 10 processed).')).toBeInTheDocument();
     const alert = screen.getByRole('alert');
-    expect(alert).toHaveClass('MuiAlert-standardError');
+    expect(alert).toHaveClass('alert-standard-error');
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   });
 
@@ -94,7 +94,7 @@ describe('ActiveImportBanner', () => {
 
     expect(screen.getByText('Import complete with warnings. 8 channels imported.')).toBeInTheDocument();
     const alert = screen.getByRole('alert');
-    expect(alert).toHaveClass('MuiAlert-standardWarning');
+    expect(alert).toHaveClass('alert-standard-warning');
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   });
 
@@ -104,7 +104,7 @@ describe('ActiveImportBanner', () => {
     );
 
     const alert = screen.getByRole('alert');
-    expect(alert).toHaveClass('MuiAlert-standardInfo');
+    expect(alert).toHaveClass('alert-standard-info');
   });
 
   test('shows success alert when import is complete', () => {
@@ -113,6 +113,6 @@ describe('ActiveImportBanner', () => {
     );
 
     const alert = screen.getByRole('alert');
-    expect(alert).toHaveClass('MuiAlert-standardSuccess');
+    expect(alert).toHaveClass('alert-standard-success');
   });
 });

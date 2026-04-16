@@ -69,6 +69,13 @@ Configuration can be modified through:
 - **Range**: 1-10
 - **Note**: Applies to scheduled autodownloads and manually triggered channel downloads
 
+### Channel Videos Hot Load (Infinite Scroll)
+- **Config Key**: `channelVideosHotLoad`
+- **Type**: `boolean`
+- **Default**: `false`
+- **Description**: When enabled, the channel videos page uses infinite scroll: as you scroll the list, the next page of videos is appended to the accumulated results instead of replacing them. When disabled, the page uses paginated navigation with a fixed page size.
+- **Note**: Affects the UI only; does not change what gets downloaded.
+
 ### Preferred Resolution
 - **Config Key**: preferredResolution
 - **Type**: `string`

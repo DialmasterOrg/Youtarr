@@ -8,9 +8,8 @@ import {
   Typography,
   CircularProgress,
   Alert,
-  Box,
-} from '@mui/material';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+} from './ui';
+import { CheckCircle as CheckCircleIcon } from '../lib/icons';
 
 interface PlexAuthDialogProps {
   open: boolean;
@@ -112,19 +111,19 @@ const PlexAuthDialog: React.FC<PlexAuthDialogProps> = ({
       </DialogTitle>
       <DialogContent>
         {success ? (
-          <Box sx={{ textAlign: 'center', py: 2 }}>
-            <CheckCircleIcon sx={{ fontSize: 60, color: 'success.main', mb: 2 }} />
+          <div style={{ textAlign: 'center', paddingTop: 16, paddingBottom: 16 }}>
+            <CheckCircleIcon size={60} style={{ color: 'var(--success, green)', marginBottom: 16 }} />
             <Typography variant="h6" gutterBottom>
               Plex API Key obtained successfully!
             </Typography>
-            <Typography variant="body1" sx={{ mt: 2 }}>
+            <Typography variant="body1" style={{ marginTop: 16 }}>
               Your API key has been added to the configuration.
             </Typography>
-            <Alert severity="info" sx={{ mt: 2, textAlign: 'left' }}>
+            <Alert severity="info" style={{ marginTop: 16, textAlign: 'left' }}>
               <strong>Next step:</strong>
               <br />Click "Test Connection" to verify and auto-save your Plex credentials
             </Alert>
-          </Box>
+          </div>
         ) : (
           <>
             <Typography variant="body1" paragraph>
@@ -133,7 +132,7 @@ const PlexAuthDialog: React.FC<PlexAuthDialogProps> = ({
             </Typography>
             
             {currentApiKey && (
-              <Alert severity="info" sx={{ mb: 2 }}>
+              <Alert severity="info" style={{ marginBottom: 16 }}>
                 You already have a Plex API key configured. Getting a new one will replace the existing key.
               </Alert>
             )}
@@ -144,18 +143,18 @@ const PlexAuthDialog: React.FC<PlexAuthDialogProps> = ({
             </Typography>
 
             {error && (
-              <Alert severity="error" sx={{ mt: 2 }}>
+              <Alert severity="error" style={{ marginTop: 16 }}>
                 {error}
               </Alert>
             )}
 
             {loading && (
-              <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
-                <CircularProgress size={20} sx={{ mr: 2 }} />
+              <div style={{ display: 'flex', alignItems: 'center', marginTop: 16 }}>
+                <CircularProgress size={20} style={{ marginRight: 16 }} />
                 <Typography variant="body2">
                   Waiting for Plex authentication... Please complete the login in the popup window.
                 </Typography>
-              </Box>
+              </div>
             )}
           </>
         )}

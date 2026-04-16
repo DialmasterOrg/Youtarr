@@ -81,6 +81,12 @@ describe('ChannelSettingsDialog', () => {
     });
   });
 
+  async function openSettingsSection(sectionName: 'General' | 'Auto Download' | 'Filters' | 'Ratings') {
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: sectionName }));
+    return user;
+  }
+
   afterEach(() => {
     // Cleanup
   });
@@ -99,7 +105,7 @@ describe('ChannelSettingsDialog', () => {
 
       render(<ChannelSettingsDialog {...defaultProps} />);
 
-      expect(screen.getByText('Channel Settings: Test Channel')).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Channel Settings' })).toBeInTheDocument();
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith('/api/channels/channel123/settings', {
@@ -111,7 +117,7 @@ describe('ChannelSettingsDialog', () => {
     test('does not render dialog when open is false', () => {
       render(<ChannelSettingsDialog {...defaultProps} open={false} />);
 
-      expect(screen.queryByText('Channel Settings: Test Channel')).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog', { name: 'Channel Settings' })).not.toBeInTheDocument();
     });
 
     test('shows loading spinner while fetching data', () => {
@@ -141,6 +147,9 @@ describe('ChannelSettingsDialog', () => {
 
       expect(screen.getByLabelText('Channel Video Quality Override')).toBeInTheDocument();
       expect(screen.getByLabelText('Subfolder')).toBeInTheDocument();
+
+      await openSettingsSection('Filters');
+
       expect(screen.getByLabelText('Min Duration (mins)')).toBeInTheDocument();
       expect(screen.getByLabelText('Max Duration (mins)')).toBeInTheDocument();
       expect(screen.getByLabelText('Title Filter (Python Regex)')).toBeInTheDocument();
@@ -179,6 +188,8 @@ describe('ChannelSettingsDialog', () => {
 
       const subfolderInput = screen.getByLabelText('Subfolder');
       expect(subfolderInput).toHaveValue('__Sports');
+
+      await openSettingsSection('Filters');
 
       const minDurationInput = screen.getByLabelText('Min Duration (mins)');
       expect(minDurationInput).toHaveValue(5);
@@ -568,6 +579,8 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
+      await openSettingsSection('Filters');
+
       const minDurationInput = screen.getByLabelText('Min Duration (mins)');
       expect(minDurationInput).toHaveValue(3);
 
@@ -599,6 +612,8 @@ describe('ChannelSettingsDialog', () => {
       await waitFor(() => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
+
+      await openSettingsSection('Filters');
 
       const minDurationInput = screen.getByLabelText('Min Duration (mins)');
       await user.clear(minDurationInput);
@@ -651,6 +666,8 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
+      await openSettingsSection('Filters');
+
       const minDurationInput = screen.getByLabelText('Min Duration (mins)');
       await user.type(minDurationInput, 'abc');
 
@@ -679,6 +696,8 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
+      await openSettingsSection('Filters');
+
       const minDurationInput = screen.getByLabelText('Min Duration (mins)');
       expect(minDurationInput).toHaveValue(5);
 
@@ -706,6 +725,8 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
+      await openSettingsSection('Filters');
+
       expect(screen.getByLabelText('Title Filter (Python Regex)')).toBeInTheDocument();
       expect(
         screen.getByText(/Only download videos with titles matching regex pattern/i)
@@ -731,6 +752,8 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
+      await openSettingsSection('Filters');
+
       const regexInput = screen.getByLabelText('Title Filter (Python Regex)');
       await user.type(regexInput, '(?i)podcast');
 
@@ -754,6 +777,8 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
+      await openSettingsSection('Filters');
+
       expect(screen.getByRole('button', { name: 'Preview Regex' })).toBeInTheDocument();
     });
 
@@ -773,6 +798,8 @@ describe('ChannelSettingsDialog', () => {
       await waitFor(() => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
+
+      await openSettingsSection('Filters');
 
       const previewButton = screen.getByRole('button', { name: 'Preview Regex' });
       expect(previewButton).toBeDisabled();
@@ -813,6 +840,8 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
+      await openSettingsSection('Filters');
+
       const previewButton = screen.getByRole('button', { name: 'Preview Regex' });
       await user.click(previewButton);
 
@@ -850,6 +879,8 @@ describe('ChannelSettingsDialog', () => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
 
+      await openSettingsSection('Filters');
+
       const previewButton = screen.getByRole('button', { name: 'Preview Regex' });
       await user.click(previewButton);
 
@@ -874,6 +905,8 @@ describe('ChannelSettingsDialog', () => {
       await waitFor(() => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
+
+      await openSettingsSection('Filters');
 
       const docLink = screen.getByTitle('Python regex documentation');
       expect(docLink).toHaveAttribute(
@@ -1332,8 +1365,12 @@ describe('ChannelSettingsDialog', () => {
       render(<ChannelSettingsDialog {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText('Download Filters')).toBeInTheDocument();
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       });
+
+      await openSettingsSection('Filters');
+
+      expect(screen.getByText('Download Filters')).toBeInTheDocument();
 
       expect(
         screen.getByText(
@@ -1767,6 +1804,214 @@ describe('ChannelSettingsDialog', () => {
       // to the refresh result, so hasChanges() is false and Save stays disabled.
       // If that reset is broken, Save would be ENABLED here.
       expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    });
+  });
+
+  describe('Auto Downloads', () => {
+    test('renders one switch per detected, non-hidden tab using new labels', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            ...mockChannelSettings,
+            detected_tabs: ['videos', 'shorts', 'streams'],
+            hidden_tabs: ['shorts'],
+            available_tabs: ['videos', 'streams'],
+            auto_download_enabled_tabs: 'video',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+        });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+
+      expect(screen.getByLabelText('New Videos')).toBeInTheDocument();
+      expect(screen.getByLabelText('New Live/Streams')).toBeInTheDocument();
+      expect(screen.queryByLabelText('New Shorts')).not.toBeInTheDocument();
+      expect(screen.queryByText('Automatically download new Videos')).not.toBeInTheDocument();
+    });
+
+    test('reflects loaded auto_download_enabled_tabs in switch state', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            ...mockChannelSettings,
+            detected_tabs: ['videos', 'shorts', 'streams'],
+            hidden_tabs: [],
+            available_tabs: ['videos', 'shorts', 'streams'],
+            auto_download_enabled_tabs: 'short,livestream',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+        });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+
+      expect(screen.getByLabelText('New Videos')).not.toBeChecked();
+      expect(screen.getByLabelText('New Shorts')).toBeChecked();
+      expect(screen.getByLabelText('New Live/Streams')).toBeChecked();
+    });
+
+    test('shows an empty-state message when no detected, non-hidden tabs remain', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            ...mockChannelSettings,
+            detected_tabs: [],
+            hidden_tabs: [],
+            available_tabs: [],
+            auto_download_enabled_tabs: '',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+        });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+
+      expect(screen.getByText(/No detected tabs are available for auto-download/i)).toBeInTheDocument();
+      expect(screen.queryByLabelText('New Videos')).not.toBeInTheDocument();
+    });
+
+    test('toggling a switch updates the value sent in the PUT body', async () => {
+      const user = userEvent.setup();
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            ...mockChannelSettings,
+            detected_tabs: ['videos', 'shorts'],
+            hidden_tabs: [],
+            available_tabs: ['videos', 'shorts'],
+            auto_download_enabled_tabs: 'video',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            settings: {
+              ...mockChannelSettings,
+              auto_download_enabled_tabs: 'video,short',
+              detected_tabs: ['videos', 'shorts'],
+              hidden_tabs: [],
+              available_tabs: ['videos', 'shorts'],
+            },
+          }),
+        });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+
+      await user.click(screen.getByLabelText('New Shorts'));
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      await waitFor(() => {
+        const saveCall = mockFetch.mock.calls.find(
+          ([url, init]) =>
+            url === '/api/channels/channel123/settings' && init?.method === 'PUT'
+        );
+        expect(saveCall).toBeDefined();
+      });
+
+      const saveCall = mockFetch.mock.calls.find(
+        ([url, init]) =>
+          url === '/api/channels/channel123/settings' && init?.method === 'PUT'
+      )!;
+      const body = JSON.parse(saveCall[1].body as string);
+      expect(body.auto_download_enabled_tabs).toBe('video,short');
+    });
+
+    test('hiding a tab strips its media type from the saved auto_download_enabled_tabs', async () => {
+      const user = userEvent.setup();
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            ...mockChannelSettings,
+            detected_tabs: ['videos', 'shorts'],
+            hidden_tabs: [],
+            available_tabs: ['videos', 'shorts'],
+            auto_download_enabled_tabs: 'video,short',
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce(mockSubfolders),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValueOnce({
+            settings: {
+              ...mockChannelSettings,
+              auto_download_enabled_tabs: 'video',
+              detected_tabs: ['videos', 'shorts'],
+              hidden_tabs: ['shorts'],
+              available_tabs: ['videos'],
+            },
+          }),
+        });
+
+      render(<ChannelSettingsDialog {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      });
+
+      // Both switches start enabled
+      expect(screen.getByLabelText('New Videos')).toBeChecked();
+      expect(screen.getByLabelText('New Shorts')).toBeChecked();
+
+      // Hide the 'shorts' tab
+      await user.click(screen.getByTestId('tabs-editor-checkbox-shorts'));
+
+      // The 'New Shorts' switch should disappear because the tab is now hidden
+      expect(screen.queryByLabelText('New Shorts')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      await waitFor(() => {
+        const saveCall = mockFetch.mock.calls.find(
+          ([url, init]) =>
+            url === '/api/channels/channel123/settings' && init?.method === 'PUT'
+        );
+        expect(saveCall).toBeDefined();
+      });
+
+      const saveCall = mockFetch.mock.calls.find(
+        ([url, init]) =>
+          url === '/api/channels/channel123/settings' && init?.method === 'PUT'
+      )!;
+      const body = JSON.parse(saveCall[1].body as string);
+      expect(body.auto_download_enabled_tabs).toBe('video');
+      expect(body.hidden_tabs).toEqual(['shorts']);
     });
   });
 });

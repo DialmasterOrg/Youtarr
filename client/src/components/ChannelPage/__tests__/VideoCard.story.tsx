@@ -15,9 +15,10 @@ const meta: Meta<typeof VideoCard> = {
   args: {
     onCheckChange: fn(),
     onHoverChange: fn(),
-    onToggleDeletion: fn(),
+    onDeletionChange: fn(),
     onToggleIgnore: fn(),
     onMobileTooltip: fn(),
+    selectionMode: null,
   },
 };
 
@@ -117,21 +118,10 @@ export const NeverDownloaded: Story = {
     await expect(await canvas.findByText(/never gonna give you up/i)).toBeInTheDocument();
 
     // Verify card is clickable (cursor should be pointer)
-    const cardElement = canvasElement.querySelector('[class*="Card"]');
+    const cardElement = canvas.getByTestId('video-card');
     if (cardElement) {
-      // Click the card to trigger checkbox
       await userEvent.click(cardElement);
-      // Should call onCheckChange with true (toggle from unchecked to checked)
       await expect(args.onCheckChange).toHaveBeenCalledWith(mockVideoNeverDownloaded.youtube_id, true);
-    }
-
-    // Test delete button if present
-    const deleteButtons = canvas.queryAllByRole('button', { name: /delete|remove|trash/i });
-    if (deleteButtons.length > 0) {
-      const deleteButton = deleteButtons[0];
-      await userEvent.click(deleteButton);
-      // Should trigger delete/ignore action
-      await expect(args.onToggleDeletion).toHaveBeenCalled();
     }
   },
 };
@@ -198,9 +188,8 @@ export const StillLive: Story = {
     }
 
     // Verify card is not selectable
-    const cardElement = canvasElement.querySelector('[class*="Card"]');
+    const cardElement = canvas.getByTestId('video-card');
     if (cardElement) {
-      // Click should not trigger checkbox (not selectable)
       await userEvent.click(cardElement);
       await expect(args.onCheckChange).not.toHaveBeenCalledWith(
         mockVideoStillLive.youtube_id,
@@ -232,10 +221,9 @@ export const Checked: Story = {
     }
 
     // Click card again to toggle off
-    const cardElement = canvasElement.querySelector('[class*="Card"]');
+    const cardElement = canvas.getByTestId('video-card');
     if (cardElement) {
       await userEvent.click(cardElement);
-      // Should toggle to false (unchecked)
       await expect(args.onCheckChange).toHaveBeenCalledWith(
         mockVideoNeverDownloaded.youtube_id,
         false
@@ -264,7 +252,7 @@ export const Mobile: Story = {
     await expect(title).toBeInTheDocument();
 
     // On mobile, clicking card should trigger same interactions
-    const cardElement = canvasElement.querySelector('[class*="Card"]');
+    const cardElement = canvas.getByTestId('video-card');
     if (cardElement) {
       await userEvent.click(cardElement);
       await expect(args.onCheckChange).toHaveBeenCalledWith(
@@ -281,29 +269,21 @@ export const Mobile: Story = {
  */
 export const MarkedForDeletion: Story = {
   args: {
-    video: mockVideoNeverDownloaded,
+    video: mockVideo,
     isMobile: false,
-    checkedBoxes: [mockVideoNeverDownloaded.youtube_id],
+    checkedBoxes: [],
     hoveredVideo: null,
-    selectedForDeletion: [mockVideoNeverDownloaded.youtube_id],
+    selectedForDeletion: [mockVideo.youtube_id],
+    selectionMode: 'delete',
   },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
 
-    // Card should show visual indication of deletion
-    const cardElement = canvasElement.querySelector('[class*="Card"]');
+    const cardElement = canvas.getByTestId('video-card');
     if (cardElement) {
-      // Check for error color styling or delete indicator
-      const style = window.getComputedStyle(cardElement);
-      // This depends on component implementation
       await expect(cardElement).toBeInTheDocument();
-    }
-
-    // Test unblock/cancel delete button
-    const unblockButtons = canvas.queryAllByRole('button', { name: /unblock|cancel|restore/i });
-    if (unblockButtons.length > 0) {
-      await userEvent.click(unblockButtons[0]);
-      await expect(args.onToggleDeletion).toHaveBeenCalledWith(mockVideoNeverDownloaded.youtube_id);
+      await userEvent.click(cardElement);
+      await expect(args.onDeletionChange).toHaveBeenCalledWith(mockVideo.youtube_id, false);
     }
   },
 };

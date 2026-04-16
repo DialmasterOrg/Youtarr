@@ -1,14 +1,12 @@
 import React, { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Button,
-  Card,
-  CardContent,
   CardHeader,
   Grid,
-  Box,
   Tabs,
   Tab,
-} from '@mui/material';
+} from '../ui';
 import ManualDownload from './ManualDownload/ManualDownload';
 import DownloadSettingsDialog from './ManualDownload/DownloadSettingsDialog';
 import { DownloadSettings } from './ManualDownload/types';
@@ -32,6 +30,7 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
 }) => {
   const [tabValue, setTabValue] = useState(0);
   const [showChannelSettingsDialog, setShowChannelSettingsDialog] = useState(false);
+  const navigate = useNavigate();
 
   // Use config hook to get default resolution and video count
   const { config } = useConfig(token);
@@ -64,6 +63,8 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
     // job and we should display an alert
     if (result.status === 400) {
       alert('Channel Download already running');
+    } else {
+      navigate('/downloads/activity');
     }
     setTimeout(fetchRunningJobs, 500);
   };
@@ -90,7 +91,8 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
     });
 
     setTimeout(fetchRunningJobs, 1000);
-  }, [token, fetchRunningJobs, downloadInitiatedRef]);
+    navigate('/downloads/activity');
+  }, [token, fetchRunningJobs, downloadInitiatedRef, navigate]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -98,56 +100,50 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
 
   return (
     <Grid item xs={12} md={12}>
-      <Card elevation={8}>
+      <div>
         <CardHeader
           title='Start Downloads'
           align='center'
+          className="px-0 pt-0"
           style={{ marginBottom: '-16px' }}
         />
-        <CardContent>
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-            <Tabs value={tabValue} onChange={handleTabChange} centered>
-              <Tab label="Manual Download" />
-              <Tab label="Channel Download" />
-            </Tabs>
-          </Box>
+        <div style={{ borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
+          <Tabs value={tabValue} onChange={handleTabChange} centered>
+            <Tab label="Manual Download" />
+            <Tab label="Channel Download" />
+          </Tabs>
+        </div>
 
-          {tabValue === 0 ? (
-            <ErrorBoundary
-              fallbackMessage="An error occurred in the download manager. Please refresh the page and try again."
-              onReset={() => setTabValue(0)}
+        {tabValue === 0 ? (
+          <ErrorBoundary
+            fallbackMessage="An error occurred in the download manager. Please refresh the page and try again."
+            onReset={() => setTabValue(0)}
+          >
+            <ManualDownload
+              onStartDownload={handleManualDownload}
+              token={token}
+              defaultResolution={defaultResolution}
+            />
+          </ErrorBoundary>
+        ) : (
+          <ErrorBoundary
+            fallbackMessage="An error occurred with channel downloads. Please refresh the page and try again."
+            onReset={() => setTabValue(1)}
+          >
+            <div
+              style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 24 }}
             >
-              <ManualDownload
-                onStartDownload={handleManualDownload}
-                token={token}
-                defaultResolution={defaultResolution}
-              />
-            </ErrorBoundary>
-          ) : (
-            <ErrorBoundary
-              fallbackMessage="An error occurred with channel downloads. Please refresh the page and try again."
-              onReset={() => setTabValue(1)}
-            >
-              <Box
-                display='flex'
-                flexDirection='column'
-                justifyContent='center'
-                alignItems='center'
-                gap={2}
-                mt={3}
+              <Button
+                variant='contained'
+                onClick={handleOpenChannelSettings}
+                size='large'
               >
-                <Button
-                  variant='contained'
-                  onClick={handleOpenChannelSettings}
-                  size='large'
-                >
-                  Download new from all channels
-                </Button>
-              </Box>
-            </ErrorBoundary>
-          )}
-        </CardContent>
-      </Card>
+                Download new from all channels
+              </Button>
+            </div>
+          </ErrorBoundary>
+        )}
+      </div>
 
       <DownloadSettingsDialog
         open={showChannelSettingsDialog}

@@ -8,13 +8,15 @@ import {
   VideoStatus,
 } from '../videoStatus';
 import { ChannelVideo } from '../../types/ChannelVideo';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import CloudOffIcon from '@mui/icons-material/CloudOff';
-import LockIcon from '@mui/icons-material/Lock';
-import BlockIcon from '@mui/icons-material/Block';
-import NewReleasesIcon from '@mui/icons-material/NewReleases';
-import ScheduleIcon from '@mui/icons-material/Schedule';
-import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
+import {
+  CheckCircle as CheckCircleIcon,
+  CloudOff as CloudOffIcon,
+  Lock as LockIcon,
+  Block as BlockIcon,
+  NewReleases as NewReleasesIcon,
+  Schedule as ScheduleIcon,
+  VideoLibrary as VideoLibraryIcon,
+} from '../../lib/icons';
 
 describe('videoStatus Utility', () => {
   // Base mock video for testing
@@ -147,8 +149,8 @@ describe('videoStatus Utility', () => {
       expect(getStatusColor('downloaded')).toBe('success');
     });
 
-    test('returns "warning" for missing status', () => {
-      expect(getStatusColor('missing')).toBe('warning');
+    test('returns "error" for missing status', () => {
+      expect(getStatusColor('missing')).toBe('error');
     });
 
     test('returns "default" for members_only status', () => {
@@ -159,8 +161,8 @@ describe('videoStatus Utility', () => {
       expect(getStatusColor('ignored')).toBe('default');
     });
 
-    test('returns "info" for never_downloaded status', () => {
-      expect(getStatusColor('never_downloaded')).toBe('info');
+    test('returns "warning" for never_downloaded status', () => {
+      expect(getStatusColor('never_downloaded')).toBe('warning');
     });
 
     test('returns "info" for unknown status', () => {
@@ -172,44 +174,44 @@ describe('videoStatus Utility', () => {
     test('returns CheckCircleIcon for downloaded status', () => {
       const icon = getStatusIcon('downloaded');
       expect(icon.type).toBe(CheckCircleIcon);
-      expect(icon.props.fontSize).toBe('small');
+      expect(icon.props.size).toBe(16);
     });
 
     test('returns CloudOffIcon for missing status', () => {
       const icon = getStatusIcon('missing');
       expect(icon.type).toBe(CloudOffIcon);
-      expect(icon.props.fontSize).toBe('small');
+      expect(icon.props.size).toBe(16);
     });
 
     test('returns LockIcon for members_only status', () => {
       const icon = getStatusIcon('members_only');
       expect(icon.type).toBe(LockIcon);
-      expect(icon.props.fontSize).toBe('small');
+      expect(icon.props.size).toBe(16);
     });
 
     test('returns BlockIcon for ignored status', () => {
       const icon = getStatusIcon('ignored');
       expect(icon.type).toBe(BlockIcon);
-      expect(icon.props.fontSize).toBe('small');
+      expect(icon.props.size).toBe(16);
     });
 
     test('returns NewReleasesIcon for never_downloaded status', () => {
       const icon = getStatusIcon('never_downloaded');
       expect(icon.type).toBe(NewReleasesIcon);
-      expect(icon.props.fontSize).toBe('small');
+      expect(icon.props.size).toBe(16);
     });
 
     test('returns NewReleasesIcon for unknown status', () => {
       const icon = getStatusIcon('unknown' as VideoStatus);
       expect(icon.type).toBe(NewReleasesIcon);
-      expect(icon.props.fontSize).toBe('small');
+      expect(icon.props.size).toBe(16);
     });
 
-    test('all icons have correct fontSize prop', () => {
+    test('all icons have correct size prop', () => {
       const statuses: VideoStatus[] = ['downloaded', 'missing', 'members_only', 'ignored', 'never_downloaded'];
       statuses.forEach(status => {
         const icon = getStatusIcon(status);
-        expect(icon.props.fontSize).toBe('small');
+        expect(icon.props.size).toBe(16);
       });
     });
   });
@@ -247,7 +249,7 @@ describe('videoStatus Utility', () => {
       expect(info?.label).toBe('Short');
       expect(info?.color).toBe('secondary');
       expect(info?.icon.type).toBe(ScheduleIcon);
-      expect(info?.icon.props.fontSize).toBe('small');
+      expect(info?.icon.props.size).toBe(16);
     });
 
     test('returns correct info for livestream media type', () => {
@@ -256,7 +258,7 @@ describe('videoStatus Utility', () => {
       expect(info?.label).toBe('Live');
       expect(info?.color).toBe('error');
       expect(info?.icon.type).toBe(VideoLibraryIcon);
-      expect(info?.icon.props.fontSize).toBe('small');
+      expect(info?.icon.props.size).toBe(16);
     });
 
     test('returns null for video media type', () => {
@@ -299,7 +301,7 @@ describe('videoStatus Utility', () => {
       expect(getStatusColor(status)).toBe('default');
       expect(getStatusLabel(status)).toBe('Ignored');
       expect(getStatusIcon(status).type).toBe(BlockIcon);
-      expect(getStatusIcon(status).props.fontSize).toBe('small');
+      expect(getStatusIcon(status).props.size).toBe(16);
     });
 
     test('downloaded video returns correct color, icon, and label', () => {
@@ -310,7 +312,7 @@ describe('videoStatus Utility', () => {
       expect(getStatusColor(status)).toBe('success');
       expect(getStatusLabel(status)).toBe('Downloaded');
       expect(getStatusIcon(status).type).toBe(CheckCircleIcon);
-      expect(getStatusIcon(status).props.fontSize).toBe('small');
+      expect(getStatusIcon(status).props.size).toBe(16);
     });
 
     test('missing video returns correct color, icon, and label', () => {
@@ -318,10 +320,10 @@ describe('videoStatus Utility', () => {
       const status = getVideoStatus(missingVideo);
 
       expect(status).toBe('missing');
-      expect(getStatusColor(status)).toBe('warning');
+      expect(getStatusColor(status)).toBe('error');
       expect(getStatusLabel(status)).toBe('Missing');
       expect(getStatusIcon(status).type).toBe(CloudOffIcon);
-      expect(getStatusIcon(status).props.fontSize).toBe('small');
+      expect(getStatusIcon(status).props.size).toBe(16);
     });
 
     test('members only video returns correct color, icon, and label', () => {
@@ -332,7 +334,7 @@ describe('videoStatus Utility', () => {
       expect(getStatusColor(status)).toBe('default');
       expect(getStatusLabel(status)).toBe('Members Only');
       expect(getStatusIcon(status).type).toBe(LockIcon);
-      expect(getStatusIcon(status).props.fontSize).toBe('small');
+      expect(getStatusIcon(status).props.size).toBe(16);
     });
 
     test('never downloaded video returns correct color, icon, and label', () => {
@@ -340,10 +342,10 @@ describe('videoStatus Utility', () => {
       const status = getVideoStatus(neverDownloadedVideo);
 
       expect(status).toBe('never_downloaded');
-      expect(getStatusColor(status)).toBe('info');
+      expect(getStatusColor(status)).toBe('warning');
       expect(getStatusLabel(status)).toBe('Not Downloaded');
       expect(getStatusIcon(status).type).toBe(NewReleasesIcon);
-      expect(getStatusIcon(status).props.fontSize).toBe('small');
+      expect(getStatusIcon(status).props.size).toBe(16);
     });
 
     test('short video returns correct media type info', () => {
@@ -354,7 +356,7 @@ describe('videoStatus Utility', () => {
       expect(mediaInfo?.label).toBe('Short');
       expect(mediaInfo?.color).toBe('secondary');
       expect(mediaInfo?.icon.type).toBe(ScheduleIcon);
-      expect(mediaInfo?.icon.props.fontSize).toBe('small');
+      expect(mediaInfo?.icon.props.size).toBe(16);
     });
 
     test('livestream video returns correct media type info', () => {
@@ -365,7 +367,7 @@ describe('videoStatus Utility', () => {
       expect(mediaInfo?.label).toBe('Live');
       expect(mediaInfo?.color).toBe('error');
       expect(mediaInfo?.icon.type).toBe(VideoLibraryIcon);
-      expect(mediaInfo?.icon.props.fontSize).toBe('small');
+      expect(mediaInfo?.icon.props.size).toBe(16);
     });
 
     test('regular video returns null media type info', () => {

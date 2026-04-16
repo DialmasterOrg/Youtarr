@@ -1,12 +1,7 @@
 import React from 'react';
 import { render } from '@testing-library/react';
-import { ThemeProvider } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
-import { LocalizationProvider } from '@mui/x-date-pickers';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { MemoryRouter } from 'react-router-dom';
 import WebSocketContext from '../../contexts/WebSocketContext';
-import { lightTheme, darkTheme } from '../../theme';
+import { ThemeEngineProvider } from '../../contexts/ThemeEngineContext';
 
 type AnyObject = Record<string, any>;
 
@@ -23,6 +18,22 @@ const mockWebSocketContext = {
   subscribe: () => {},
   unsubscribe: () => {},
 };
+
+function setViewportMatch(isMobile: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: query === '(max-width: 767px)' ? isMobile : false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
 
 function applyDecorators(storyNode: React.ReactNode, decorators: any[], context: AnyObject) {
   return decorators.reduceRight((currentNode, decorator) => {
@@ -49,7 +60,10 @@ export async function runStoryWithPlay(storyModule: StoryModule, storyName: stri
       ...(meta.parameters || {}),
       ...(story.parameters || {}),
     },
-    globals: { theme: 'light' },
+    globals: {
+      ...(meta.globals || {}),
+      ...(story.globals || {}),
+    },
     viewMode: 'story',
     hooks: {},
   };
@@ -64,18 +78,22 @@ export async function runStoryWithPlay(storyModule: StoryModule, storyName: stri
   const initialNode = <StoryRenderComponent />;
   const decoratedNode = applyDecorators(initialNode, decorators, context);
   
-  // Apply global providers (mimicking preview.js setup)
-  const selectedTheme = context.globals.theme === 'dark' ? darkTheme : lightTheme;
-  
+  if (typeof window !== 'undefined') {
+    const themeMode = context.globals.themeMode || 'playful';
+    const colorMode = context.globals.colorMode || context.globals.theme || 'light';
+    const motionEnabled = context.globals.motionEnabled === 'on' || context.globals.motionEnabled === true;
+    localStorage.setItem('uiThemeMode', themeMode);
+    localStorage.setItem('uiColorMode', colorMode === 'dark' ? 'dark' : 'light');
+    localStorage.setItem('uiMotionEnabled', String(motionEnabled));
+    setViewportMatch(context.parameters.layoutBreakpoint === 'mobile');
+  }
+
   const withProviders = (
-    <LocalizationProvider dateAdapter={AdapterDateFns}>
-      <ThemeProvider theme={selectedTheme}>
-        <CssBaseline />
-        <WebSocketContext.Provider value={mockWebSocketContext}>
-          {decoratedNode}
-        </WebSocketContext.Provider>
-      </ThemeProvider>
-    </LocalizationProvider>
+    <ThemeEngineProvider>
+      <WebSocketContext.Provider value={mockWebSocketContext}>
+        {decoratedNode}
+      </WebSocketContext.Provider>
+    </ThemeEngineProvider>
   );
   
   const utils = render(<>{withProviders}</>);

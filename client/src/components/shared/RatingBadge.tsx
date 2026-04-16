@@ -1,6 +1,7 @@
 import React from 'react';
-import { Chip, Tooltip, SxProps, Theme, Box, Typography } from '@mui/material';
-import EighteenUpRatingIcon from '@mui/icons-material/EighteenUpRating';
+import { Chip, Tooltip, Box, Typography } from '../ui';
+import { EighteenUpRating as EighteenUpRatingIcon } from '../../lib/icons';
+import { SHARED_RATING_CHIP_SMALL_STYLE, SHARED_RATING_CHIP_STYLE } from './chipStyles';
 
 interface RatingBadgeProps {
   rating: string | null | undefined;
@@ -8,7 +9,11 @@ interface RatingBadgeProps {
   size?: 'small' | 'medium';
   showNA?: boolean;
   variant?: 'pill' | 'text';
-  sx?: SxProps<Theme>;
+  className?: string;
+  style?: React.CSSProperties;
+  sx?: Record<string, unknown>;
+  onClick?: React.MouseEventHandler<HTMLElement>;
+  ariaLabel?: string;
 }
 
 /**
@@ -22,31 +27,47 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
   size = 'small',
   showNA = false,
   variant = 'pill',
+  className,
+  style,
   sx,
+  onClick,
+  ariaLabel,
 }) => {
   if (!rating && !showNA) {
     return null;
   }
 
-  // No rating assigned - show subtle "Unrated" indicator
+  // No rating assigned - show "Unrated" chip (no color, grey)
   if (!rating) {
     return (
-      <Typography
-        variant="caption"
-        sx={{
-          color: 'text.disabled',
-          fontStyle: 'italic',
-          fontSize: size === 'small' ? '0.7rem' : '0.8rem',
-          ...sx,
+      <Chip
+        label="Unrated"
+        size={size}
+        color="default"
+        variant="outlined"
+        onClick={onClick}
+        aria-label={ariaLabel}
+        style={{
+          ...(size === 'small'
+            ? SHARED_RATING_CHIP_SMALL_STYLE
+            : {
+              ...SHARED_RATING_CHIP_STYLE,
+              height: 24,
+              fontSize: '0.8rem',
+            }),
+          backgroundColor: 'var(--rating-chip-unrated-background)',
+          color: 'var(--rating-chip-unrated-foreground)',
+          ...style,
         }}
-      >
-        Unrated
-      </Typography>
+        className={`text-muted-foreground/50 border-muted-foreground/50 ${className || ''}`.trim()}
+      />
     );
   }
 
   const getRatingColor = (rate: string): 'default' | 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success' => {
-    const lower = rate.toLowerCase();
+    const normalized = typeof rate === 'string' ? rate.trim() : '';
+    if (!normalized) return 'default';
+    const lower = normalized.toLowerCase();
 
     // Kids / G - Green (Success)
     if (lower.includes('tv-y') || lower.includes('tv-g') || lower === 'g') {
@@ -63,7 +84,7 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
       return 'error';
     }
 
-    return 'default';
+    return 'secondary';
   };
 
   const tooltipText = ratingSource
@@ -76,11 +97,11 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
 
     return (
       <Tooltip title={tooltipText} placement="top">
-        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, ...sx }}>
-          <EighteenUpRatingIcon sx={{ fontSize: size === 'small' ? 16 : 20, color: resolvedColor }} />
+        <Box className="inline-flex items-center gap-1">
+          <EighteenUpRatingIcon size={size === 'small' ? 16 : 20} style={{ color: resolvedColor }} data-testid="EighteenUpRatingIcon" />
           <Typography
             variant="caption"
-            sx={{
+            style={{
               fontWeight: 600,
               color: resolvedColor,
               fontSize: size === 'small' ? '0.75rem' : '0.875rem',
@@ -94,18 +115,44 @@ const RatingBadge: React.FC<RatingBadgeProps> = ({
   }
 
   const chipColor = getRatingColor(rating);
+  const chipStyleByColor: Record<string, React.CSSProperties> = {
+    success: {
+      backgroundColor: 'var(--success)',
+      color: 'var(--success-foreground)',
+    },
+    warning: {
+      backgroundColor: 'var(--warning)',
+      color: 'var(--warning-foreground)',
+    },
+    error: {
+      backgroundColor: 'var(--destructive)',
+      color: 'var(--destructive-foreground)',
+    },
+    secondary: {
+      backgroundColor: 'var(--secondary)',
+      color: 'var(--secondary-foreground)',
+    },
+    default: {
+      backgroundColor: 'var(--muted)',
+      color: 'var(--muted-foreground)',
+    },
+  };
 
   return (
     <Tooltip title={tooltipText} placement="top">
       <Chip
         label={rating}
         size={size}
+        variant="filled"
         color={chipColor}
-        icon={<EighteenUpRatingIcon sx={{ fontSize: size === 'small' ? '0.85rem' : '1rem' }} />}
-        sx={{
-          fontSize: size === 'small' ? '0.7rem' : '0.875rem',
-          '& .MuiChip-icon': { ml: 0.3 },
-          ...sx,
+        icon={<EighteenUpRatingIcon size={size === 'small' ? 12 : 16} data-testid="EighteenUpRatingIcon" />}
+        className={className}
+        onClick={onClick}
+        aria-label={ariaLabel}
+        style={{
+          ...(size === 'small' ? SHARED_RATING_CHIP_SMALL_STYLE : SHARED_RATING_CHIP_STYLE),
+          ...(chipStyleByColor[chipColor] || chipStyleByColor.default),
+          ...style,
         }}
       />
     </Tooltip>

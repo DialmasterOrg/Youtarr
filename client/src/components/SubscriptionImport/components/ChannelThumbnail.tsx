@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Avatar } from '@mui/material';
-import { Person as PersonIcon } from '@mui/icons-material';
+import { Avatar } from '../../ui';
+import { User as PersonIcon } from '../../../lib/icons';
 
 interface ChannelThumbnailProps {
   thumbnailUrl: string | null;
@@ -10,23 +10,25 @@ interface ChannelThumbnailProps {
 
 const ChannelThumbnail: React.FC<ChannelThumbnailProps> = ({ thumbnailUrl, title, size = 40 }) => {
   const [hasError, setHasError] = useState(false);
+  const avatarSize = size <= 36 ? 'small' : size >= 48 ? 'large' : 'medium';
 
   if (!thumbnailUrl || hasError) {
     return (
-      <Avatar sx={{ width: size, height: size, bgcolor: 'grey.400' }} alt={title}>
-        <PersonIcon />
+      <Avatar size={avatarSize} alt={title} style={{ width: size, height: size }}>
+        <PersonIcon size={size * 0.45} />
       </Avatar>
     );
   }
 
   return (
     <Avatar
+      size={avatarSize}
       src={thumbnailUrl}
       alt={title}
-      sx={{ width: size, height: size }}
-      onError={() => setHasError(true)}
+      style={{ width: size, height: size }}
+      imgProps={{ onError: () => setHasError(true) }}
     >
-      <PersonIcon />
+      <PersonIcon size={size * 0.45} />
     </Avatar>
   );
 };

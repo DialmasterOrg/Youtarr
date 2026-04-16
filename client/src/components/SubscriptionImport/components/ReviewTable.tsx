@@ -1,12 +1,20 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Box, Checkbox, List, Table, TableBody, TableCell,
-  TableHead, TablePagination, TableRow, useMediaQuery, useTheme,
-} from '@mui/material';
+  Checkbox,
+  FormControlLabel,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Typography,
+} from '../../ui';
 import { ReviewChannel, RowState } from '../../../types/subscriptionImport';
 import { ImportFlowAction } from '../hooks/useImportFlow';
 import ReviewTableRow from './ReviewTableRow';
 import ReviewTableMobileCard from './ReviewTableMobileCard';
+import useMediaQuery from '../../../hooks/useMediaQuery';
+import PageControls from '../../shared/PageControls';
 
 interface ReviewTableProps {
   channels: ReviewChannel[];
@@ -17,58 +25,69 @@ interface ReviewTableProps {
   globalPreferredResolution: string;
 }
 
-const ROWS_PER_PAGE = 100;
+const ROWS_PER_PAGE = 50;
 
 const ReviewTable: React.FC<ReviewTableProps> = ({
   channels, rowStates, dispatch, subfolders, defaultSubfolderDisplay, globalPreferredResolution,
 }) => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const [page, setPage] = useState(0);
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(channels.length / ROWS_PER_PAGE));
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const pageChannels = useMemo(() => {
-    const start = page * ROWS_PER_PAGE;
+    const start = (page - 1) * ROWS_PER_PAGE;
     return channels.slice(start, start + ROWS_PER_PAGE);
   }, [channels, page]);
 
-  const handlePageChange = (_event: unknown, newPage: number) => {
-    setPage(newPage);
-  };
-
   const allOnPageSelected = useMemo(() => {
-    const eligible = pageChannels.filter((c) => !c.alreadySubscribed);
+    const eligible = pageChannels.filter((channel) => !channel.alreadySubscribed);
     if (eligible.length === 0) return false;
-    return eligible.every((c) => rowStates[c.channelId]?.selected);
+    return eligible.every((channel) => rowStates[channel.channelId]?.selected);
   }, [pageChannels, rowStates]);
 
   const someOnPageSelected = useMemo(() => {
-    const eligible = pageChannels.filter((c) => !c.alreadySubscribed);
+    const eligible = pageChannels.filter((channel) => !channel.alreadySubscribed);
     if (eligible.length === 0) return false;
-    const selectedCount = eligible.filter((c) => rowStates[c.channelId]?.selected).length;
+    const selectedCount = eligible.filter((channel) => rowStates[channel.channelId]?.selected).length;
     return selectedCount > 0 && selectedCount < eligible.length;
   }, [pageChannels, rowStates]);
 
   const handleHeaderCheckboxChange = () => {
-    const eligible = pageChannels.filter((c) => !c.alreadySubscribed);
-    if (allOnPageSelected) {
-      for (const c of eligible) {
-        if (rowStates[c.channelId]?.selected) {
-          dispatch({ type: 'TOGGLE_ROW_SELECTION', payload: c.channelId });
-        }
-      }
-    } else {
-      for (const c of eligible) {
-        if (!rowStates[c.channelId]?.selected) {
-          dispatch({ type: 'TOGGLE_ROW_SELECTION', payload: c.channelId });
-        }
+    const eligible = pageChannels.filter((channel) => !channel.alreadySubscribed);
+    for (const channel of eligible) {
+      const isSelected = rowStates[channel.channelId]?.selected;
+      if ((allOnPageSelected && isSelected) || (!allOnPageSelected && !isSelected)) {
+        dispatch({ type: 'TOGGLE_ROW_SELECTION', payload: channel.channelId });
       }
     }
   };
 
   if (isMobile) {
     return (
-      <Box>
-        <List disablePadding>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-3 rounded-[var(--radius-ui)] border border-[var(--border-strong)] bg-card px-4 py-3">
+          <Typography variant="body2" color="secondary">
+            {channels.length} channels ready for review
+          </Typography>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={allOnPageSelected}
+                indeterminate={someOnPageSelected}
+                onChange={handleHeaderCheckboxChange}
+                inputProps={{ 'aria-label': 'Select all on page' }}
+              />
+            }
+            label="Page"
+          />
+        </div>
+        <div>
           {pageChannels.map((channel) => (
             <ReviewTableMobileCard
               key={channel.channelId}
@@ -80,27 +99,18 @@ const ReviewTable: React.FC<ReviewTableProps> = ({
               globalPreferredResolution={globalPreferredResolution}
             />
           ))}
-        </List>
-        {channels.length > ROWS_PER_PAGE && (
-          <TablePagination
-            component="div"
-            count={channels.length}
-            page={page}
-            onPageChange={handlePageChange}
-            rowsPerPage={ROWS_PER_PAGE}
-            rowsPerPageOptions={[ROWS_PER_PAGE]}
-          />
-        )}
-      </Box>
+        </div>
+        <PageControls page={page} totalPages={totalPages} onPageChange={setPage} compact />
+      </div>
     );
   }
 
   return (
-    <Box>
+    <div className="space-y-4">
       <Table size="small">
         <TableHead>
           <TableRow>
-            <TableCell padding="checkbox">
+            <TableCell component="th" className="w-10">
               <Checkbox
                 checked={allOnPageSelected}
                 indeterminate={someOnPageSelected}
@@ -108,10 +118,10 @@ const ReviewTable: React.FC<ReviewTableProps> = ({
                 inputProps={{ 'aria-label': 'Select all on page' }}
               />
             </TableCell>
-            <TableCell sx={{ width: 56 }} />
-            <TableCell>Channel</TableCell>
-            <TableCell>Settings</TableCell>
-            <TableCell align="right" sx={{ width: 56 }} />
+            <TableCell component="th" className="w-14" />
+            <TableCell component="th">Channel</TableCell>
+            <TableCell component="th">Settings</TableCell>
+            <TableCell component="th" align="right" className="w-14" />
           </TableRow>
         </TableHead>
         <TableBody>
@@ -128,17 +138,8 @@ const ReviewTable: React.FC<ReviewTableProps> = ({
           ))}
         </TableBody>
       </Table>
-      {channels.length > ROWS_PER_PAGE && (
-        <TablePagination
-          component="div"
-          count={channels.length}
-          page={page}
-          onPageChange={handlePageChange}
-          rowsPerPage={ROWS_PER_PAGE}
-          rowsPerPageOptions={[ROWS_PER_PAGE]}
-        />
-      )}
-    </Box>
+      <PageControls page={page} totalPages={totalPages} onPageChange={setPage} />
+    </div>
   );
 };
 

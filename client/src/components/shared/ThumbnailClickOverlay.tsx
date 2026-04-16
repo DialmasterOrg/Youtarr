@@ -1,15 +1,15 @@
 import React from 'react';
-import { Box, SxProps, Theme } from '@mui/material';
+import { Box } from '../ui';
 
 interface ThumbnailClickOverlayProps {
   onClick: (e: React.MouseEvent) => void;
-  sx?: SxProps<Theme>;
+  style?: React.CSSProperties;
 }
 
-const ThumbnailClickOverlay: React.FC<ThumbnailClickOverlayProps> = ({ onClick, sx }) => (
+const ThumbnailClickOverlay: React.FC<ThumbnailClickOverlayProps> = ({ onClick, style }) => (
   <Box
     onClick={onClick}
-    sx={{
+    style={{
       position: 'absolute',
       top: '25%',
       left: '25%',
@@ -17,7 +17,7 @@ const ThumbnailClickOverlay: React.FC<ThumbnailClickOverlayProps> = ({ onClick, 
       height: '50%',
       cursor: 'pointer',
       zIndex: 1,
-      ...sx as object,
+      ...style,
     }}
   />
 );

@@ -1,7 +1,15 @@
 import React, { useEffect } from 'react';
 import {
-  Box, CircularProgress, Table, TableBody, TableCell, TableHead, TableRow, Typography,
-} from '@mui/material';
+  Card,
+  CardContent,
+  CircularProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Typography,
+} from '../../ui';
 import { useImportHistory } from '../hooks/useImportHistory';
 import { ImportPhase } from '../../../types/subscriptionImport';
 
@@ -22,9 +30,9 @@ const RecentImportsSection: React.FC<RecentImportsSectionProps> = ({ token, curr
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+      <div className="flex justify-center py-4">
         <CircularProgress size={24} />
-      </Box>
+      </div>
     );
   }
 
@@ -33,31 +41,29 @@ const RecentImportsSection: React.FC<RecentImportsSectionProps> = ({ token, curr
   }
 
   return (
-    <Box sx={{ mt: 4 }}>
-      <Typography variant="h6" sx={{ mb: 2 }}>
-        Recent Imports
-      </Typography>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>Date</TableCell>
-            <TableCell>Status</TableCell>
-            <TableCell align="right">Channels</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {imports.map((imp) => (
-            <TableRow key={imp.jobId}>
-              <TableCell>
-                {new Date(imp.startedAt).toLocaleDateString()}
-              </TableCell>
-              <TableCell>{imp.status}</TableCell>
-              <TableCell align="right">{imp.total}</TableCell>
+    <Card className="mt-6" variant="outlined">
+      <CardContent className="space-y-3">
+        <Typography variant="h6">Recent Imports</Typography>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell component="th">Date</TableCell>
+              <TableCell component="th">Status</TableCell>
+              <TableCell component="th" align="right">Channels</TableCell>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </Box>
+          </TableHead>
+          <TableBody>
+            {imports.map((imp) => (
+              <TableRow key={imp.jobId} hover>
+                <TableCell>{new Date(imp.startedAt).toLocaleDateString()}</TableCell>
+                <TableCell>{imp.status}</TableCell>
+                <TableCell align="right">{imp.total}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 };
 

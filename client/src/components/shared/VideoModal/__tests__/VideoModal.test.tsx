@@ -1,7 +1,6 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ThemeProvider, createTheme } from '@mui/material';
 import { VideoModalData } from '../types';
 
 // Mock axios
@@ -134,18 +133,26 @@ jest.mock('../../ChangeRatingDialog', () => ({
 
 jest.mock('../../RatingBadge', () => ({
   __esModule: true,
-  default: function MockRatingBadge(props: { rating: string | null }) {
+  default: function MockRatingBadge(props: { rating: string | null; showNA?: boolean; onClick?: () => void; ariaLabel?: string }) {
     const React = require('react');
-    return props.rating
-      ? React.createElement('span', { 'data-testid': 'rating-badge' }, props.rating)
+    const label = props.rating || (props.showNA ? 'Unrated' : null);
+    return label
+      ? React.createElement(
+          props.onClick ? 'button' : 'span',
+          {
+            'data-testid': 'rating-badge',
+            onClick: props.onClick,
+            'aria-label': props.ariaLabel,
+            type: props.onClick ? 'button' : undefined,
+          },
+          label
+        )
       : null;
   },
 }));
 
 import { MemoryRouter } from 'react-router-dom';
 import VideoModal from '../index';
-
-const theme = createTheme();
 
 const baseVideo: VideoModalData = {
   youtubeId: 'test123',
@@ -188,9 +195,7 @@ function renderModal(props: Partial<React.ComponentProps<typeof VideoModal>> = {
 
   return render(
     <MemoryRouter>
-      <ThemeProvider theme={theme}>
-        <VideoModal {...defaultProps} {...props} />
-      </ThemeProvider>
+      <VideoModal {...defaultProps} {...props} />
     </MemoryRouter>
   );
 }
@@ -209,13 +214,14 @@ describe('VideoModal', () => {
 
   test('renders status chip', () => {
     renderModal();
-    expect(screen.getByText('Downloaded')).toBeInTheDocument();
+    expect(screen.getByText('Available')).toBeInTheDocument();
   });
 
-  test('renders rating in action button when rating exists', () => {
+  test('renders a clickable rating chip when rating exists', () => {
     renderModal({
       video: { ...baseVideo, normalizedRating: 'PG-13', ratingSource: 'manual' },
     });
+
     const ratingButton = screen.getByRole('button', { name: /change rating/i });
     expect(ratingButton).toBeInTheDocument();
     expect(ratingButton).toHaveTextContent('PG-13');
@@ -300,7 +306,7 @@ describe('VideoModal', () => {
 
       // Confirm the deletion in the dialog
       const confirmButton = screen.getByTestId('confirm-delete');
-      await userEvent.click(confirmButton);
+      fireEvent.click(confirmButton);
 
       await waitFor(() => {
         expect(mockDeleteVideosByYoutubeIds).toHaveBeenCalledWith(['test123'], 'test-token');
@@ -326,7 +332,7 @@ describe('VideoModal', () => {
       await userEvent.click(deleteButton);
 
       const confirmButton = screen.getByTestId('confirm-delete');
-      await userEvent.click(confirmButton);
+      fireEvent.click(confirmButton);
 
       await waitFor(() => {
         expect(screen.getByText('Permission denied')).toBeInTheDocument();
@@ -382,13 +388,11 @@ describe('VideoModal', () => {
 
       renderModal({ onRatingChanged });
 
-      // Click the Rate button to open the rating dialog
       const rateButton = screen.getByRole('button', { name: /change rating/i });
       await userEvent.click(rateButton);
 
-      // Apply a rating
       const applyButton = screen.getByTestId('apply-rating');
-      await userEvent.click(applyButton);
+      fireEvent.click(applyButton);
 
       await waitFor(() => {
         expect(axios.post).toHaveBeenCalledWith(
@@ -416,7 +420,7 @@ describe('VideoModal', () => {
       await userEvent.click(rateButton);
 
       const applyButton = screen.getByTestId('apply-rating');
-      await userEvent.click(applyButton);
+      fireEvent.click(applyButton);
 
       await waitFor(() => {
         expect(screen.getByText('Rating update failed')).toBeInTheDocument();
@@ -425,7 +429,6 @@ describe('VideoModal', () => {
 
     test('shows error snackbar when video has no databaseId', async () => {
       const videoWithoutDbId = { ...baseVideo, databaseId: null };
-      axios.post.mockResolvedValueOnce({ data: { success: true } });
 
       renderModal({ video: videoWithoutDbId });
 
@@ -433,14 +436,14 @@ describe('VideoModal', () => {
       await userEvent.click(rateButton);
 
       const applyButton = screen.getByTestId('apply-rating');
-      await userEvent.click(applyButton);
+      fireEvent.click(applyButton);
 
       await waitFor(() => {
         expect(screen.getByText('Cannot update rating: video not in database')).toBeInTheDocument();
       });
 
-      // Should not have called the API
       expect(axios.post).not.toHaveBeenCalled();
     });
   });
+
 });

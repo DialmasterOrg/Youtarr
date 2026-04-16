@@ -289,6 +289,56 @@ class ChannelSettingsModule {
   }
 
   /**
+   * Validate an auto_download_enabled_tabs value from a user request.
+   * @param {any} value - The value provided in the update payload (string CSV of media types)
+   * @param {string|null} detectedTabsCsv - The channel's available_tabs (detected)
+   * @param {string[]} effectiveHiddenTabs - The hidden tabs that will be in effect after the update
+   * @returns {{ valid: boolean, error?: string, normalized?: string }}
+   */
+  validateAutoDownloadEnabledTabs(value, detectedTabsCsv, effectiveHiddenTabs) {
+    if (value === null || value === undefined) {
+      return { valid: true };
+    }
+    if (typeof value !== 'string') {
+      return { valid: false, error: 'auto_download_enabled_tabs must be a string' };
+    }
+    const parts = value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+    if (parts.length === 0) {
+      return { valid: true, normalized: '' };
+    }
+    const validMediaTypes = new Set(Object.values(MEDIA_TAB_TYPE_MAP));
+    for (const part of parts) {
+      if (!validMediaTypes.has(part)) {
+        return {
+          valid: false,
+          error: `Invalid auto_download_enabled_tabs entry: ${part}. Allowed values: ${Array.from(validMediaTypes).join(', ')}`
+        };
+      }
+    }
+    const detectedTabs = parseTabCsv(detectedTabsCsv);
+    const hiddenSet = new Set(effectiveHiddenTabs || []);
+    const effectiveMediaTypes = new Set(
+      detectedTabs
+        .filter((tab) => !hiddenSet.has(tab))
+        .map((tab) => MEDIA_TAB_TYPE_MAP[tab])
+        .filter(Boolean)
+    );
+    for (const part of parts) {
+      if (!effectiveMediaTypes.has(part)) {
+        return {
+          valid: false,
+          error: `auto_download_enabled_tabs entry '${part}' is not allowed: corresponding tab is not detected for this channel or is hidden`
+        };
+      }
+    }
+    const deduped = Array.from(new Set(parts));
+    return { valid: true, normalized: deduped.join(',') };
+  }
+
+  /**
    * Get the full directory path for a channel, including subfolder if set
    * @param {Object} channel - Channel database record
    * @returns {string} - Full directory path
@@ -534,6 +584,7 @@ class ChannelSettingsModule {
       audio_format: channel.audio_format,
       default_rating: channel.default_rating,
       skip_video_folder: channel.skip_video_folder,
+      auto_download_enabled_tabs: channel.auto_download_enabled_tabs,
       detected_tabs: detectedTabs,
       hidden_tabs: Array.from(hiddenTabsSet),
       available_tabs: availableTabs,
@@ -684,6 +735,24 @@ class ChannelSettingsModule {
       normalizedHiddenTabs = validation.normalized;
     }
 
+    // Validate auto_download_enabled_tabs if provided. Use the post-update hidden
+    // tabs so the validator only accepts media types whose tab will be visible.
+    let normalizedAutoDownloadTabs = null;
+    if (settings.auto_download_enabled_tabs !== undefined) {
+      const effectiveHiddenTabs = normalizedHiddenTabs !== null
+        ? normalizedHiddenTabs
+        : parseTabCsv(channel.hidden_tabs);
+      const validation = this.validateAutoDownloadEnabledTabs(
+        settings.auto_download_enabled_tabs,
+        channel.available_tabs,
+        effectiveHiddenTabs
+      );
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+      normalizedAutoDownloadTabs = validation.normalized;
+    }
+
     // Store old subfolder for potential move
     const oldSubFolder = channel.sub_folder;
     const newSubFolder = settings.sub_folder !== undefined ?
@@ -723,6 +792,9 @@ class ChannelSettingsModule {
     if (settings.skip_video_folder !== undefined) {
       updateData.skip_video_folder = settings.skip_video_folder;
     }
+    if (normalizedAutoDownloadTabs !== null) {
+      updateData.auto_download_enabled_tabs = normalizedAutoDownloadTabs;
+    }
     if (normalizedHiddenTabs !== null) {
       updateData.hidden_tabs = normalizedHiddenTabs.length > 0
         ? normalizedHiddenTabs.join(',')
@@ -730,16 +802,19 @@ class ChannelSettingsModule {
 
       // When a tab is hidden, strip its corresponding media type from
       // auto_download_enabled_tabs so we don't auto-download something the
-      // user has hidden from view.
-      const hiddenMediaTypes = new Set(
-        normalizedHiddenTabs
-          .map((tabType) => MEDIA_TAB_TYPE_MAP[tabType])
-          .filter(Boolean)
-      );
-      const currentAuto = parseTabCsv(channel.auto_download_enabled_tabs);
-      const filteredAuto = currentAuto.filter((mt) => !hiddenMediaTypes.has(mt));
-      if (filteredAuto.length !== currentAuto.length) {
-        updateData.auto_download_enabled_tabs = filteredAuto.join(',');
+      // user has hidden from view. Skip when the user already sent a validated
+      // auto_download value (which is guaranteed not to include hidden tabs).
+      if (normalizedAutoDownloadTabs === null) {
+        const hiddenMediaTypes = new Set(
+          normalizedHiddenTabs
+            .map((tabType) => MEDIA_TAB_TYPE_MAP[tabType])
+            .filter(Boolean)
+        );
+        const currentAuto = parseTabCsv(channel.auto_download_enabled_tabs);
+        const filteredAuto = currentAuto.filter((mt) => !hiddenMediaTypes.has(mt));
+        if (filteredAuto.length !== currentAuto.length) {
+          updateData.auto_download_enabled_tabs = filteredAuto.join(',');
+        }
       }
     }
 
@@ -794,6 +869,7 @@ class ChannelSettingsModule {
         audio_format: updatedChannel.audio_format,
         default_rating: updatedChannel.default_rating,
         skip_video_folder: updatedChannel.skip_video_folder,
+        auto_download_enabled_tabs: updatedChannel.auto_download_enabled_tabs,
         detected_tabs: detectedTabsAfter,
         hidden_tabs: hiddenTabsAfter,
         available_tabs: availableTabsAfter,

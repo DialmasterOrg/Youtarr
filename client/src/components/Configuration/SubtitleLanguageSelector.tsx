@@ -1,13 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import {
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Chip,
-  Box,
-  SelectChangeEvent,
-} from '@mui/material';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface SubtitleLanguageSelectorProps {
   value: string;
@@ -41,70 +32,167 @@ function SubtitleLanguageSelector({
   onChange,
   disabled = false,
 }: SubtitleLanguageSelectorProps) {
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
-
-  // Convert string value to array when component mounts or value changes
-  useEffect(() => {
-    if (value && value.trim()) {
-      const languages = value.split(',').map((lang) => lang.trim()).filter(Boolean);
-      // Filter out invalid codes
+  const parseInitialLanguages = React.useCallback((rawValue: string) => {
+    if (rawValue && rawValue.trim()) {
+      const languages = rawValue.split(',').map((lang) => lang.trim()).filter(Boolean);
       const validLanguages = languages.filter((lang) =>
         LANGUAGE_OPTIONS.some((opt) => opt.code === lang)
       );
-      setSelectedLanguages(validLanguages.length > 0 ? validLanguages : ['en']);
-    } else {
-      setSelectedLanguages(['en']);
+      return validLanguages.length > 0 ? validLanguages : ['en'];
     }
-  }, [value]);
+    return ['en'];
+  }, []);
 
-  const handleChange = (event: SelectChangeEvent<string[]>) => {
-    const newValue = event.target.value as string[];
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(() => parseInitialLanguages(value));
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const ignoreClickRef = useRef(false);
 
-    // Ensure at least one language is selected
-    if (newValue.length === 0) {
-      setSelectedLanguages(['en']);
-      onChange('en');
+  // Convert string value to array when component mounts or value changes
+  // Also close dropdown when value prop changes externally (controlled rerender)
+  useEffect(() => {
+    setSelectedLanguages(parseInitialLanguages(value));
+    setOpen(false);
+  }, [value, parseInitialLanguages]);
+
+  useEffect(() => {
+    if (!open) {
       return;
     }
 
-    setSelectedLanguages(newValue);
-    onChange(newValue.join(','));
-  };
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
 
-  const getLanguageLabel = (code: string): string => {
-    const option = LANGUAGE_OPTIONS.find((opt) => opt.code === code);
-    return option ? option.label : code;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  const handleToggleLanguage = (code: string) => {
+    if (disabled) return;
+    const isSelected = selectedLanguages.includes(code);
+
+    if (isSelected) {
+      const next = selectedLanguages.filter((lang) => lang !== code);
+      if (next.length === 0) {
+        setSelectedLanguages(['en']);
+        onChange('en');
+        return;
+      }
+      setSelectedLanguages(next);
+      onChange(next.join(','));
+      return;
+    }
+
+    const next = [...selectedLanguages, code];
+    setSelectedLanguages(next);
+    onChange(next.join(','));
   };
 
   return (
-    <FormControl fullWidth disabled={disabled}>
-      <InputLabel id="subtitle-language-label">Subtitle Languages</InputLabel>
-      <Select
-        labelId="subtitle-language-label"
-        id="subtitle-language-select"
-        multiple
-        value={selectedLanguages}
-        onChange={handleChange}
-        label="Subtitle Languages"
-        renderValue={(selected) => (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-            {selected.map((code) => (
-              <Chip
-                key={code}
-                label={getLanguageLabel(code)}
-                size="small"
-              />
-            ))}
-          </Box>
-        )}
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: 4, position: 'relative' }}>
+      <label
+        htmlFor="subtitle-language-select"
+        style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)', fontWeight: 500 }}
       >
-        {LANGUAGE_OPTIONS.map((option) => (
-          <MenuItem key={option.code} value={option.code}>
-            {option.label}
-          </MenuItem>
-        ))}
-      </Select>
-    </FormControl>
+        Subtitle Languages
+      </label>
+      <button
+        id="subtitle-language-select"
+        type="button"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          if (!disabled && !open) {
+            ignoreClickRef.current = true;
+            setOpen(true);
+          }
+        }}
+        onClick={() => {
+          if (disabled) {
+            return;
+          }
+          if (ignoreClickRef.current) {
+            ignoreClickRef.current = false;
+            return;
+          }
+          setOpen((current) => !current);
+        }}
+        disabled={disabled}
+        aria-disabled={disabled ? 'true' : undefined}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-controls={open ? 'subtitle-language-options' : undefined}
+        aria-label="Subtitle Languages"
+        style={{
+          width: '100%',
+          textAlign: 'left',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-input)',
+          backgroundColor: 'var(--background)',
+          color: 'var(--foreground)',
+          padding: '8px',
+          fontSize: '0.875rem',
+          opacity: disabled ? 0.5 : 1,
+          cursor: disabled ? 'not-allowed' : 'auto',
+          display: 'flex',
+          gap: 6,
+          flexWrap: 'wrap',
+        }}
+      >
+        {selectedLanguages.map((code) => {
+          const label = LANGUAGE_OPTIONS.find((o) => o.code === code)?.label || code;
+          return (
+            <span key={code} style={{ padding: '2px 6px', borderRadius: 999, background: 'var(--muted)' }}>
+              {label}
+            </span>
+          );
+        })}
+      </button>
+      {open && !disabled && (
+        <div
+          id="subtitle-language-options"
+          role="listbox"
+          aria-label="Subtitle Languages options"
+          style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-input)', padding: 4, maxHeight: 220, overflowY: 'auto' }}
+        >
+          {LANGUAGE_OPTIONS.map((option) => {
+            const selected = selectedLanguages.includes(option.code);
+            return (
+              <div
+                key={option.code}
+                role="option"
+                aria-selected={selected}
+                onClick={() => handleToggleLanguage(option.code)}
+                style={{
+                  padding: '6px 8px',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  background: selected ? 'var(--muted)' : 'transparent',
+                }}
+              >
+                {option.label}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <span style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)' }}>
+        Selected: {selectedLanguages.join(', ')}
+      </span>
+    </div>
   );
 }
 

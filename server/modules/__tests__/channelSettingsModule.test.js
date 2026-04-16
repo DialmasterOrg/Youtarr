@@ -631,6 +631,18 @@ describe('ChannelSettingsModule', () => {
       expect(result.hidden_tabs).toEqual([]);
       expect(result.available_tabs).toEqual([]);
     });
+
+    test('includes auto_download_enabled_tabs from the channel record', async () => {
+      const channel = {
+        ...mockChannel,
+        auto_download_enabled_tabs: 'video,short'
+      };
+      Channel.findOne.mockResolvedValue(channel);
+
+      const result = await channelSettingsModule.getChannelSettings('UC123456');
+
+      expect(result.auto_download_enabled_tabs).toBe('video,short');
+    });
   });
 
   describe('updateChannelSettings', () => {
@@ -870,6 +882,114 @@ describe('ChannelSettingsModule', () => {
         );
         expect(updateCall).toBeDefined();
         expect(updateCall[0].auto_download_enabled_tabs).toBe('video');
+      });
+    });
+
+    describe('auto_download_enabled_tabs', () => {
+      const buildChannel = (overrides = {}) => ({
+        ...mockChannel,
+        available_tabs: 'videos,shorts,streams',
+        hidden_tabs: null,
+        auto_download_enabled_tabs: 'video',
+        update: jest.fn().mockImplementation(function (data) {
+          Object.assign(this, data);
+          return Promise.resolve(this);
+        }),
+        ...overrides,
+      });
+
+      test('persists a valid auto_download_enabled_tabs value', async () => {
+        const channel = buildChannel();
+        Channel.findOne.mockResolvedValue(channel);
+
+        const result = await channelSettingsModule.updateChannelSettings('UC123456', {
+          auto_download_enabled_tabs: 'video,livestream'
+        });
+
+        expect(channel.update).toHaveBeenCalledWith(
+          expect.objectContaining({ auto_download_enabled_tabs: 'video,livestream' })
+        );
+        expect(result.settings.auto_download_enabled_tabs).toBe('video,livestream');
+      });
+
+      test('persists an empty string when the user disables all auto-downloads', async () => {
+        const channel = buildChannel({ auto_download_enabled_tabs: 'video,short' });
+        Channel.findOne.mockResolvedValue(channel);
+
+        await channelSettingsModule.updateChannelSettings('UC123456', {
+          auto_download_enabled_tabs: ''
+        });
+
+        expect(channel.update).toHaveBeenCalledWith(
+          expect.objectContaining({ auto_download_enabled_tabs: '' })
+        );
+      });
+
+      test('rejects unknown media type entries', async () => {
+        const channel = buildChannel();
+        Channel.findOne.mockResolvedValue(channel);
+
+        await expect(
+          channelSettingsModule.updateChannelSettings('UC123456', {
+            auto_download_enabled_tabs: 'video,bogus'
+          })
+        ).rejects.toThrow('Invalid auto_download_enabled_tabs entry: bogus');
+        expect(channel.update).not.toHaveBeenCalled();
+      });
+
+      test('rejects entries whose tab is not detected for the channel', async () => {
+        const channel = buildChannel({ available_tabs: 'videos' });
+        Channel.findOne.mockResolvedValue(channel);
+
+        await expect(
+          channelSettingsModule.updateChannelSettings('UC123456', {
+            auto_download_enabled_tabs: 'short'
+          })
+        ).rejects.toThrow(/'short' is not allowed/);
+        expect(channel.update).not.toHaveBeenCalled();
+      });
+
+      test('rejects entries whose tab will be hidden after the same update', async () => {
+        const channel = buildChannel();
+        Channel.findOne.mockResolvedValue(channel);
+
+        await expect(
+          channelSettingsModule.updateChannelSettings('UC123456', {
+            hidden_tabs: ['shorts'],
+            auto_download_enabled_tabs: 'video,short'
+          })
+        ).rejects.toThrow(/'short' is not allowed/);
+      });
+
+      test('does not run hidden-tab strip side-effect when user supplies a validated value', async () => {
+        const channel = buildChannel({
+          available_tabs: 'videos,shorts',
+          auto_download_enabled_tabs: 'video,short'
+        });
+        Channel.findOne.mockResolvedValue(channel);
+
+        await channelSettingsModule.updateChannelSettings('UC123456', {
+          hidden_tabs: ['shorts'],
+          auto_download_enabled_tabs: 'video'
+        });
+
+        const autoCalls = channel.update.mock.calls.filter(
+          (call) => 'auto_download_enabled_tabs' in (call[0] || {})
+        );
+        expect(autoCalls).toHaveLength(1);
+        expect(autoCalls[0][0].auto_download_enabled_tabs).toBe('video');
+      });
+
+      test('round-trips through GET after a save', async () => {
+        const channel = buildChannel();
+        Channel.findOne.mockResolvedValue(channel);
+
+        await channelSettingsModule.updateChannelSettings('UC123456', {
+          auto_download_enabled_tabs: 'short,livestream'
+        });
+        const refreshed = await channelSettingsModule.getChannelSettings('UC123456');
+
+        expect(refreshed.auto_download_enabled_tabs).toBe('short,livestream');
       });
     });
   });

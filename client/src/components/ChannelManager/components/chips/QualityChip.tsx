@@ -1,6 +1,7 @@
 import React from 'react';
-import { Chip } from '@mui/material';
-import SettingsIcon from '@mui/icons-material/Settings';
+import { Chip } from '../../../../components/ui';
+import { Settings as SettingsIcon, Video as VideoIcon } from '../../../../lib/icons';
+import { SHARED_CHANNEL_META_CHIP_STYLE, SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE } from '../../../shared/chipStyles';
 
 interface QualityChipProps {
   videoQuality: string | null | undefined;
@@ -10,20 +11,21 @@ interface QualityChipProps {
 const QualityChip: React.FC<QualityChipProps> = ({ videoQuality, globalPreferredResolution }) => {
   const resolvedQuality = videoQuality || globalPreferredResolution;
   const isOverride = Boolean(videoQuality);
+  const icon = isOverride
+    ? <SettingsIcon size={14} data-testid="SettingsIcon" />
+    : <VideoIcon size={14} data-testid="VideoIcon" />;
 
   return (
     <Chip
       label={`${resolvedQuality}p`}
       size="small"
       color={isOverride ? 'success' : 'default'}
-      icon={isOverride ? <SettingsIcon sx={{ fontSize: '0.85rem' }} /> : undefined}
+      icon={icon}
       data-testid="quality-chip"
       data-override={isOverride ? 'true' : 'false'}
-      sx={{
-        fontSize: '0.7rem',
-        '& .MuiChip-icon': {
-          ml: 0.3,
-        },
+      style={{
+        ...SHARED_CHANNEL_META_CHIP_STYLE,
+        ...(isOverride ? undefined : SHARED_CHANNEL_META_DEFAULT_SURFACE_STYLE),
       }}
     />
   );

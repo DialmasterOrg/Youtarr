@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, TextField, Typography } from '@mui/material';
+import { TextField, Typography } from '../../ui';
 
 interface DurationFilterInputProps {
   minDuration: number | null;
@@ -41,9 +41,9 @@ function DurationFilterInput({
   };
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       {!compact && (
-        <Typography variant="body2" color="text.secondary" sx={{ minWidth: 60 }}>
+        <Typography variant="body2" color="text.secondary" style={{ minWidth: 60 }}>
           Duration:
         </Typography>
       )}
@@ -54,7 +54,7 @@ function DurationFilterInput({
         value={minDuration ?? ''}
         onChange={handleMinChange}
         inputProps={{ min: 0, 'aria-label': 'Minimum duration in minutes' }}
-        sx={{ width: compact ? 70 : 80 }}
+        style={{ width: compact ? 70 : 80 }}
       />
       <Typography variant="body2" color="text.secondary">
         to
@@ -66,12 +66,12 @@ function DurationFilterInput({
         value={maxDuration ?? ''}
         onChange={handleMaxChange}
         inputProps={{ min: 0, 'aria-label': 'Maximum duration in minutes' }}
-        sx={{ width: compact ? 70 : 80 }}
+        style={{ width: compact ? 70 : 80 }}
       />
       <Typography variant="body2" color="text.secondary">
         min
       </Typography>
-    </Box>
+    </div>
   );
 }
 

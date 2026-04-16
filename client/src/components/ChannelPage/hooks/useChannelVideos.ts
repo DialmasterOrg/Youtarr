@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChannelVideo } from '../../../types/ChannelVideo';
 
 interface UseChannelVideosParams {
@@ -10,7 +10,10 @@ interface UseChannelVideosParams {
   sortBy: string;
   sortOrder: string;
   tabType: string | null;
+  maxRating: string;
   token: string | null;
+  append?: boolean;
+  resetKey?: string;
   minDuration?: number | null;
   maxDuration?: number | null;
   dateFrom?: Date | null;
@@ -39,7 +42,10 @@ export function useChannelVideos({
   sortBy,
   sortOrder,
   tabType,
+  maxRating,
   token,
+  append = false,
+  resetKey,
   minDuration,
   maxDuration,
   dateFrom,
@@ -50,16 +56,14 @@ export function useChannelVideos({
   const [totalCount, setTotalCount] = useState<number>(0);
   const [oldestVideoDate, setOldestVideoDate] = useState<string | null>(null);
   const [videoFailed, setVideoFailed] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(!!token && !!channelId && !!tabType);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
   const [autoDownloadsEnabled, setAutoDownloadsEnabled] = useState<boolean>(false);
   const [availableTabs, setAvailableTabs] = useState<string[]>([]);
+  const resetKeyRef = useRef<string | undefined>(resetKey);
 
   const fetchVideos = useCallback(async () => {
-    if (!channelId || !token || !tabType) {
-      setLoading(false);
-      return;
-    }
+    if (!channelId || !token || !tabType) return;
 
     setLoading(true);
     setError(null);
@@ -74,6 +78,10 @@ export function useChannelVideos({
         sortOrder: sortOrder,
         tabType: tabType,
       });
+
+      if (maxRating) {
+        queryParams.set('maxRating', maxRating);
+      }
 
       // Add optional filter params (convert duration from minutes to seconds)
       if (minDuration != null) {
@@ -96,7 +104,6 @@ export function useChannelVideos({
         headers: {
           'x-access-token': token,
         },
-        cache: 'no-cache',
       });
 
       if (!response.ok) {
@@ -105,8 +112,28 @@ export function useChannelVideos({
 
       const data = await response.json();
 
+      const incomingVideos: ChannelVideo[] = data.videos || [];
+      const isReset = resetKeyRef.current !== resetKey;
+      if (isReset) {
+        resetKeyRef.current = resetKey;
+      }
+
       if (data.videos !== undefined) {
-        setVideos(data.videos || []);
+        if (!isReset && append && page > 1) {
+          setVideos((prev) => {
+            const combined = [...prev, ...incomingVideos];
+            const seen = new Set<string>();
+            return combined.filter((video) => {
+              if (seen.has(video.youtube_id)) return false;
+              seen.add(video.youtube_id);
+              return true;
+            });
+          });
+        } else {
+          setVideos(incomingVideos);
+        }
+      } else if (isReset) {
+        setVideos([]);
       }
       setVideoFailed(data.videoFail || false);
       setTotalCount(data.totalCount || 0);
@@ -119,7 +146,7 @@ export function useChannelVideos({
     } finally {
       setLoading(false);
     }
-  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, token, minDuration, maxDuration, dateFrom, dateTo, protectedFilter]);
+  }, [channelId, page, pageSize, hideDownloaded, searchQuery, sortBy, sortOrder, tabType, maxRating, token, append, resetKey, minDuration, maxDuration, dateFrom, dateTo, protectedFilter]);
 
   useEffect(() => {
     fetchVideos();

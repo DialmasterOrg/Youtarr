@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import DownloadHistory from '../DownloadHistory';
+import { useConfig } from '../../../hooks/useConfig';
 import { Job } from '../../../types/Job';
 import { VideoData } from '../../../types/VideoData';
 
@@ -20,17 +21,20 @@ jest.mock('../../../utils', () => ({
   }),
 }));
 
+jest.mock('../../../hooks/useConfig', () => ({
+  useConfig: jest.fn(),
+}));
+
+const mockUseConfig = useConfig as jest.MockedFunction<typeof useConfig>;
+
 describe('DownloadHistory', () => {
   const mockHandleExpandCell = jest.fn();
-  const mockSetAnchorEl = jest.fn();
 
   const defaultProps = {
     jobs: [],
     currentTime: new Date('2024-01-15T10:30:00Z'),
     expanded: {},
-    anchorEl: {},
     handleExpandCell: mockHandleExpandCell,
-    setAnchorEl: mockSetAnchorEl,
     isMobile: false,
   };
 
@@ -93,6 +97,9 @@ describe('DownloadHistory', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseConfig.mockReturnValue({
+      config: { channelVideosHotLoad: false },
+    } as ReturnType<typeof useConfig>);
   });
 
   test('renders with title and no jobs message when jobs array is empty', () => {
@@ -123,8 +130,7 @@ describe('DownloadHistory', () => {
     expect(allText).toMatch(/Completed|m\d+s/);
   });
 
-  test('displays video count and info button for jobs with videos', () => {
-    // Create jobs that will all be displayed (with videos or in progress)
+  test('displays "---" for in-progress jobs without videos', () => {
     const testJobs: Job[] = [
       sampleJobs[0], // Has 2 videos
       {
@@ -134,11 +140,6 @@ describe('DownloadHistory', () => {
     ];
     render(<DownloadHistory {...defaultProps} jobs={testJobs} />);
 
-    // Job with videos should have info button
-    const infoIcon = screen.queryByTestId('InfoIcon');
-    expect(infoIcon).toBeInTheDocument();
-
-    // Get all table cells
     const tableCells = screen.getAllByRole('cell');
     const cellTexts = tableCells.map(cell => cell.textContent || '');
 
@@ -187,23 +188,6 @@ describe('DownloadHistory', () => {
     expect(checkbox).toBeChecked();
   });
 
-  test('handles popover interaction', async () => {
-    const user = userEvent.setup();
-    render(<DownloadHistory {...defaultProps} jobs={sampleJobs} />);
-
-    // Find the info icon and its parent button
-    const infoIcon = screen.getByTestId('InfoIcon');
-    // Get the button containing the icon using Testing Library queries
-    const buttons = screen.getAllByRole('button');
-    const infoButton = buttons.find(btn => btn.contains(infoIcon));
-
-    expect(infoButton).toBeTruthy();
-
-    // Click the button and verify the handler was called
-    await user.click(infoButton!);
-    expect(mockSetAnchorEl).toHaveBeenCalled();
-  });
-
   test('handles pagination with many jobs', async () => {
     const user = userEvent.setup();
 
@@ -241,7 +225,7 @@ describe('DownloadHistory', () => {
     expect(pagination).toBeInTheDocument();
 
     // Find and click page 2 button
-    const page2Button = screen.getByLabelText(/page 2/i);
+    const page2Button = screen.getByLabelText(/go to page 2/i);
     await user.click(page2Button);
 
     // Should now show remaining 3 jobs
@@ -251,12 +235,45 @@ describe('DownloadHistory', () => {
     });
   });
 
-  test('handles mobile view', () => {
+  test('handles mobile view with a single-video job', () => {
+    const singleVideoJob: Job[] = [{
+      id: 'single-job',
+      jobType: 'Channel Downloads',
+      status: 'Completed',
+      output: '',
+      timeCreated: new Date('2024-01-15T09:00:00Z').getTime(),
+      timeInitiated: new Date('2024-01-15T09:00:30Z').getTime(),
+      data: {
+        videos: [{
+          id: 1,
+          youtubeId: 'video1',
+          youTubeChannelName: 'Test Channel',
+          youTubeVideoName: 'Test Video 1',
+          duration: 120,
+          timeCreated: '2024-01-15T09:00:00Z',
+          originalDate: null,
+          description: null,
+        } as VideoData],
+      },
+    }];
+
+    render(<DownloadHistory {...defaultProps} jobs={singleVideoJob} isMobile={true} />);
+
+    expect(screen.getByText('Download History')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Test Video 1' })).toBeInTheDocument();
+    expect(screen.getByText('Test Channel')).toBeInTheDocument();
+    expect(screen.getByText(/Date:/)).toBeInTheDocument();
+    expect(screen.getByText(/Source:/)).toBeInTheDocument();
+    expect(screen.getByText(/Status:/)).toBeInTheDocument();
+  });
+
+  test('mobile view shows "Multiple (N)" title for multi-video jobs and hides the single-video header info', () => {
     render(<DownloadHistory {...defaultProps} jobs={sampleJobs} isMobile={true} />);
 
-    // Check that table cells are rendered (mobile affects styling, not structure)
-    const tableCells = screen.getAllByRole('cell');
-    expect(tableCells.length).toBeGreaterThan(0);
+    expect(screen.getByText('Multiple (2)')).toBeInTheDocument();
+    // Top-level header info for a single video must not leak into multi-video card
+    expect(screen.queryByRole('button', { name: 'Test Video 1' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Test Channel')).not.toBeInTheDocument();
   });
 
   test('formats time with AM/PM', () => {
@@ -328,7 +345,7 @@ describe('DownloadHistory', () => {
     render(<DownloadHistory {...defaultProps} jobs={manyJobs} />);
 
     // Navigate to page 2
-    const page2Button = screen.getByLabelText(/page 2/i);
+    const page2Button = screen.getByLabelText(/go to page 2/i);
     await user.click(page2Button);
 
     // Wait for page change
@@ -346,42 +363,6 @@ describe('DownloadHistory', () => {
       const rows = screen.getAllByRole('row');
       expect(rows.length).toBeGreaterThanOrEqual(13); // At least 1 header + 12 jobs on page 1
     });
-  });
-
-  test('shows info button for jobs with videos', () => {
-    const jobWithVideos: Job[] = [{
-      id: 'job-videos',
-      jobType: 'Channel Downloads',
-      status: 'Completed',
-      output: '',
-      timeCreated: Date.now(),
-      timeInitiated: Date.now(),
-      data: {
-        videos: [
-          {
-            id: 1,
-            youtubeId: 'video1',
-            youTubeChannelName: 'Test Channel',
-            youTubeVideoName: 'Test Video',
-            duration: 185,
-            timeCreated: new Date().toISOString(),
-            originalDate: null,
-            description: null,
-          } as VideoData,
-        ],
-      },
-    }];
-
-    render(<DownloadHistory {...defaultProps} jobs={jobWithVideos} />);
-
-    // Check that info icon is shown for job with videos
-    const infoIcon = screen.getByTestId('InfoIcon');
-    expect(infoIcon).toBeInTheDocument();
-
-    // Verify the job displays "1" for video count (not the actual popover content)
-    const tableCells = screen.getAllByRole('cell');
-    const cellTexts = tableCells.map(cell => cell.textContent || '');
-    expect(cellTexts.some(text => text.includes('1'))).toBe(true); // 1 video
   });
 
   test('handles jobs with undefined or null data', () => {

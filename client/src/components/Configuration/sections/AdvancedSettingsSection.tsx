@@ -3,11 +3,10 @@ import {
   TextField,
   FormHelperText,
   Grid,
-  Box,
   Alert,
   AlertTitle,
   Typography,
-} from '@mui/material';
+} from '../../ui';
 import { ConfigurationAccordion } from '../common/ConfigurationAccordion';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { ConfigState } from '../types';
@@ -47,7 +46,7 @@ export const AdvancedSettingsSection: React.FC<AdvancedSettingsSectionProps> = (
       chipColor="default"
       defaultExpanded={false}
     >
-      <Alert severity="info" sx={{ mb: 2 }}>
+      <Alert severity="info" style={{ marginBottom: 16 }}>
         <AlertTitle>Advanced Configuration</AlertTitle>
         <Typography variant="body2">
           Fine-tune yt-dlp behavior with rate limiting and proxy settings. These settings are applied to all yt-dlp operations.
@@ -69,13 +68,13 @@ export const AdvancedSettingsSection: React.FC<AdvancedSettingsSectionProps> = (
               }
             }}
             helperText={
-              <Box component="span" sx={{ display: 'flex', alignItems: 'center' }}>
+              <span style={{ display: 'flex', alignItems: 'center' }}>
                 Delay between yt-dlp API requests (0-30). Higher values prevent YouTube rate limiting but slow downloads.
                 <InfoTooltip
                   text="YouTube may block requests if too many are made in a short period. A delay of 1-2 seconds usually works well. Increase to 5-10 seconds if you experience 429 errors or frequent throttling."
                   onMobileClick={onMobileTooltipClick}
                 />
-              </Box>
+              </span>
             }
           />
         </Grid>
@@ -90,23 +89,23 @@ export const AdvancedSettingsSection: React.FC<AdvancedSettingsSectionProps> = (
             onBlur={handleProxyBlur}
             error={Boolean(proxyError)}
             helperText={
-              <Box component="span">
+              <span>
                 {proxyError || (
-                  <Box component="span" sx={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{ display: 'flex', alignItems: 'center' }}>
                     Optional proxy URL (e.g., socks5://user:pass@127.0.0.1:1080/). Leave empty for direct connection.
                     <InfoTooltip
                       text="Supported protocols: http://, https://, socks4://, socks5://. Authentication is optional: protocol://user:pass@host:port. Pass empty string to disable proxy."
                       onMobileClick={onMobileTooltipClick}
                     />
-                  </Box>
+                  </span>
                 )}
-              </Box>
+              </span>
             }
           />
         </Grid>
 
         <Grid item xs={12}>
-          <FormHelperText sx={{ mt: 1 }}>
+          <FormHelperText style={{ marginTop: 8 }}>
             <strong>Note:</strong> These settings apply to all yt-dlp operations including channel metadata fetching, video downloads, and thumbnail downloads.
           </FormHelperText>
         </Grid>

@@ -1,9 +1,18 @@
 import React from 'react';
 import {
-  Box, FormControl, InputLabel, MenuItem, Select,
-  SwipeableDrawer, Switch, Typography, FormControlLabel,
-} from '@mui/material';
-import type { SelectChangeEvent } from '@mui/material';
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  FormControlLabel,
+  InputLabel,
+  MenuItem,
+  Select,
+  SelectChangeEvent,
+  Switch,
+} from '../../ui';
 import { RowState, RowSettings } from '../../../types/subscriptionImport';
 import { ImportFlowAction } from '../hooks/useImportFlow';
 import { QUALITY_OPTIONS, RATING_OPTIONS } from './rowSettingsOptions';
@@ -21,7 +30,7 @@ interface RowSettingsSheetProps {
 }
 
 const RowSettingsSheet: React.FC<RowSettingsSheetProps> = ({
-  open, onClose, onOpen, channelId, rowState, dispatch, subfolders, defaultSubfolderDisplay,
+  open, onClose, onOpen: _onOpen, channelId, rowState, dispatch, subfolders, defaultSubfolderDisplay,
 }) => {
   const { settings } = rowState;
 
@@ -29,8 +38,8 @@ const RowSettingsSheet: React.FC<RowSettingsSheetProps> = ({
     dispatch({ type: 'UPDATE_ROW_SETTINGS', payload: { channelId, settings: partial } });
   };
 
-  const handleAutoDownloadChange = (_event: React.ChangeEvent<HTMLInputElement>, checked: boolean) => {
-    updateSettings({ autoDownloadEnabled: checked });
+  const handleAutoDownloadChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    updateSettings({ autoDownloadEnabled: event.target.checked });
   };
 
   const handleQualityChange = (event: SelectChangeEvent<string>) => {
@@ -44,20 +53,9 @@ const RowSettingsSheet: React.FC<RowSettingsSheetProps> = ({
   };
 
   return (
-    <SwipeableDrawer
-      anchor="bottom"
-      open={open}
-      onClose={onClose}
-      onOpen={onOpen}
-      PaperProps={{
-        sx: { borderTopLeftRadius: 16, borderTopRightRadius: 16 },
-      }}
-    >
-      <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Box sx={{ width: 40, height: 4, bgcolor: 'grey.400', borderRadius: 2, mx: 'auto', mb: 1 }} />
-
-        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Channel Settings</Typography>
-
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle onClose={onClose}>Channel Settings</DialogTitle>
+      <DialogContent className="space-y-4">
         <FormControlLabel
           control={
             <Switch
@@ -69,13 +67,13 @@ const RowSettingsSheet: React.FC<RowSettingsSheetProps> = ({
           label="Auto-download enabled"
         />
 
-        <FormControl size="small" fullWidth>
+        <FormControl fullWidth>
           <InputLabel id={`sheet-quality-label-${channelId}`}>Video Quality</InputLabel>
           <Select
             labelId={`sheet-quality-label-${channelId}`}
-            label="Video Quality"
             value={settings.videoQuality ?? ''}
             onChange={handleQualityChange}
+            fullWidth
           >
             {QUALITY_OPTIONS.map((opt) => (
               <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
@@ -92,21 +90,24 @@ const RowSettingsSheet: React.FC<RowSettingsSheetProps> = ({
           label="Subfolder"
         />
 
-        <FormControl size="small" fullWidth>
+        <FormControl fullWidth>
           <InputLabel id={`sheet-rating-label-${channelId}`}>Content Rating</InputLabel>
           <Select
             labelId={`sheet-rating-label-${channelId}`}
-            label="Content Rating"
             value={settings.defaultRating ?? ''}
             onChange={handleRatingChange}
+            fullWidth
           >
             {RATING_OPTIONS.map((opt) => (
               <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
             ))}
           </Select>
         </FormControl>
-      </Box>
-    </SwipeableDrawer>
+      </DialogContent>
+      <DialogActions>
+        <Button variant="contained" onClick={onClose}>Done</Button>
+      </DialogActions>
+    </Dialog>
   );
 };
 

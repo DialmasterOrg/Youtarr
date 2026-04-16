@@ -7,7 +7,6 @@ import React, {
 } from 'react';
 import {
   Grid,
-  Card,
   Typography,
   LinearProgress,
   Box,
@@ -19,11 +18,8 @@ import {
   AccordionSummary,
   AccordionDetails,
   Tooltip,
-} from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import QueueIcon from '@mui/icons-material/Queue';
-import PlaylistPlayIcon from '@mui/icons-material/PlaylistPlay';
-import StopIcon from '@mui/icons-material/Stop';
+} from '../ui';
+import { ChevronDown as ExpandMoreIcon, List as QueueIcon, PlaySquare as PlaylistPlayIcon, Square as StopIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import WebSocketContext from '../../contexts/WebSocketContext';
 import { Job } from '../../types/Job';
@@ -129,18 +125,23 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
   }
   const { subscribe, unsubscribe } = wsContext;
 
-  // Derive color from state
+  // Derive color from state (using CSS vars)
   const progressColor = useMemo(() => {
-    if (!currentProgress) return '#9e9e9e';
+    if (!currentProgress) return 'var(--muted-foreground)';
 
-    if (currentProgress.stalled) return '#ffca28'; // Yellow
+    if (currentProgress.stalled) return 'hsl(var(--warning))';
 
-    switch(currentProgress.state) {
-      case 'initiating': return '#9e9e9e'; // Grey
-      case 'complete': return '#66bb6a'; // Green
-      case 'terminated': return '#ff9800'; // Orange (warning)
-      case 'error': return '#ef5350'; // Red
-      default: return '#42a5f5'; // Blue
+    switch (currentProgress.state) {
+      case 'initiating':
+        return 'var(--muted-foreground)';
+      case 'complete':
+        return 'hsl(var(--success))';
+      case 'terminated':
+        return 'hsl(var(--warning))';
+      case 'error':
+        return 'hsl(var(--destructive))';
+      default:
+        return 'hsl(var(--primary))';
     }
   }, [currentProgress]);
 
@@ -170,6 +171,19 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
       eta: formattedEta
     };
   }, [currentProgress]);
+
+  const overlayTextColor = useMemo(() => {
+    const percent = currentProgress?.progress?.percent ?? 0;
+    return percent > 50 ? '#ffffff' : 'var(--foreground)';
+  }, [currentProgress?.progress?.percent]);
+
+  const overlayTextShadow = useMemo(
+    () =>
+      overlayTextColor === '#ffffff'
+        ? '1px 1px 2px rgba(0, 0, 0, 0.55)'
+        : '1px 1px 2px rgba(255, 255, 255, 0.65)',
+    [overlayTextColor]
+  );
 
   // Derive status message from state
   const statusMessage = useMemo(() => {
@@ -231,7 +245,6 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
       if (response.ok) {
         // Success - job will update via WebSocket
-        console.log('Job termination initiated successfully');
       } else {
         const error = await response.json();
         alert(error.error || 'Failed to terminate job');
@@ -386,44 +399,25 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
   return (
     <Grid item xs={12} md={12} paddingBottom={'8px'}>
-      <Card elevation={8}>
-        <Box sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          position: 'relative',
-          py: 2,
-          px: 2,
-          borderBottom: '1px solid',
-          borderColor: 'divider'
-        }}>
-          <Typography variant="h6" component="h2" sx={{ textAlign: 'center' }}>
+      <Box>
+        <Box className="flex items-center justify-center relative py-4 px-4 border-b border-border">
+          <Typography variant="h6" component="h2" className="text-center">
             Download Progress
           </Typography>
           {showTerminateButton && (
-            <Box sx={{ position: 'absolute', right: 16 }}>
+            <Box style={{ position: 'absolute', right: 16 }}>
               <Tooltip title="Stop the current download job">
                 <Button
+                  aria-label="Stop the current download job"
                   onClick={() => setShowTerminateDialog(true)}
                   disabled={isTerminating}
                   variant="contained"
                   color="error"
                   size="small"
                   startIcon={<StopIcon />}
-                  sx={{
-                    minWidth: { xs: 'auto', sm: '120px' },
-                    px: { xs: 1, sm: 2 },
-                    '& .MuiButton-startIcon': {
-                      margin: { xs: 0, sm: '0 8px 0 -4px' }
-                    }
-                  }}
+                  className="min-w-auto sm:min-w-[120px] px-2 sm:px-4"
                 >
-                  <Box
-                    component="span"
-                    sx={{
-                      display: { xs: 'none', sm: 'inline' }
-                    }}
-                  >
+                  <Box component="span" className="hidden sm:inline">
                     Stop Job
                   </Box>
                 </Button>
@@ -434,39 +428,28 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
         {/* Show queued jobs if any */}
         {pendingJobs.length > 0 && (
-          <Box sx={{ px: 2, pb: 1 }}>
+          <Box className="px-4 pb-2">
             <Accordion
               elevation={0}
-              sx={{
-                bgcolor: 'action.hover',
-                '&:before': { display: 'none' },
-                borderRadius: 1,
-              }}
+              className="bg-muted/50 rounded-[var(--radius-ui)]"
             >
               <AccordionSummary
                 expandIcon={<ExpandMoreIcon />}
-                sx={{
-                  minHeight: '42px',
-                  '& .MuiAccordionSummary-content': {
-                    alignItems: 'center',
-                    gap: 1,
-                    my: 0.5
-                  }
-                }}
+                className="min-h-[42px]"
               >
-                <QueueIcon fontSize="small" color="action" />
+                <QueueIcon size={16} className="text-muted-foreground" />
                 <Typography variant="body2" color="text.secondary">
                   {pendingJobs.length} {pendingJobs.length === 1 ? 'job' : 'jobs'} queued
                 </Typography>
               </AccordionSummary>
-              <AccordionDetails sx={{ pt: 0, pb: 1.5 }}>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              <AccordionDetails className="pt-0 pb-3">
+                <Box className="flex flex-wrap gap-2">
                   {pendingJobs.map((job, index) => {
                     const isChannelDownload = job.jobType.includes('Channel Downloads');
                     const label = isChannelDownload ? 'Channel Update' : 'Manual Download';
                     const icon = isChannelDownload ?
-                      <PlaylistPlayIcon fontSize="small" /> :
-                      <QueueIcon fontSize="small" />;
+                      <PlaylistPlayIcon size={16} /> :
+                      <QueueIcon size={16} />;
 
                     return (
                       <Chip
@@ -487,7 +470,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
         {/* Show error if available */}
         {errorDetails && !currentProgress && (
-          <Box sx={{ px: 2, pb: 2 }}>
+          <Box className="px-4 pb-4">
             <Alert
               severity="error"
               action={
@@ -498,7 +481,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                   <Button
                     color="inherit"
                     size="small"
-                    onClick={() => navigate('/configuration')}
+                    onClick={() => navigate('/settings/integrations')}
                   >
                     Go to Settings
                   </Button>
@@ -515,7 +498,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
         {/* Show warning if available (terminated downloads) */}
         {warningDetails && !currentProgress && !errorDetails && (
-          <Box sx={{ px: 2, pb: 2 }}>
+          <Box className="px-4 pb-4">
             <Alert severity="warning">
               <AlertTitle>Download Terminated</AlertTitle>
               <Typography variant="body2">
@@ -527,19 +510,14 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
         {/* Show final summary if available */}
         {finalSummary && !currentProgress && !errorDetails && (
-          <Box sx={{ px: 2, pb: 2 }}>
-            <Box sx={{
-              p: 1,
-              backgroundColor: (finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'warning.light' : 'success.light',
-              borderRadius: 1,
-              textAlign: 'center'
-            }}>
-              <Typography variant="h6" color={(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'warning.contrastText' : 'success.contrastText'}>
+          <Box className="px-4 pb-4">
+            <Box className={`p-2 rounded-[var(--radius-ui)] text-center ${(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'bg-warning/10' : 'bg-success/10'}`}>
+              <Typography variant="h6" className={(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'text-warning-foreground' : 'text-success-foreground'}>
                 Summary of last job
               </Typography>
-              <Typography variant="body1" color={(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'warning.contrastText' : 'success.contrastText'}>
+              <Typography variant="body1" className={(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'text-warning-foreground' : 'text-success-foreground'}>
                 {(() => {
-                  const parts = [];
+                  const parts: string[] = [];
                   if (finalSummary.totalDownloaded > 0) {
                     parts.push(`✓ ${finalSummary.totalDownloaded} video${finalSummary.totalDownloaded !== 1 ? 's' : ''} downloaded`);
                   }
@@ -555,7 +533,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                   return parts.join(', ');
                 })()}
               </Typography>
-              <Typography variant="caption" color={(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'warning.contrastText' : 'success.contrastText'} sx={{ mt: 0.5, display: 'block' }}>
+              <Typography variant="caption" className={`mt-1 block ${(finalSummary.totalFailed && finalSummary.totalFailed > 0) ? 'text-warning-foreground' : 'text-success-foreground'}`}>
                 {(() => {
                   let jobTypeLabel: string;
                   if (finalSummary.jobType.includes('Channel Downloads')) {
@@ -573,7 +551,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
             {/* Show details of failed videos if any */}
             {finalSummary.failedVideos && finalSummary.failedVideos.length > 0 && (
-              <Box sx={{ mt: 2 }}>
+              <Box className="mt-4">
                 <Alert severity="error">
                   <AlertTitle>Failed Downloads</AlertTitle>
                   {(() => {
@@ -586,17 +564,17 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                     });
 
                     return Array.from(errorGroups.entries()).map(([error, videos], groupIndex) => (
-                      <Box key={groupIndex} sx={{ mt: groupIndex > 0 ? 1.5 : 0 }}>
-                        <Typography variant="body2" component="div" sx={{ fontWeight: 'bold' }}>
+                      <Box key={groupIndex} className={groupIndex > 0 ? 'mt-3' : ''}>
+                        <Typography variant="body2" component="div" className="font-bold">
                           {videos.length} video{videos.length !== 1 ? 's' : ''} failed:
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.5 }}>
+                        <Typography variant="caption" color="text.secondary" component="div" className="mt-1">
                           {error}
                         </Typography>
 
                         {/* Only show individual video details if titles are known */}
                         {videos.some(v => v.title !== 'Unknown') && (
-                          <Box sx={{ mt: 1, pl: 2 }}>
+                          <Box className="mt-2 pl-4">
                             {videos
                               .filter(v => v.title !== 'Unknown')
                               .map((video, index) => (
@@ -618,9 +596,9 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
         {/* Show progress when active */}
         {currentProgress && showProgress && (
-          <Box sx={{ px: 2, pb: 2 }}>
+          <Box className="px-4 pb-4">
             {/* Thicker progress bar with overlay text */}
-            <Box sx={{ position: 'relative', mb: 1 }}>
+            <Box className="relative mb-2">
               <LinearProgress
                 variant={
                   // Show determinate for actual downloads (video, audio, subtitles)
@@ -635,49 +613,19 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                     : 'determinate'
                 }
                 value={currentProgress.progress?.percent ?? 0}
-                sx={{
-                  height: 32,
-                  borderRadius: 1,
-                  bgcolor: 'action.hover',
-                  '& .MuiLinearProgress-bar': {
-                    backgroundColor: progressColor,
-                    transition: 'background-color 0.3s ease'
-                  }
-                }}
+                height={32}
+                barColor={progressColor}
+                className="shadow-sm"
               />
 
               {/* Overlay text centered on progress bar */}
-              <Box sx={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                px: 1
-              }}>
-                <Box sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 0.5,
-                  maxWidth: '100%',
-                  overflow: 'hidden'
-                }}>
+              <Box className="absolute inset-0 flex items-center justify-center px-2">
+                <Box className="flex items-center gap-1 max-w-full overflow-hidden">
                   {overlayContent.title && (
                     <Typography
                       variant="body2"
                       noWrap
-                      sx={{
-                        flex: 1,
-                        minWidth: 0,
-                        color: (currentProgress.progress?.percent ?? 0) > 50 ? 'white' : 'black',
-                        fontWeight: 'bold',
-                        textShadow: (currentProgress.progress?.percent ?? 0) > 50 ?
-                          '1px 1px 2px rgba(0,0,0,0.7)' :
-                          '1px 1px 2px rgba(255,255,255,0.7)'
-                      }}
+                      style={{ flex: 1, minWidth: 0, color: overlayTextColor, fontWeight: 'bold', textShadow: overlayTextShadow }}
                     >
                       {overlayContent.title}
                     </Typography>
@@ -685,15 +633,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
                   {overlayContent.eta && (
                     <Typography
                       variant="body2"
-                      sx={{
-                        flexShrink: 0,
-                        whiteSpace: 'nowrap',
-                        color: (currentProgress.progress?.percent ?? 0) > 50 ? 'white' : 'black',
-                        fontWeight: 'bold',
-                        textShadow: (currentProgress.progress?.percent ?? 0) > 50 ?
-                          '1px 1px 2px rgba(0,0,0,0.7)' :
-                          '1px 1px 2px rgba(255,255,255,0.7)'
-                      }}
+                      style={{ flexShrink: 0, whiteSpace: 'nowrap', color: overlayTextColor, fontWeight: 'bold', textShadow: overlayTextShadow }}
                     >
                       {overlayContent.title ? `· ETA ${overlayContent.eta}` : `ETA ${overlayContent.eta}`}
                     </Typography>
@@ -703,12 +643,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
             </Box>
 
             {/* Status row below progress bar */}
-            <Box sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              mt: 0.5
-            }}>
+            <Box className="flex justify-between items-center mt-1">
               <Typography variant="caption" color="text.secondary">
                 {statusMessage}
               </Typography>
@@ -728,16 +663,8 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
             {/* Video count display with context */}
             {videoCount.total > 0 && (
-              <Box sx={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                mt: 1,
-                p: 1,
-                bgcolor: 'action.hover',
-                borderRadius: 1
-              }}>
-                <Typography variant="body2" color="text.secondary">
+              <Box className="flex justify-center items-center mt-2 px-[5px] py-[3px] bg-card border border-border rounded-[var(--radius-ui)] shadow-sm">
+                <Typography variant="body2" className="font-semibold">
                   {(() => {
                     const isChannelDownload = currentProgress.downloadType?.includes('Channel Downloads');
 
@@ -757,18 +684,12 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
 
         {/* Show placeholder when no activity */}
         {!currentProgress && !finalSummary && (
-          <Box sx={{ px: 2, pb: 2 }}>
-            <Box sx={{
-              p: 3,
-              textAlign: 'center',
-              color: 'text.secondary',
-              borderTop: '1px solid',
-              borderColor: 'divider'
-            }}>
+          <Box className="px-4 pb-4">
+            <Box className="p-6 text-center text-muted-foreground border-t border-border">
               <Typography variant="body2">
                 No download activity at the moment
               </Typography>
-              <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>
+              <Typography variant="caption" className="mt-2 block">
                 Downloads will appear here when started
               </Typography>
             </Box>
@@ -781,7 +702,7 @@ const DownloadProgress: React.FC<DownloadProgressProps> = ({
           onClose={() => setShowTerminateDialog(false)}
           onConfirm={handleTerminate}
         />
-      </Card>
+      </Box>
     </Grid>
   );
 };

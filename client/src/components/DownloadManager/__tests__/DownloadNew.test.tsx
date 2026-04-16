@@ -7,6 +7,11 @@ import DownloadNew from '../DownloadNew';
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
+const mockNavigate = jest.fn();
+jest.mock('react-router-dom', () => ({
+  useNavigate: () => mockNavigate,
+}));
+
 // Mock useConfig hook
 const mockUseConfig = jest.fn();
 jest.mock('../../../hooks/useConfig', () => ({
@@ -256,6 +261,10 @@ describe('DownloadNew', () => {
     expect(mockDownloadInitiatedRef.current).toBe(true);
     expect(screen.queryByTestId('download-settings-dialog')).not.toBeInTheDocument();
 
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/downloads/activity');
+    });
+
     act(() => {
       jest.advanceTimersByTime(500);
     });
@@ -321,6 +330,7 @@ describe('DownloadNew', () => {
     });
 
     expect(mockDownloadInitiatedRef.current).toBe(true);
+    expect(mockNavigate).not.toHaveBeenCalled();
 
     alertSpy.mockRestore();
   });
@@ -371,6 +381,10 @@ describe('DownloadNew', () => {
     });
 
     expect(mockDownloadInitiatedRef.current).toBe(true);
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/downloads/activity');
+    });
 
     act(() => {
       jest.advanceTimersByTime(1000);

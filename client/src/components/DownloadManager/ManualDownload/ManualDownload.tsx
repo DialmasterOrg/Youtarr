@@ -10,13 +10,13 @@ import {
   CircularProgress,
   Badge,
   Collapse
-} from '@mui/material';
+} from '../../ui';
 import { TransitionGroup } from 'react-transition-group';
 import {
   Download as DownloadIcon,
-  Clear as ClearIcon,
-  PlaylistAdd as PlaylistAddIcon
-} from '@mui/icons-material';
+  X as ClearIcon,
+  ListPlus as PlaylistAddIcon
+} from 'lucide-react';
 import axios from 'axios';
 import UrlInput from './UrlInput';
 import VideoChip from './VideoChip';
@@ -163,37 +163,40 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
 
   return (
     <Box>
-      <Paper elevation={1} sx={{ p: 2, mb: 2 }}>
-        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <PlaylistAddIcon />
+      <Paper elevation={1} className="p-4 mb-4">
+        <Typography variant="h6" gutterBottom className="flex items-center gap-2">
+          <PlaylistAddIcon size={20} />
           Add Videos to Download
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="body2" color="text.secondary" className="mb-4">
           Paste YouTube video URLs to add to queue
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-          <Box sx={{ flex: 1 }}>
+        <Box className="flex flex-col gap-4">
+          <Box className="w-full">
             <UrlInput
               onValidate={validateUrl}
               isValidating={isValidating}
               disabled={isDownloading}
             />
           </Box>
-          <Button
-            variant="outlined"
-            onClick={() => setShowBulkImport(true)}
-            startIcon={<PlaylistAddIcon />}
-            disabled={isDownloading}
-            sx={{ whiteSpace: 'nowrap', minHeight: 56 }}
-          >
-            Bulk Import
-          </Button>
+          <Box className="flex justify-center">
+            <Button
+              variant="outlined"
+              onClick={() => setShowBulkImport(true)}
+              startIcon={<PlaylistAddIcon />}
+              disabled={isDownloading}
+              className="w-full md:w-[20vw]"
+              sx={{ whiteSpace: 'nowrap', minHeight: 56 }}
+            >
+              Bulk Import
+            </Button>
+          </Box>
         </Box>
       </Paper>
 
       {validatedVideos.length > 0 && (
-        <Paper elevation={1} sx={{ p: 2, mb: 2 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Paper elevation={1} className="p-4 mb-4">
+          <Box className="flex justify-between items-center mb-4">
             <Box>
               <Typography variant="h6">
                 Download Queue
@@ -210,19 +213,16 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
               size="small"
               onClick={handleClearAll}
               startIcon={<ClearIcon />}
+              className="text-foreground border-border hover:bg-muted hover:border-foreground hover:text-foreground"
             >
               Clear All
             </Button>
           </Box>
 
-          <Divider sx={{ mb: 2 }} />
+          <Divider className="mb-4" />
 
           <Box
-            sx={{
-              mb: 2,
-              maxHeight: 400,
-              overflowY: 'auto'
-            }}
+            className="mb-4 max-h-[400px] overflow-y-auto"
           >
             <TransitionGroup
               style={{
@@ -242,7 +242,7 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
             </TransitionGroup>
           </Box>
 
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+          <Box className="flex justify-end gap-4">
             <Badge
               badgeContent={validatedVideos.length}
               color="primary"
@@ -254,6 +254,7 @@ const ManualDownload: React.FC<ManualDownloadProps> = ({ onStartDownload, token,
                 onClick={handleOpenSettings}
                 disabled={validatedVideos.length === 0 || isDownloading}
                 startIcon={isDownloading ? <CircularProgress size={20} /> : <DownloadIcon />}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 {isDownloading ? 'Starting...' : 'Download Videos'}
               </Button>

@@ -1,7 +1,6 @@
 import React from 'react';
-import { Alert, AlertColor, Box, LinearProgress, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
-import MuiLink from '@mui/material/Link';
+import { Alert, Button, LinearProgress, Typography } from '../../ui';
 import { ImportJobSummary } from '../../../types/subscriptionImport';
 
 interface ActiveImportBannerProps {
@@ -9,7 +8,7 @@ interface ActiveImportBannerProps {
 }
 
 interface StatusDisplay {
-  severity: AlertColor;
+  severity: 'info' | 'warning' | 'error' | 'success';
   text: string;
 }
 
@@ -40,32 +39,22 @@ const ActiveImportBanner: React.FC<ActiveImportBannerProps> = ({ activeImport })
     : 0;
 
   return (
-    <Alert
-      severity={severity}
-      sx={{ mb: 2 }}
-    >
-      <Box sx={{ width: '100%' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-          <Typography variant="body2">
-            {text}
-          </Typography>
-          <MuiLink
-            component={RouterLink}
-            to="/channels/import"
-            variant="body2"
-            sx={{ ml: 2, whiteSpace: 'nowrap' }}
-          >
-            View details
-          </MuiLink>
-        </Box>
+    <Alert severity={severity} className="mb-2">
+      <div className="w-full flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <Typography variant="body2">{text}</Typography>
+          <Button asChild variant="link" size="small">
+            <RouterLink to="/channels/imports">View details</RouterLink>
+          </Button>
+        </div>
         {isInProgress && (
           <LinearProgress
             variant="determinate"
             value={progressPercent}
-            sx={{ mt: 0.5 }}
+            height={6}
           />
         )}
-      </Box>
+      </div>
     </Alert>
   );
 };

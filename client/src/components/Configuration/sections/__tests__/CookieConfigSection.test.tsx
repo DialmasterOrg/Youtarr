@@ -49,11 +49,6 @@ const createSectionProps = (
   ...overrides,
 });
 
-const expandAccordion = async (user: ReturnType<typeof userEvent.setup>) => {
-  const accordionToggle = screen.getByRole('button', { name: /cookie configuration/i });
-  await user.click(accordionToggle);
-};
-
 describe('CookieConfigSection', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -65,7 +60,6 @@ describe('CookieConfigSection', () => {
     const props = createSectionProps();
     renderWithProviders(<CookieConfigSection {...props} />);
 
-    await expandAccordion(user);
     const toggle = await screen.findByRole('checkbox', { name: /enable cookies/i });
     expect(toggle).not.toBeChecked();
 
@@ -90,7 +84,6 @@ describe('CookieConfigSection', () => {
 
     renderWithProviders(<CookieConfigSection {...props} />);
 
-    await expandAccordion(user);
     expect(await screen.findByRole('button', { name: /upload cookie file/i })).toBeEnabled();
     expect(screen.getByText('Custom cookies uploaded')).toBeInTheDocument();
     expect(screen.getByText('Status: Using custom cookies')).toBeInTheDocument();
@@ -110,7 +103,6 @@ describe('CookieConfigSection', () => {
 
     renderWithProviders(<CookieConfigSection {...props} />);
 
-    await expandAccordion(user);
     const fileInput = screen.getByTestId('cookie-file-input') as HTMLInputElement;
     const file = new File(['cookie-data'], 'cookies.txt', { type: 'text/plain' });
 

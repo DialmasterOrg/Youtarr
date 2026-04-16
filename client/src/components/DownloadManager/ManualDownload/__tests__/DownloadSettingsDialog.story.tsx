@@ -28,3 +28,21 @@ export const ConfirmDefaults: Story = {
     await expect(args.onConfirm).toHaveBeenCalledWith(null);
   },
 };
+
+export const CustomSettingsDropdowns: Story = {
+  args: {
+    mode: 'manual',
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+
+    await userEvent.click(body.getByRole('checkbox', { name: /Use custom settings/i }));
+
+    await userEvent.click(body.getByLabelText('Download Type'));
+    await expect(body.getByRole('option', { name: 'Video + MP3' })).toBeInTheDocument();
+
+    await userEvent.click(body.getByRole('option', { name: 'Video + MP3' }));
+    await userEvent.click(body.getByLabelText('Content Rating'));
+    await expect(body.getByRole('option', { name: /PG-13/ })).toBeInTheDocument();
+  },
+};

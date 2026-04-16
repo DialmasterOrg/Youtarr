@@ -1,8 +1,7 @@
 import React from 'react';
-import { Tooltip, IconButton } from '@mui/material';
-import InfoIcon from '@mui/icons-material/Info';
-import useMediaQuery from '@mui/material/useMediaQuery';
-import { useTheme } from '@mui/material/styles';
+import { Tooltip } from '../../ui';
+import { Info as InfoIcon } from '../../../lib/icons';
+import useMediaQuery from '../../../hooks/useMediaQuery';
 
 interface InfoTooltipProps {
   text: string;
@@ -15,8 +14,7 @@ interface InfoTooltipProps {
  * - Mobile: Triggers callback to show snackbar
  */
 export const InfoTooltip: React.FC<InfoTooltipProps> = ({ text, onMobileClick }) => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMediaQuery('(max-width: 767px)');
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -28,21 +26,24 @@ export const InfoTooltip: React.FC<InfoTooltipProps> = ({ text, onMobileClick })
 
   if (isMobile) {
     return (
-      <IconButton
-        size="small"
-        sx={{ ml: 0.5, p: 0.5 }}
+      <button
+        aria-label="More information"
+        style={{ marginLeft: 4, padding: 4, background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', color: 'var(--muted-foreground)' }}
         onClick={handleClick}
       >
-        <InfoIcon fontSize="small" />
-      </IconButton>
+        <InfoIcon size={16} />
+      </button>
     );
   }
 
   return (
     <Tooltip title={text} arrow placement="top">
-      <IconButton size="small" sx={{ ml: 0.5, p: 0.5 }}>
-        <InfoIcon fontSize="small" />
-      </IconButton>
+      <button
+        aria-label="More information"
+        style={{ marginLeft: 4, padding: 4, background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', color: 'var(--muted-foreground)' }}
+      >
+        <InfoIcon size={16} />
+      </button>
     </Tooltip>
   );
 };

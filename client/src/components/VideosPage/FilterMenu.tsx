@@ -4,18 +4,16 @@ import {
   MenuItem,
   ListItemIcon,
   TextField,
-  Box,
   Typography,
-  Divider
-} from '@mui/material';
-import CheckIcon from '@mui/icons-material/Check';
-import SearchIcon from '@mui/icons-material/Search';
+  Divider,
+} from '../ui';
+import { Check as CheckIcon, Search as SearchIcon } from '../../lib/icons';
 
 interface FilterMenuProps {
   anchorEl: null | HTMLElement;
   handleClose: () => void;
   handleMenuItemClick: (
-    event: React.MouseEvent<HTMLLIElement, MouseEvent>,
+    event: React.MouseEvent<HTMLElement, MouseEvent>,
     channel: string
   ) => void;
   filter: string;
@@ -56,8 +54,9 @@ const FilterMenu: React.FC<FilterMenuProps> = ({
         },
       }}
     >
-      <Box sx={{ px: 2, py: 1, position: 'sticky', top: 0, bgcolor: 'background.paper', zIndex: 1 }}>
+      <div style={{ padding: '8px 16px', position: 'sticky', top: 0, backgroundColor: 'var(--card)', zIndex: 1 }}>
         <TextField
+          type="text"
           size="small"
           fullWidth
           placeholder="Search channels..."
@@ -66,11 +65,11 @@ const FilterMenu: React.FC<FilterMenuProps> = ({
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
           InputProps={{
-            startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />,
+            startAdornment: <SearchIcon size={16} data-testid="SearchIcon" style={{ marginRight: 4, color: 'var(--muted-foreground)' }} />,
           }}
           autoFocus
         />
-      </Box>
+      </div>
       <Divider />
 
       <MenuItem
@@ -81,17 +80,17 @@ const FilterMenu: React.FC<FilterMenuProps> = ({
         All
         {filter === '' && (
           <ListItemIcon>
-            <CheckIcon />
+            <CheckIcon data-testid="CheckIcon" />
           </ListItemIcon>
         )}
       </MenuItem>
 
       {filteredChannels.length === 0 ? (
-        <Box sx={{ px: 2, py: 1 }}>
+        <div style={{ padding: '8px 16px' }}>
           <Typography variant="body2" color="text.secondary">
             No channels found
           </Typography>
-        </Box>
+        </div>
       ) : (
         filteredChannels.map((channel) => (
           <MenuItem
@@ -102,7 +101,7 @@ const FilterMenu: React.FC<FilterMenuProps> = ({
             {channel}
             {filter === channel && (
               <ListItemIcon>
-                <CheckIcon />
+                <CheckIcon data-testid="CheckIcon" />
               </ListItemIcon>
             )}
           </MenuItem>

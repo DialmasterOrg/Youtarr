@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import isEqual from 'lodash/isEqual';
 import {
   Dialog,
   DialogTitle,
@@ -6,8 +7,8 @@ import {
   Button,
   Alert,
   Snackbar,
-} from '@mui/material';
-import InfoIcon from '@mui/icons-material/Info';
+} from './ui';
+import { Info as InfoIcon } from 'lucide-react';
 import PlexLibrarySelector from './PlexLibrarySelector';
 import PlexAuthDialog from './PlexAuthDialog';
 import ConfigurationSkeleton from './Configuration/common/ConfigurationSkeleton';
@@ -18,6 +19,7 @@ import { KodiCompatibilitySection } from './Configuration/sections/KodiCompatibi
 import { CookieConfigSection } from './Configuration/sections/CookieConfigSection';
 import { NotificationsSection } from './Configuration/sections/NotificationsSection';
 import { DownloadPerformanceSection } from './Configuration/sections/DownloadPerformanceSection';
+import AppearanceSettingsSection from './Configuration/sections/AppearanceSettingsSection';
 import { AdvancedSettingsSection } from './Configuration/sections/AdvancedSettingsSection';
 import { AutoRemovalSection } from './Configuration/sections/AutoRemovalSection';
 import { AccountSecuritySection } from './Configuration/sections/AccountSecuritySection';
@@ -38,41 +40,7 @@ import {
 } from './Configuration/types';
 import { validateConfig } from './Configuration/utils/configValidation';
 
-const isDeepEqual = (a: any, b: any): boolean => {
-  if (a === b) {
-    return true;
-  }
-
-  if (a === null || b === null) {
-    return false;
-  }
-
-  if (typeof a !== typeof b) {
-    return false;
-  }
-
-  if (typeof a !== 'object') {
-    return false;
-  }
-
-  if (Array.isArray(a)) {
-    if (!Array.isArray(b) || a.length !== b.length) {
-      return false;
-    }
-    return a.every((value, index) => isDeepEqual(value, b[index]));
-  }
-
-  const keysA = Object.keys(a);
-  const keysB = Object.keys(b);
-
-  if (keysA.length !== keysB.length) {
-    return false;
-  }
-
-  return keysA.every((key) => Object.prototype.hasOwnProperty.call(b, key) && isDeepEqual(a[key], b[key]));
-};
-
-function Configuration({ token }: ConfigurationProps) {
+function Configuration({ token, sectionGroup }: ConfigurationProps) {
   // Use the useConfig hook to fetch and manage configuration
   const {
     config,
@@ -212,7 +180,7 @@ function Configuration({ token }: ConfigurationProps) {
       return;
     }
     const changed = TRACKABLE_CONFIG_KEYS.some((k) => {
-      return !isDeepEqual((config as any)[k], (initialConfig as any)[k]);
+      return !isEqual((config as any)[k], (initialConfig as any)[k]);
     });
     setHasUnsavedChanges(changed);
   }, [config, initialConfig]);
@@ -221,95 +189,123 @@ function Configuration({ token }: ConfigurationProps) {
     return <ConfigurationSkeleton />;
   }
 
+  const showGeneral = !sectionGroup || sectionGroup === 'general';
+  const showIntegrations = !sectionGroup || sectionGroup === 'integrations';
+  const showDownloads = !sectionGroup || sectionGroup === 'downloads';
+  const showAdvanced = !sectionGroup || sectionGroup === 'advanced';
+  const showSecurity = !sectionGroup || sectionGroup === 'security';
+
   return (
     <>
-      <CoreSettingsSection
-        config={config}
-        deploymentEnvironment={deploymentEnvironment}
-        isPlatformManaged={isPlatformManaged}
-        onConfigChange={handleConfigChange}
-        onMobileTooltipClick={setMobileTooltip}
-        token={token}
-        ytDlpVersionInfo={ytDlpVersionInfo}
-        ytDlpUpdateStatus={ytDlpUpdateStatus}
-        onYtDlpUpdate={performYtDlpUpdate}
-      />
+      {showGeneral && (
+        <>
+          <CoreSettingsSection
+            config={config}
+            deploymentEnvironment={deploymentEnvironment}
+            isPlatformManaged={isPlatformManaged}
+            onConfigChange={handleConfigChange}
+            onMobileTooltipClick={setMobileTooltip}
+            token={token}
+            ytDlpVersionInfo={ytDlpVersionInfo}
+            ytDlpUpdateStatus={ytDlpUpdateStatus}
+            onYtDlpUpdate={performYtDlpUpdate}
+          />
 
-      <PlexIntegrationSection
-        config={config}
-        isPlatformManaged={isPlatformManaged}
-        plexConnectionStatus={plexConnectionStatus}
-        plexLibraries={plexLibraries}
-        hasPlexServerConfigured={hasPlexServerConfigured}
-        onConfigChange={handleConfigChange}
-        onTestConnection={testPlexConnection}
-        onOpenLibrarySelector={openLibrarySelector}
-        onOpenPlexAuthDialog={() => setOpenPlexAuthDialog(true)}
-        onMobileTooltipClick={setMobileTooltip}
-        token={token}
-      />
+          <AppearanceSettingsSection
+            onMobileTooltipClick={setMobileTooltip}
+          />
+        </>
+      )}
 
-      <SponsorBlockSection
-        config={config}
-        onConfigChange={handleConfigChange}
-        onMobileTooltipClick={setMobileTooltip}
-      />
+      {showIntegrations && (
+        <>
+          <PlexIntegrationSection
+            config={config}
+            isPlatformManaged={isPlatformManaged}
+            plexConnectionStatus={plexConnectionStatus}
+            plexLibraries={plexLibraries}
+            hasPlexServerConfigured={hasPlexServerConfigured}
+            onConfigChange={handleConfigChange}
+            onTestConnection={testPlexConnection}
+            onOpenLibrarySelector={openLibrarySelector}
+            onOpenPlexAuthDialog={() => setOpenPlexAuthDialog(true)}
+            onMobileTooltipClick={setMobileTooltip}
+            token={token}
+          />
 
-      <KodiCompatibilitySection
-        config={config}
-        onConfigChange={handleConfigChange}
-        onMobileTooltipClick={setMobileTooltip}
-      />
+          <SponsorBlockSection
+            config={config}
+            onConfigChange={handleConfigChange}
+            onMobileTooltipClick={setMobileTooltip}
+          />
 
-      <CookieConfigSection
-        token={token}
-        config={config}
-        setConfig={setConfig}
-        onConfigChange={handleConfigChange}
-        setSnackbar={setSnackbar}
-        onMobileTooltipClick={setMobileTooltip}
-      />
+          <KodiCompatibilitySection
+            config={config}
+            onConfigChange={handleConfigChange}
+            onMobileTooltipClick={setMobileTooltip}
+          />
 
-      <NotificationsSection
-        token={token}
-        config={config}
-        onConfigChange={handleConfigChange}
-        onMobileTooltipClick={setMobileTooltip}
-        setSnackbar={setSnackbar}
-      />
+          <CookieConfigSection
+            token={token}
+            config={config}
+            setConfig={setConfig}
+            onConfigChange={handleConfigChange}
+            setSnackbar={setSnackbar}
+            onMobileTooltipClick={setMobileTooltip}
+          />
 
-      <DownloadPerformanceSection
-        config={config}
-        onConfigChange={handleConfigChange}
-        onMobileTooltipClick={setMobileTooltip}
-      />
+          <NotificationsSection
+            token={token}
+            config={config}
+            onConfigChange={handleConfigChange}
+            onMobileTooltipClick={setMobileTooltip}
+            setSnackbar={setSnackbar}
+          />
+        </>
+      )}
 
-      <AdvancedSettingsSection
-        config={config}
-        onConfigChange={handleConfigChange}
-        onMobileTooltipClick={setMobileTooltip}
-      />
+      {showDownloads && (
+        <>
+          <DownloadPerformanceSection
+            config={config}
+            onConfigChange={handleConfigChange}
+            onMobileTooltipClick={setMobileTooltip}
+          />
 
-      <AutoRemovalSection
-        token={token}
-        config={config}
-        storageAvailable={storageAvailable}
-        onConfigChange={handleConfigChange}
-        onMobileTooltipClick={setMobileTooltip}
-      />
+          <AutoRemovalSection
+            token={token}
+            config={config}
+            storageAvailable={storageAvailable}
+            onConfigChange={handleConfigChange}
+            onMobileTooltipClick={setMobileTooltip}
+          />
+        </>
+      )}
 
-      <AccountSecuritySection
-        token={token}
-        envAuthApplied={config.envAuthApplied}
-        authEnabled={isPlatformManaged.authEnabled}
-        setSnackbar={setSnackbar}
-      />
+      {showAdvanced && (
+        <AdvancedSettingsSection
+          config={config}
+          onConfigChange={handleConfigChange}
+          onMobileTooltipClick={setMobileTooltip}
+        />
+      )}
 
-      <ApiKeysSection
-        token={token}
-        apiKeyRateLimit={config.apiKeyRateLimit}
-        onRateLimitChange={(value) => handleConfigChange({ apiKeyRateLimit: value })}
-      />
+      {showSecurity && (
+        <>
+          <AccountSecuritySection
+            token={token}
+            envAuthApplied={config.envAuthApplied}
+            authEnabled={isPlatformManaged.authEnabled}
+            setSnackbar={setSnackbar}
+          />
+
+          <ApiKeysSection
+            token={token}
+            apiKeyRateLimit={config.apiKeyRateLimit}
+            onRateLimitChange={(value) => handleConfigChange({ apiKeyRateLimit: value })}
+          />
+        </>
+      )}
 
       <SaveBar
         hasUnsavedChanges={hasUnsavedChanges}
@@ -353,7 +349,6 @@ function Configuration({ token }: ConfigurationProps) {
 
       <Snackbar
         open={mobileTooltip !== null}
-        autoHideDuration={8000}
         onClose={() => setMobileTooltip(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >

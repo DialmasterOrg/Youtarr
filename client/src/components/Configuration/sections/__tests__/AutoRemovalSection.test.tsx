@@ -31,10 +31,6 @@ const createSectionProps = (
   ...overrides,
 });
 
-const expandAccordion = async (user: ReturnType<typeof userEvent.setup>) => {
-  const toggle = screen.getByRole('button', { name: /Automatic Video Removal/i });
-  await user.click(toggle);
-};
 
 const createDryRunResult = (
   overrides: Partial<AutoRemovalDryRunResult> = {}
@@ -95,7 +91,6 @@ describe('AutoRemovalSection', () => {
     const user = userEvent.setup();
     const props = createSectionProps();
     renderWithProviders(<AutoRemovalSection {...props} />);
-    await expandAccordion(user);
 
     const toggle = screen.getByRole('checkbox', { name: /Enable Automatic Video Removal/i });
     expect(toggle).not.toBeChecked();
@@ -113,7 +108,6 @@ describe('AutoRemovalSection', () => {
     });
 
     renderWithProviders(<AutoRemovalSection {...props} />);
-    await expandAccordion(user);
 
     expect(
       screen.getByText(/You must configure at least one removal threshold/i)
@@ -132,7 +126,6 @@ describe('AutoRemovalSection', () => {
     });
 
     renderWithProviders(<AutoRemovalSection {...props} />);
-    await expandAccordion(user);
 
     expect(screen.getByText(/Space-Based Removal Unavailable/i)).toBeInTheDocument();
     expect(screen.queryByLabelText('Free Space Threshold (Optional)')).not.toBeInTheDocument();
@@ -145,7 +138,6 @@ describe('AutoRemovalSection', () => {
     });
 
     renderWithProviders(<AutoRemovalSection {...props} />);
-    await expandAccordion(user);
 
     const freeSpaceSelect = screen.getByLabelText('Free Space Threshold (Optional)');
     fireEvent.mouseDown(freeSpaceSelect);
@@ -176,7 +168,6 @@ describe('AutoRemovalSection', () => {
     const props = createSectionProps({ config });
 
     renderWithProviders(<AutoRemovalSection {...props} />);
-    await expandAccordion(user);
 
     const previewButton = screen.getByRole('button', { name: /Preview Automatic Removal/i });
     await user.click(previewButton);
@@ -207,7 +198,6 @@ describe('AutoRemovalSection', () => {
     const props = createSectionProps({ config });
 
     renderWithProviders(<AutoRemovalSection {...props} />);
-    await expandAccordion(user);
 
     const previewButton = screen.getByRole('button', { name: /Preview Automatic Removal/i });
     await user.click(previewButton);
@@ -226,7 +216,6 @@ describe('AutoRemovalSection', () => {
     const props = createSectionProps({ config });
 
     const { rerender } = renderWithProviders(<AutoRemovalSection {...props} />);
-    await expandAccordion(user);
 
     const previewButton = screen.getByRole('button', { name: /Preview Automatic Removal/i });
     await user.click(previewButton);

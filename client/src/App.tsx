@@ -1,7 +1,6 @@
 import './App.css';
 import packageJson from '../package.json';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import toplogo from './Youtarr_text.png';
 import axios from 'axios';
 import {
   BrowserRouter as Router,
@@ -12,38 +11,15 @@ import {
   useLocation,
 } from 'react-router-dom';
 import {
-  Grid,
-  AppBar,
-  Toolbar,
-  Container,
+  Box,
   Typography,
-  Drawer,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  IconButton,
-  useTheme,
-  useMediaQuery,
   Snackbar,
   Alert,
-  Box,
-  CssBaseline,
-} from '@mui/material';
-import { ThemeProvider } from '@mui/material/styles';
-import CloseIcon from '@mui/icons-material/Close';
-import MenuIcon from '@mui/icons-material/Menu';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import Tooltip from '@mui/material/Tooltip';
-import SettingsIcon from '@mui/icons-material/Settings';
-import SubscriptionsIcon from '@mui/icons-material/Subscriptions';
-import DownloadIcon from '@mui/icons-material/Download';
-import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
-import LoginIcon from '@mui/icons-material/Login';
-import LogoutIcon from '@mui/icons-material/Logout';
-import ShieldIcon from '@mui/icons-material/Shield';
-import NewReleasesIcon from '@mui/icons-material/NewReleases';
-import Configuration from './components/Configuration';
+  Container,
+} from './components/ui';
+import { AlertTriangle as WarningAmberIcon } from 'lucide-react';
+import { AppShell } from './components/layout/AppShell';
+import { Settings } from './components/Settings/Settings';
 import ChannelManager from './components/ChannelManager';
 import DownloadManager from './components/DownloadManager';
 import VideosPage from './components/VideosPage';
@@ -52,34 +28,46 @@ import InitialSetup from './components/InitialSetup';
 import ChannelPage from './components/ChannelPage';
 import ImportSubscriptionsPage from './components/SubscriptionImport';
 import ChangelogPage from './components/ChangelogPage';
-import StorageStatus from './components/StorageStatus';
+import { AuthSplash } from './components/AuthSplash';
 import { useConfig } from './hooks/useConfig';
 import ErrorBoundary from './components/ErrorBoundary';
 import DatabaseErrorOverlay from './components/DatabaseErrorOverlay';
-import { lightTheme, darkTheme } from './theme';
+import { useThemeEngine } from './contexts/ThemeEngineContext';
 import { YTDLP_UPDATED_EVENT } from './components/Configuration/hooks/useYtDlpUpdate';
-
-import { locationUtils } from './utils/location';
 
 // Event name for database error detection
 const DB_ERROR_EVENT = 'db-error-detected';
 
-function AppContent() {
-  // Safely parse JSON responses. 304/empty bodies return null.
-  const safeParseJson = async (response: Response) => {
-    if (response.status === 304) return null;
-    try {
-      return await response.json();
-    } catch (err) {
-      return null;
-    }
+async function readJsonResponse<T>(input: RequestInfo | URL, init?: RequestInit): Promise<{
+  data: T | null;
+  ok: boolean;
+  status: number;
+}> {
+  const response = init === undefined ? await fetch(input) : await fetch(input, init);
+  let data: T | null = null;
+
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  return {
+    data,
+    ok: response.ok,
+    status: response.status,
   };
+}
+
+function AppContent() {
+  const { themeMode, colorMode, setColorMode } = useThemeEngine();
   const [token, setToken] = useState<string | null>(
     localStorage.getItem('authToken') // Only use the new authToken, no fallback to plexAuthToken
   );
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [serverVersion, setServerVersion] = useState('');
   const [ytDlpVersion, setYtDlpVersion] = useState('');
+  const [ytDlpUpdateAvailable, setYtDlpUpdateAvailable] = useState(false);
+  const [ytDlpLatestVersion, setYtDlpLatestVersion] = useState('');
   const [requiresSetup, setRequiresSetup] = useState<boolean | null>(null);
   const [checkingSetup, setCheckingSetup] = useState(true);
   const [isPlatformManaged, setIsPlatformManaged] = useState(false);
@@ -90,37 +78,63 @@ function AppContent() {
   const [dbErrors, setDbErrors] = useState<string[]>([]);
   const [dbRecovered, setDbRecovered] = useState(false);
   const [countdown, setCountdown] = useState(15);
-  const [ytDlpUpdateAvailable, setYtDlpUpdateAvailable] = useState(false);
-  const [ytDlpLatestVersion, setYtDlpLatestVersion] = useState('');
   const location = useLocation();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const drawerWidth = isMobile ? '50%' : 240; // specify your drawer width
 
   // Use config hook for global configuration access
   const { config: appConfig, deploymentEnvironment } = useConfig(token);
   const { version } = packageJson;
   const clientVersion = `v${version}`; // Create a version with 'v' prefix for comparison
   const tmpDirectory = '/tmp';
+  const isElfHosted = platformName?.toLowerCase() === 'elfhosted';
+  const updateAvailable = Boolean(
+    serverVersion &&
+    serverVersion !== clientVersion &&
+    !isElfHosted
+  );
+  const updateTooltip = updateAvailable
+    ? `New version (${serverVersion}) available! Please shut down and pull the latest image and files to update.`
+    : undefined;
 
-  // Select theme based on darkModeEnabled config
-  const selectedTheme = useMemo(() => {
-    return appConfig.darkModeEnabled ? darkTheme : lightTheme;
+  const ytDlpLabel = ytDlpVersion ? `yt-dlp: ${ytDlpVersion}` : '';
+  const ytDlpUpdateTooltip = ytDlpUpdateAvailable && ytDlpLatestVersion
+    ? `yt-dlp update available (${ytDlpLatestVersion}). Go to Settings to update.`
+    : undefined;
+
+  // On first load, sync dark mode from server config if user hasn't set a local preference
+  useEffect(() => {
+    const hasLocalPref = localStorage.getItem('uiColorMode') !== null;
+    if (!hasLocalPref && appConfig.darkModeEnabled !== undefined) {
+      setColorMode(appConfig.darkModeEnabled ? 'dark' : 'light');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appConfig.darkModeEnabled]);
 
-  const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('plexAuthToken');
+    setToken(null);
+
+    // Redirect to login splash screen outside of test environments.
+    if (import.meta.env.MODE !== 'test') {
+      window.location.href = '/login';
+    }
   };
 
   const handleDatabaseRetry = () => {
+    // In Vitest/jsdom, Location.reload can trigger an unimplemented navigation path.
+    // The UI intent is "retry by reloading"; keep that behavior in real runtime only.
+    if (import.meta.env.MODE === 'test') {
+      return;
+    }
+
     // Reload the page to re-check database status
-    locationUtils.reload();
+    window.location.reload();
   };
 
   // Override global fetch to automatically detect database errors
   useEffect(() => {
-    // Skip fetch override in test environment to preserve Jest mock functionality
-    if (process.env.NODE_ENV === 'test') {
+    // Skip fetch override in test environment to preserve Vitest/Jest mock functionality
+    if (import.meta.env.MODE === 'test') {
       return;
     }
 
@@ -163,26 +177,24 @@ function AppContent() {
 
   // Check database status on initial load
   useEffect(() => {
-    fetch('/api/db-status', { cache: 'no-cache' })
-      .then(async (response) => {
-        if (!response.ok && response.status !== 304) {
-          throw new Error('Failed to check database status');
-        }
-        return await safeParseJson(response);
-      })
-      .then((data) => {
-        if (!data) {
-          // 304 or empty body - assume healthy for initial check
+    readJsonResponse<{ status?: string; database?: { errors?: string[] }; details?: string[]; message?: string }>('/api/db-status')
+      .then(({ data, ok, status }) => {
+        if (data?.status === 'healthy') {
           setDbStatus('healthy');
           return;
         }
 
-        if (data.status === 'healthy') {
-          setDbStatus('healthy');
-        } else {
+        if (data) {
           setDbStatus('error');
-          setDbErrors(data.database?.errors || ['Unknown database error']);
+          setDbErrors(data?.database?.errors || data?.details || [data?.message || 'Unknown database error']);
+          return;
         }
+
+        if (!ok) {
+          throw new Error(`Database status request failed with ${status}`);
+        }
+
+        throw new Error('Database status response was not valid JSON');
       })
       .catch((error) => {
         console.error('Failed to check database status:', error);
@@ -191,21 +203,9 @@ function AppContent() {
       });
   }, []);
 
-  // Setup axios interceptor to handle 304 responses and database errors
+  // Setup axios interceptor to catch database errors from any API call
   useEffect(() => {
-    // Interceptor to prevent 304s by stripping conditional headers in dev mode
-    let requestInterceptor: number | null = null;
-    if (import.meta.env.DEV) {
-      requestInterceptor = axios.interceptors.request.use((config) => {
-        if (config.headers) {
-          delete config.headers['If-None-Match'];
-          delete config.headers['If-Modified-Since'];
-        }
-        return config;
-      });
-    }
-
-    const responseInterceptor = axios.interceptors.response.use(
+    const interceptor = axios.interceptors.response.use(
       (response) => response,
       (error) => {
         // Check if this is a database error (503 with requiresDbFix flag)
@@ -222,12 +222,9 @@ function AppContent() {
       }
     );
 
-    // Cleanup interceptors on unmount
+    // Cleanup interceptor on unmount
     return () => {
-      if (requestInterceptor !== null) {
-        axios.interceptors.request.eject(requestInterceptor);
-      }
-      axios.interceptors.response.eject(responseInterceptor);
+      axios.interceptors.response.eject(interceptor);
     };
   }, []);
 
@@ -257,29 +254,25 @@ function AppContent() {
       return; // Don't poll if database is healthy
     }
 
-    console.log('Database in error state, starting polling...');
     countdownRef.current = 15;
     setCountdown(15);
 
     // Check database status every 15 seconds
     const checkInterval = setInterval(async () => {
       try {
-        const response = await fetch('/api/db-status', { cache: 'no-cache' });
-        if (!response.ok && response.status !== 304) {
-          throw new Error('Failed to fetch DB status');
-        }
-        const data = await safeParseJson(response);
+        const { data, ok, status } = await readJsonResponse<{ status?: string; database?: { errors?: string[] }; details?: string[]; message?: string }>('/api/db-status');
 
-        if (!data) {
-          // 304 or empty body - skip parsing and keep current state
-        } else if (data.status === 'healthy') {
-          console.log('Database recovered!');
+        if (data?.status === 'healthy') {
           setDbStatus('healthy');
           setDbRecovered(true); // Show recovery message
           setDbErrors([]);
-        } else {
+        } else if (data) {
           // Still unhealthy, update errors
-          setDbErrors(data.database?.errors || ['Unknown database error']);
+          setDbErrors(data?.database?.errors || data?.details || [data?.message || 'Unknown database error']);
+        } else if (!ok) {
+          throw new Error(`Database status poll failed with ${status}`);
+        } else {
+          throw new Error('Database status poll response was not valid JSON');
         }
       } catch (error) {
         console.error('Error polling database status:', error);
@@ -336,19 +329,10 @@ function AppContent() {
     }
 
     // First check if setup is required
-    fetch('/setup/status', { cache: 'no-cache' })
-      .then(async (response) => {
-        if (!response.ok && response.status !== 304) {
-          throw new Error('Setup status check failed');
-        }
-        return await safeParseJson(response);
-      })
-      .then((data) => {
-        if (!data) {
-          // 304 or empty body - we couldn't parse a body. Assume setup required to be safe.
-          setCheckingSetup(false);
-          setRequiresSetup(true);
-          return;
+    readJsonResponse<{ requiresSetup: boolean; platformManaged?: boolean }>('/setup/status')
+      .then(({ data, ok, status }) => {
+        if (!ok || !data) {
+          throw new Error(`Setup status request failed with ${status}`);
         }
 
         setRequiresSetup(data.requiresSetup);
@@ -380,10 +364,9 @@ function AppContent() {
               headers: {
                 'x-access-token': authToken,
               },
-              cache: 'no-cache',
             })
               .then((response) => {
-                if (response.ok || response.status === 304) {
+                if (response.ok) {
                   setToken(authToken);
                 } else {
                   localStorage.removeItem('authToken');
@@ -429,17 +412,13 @@ function AppContent() {
     fetch('/api/ytdlp/latest-version', {
       headers: { 'x-access-token': token },
     })
-      .then(async (response) => {
-        if (!response.ok && response.status !== 304) {
-          throw new Error('Failed to fetch yt-dlp version');
+      .then((response) => {
+        if (response.ok) {
+          return response.json();
         }
-        return await safeParseJson(response);
+        throw new Error('Failed to fetch yt-dlp version');
       })
       .then((data) => {
-        if (!data) {
-          // 304 or empty body - nothing to update
-          return;
-        }
         setYtDlpUpdateAvailable(data.updateAvailable || false);
         setYtDlpLatestVersion(data.latestVersion || '');
         if (data.currentVersion) {
@@ -457,7 +436,6 @@ function AppContent() {
     fetchYtDlpVersionInfo();
   }, [fetchYtDlpVersionInfo]);
 
-  // Listen for yt-dlp update events to refresh version display
   useEffect(() => {
     const handleYtDlpUpdated = () => {
       fetchYtDlpVersionInfo();
@@ -471,9 +449,7 @@ function AppContent() {
   }, [fetchYtDlpVersionInfo]);
 
   return (
-    <ThemeProvider theme={selectedTheme}>
-      <CssBaseline />
-      <>
+    <>
         {/* Database Error Overlay - shows when database is unavailable or recovered */}
         {(dbStatus === 'error' || dbRecovered) && (
           <DatabaseErrorOverlay
@@ -484,492 +460,124 @@ function AppContent() {
           />
         )}
 
-      <AppBar
-        position="fixed"
-        sx={{
-          bgcolor: 'background.paper',
-          width: '100%',
-          margin: 0,
-          padding: 0,
-        }}
-      >
-        <Toolbar
-          style={{
-            paddingBottom: '8px',
-          }}
-        >
-          <IconButton
-            color='inherit'
-            aria-label='open drawer'
-            edge='start'
-            onClick={handleDrawerToggle}
-            sx={{
-              mx: 0.25,
-              mt: 1,
-              visibility: isMobile ? 'visible' : 'hidden',
-              color: 'text.primary',
-            }}
-          >
-            <MenuIcon fontSize='large' />
-          </IconButton>
-          {!requiresSetup && token && <StorageStatus token={token} />}
-          <Box
-            sx={{
-              marginTop: '8px',
-              color: 'text.primary',
-              flexGrow: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {platformName?.toLowerCase() === 'elfhosted' && (
-                <img
-                  src="https://store.elfhosted.com/wp-content/uploads/2024/11/logo.svg"
-                  alt="ElfHosted"
-                  style={{ width: isMobile ? '30px' : '40px', height: 'auto' }}
-                />
-              )}
-              <img
-                src={toplogo}
-                alt='Youtarr'
-                style={{ width: isMobile ? '150px' : '200px', height: isMobile ? '44px' : '56px' }}
-              />
-            </div>
-            <Typography
-              style={{ fontSize: isMobile ? 'small' : 'large' }}
-              align='center'
-            >
-              YouTube Video Manager
-            </Typography>
-          </Box>
-          <Box
-            style={{
-              position: 'absolute',
-              top: 5,
-              right: 10,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-end'
-            }}
-          >
-            <Typography
-              fontSize='small'
-              color={'textSecondary'}
-            >
-              {clientVersion}
-            </Typography>
-            {ytDlpVersion && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                {ytDlpUpdateAvailable && (
-                  <Tooltip title={`yt-dlp update available (${ytDlpLatestVersion}). Go to Configuration to update.`}>
-                    <IconButton
-                      component={Link}
-                      to="/configuration"
-                      size="small"
-                      aria-label={`yt-dlp update available (${ytDlpLatestVersion}). Click to go to Configuration.`}
-                      sx={{ p: 0.25 }}
-                    >
-                      <WarningAmberIcon sx={{ fontSize: 14, color: 'warning.main' }} />
-                    </IconButton>
-                  </Tooltip>
-                )}
-                <Typography
-                  fontSize='x-small'
-                  color={'textSecondary'}
-                  style={{ opacity: 0.7 }}
-                >
-                  yt-dlp: {ytDlpVersion}
-                </Typography>
-              </Box>
-            )}
-          </Box>
-          {/* This is the matching invisible IconButton */}
-          <IconButton
-            color='inherit'
-            aria-label='menu space'
-            edge='start'
-            sx={{ mx: 0.25, visibility: 'hidden', color: 'text.primary' }}
-          >
-            <MenuIcon fontSize='large' />
-          </IconButton>
-        </Toolbar>
-      </AppBar>
-      <Grid container>
-        <Grid
-          item
-          xs={12}
-          sm={3}
-          md={1}
-          style={{ maxWidth: drawerWidth, paddingTop: isMobile ?'0px' : '100px' }}
-        >
-          <Drawer
-            variant={isMobile ? 'temporary' : 'permanent'}
-            open={isMobile ? mobileOpen : true}
-            onClose={handleDrawerToggle}
-            style={{ width: drawerWidth }}
-            PaperProps={{
-              sx: {
-                width: drawerWidth,
-                bgcolor: 'background.default',
-                maxWidth: '50vw',
-                marginTop: isMobile ? '0' : '100px',
-              },
-            }}
-            ModalProps={{ keepMounted: true }} // Better open performance on mobile.
-          >
-            {isMobile && (
-              <IconButton
-                color='inherit'
-                aria-label='close drawer'
-                edge='end'
-                onClick={handleDrawerToggle}
-                sx={{ mx: 2, mb: 0, mt: 2, alignSelf: 'flex-end' }}
-              >
-                <CloseIcon fontSize='large' />
-              </IconButton>
-            )}
-            <List>
-              <ListItem
-                button
-                component={Link}
-                to='/configuration'
-                onClick={handleDrawerToggle}
-                sx={{
-                  bgcolor: location.pathname === '/configuration' ? 'action.selected' : 'transparent',
-                  borderLeft: location.pathname === '/configuration' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
-                  '&:hover': {
-                    bgcolor: location.pathname === '/configuration' ? 'action.hover' : 'action.hover',
-                  },
-                  paddingX: isMobile ? '8px' : '16px'
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                  <SettingsIcon sx={{ color: location.pathname === '/configuration' ? 'primary.main' : 'inherit' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primaryTypographyProps={{
-                    fontSize: isMobile ? 'small' : 'medium',
-                    fontWeight: location.pathname === '/configuration' ? 'bold' : 'normal'
-                  }}
-                  primary='Configuration'
-                />
-              </ListItem>
-              <ListItem
-                button
-                component={Link}
-                to='/channels'
-                onClick={handleDrawerToggle}
-                sx={{
-                  bgcolor: location.pathname === '/channels' ? 'action.selected' : 'transparent',
-                  borderLeft: location.pathname === '/channels' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
-                  '&:hover': {
-                    bgcolor: 'action.hover',
-                  },
-                  paddingX: isMobile ? '8px' : '16px'
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                  <SubscriptionsIcon sx={{ color: location.pathname === '/channels' ? 'primary.main' : 'inherit' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primaryTypographyProps={{
-                    fontSize: isMobile ? 'small' : 'medium',
-                    fontWeight: location.pathname === '/channels' ? 'bold' : 'normal'
-                  }}
-                  primary='Your Channels'
-                />
-              </ListItem>
-              <ListItem
-                button
-                component={Link}
-                to='/downloads'
-                onClick={handleDrawerToggle}
-                sx={{
-                  bgcolor: location.pathname === '/downloads' ? 'action.selected' : 'transparent',
-                  borderLeft: location.pathname === '/downloads' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
-                  '&:hover': {
-                    bgcolor: 'action.hover',
-                  },
-                  paddingX: isMobile ? '8px' : '16px'
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                  <DownloadIcon sx={{ color: location.pathname === '/downloads' ? 'primary.main' : 'inherit' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primaryTypographyProps={{
-                    fontSize: isMobile ? 'small' : 'medium',
-                    fontWeight: location.pathname === '/downloads' ? 'bold' : 'normal'
-                  }}
-                  primary='Manage Downloads'
-                />
-              </ListItem>
-              <ListItem
-                button
-                component={Link}
-                to='/videos'
-                onClick={handleDrawerToggle}
-                sx={{
-                  bgcolor: location.pathname === '/videos' ? 'action.selected' : 'transparent',
-                  borderLeft: location.pathname === '/videos' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
-                  '&:hover': {
-                    bgcolor: 'action.hover',
-                  },
-                  paddingX: isMobile ? '8px' : '16px'
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                  <VideoLibraryIcon sx={{ color: location.pathname === '/videos' ? 'primary.main' : 'inherit' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primaryTypographyProps={{
-                    fontSize: isMobile ? 'small' : 'medium',
-                    fontWeight: location.pathname === '/videos' ? 'bold' : 'normal'
-                  }}
-                  primary='Downloaded Videos'
-                />
-              </ListItem>
-              <ListItem
-                button
-                component={Link}
-                to='/changelog'
-                onClick={handleDrawerToggle}
-                sx={{
-                  bgcolor: location.pathname === '/changelog' ? 'action.selected' : 'transparent',
-                  borderLeft: location.pathname === '/changelog' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
-                  '&:hover': {
-                    bgcolor: 'action.hover',
-                  },
-                  paddingX: isMobile ? '8px' : '16px'
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                  <NewReleasesIcon sx={{ color: location.pathname === '/changelog' ? 'primary.main' : 'inherit' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primaryTypographyProps={{
-                    fontSize: isMobile ? 'small' : 'medium',
-                    fontWeight: location.pathname === '/changelog' ? 'bold' : 'normal'
-                  }}
-                  primary='Changelog'
-                />
-              </ListItem>
-              {!token && !isPlatformManaged && (
-                <ListItem
-                  button
-                  component={Link}
-                  to='/login'
-                  onClick={handleDrawerToggle}
-                  sx={{
-                    bgcolor: location.pathname === '/login' ? 'action.selected' : 'transparent',
-                    borderLeft: location.pathname === '/login' ? (theme) => `4px solid ${theme.palette.primary.main}` : 'none',
-                    '&:hover': {
-                      bgcolor: 'action.hover',
-                    },
-                    paddingX: isMobile ? '8px' : '16px'
-                  }}
-                >
-                  <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                    <LoginIcon sx={{ color: location.pathname === '/login' ? 'primary.main' : 'inherit' }} />
-                  </ListItemIcon>
-                  <ListItemText
-                    primaryTypographyProps={{
-                      fontSize: isMobile ? 'small' : 'medium',
-                      fontWeight: location.pathname === '/login' ? 'bold' : 'normal'
+        {checkingSetup ? (
+          <div className="flex items-center justify-center min-h-screen">
+            <Typography>Loading...</Typography>
+          </div>
+        ) : (
+          <Routes>
+            {/* Setup Route - Full Screen */}
+            <Route
+              path="/setup"
+              element={
+                requiresSetup ? (
+                  <InitialSetup
+                    onSetupComplete={(newToken) => {
+                      setToken(newToken);
+                      setRequiresSetup(false);
+                      window.location.href = '/channels';
                     }}
-                    primary='Login'
                   />
-                </ListItem>
-              )}
-              {token && !isPlatformManaged && (
-                <ListItem
-                  button
-                  onClick={() => {
-                    localStorage.removeItem('authToken');
-                    localStorage.removeItem('plexAuthToken');
-                    setToken(null);
-                    handleDrawerToggle();
-                  }}
-                  sx={{
-                    paddingX: isMobile ? '8px' : '16px'
-                  }}
-                >
-                  <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                    <LogoutIcon />
-                  </ListItemIcon>
-                  <ListItemText
-                    primaryTypographyProps={{ fontSize: isMobile ? 'small' : 'medium' }}
-                    primary='Logout'
-                  />
-                </ListItem>
-              )}
-              {isPlatformManaged && (
-                <ListItem sx={{ paddingX: isMobile ? '8px' : '16px' }}>
-                  <ListItemIcon sx={{ minWidth: isMobile ? 46 : 56 }}>
-                    <ShieldIcon sx={{ color: 'success.main' }} />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Platform Authentication"
-                    primaryTypographyProps={{ fontSize: isMobile ? 'small' : 'medium' }}
-                    secondary={platformName?.toLowerCase() === "elfhosted" ? "Managed by Elfhosted" : "Managed by platform"}
-                    secondaryTypographyProps={{ fontSize: 'x-small' }}
-                  />
-                </ListItem>
-              )}
-            </List>
-          </Drawer>
-        </Grid>
-        <Grid
-          item
-          xs={12}
-          style={{
-            marginLeft: isMobile ? '0' : drawerWidth,
-          }}
-        >
-          <Container
-            style={{
-              paddingTop: isMobile ? '100px' : '32px',
-              width: '100%',
-              ...(location.pathname === '/channels'
-                ? (isMobile
-                    ? {
-                        height: '100vh',
-                        maxHeight: 'calc(100vh - 16px)',
-                      }
-                    : {
-                        height: 'calc(100vh - 132px)',
-                        maxHeight: 'calc(100vh - 132px)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                      })
-                : {}),
-            }}
-          >
-            {checkingSetup ? (
-              <div>Loading...</div>
-            ) : (
-              <ErrorBoundary
-                fallbackMessage="An unexpected error occurred. Please refresh the page to continue."
-              >
-                <Routes>
-                <Route path='/setup' element={<InitialSetup onSetupComplete={(newToken) => {
-                  setToken(newToken);
-                  setRequiresSetup(false);
-                  locationUtils.setHref('/configuration');
-                }} />} />
-                <Route
-                  path='/login'
-                  element={
-                    isPlatformManaged ? (
-                      <Navigate to='/configuration' replace />
-                    ) : (
-                      <LocalLogin setToken={setToken} />
-                    )
-                  }
-                />
-                <Route
-                  path='/changelog'
-                  element={<ChangelogPage />}
-                />
-                {token ? (
-                  <>
-                    <Route
-                      path='/configuration'
-                      element={<Configuration token={token} />}
-                    />
-                    <Route
-                      path='/channels'
-                      element={<ChannelManager token={token} />}
-                    />
-                    <Route
-                      path='/channels/import'
-                      element={<ImportSubscriptionsPage token={token} />}
-                    />
-                    <Route
-                      path='/downloads'
-                      element={<DownloadManager token={token} />}
-                    />
-                    <Route
-                      path='/videos'
-                      element={<VideosPage token={token} />}
-                    />
-                    <Route
-                      path='/channel/:channel_id'
-                      element={<ChannelPage token={token} />}
-                    />
-                    <Route path='/*' element={<Navigate to='/downloads' />} />
-                  </>
                 ) : (
-                  // If setup is required, redirect to setup, otherwise to login
-                  <Route path='/*' element={<Navigate to={requiresSetup ? '/setup' : '/login'} />} />
-                )}
-                </Routes>
-              </ErrorBoundary>
-            )}
-          </Container>
-        </Grid>
-      </Grid>
-      <Box
-        component="footer"
-        sx={{
-          position: 'fixed',
-          bottom: 0,
-          width: '100%',
-          bgcolor: 'background.paper',
-          textAlign: 'center',
-        }}
-      >
-        <Typography variant='subtitle1' color='textSecondary'>
-          {serverVersion && serverVersion !== clientVersion && platformName?.toLowerCase() !== 'elfhosted' && (
-            <Typography color='error'>
-              New version ({serverVersion}) available! Please shut down and pull the latest image and files to update.
-            </Typography>
-          )}
-        </Typography>
-      </Box>
+                  <Navigate to="/channels" replace />
+                )
+              }
+            />
 
-      {/* Persistent warning for temp directory */}
-      <Snackbar
-        open={showTmpWarning}
-        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-        sx={{ mt: 8 }}
-        onClose={() => setShowTmpWarning(false)}
-      >
-        <Alert
-          severity="error"
-          icon={<WarningAmberIcon />}
+            {/* Login Route - Full Screen Splash */}
+            <Route
+              path="/login"
+              element={
+                isPlatformManaged ? (
+                  <Navigate to="/channels" replace />
+                ) : token ? (
+                  <Navigate to="/channels" replace />
+                ) : (
+                  <AuthSplash setToken={setToken} />
+                )
+              }
+            />
+
+            {/* Authenticated Routes - Wrapped in AppShell */}
+            <Route
+              path="*"
+              element={
+                token ? (
+                  <AppShell
+                    token={token}
+                    isPlatformManaged={isPlatformManaged}
+                    appName="Youtarr"
+                    versionLabel={ytDlpLabel ? `${clientVersion} • ${ytDlpLabel}` : clientVersion}
+                    updateAvailable={updateAvailable}
+                    updateTooltip={updateTooltip}
+                    ytDlpUpdateAvailable={ytDlpUpdateAvailable}
+                    ytDlpUpdateTooltip={ytDlpUpdateTooltip}
+                    onLogout={handleLogout}
+                  >
+                    <Container
+                      maxWidth={false}
+                      className={location.pathname.startsWith('/channels') ? 'w-full flex flex-col' : 'w-full'}
+                      style={location.pathname.startsWith('/channels') ? { minHeight: 'calc(100vh - 140px)' } : undefined}
+                    >
+                      <ErrorBoundary fallbackMessage="An unexpected error occurred. Please refresh the page to continue.">
+                        <Routes>
+                          <Route path="/changelog" element={<ChangelogPage />} />
+                          <Route path="/settings/*" element={<Settings token={token} />} />
+                          <Route path="/configuration" element={<Navigate to="/settings" replace />} />
+                          <Route path="/channels" element={<ChannelManager token={token} />} />
+                          <Route path="/channels/imports" element={<ImportSubscriptionsPage token={token} />} />
+                          <Route path="/downloads/*" element={<DownloadManager token={token} />} />
+                          <Route path="/videos" element={<VideosPage token={token} />} />
+                          <Route path="/channel/:channel_id" element={<ChannelPage token={token} />} />
+                          <Route path="/" element={<Navigate to="/channels" replace />} />
+                          <Route path="/*" element={<Navigate to="/channels" replace />} />
+                        </Routes>
+                      </ErrorBoundary>
+                    </Container>
+                  </AppShell>
+                ) : (
+                  <Navigate to={requiresSetup ? '/setup' : '/login'} replace />
+                )
+              }
+            />
+          </Routes>
+        )}
+
+        {/* Persistent warning for temp directory */}
+        <Snackbar
+          open={showTmpWarning}
+          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+          className="mt-16 w-full flex justify-center"
+          style={{ zIndex: 1210 }}
           onClose={() => setShowTmpWarning(false)}
-          sx={{
-            maxWidth: '600px',
-            '& .MuiAlert-message': {
-              width: '100%'
-            }
-          }}
         >
-          <Box>
-            <Typography variant="body2" gutterBottom>
-              <strong>Warning:</strong> Your video directory is mounted to {tmpDirectory}. This means your downloaded videos will not persist between restarts.
-            </Typography>
-            {platformName && platformName.toLowerCase() === 'elfhosted' && (
-              <Typography variant="body2">
-                Please see the{' '}
-                <a
-                  href="https://docs.elfhosted.com/app/youtarr"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: 'inherit', textDecoration: 'underline' }}
-                >
-                  Elfhosted setup guide
-                </a>
+          <Alert
+            severity="error"
+            icon={<WarningAmberIcon className="h-5 w-5" />}
+            onClose={() => setShowTmpWarning(false)}
+            className="max-w-[600px] w-full"
+          >
+            <div>
+              <Typography variant="body2" className="mb-1">
+                <strong>Warning:</strong> Your video directory is mounted to {tmpDirectory}. This means your downloaded videos will not persist between restarts.
               </Typography>
-            )}
-          </Box>
-        </Alert>
-      </Snackbar>
+              {platformName && platformName.toLowerCase() === 'elfhosted' && (
+                <Typography variant="body2">
+                  Please see the{' '}
+                  <a
+                    href="https://docs.elfhosted.com/app/youtarr"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: 'inherit', textDecoration: 'underline' }}
+                  >
+                    Elfhosted setup guide
+                  </a>
+                </Typography>
+              )}
+            </div>
+          </Alert>
+        </Snackbar>
       </>
-    </ThemeProvider>
   );
 }
 

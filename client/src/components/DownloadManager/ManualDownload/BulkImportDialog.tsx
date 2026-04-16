@@ -9,16 +9,15 @@ import {
   Box,
   Alert,
   Typography,
-  Divider,
   Collapse,
   IconButton,
-} from '@mui/material';
+} from '../../ui';
 import {
-  UploadFile as UploadFileIcon,
+  Close as CloseIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
-  Close as CloseIcon,
-} from '@mui/icons-material';
+  Upload as UploadFileIcon,
+} from '../../../lib/icons';
 import { VideoInfo } from './types';
 import { parseYoutubeUrls, BulkParseResult } from './urlParser';
 
@@ -149,23 +148,19 @@ const BulkImportDialog: React.FC<BulkImportDialogProps> = ({
       fullWidth
       data-testid="bulk-import-dialog"
     >
-      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <DialogTitle className="flex items-center justify-between gap-2" onClose={onClose}>
         Bulk Import URLs
-        <IconButton onClick={onClose} size="small" aria-label="close">
-          <CloseIcon />
-        </IconButton>
       </DialogTitle>
 
       <DialogContent>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="body2" color="text.secondary" className="mb-4">
           Paste YouTube video URLs, one per line:
         </Typography>
 
         <TextField
           multiline
           fullWidth
-          minRows={8}
-          maxRows={16}
+          rows={10}
           value={textValue}
           onChange={handleTextChange}
           placeholder={
@@ -175,16 +170,16 @@ const BulkImportDialog: React.FC<BulkImportDialogProps> = ({
           inputProps={{ 'data-testid': 'bulk-import-textarea' }}
         />
 
-        <Divider sx={{ my: 2 }}>
-          <Typography variant="caption" color="text.secondary">
-            or
-          </Typography>
-        </Divider>
+        <div className="my-4 flex items-center gap-3 text-muted-foreground">
+          <div className="h-px flex-1 bg-border" />
+          <Typography variant="caption" color="text.secondary">or</Typography>
+          <div className="h-px flex-1 bg-border" />
+        </div>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box className="flex items-center gap-2">
           <Button
             variant="outlined"
-            startIcon={<UploadFileIcon />}
+            startIcon={<UploadFileIcon size={16} />}
             onClick={() => fileInputRef.current?.click()}
             size="small"
           >
@@ -206,7 +201,7 @@ const BulkImportDialog: React.FC<BulkImportDialogProps> = ({
         </Box>
 
         {hasResults && (
-          <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Box className="mt-4 flex flex-col gap-2">
             {validCount > 0 && (
               <Alert severity="success" variant="outlined">
                 {validCount} valid URL{validCount !== 1 ? 's' : ''} found
@@ -236,7 +231,7 @@ const BulkImportDialog: React.FC<BulkImportDialogProps> = ({
                     onClick={() => setShowInvalid(!showInvalid)}
                     aria-label={showInvalid ? 'hide invalid lines' : 'show invalid lines'}
                   >
-                    {showInvalid ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                    {showInvalid ? <ExpandLessIcon size={16} /> : <ExpandMoreIcon size={16} />}
                   </IconButton>
                 }
               >
@@ -246,20 +241,14 @@ const BulkImportDialog: React.FC<BulkImportDialogProps> = ({
 
             <Collapse in={showInvalid}>
               <Box
-                sx={{
-                  maxHeight: 120,
-                  overflowY: 'auto',
-                  bgcolor: 'action.hover',
-                  borderRadius: 1,
-                  p: 1,
-                }}
+                className="max-h-[120px] overflow-y-auto rounded-[var(--radius-ui)] bg-muted p-2"
               >
                 {parseResult?.invalid.map((line, i) => (
                   <Typography
                     key={i}
                     variant="caption"
                     display="block"
-                    sx={{ wordBreak: 'break-all' }}
+                    className="break-all"
                   >
                     {line}
                   </Typography>
@@ -269,7 +258,7 @@ const BulkImportDialog: React.FC<BulkImportDialogProps> = ({
           </Box>
         )}
 
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+        <Typography variant="caption" color="text.secondary" className="mt-4 block">
           Previously downloaded videos will be skipped unless you enable re-download in the settings dialog.
         </Typography>
       </DialogContent>

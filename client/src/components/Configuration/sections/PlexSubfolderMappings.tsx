@@ -19,9 +19,8 @@ import {
   TableRow,
   Tooltip,
   Typography,
-} from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
-import DeleteIcon from '@mui/icons-material/Delete';
+} from '../../ui';
+import { Add as AddIcon, Delete as DeleteIcon } from '../../../lib/icons';
 import { PlexConnectionStatus } from '../types';
 import { PlexLibrary, resolveLibraryDisplay } from '../../../utils/plexLibraries';
 import { PlexLibraryLabel } from './components/PlexLibraryLabel';
@@ -133,9 +132,9 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
   }
 
   return (
-    <Box sx={{ mt: 3 }}>
-      <Divider sx={{ mb: 2 }} />
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+    <Box className="mt-4">
+      <Divider className="mb-4" />
+      <Box className="flex items-center justify-between mb-2">
         <Typography variant="subtitle2">
           Per-Subfolder Library Mappings
         </Typography>
@@ -155,13 +154,13 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
           </Tooltip>
         )}
       </Box>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+      <Typography variant="caption" color="text.secondary" className="block mb-4">
         Map each subfolder to a specific Plex library. Subfolders without a mapping use the
         default library selected above.
       </Typography>
 
       {loadingData && (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+        <Box className="flex items-center gap-2 mb-4">
           <CircularProgress size={16} />
           <Typography variant="caption" color="text.secondary">
             Loading subfolders...
@@ -170,18 +169,18 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
       )}
 
       {fetchError && (
-        <Alert severity="warning" sx={{ mb: 1.5 }}>
+        <Alert severity="warning" className="mb-4">
           Could not load channel subfolders. Check your connection and try refreshing.
         </Alert>
       )}
 
       {mappings.length > 0 && (
-        <Table size="small" sx={{ mb: 2 }}>
+        <Table size="small">
           <TableHead>
             <TableRow>
               <TableCell>Subfolder</TableCell>
               <TableCell>Plex Library</TableCell>
-              <TableCell padding="checkbox" />
+              <TableCell style={{ width: 48, paddingLeft: 4, paddingRight: 4 }} />
             </TableRow>
           </TableHead>
           <TableBody>
@@ -190,21 +189,21 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
               return (
                 <TableRow key={`${mapping.subfolder === null ? '\x00root' : mapping.subfolder}-${mapping.libraryId}`}>
                   <TableCell>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                    <Typography variant="body2" className="font-mono">
                       {formatMappingSubfolder(mapping.subfolder)}
                     </Typography>
                   </TableCell>
                   <TableCell>
                     <PlexLibraryLabel display={display} />
                   </TableCell>
-                  <TableCell padding="checkbox">
+                  <TableCell style={{ width: 48, paddingLeft: 4, paddingRight: 4 }}>
                     <IconButton
                       size="small"
                       onClick={() => handleDeleteMapping(mapping.subfolder)}
                       aria-label={`Remove mapping for ${formatMappingSubfolder(mapping.subfolder)}`}
                       data-testid={`delete-mapping-${mapping.subfolder ?? 'root'}`}
                     >
-                      <DeleteIcon fontSize="small" />
+                      <DeleteIcon size={16} />
                     </IconButton>
                   </TableCell>
                 </TableRow>
@@ -215,14 +214,14 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
       )}
 
       {mappings.length === 0 && !showAddForm && !loadingData && (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+        <Typography variant="body2" color="text.secondary" className="block mb-4">
           No per-subfolder mappings configured. All downloads will refresh the default library.
         </Typography>
       )}
 
       {showAddForm && isConnected && (
-        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', flexWrap: 'wrap', mt: 1 }}>
-          <FormControl size="small" sx={{ minWidth: 160 }}>
+        <Box className="flex flex-wrap items-start gap-3 mt-2">
+          <FormControl style={{ minWidth: 160 }}>
             <InputLabel id="new-mapping-subfolder-label">Subfolder</InputLabel>
             <Select
               labelId="new-mapping-subfolder-label"
@@ -245,7 +244,7 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
             </Select>
           </FormControl>
 
-          <FormControl size="small" sx={{ minWidth: 180 }}>
+          <FormControl style={{ minWidth: 180 }}>
             <InputLabel id="new-mapping-library-label">Plex Library</InputLabel>
             <Select
               labelId="new-mapping-library-label"
@@ -269,7 +268,7 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
             onClick={handleAddMapping}
             disabled={isAddDisabled}
             data-testid="confirm-add-mapping-button"
-            sx={{ height: 40 }}
+            className="h-10"
           >
             Add
           </Button>
@@ -280,7 +279,7 @@ export const PlexSubfolderMappings: React.FC<PlexSubfolderMappingsProps> = ({
               setNewSubfolder('');
               setNewLibraryId('');
             }}
-            sx={{ height: 40 }}
+            className="h-10"
           >
             Cancel
           </Button>

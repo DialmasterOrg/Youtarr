@@ -130,6 +130,25 @@ beforeEach(() => {
   setMockLocation('http://localhost/');
 });
 
+// Global matchMedia mock – required because jsdom does not implement window.matchMedia.
+// Uses a plain function (NOT jest.fn()) so resetMocks:true does NOT wipe the implementation.
+// Tests that need responsive behaviour can re-define per-test with Object.defineProperty.
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
 // Mock import.meta.env for source code that hasn't been transformed by SWC
 // We define it on globalThis as well to ensure it's picked up
 Object.defineProperty(globalThis, 'importMetaEnv', {
@@ -142,4 +161,42 @@ Object.defineProperty(globalThis, 'importMetaEnv', {
 if (typeof global.importMeta === 'undefined') {
   // @ts-ignore
   global.importMeta = { env: { DEV: true, MODE: 'test' } };
+}
+
+// Radix UI Slider (and other pointer-based primitives) call these in JSDOM where
+// they are undefined. We provide no-op stubs so the tests don't throw.
+if (typeof HTMLElement !== 'undefined') {
+  if (!HTMLElement.prototype.hasPointerCapture) {
+    HTMLElement.prototype.hasPointerCapture = function () { return false; };
+  }
+  if (!HTMLElement.prototype.setPointerCapture) {
+    HTMLElement.prototype.setPointerCapture = function () {};
+  }
+  if (!HTMLElement.prototype.releasePointerCapture) {
+    HTMLElement.prototype.releasePointerCapture = function () {};
+  }
+  // Radix Select calls scrollIntoView on focused items; JSDOM doesn't implement it.
+  if (!HTMLElement.prototype.scrollIntoView) {
+    HTMLElement.prototype.scrollIntoView = function () {};
+  }
+}
+// Radix UI uses ResizeObserver for popover/tooltip positioning; JSDOM lacks it.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
+if (typeof globalThis.IntersectionObserver === 'undefined') {
+  globalThis.IntersectionObserver = class IntersectionObserver {
+    readonly root = null;
+    readonly rootMargin = '';
+    readonly thresholds = [];
+    disconnect() {}
+    observe() {}
+    unobserve() {}
+    takeRecords() { return []; }
+  } as any;
 }

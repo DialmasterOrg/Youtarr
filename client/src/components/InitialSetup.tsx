@@ -1,16 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
   TextField,
   Button,
   Typography,
   Alert,
+  AlertTitle,
   Paper,
-  Container,
   LinearProgress,
-  AlertTitle
-} from '@mui/material';
+} from './ui';
 import axios from 'axios';
+import packageJson from '../../package.json';
+import {
+  AUTH_CONTAINER_STYLE,
+  AUTH_FOOTER_STYLE,
+  AUTH_PRIMARY_BUTTON_STYLE,
+  AUTH_SUBTITLE_STYLE,
+  AUTH_SURFACE_STYLE,
+  AUTH_TITLE_STYLE,
+  AUTH_VIEWPORT_STYLE,
+} from './authSurfaceStyles';
 
 interface InitialSetupProps {
   onSetupComplete: (token: string) => void;
@@ -25,12 +33,9 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Check if we're on localhost
     axios.get('/setup/status')
       .then(response => {
         setIsLocalhost(response.data.isLocalhost);
-        // Don't redirect if setup is not required - let the user complete setup
-        // or navigate away on their own
       })
       .catch(err => {
         console.error('Setup status check failed:', err);
@@ -77,104 +82,134 @@ const InitialSetup: React.FC<InitialSetupProps> = ({ onSetupComplete }) => {
 
   if (isLocalhost === false) {
     return (
-      <Container maxWidth="sm">
-        <Paper elevation={3} sx={{ p: 4, mt: 8 }}>
-          <Typography variant="h5" color="error" gutterBottom>
-            🔒 Security Protection Active
-          </Typography>
-          <Typography variant="body1" paragraph>
-            Initial password setup must be performed from the server itself.
-          </Typography>
-          <Typography variant="body2" paragraph>
-            Please access Youtarr directly from the server machine at:
-          </Typography>
-          <Alert severity="info">
-            http://localhost:3087
-          </Alert>
-          <Typography variant="body2" sx={{ mt: 2 }}>
-            This security measure prevents unauthorized users from claiming your Youtarr instance.
-          </Typography>
-        </Paper>
-      </Container>
+      <div style={AUTH_VIEWPORT_STYLE}>
+        <div style={AUTH_CONTAINER_STYLE}>
+          <Paper elevation={0} style={AUTH_SURFACE_STYLE}>
+            <Typography variant="h5" color="error" gutterBottom>
+              🔒 Security Protection Active
+            </Typography>
+            <Typography variant="body1" paragraph>
+              Initial password setup must be performed from the server itself.
+            </Typography>
+            <Alert severity="info">
+              http://localhost:3087
+            </Alert>
+            <Typography variant="body2" style={{ marginTop: 16 }}>
+              This security measure prevents unauthorized users from claiming your Youtarr instance.
+            </Typography>
+          </Paper>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Container maxWidth="sm">
-      <Paper elevation={3} sx={{ p: 4, mt: 8 }}>
-        <Typography variant="h4" gutterBottom>
-          Welcome to Youtarr Setup
-        </Typography>
+    <div style={AUTH_VIEWPORT_STYLE}>
+      <div style={AUTH_CONTAINER_STYLE}>
+        <Paper elevation={0} style={AUTH_SURFACE_STYLE}>
+          {/* Branding */}
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
+            <Typography
+              variant="h3"
+              component="h1"
+              style={AUTH_TITLE_STYLE}
+            >
+              Welcome to Youtarr Setup
+            </Typography>
+            <Typography
+              variant="subtitle1"
+              color="text.secondary"
+              style={AUTH_SUBTITLE_STYLE}
+            >
+              First-time Setup
+            </Typography>
+          </div>
 
-        <Alert severity="info" sx={{ mb: 3 }}>
-          <AlertTitle>Important</AlertTitle>
-          <Typography variant="body2" paragraph>
-            Youtarr uses local authentication by default. Plex is optional.
-          </Typography>
-          <Typography variant="body2">
-            Initial setup requires access via localhost<br />
-            If you do not have access to the app via localhost, you should stop the application<br />
-            and set AUTH_PRESET_USERNAME and AUTH_PRESET_PASSWORD environment variables instead,<br />
-            then restart the application.
-          </Typography>
-        </Alert>
+          {/* Info alert */}
+          <Alert severity="info" style={{ marginBottom: 24, borderRadius: 'var(--radius-ui)' }}>
+            <AlertTitle>Important</AlertTitle>
+            <Typography variant="body2">
+              Youtarr uses local authentication by default. Initial setup requires access via localhost.
+            </Typography>
+          </Alert>
 
-        <Box component="form" onSubmit={handleSetup}>
-          <TextField
-            fullWidth
-            label="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            margin="normal"
-            required
-            helperText="Choose a username for login"
-          />
+          {/* Form */}
+          <form onSubmit={handleSetup}>
+            <TextField
+              fullWidth
+              label="Username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              margin="normal"
+              required
+              helperText="Choose a username for login"
+              inputProps={{ autoCapitalize: 'off' }}
+              style={{ marginBottom: '16px' }}
+            />
 
-          <TextField
-            fullWidth
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            margin="normal"
-            required
-            helperText={`Password strength: ${password ? passwordStrength(password) : 'Enter password'}`}
-          />
+            <TextField
+              fullWidth
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              margin="normal"
+              required
+              helperText={`Password strength: ${password ? passwordStrength(password) : 'Enter password'}`}
+              style={{ marginBottom: '16px' }}
+            />
 
-          <TextField
-            fullWidth
-            label="Confirm Password"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            margin="normal"
-            required
-          />
+            <TextField
+              fullWidth
+              label="Confirm Password"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              margin="normal"
+              required
+            />
 
-          {error && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {error}
-            </Alert>
-          )}
+            {error && (
+              <Alert
+                severity="error"
+                style={{ marginTop: 16, borderRadius: 'var(--radius-ui)', border: '1px solid var(--destructive)' }}
+              >
+                {error}
+              </Alert>
+            )}
 
-          <Button
-            type="submit"
-            fullWidth
-            variant="contained"
-            sx={{ mt: 3 }}
-            disabled={loading || isLocalhost === null}
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              size="large"
+              disabled={loading || isLocalhost === null}
+              style={AUTH_PRIMARY_BUTTON_STYLE}
+            >
+              {loading ? 'Setting up...' : 'Complete Setup'}
+            </Button>
+
+            {loading && <LinearProgress style={{ marginTop: 16, borderRadius: 'var(--radius-ui)' }} />}
+          </form>
+
+          {/* Footer */}
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            style={AUTH_FOOTER_STYLE}
           >
-            {loading ? 'Setting up...' : 'Complete Setup'}
-          </Button>
-
-          {loading && <LinearProgress sx={{ mt: 2 }} />}
-        </Box>
-
-        <Typography variant="caption" sx={{ mt: 3, display: 'block', textAlign: 'center' }}>
-          After setup, you can access Youtarr from anywhere with these credentials.
-        </Typography>
-      </Paper>
-    </Container>
+            After setup, you can access Youtarr from anywhere.
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            style={{ ...AUTH_FOOTER_STYLE, marginTop: 4 }}
+          >
+            Youtarr v{packageJson.version}
+          </Typography>
+        </Paper>
+      </div>
+    </div>
   );
 };
 
