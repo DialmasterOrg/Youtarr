@@ -234,8 +234,8 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                     const singleVideo = videos[0];
                     const hasMultiple = videos.length > 1;
                     const titleText = singleVideo?.youTubeVideoName || (hasMultiple ? `Multiple (${videos.length})` : cleanJobTypeLabel(job.jobType));
-                    const channelText = singleVideo?.youTubeChannelName;
-                    const thumbnailSrc = singleVideo?.youtubeId
+                    const channelText = !hasMultiple ? singleVideo?.youTubeChannelName : undefined;
+                    const thumbnailSrc = !hasMultiple && singleVideo?.youtubeId
                       ? `https://i.ytimg.com/vi/${singleVideo.youtubeId}/mqdefault.jpg`
                       : null;
 

@@ -235,8 +235,29 @@ describe('DownloadHistory', () => {
     });
   });
 
-  test('handles mobile view', () => {
-    render(<DownloadHistory {...defaultProps} jobs={sampleJobs} isMobile={true} />);
+  test('handles mobile view with a single-video job', () => {
+    const singleVideoJob: Job[] = [{
+      id: 'single-job',
+      jobType: 'Channel Downloads',
+      status: 'Completed',
+      output: '',
+      timeCreated: new Date('2024-01-15T09:00:00Z').getTime(),
+      timeInitiated: new Date('2024-01-15T09:00:30Z').getTime(),
+      data: {
+        videos: [{
+          id: 1,
+          youtubeId: 'video1',
+          youTubeChannelName: 'Test Channel',
+          youTubeVideoName: 'Test Video 1',
+          duration: 120,
+          timeCreated: '2024-01-15T09:00:00Z',
+          originalDate: null,
+          description: null,
+        } as VideoData],
+      },
+    }];
+
+    render(<DownloadHistory {...defaultProps} jobs={singleVideoJob} isMobile={true} />);
 
     expect(screen.getByText('Download History')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Test Video 1' })).toBeInTheDocument();
@@ -244,6 +265,15 @@ describe('DownloadHistory', () => {
     expect(screen.getByText(/Date:/)).toBeInTheDocument();
     expect(screen.getByText(/Source:/)).toBeInTheDocument();
     expect(screen.getByText(/Status:/)).toBeInTheDocument();
+  });
+
+  test('mobile view shows "Multiple (N)" title for multi-video jobs and hides the single-video header info', () => {
+    render(<DownloadHistory {...defaultProps} jobs={sampleJobs} isMobile={true} />);
+
+    expect(screen.getByText('Multiple (2)')).toBeInTheDocument();
+    // Top-level header info for a single video must not leak into multi-video card
+    expect(screen.queryByRole('button', { name: 'Test Video 1' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Test Channel')).not.toBeInTheDocument();
   });
 
   test('formats time with AM/PM', () => {
