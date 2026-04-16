@@ -158,7 +158,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
               </Typography>
             </AccordionSummary>
             <AccordionDetails>
-              <Grid container spacing={2}>
+              <Grid container spacing={3} alignItems="center">
                 <Grid item xs={12} md={6}>
                   <Box className="flex items-center">
                     <FormControlLabel
@@ -218,15 +218,17 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
 
                 {config.subtitlesEnabled && (
                   <Grid item xs={12} md={6}>
-                    <Box className="flex items-center">
+                    <Box className="flex items-start">
                       <SubtitleLanguageSelector
                         value={config.subtitleLanguage}
                         onChange={(value) => onConfigChange({ subtitleLanguage: value })}
                       />
-                      <InfoTooltip
-                        text="Select one or more subtitle languages. Subtitles will be downloaded when available; videos without subtitles will still download successfully."
-                        onMobileClick={onMobileTooltipClick}
-                      />
+                      <Box className="flex items-center min-h-[48px] mt-5">
+                        <InfoTooltip
+                          text="Select one or more subtitle languages. Subtitles will be downloaded when available; videos without subtitles will still download successfully."
+                          onMobileClick={onMobileTooltipClick}
+                        />
+                      </Box>
                     </Box>
                   </Grid>
                 )}
@@ -245,9 +247,9 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
             <AccordionDetails>
               <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
-                  <Box className="flex items-center">
-                    <FormControl fullWidth>
-                      <InputLabel>Download Frequency</InputLabel>
+                  <FormControl fullWidth>
+                    <InputLabel>Download Frequency</InputLabel>
+                    <Box className="flex items-center gap-1">
                       <Select
                         value={currentFrequency}
                         onChange={(e: SelectChangeEvent<string>) =>
@@ -255,6 +257,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                         }
                         label="Download Frequency"
                         disabled={!config.channelAutoDownload}
+                        className="flex-1 min-w-0"
                       >
                         {Object.keys(FREQUENCY_MAPPING).map((key) => (
                           <MenuItem key={key} value={key}>
@@ -262,22 +265,23 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                           </MenuItem>
                         ))}
                       </Select>
-                    </FormControl>
-                    <InfoTooltip
-                      text="How often to run automatic channel video downloads."
-                      onMobileClick={onMobileTooltipClick}
-                    />
-                  </Box>
+                      <InfoTooltip
+                        text="How often to run automatic channel video downloads."
+                        onMobileClick={onMobileTooltipClick}
+                      />
+                    </Box>
+                  </FormControl>
                 </Grid>
 
                 <Grid item xs={12} md={6}>
-                  <Box className="flex items-center">
-                    <FormControl fullWidth>
-                      <InputLabel>Files to Download per Channel</InputLabel>
+                  <FormControl fullWidth>
+                    <InputLabel>Files to Download per Channel</InputLabel>
+                    <Box className="flex items-center gap-1">
                       <Select
                         value={config.channelFilesToDownload}
                         onChange={handleChannelFilesChange}
                         label="Videos to Download per Channel Tab"
+                        className="flex-1 min-w-0"
                       >
                         {getChannelFilesOptions(config.channelFilesToDownload).map(count => (
                           <MenuItem key={count} value={count}>
@@ -285,24 +289,25 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                           </MenuItem>
                         ))}
                       </Select>
-                    </FormControl>
-                    <InfoTooltip
-                      text="How many videos (starting from most recently uploaded) Youtarr will attempt to download per tab when channel downloads run. Already downloaded videos will be skipped."
-                      onMobileClick={onMobileTooltipClick}
-                    />
-                  </Box>
+                      <InfoTooltip
+                        text="How many videos (starting from most recently uploaded) Youtarr will attempt to download per tab when channel downloads run. Already downloaded videos will be skipped."
+                        onMobileClick={onMobileTooltipClick}
+                      />
+                    </Box>
+                  </FormControl>
                 </Grid>
 
                 <Grid item xs={12} md={6}>
-                  <Box className="flex items-center">
-                    <FormControl fullWidth>
-                      <InputLabel>Preferred Resolution</InputLabel>
+                  <FormControl fullWidth>
+                    <InputLabel>Preferred Resolution</InputLabel>
+                    <Box className="flex items-center gap-1">
                       <Select
                         value={config.preferredResolution}
                         onChange={(e: SelectChangeEvent<string>) =>
                           onConfigChange({ preferredResolution: e.target.value })
                         }
                         label="Preferred Resolution"
+                        className="flex-1 min-w-0"
                       >
                         <MenuItem value="2160">4K (2160p)</MenuItem>
                         <MenuItem value="1440">1440p</MenuItem>
@@ -311,40 +316,39 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                         <MenuItem value="480">480p</MenuItem>
                         <MenuItem value="360">360p</MenuItem>
                       </Select>
-                    </FormControl>
-                    <InfoTooltip
-                      text="The resolution we will try to download from YouTube. Note that this is not guaranteed as YouTube may not have your preferred resolution available."
-                      onMobileClick={onMobileTooltipClick}
-                    />
-                  </Box>
+                      <InfoTooltip
+                        text="The resolution we will try to download from YouTube. Note that this is not guaranteed as YouTube may not have your preferred resolution available."
+                        onMobileClick={onMobileTooltipClick}
+                      />
+                    </Box>
+                  </FormControl>
                 </Grid>
 
                 <Grid item xs={12} md={6}>
-                  <Box className="flex flex-col items-stretch">
-                    <Box className="flex items-center">
-                      <FormControl fullWidth>
-                        <InputLabel>Preferred Video Codec</InputLabel>
-                        <Select
-                          value={config.videoCodec}
-                          onChange={(e: SelectChangeEvent<string>) =>
-                            onConfigChange({ videoCodec: e.target.value })
-                          }
-                          label="Preferred Video Codec"
-                        >
-                          <MenuItem value="default">Default (No Preference)</MenuItem>
-                          <MenuItem value="h264">H.264/AVC (Best Compatibility)</MenuItem>
-                          <MenuItem value="h265">H.265/HEVC (Balanced)</MenuItem>
-                        </Select>
-                      </FormControl>
+                  <FormControl fullWidth>
+                    <InputLabel>Preferred Video Codec</InputLabel>
+                    <Box className="flex items-center gap-1">
+                      <Select
+                        value={config.videoCodec}
+                        onChange={(e: SelectChangeEvent<string>) =>
+                          onConfigChange({ videoCodec: e.target.value })
+                        }
+                        label="Preferred Video Codec"
+                        className="flex-1 min-w-0"
+                      >
+                        <MenuItem value="default">Default (No Preference)</MenuItem>
+                        <MenuItem value="h264">H.264/AVC (Best Compatibility)</MenuItem>
+                        <MenuItem value="h265">H.265/HEVC (Balanced)</MenuItem>
+                      </Select>
                       <InfoTooltip
                         text="Select your preferred video codec. Youtarr will download this codec when available, and fall back to other codecs if your preference is not available for a video. H.264 is recommended for Apple TV and maximum device compatibility. VP9 is the default codec for most YouTube videos."
                         onMobileClick={onMobileTooltipClick}
                       />
                     </Box>
-                    <Box component="span" className="mt-1 text-xs text-muted-foreground">
+                    <Box component="span" className="text-xs text-muted-foreground">
                       Note: H.264 produces larger file sizes but offers maximum compatibility for Apple TV. This is a preference and will fall back to available codecs.
                     </Box>
-                  </Box>
+                  </FormControl>
                 </Grid>
 
                 <Grid item xs={12}>
@@ -372,7 +376,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                   </Accordion>
                 </Grid>
 
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12} md={6} className="mt-3">
                   <FormControl>
                     <FormControlLabel
                       control={
@@ -395,7 +399,7 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                   </FormControl>
                 </Grid>
 
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12} md={6} className="mt-3">
                   <FormControl>
                     <FormControlLabel
                       control={
@@ -432,33 +436,29 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
             <AccordionDetails>
               <Grid container spacing={2}>
                 <Grid item xs={12}>
-                  <Box className="mb-1 flex items-center">
-                    <Typography variant="body2" style={{ fontWeight: 600 }}>
+                  <FormControl fullWidth>
+                    <InputLabel htmlFor="youtubeOutputDirectory" className="flex items-center gap-2">
                       YouTube Output Directory
-                    </Typography>
-                    <Chip
-                      label="Docker Volume"
-                      size="small"
-                      className="ml-2"
+                      <Chip label="Docker Volume" size="small" />
+                    </InputLabel>
+                    <TextField
+                      id="youtubeOutputDirectory"
+                      fullWidth
+                      name="youtubeOutputDirectory"
+                      value={config.youtubeOutputDirectory}
+                      onChange={handleInputChange}
+                      disabled={true}
+                      helperText={
+                        deploymentEnvironment.platform?.toLowerCase() === "elfhosted"
+                          ? "This path is configured by your platform deployment and cannot be changed here."
+                          : "Configured via YOUTUBE_OUTPUT_DIR environment variable. Edit .env and restart to change."
+                      }
                     />
-                  </Box>
-                  <TextField
-                    fullWidth
-                    label="YouTube Output Directory"
-                    name="youtubeOutputDirectory"
-                    value={config.youtubeOutputDirectory}
-                    onChange={handleInputChange}
-                    disabled={true}
-                    helperText={
-                      deploymentEnvironment.platform?.toLowerCase() === "elfhosted"
-                        ? "This path is configured by your platform deployment and cannot be changed here."
-                        : "Configured via YOUTUBE_OUTPUT_DIR environment variable. Edit .env and restart to change."
-                    }
-                  />
+                  </FormControl>
                 </Grid>
 
                 <Grid item xs={12} md={6}>
-                  <Box className="flex items-center">
+                  <Box className="flex items-start">
                     <SubfolderAutocomplete
                       mode="global"
                       value={config.defaultSubfolder || null}
@@ -468,15 +468,17 @@ export const CoreSettingsSection: React.FC<CoreSettingsSectionProps> = ({
                       label="Default Subfolder"
                       helperText="Default download location for channels using 'Default Subfolder'"
                     />
-                    <InfoTooltip
-                      text="Set the default download location for untracked channels and channels using 'Default Subfolder'. Leave empty to download to the root directory by default."
-                      onMobileClick={onMobileTooltipClick}
-                    />
+                    <Box className="flex items-center min-h-[48px] mt-5">
+                      <InfoTooltip
+                        text="Set the default download location for untracked channels and channels using 'Default Subfolder'. Leave empty to download to the root directory by default."
+                        onMobileClick={onMobileTooltipClick}
+                      />
+                    </Box>
                   </Box>
                 </Grid>
 
                 <Grid item xs={12} md={6}>
-                  <Box className="flex items-center">
+                  <Box className="flex items-center md:mt-5 md:min-h-[48px]">
                     <FormControlLabel
                       control={
                         <Switch
