@@ -112,15 +112,25 @@ export const DownloadPerformanceSection: React.FC<DownloadPerformanceSectionProp
         {config.enableStallDetection && (
           <>
             <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Stall Detection Window (seconds)"
-                type="number"
-                inputProps={{ min: 5, max: 120, step: 5 }}
-                value={config.stallDetectionWindowSeconds ?? 30}
-                onChange={(e) => onConfigChange({ stallDetectionWindowSeconds: Number(e.target.value) })}
-                helperText="How long the download must stay below the stall threshold before retry logic kicks in"
-              />
+              <FormControl fullWidth>
+                <InputLabel htmlFor="stall-detection-window-input">Stall Detection Window (seconds)</InputLabel>
+                <TextField
+                  id="stall-detection-window-input"
+                  fullWidth
+                  type="number"
+                  inputProps={{
+                    min: 5,
+                    max: 120,
+                    step: 5,
+                    style: { backgroundColor: 'var(--input)', minHeight: 48 },
+                  }}
+                  value={config.stallDetectionWindowSeconds ?? 30}
+                  onChange={(e) => onConfigChange({ stallDetectionWindowSeconds: Number(e.target.value) })}
+                />
+                <FormHelperText>
+                  How long the download must stay below the stall threshold before retry logic kicks in
+                </FormHelperText>
+              </FormControl>
             </Grid>
 
             <Grid item xs={12} md={6}>
