@@ -1268,7 +1268,7 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
         )}
 
         {/* Pagination and page size selector */}
-        {!videosLoading && totalCount > 0 && (
+        {totalCount > 0 && (
           <div
             style={{
               display: 'flex',
@@ -1362,6 +1362,41 @@ function ChannelVideos({ token, channelAutoDownloadTabs, channelId: propChannelI
                 ))}
               </Grid>
             </div>
+          ) : videosLoading && !useInfiniteScroll ? (
+            viewMode === 'list' ? (
+              <div>
+                {[...Array(pageSize)].map((_, index) => (
+                  <div
+                    key={`skeleton-list-${index}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: 12,
+                      marginBottom: 12,
+                      borderRadius: 8,
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    <Skeleton variant="rectangular" width={120} height={90} />
+                    <div style={{ flex: 1 }}>
+                      <Skeleton variant="text" />
+                      <Skeleton variant="text" width="40%" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Grid container spacing={2}>
+                {[...Array(pageSize)].map((_, index) => (
+                  <Grid item xs={12} sm={6} md={4} lg={3} key={`skeleton-${index}`}>
+                    <Skeleton variant="rectangular" height={200} />
+                    <Skeleton variant="text" style={{ marginTop: 8 }} />
+                    <Skeleton variant="text" width="60%" />
+                  </Grid>
+                ))}
+              </Grid>
+            )
           ) : videos.length === 0 ? (
             <div style={{ textAlign: 'center', paddingTop: 32, paddingBottom: 32 }}>
               <Typography variant="body1" color="text.secondary">
