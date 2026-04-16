@@ -207,6 +207,7 @@ export function Settings({ token }: SettingsProps) {
                 onOpenLibrarySelector={openLibrarySelector}
                 onOpenPlexAuthDialog={() => setOpenPlexAuthDialog(true)}
                 onMobileTooltipClick={setMobileTooltip}
+                token={token}
               />
             }
           />

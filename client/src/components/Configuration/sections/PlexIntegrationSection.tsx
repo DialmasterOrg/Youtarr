@@ -139,7 +139,7 @@ export const PlexIntegrationSection: React.FC<PlexIntegrationSectionProps> = ({
         </Alert>
       )}
 
-      <Grid container spacing={2}>
+      <Grid container spacing={3}>
         <Grid item xs={12} md={5}>
           <TextField
             fullWidth
