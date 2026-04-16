@@ -22,6 +22,7 @@ export interface TabsEditorRefreshResult {
   availableTabs: string[];
   detectedTabs: string[];
   hiddenTabs: string[];
+  autoDownloadEnabledTabs?: string;
 }
 
 interface TabsEditorProps {
@@ -77,7 +78,10 @@ function TabsEditor({
       onRefresh({
         availableTabs: Array.isArray(data.availableTabs) ? data.availableTabs : [],
         detectedTabs: Array.isArray(data.detectedTabs) ? data.detectedTabs : [],
-        hiddenTabs: Array.isArray(data.hiddenTabs) ? data.hiddenTabs : []
+        hiddenTabs: Array.isArray(data.hiddenTabs) ? data.hiddenTabs : [],
+        autoDownloadEnabledTabs: typeof data.autoDownloadEnabledTabs === 'string'
+          ? data.autoDownloadEnabledTabs
+          : undefined,
       });
     } catch (err) {
       let message = 'Failed to refresh tabs';
@@ -110,7 +114,7 @@ function TabsEditor({
           to run detection now.
         </Alert>
       ) : (
-        <Box style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 }}>
+        <Box style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 4 }}>
           {orderedDetectedTabs.map((tab) => (
             <FormControlLabel
               key={tab}

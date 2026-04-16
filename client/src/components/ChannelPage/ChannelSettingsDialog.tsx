@@ -75,6 +75,20 @@ interface ChannelSettingsDialogProps {
   onSettingsSaved?: (settings: ChannelSettings & ChannelTabsState) => void;
 }
 
+const TAB_TO_MEDIA_TYPE: Record<string, string> = {
+  videos: 'video',
+  shorts: 'short',
+  streams: 'livestream',
+};
+
+const MEDIA_TYPE_LABEL: Record<string, string> = {
+  video: 'New Videos',
+  short: 'New Shorts',
+  livestream: 'New Live/Streams',
+};
+
+const MEDIA_TYPE_ORDER: string[] = ['video', 'short', 'livestream'];
+
 const regexExamples = [
   {
     label: 'Exclude videos containing a word (case-insensitive)',
@@ -383,15 +397,34 @@ function ChannelSettingsDialog({
     detectedTabs.every((tab) => settings.hidden_tabs.includes(tab));
 
   const handleHiddenTabsChange = (nextHidden: string[]) => {
-    setSettings((prev) => ({ ...prev, hidden_tabs: nextHidden }));
+    const hiddenMediaTypes = new Set(
+      nextHidden.map((tab) => TAB_TO_MEDIA_TYPE[tab]).filter(Boolean)
+    );
+    setSettings((prev) => {
+      const currentAuto = prev.auto_download_enabled_tabs
+        ? prev.auto_download_enabled_tabs.split(',').map((t) => t.trim()).filter(Boolean)
+        : [];
+      const filteredAuto = currentAuto.filter((mt) => !hiddenMediaTypes.has(mt));
+      return {
+        ...prev,
+        hidden_tabs: nextHidden,
+        auto_download_enabled_tabs: filteredAuto.join(','),
+      };
+    });
   };
 
   const handleTabsRefresh = (result: TabsEditorRefreshResult) => {
     setDetectedTabs(result.detectedTabs);
-    setSettings((prev) => ({ ...prev, hidden_tabs: result.hiddenTabs }));
-    setOriginalSettings((prev) => ({ ...prev, hidden_tabs: result.hiddenTabs }));
-    // The backend also updates available_tabs/auto_download_enabled_tabs on refresh,
-    // but the dialog will reflect those the next time the parent reloads channel info.
+    setSettings((prev) => ({
+      ...prev,
+      hidden_tabs: result.hiddenTabs,
+      auto_download_enabled_tabs: result.autoDownloadEnabledTabs ?? prev.auto_download_enabled_tabs,
+    }));
+    setOriginalSettings((prev) => ({
+      ...prev,
+      hidden_tabs: result.hiddenTabs,
+      auto_download_enabled_tabs: result.autoDownloadEnabledTabs ?? prev.auto_download_enabled_tabs,
+    }));
   };
 
   const handlePreviewFilter = async () => {
@@ -483,6 +516,12 @@ function ChannelSettingsDialog({
     return currentTabs.includes(tab);
   };
 
+  const hiddenTabsSet = new Set(settings.hidden_tabs);
+  const availableMediaTypes = MEDIA_TYPE_ORDER.filter((mediaType) => {
+    const tabType = Object.keys(TAB_TO_MEDIA_TYPE).find((t) => TAB_TO_MEDIA_TYPE[t] === mediaType);
+    return tabType !== undefined && detectedTabs.includes(tabType) && !hiddenTabsSet.has(tabType);
+  });
+
   const renderSectionContent = (sectionId: string) => {
     switch (sectionId) {
       case 'general':
@@ -509,24 +548,26 @@ function ChannelSettingsDialog({
                   Enable these to automatically download new content from this channel during scheduled tasks.
                 </Typography>
               </Alert>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={isTabEnabled('video')}
-                    onChange={(e) => toggleAutoDownloadTab('video', e.target.checked)}
-                  />
-                }
-                label="Automatically download new Videos"
-              />
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={isTabEnabled('short')}
-                    onChange={(e) => toggleAutoDownloadTab('short', e.target.checked)}
-                  />
-                }
-                label="Automatically download new Shorts"
-              />
+              {availableMediaTypes.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No detected tabs are available for auto-download. Enable a tab above first.
+                </Typography>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
+                  {availableMediaTypes.map((mediaType) => (
+                    <FormControlLabel
+                      key={mediaType}
+                      control={
+                        <Switch
+                          checked={isTabEnabled(mediaType)}
+                          onChange={(e) => toggleAutoDownloadTab(mediaType, e.target.checked)}
+                        />
+                      }
+                      label={MEDIA_TYPE_LABEL[mediaType]}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
 
             <Divider />
