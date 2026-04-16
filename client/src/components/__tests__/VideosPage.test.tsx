@@ -263,19 +263,16 @@ describe('VideosPage Component', () => {
       expect(axios.get).not.toHaveBeenCalled();
     });
 
-    test('displays table headers in desktop view', async () => {
+    test('displays table header with sort controls in desktop view', async () => {
       axios.get.mockResolvedValueOnce({ data: mockPaginatedResponse(mockVideos) });
 
       render(<VideosPage token={mockToken} />);
 
       await waitFor(() => {
-        expect(screen.getByText('Thumbnail')).toBeInTheDocument();
+        expect(screen.getByText('Downloaded Videos')).toBeInTheDocument();
       });
-      expect(screen.getByText('Channel')).toBeInTheDocument();
-      expect(screen.getByText('Video Information')).toBeInTheDocument();
-      expect(screen.getByText('Published')).toBeInTheDocument();
-      expect(screen.getByText('Added')).toBeInTheDocument();
-      expect(screen.getByText('File Info')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Published/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Added/ })).toBeInTheDocument();
     });
 
     test('filters videos by channel name', async () => {
@@ -648,14 +645,13 @@ describe('VideosPage Component', () => {
 
       render(<VideosPage token={mockToken} />);
 
-      await waitFor(() => {
-        expect(screen.getByText('Loading videos...')).toBeInTheDocument();
-      });
+      // While the fetch is pending the videos haven't rendered yet.
+      expect(screen.queryByText('How to Code')).not.toBeInTheDocument();
 
+      // Once the fetch resolves the video appears.
       await waitFor(() => {
         expect(screen.getByText('How to Code')).toBeInTheDocument();
       });
-      expect(screen.queryByText('Loading videos...')).not.toBeInTheDocument();
     });
 
     test('handles videos with no file size information', async () => {

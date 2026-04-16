@@ -100,6 +100,7 @@ const AutoDownloadChips: React.FC<AutoDownloadChipsProps> = ({
           size="small"
           variant="filled"
           color={isAutoDownloadEnabled ? 'primary' : 'default'}
+          icon={isAutoDownloadEnabled ? <FileDownloadIcon size={12} /> : undefined}
           style={{
             fontSize: '0.7rem',
             height: 24,
