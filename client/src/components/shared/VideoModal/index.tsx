@@ -131,34 +131,43 @@ function VideoModal({
       >
         {/* Header bar - title + close */}
         <DialogTitle onClose={!isMobile ? onClose : undefined}>
-          {isMobile && (
-            <IconButton
-              onClick={onClose}
-              size="small"
-              aria-label="Close"
-              edge="start"
-              style={{ marginRight: 4 }}
-            >
-              <ArrowBackIcon size={20} />
-            </IconButton>
-          )}
-          <Typography
-            variant="h6"
-            component="span"
-            sx={{
-              flex: 1,
+          <span
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              width: '100%',
               minWidth: 0,
-              fontSize: isMobile ? '1rem' : '1.15rem',
-              fontWeight: 600,
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-              wordBreak: 'break-word',
             }}
           >
-            {localVideo.title}
-          </Typography>
+            {isMobile && (
+              <IconButton
+                onClick={onClose}
+                size="large"
+                aria-label="Close"
+                edge="start"
+              >
+                <ArrowBackIcon size={24} />
+              </IconButton>
+            )}
+            <Typography
+              variant="h6"
+              component="span"
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                fontSize: isMobile ? '1rem' : '1.15rem',
+                fontWeight: 600,
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                wordBreak: 'break-word',
+              }}
+            >
+              {localVideo.title}
+            </Typography>
+          </span>
         </DialogTitle>
         <DialogContentBody
           style={{

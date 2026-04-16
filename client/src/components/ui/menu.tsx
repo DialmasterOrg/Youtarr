@@ -329,17 +329,31 @@ export interface PopoverProps {
 
 const Popover: React.FC<PopoverProps> = ({ open, anchorEl, onClose, children, className, PaperProps }) => {
   const [pos, setPos] = React.useState<{ top: number; left: number } | null>(null);
+  const popoverRef = React.useRef<HTMLDivElement | null>(null);
   const overlayInsets = getOverlayInsets();
 
   const updatePosition = React.useCallback(() => {
-    if (!open || !anchorEl) return;
+    if (!open || !anchorEl || !popoverRef.current || typeof window === 'undefined') return;
     const rect = anchorEl.getBoundingClientRect();
-    setPos({ top: rect.bottom + 4, left: rect.left });
+    const popoverEl = popoverRef.current;
+    const popoverWidth =
+      popoverEl.getBoundingClientRect().width || popoverEl.scrollWidth || 0;
+
+    const top = rect.bottom + 4;
+    const viewportLeft = VIEWPORT_GUTTER;
+    const viewportRight = window.innerWidth - VIEWPORT_GUTTER;
+    const maxLeft = Math.max(viewportRight - popoverWidth, viewportLeft);
+    const left = clamp(rect.left, viewportLeft, maxLeft);
+
+    setPos((current) => {
+      if (current && current.top === top && current.left === left) return current;
+      return { top, left };
+    });
   }, [open, anchorEl]);
 
-  React.useEffect(() => {
-    updatePosition();
+  React.useLayoutEffect(() => {
     if (!open) return;
+    updatePosition();
     window.addEventListener('resize', updatePosition);
     window.addEventListener('scroll', updatePosition, true);
     return () => {
@@ -354,16 +368,20 @@ const Popover: React.FC<PopoverProps> = ({ open, anchorEl, onClose, children, cl
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
+        ref={popoverRef}
         onKeyDown={(e) => { if (e.key === 'Escape') onClose?.(); }}
-        style={pos ? {
+        style={{
           position: 'fixed',
-          top: pos.top,
-          left: pos.left,
+          top: pos?.top ?? 0,
+          left: pos?.left ?? 0,
           zIndex: 1300,
-          maxHeight: window.innerHeight - pos.top - overlayInsets.bottom,
+          maxHeight: pos
+            ? window.innerHeight - pos.top - overlayInsets.bottom
+            : window.innerHeight - overlayInsets.bottom,
           maxWidth: 'min(28rem, calc(100vw - 24px))',
           overflowY: 'auto',
-        } : undefined}
+          visibility: pos ? 'visible' : 'hidden',
+        }}
         className={cn(
           'overflow-x-hidden',
           'rounded-[var(--radius-ui)]',

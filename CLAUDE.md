@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Youtarr is a Dockerized application that automatically downloads videos from YouTube channels and integrates them with Plex Media Server. It consists of:
 
 - **Backend**: Node.js/Express server with MariaDB database using Sequelize ORM
-- **Frontend**: React/TypeScript application with Material-UI components
+- **Frontend**: React/TypeScript application with a custom UI layer (Radix primitives + Tailwind CSS, themed via CSS variables)
 - **Infrastructure**: Docker Compose setup with separate containers for app and database
 
 ## Scope Discipline
@@ -49,7 +49,7 @@ For multi-part requests (e.g., "review this PR AND explain WebSocket handling"),
 - `hooks/`: app-wide custom hooks for data fetching and state.
 - `contexts/` and `providers/`: React Context for cross-cutting concerns (auth token, WebSocket, theme). `contexts/ThemeEngineContext.tsx` owns the active theme mode, resolves the layout policy for the current viewport, and injects theme CSS variables onto the document root.
 - `config/configSchema.ts`: the `CONFIG_FIELDS` registry. Use this pattern when adding new configuration fields; it auto-derives types, defaults, and change tracking.
-- `theme.ts`: legacy Material-UI theme (light/dark mode). `types/`, `utils/`: shared types and helpers.
+- `types/`, `utils/`: shared types and helpers.
 
 ### Database
 - MariaDB 10.3 with utf8mb4. Migrations in `migrations/` run automatically on container startup. Create new migrations with `./scripts/db-create-migration.sh migration-name`.
@@ -158,9 +158,10 @@ These standards apply when you are authoring new code or doing an explicit rewri
 - **Memoize deliberately**: `useMemo` for genuinely expensive derivations, `useCallback` for callbacks passed to memoized children. Do not over-memoize trivial values.
 
 #### Styling
-- **Use MUI's `sx` prop** for styling, not inline `style`. `sx` is theme-aware, responsive, and supports hover states and dark mode.
-- **Theme values**: `theme.palette.primary.main`, not `'#1976d2'`.
-- **Responsive breakpoints**: `useMediaQuery(theme.breakpoints.down('sm'))`.
+- **Tailwind utility classes** via `className` are the default for layout, spacing, and typography. Import UI primitives from `./ui` (Box, Card, Typography, Button, Chip, Dialog, etc.); do not reach for MUI, it is not installed.
+- **Theme tokens via CSS variables**, not hardcoded colors: `var(--destructive)`, `text-foreground`, `text-muted-foreground`, `bg-card`. Theme values are set on the document root by `ThemeEngineContext`.
+- **Inline `style` is acceptable only for computed/dynamic values** (e.g., a padding driven by `isMobile`, a length-dependent `maxHeight`). For static styling, prefer Tailwind classes.
+- **Responsive breakpoints**: use the custom `useMediaQuery` from `hooks/useMediaQuery` with a raw media query (`useMediaQuery('(max-width: 767px)')`) or the exported `breakpoints.down('sm')` helper. Tailwind's `md:`/`sm:` class prefixes are also fine for pure-CSS responsive behavior.
 
 #### API Calls
 - **Use Axios** in new hooks and components. A few legacy hooks use raw `fetch()` (`client/src/hooks/useConfig.ts` and `client/src/components/Configuration/hooks/usePlexConnection.ts`); do not copy them.
