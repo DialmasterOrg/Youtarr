@@ -185,7 +185,7 @@ export function useVideoModalActions({
     if (success) {
       onDownloadQueued?.(localVideo.youtubeId);
       onClose();
-      navigate('/downloads');
+      navigate('/downloads/activity');
     } else {
       showSnackbar('Failed to queue download', 'error');
     }

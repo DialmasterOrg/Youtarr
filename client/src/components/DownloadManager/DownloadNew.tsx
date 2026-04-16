@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Button,
   CardHeader,
@@ -29,6 +30,7 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
 }) => {
   const [tabValue, setTabValue] = useState(0);
   const [showChannelSettingsDialog, setShowChannelSettingsDialog] = useState(false);
+  const navigate = useNavigate();
 
   // Use config hook to get default resolution and video count
   const { config } = useConfig(token);
@@ -61,6 +63,8 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
     // job and we should display an alert
     if (result.status === 400) {
       alert('Channel Download already running');
+    } else {
+      navigate('/downloads/activity');
     }
     setTimeout(fetchRunningJobs, 500);
   };
@@ -87,7 +91,8 @@ const DownloadNew: React.FC<DownloadNewProps> = ({
     });
 
     setTimeout(fetchRunningJobs, 1000);
-  }, [token, fetchRunningJobs, downloadInitiatedRef]);
+    navigate('/downloads/activity');
+  }, [token, fetchRunningJobs, downloadInitiatedRef, navigate]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
