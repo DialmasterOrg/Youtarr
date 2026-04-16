@@ -383,17 +383,23 @@ function ChannelPage({ token }: ChannelPageProps) {
                   </Box>
                 </Box>
 
-                {/* Rating */}
+                {/* Content Rating */}
                 <Box className="flex flex-col gap-1">
                   <Typography variant="caption" color="text.secondary" className="font-semibold uppercase" style={{ fontSize: '0.65rem' }}>
-                    Rating
+                    Content Rating
                   </Typography>
                   {channel ? (
-                    <RatingBadge
-                      rating={channel.default_rating}
-                      ratingSource="Channel Default"
-                      size="small"
-                    />
+                    channel.default_rating ? (
+                      <RatingBadge
+                        rating={channel.default_rating}
+                        ratingSource="Channel Default"
+                        size="small"
+                      />
+                    ) : (
+                      <Typography variant="caption" color="text.secondary" className="italic" style={{ fontSize: '0.7rem' }}>
+                        No rating override
+                      </Typography>
+                    )
                   ) : (
                     <span className="text-xs text-muted">Loading...</span>
                   )}
@@ -453,14 +459,26 @@ function ChannelPage({ token }: ChannelPageProps) {
                     className="whitespace-nowrap inline-flex items-center"
                     style={{ lineHeight: 1.2 }}
                   >
-                    Rating:
+                    Content Rating:
                   </Typography>
                   {channel ? (
-                    <RatingBadge
-                      rating={channel.default_rating}
-                      ratingSource="Channel Default"
-                      size="small"
-                    />
+                    channel.default_rating ? (
+                      <RatingBadge
+                        rating={channel.default_rating}
+                        ratingSource="Channel Default"
+                        size="small"
+                      />
+                    ) : (
+                      <Typography
+                        variant="body2"
+                        component="span"
+                        color="text.secondary"
+                        className="italic"
+                        style={{ lineHeight: 1.2 }}
+                      >
+                        No rating override
+                      </Typography>
+                    )
                   ) : (
                     <span className="text-xs text-muted">Loading...</span>
                   )}
