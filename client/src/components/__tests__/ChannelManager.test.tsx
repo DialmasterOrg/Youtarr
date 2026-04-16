@@ -425,14 +425,14 @@ describe('ChannelManager Component', () => {
       });
     });
 
-    test('navigates to subscriptions when Import button clicked', async () => {
+    test('navigates to imports when Import button clicked', async () => {
       const user = userEvent.setup();
 
       renderChannelManager();
 
       await user.click(screen.getByRole('button', { name: /import/i }));
 
-      expect(mockNavigate).toHaveBeenCalledWith('/channels/subscriptions');
+      expect(mockNavigate).toHaveBeenCalledWith('/channels/imports');
     });
   });
 

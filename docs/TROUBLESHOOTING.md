@@ -497,7 +497,7 @@ YouTube is blocking your downloads.
 3. Check firewall isn't blocking local connections
 4. Verify Plex is accessible at the configured IP and port
 
-## Subscription Import Issues
+## Channel Import Issues
 
 ### Cookies Upload Fails or Returns No Channels
 

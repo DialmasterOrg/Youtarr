@@ -44,7 +44,7 @@ const ActiveImportBanner: React.FC<ActiveImportBannerProps> = ({ activeImport })
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <Typography variant="body2">{text}</Typography>
           <Button asChild variant="link" size="small">
-            <RouterLink to="/channels/subscriptions">View details</RouterLink>
+            <RouterLink to="/channels/imports">View details</RouterLink>
           </Button>
         </div>
         {isInProgress && (

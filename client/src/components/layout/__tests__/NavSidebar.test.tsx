@@ -20,8 +20,8 @@ const CHANNELS_ITEM = {
   icon: <span>ChannelsIcon</span>,
   to: '/channels',
   subItems: [
-    { key: 'channels-list', label: 'Channels', to: '/channels' },
-    { key: 'channels-subscriptions', label: 'Subscriptions', to: '/channels/subscriptions' },
+    { key: 'channels-list', label: 'Your Channels', to: '/channels' },
+    { key: 'channels-subscriptions', label: 'Imports', to: '/channels/imports' },
   ],
 };
 
@@ -96,14 +96,14 @@ describe('NavSidebar – sub-item visibility', () => {
   it('shows channels sub-items when at the channels root page', () => {
     renderSidebar('/channels');
 
-    expect(screen.getByText('Subscriptions')).toBeInTheDocument();
+    expect(screen.getByText('Imports')).toBeInTheDocument();
     expect(screen.getAllByText('Channels').length).toBeGreaterThan(0);
   });
 
-  it('shows channels sub-items when at the subscriptions sub-page', () => {
-    renderSidebar('/channels/subscriptions');
+  it('shows channels sub-items when at the imports sub-page', () => {
+    renderSidebar('/channels/imports');
 
-    expect(screen.getByText('Subscriptions')).toBeInTheDocument();
+    expect(screen.getByText('Imports')).toBeInTheDocument();
     expect(screen.getAllByText('Channels').length).toBeGreaterThan(0);
   });
 

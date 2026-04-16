@@ -370,7 +370,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
   };
 
   const handleOpenSubscriptions = () => {
-    navigate('/channels/subscriptions');
+    navigate('/channels/imports');
   };
 
   return (

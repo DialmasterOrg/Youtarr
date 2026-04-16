@@ -525,8 +525,7 @@ function AppContent() {
                           <Route path="/settings/*" element={<Settings token={token} />} />
                           <Route path="/configuration" element={<Navigate to="/settings" replace />} />
                           <Route path="/channels" element={<ChannelManager token={token} />} />
-                          <Route path="/channels/import" element={<Navigate to="/channels/subscriptions" replace />} />
-                          <Route path="/channels/subscriptions" element={<ImportSubscriptionsPage token={token} />} />
+                          <Route path="/channels/imports" element={<ImportSubscriptionsPage token={token} />} />
                           <Route path="/downloads/*" element={<DownloadManager token={token} />} />
                           <Route path="/videos" element={<VideosPage token={token} />} />
                           <Route path="/channel/:channel_id" element={<ChannelPage token={token} />} />

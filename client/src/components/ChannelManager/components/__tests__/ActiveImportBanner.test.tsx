@@ -38,7 +38,7 @@ describe('ActiveImportBanner', () => {
 
     const link = screen.getByRole('link', { name: 'View details' });
     expect(link).toBeInTheDocument();
-    expect(link).toHaveAttribute('href', '/channels/subscriptions');
+    expect(link).toHaveAttribute('href', '/channels/imports');
   });
 
   test('shows success message when import is complete', () => {

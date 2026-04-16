@@ -7,17 +7,17 @@ const channelsItem = {
   icon: <span>ChannelsIcon</span>,
   to: '/channels',
   subItems: [
-    { key: 'channels-list', label: 'Channels', to: '/channels' },
-    { key: 'channels-subscriptions', label: 'Subscriptions', to: '/channels/subscriptions' },
+    { key: 'channels-list', label: 'Your Channels', to: '/channels' },
+    { key: 'channels-subscriptions', label: 'Imports', to: '/channels/imports' },
   ],
 };
 
 describe('navigation helpers', () => {
-  it('keeps channels expanded but not selected on the subscriptions subpage', () => {
-    expect(isNavPathActive('/channels/subscriptions', '/channels')).toBe(false);
-    expect(isNavPathActive('/channels/subscriptions', '/channels/subscriptions')).toBe(true);
-    expect(isNavItemSelected('/channels/subscriptions', channelsItem)).toBe(false);
-    expect(isNavItemExpanded('/channels/subscriptions', channelsItem)).toBe(true);
+  it('keeps channels expanded but not selected on the imports subpage', () => {
+    expect(isNavPathActive('/channels/imports', '/channels')).toBe(false);
+    expect(isNavPathActive('/channels/imports', '/channels/imports')).toBe(true);
+    expect(isNavItemSelected('/channels/imports', channelsItem)).toBe(false);
+    expect(isNavItemExpanded('/channels/imports', channelsItem)).toBe(true);
   });
 
   it('keeps channels selected on the root and channel detail pages', () => {

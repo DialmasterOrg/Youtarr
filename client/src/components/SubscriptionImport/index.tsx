@@ -117,7 +117,7 @@ const ImportSubscriptionsPage: React.FC<ImportSubscriptionsPageProps> = ({ token
           Back to channels
         </Button>
         <div className="space-y-1">
-          <Typography variant="h5">Subscription Import</Typography>
+          <Typography variant="h5">Import Channels</Typography>
           <Typography variant="body2" color="secondary">
             Preview subscriptions, tune per-channel defaults, and import them directly into your channels list.
           </Typography>
