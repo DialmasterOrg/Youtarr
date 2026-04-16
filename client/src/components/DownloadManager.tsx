@@ -24,7 +24,6 @@ function DownloadManager({ token }: DownloadManagerProps) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [anchorEl, setAnchorEl] = useState<Record<string, null | HTMLButtonElement>>({});
   const downloadInitiatedRef = useRef(false);
   const downloadProgressRef = useRef<{ index: number | null; message: string }>(
     { index: null, message: '' }
@@ -130,8 +129,6 @@ function DownloadManager({ token }: DownloadManagerProps) {
             <DownloadHistory
               jobs={jobs}
               expanded={expanded}
-              anchorEl={anchorEl}
-              setAnchorEl={setAnchorEl}
               handleExpandCell={handleExpandCell}
               currentTime={currentTime}
               isMobile={isMobile}

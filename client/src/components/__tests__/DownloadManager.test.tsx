@@ -64,23 +64,19 @@ jest.mock('../DownloadManager/DownloadProgress', () => ({
 
 jest.mock('../DownloadManager/DownloadHistory', () => ({
   __esModule: true,
-  default: function MockDownloadHistory({ jobs, expanded, handleExpandCell, anchorEl, setAnchorEl, currentTime, isMobile }: any) {
+  default: function MockDownloadHistory({ jobs, expanded, handleExpandCell, currentTime, isMobile }: any) {
     const React = require('react');
     return React.createElement('div', { 'data-testid': 'download-history' },
       React.createElement('div', null, `Jobs Count: ${jobs.length}`),
       React.createElement('div', null, `Mobile View: ${isMobile}`),
       React.createElement('div', null, `Current Time: ${currentTime.toISOString()}`),
-      jobs.map((job: any, index: number) =>
+      jobs.map((job: any) =>
         React.createElement('div', { key: job.id, 'data-testid': `job-${job.id}` },
           React.createElement('span', null, job.jobType),
           React.createElement('button', {
             'data-testid': `expand-${job.id}`,
             onClick: () => handleExpandCell(job.id)
-          }, expanded[job.id] ? 'Collapse' : 'Expand'),
-          React.createElement('button', {
-            'data-testid': `anchor-${job.id}`,
-            onClick: (e: any) => setAnchorEl({ ...anchorEl, [job.id]: e.currentTarget })
-          }, 'Set Anchor')
+          }, expanded[job.id] ? 'Collapse' : 'Expand')
         )
       )
     );
@@ -341,21 +337,6 @@ describe('DownloadManager', () => {
       await user.click(expandButton1);
 
       expect(expandButton1.textContent).toBe('Expand');
-    });
-
-    test('manages anchor elements for jobs', async () => {
-      const user = userEvent.setup({ delay: null });
-      mockedAxios.get.mockResolvedValueOnce({ data: mockJobs });
-
-      renderWithContext(<DownloadManager token={mockToken} />, '/history');
-
-      await waitFor(() => {
-        expect(screen.getByTestId('job-1')).toBeInTheDocument();
-      });
-
-      const anchorButton = screen.getByTestId('anchor-1');
-
-      await user.click(anchorButton);
     });
 
     test('updates current time every second', () => {

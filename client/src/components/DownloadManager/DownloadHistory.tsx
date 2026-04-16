@@ -20,21 +20,61 @@ import {
   CardContent,
 } from '../ui';
 import { ChevronDown as ExpandMoreIcon, ChevronUp as ExpandLessIcon } from 'lucide-react';
-import { Info as InfoIcon } from '../../lib/icons';
 import { Job } from '../../types/Job';
+import { VideoData } from '../../types/VideoData';
 import { useSwipeable } from 'react-swipeable';
 import { useConfig } from '../../hooks/useConfig';
 import PageControls from '../shared/PageControls';
+import VideoModal from '../shared/VideoModal';
+import { VideoModalData } from '../shared/VideoModal/types';
 
 interface DownloadHistoryProps {
   jobs: Job[];
   currentTime: Date;
   expanded: Record<string, boolean>;
   handleExpandCell: (id: string) => void;
-  anchorEl?: Record<string, null | HTMLButtonElement>;
-  setAnchorEl?: React.Dispatch<React.SetStateAction<Record<string, null | HTMLButtonElement>>>;
   isMobile: boolean;
   token?: string | null;
+}
+
+function cleanJobTypeLabel(jobType: string): string {
+  if (jobType.includes('Channel Downloads')) return 'Channel Downloads';
+  if (jobType.includes('Manually Added Urls')) {
+    const apiKeyMatch = jobType.match(/\(via API: (.+)\)/);
+    return apiKeyMatch ? `Manual Videos (API: ${apiKeyMatch[1]})` : 'Manual Videos';
+  }
+  return jobType;
+}
+
+function jobVideoToModalData(video: VideoData): VideoModalData {
+  const isDownloaded = Boolean(video.filePath) && !video.removed;
+  const status: VideoModalData['status'] = video.removed
+    ? 'missing'
+    : isDownloaded
+    ? 'downloaded'
+    : 'never_downloaded';
+  return {
+    youtubeId: video.youtubeId,
+    title: video.youTubeVideoName,
+    channelName: video.youTubeChannelName,
+    thumbnailUrl: `/images/videothumb-${video.youtubeId}.jpg`,
+    duration: video.duration,
+    publishedAt: video.originalDate || null,
+    addedAt: video.timeCreated || null,
+    mediaType: video.media_type || 'video',
+    status,
+    isDownloaded,
+    filePath: video.filePath || null,
+    fileSize: video.fileSize ? Number(video.fileSize) : null,
+    audioFilePath: video.audioFilePath || null,
+    audioFileSize: video.audioFileSize ? Number(video.audioFileSize) : null,
+    isProtected: video.protected || false,
+    isIgnored: false,
+    normalizedRating: video.normalized_rating || null,
+    ratingSource: video.rating_source || null,
+    databaseId: video.id,
+    channelId: video.channel_id || null,
+  };
 }
 
 const DownloadHistory: React.FC<DownloadHistoryProps> = ({
@@ -42,11 +82,10 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
   currentTime,
   expanded,
   handleExpandCell,
-  anchorEl,
-  setAnchorEl,
   isMobile,
   token = null,
 }) => {
+  const [modalVideo, setModalVideo] = useState<VideoData | null>(null);
   const [showNoVideoJobs, setShowNoVideoJobs] = useState(false);
   const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [currentPage, setCurrentPage] = useState(1);
@@ -123,21 +162,33 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
     trackMouse: true,
   });
 
+    const modalElement = modalVideo ? (
+      <VideoModal
+        open
+        onClose={() => setModalVideo(null)}
+        video={jobVideoToModalData(modalVideo)}
+        token={token}
+      />
+    ) : null;
+
     if (isMobile) {
       return (
+        <>
         <Grid item xs={12}>
           <Card>
             <CardHeader title="Download History" />
             <CardContent>
-              <Toolbar disableGutters className="justify-between mb-2 gap-2 flex-wrap">
+              <Toolbar disableGutters className="mb-2">
                 <FormControlLabel
                   control={<Checkbox checked={showNoVideoJobs} onChange={(e) => { setShowNoVideoJobs(e.target.checked); setCurrentPage(1); }} />}
                   label="Show jobs without videos"
                 />
-                {!useInfiniteScroll && (
-                  <PageControls page={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} compact />
-                )}
               </Toolbar>
+              {!useInfiniteScroll && (
+                <Box className="flex justify-center mb-2">
+                  <PageControls page={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} compact />
+                </Box>
+              )}
 
               <Box {...handlers}>
                 <Box className="flex flex-col gap-2.5">
@@ -148,9 +199,12 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                   {currentJobs.map((job) => {
                     const isExpanded = !!expanded[job.id];
 
+                    const videos = job.data?.videos || [];
+                    const isCompletedWithNoVideos = videos.length === 0 && job.status !== 'In Progress';
+
                     let durationString = '';
                     if (job.status !== 'In Progress') {
-                      durationString = job.status;
+                      durationString = isCompletedWithNoVideos ? `${job.status} - no new videos` : job.status;
                     } else {
                       const jobStartTime = new Date(job.timeInitiated).getTime();
                       const duration = new Date(currentTime.getTime() - jobStartTime);
@@ -177,10 +231,9 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                     hours = hours ? hours : 12;
                     const formattedTimeCreated = `${month}-${day} ${hours}:${minutes} ${period}`;
 
-                    const videos = job.data?.videos || [];
                     const singleVideo = videos[0];
                     const hasMultiple = videos.length > 1;
-                    const titleText = singleVideo?.youTubeVideoName || (hasMultiple ? `Multiple (${videos.length})` : job.jobType);
+                    const titleText = singleVideo?.youTubeVideoName || (hasMultiple ? `Multiple (${videos.length})` : cleanJobTypeLabel(job.jobType));
                     const channelText = singleVideo?.youTubeChannelName;
                     const thumbnailSrc = singleVideo?.youtubeId
                       ? `https://i.ytimg.com/vi/${singleVideo.youtubeId}/mqdefault.jpg`
@@ -195,7 +248,12 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                         <Box className="flex items-start justify-between gap-2">
                           <Typography variant="subtitle2" className="font-semibold">
                             {singleVideo ? (
-                              <Link href={`https://www.youtube.com/watch?v=${singleVideo.youtubeId}`} target="_blank" rel="noopener noreferrer">
+                              <Link
+                                component="button"
+                                type="button"
+                                onClick={() => setModalVideo(singleVideo)}
+                                style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
+                              >
                                 {singleVideo.youTubeVideoName}
                               </Link>
                             ) : (
@@ -218,6 +276,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                         <Box className="mt-2 flex items-start gap-3">
                           {thumbnailSrc && (
                             <Box
+                              onClick={singleVideo ? () => setModalVideo(singleVideo) : undefined}
                               style={{
                                 width: 96,
                                 height: 72,
@@ -225,6 +284,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                 overflow: 'hidden',
                                 backgroundColor: 'rgb(17 24 39)',
                                 flexShrink: 0,
+                                cursor: singleVideo ? 'pointer' : 'default',
                               }}
                             >
                               <img
@@ -254,9 +314,14 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                         {hasMultiple && (
                           <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                             <Box className="mt-1.5 flex flex-col gap-1">
-                              {videos.map((video: any) => (
+                              {videos.map((video: VideoData) => (
                                 <Box key={video.youtubeId} className="flex flex-col">
-                                  <Link href={`https://www.youtube.com/watch?v=${video.youtubeId}`} target="_blank" rel="noopener noreferrer">
+                                  <Link
+                                    component="button"
+                                    type="button"
+                                    onClick={() => setModalVideo(video)}
+                                    style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
+                                  >
                                     {video.youTubeVideoName}
                                   </Link>
                                   <Typography variant="caption" color="secondary">
@@ -285,10 +350,13 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
             </CardContent>
           </Card>
         </Grid>
+        {modalElement}
+        </>
       );
     }
 
     return (
+      <>
       <Grid item xs={12}>
         <Box>
           <CardHeader title="Download History" className="px-0 pt-0" />
@@ -321,9 +389,12 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                   {currentJobs.map((job) => {
                     const isExpanded = !!expanded[job.id];
 
+                    const videos = job.data?.videos || [];
+                    const isCompletedWithNoVideos = videos.length === 0 && job.status !== 'In Progress';
+
                     let durationString = '';
                     if (job.status !== 'In Progress') {
-                      durationString = job.status;
+                      durationString = isCompletedWithNoVideos ? `${job.status} - no new videos` : job.status;
                     } else {
                       const jobStartTime = new Date(job.timeInitiated).getTime();
                       const duration = new Date(currentTime.getTime() - jobStartTime);
@@ -350,8 +421,6 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                     hours = hours ? hours : 12;
                     const formattedTimeCreated = `${month}-${day} ${hours}:${minutes} ${period}`;
 
-                    const videos = job.data?.videos || [];
-
                     if (videos.length > 1) {
                       return (
                         <React.Fragment key={job.id}>
@@ -361,19 +430,9 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                             <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{formattedJobType}</TableCell>
                             <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{job.status}</TableCell>
                             <TableCell align="right">
-                              <div style={{ display: 'inline-flex', gap: 4 }}>
-                                {setAnchorEl && (
-                                  <IconButton
-                                    size="small"
-                                    onClick={(e) => setAnchorEl((prev: any) => ({ ...(prev || {}), [job.id]: e.currentTarget as HTMLButtonElement }))}
-                                  >
-                                    <InfoIcon size={16} data-testid="InfoIcon" />
-                                  </IconButton>
-                                )}
-                                <IconButton size="small" onClick={() => handleExpandCell(job.id)}>
-                                  {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                                </IconButton>
-                              </div>
+                              <Box style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--foreground)' }}>
+                                {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                              </Box>
                             </TableCell>
                           </TableRow>
 
@@ -383,11 +442,18 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                                 <Box className="p-2">
                                   <Table size="small">
                                     <TableBody>
-                                      {videos.map((video: any) => (
+                                      {videos.map((video: VideoData) => (
                                         <TableRow key={video.youtubeId}>
                                           <TableCell style={{ width: 180 }}>{formattedTimeCreated}</TableCell>
                                           <TableCell>
-                                            <Link href={`https://www.youtube.com/watch?v=${video.youtubeId}`} target="_blank" rel="noopener noreferrer">{video.youTubeVideoName}</Link>
+                                            <Link
+                                              component="button"
+                                              type="button"
+                                              onClick={(e: React.MouseEvent) => { e.stopPropagation(); setModalVideo(video); }}
+                                              style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
+                                            >
+                                              {video.youTubeVideoName}
+                                            </Link>
                                             <Typography variant="caption" color="secondary" className="block">{video.youTubeChannelName}</Typography>
                                           </TableCell>
                                           <TableCell>{formattedJobType}</TableCell>
@@ -413,7 +479,14 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                           {singleVideo ? (
                             <>
                               <span aria-hidden="true" style={{ display: 'none' }}>1</span>
-                              <Link href={`https://www.youtube.com/watch?v=${singleVideo.youtubeId}`} target="_blank" rel="noopener noreferrer">{singleVideo.youTubeVideoName}</Link>
+                              <Link
+                                component="button"
+                                type="button"
+                                onClick={() => setModalVideo(singleVideo)}
+                                style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
+                              >
+                                {singleVideo.youTubeVideoName}
+                              </Link>
                               <Typography variant="caption" color="secondary" className="block">{singleVideo.youTubeChannelName}</Typography>
                             </>
                           ) : job.status === 'In Progress' ? (
@@ -424,16 +497,7 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
                         </TableCell>
                         <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{formattedJobType || '---'}</TableCell>
                         <TableCell style={{ fontSize: isMobile ? 'small' : 'medium' }}>{durationString}</TableCell>
-                        <TableCell align="right">
-                          {setAnchorEl && videos.length > 0 && (
-                            <IconButton
-                              size="small"
-                              onClick={(e) => setAnchorEl((prev: any) => ({ ...(prev || {}), [job.id]: e.currentTarget as HTMLButtonElement }))}
-                            >
-                              <InfoIcon size={16} data-testid="InfoIcon" />
-                            </IconButton>
-                          )}
-                        </TableCell>
+                        <TableCell align="right" />
                       </TableRow>
                     );
                   })}
@@ -453,6 +517,8 @@ const DownloadHistory: React.FC<DownloadHistoryProps> = ({
           )}
         </Box>
       </Grid>
+      {modalElement}
+      </>
     );
   };
 
