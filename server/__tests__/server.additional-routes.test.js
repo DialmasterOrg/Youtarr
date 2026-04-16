@@ -205,6 +205,7 @@ const createServerModule = ({
         const jobModuleMock = {
           getJob: jest.fn(),
           getRunningJobs: jest.fn(() => []),
+          getRunningJobsWithFreshVideos: jest.fn().mockResolvedValue([]),
           getAllJobs: jest.fn().mockResolvedValue([
             { id: 'job-1', type: 'Download', status: 'Completed' }
           ])
