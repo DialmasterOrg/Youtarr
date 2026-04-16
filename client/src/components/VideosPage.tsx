@@ -26,6 +26,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Skeleton,
 } from './ui';
 import { Filter as FilterListIcon, AlertCircle as ErrorOutlineIcon, CheckCircle as CheckCircleIcon, HardDrive as StorageIcon, Trash2 as DeleteIcon, Download as DownloadIcon, Clock as ScheduleIcon, AlarmCheck as AlarmOnIcon, Search as SearchIcon, Video as VideoLibraryIcon, X as ClearIcon } from 'lucide-react';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -212,13 +213,6 @@ function VideosPage({ token }: VideosPageProps) {
     setVideos([]);
     setPage(1);
   }, [useInfiniteScroll]);
-
-  // Scroll to videos container when page changes (from pagination controls)
-  useEffect(() => {
-    if (page > 1 && videosContainerRef.current && !useInfiniteScroll) {
-      videosContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [page, useInfiniteScroll]);
 
   useEffect(() => {
     if (!useInfiniteScroll) return;
@@ -684,11 +678,46 @@ function VideosPage({ token }: VideosPageProps) {
               )}
               <TableBody>
                 {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={1} align="center">
-                      <Typography>Loading videos...</Typography>
-                    </TableCell>
-                  </TableRow>
+                  [...Array(videosPerPage)].map((_, i) => (
+                    <TableRow key={`skeleton-${i}`}>
+                      {isMobile ? (
+                        <TableCell style={{ paddingLeft: 12, paddingRight: 12, paddingTop: 12, paddingBottom: 12 }}>
+                          <Box className="flex flex-col gap-3">
+                            <Skeleton variant="text" width="80%" height={22} />
+                            <Skeleton variant="rectangular" width="100%" height={200} />
+                            <Stack direction="row" spacing={1}>
+                              <Skeleton variant="rounded" width={72} height={22} />
+                              <Skeleton variant="rounded" width={72} height={22} />
+                              <Skeleton variant="rounded" width={88} height={22} />
+                            </Stack>
+                            <Skeleton variant="text" width="60%" />
+                          </Box>
+                        </TableCell>
+                      ) : (
+                        <TableCell colSpan={1} className="p-0">
+                          <Box className="flex items-stretch gap-4 py-3 px-4">
+                            <Skeleton variant="rectangular" width={42} height={42} style={{ marginTop: 4, flexShrink: 0 }} />
+                            <Skeleton variant="rectangular" width={256} height={144} style={{ flexShrink: 0 }} />
+                            <Box className="flex-1 min-w-0 flex flex-col gap-4">
+                              <Box>
+                                <Skeleton variant="text" width="70%" height={28} />
+                                <Skeleton variant="text" width="25%" />
+                              </Box>
+                              <Stack direction="row" spacing={1}>
+                                <Skeleton variant="rounded" width={80} height={24} />
+                                <Skeleton variant="rounded" width={80} height={24} />
+                                <Skeleton variant="rounded" width={100} height={24} />
+                              </Stack>
+                              <Stack direction="row" spacing={2}>
+                                <Skeleton variant="text" width={160} />
+                                <Skeleton variant="text" width={220} />
+                              </Stack>
+                            </Box>
+                          </Box>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))
                 ) : videos.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={1} align="center">
