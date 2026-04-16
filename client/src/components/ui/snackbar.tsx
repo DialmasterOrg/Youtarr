@@ -74,18 +74,22 @@ const Snackbar: React.FC<SnackbarProps> = ({
 
   const posClass = cn(
     'fixed z-[9999]',
-    anchorOrigin.vertical === 'top' ? 'top-4' : 'bottom-4',
+    anchorOrigin.vertical === 'top' ? 'top-4' : null,
     anchorOrigin.horizontal === 'left' ? 'left-4' :
     anchorOrigin.horizontal === 'right' ? 'right-4' :
     'left-1/2 -translate-x-1/2'
   );
+
+  const positionStyle: React.CSSProperties = anchorOrigin.vertical === 'bottom'
+    ? { bottom: 'calc((var(--mobile-nav-total-offset-px, 0) * 1px) + env(safe-area-inset-bottom, 0px) + 16px)' }
+    : {};
 
   return (
     <div
       role="status"
       aria-live="polite"
       className={cn(posClass, 'animate-slide-up', className)}
-      style={style}
+      style={{ ...positionStyle, ...style }}
     >
       {children ? enhanceSnackbarChildren(children) : (
         <div className="flex items-center gap-3 px-4 py-3 bg-[var(--snackbar-surface-background)] text-[var(--snackbar-surface-foreground)] border border-[var(--snackbar-surface-border)] rounded-[var(--radius-ui)] shadow-hard backdrop-blur-md min-w-[280px] max-w-[400px]">
