@@ -1079,4 +1079,109 @@ describe('useConfigSave', () => {
       expect(dispatchEventSpy).not.toHaveBeenCalled();
     });
   });
+
+  describe('Save status reporting', () => {
+    test('saveConfig resolves to true on success', async () => {
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValueOnce({}),
+      } as any);
+
+      const { result } = renderHook(() =>
+        useConfigSave({
+          token: mockToken,
+          config: mockConfig,
+          setInitialConfig: mockSetInitialConfig,
+          setSnackbar: mockSetSnackbar,
+          hasPlexServerConfigured: false,
+          checkPlexConnection: mockCheckPlexConnection,
+        })
+      );
+
+      await expect(result.current.saveConfig()).resolves.toBe(true);
+    });
+
+    test('saveConfig resolves to false on HTTP error', async () => {
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: jest.fn().mockResolvedValueOnce({}),
+      } as any);
+
+      const { result } = renderHook(() =>
+        useConfigSave({
+          token: mockToken,
+          config: mockConfig,
+          setInitialConfig: mockSetInitialConfig,
+          setSnackbar: mockSetSnackbar,
+          hasPlexServerConfigured: false,
+          checkPlexConnection: mockCheckPlexConnection,
+        })
+      );
+
+      await expect(result.current.saveConfig()).resolves.toBe(false);
+    });
+
+    test('saveConfig resolves to false on network error', async () => {
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      mockFetch.mockRejectedValueOnce(new Error('Network down'));
+
+      const { result } = renderHook(() =>
+        useConfigSave({
+          token: mockToken,
+          config: mockConfig,
+          setInitialConfig: mockSetInitialConfig,
+          setSnackbar: mockSetSnackbar,
+          hasPlexServerConfigured: false,
+          checkPlexConnection: mockCheckPlexConnection,
+        })
+      );
+
+      await expect(result.current.saveConfig()).resolves.toBe(false);
+    });
+
+    test('isSaving is false initially and toggles around saveConfig', async () => {
+      const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+      let resolveFetch: (value: any) => void = () => {};
+      mockFetch.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }) as any
+      );
+
+      const { result } = renderHook(() =>
+        useConfigSave({
+          token: mockToken,
+          config: mockConfig,
+          setInitialConfig: mockSetInitialConfig,
+          setSnackbar: mockSetSnackbar,
+          hasPlexServerConfigured: false,
+          checkPlexConnection: mockCheckPlexConnection,
+        })
+      );
+
+      expect(result.current.isSaving).toBe(false);
+
+      const savePromise = result.current.saveConfig();
+
+      await waitFor(() => {
+        expect(result.current.isSaving).toBe(true);
+      });
+
+      resolveFetch({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValueOnce({}),
+      });
+
+      await savePromise;
+
+      await waitFor(() => {
+        expect(result.current.isSaving).toBe(false);
+      });
+    });
+  });
 });

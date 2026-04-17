@@ -1,6 +1,8 @@
 import React from 'react';
 import { Button, Typography, CircularProgress, Slide, Tooltip } from '../../ui';
 import { Save as SaveIcon, WarningAmber as WarningAmberIcon, ErrorOutline as ErrorOutlineIcon } from '../../../lib/icons';
+import { useMediaQuery } from '../../../hooks/useMediaQuery';
+import { HEADER_HEIGHT_DESKTOP, HEADER_HEIGHT_MOBILE } from '../../layout/navLayoutConstants';
 
 interface SaveBarProps {
   hasUnsavedChanges: boolean;
@@ -33,6 +35,8 @@ export const SaveBar: React.FC<SaveBarProps> = ({
   const tooltipText = hasUnsavedChanges
     ? 'You have unsaved changes'
     : 'Save configuration settings';
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  const headerHeight = isMobile ? HEADER_HEIGHT_MOBILE : HEADER_HEIGHT_DESKTOP;
 
   const bannerContent = (
     <>
@@ -135,7 +139,7 @@ export const SaveBar: React.FC<SaveBarProps> = ({
       <div
         style={{
           position: 'fixed',
-          top: 'calc(64px + var(--shell-gap, 0px))',
+          top: `calc(${headerHeight}px + var(--shell-gap, 0px))`,
           left: 0,
           right: 0,
           zIndex: 1302,
