@@ -20,6 +20,7 @@ export function useUnsavedChangesGuard({
   shouldBlock,
 }: UseUnsavedChangesGuardArgs): UseUnsavedChangesGuardResult {
   const [pendingNav, setPendingNav] = useState<string | null>(null);
+  const pendingNavRef = useRef<string | null>(null);
   const enabledRef = useRef(enabled);
   const shouldBlockRef = useRef(shouldBlock);
   const bypassRef = useRef(false);
@@ -51,6 +52,7 @@ export function useUnsavedChangesGuard({
           return original.apply(this, args);
         }
 
+        pendingNavRef.current = targetUrl;
         setPendingNav(targetUrl);
       };
     };
@@ -77,20 +79,21 @@ export function useUnsavedChangesGuard({
   }, [enabled]);
 
   const confirmNav = useCallback(() => {
-    setPendingNav((current) => {
-      if (current === null) return null;
-      bypassRef.current = true;
-      try {
-        window.history.pushState(null, '', current);
-        window.dispatchEvent(new PopStateEvent('popstate'));
-      } finally {
-        bypassRef.current = false;
-      }
-      return null;
-    });
+    const target = pendingNavRef.current;
+    if (target === null) return;
+    pendingNavRef.current = null;
+    setPendingNav(null);
+    bypassRef.current = true;
+    try {
+      window.history.pushState(null, '', target);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    } finally {
+      bypassRef.current = false;
+    }
   }, []);
 
   const cancelNav = useCallback(() => {
+    pendingNavRef.current = null;
     setPendingNav(null);
   }, []);
 
