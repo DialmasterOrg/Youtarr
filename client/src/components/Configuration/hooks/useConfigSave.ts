@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { ConfigState, SnackbarState } from '../types';
 import { CONFIG_UPDATED_EVENT } from '../../../hooks/useConfig';
 
@@ -19,7 +19,10 @@ export const useConfigSave = ({
   hasPlexServerConfigured,
   checkPlexConnection,
 }: UseConfigSaveParams) => {
-  const saveConfig = useCallback(async () => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  const saveConfig = useCallback(async (): Promise<boolean> => {
+    setIsSaving(true);
     try {
       const response = await fetch('/updateconfig', {
         method: 'POST',
@@ -30,40 +33,44 @@ export const useConfigSave = ({
         body: JSON.stringify(config),
       });
 
-      if (response.ok) {
-        // Update initial snapshot to current config so unsaved flag resets
-        setInitialConfig(config);
-
-        if (typeof window !== 'undefined') {
-          const configUpdatedEvent = new CustomEvent<ConfigState>(CONFIG_UPDATED_EVENT, {
-            detail: config,
-          });
-          window.dispatchEvent(configUpdatedEvent);
-        }
-
-        setSnackbar({
-          open: true,
-          message: 'Configuration saved successfully',
-          severity: 'success'
-        });
-
-        // Re-check Plex connection if IP changed
-        if (hasPlexServerConfigured) {
-          checkPlexConnection();
-        }
-      } else {
+      if (!response.ok) {
         throw new Error('Failed to save configuration');
       }
+
+      setInitialConfig(config);
+
+      if (typeof window !== 'undefined') {
+        const configUpdatedEvent = new CustomEvent<ConfigState>(CONFIG_UPDATED_EVENT, {
+          detail: config,
+        });
+        window.dispatchEvent(configUpdatedEvent);
+      }
+
+      setSnackbar({
+        open: true,
+        message: 'Configuration saved successfully',
+        severity: 'success'
+      });
+
+      if (hasPlexServerConfigured) {
+        checkPlexConnection();
+      }
+
+      return true;
     } catch (error) {
       setSnackbar({
         open: true,
         message: 'Failed to save configuration',
         severity: 'error'
       });
+      return false;
+    } finally {
+      setIsSaving(false);
     }
   }, [token, config, setInitialConfig, setSnackbar, hasPlexServerConfigured, checkPlexConnection]);
 
   return {
     saveConfig,
+    isSaving,
   };
 };

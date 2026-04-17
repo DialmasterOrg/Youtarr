@@ -108,21 +108,36 @@ export const NavHeaderActions: React.FC<NavHeaderActionsProps> = ({
 
       {layoutPolicy.headerVersionPlacement === 'mobile' && isMobile && !showLandscapeNavItems && versionParts.length > 0 && (
         <Tooltip title="Tap to view changelog" arrow placement="bottom">
-          <Typography
-            variant="caption"
+          <Box
+            className="flex flex-col items-end mr-1"
+            style={{ lineHeight: 1.1, cursor: 'pointer', userSelect: 'none' }}
             onClick={() => navigate('/changelog')}
-            style={{
-              color: 'var(--muted-foreground)',
-              fontWeight: 600,
-              fontSize: '0.6rem',
-              cursor: 'pointer',
-              marginRight: 4,
-              userSelect: 'none',
-              lineHeight: 1,
-            }}
           >
-            {versionParts[0]}
-          </Typography>
+            <Typography
+              variant="caption"
+              style={{
+                color: 'var(--muted-foreground)',
+                fontWeight: 600,
+                fontSize: '0.6rem',
+                lineHeight: 1,
+              }}
+            >
+              {versionParts[0]}
+            </Typography>
+            {versionParts[1] && (
+              <Typography
+                variant="caption"
+                style={{
+                  color: 'var(--muted-foreground)',
+                  fontSize: '0.6rem',
+                  lineHeight: 1,
+                  marginTop: 2,
+                }}
+              >
+                {versionParts[1]}
+              </Typography>
+            )}
+          </Box>
         </Tooltip>
       )}
 

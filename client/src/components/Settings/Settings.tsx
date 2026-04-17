@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import isEqual from 'lodash/isEqual';
 import {
   Alert,
@@ -21,7 +21,13 @@ import { AutoRemovalSection } from '../Configuration/sections/AutoRemovalSection
 import { AccountSecuritySection } from '../Configuration/sections/AccountSecuritySection';
 import ApiKeysSection from '../Configuration/sections/ApiKeysSection';
 import { SaveBar } from '../Configuration/sections/SaveBar';
-import { usePlexConnection, useConfigSave, useYtDlpUpdate } from '../Configuration/hooks';
+import { UnsavedChangesDialog } from '../Configuration/sections/UnsavedChangesDialog';
+import {
+  usePlexConnection,
+  useConfigSave,
+  useYtDlpUpdate,
+  useUnsavedChangesGuard,
+} from '../Configuration/hooks';
 import { useStorageStatus } from '../../hooks/useStorageStatus';
 import { useConfig } from '../../hooks/useConfig';
 import { TRACKABLE_CONFIG_KEYS } from '../../config/configSchema';
@@ -82,7 +88,7 @@ export function Settings({ token }: SettingsProps) {
     hasPlexServerConfigured,
   });
 
-  const { saveConfig } = useConfigSave({
+  const { saveConfig, isSaving } = useConfigSave({
     token,
     config,
     setInitialConfig,
@@ -90,6 +96,31 @@ export function Settings({ token }: SettingsProps) {
     hasPlexServerConfigured,
     checkPlexConnection,
   });
+
+  const shouldBlockNav = useCallback(
+    (targetUrl: string) => !targetUrl.startsWith('/settings'),
+    []
+  );
+
+  const { pendingNav, confirmNav, cancelNav } = useUnsavedChangesGuard({
+    enabled: hasUnsavedChanges,
+    shouldBlock: shouldBlockNav,
+  });
+
+  const handleSaveAndContinue = useCallback(async () => {
+    if (validationError) {
+      setSnackbar({
+        open: true,
+        message: validationError,
+        severity: 'error',
+      });
+      return;
+    }
+    const ok = await saveConfig();
+    if (ok) {
+      confirmNav();
+    }
+  }, [validationError, saveConfig, confirmNav]);
 
   const {
     versionInfo: ytDlpVersionInfo,
@@ -162,10 +193,19 @@ export function Settings({ token }: SettingsProps) {
     <div>
       <SaveBar
         hasUnsavedChanges={hasUnsavedChanges}
-        isLoading={isLoading}
+        isLoading={isLoading || isSaving}
         onSave={handleSave}
         validationError={validationError}
-        placement="inline"
+        placement="fixed"
+      />
+
+      <UnsavedChangesDialog
+        open={pendingNav !== null}
+        isSaving={isSaving}
+        validationError={validationError ?? null}
+        onDiscard={confirmNav}
+        onCancel={cancelNav}
+        onSave={handleSaveAndContinue}
       />
 
       <div style={{ marginBottom: 16 }}>
@@ -189,6 +229,9 @@ export function Settings({ token }: SettingsProps) {
                 onConfigChange={handleConfigChange}
                 onMobileTooltipClick={setMobileTooltip}
                 token={token}
+                ytDlpVersionInfo={ytDlpVersionInfo}
+                ytDlpUpdateStatus={ytDlpUpdateStatus}
+                onYtDlpUpdate={performYtDlpUpdate}
               />
             }
           />
