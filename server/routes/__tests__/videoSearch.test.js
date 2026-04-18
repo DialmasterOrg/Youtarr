@@ -21,6 +21,11 @@ function buildApp({ verifyToken, searchVideos }) {
   };
   const app = express();
   app.use(express.json());
+  // pino-http guarantees req.log in production; stub here so route handlers can call it.
+  app.use((req, _res, next) => {
+    req.log = { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() };
+    next();
+  });
   app.use(createVideoSearchRoutes({ verifyToken, videoSearchModule }));
   return app;
 }

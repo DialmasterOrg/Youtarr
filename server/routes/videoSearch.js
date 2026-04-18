@@ -123,7 +123,7 @@ function createVideoSearchRoutes({ verifyToken, videoSearchModule }) {
       if (err instanceof videoSearchModule.SearchTimeoutError) {
         return res.status(504).json({ error: 'Search timed out' });
       }
-      req.log?.error({ err }, 'video search failed');
+      req.log.error({ err, query: validation.query }, 'video search failed');
       return res.status(502).json({ error: 'Search failed' });
     }
   });

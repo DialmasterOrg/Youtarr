@@ -351,7 +351,7 @@ Mark specific videos to exclude them from automatic channel downloads.
 Search YouTube from inside Youtarr and see which results you already have, which are missing, and which are new.
 
 1. **Open Find on YouTube**
-   - On the Videos page, click the "Find on YouTube" toggle
+   - In the sidebar, expand **Videos** and click **Find on YouTube**
    - Enter a search query (up to 200 characters)
    - Pick a result count (10, 25, or 50) and click Search
 

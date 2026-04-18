@@ -232,6 +232,12 @@ const createServerModule = ({
           init: jest.fn(),
           ImportInProgressError: class ImportInProgressError extends Error {}
         }));
+        jest.doMock('../modules/videoSearchModule', () => ({
+          searchVideos: jest.fn().mockResolvedValue([]),
+          ALLOWED_COUNTS: [10, 25, 50],
+          SearchCanceledError: class SearchCanceledError extends Error {},
+          SearchTimeoutError: class SearchTimeoutError extends Error {},
+        }));
         jest.doMock('../modules/messageEmitter', () => ({
           emitMessage: jest.fn(),
           getLastMessages: jest.fn(() => [])
