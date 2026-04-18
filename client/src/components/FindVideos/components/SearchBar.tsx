@@ -31,7 +31,7 @@ export default function SearchBar({
           if (e.key === 'Enter' && canSearch) onSearch();
         }}
         disabled={loading}
-        className="flex-1"
+        className="w-full sm:w-[32rem]"
       />
       <Select
         value={String(pageSize)}
@@ -49,7 +49,7 @@ export default function SearchBar({
           <Button variant="outlined" onClick={onCancel}>Cancel</Button>
         </Box>
       ) : (
-        <Button onClick={onSearch} disabled={!canSearch}>Search</Button>
+        <Button variant="contained" onClick={onSearch} disabled={!canSearch}>Search</Button>
       )}
     </Box>
   );
