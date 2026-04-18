@@ -381,7 +381,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
           title="Channels"
           action={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Tooltip title="Learn how channel downloads work">
+              <Tooltip title="Learn how channel downloads work" disableTouchListener>
                 <IconButton aria-label="Learn how channel downloads work" onClick={() => setHelpDialogOpen(true)}>
                   <HelpOutlineIcon size={18} />
                 </IconButton>
