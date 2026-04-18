@@ -115,6 +115,7 @@ const options = {
     path.join(__dirname, 'routes', 'plex.js'),
     path.join(__dirname, 'routes', 'setup.js'),
     path.join(__dirname, 'routes', 'videos.js'),
+    path.join(__dirname, 'routes', 'videoSearch.js'),
     path.join(__dirname, 'routes', 'apikeys.js'),
   ],
 };

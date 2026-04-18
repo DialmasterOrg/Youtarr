@@ -352,8 +352,8 @@ describe('VideoModal', () => {
 
       await waitFor(() => {
         expect(axios.post).toHaveBeenCalledWith(
-          '/api/channels/videos/test123/ignore',
-          { ignored: true },
+          '/api/channels/UC123/videos/test123/ignore',
+          undefined,
           { headers: { 'x-access-token': 'test-token' } }
         );
       });

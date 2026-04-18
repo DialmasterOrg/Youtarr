@@ -9,6 +9,7 @@ const createPlexRoutes = require('./plex');
 const createApiKeyRoutes = require('./apikeys');
 const createSubscriptionRoutes = require('./subscriptions');
 const createVideoDetailRoutes = require('./videoDetail');
+const createVideoSearchRoutes = require('./videoSearch');
 const videoMetadataModule = require('../modules/videoMetadataModule');
 
 /**
@@ -28,6 +29,7 @@ function registerRoutes(app, deps) {
     videosModule,
     archiveModule,
     subscriptionImportModule,
+    videoSearchModule,
     getCachedYtDlpVersion,
     refreshYtDlpVersionCache,
     validateEnvAuthCredentials,
@@ -52,6 +54,9 @@ function registerRoutes(app, deps) {
 
   // Video routes
   app.use(createVideoRoutes({ verifyToken, videosModule, downloadModule }));
+
+  // Video search routes
+  app.use(createVideoSearchRoutes({ verifyToken, videoSearchModule }));
 
   // Job routes
   app.use(createJobRoutes({ verifyToken, jobModule, downloadModule }));

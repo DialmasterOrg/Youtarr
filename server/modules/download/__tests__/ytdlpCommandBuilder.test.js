@@ -44,6 +44,58 @@ describe('YtdlpCommandBuilder', () => {
     tempPathManager.getTempBasePath.mockReturnValue('/mock/youtube/output/.youtarr_tmp');
   });
 
+  describe('buildSearchArgs', () => {
+    it('returns argv with ytsearch<count>:<query> for given query and count', () => {
+      const result = YtdlpCommandBuilder.buildSearchArgs('Minecraft', 25);
+      expect(result).toContain('--flat-playlist');
+      expect(result).toContain('--dump-json');
+      expect(result).toContain('--no-warnings');
+      expect(result).toContain('--default-search');
+      expect(result).toContain('ytsearch');
+      expect(result).toContain('ytsearch25:Minecraft');
+      const extractorIdx = result.indexOf('--extractor-args');
+      expect(extractorIdx).toBeGreaterThanOrEqual(0);
+      expect(result[extractorIdx + 1]).toBe('youtubetab:approximate_date');
+    });
+
+    it('includes common args (-4, --paths temp:) from buildCommonArgs', () => {
+      const result = YtdlpCommandBuilder.buildSearchArgs('test', 10);
+      expect(result).toContain('-4');
+      const pathsIdx = result.indexOf('--paths');
+      expect(pathsIdx).toBeGreaterThanOrEqual(0);
+      expect(result[pathsIdx + 1]).toMatch(/^temp:/);
+    });
+
+    it('includes --proxy when config.proxy is set', () => {
+      mockConfig.proxy = 'http://proxy.local:8080';
+      const result = YtdlpCommandBuilder.buildSearchArgs('test', 10);
+      const proxyIdx = result.indexOf('--proxy');
+      expect(proxyIdx).toBeGreaterThanOrEqual(0);
+      expect(result[proxyIdx + 1]).toBe('http://proxy.local:8080');
+    });
+
+    it('does not include --sleep-requests (search is one-shot)', () => {
+      mockConfig.sleepRequests = 5;
+      const result = YtdlpCommandBuilder.buildSearchArgs('test', 10);
+      expect(result).not.toContain('--sleep-requests');
+    });
+
+    it('includes --cookies when getCookiesPath returns a path', () => {
+      configModule.getCookiesPath.mockReturnValue('/path/to/cookies.txt');
+      const result = YtdlpCommandBuilder.buildSearchArgs('test', 10);
+      const cookiesIdx = result.indexOf('--cookies');
+      expect(cookiesIdx).toBeGreaterThanOrEqual(0);
+      expect(result[cookiesIdx + 1]).toBe('/path/to/cookies.txt');
+      expect(result).toContain('ytsearch10:test');
+    });
+
+    it('does not include --cookies flag when getCookiesPath returns null', () => {
+      configModule.getCookiesPath.mockReturnValue(null);
+      const result = YtdlpCommandBuilder.buildSearchArgs('test', 10);
+      expect(result).not.toContain('--cookies');
+    });
+  });
+
   describe('buildSponsorblockArgs', () => {
     it('should return empty array when sponsorblock is disabled', () => {
       const config = { sponsorblockEnabled: false };

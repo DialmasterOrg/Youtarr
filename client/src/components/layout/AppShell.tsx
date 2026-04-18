@@ -96,6 +96,14 @@ export function AppShell({
     []
   );
 
+  const videosSubItems = useMemo(
+    () => [
+      { key: 'videos-downloaded', label: 'Downloaded Videos', to: '/videos' },
+      { key: 'videos-find', label: 'Find on YouTube', to: '/videos/find' },
+    ],
+    []
+  );
+
   const settingsSubItems = useMemo(
     () =>
       SETTINGS_PAGES.map((page) => ({
@@ -123,6 +131,7 @@ export function AppShell({
           oldLabel: 'Downloaded Videos',
           icon: <VideoLibraryIcon />,
           to: '/videos',
+          subItems: videosSubItems,
         },
         {
           key: 'downloads' as const,
@@ -141,7 +150,7 @@ export function AppShell({
           subItems: settingsSubItems,
         },
       ],
-    [channelsSubItems, downloadsSubItems, settingsSubItems]
+    [channelsSubItems, videosSubItems, downloadsSubItems, settingsSubItems]
   );
 
   const toggleDrawer = () => {

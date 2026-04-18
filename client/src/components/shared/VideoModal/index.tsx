@@ -36,6 +36,7 @@ function VideoModal({
   onIgnoreChanged,
   onDownloadQueued,
   onRatingChanged,
+  allowIgnore,
 }: VideoModalProps) {
   const isMobile = useMediaQuery('(max-width: 599px)');
 
@@ -200,6 +201,7 @@ function VideoModal({
               onRatingClick={() => setRatingDialogOpen(true)}
               protectionLoading={protectionLoading}
               isMobile={isMobile}
+              allowIgnore={allowIgnore}
             />
             <VideoMetadata
               video={localVideo}
