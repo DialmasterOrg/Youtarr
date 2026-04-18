@@ -183,13 +183,16 @@ describe('YtDlpRunner', () => {
     });
   });
 
-  it('rejects when the process reports a timeout', async () => {
+  it('rejects with a YTDLP_TIMEOUT code when the process reports a timeout', async () => {
     const runPromise = ytDlpRunner.run(['--any'], { timeoutMs: 0 });
     const proc = getLastProcess();
 
     proc.emit('close', null);
 
-    await expect(runPromise).rejects.toThrow('yt-dlp process timed out after 0ms');
+    await expect(runPromise).rejects.toMatchObject({
+      message: 'yt-dlp process timed out after 0ms',
+      code: 'YTDLP_TIMEOUT',
+    });
   });
 
   it('rejects with stderr output when process exits with error code', async () => {

@@ -84,7 +84,7 @@ export default function FindVideos({ token }: FindVideosProps) {
       />
       {modalVideo && (
         <VideoModal
-          open={modalVideo !== null}
+          open
           onClose={() => setModalVideo(null)}
           video={modalVideo}
           token={token}

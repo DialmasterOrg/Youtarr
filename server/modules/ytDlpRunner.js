@@ -108,7 +108,9 @@ class YtDlpRunner {
         } else if (code === 0) {
           resolve(stdout);
         } else if (code === null) {
-          reject(new Error(`yt-dlp process timed out after ${timeoutMs}ms`));
+          const timeoutError = new Error(`yt-dlp process timed out after ${timeoutMs}ms`);
+          timeoutError.code = 'YTDLP_TIMEOUT';
+          reject(timeoutError);
         } else {
           const errorMessage = stderr || `yt-dlp process exited with code ${code}`;
           reject(new Error(errorMessage));

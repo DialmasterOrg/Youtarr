@@ -26,7 +26,7 @@ class VideoSearchModule {
       stdout = await ytDlpRunner.run(args, { timeoutMs: SEARCH_TIMEOUT_MS, signal });
     } catch (err) {
       if (err.name === 'AbortError') throw new SearchCanceledError();
-      if (err.message && err.message.includes('timed out')) throw new SearchTimeoutError();
+      if (err.code === 'YTDLP_TIMEOUT') throw new SearchTimeoutError();
       throw err;
     }
 

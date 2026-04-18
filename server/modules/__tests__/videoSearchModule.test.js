@@ -83,8 +83,9 @@ describe('videoSearchModule', () => {
     ).rejects.toBeInstanceOf(videoSearchModule.SearchCanceledError);
   });
 
-  test('throws SearchTimeoutError when ytDlpRunner rejects with timeout message', async () => {
-    ytDlpRunner.run.mockRejectedValueOnce(new Error('yt-dlp process timed out after 60000ms'));
+  test('throws SearchTimeoutError when ytDlpRunner rejects with YTDLP_TIMEOUT code', async () => {
+    const timeoutErr = Object.assign(new Error('yt-dlp process timed out after 60000ms'), { code: 'YTDLP_TIMEOUT' });
+    ytDlpRunner.run.mockRejectedValueOnce(timeoutErr);
 
     await expect(
       videoSearchModule.searchVideos('test', 10, {})

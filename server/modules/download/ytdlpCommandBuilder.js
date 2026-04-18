@@ -366,17 +366,8 @@ class YtdlpCommandBuilder {
     return allFilters.join(' & ');
   }
 
-  /**
-   * Build arguments for searching YouTube via yt-dlp
-   * @param {string} query - Search query string
-   * @param {number} count - Number of results to return
-   * @returns {string[]} - Complete args array
-   */
   static buildSearchArgs(query, count) {
-    // youtubetab:approximate_date makes flat-playlist populate an approximate
-    // upload_date/timestamp for each entry (derived from "X years ago" text),
-    // which is enough for a sortable/display date without paying for full
-    // per-video extraction.
+    // youtubetab:approximate_date populates an approximate upload_date/timestamp from "X years ago" text without paying for full per-video extraction.
     const config = configModule.getConfig();
     const args = [
       ...this.buildCommonArgs(config, { skipSleepRequests: true }),
