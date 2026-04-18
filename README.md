@@ -51,55 +51,18 @@ Youtarr and [Pinchflat](https://github.com/kieraneglin/pinchflat) solve the same
 
 Youtarr predates Pinchflat (first commit May 2023 vs. January 2024); the two projects arrived at similar solutions independently and have evolved in parallel. For a side-by-side of where they actually differ — Plex integration, in-app playback, content ratings, REST API, RSS feeds, indexing strategy — see [Youtarr vs Pinchflat](docs/YOUTARR_VS_PINCHFLAT.md).
 
-## Prerequisites
-- Docker & Docker Compose
-- Git
-- Bash shell (Git Bash for Windows)
+## Quick Start
+
+You'll need Docker, Docker Compose, Git, and a Bash shell (Git Bash on Windows). See the [Installation Guide](docs/INSTALLATION.md) for prerequisites, install methods, initial setup, and updating.
+
 > **Heads up:** Youtarr runs exclusively via Docker; direct `npm start`/Node deployments are unsupported.
 
-## Using Development Builds
-
-Want to try new features before they're officially released? Youtarr offers bleeding-edge development builds that contain the latest merged changes.
-
-> ⚠️ **Warning:** Dev builds are not fully tested and may be unstable. Use at your own risk, and expect potential bugs or breaking changes. Recommended for testing/feedback only.
-
-### Option 1: Using the start script (recommended)
-
-```bash
-./start.sh --dev --pull-latest
-```
-
-This pulls and runs the `dev-latest` image, which is automatically built whenever changes are merged to the `dev` branch.
-
-### Option 2: Manual configuration
-
-If you're not using the start script, set the `YOUTARR_IMAGE` environment variable in your `.env` file or docker-compose command:
-
-```bash
-# In .env file
-YOUTARR_IMAGE=dialmaster/youtarr:dev-latest
-```
-
-Or with docker-compose directly:
-
-```bash
-YOUTARR_IMAGE=dialmaster/youtarr:dev-latest docker compose up -d
-```
-
-### Switching back to stable
-
-Simply run without the `--dev` flag:
-
-```bash
-./start.sh --pull-latest
-```
-
-Or remove/comment out the `YOUTARR_IMAGE` line in your `.env` file to use the default stable `latest` tag.
+> Want to try unreleased features? See [Using Development Builds](docs/DEVELOPMENT.md#using-development-builds) for the bleeding-edge `dev-latest` image.
 
 ## Documentation
 
-### Getting Started
-- [Installation Guide](docs/INSTALLATION.md) - Quick Start guide, installation and setup instructions
+### Setup & Configuration
+- [Installation Guide](docs/INSTALLATION.md) - Install methods, initial setup, and updating
 - [Usage Guide](docs/USAGE_GUIDE.md) - Step-by-step tutorials for common tasks
 - [Configuration Reference](docs/CONFIG.md) - All configuration options
 - [Environment Variables](docs/ENVIRONMENT_VARIABLES.md) - Docker environment settings
@@ -121,7 +84,7 @@ Or remove/comment out the `YOUTARR_IMAGE` line in your `.env` file to use the de
 - [Backup & Restore](docs/BACKUP_RESTORE.md) - Backup your configuration and database, restore to new systems
 - [Database Management](docs/DATABASE.md) - Database configuration and maintenance
 - [Docker Configuration](docs/DOCKER.md) - Advanced Docker settings
-- [Development Guide](docs/DEVELOPMENT.md) - Contributing and development setup
+- [Development Guide](docs/DEVELOPMENT.md) - Contributing, development setup, and using bleeding-edge dev builds
 - [API Documentation](http://localhost:3087/swagger) - Interactive Swagger/OpenAPI documentation (requires running instance)
 
 ### Help & Support
