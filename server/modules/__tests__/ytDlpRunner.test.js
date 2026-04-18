@@ -281,4 +281,26 @@ describe('YtDlpRunner', () => {
     expect(runSpy).toHaveBeenCalled();
     runSpy.mockRestore();
   });
+
+  it('rejects with AbortError and kills process when signal aborts after spawn', async () => {
+    const controller = new AbortController();
+    const runPromise = ytDlpRunner.run(['--version'], { timeoutMs: 0, signal: controller.signal });
+    const proc = getLastProcess();
+
+    controller.abort();
+
+    await expect(runPromise).rejects.toMatchObject({ name: 'AbortError', code: 'ABORT_ERR' });
+    expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+  });
+
+  it('rejects immediately with AbortError when signal is already aborted before run', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const runPromise = ytDlpRunner.run(['--version'], { timeoutMs: 0, signal: controller.signal });
+    const proc = getLastProcess();
+
+    await expect(runPromise).rejects.toMatchObject({ name: 'AbortError', code: 'ABORT_ERR' });
+    expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+  });
 });

@@ -31,6 +31,7 @@ interface VideoActionsProps {
   onRatingClick: () => void;
   protectionLoading: boolean;
   isMobile: boolean;
+  allowIgnore?: boolean;
 }
 
 function VideoActions({
@@ -42,11 +43,12 @@ function VideoActions({
   onRatingClick,
   protectionLoading,
   isMobile,
+  allowIgnore = true,
 }: VideoActionsProps) {
   const isDownloadedAndPresent = video.isDownloaded && video.status !== 'missing';
   const showProtect = isDownloadedAndPresent;
   const showDownload = !isDownloadedAndPresent;
-  const showIgnore = !isDownloadedAndPresent || video.isIgnored;
+  const showIgnore = (!isDownloadedAndPresent || video.isIgnored) && allowIgnore;
   const showDelete = video.isDownloaded || video.status === 'missing';
   const mediaTypeInfo = getMediaTypeInfo(video.mediaType);
   const statusLabel = video.status === 'downloaded' ? 'Available' : getStatusLabel(video.status);

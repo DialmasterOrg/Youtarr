@@ -13,6 +13,7 @@ This guide provides step-by-step instructions for common tasks in Youtarr. After
 - [Re-download Missing Videos](#re-download-missing-videos)
 - [Organize Channels with Multi-Library Support](#organize-channels-with-multi-library-support)
 - [Browse and Filter Channel Videos](#browse-and-filter-channel-videos)
+- [Find Videos on YouTube](#find-videos-on-youtube)
 - [Preview and Play Videos](#preview-and-play-videos)
 - [External Access with API Keys](#external-access-with-api-keys)
 - [Content Ratings](#content-ratings)
@@ -344,6 +345,27 @@ Mark specific videos to exclude them from automatic channel downloads.
    - Ignored videos are tracked in `config/complete.list`
    - They won't appear in download recommendations
    - You can still manually download them if you change your mind
+
+## Find Videos on YouTube
+
+Search YouTube from inside Youtarr and see which results you already have, which are missing, and which are new.
+
+1. **Open Find on YouTube**
+   - On the Videos page, click the "Find on YouTube" toggle
+   - Enter a search query (up to 200 characters)
+   - Pick a result count (10, 25, or 50) and click Search
+
+2. **Results**
+   - Sorted newest-to-oldest by YouTube's approximate publish date (accurate to within a day or two, same fidelity as the channel videos page)
+   - Each card shows the channel, duration, upload date, and a status chip:
+     - **Downloaded**: already in your library
+     - **Missing**: previously downloaded but removed from disk
+     - **Not Downloaded**: new result, not yet saved
+   - Click a result to open the video detail modal, where you can download, play (if downloaded), or ignore it
+
+3. **Notes**
+   - Rate-limited to 10 searches per minute per session; server-side timeout is 60 seconds
+   - Nothing is persisted from the search itself, only videos you download get saved
 
 ## Preview and Play Videos
 

@@ -367,6 +367,30 @@ class YtdlpCommandBuilder {
   }
 
   /**
+   * Build arguments for searching YouTube via yt-dlp
+   * @param {string} query - Search query string
+   * @param {number} count - Number of results to return
+   * @returns {string[]} - Complete args array
+   */
+  static buildSearchArgs(query, count) {
+    // youtubetab:approximate_date makes flat-playlist populate an approximate
+    // upload_date/timestamp for each entry (derived from "X years ago" text),
+    // which is enough for a sortable/display date without paying for full
+    // per-video extraction.
+    const config = configModule.getConfig();
+    const args = [
+      ...this.buildCommonArgs(config, { skipSleepRequests: true }),
+      '--flat-playlist',
+      '--dump-json',
+      '--no-warnings',
+      '--extractor-args', 'youtubetab:approximate_date',
+      '--default-search', 'ytsearch',
+      `ytsearch${count}:${query}`,
+    ];
+    return args;
+  }
+
+  /**
    * Build yt-dlp command args array for channel downloads
    * @param {string} resolution - Video resolution
    * @param {boolean} allowRedownload - Allow re-downloading previously fetched videos

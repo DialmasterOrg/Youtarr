@@ -26,6 +26,7 @@ https://github.com/user-attachments/assets/34e5b50b-1a38-4f0b-9f84-bd47cefe4348
 - **Smart Downloads**: Pre-validate manually pasted URLs with metadata preview before downloading
 - **Channel Subscriptions**: Subscribe to channels and auto-download new videos, shorts, and streams with per-tab controls
 - **Browse Channels**: View and search all videos from subscribed channels with advanced filtering, tabbed views for Videos/Shorts/Streams, and contextual publish date accuracy tips
+- **Find on YouTube**: Search YouTube from inside Youtarr, see which results are already downloaded or missing, and click any result to queue a download
 - **In-App Playback**: Click any thumbnail to open a detail modal with extended metadata and in-browser streaming of downloaded videos; no media server required
 - **Channel Grouping & Multi-Library Support**: Organize channels into custom subfolders (e.g., `__kids`, `__music`, `__news`) to create separate media server libraries
 - **Smart Organization**: Videos organized by channel with metadata and thumbnails

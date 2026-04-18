@@ -23,6 +23,7 @@ import { Settings } from './components/Settings/Settings';
 import ChannelManager from './components/ChannelManager';
 import DownloadManager from './components/DownloadManager';
 import VideosPage from './components/VideosPage';
+import FindVideos from './components/FindVideos';
 import LocalLogin from './components/LocalLogin';
 import InitialSetup from './components/InitialSetup';
 import ChannelPage from './components/ChannelPage';
@@ -528,6 +529,7 @@ function AppContent() {
                           <Route path="/channels/imports" element={<ImportSubscriptionsPage token={token} />} />
                           <Route path="/downloads/*" element={<DownloadManager token={token} />} />
                           <Route path="/videos" element={<VideosPage token={token} />} />
+                          <Route path="/videos/find" element={<FindVideos token={token} />} />
                           <Route path="/channel/:channel_id" element={<ChannelPage token={token} />} />
                           <Route path="/" element={<Navigate to="/channels" replace />} />
                           <Route path="/*" element={<Navigate to="/channels" replace />} />
