@@ -95,14 +95,34 @@ class VideoSearchModule {
     if (youtubeIds.length === 0) return;
     const existing = await Video.findAll({
       where: { youtubeId: youtubeIds },
-      attributes: ['youtubeId', 'removed'],
+      attributes: [
+        'id',
+        'youtubeId',
+        'removed',
+        'filePath',
+        'fileSize',
+        'audioFilePath',
+        'audioFileSize',
+        'last_downloaded_at',
+        'protected',
+        'normalized_rating',
+        'rating_source',
+      ],
     });
-    const statusByYoutubeId = new Map(
-      existing.map(v => [v.youtubeId, v.removed ? 'missing' : 'downloaded'])
-    );
+    const recordByYoutubeId = new Map(existing.map(v => [v.youtubeId, v]));
     for (const r of results) {
-      const localStatus = statusByYoutubeId.get(r.youtubeId);
-      if (localStatus) r.status = localStatus;
+      const record = recordByYoutubeId.get(r.youtubeId);
+      if (!record) continue;
+      r.status = record.removed ? 'missing' : 'downloaded';
+      r.databaseId = record.id;
+      r.filePath = record.filePath;
+      r.fileSize = record.fileSize;
+      r.audioFilePath = record.audioFilePath;
+      r.audioFileSize = record.audioFileSize;
+      r.addedAt = record.last_downloaded_at ? new Date(record.last_downloaded_at).toISOString() : null;
+      r.isProtected = Boolean(record.protected);
+      r.normalizedRating = record.normalized_rating;
+      r.ratingSource = record.rating_source;
     }
   }
 

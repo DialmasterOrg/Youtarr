@@ -1,7 +1,10 @@
 import React from 'react';
 import { Box, Typography, Alert, Button, Skeleton } from '../../ui';
-import { SearchResult, PageSize } from '../types';
+import { useMediaQuery } from '../../../hooks/useMediaQuery';
+import { SearchResult, PageSize, ViewMode } from '../types';
 import ResultCard from './ResultCard';
+import ResultsTable from './ResultsTable';
+import ResultsListMobile from './ResultsListMobile';
 
 interface ResultsGridProps {
   results: SearchResult[];
@@ -10,13 +13,16 @@ interface ResultsGridProps {
   hasSearched: boolean;
   lastQuery: string;
   pageSize: PageSize;
+  viewMode: ViewMode;
   onResultClick: (result: SearchResult) => void;
   onRetry: () => void;
 }
 
 export default function ResultsGrid({
-  results, loading, error, hasSearched, lastQuery, pageSize, onResultClick, onRetry,
+  results, loading, error, hasSearched, lastQuery, pageSize, viewMode, onResultClick, onRetry,
 }: ResultsGridProps) {
+  const isMobile = useMediaQuery('(max-width: 767px)');
+
   if (loading) {
     return (
       <Box className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -56,6 +62,12 @@ export default function ResultsGrid({
         No videos found for &quot;{lastQuery}&quot;.
       </Typography>
     );
+  }
+
+  if (viewMode === 'table') {
+    return isMobile
+      ? <ResultsListMobile results={results} onResultClick={onResultClick} />
+      : <ResultsTable results={results} onResultClick={onResultClick} />;
   }
 
   return (

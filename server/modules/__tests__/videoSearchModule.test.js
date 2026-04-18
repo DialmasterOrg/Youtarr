@@ -111,8 +111,92 @@ describe('videoSearchModule', () => {
       expect(results.find(r => r.youtubeId === 'ccccccccccc').status).toBe('never_downloaded');
       expect(Video.findAll).toHaveBeenCalledWith(expect.objectContaining({
         where: expect.objectContaining({ youtubeId: ['aaaaaaaaaaa', 'bbbbbbbbbbb', 'ccccccccccc'] }),
-        attributes: ['youtubeId', 'removed'],
+        attributes: expect.arrayContaining([
+          'id',
+          'youtubeId',
+          'removed',
+          'filePath',
+          'fileSize',
+          'audioFilePath',
+          'audioFileSize',
+          'last_downloaded_at',
+          'protected',
+          'normalized_rating',
+          'rating_source',
+        ]),
       }));
+    });
+
+    test('attaches file paths, sizes, rating, protection, and addedAt for downloaded results', async () => {
+      const downloadedAt = new Date('2025-07-02T12:34:56.000Z');
+      Video.findAll.mockResolvedValueOnce([
+        {
+          id: 42,
+          youtubeId: 'aaaaaaaaaaa',
+          removed: false,
+          filePath: '/usr/src/app/data/chan/video.mp4',
+          fileSize: 1234567,
+          audioFilePath: null,
+          audioFileSize: null,
+          last_downloaded_at: downloadedAt,
+          protected: true,
+          normalized_rating: 'PG-13',
+          rating_source: 'yt-dlp',
+        },
+      ]);
+
+      const ndjson = JSON.stringify({ id: 'aaaaaaaaaaa', title: 'A' }) + '\n';
+      ytDlpRunner.run.mockResolvedValueOnce(ndjson);
+
+      const [result] = await videoSearchModule.searchVideos('test', 10, {});
+      expect(result).toMatchObject({
+        youtubeId: 'aaaaaaaaaaa',
+        status: 'downloaded',
+        databaseId: 42,
+        filePath: '/usr/src/app/data/chan/video.mp4',
+        fileSize: 1234567,
+        audioFilePath: null,
+        audioFileSize: null,
+        addedAt: downloadedAt.toISOString(),
+        isProtected: true,
+        normalizedRating: 'PG-13',
+        ratingSource: 'yt-dlp',
+      });
+    });
+
+    test('leaves enrichment fields absent on never_downloaded results', async () => {
+      Video.findAll.mockResolvedValueOnce([]);
+      const ndjson = JSON.stringify({ id: 'aaaaaaaaaaa', title: 'A' }) + '\n';
+      ytDlpRunner.run.mockResolvedValueOnce(ndjson);
+
+      const [result] = await videoSearchModule.searchVideos('test', 10, {});
+      expect(result.status).toBe('never_downloaded');
+      expect(result.databaseId).toBeUndefined();
+      expect(result.filePath).toBeUndefined();
+      expect(result.addedAt).toBeUndefined();
+    });
+
+    test('addedAt is null when last_downloaded_at is missing on the record', async () => {
+      Video.findAll.mockResolvedValueOnce([
+        {
+          id: 1,
+          youtubeId: 'aaaaaaaaaaa',
+          removed: false,
+          filePath: '/data/video.mp4',
+          fileSize: 100,
+          audioFilePath: null,
+          audioFileSize: null,
+          last_downloaded_at: null,
+          protected: false,
+          normalized_rating: null,
+          rating_source: null,
+        },
+      ]);
+      const ndjson = JSON.stringify({ id: 'aaaaaaaaaaa', title: 'A' }) + '\n';
+      ytDlpRunner.run.mockResolvedValueOnce(ndjson);
+
+      const [result] = await videoSearchModule.searchVideos('test', 10, {});
+      expect(result.addedAt).toBeNull();
     });
   });
 

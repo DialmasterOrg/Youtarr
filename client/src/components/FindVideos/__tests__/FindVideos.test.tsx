@@ -21,6 +21,24 @@ jest.mock('../../shared/VideoModal', () => ({
 const axios = require('axios');
 const FindVideos = require('../index').default;
 
+beforeAll(() => {
+  if (!window.matchMedia) {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: (query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    });
+  }
+});
+
 describe('FindVideos page', () => {
   beforeEach(() => { jest.clearAllMocks(); });
 
@@ -56,5 +74,25 @@ describe('FindVideos page', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /open pick me/i }));
     expect(screen.getByTestId('mock-video-modal')).toHaveTextContent('Pick me');
+  });
+
+  test('toggling to Table View switches results to a table and row click opens modal', async () => {
+    axios.post.mockResolvedValueOnce({
+      data: { results: [{
+        youtubeId: 'abc12345678', title: 'Row Pick', channelName: 'Chan',
+        channelId: null, duration: 120, thumbnailUrl: null, publishedAt: null,
+        viewCount: null, status: 'never_downloaded',
+      }] },
+    });
+
+    render(<FindVideos token="t" />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'x' } });
+    fireEvent.click(screen.getByRole('button', { name: /^search$/i }));
+    expect(await screen.findByText('Row Pick')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /table view/i }));
+    const row = screen.getByRole('row', { name: /open row pick/i });
+    fireEvent.click(row);
+    expect(screen.getByTestId('mock-video-modal')).toHaveTextContent('Row Pick');
   });
 });

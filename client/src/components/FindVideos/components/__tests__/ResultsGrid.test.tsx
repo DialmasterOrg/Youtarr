@@ -28,6 +28,42 @@ jest.mock('../ResultCard', () => ({
   },
 }));
 
+jest.mock('../ResultsTable', () => ({
+  __esModule: true,
+  default: function MockResultsTable(props: { results: { youtubeId: string; title: string }[]; onResultClick: (r: { youtubeId: string; title: string }) => void }) {
+    const React = require('react');
+    return React.createElement(
+      'div',
+      { 'data-testid': 'results-table' },
+      props.results.map((r) =>
+        React.createElement(
+          'button',
+          { key: r.youtubeId, onClick: () => props.onResultClick(r), 'data-testid': `row-${r.youtubeId}` },
+          r.title
+        )
+      )
+    );
+  },
+}));
+
+jest.mock('../ResultsListMobile', () => ({
+  __esModule: true,
+  default: function MockResultsListMobile(props: { results: { youtubeId: string; title: string }[]; onResultClick: (r: { youtubeId: string; title: string }) => void }) {
+    const React = require('react');
+    return React.createElement(
+      'div',
+      { 'data-testid': 'results-list-mobile' },
+      props.results.map((r) =>
+        React.createElement(
+          'button',
+          { key: r.youtubeId, onClick: () => props.onResultClick(r), 'data-testid': `card-mobile-${r.youtubeId}` },
+          r.title
+        )
+      )
+    );
+  },
+}));
+
 const ResultsGrid = require('../ResultsGrid').default;
 
 const baseProps = {
@@ -37,6 +73,7 @@ const baseProps = {
   hasSearched: false,
   lastQuery: '',
   pageSize: 25 as const,
+  viewMode: 'grid' as const,
   onResultClick: () => {},
   onRetry: () => {},
 };
@@ -84,5 +121,70 @@ describe('ResultsGrid', () => {
 
     fireEvent.click(screen.getByTestId('card-a'));
     expect(onResultClick).toHaveBeenCalledWith(results[0]);
+  });
+
+  test('viewMode=table on desktop: renders ResultsTable; click invokes onResultClick', () => {
+    const onResultClick = jest.fn();
+    const results = [
+      {
+        youtubeId: 'a', title: 'Alpha', channelName: 'C', channelId: null,
+        duration: null, thumbnailUrl: null, publishedAt: null, viewCount: null, status: 'never_downloaded' as const,
+      },
+    ];
+    render(<ResultsGrid {...baseProps} hasSearched viewMode="table" results={results} onResultClick={onResultClick} />);
+    expect(screen.getByTestId('results-table')).toBeInTheDocument();
+    expect(screen.queryByTestId('results-list-mobile')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('card-a')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('row-a'));
+    expect(onResultClick).toHaveBeenCalledWith(results[0]);
+  });
+
+  describe('on mobile viewport', () => {
+    beforeEach(() => {
+      Object.defineProperty(window, 'matchMedia', {
+        writable: true,
+        value: (query: string) => ({
+          matches: query.includes('max-width: 767px'),
+          media: query,
+          onchange: null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => false,
+        }),
+      });
+    });
+
+    afterEach(() => {
+      Object.defineProperty(window, 'matchMedia', {
+        writable: true,
+        value: (query: string) => ({
+          matches: false,
+          media: query,
+          onchange: null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => false,
+        }),
+      });
+    });
+
+    test('viewMode=table renders ResultsListMobile instead of ResultsTable', () => {
+      const onResultClick = jest.fn();
+      const results = [
+        {
+          youtubeId: 'a', title: 'Alpha', channelName: 'C', channelId: null,
+          duration: null, thumbnailUrl: null, publishedAt: null, viewCount: null, status: 'never_downloaded' as const,
+        },
+      ];
+      render(<ResultsGrid {...baseProps} hasSearched viewMode="table" results={results} onResultClick={onResultClick} />);
+      expect(screen.getByTestId('results-list-mobile')).toBeInTheDocument();
+      expect(screen.queryByTestId('results-table')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByTestId('card-mobile-a'));
+      expect(onResultClick).toHaveBeenCalledWith(results[0]);
+    });
   });
 });

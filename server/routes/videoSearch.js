@@ -85,6 +85,15 @@ function createVideoSearchRoutes({ verifyToken, videoSearchModule }) {
    *                       status:
    *                         type: string
    *                         enum: [downloaded, missing, never_downloaded]
+   *                       databaseId: { type: integer, nullable: true, description: "Video row id when status is downloaded or missing." }
+   *                       filePath: { type: string, nullable: true }
+   *                       fileSize: { type: integer, nullable: true }
+   *                       audioFilePath: { type: string, nullable: true }
+   *                       audioFileSize: { type: integer, nullable: true }
+   *                       addedAt: { type: string, nullable: true, format: date-time }
+   *                       isProtected: { type: boolean, nullable: true }
+   *                       normalizedRating: { type: string, nullable: true }
+   *                       ratingSource: { type: string, nullable: true }
    *       400:
    *         description: Invalid query or count
    *       429:

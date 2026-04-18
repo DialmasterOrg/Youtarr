@@ -2,10 +2,11 @@ import React, { useCallback, useRef, useState } from 'react';
 import { Box, Typography } from '../ui';
 import VideoModal from '../shared/VideoModal';
 import { VideoModalData } from '../shared/VideoModal/types';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import SearchBar from './components/SearchBar';
 import ResultsGrid from './components/ResultsGrid';
 import { useVideoSearch } from './hooks/useVideoSearch';
-import { DEFAULT_PAGE_SIZE, PageSize, SearchResult } from './types';
+import { DEFAULT_PAGE_SIZE, PageSize, SearchResult, ViewMode } from './types';
 
 interface FindVideosProps {
   token: string | null;
@@ -19,27 +20,29 @@ function toModalData(r: SearchResult): VideoModalData {
     thumbnailUrl: r.thumbnailUrl || '',
     duration: r.duration,
     publishedAt: r.publishedAt,
-    addedAt: null,
+    addedAt: r.addedAt ?? null,
     mediaType: 'video',
     status: r.status,
     isDownloaded: r.status === 'downloaded',
-    filePath: null,
-    fileSize: null,
-    audioFilePath: null,
-    audioFileSize: null,
-    isProtected: false,
+    filePath: r.filePath ?? null,
+    fileSize: r.fileSize ?? null,
+    audioFilePath: r.audioFilePath ?? null,
+    audioFileSize: r.audioFileSize ?? null,
+    isProtected: r.isProtected ?? false,
     isIgnored: false,
-    normalizedRating: null,
-    ratingSource: null,
-    databaseId: null,
+    normalizedRating: r.normalizedRating ?? null,
+    ratingSource: r.ratingSource ?? null,
+    databaseId: r.databaseId ?? null,
     channelId: r.channelId,
   };
 }
 
 export default function FindVideos({ token }: FindVideosProps) {
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const [query, setQuery] = useState('');
   const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
   const [hasSearched, setHasSearched] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>(isMobile ? 'table' : 'grid');
   const [modalVideo, setModalVideo] = useState<VideoModalData | null>(null);
   const lastQueryRef = useRef('');
   const lastPageSizeRef = useRef<PageSize>(DEFAULT_PAGE_SIZE);
@@ -67,8 +70,10 @@ export default function FindVideos({ token }: FindVideosProps) {
         query={query}
         pageSize={pageSize}
         loading={loading}
+        viewMode={viewMode}
         onQueryChange={setQuery}
         onPageSizeChange={setPageSize}
+        onViewModeChange={setViewMode}
         onSearch={doSearch}
         onCancel={cancel}
       />
@@ -79,6 +84,7 @@ export default function FindVideos({ token }: FindVideosProps) {
         hasSearched={hasSearched}
         lastQuery={lastQueryRef.current}
         pageSize={pageSize}
+        viewMode={viewMode}
         onResultClick={(r) => setModalVideo(toModalData(r))}
         onRetry={onRetry}
       />
