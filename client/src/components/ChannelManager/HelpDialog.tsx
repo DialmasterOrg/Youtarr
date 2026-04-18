@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Dialog,
+  DialogTitle,
   DialogContent,
   DialogContentText,
   DialogActions,
@@ -24,6 +25,7 @@ function HelpDialog({ open, onClose, isMobile }: HelpDialogProps) {
       maxWidth="sm"
       fullWidth
     >
+      <DialogTitle className="sr-only p-0 border-0">Channel Display Guide</DialogTitle>
       <DialogContent>
         <DialogContentText
           id='help-dialog-title'
