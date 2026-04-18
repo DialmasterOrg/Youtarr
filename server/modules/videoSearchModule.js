@@ -138,8 +138,7 @@ class VideoSearchModule {
   }
 }
 
-const instance = new VideoSearchModule();
-instance.SearchCanceledError = SearchCanceledError;
-instance.SearchTimeoutError = SearchTimeoutError;
-instance.ALLOWED_COUNTS = ALLOWED_COUNTS;
-module.exports = instance;
+module.exports = new VideoSearchModule();
+module.exports.SearchCanceledError = SearchCanceledError;
+module.exports.SearchTimeoutError = SearchTimeoutError;
+module.exports.ALLOWED_COUNTS = ALLOWED_COUNTS;
