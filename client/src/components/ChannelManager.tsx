@@ -35,6 +35,7 @@ import {
   Upload as UploadIcon,
 } from '../lib/icons';
 import { Undo2 as UndoIcon, FolderOpen as FolderSpecialIcon } from 'lucide-react';
+import { MOBILE_NAV_SAFE_GAP } from './layout/navLayoutConstants';
 import useMediaQuery from '../hooks/useMediaQuery';
 import { useNavigate } from 'react-router-dom';
 import WebSocketContext, { Message } from '../contexts/WebSocketContext';
@@ -827,7 +828,7 @@ const ChannelManager: React.FC<ChannelManagerProps> = ({ token }) => {
         <div
           style={{
             position: 'fixed',
-            bottom: 72,
+            bottom: isMobile ? `calc(var(--mobile-nav-total-offset, 0px) + ${MOBILE_NAV_SAFE_GAP}px)` : 72,
             right: isMobile ? 16 : 32,
             zIndex: 1401,
             pointerEvents: hasPendingChanges ? 'auto' : 'none',
