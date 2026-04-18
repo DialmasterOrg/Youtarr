@@ -114,4 +114,117 @@ describe('ThemeEngineProvider defaults', () => {
       showWordmarkDefault: true,
     });
   });
+
+  it('returns fallback values when useThemeEngine is called outside a provider', () => {
+    function FallbackProbe() {
+      const { themeMode, motionEnabled, showHeaderLogo, colorMode } = useThemeEngine();
+      return (
+        <div data-testid="fallback-probe">
+          {themeMode}|{String(motionEnabled)}|{String(showHeaderLogo)}|{colorMode}
+        </div>
+      );
+    }
+    render(<FallbackProbe />);
+    expect(screen.getByTestId('fallback-probe')).toHaveTextContent('linear|false|true|light');
+  });
+
+  it('falls back to default theme mode when stored value is not a valid ThemeMode', () => {
+    localStorage.setItem('uiThemeMode', 'not-a-real-theme');
+    render(
+      <ThemeEngineProvider>
+        <ThemeEngineProbe />
+      </ThemeEngineProvider>
+    );
+    expect(screen.getByTestId('theme-engine-probe')).toHaveTextContent(/^linear\|/);
+  });
+
+  it('reads colorMode from localStorage and applies the dark class to the body', () => {
+    localStorage.setItem('uiColorMode', 'dark');
+    render(
+      <ThemeEngineProvider>
+        <ThemeEngineProbe />
+      </ThemeEngineProvider>
+    );
+    expect(document.body.classList.contains('dark')).toBe(true);
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+  });
+
+  it('treats any non-"dark" stored color mode as light', () => {
+    localStorage.setItem('uiColorMode', 'banana');
+    render(
+      <ThemeEngineProvider>
+        <ThemeEngineProbe />
+      </ThemeEngineProvider>
+    );
+    expect(document.body.classList.contains('dark')).toBe(false);
+  });
+
+  it('persists motionEnabled changes and writes a body data attribute', async () => {
+    const user = userEvent.setup();
+
+    function MotionControls() {
+      const { motionEnabled, setMotionEnabled } = useThemeEngine();
+      return (
+        <>
+          <span data-testid="motion-state">{String(motionEnabled)}</span>
+          <button type="button" onClick={() => setMotionEnabled(true)}>
+            Enable motion
+          </button>
+        </>
+      );
+    }
+
+    render(
+      <ThemeEngineProvider>
+        <MotionControls />
+      </ThemeEngineProvider>
+    );
+
+    expect(screen.getByTestId('motion-state')).toHaveTextContent('false');
+    expect(document.body.dataset.motion).toBe('off');
+
+    await user.click(screen.getByRole('button', { name: 'Enable motion' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('motion-state')).toHaveTextContent('true');
+    });
+    expect(document.body.dataset.motion).toBe('on');
+    expect(localStorage.getItem('uiMotionEnabled')).toBe('true');
+  });
+
+  it('reads stored motionEnabled value on initial render', () => {
+    localStorage.setItem('uiMotionEnabled', 'true');
+    function MotionProbe() {
+      const { motionEnabled } = useThemeEngine();
+      return <span data-testid="m">{String(motionEnabled)}</span>;
+    }
+    render(
+      <ThemeEngineProvider>
+        <MotionProbe />
+      </ThemeEngineProvider>
+    );
+    expect(screen.getByTestId('m')).toHaveTextContent('true');
+  });
+
+  it('falls back to legacy (non-scoped) preference key when scoped key is missing', () => {
+    // No scoped key for linear, but legacy key exists with "false"
+    localStorage.setItem('uiHeaderLogoVisible', 'false');
+    render(
+      <ThemeEngineProvider>
+        <ThemeEngineProbe />
+      </ThemeEngineProvider>
+    );
+    // First field is themeMode, second is showHeaderLogo
+    expect(screen.getByTestId('theme-engine-probe')).toHaveTextContent('linear|false|true|true');
+  });
+
+  it('writes themeMode and colorMode to localStorage on initial render', () => {
+    render(
+      <ThemeEngineProvider>
+        <ThemeEngineProbe />
+      </ThemeEngineProvider>
+    );
+    expect(localStorage.getItem('uiThemeMode')).toBe('linear');
+    expect(localStorage.getItem('uiColorMode')).toBe('light');
+  });
 });

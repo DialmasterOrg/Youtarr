@@ -162,13 +162,29 @@ const FormHelperText = React.forwardRef<HTMLParagraphElement, React.HTMLAttribut
 FormHelperText.displayName = 'FormHelperText';
 
 /* ─── InputLabel ──────────────────────────────────────── */
-const InputLabel = React.forwardRef<HTMLLabelElement, React.LabelHTMLAttributes<HTMLLabelElement> & { shrink?: boolean; required?: boolean; error?: boolean }>(
-  ({ className, shrink: _shrink, required, error, children, ...props }, ref) => (
-    <label ref={ref} className={cn('text-xs font-medium text-muted-foreground', error && 'text-destructive', className)} {...props}>
-      {children}
-      {required && <span className="ml-0.5 text-destructive">*</span>}
-    </label>
-  )
+// Renders as <label> when htmlFor is provided (genuine native association),
+// otherwise as <span>. Callers that rely on aria-labelledby (via <Select labelId>)
+// pass an id; screen readers still resolve the label text through that path.
+// Rendering the non-htmlFor case as <span> avoids Chrome's "label not associated
+// with a form field" audit without changing the control's accessible name.
+const InputLabel = React.forwardRef<HTMLElement, React.LabelHTMLAttributes<HTMLLabelElement> & { shrink?: boolean; required?: boolean; error?: boolean }>(
+  ({ className, shrink: _shrink, required, error, htmlFor, children, ...props }, ref) => {
+    const mergedClassName = cn('text-xs font-medium text-muted-foreground', error && 'text-destructive', className);
+    if (htmlFor) {
+      return (
+        <label ref={ref as React.Ref<HTMLLabelElement>} htmlFor={htmlFor} className={mergedClassName} {...props}>
+          {children}
+          {required && <span className="ml-0.5 text-destructive">*</span>}
+        </label>
+      );
+    }
+    return (
+      <span ref={ref as React.Ref<HTMLSpanElement>} className={mergedClassName} {...(props as React.HTMLAttributes<HTMLSpanElement>)}>
+        {children}
+        {required && <span className="ml-0.5 text-destructive">*</span>}
+      </span>
+    );
+  }
 );
 InputLabel.displayName = 'InputLabel';
 
