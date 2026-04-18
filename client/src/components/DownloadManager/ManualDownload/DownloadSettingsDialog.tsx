@@ -222,9 +222,11 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
       fullWidth
       BackdropProps={{ 'data-testid': 'dialog-backdrop' } as any}
     >
-      <DialogTitle className="flex items-center gap-2">
-        <SettingsIcon size={20} data-testid="SettingsIcon" />
-        Download Settings
+      <DialogTitle>
+        <span className="flex items-center gap-2">
+          <SettingsIcon size={20} data-testid="SettingsIcon" />
+          Download Settings
+        </span>
       </DialogTitle>
 
       <DialogContent>
