@@ -1,5 +1,19 @@
 # Changelog
 
+## [v1.66.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.66.1) - 2026-04-19
+
+### [1.66.1](https://github.com/DialmasterOrg/Youtarr/compare/vv1.66.0...v1.66.1) (2026-04-19)
+
+
+### Bug Fixes
+
+* **release:** pass changelog through env vars, not ${{ }} text substitution ([6da1269](https://github.com/DialmasterOrg/Youtarr/commit/6da12693625f51b32c00b8e9e6fb352424473e37))
+* **release:** remove empty template braces from shell comment ([5dec3ed](https://github.com/DialmasterOrg/Youtarr/commit/5dec3ed855475f58c6fd7793ab34b1b175b127b5))
+
+
+
+
+
 ## [v1.65.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.65.0) - 2026-04-13
 
 ## [1.65.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.64.0...v1.65.0) (2026-04-13)
