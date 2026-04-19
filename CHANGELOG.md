@@ -1,5 +1,117 @@
 # Changelog
 
+## [v1.66.1](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.66.1) - 2026-04-19
+
+### [1.66.1](https://github.com/DialmasterOrg/Youtarr/compare/v1.65.0...v1.66.1) (2026-04-19)
+
+
+### Features
+
+* **client:** add token-first tailwind baseline and storybook setup ([6aa9ec6](https://github.com/DialmasterOrg/Youtarr/commit/6aa9ec6105c4a3e967f0a727538ef0b81e1c49ed))
+* **client:** port origin/main 4-theme engine and appearance controls ([6258283](https://github.com/DialmasterOrg/Youtarr/commit/625828370e8ec094f542f06f5152599cc92db5f7))
+* add new theme tokens and styles for overlays, authentication surfaces, and navigation ([fd3ca94](https://github.com/DialmasterOrg/Youtarr/commit/fd3ca94d34efa33107cf6773a2ec79296b5a8715))
+* add PageControls component for pagination functionality and update NavSidebar styles ([4787a97](https://github.com/DialmasterOrg/Youtarr/commit/4787a978cbc1276dd843f2f94ea2a02c830634fa))
+* add PageControls component for pagination functionality and update NavSidebar styles ([1bd9b44](https://github.com/DialmasterOrg/Youtarr/commit/1bd9b448cba86b6aef9127100534d47e85d39db6))
+* Enhance mobile navigation and action bar functionality ([93930fe](https://github.com/DialmasterOrg/Youtarr/commit/93930fe7dc11ea2c259494f28e74afd5964252d0))
+* enhance Plex integration UI and improve snackbar styling ([fa62032](https://github.com/DialmasterOrg/Youtarr/commit/fa6203253f73a0ce25e5d6c26611b4f80b04987b))
+* enhance UI components and theme management ([96f7b1b](https://github.com/DialmasterOrg/Youtarr/commit/96f7b1b2ddcf25c9ec7e34a89ee202a0c2240f9e))
+* Integrate recent features and depedency PR's ([f5dc949](https://github.com/DialmasterOrg/Youtarr/commit/f5dc949ad031c11dc856c17c3d4bec6979b1da65))
+* Integrated Claude Code Review Feedback (for the most part) ([34278e0](https://github.com/DialmasterOrg/Youtarr/commit/34278e0ffe0ce2ba4d4d8bc5d5e5aa41ef602c94))
+* Refactor layout of URL input and bulk import button for improved responsiveness ([a5cf734](https://github.com/DialmasterOrg/Youtarr/commit/a5cf73480c09f7e98d8e938f323432222a70e21a))
+* theme migration - playful/linear/neumorphic/flat themes, dark mode, layout refactor ([1588c25](https://github.com/DialmasterOrg/Youtarr/commit/1588c25a4db3ed9f01489d2634232159762a9a8e))
+* **ui:** add Radix+Tailwind primitives, wire success/warning/info semantic tokens ([8a7bd21](https://github.com/DialmasterOrg/Youtarr/commit/8a7bd219c622e67c35250137948846a3c8786144))
+* enhance ChannelVideosHeader with action menu for bulk operations ([e72b285](https://github.com/DialmasterOrg/Youtarr/commit/e72b28500e60c124f70a3d67bead57df11790796))
+* Enhance theme integration with new themed chip styles and responsive adjustments ([5b07821](https://github.com/DialmasterOrg/Youtarr/commit/5b0782126fab7996188a5c802c9d45ac815b96d7))
+* migrate Storybook configuration to TypeScript and enhance layout components with new stories and tests ([fe83842](https://github.com/DialmasterOrg/Youtarr/commit/fe8384242bcadb3a1901ab6f690ccda012d0f0fe))
+* Refactor theme handling and background decorations ([884412c](https://github.com/DialmasterOrg/Youtarr/commit/884412cff8f970faf62a78e5f63caf51b2121c60))
+* Update navigation logic and improve UI components for better user experience ([0b442f9](https://github.com/DialmasterOrg/Youtarr/commit/0b442f9e47b49b75f23d6b20a20b7ad3cbd3177d))
+* Update UI components for improved theme handling and loading states ([2834c60](https://github.com/DialmasterOrg/Youtarr/commit/2834c60945d540825020dcd26f4840457057d010))
+* **downloads:** improve Manual Download chip layout and bulk import UX ([45566c1](https://github.com/DialmasterOrg/Youtarr/commit/45566c19d713d070dcdc37d3db9790a11ab4f27b))
+* **find-videos:** add table/list view toggle and enrich results for modal ([b1cef12](https://github.com/DialmasterOrg/Youtarr/commit/b1cef1242eed364c3f48b1d23f2236cbc2aba944))
+* **videos:** add Find on YouTube search page ([26c6c73](https://github.com/DialmasterOrg/Youtarr/commit/26c6c734e0cb2b47eac133d3aa4eff074376c6fc))
+
+
+### Bug Fixes
+
+* **release:** pass changelog through env vars, not ${{ }} text substitution ([6da1269](https://github.com/DialmasterOrg/Youtarr/commit/6da12693625f51b32c00b8e9e6fb352424473e37))
+* **release:** remove empty template braces from shell comment ([5dec3ed](https://github.com/DialmasterOrg/Youtarr/commit/5dec3ed855475f58c6fd7793ab34b1b175b127b5))
+* a lot of visual cleanup of theme alignment ([c14ba66](https://github.com/DialmasterOrg/Youtarr/commit/c14ba66fdcc34ebdcecaa7907091c01d2361a8aa))
+* add data-testid attributes for improved testability in UI components ([da0aa81](https://github.com/DialmasterOrg/Youtarr/commit/da0aa81443e0ce128f046e6ded68483864ce3af7))
+* add Tabs component tests and enhance Dialog component with context support ([cbb4a3b](https://github.com/DialmasterOrg/Youtarr/commit/cbb4a3bc5b1c7866f4d0332c02d48bce2100e260))
+* Adjust NavHeader and NavSidebar styles for improved layout and responsiveness ([8f07637](https://github.com/DialmasterOrg/Youtarr/commit/8f076371652fda04fd60422a4af73998db1d774a))
+* channel page infinite-scroll races and thumbnail modal click ([fe755e6](https://github.com/DialmasterOrg/Youtarr/commit/fe755e6ccbeff3a25980331081362220dd9185e4))
+* Complete UI/UX improvements - mobile responsive tweaks and accessibility enhancements ([ffb2d19](https://github.com/DialmasterOrg/Youtarr/commit/ffb2d196063fc6a4ba6df7b3e5f130cb93b052de))
+* keep pagination visible and show skeleton on channel page change ([d7ac86c](https://github.com/DialmasterOrg/Youtarr/commit/d7ac86cdec0c82a2dd8c258b053b2b68b7144e48))
+* resolve videos red overlay, settings links, playful sidebar layout, drawer height, nav button routing, text weight, and per-theme animations ([041d99a](https://github.com/DialmasterOrg/Youtarr/commit/041d99a166b49f3dcb4f72637b6d62cf6a35ed70))
+* restore /settings/plex token and clean up subfolder mappings layout ([618feed](https://github.com/DialmasterOrg/Youtarr/commit/618feedd8be6153a4adc151338b66abb9fd441c0))
+* Still working through build/test errors after theme refactor. ([1ce745d](https://github.com/DialmasterOrg/Youtarr/commit/1ce745db48457d4fb083e018e01ccb2ac9b623af))
+* Test and linting error cleanup ([924646e](https://github.com/DialmasterOrg/Youtarr/commit/924646e58997109dc481455e5cec183d06e2035a))
+* Update dependencies in package-lock.json for improved stability and performance ([a176875](https://github.com/DialmasterOrg/Youtarr/commit/a176875d5db4e6f22c839e04c237f98a5422538a))
+* Update playful theme styles and improve mobile responsiveness ([d81aac1](https://github.com/DialmasterOrg/Youtarr/commit/d81aac19346b1fcd942f36380774b9915194c1eb))
+* update routing in DownloadManager, adjust sidebar navigation, and refine video box styles ([2e58cc6](https://github.com/DialmasterOrg/Youtarr/commit/2e58cc61394734f92670d15159156fcad06f7d53))
+* Update test selectors and styles for DownloadSettingsDialog, NavHeader, and overlay behavior ([df64853](https://github.com/DialmasterOrg/Youtarr/commit/df64853f4dc2479cc6f0dd99e5c26da643c44210))
+* update video status handling and UI components ([36f6467](https://github.com/DialmasterOrg/Youtarr/commit/36f64671274467c83769473f3c5221831e7d38bb))
+* update workflow and text field styles for improved functionality and clarity ([001ece9](https://github.com/DialmasterOrg/Youtarr/commit/001ece9498b03ea254b119453a9f079c0b23cbfd))
+* Working through updating the tests for components after theme refactor ([993013e](https://github.com/DialmasterOrg/Youtarr/commit/993013e3af9d8389189738a24dfee4ee36bc4580))
+* **channels:** lift floating Save button above mobile bottom nav ([f790459](https://github.com/DialmasterOrg/Youtarr/commit/f790459f134322f16c07e61d915026cd06e20d7f))
+* **channels:** persist auto-download tabs and tighten settings dialog ([8d04506](https://github.com/DialmasterOrg/Youtarr/commit/8d045067ff76bea8d72f0bf005b5a2104d07793b))
+* **channels:** remove excess bottom padding on mobile ChannelVideos ([45b367d](https://github.com/DialmasterOrg/Youtarr/commit/45b367d9ec69077eb42f98cfaa1a07b8de227ee3))
+* **channels:** restore download icon on auto-download chips ([dd3ab3f](https://github.com/DialmasterOrg/Youtarr/commit/dd3ab3faa9dfe94b01be6ccbfe0ed25d4398cd2b))
+* **downloads:** hide first-video thumbnail and channel caption on mobile multi-video cards ([8c09c32](https://github.com/DialmasterOrg/Youtarr/commit/8c09c3274c8636884163b6d70e844a8e5e6eb85c))
+* **downloads:** open VideoModal from history, clean up mobile layout ([f052e3e](https://github.com/DialmasterOrg/Youtarr/commit/f052e3e993f7dba512686401274024b273601b36))
+* **downloads:** redirect to activity page after starting a download ([2a22409](https://github.com/DialmasterOrg/Youtarr/commit/2a22409b72a3c7a8751ec4698df2586363d299b9))
+* **downloads:** refresh job video data from DB before serving /runningjobs ([83bc2d6](https://github.com/DialmasterOrg/Youtarr/commit/83bc2d6309c04b77f2b5a0525fd3f538e0223671))
+* **downloads:** show "Multiple (N)" title in mobile history for multi-video jobs ([3e85adb](https://github.com/DialmasterOrg/Youtarr/commit/3e85adb5b078c30725e3791aa441402f62735419))
+* **settings:** align Stall Detection Window field with sibling selects ([3f72471](https://github.com/DialmasterOrg/Youtarr/commit/3f72471c8e3ad34a182d8dbb7bef7d7e24654272))
+* **settings:** keep history side effects out of setState updater ([50b1c2a](https://github.com/DialmasterOrg/Youtarr/commit/50b1c2a71f4b7af291f1c6f283f9178d23b5039e))
+* **settings:** restore yt-dlp UI and tighten unsaved-changes flow ([24e4d23](https://github.com/DialmasterOrg/Youtarr/commit/24e4d235d61c49b5fcf16308bee9bfcb00e8c401))
+* **settings:** tighten layout and alignment in Core Settings page ([ed6c010](https://github.com/DialmasterOrg/Youtarr/commit/ed6c0105a9cbc9da354ccf689cf72788a5d8ab63))
+* **ui:** align settings icon with title text in DownloadSettingsDialog ([20ed515](https://github.com/DialmasterOrg/Youtarr/commit/20ed515d0360415cdc1ddc339ed4fec24cb58c71))
+* **ui:** clamp Popover position within viewport ([5234394](https://github.com/DialmasterOrg/Youtarr/commit/523439441209cf3c5bf8f116e820297d42ff2f00))
+* **ui:** enlarge mobile VideoModal back button and align with title ([8bd26d6](https://github.com/DialmasterOrg/Youtarr/commit/8bd26d6564a2c2b6219bab6fa08e830f1e63c954))
+* **ui:** keep bottom snackbars above mobile nav ([9c0be35](https://github.com/DialmasterOrg/Youtarr/commit/9c0be3544e330785a6ccaf9326346640e3704a48))
+* **ui:** rewrite Channel Display Guide for accuracy and layout ([6f6e248](https://github.com/DialmasterOrg/Youtarr/commit/6f6e248806a222745b7f5c23842ebc79db93ae98))
+* **ui:** show placeholder and rename Rating label on ChannelPage ([c578735](https://github.com/DialmasterOrg/Youtarr/commit/c578735cea7c9d46b67d3f2e0d452e7a3542f29b))
+* **ui:** silence Radix DialogTitle and orphan label a11y warnings ([5889bfa](https://github.com/DialmasterOrg/Youtarr/commit/5889bfac96bfc524e8d815a315a0f60e500da989))
+* **videos:** align header and fit mobile pagination ([7628010](https://github.com/DialmasterOrg/Youtarr/commit/762801049b2dd380f24299e54ecb67b01cfff846))
+* **videos:** smoother pagination transitions ([ce7b2e9](https://github.com/DialmasterOrg/Youtarr/commit/ce7b2e9fe5fd8c88f0a8e92a7b6343db9eecf014))
+* **videos:** unblock backend tests and address PR review ([eca44a1](https://github.com/DialmasterOrg/Youtarr/commit/eca44a1b52dfd0075c333a39c96dbc24285b42ca))
+
+
+### Styles
+
+* **find-videos:** widen search input on desktop and make Search button look like a button ([b6fc83f](https://github.com/DialmasterOrg/Youtarr/commit/b6fc83f650fbb1c264e0419d82b9ef87ad769f00))
+
+
+### Tests
+
+* unblock CI lint and restore lost coverage ([1ee835e](https://github.com/DialmasterOrg/Youtarr/commit/1ee835e1ee6b5d08fd40e7a26d902b68cbefe5bb))
+* **frontend:** add coverage for hooks, VideoModal, and post-refactor components ([0f7267c](https://github.com/DialmasterOrg/Youtarr/commit/0f7267cf4b5e36d22b6d42f57a4a07dab2344136))
+
+
+### Documentation
+
+* Add pinchflat comparison [skip ci] ([ab7978e](https://github.com/DialmasterOrg/Youtarr/commit/ab7978eab79dc1aea1713fc97cc0b60009df5ff3))
+* refresh CLAUDE.md for Tailwind/Radix retheme ([e701f7b](https://github.com/DialmasterOrg/Youtarr/commit/e701f7b25b5019148d271807213e75d0dce96398))
+* restructure README Quick Start and move dev builds to DEVELOPMENT.md ([5474aa9](https://github.com/DialmasterOrg/Youtarr/commit/5474aa935c9f58d0aa44afc81fd9fd0195368f5e))
+* update CHANGELOG for v1.65.0 [skip ci] ([88fb5d5](https://github.com/DialmasterOrg/Youtarr/commit/88fb5d582962dcd91fe9874c6794cc4ff2ac17e4))
+
+
+### Code Refactoring
+
+* enhance test coverage and improve component accessibility ([a25f785](https://github.com/DialmasterOrg/Youtarr/commit/a25f785a45211865b62d6a6149ed821bf0c2cbee))
+* remove neumorphic theme and related styles; update NavSidebar and RatingBadge components ([3d3321c](https://github.com/DialmasterOrg/Youtarr/commit/3d3321c57572afb8dbdc93cb5c78a29c939cf893))
+* replace any types in ui primitives with narrower types ([9a9d41f](https://github.com/DialmasterOrg/Youtarr/commit/9a9d41f2b7b09e1dcca16d0471165f56f6ac0d3a))
+* split NavHeader into chrome, actions, and top-nav items ([37300e7](https://github.com/DialmasterOrg/Youtarr/commit/37300e7dfca939b6ebca00fdd4cfc3c744577052))
+* split NavSidebar into orchestrator, desktop, mobile, and drawer content ([480dcb2](https://github.com/DialmasterOrg/Youtarr/commit/480dcb29cf84561b2427bf8269e83fd26bdacadf))
+* split ui/layout.tsx into focused primitive files ([f90ca99](https://github.com/DialmasterOrg/Youtarr/commit/f90ca9910280419b64d7f98c0a215e1a3379c617))
+* **nav:** rename Subscriptions to Imports and clarify Channels sub-item ([470fb8b](https://github.com/DialmasterOrg/Youtarr/commit/470fb8b9b539e2186201fa86c1a8318e47ae3e14))
+* **ui:** drop silent sx prop from non-honoring wrappers ([e2f7c72](https://github.com/DialmasterOrg/Youtarr/commit/e2f7c727b162f30cce025b2e2c50666534be7970))
+* **video-search:** export error classes directly on module.exports ([b2473a5](https://github.com/DialmasterOrg/Youtarr/commit/b2473a5b4332f066627e25cc7e30e700dfdb725b))
+* **videos:** address PR review nits on Find on YouTube ([e09393d](https://github.com/DialmasterOrg/Youtarr/commit/e09393d7c9f37aeef056ac37e9b31be75d85e388))
+
+
+
 ## [v1.65.0](https://github.com/DialmasterOrg/Youtarr/releases/tag/v1.65.0) - 2026-04-13
 
 ## [1.65.0](https://github.com/DialmasterOrg/Youtarr/compare/vv1.64.0...v1.65.0) (2026-04-13)
