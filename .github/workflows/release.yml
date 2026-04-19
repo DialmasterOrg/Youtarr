@@ -157,11 +157,17 @@ jobs:
 
       - name: Update CHANGELOG.md
         if: ${{ !inputs.dry_run && steps.calculate_version.outputs.release_type != 'none' }}
+        env:
+          NEW_TAG: ${{ steps.calculate_version.outputs.new_tag }}
+          CHANGELOG_BODY: ${{ steps.calculate_version.outputs.changelog }}
+          REPO: ${{ github.repository }}
         run: |
           # Create or update CHANGELOG.md
-          CHANGELOG_ENTRY="## [${{ steps.calculate_version.outputs.new_tag }}](https://github.com/${{ github.repository }}/releases/tag/${{ steps.calculate_version.outputs.new_tag }}) - $(date +%Y-%m-%d)
+          # Values are passed via env vars (see `env:` above) so quotes/parens
+          # in commit messages do not break bash parsing.
+          CHANGELOG_ENTRY="## [${NEW_TAG}](https://github.com/${REPO}/releases/tag/${NEW_TAG}) - $(date +%Y-%m-%d)
 
-          ${{ steps.calculate_version.outputs.changelog }}
+          ${CHANGELOG_BODY}
 
           "
 
@@ -181,7 +187,7 @@ jobs:
 
           # Commit the CHANGELOG update
           git add CHANGELOG.md
-          git commit -m "docs: update CHANGELOG for ${{ steps.calculate_version.outputs.new_tag }} [skip ci]"
+          git commit -m "docs: update CHANGELOG for ${NEW_TAG} [skip ci]"
           git push
 
       - name: Record CHANGELOG commit SHA
@@ -305,24 +311,30 @@ jobs:
 
       - name: Display dry run results
         if: ${{ inputs.dry_run }}
+        env:
+          NEW_TAG: ${{ steps.calculate_version.outputs.new_tag }}
+          PREVIOUS_TAG: ${{ steps.calculate_version.outputs.previous_tag }}
+          RELEASE_TYPE: ${{ steps.calculate_version.outputs.release_type }}
+          CHANGELOG_BODY: ${{ steps.calculate_version.outputs.changelog }}
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
         run: |
           echo "🔍 DRY RUN RESULTS:"
           echo "==================="
-          echo "Would have created tag: ${{ steps.calculate_version.outputs.new_tag }}"
-          echo "Previous tag: ${{ steps.calculate_version.outputs.previous_tag }}"
-          echo "Bump type: ${{ steps.calculate_version.outputs.release_type }}"
+          echo "Would have created tag: ${NEW_TAG}"
+          echo "Previous tag: ${PREVIOUS_TAG}"
+          echo "Bump type: ${RELEASE_TYPE}"
           echo ""
-          echo "Would have created GitHub Release: ${{ steps.calculate_version.outputs.new_tag }}"
+          echo "Would have created GitHub Release: ${NEW_TAG}"
           echo ""
           echo "Release Notes Preview:"
           echo "----------------------"
-          echo "${{ steps.calculate_version.outputs.changelog }}"
+          echo "${CHANGELOG_BODY}"
           echo ""
           echo "Docker images that would be pushed:"
-          echo "  - ${{ vars.DOCKERHUB_USERNAME }}/youtarr:${{ steps.calculate_version.outputs.new_tag }}"
-          echo "  - ${{ vars.DOCKERHUB_USERNAME }}/youtarr:latest"
+          echo "  - ${DOCKERHUB_USERNAME}/youtarr:${NEW_TAG}"
+          echo "  - ${DOCKERHUB_USERNAME}/youtarr:latest"
           echo ""
-          if [ "${{ steps.calculate_version.outputs.release_type }}" = "none" ]; then
+          if [ "${RELEASE_TYPE}" = "none" ]; then
             echo "No changes detected since the last release; no build attempted in dry run."
           else
             echo "✅ Build verification steps succeeded (client and Docker)"
