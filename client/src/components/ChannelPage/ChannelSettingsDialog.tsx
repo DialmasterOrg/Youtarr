@@ -602,6 +602,11 @@ function ChannelSettingsDialog({
               <Typography variant="caption" color="text.secondary" style={{ marginTop: 8, display: 'block' }}>
                 Effective channel quality: {effectiveQualityDisplay}.
               </Typography>
+              {(settings.video_quality === '1440' || settings.video_quality === '2160') && (
+                <Typography variant="caption" color="warning.main" style={{ marginTop: 4, display: 'block' }}>
+                  YouTube only serves H.264 MP4 up to 1080p. {settings.video_quality === '2160' ? '4K' : '1440p'} uses VP9/AV1 (remuxed into MP4); older Plex clients without native VP9/AV1 decode may transcode.
+                </Typography>
+              )}
             </div>
 
             <FormControl fullWidth style={{ marginTop: 8 }}>

@@ -51,6 +51,19 @@ class YtdlpCommandBuilder {
     return path.join(...segments);
   }
   /**
+   * YouTube caps H.264 MP4 streams at 1080p. Above that, only VP9 (typically
+   * webm) and AV1 are available. When this returns true, the default format
+   * selector must not restrict to [ext=mp4], and the caller must pass
+   * --merge-output-format mp4 so the final container stays MP4.
+   * @param {string|number|null} resolution - Requested max height
+   * @returns {boolean}
+   */
+  static resolutionRequiresNonMp4Source(resolution) {
+    const height = Number(resolution);
+    return Number.isFinite(height) && height > 1080;
+  }
+
+  /**
    * Build format string based on resolution, codec preference, and audio format
    * @param {string} resolution - Video resolution (e.g., '1080', '720')
    * @param {string} videoCodec - Video codec preference ('h264', 'h265', 'default')
@@ -84,10 +97,18 @@ class YtdlpCommandBuilder {
       break;
 
     case 'default':
-    default:
-      // Default behavior: no codec preference, just resolution and container
-      videoFormat = `bestvideo[height<=${res}][ext=mp4]+${audioFmt}/${fallbackMp4}/${ultimateFallback}`;
+    default: {
+      // At 1080p and below, H.264 MP4 is available on YouTube so we keep the
+      // [ext=mp4] constraint for maximum Plex client compatibility (direct-play
+      // on Apple TV HD, older Rokus, iOS, etc.). Above 1080p, YouTube only
+      // serves VP9/AV1, so we drop the constraint and rely on
+      // --merge-output-format mp4 to keep the output container MP4.
+      const primarySelector = this.resolutionRequiresNonMp4Source(res)
+        ? `bestvideo[height<=${res}]+${audioFmt}`
+        : `bestvideo[height<=${res}][ext=mp4]+${audioFmt}`;
+      videoFormat = `${primarySelector}/${fallbackMp4}/${ultimateFallback}`;
       break;
+    }
     }
 
     return videoFormat;
@@ -425,6 +446,9 @@ class YtdlpCommandBuilder {
       // Clean @ prefix from uploader_id when it's used as fallback
       '--replace-in-metadata', 'uploader_id', '^@', '',
       '-f', this.buildFormatString(res, videoCodec, audioFormat),
+      // Only force MP4 remux when sources might be webm (1440p+).
+      // At <=1080p the format selector already picks MP4 sources.
+      ...(this.resolutionRequiresNonMp4Source(res) ? ['--merge-output-format', 'mp4'] : []),
       '--write-thumbnail',
       '--convert-thumbnails', 'jpg',
     ];
@@ -502,6 +526,9 @@ class YtdlpCommandBuilder {
       // Clean @ prefix from uploader_id when it's used as fallback
       '--replace-in-metadata', 'uploader_id', '^@', '',
       '-f', this.buildFormatString(res, videoCodec, audioFormat),
+      // Only force MP4 remux when sources might be webm (1440p+).
+      // At <=1080p the format selector already picks MP4 sources.
+      ...(this.resolutionRequiresNonMp4Source(res) ? ['--merge-output-format', 'mp4'] : []),
       '--write-thumbnail',
       '--convert-thumbnails', 'jpg',
     ];

@@ -492,7 +492,7 @@ describe('CoreSettingsSection Component', () => {
     test('displays helper text about codec preferences', () => {
       const props = createSectionProps();
       renderWithProviders(<CoreSettingsSection {...props} />);
-      expect(screen.getByText(/Note: H\.264 produces larger file sizes/i)).toBeInTheDocument();
+      expect(screen.getByText(/YouTube caps H\.264 at 1080p/i)).toBeInTheDocument();
     });
   });
 

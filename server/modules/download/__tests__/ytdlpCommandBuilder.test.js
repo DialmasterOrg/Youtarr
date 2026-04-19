@@ -221,9 +221,19 @@ describe('YtdlpCommandBuilder', () => {
       expect(result).toBe('bestvideo[height<=720][ext=mp4][vcodec^=hev]+bestaudio[ext=m4a]/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
     });
 
-    it('should handle 4K resolution with default codec', () => {
+    it('should handle 4K resolution with default codec by dropping [ext=mp4] (YouTube has no H.264 MP4 above 1080p)', () => {
       const result = YtdlpCommandBuilder.buildFormatString('2160', 'default');
-      expect(result).toBe('bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+      expect(result).toBe('bestvideo[height<=2160]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should handle 1440p resolution with default codec by dropping [ext=mp4]', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('1440', 'default');
+      expect(result).toBe('bestvideo[height<=1440]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should keep [ext=mp4] for 720p default codec (H.264 MP4 available)', () => {
+      const result = YtdlpCommandBuilder.buildFormatString('720', 'default');
+      expect(result).toBe('bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
     });
 
     it('should use default resolution (1080) when resolution is null', () => {
@@ -718,8 +728,27 @@ describe('YtdlpCommandBuilder', () => {
       const result = YtdlpCommandBuilder.getBaseCommandArgs();
       const formatIndex = result.indexOf('-f');
       const formatString = result[formatIndex + 1];
-      // Default codec should not include vcodec filters
+      // Default codec at 1080p keeps [ext=mp4] for Plex compatibility
       expect(formatString).toBe('bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should not include --merge-output-format at <=1080p', () => {
+      const result = YtdlpCommandBuilder.getBaseCommandArgs('1080');
+      expect(result).not.toContain('--merge-output-format');
+    });
+
+    it('should include --merge-output-format mp4 at 1440p to keep container MP4 after VP9 remux', () => {
+      const result = YtdlpCommandBuilder.getBaseCommandArgs('1440');
+      const idx = result.indexOf('--merge-output-format');
+      expect(idx).toBeGreaterThanOrEqual(0);
+      expect(result[idx + 1]).toBe('mp4');
+    });
+
+    it('should include --merge-output-format mp4 at 2160p', () => {
+      const result = YtdlpCommandBuilder.getBaseCommandArgs('2160');
+      const idx = result.indexOf('--merge-output-format');
+      expect(idx).toBeGreaterThanOrEqual(0);
+      expect(result[idx + 1]).toBe('mp4');
     });
 
     it('should use h264 videoCodec when configured', () => {
@@ -902,6 +931,18 @@ describe('YtdlpCommandBuilder', () => {
       const formatIndex = result.indexOf('-f');
       const formatString = result[formatIndex + 1];
       expect(formatString).toBe('bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best');
+    });
+
+    it('should not include --merge-output-format at <=1080p', () => {
+      const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload('1080');
+      expect(result).not.toContain('--merge-output-format');
+    });
+
+    it('should include --merge-output-format mp4 at 2160p', () => {
+      const result = YtdlpCommandBuilder.getBaseCommandArgsForManualDownload('2160');
+      const idx = result.indexOf('--merge-output-format');
+      expect(idx).toBeGreaterThanOrEqual(0);
+      expect(result[idx + 1]).toBe('mp4');
     });
 
     it('should use h264 videoCodec when configured', () => {

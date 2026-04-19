@@ -369,10 +369,13 @@ const DownloadSettingsDialog: React.FC<DownloadSettingsDialogProps> = ({
                 </FormHelperText>
               </FormControl>
 
-              {resolution === '2160' && (
+              {(resolution === '2160' || resolution === '1440') && (
                 <Alert severity="warning" className="mb-4">
                   <Typography variant="body2">
-                    4K videos may take significantly longer to download and use more storage space.
+                    {resolution === '2160'
+                      ? '4K videos may take significantly longer to download and use more storage space. '
+                      : ''}
+                    YouTube only provides H.264 MP4 up to 1080p, so {resolution === '2160' ? '4K' : '1440p'} uses VP9 or AV1 (remuxed into MP4). Older Plex clients without native VP9/AV1 decode (Apple TV HD, iOS, older Rokus) may transcode.
                   </Typography>
                 </Alert>
               )}
