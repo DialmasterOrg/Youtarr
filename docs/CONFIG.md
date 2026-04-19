@@ -83,13 +83,14 @@ Configuration can be modified through:
 - **Options**: `"4320"`, `"2160"`, `"1440"`, `"1080"`, `"720"`, `"480"`, `"360"`, `"240"`, `"144"`
 - **Description**: Global setting for preferred download resolution
 - **Note**: Downloads from YouTube at best available quality up to this limit
+- **Codec implication**: YouTube only provides H.264 in MP4 up to 1080p. Selecting 1440p or 2160p forces Youtarr to pick a VP9 or AV1 source stream (YouTube does not offer H.264 at those resolutions) and remux it into MP4 via `--merge-output-format mp4`. The remux is lossless (no re-encode), but Plex clients without native VP9/AV1 hardware decode (Apple TV HD, older Apple TV 4K, iOS, older Rokus) will transcode at playback. If direct-play compatibility matters more than resolution, keep this at 1080p or set `videoCodec` to `h264`.
 
 ### Preferred Video Codec
 - **Config Key**: `videoCodec`
 - **Type**: `string`
 - **Default**: `"default"`
 - **Options**: `"default"`, `"h264"`, `"h265"`
-- **Description**: Preferred video codec for downloads, default generally downloads as vp9 or av1
+- **Description**: Preferred video codec for downloads. `"default"` picks the best stream YouTube offers at the requested resolution (typically VP9 or AV1 above 1080p). `"h264"` forces H.264/AVC, which maximizes client compatibility but effectively caps resolution at 1080p because YouTube does not serve H.264 above that height. `"h265"` prefers HEVC but YouTube rarely provides it, so it almost always falls back to H.264 MP4.
 - **Compatibility**:
   - `h264`: Best compatibility with all devices
   - `h265`: Better compression, requires modern devices
